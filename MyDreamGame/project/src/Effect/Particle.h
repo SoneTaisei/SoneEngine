@@ -30,6 +30,7 @@ private:
     ParticleCommon *particleCommon_ = nullptr;
     uint32_t kParticleCount_ = 0;
 
+    // 自分のブレンドモード（デフォルトは通常）
     BlendMode blendMode_ = kBlendModeNomal;
 
     // Instancing用リソース

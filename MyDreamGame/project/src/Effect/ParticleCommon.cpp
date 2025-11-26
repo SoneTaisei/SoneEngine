@@ -22,11 +22,9 @@ void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
 
     // パイプラインステートの設定
     commandList_->SetGraphicsRootSignature(rootSignature_.Get());
-    
-    // デフォルトとして「通常ブレンド」を設定しておく（安全性のため）
-    // 実際の描画では Particle::Draw 内で SetBlendMode が呼ばれて上書きされる
+    // pipelineState_ は空なので使わず、配列の [kBlendModeNomal] をデフォルトにする
+    // BlendMode.h のスペルに合わせています
     commandList_->SetPipelineState(pipelineStates_[kBlendModeNomal].Get());
-    
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // DescriptorHeapの設定 (TextureManagerから借りる)
@@ -122,6 +120,7 @@ void ParticleCommon::CreateRootSignature() {
 }
 
 void ParticleCommon::CreatePipelineState() {
+    // --- シェーダーコンパイル (変更なし) ---
     IDxcUtils *dxcUtils = nullptr;
     IDxcCompiler3 *dxcCompiler = nullptr;
     IDxcIncludeHandler *includeHandler = nullptr;
@@ -131,6 +130,7 @@ void ParticleCommon::CreatePipelineState() {
 
     // シェーダーコンパイル処理
     auto CompileShader = [&](const std::wstring &filePath, const wchar_t *profile) {
+        // ... (省略: 元のコードと同じ内容) ...
         IDxcBlobEncoding *sourceBlob = nullptr;
         if(FAILED(dxcUtils->LoadFile(filePath.c_str(), nullptr, &sourceBlob))) return Microsoft::WRL::ComPtr<ID3DBlob>();
         LPCWSTR arguments[] = { filePath.c_str(), L"-E", L"main", L"-T", profile, L"-Zi", L"-Qembed_debug", L"-Od", L"-Zpr" };
@@ -168,6 +168,7 @@ void ParticleCommon::CreatePipelineState() {
     psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
     psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
 
+    // ■■■ 重要: ループの前に共通設定を済ませる ■■■
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 両面描画
 
@@ -232,6 +233,7 @@ void ParticleCommon::CreatePipelineState() {
         HRESULT hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineStates_[i]));
         assert(SUCCEEDED(hr));
     }
+    // ■ ループ後の単体作成コードは削除しました (不要なため)
 
     dxcUtils->Release();
     dxcCompiler->Release();

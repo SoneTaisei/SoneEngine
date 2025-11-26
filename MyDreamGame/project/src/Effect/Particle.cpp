@@ -79,6 +79,9 @@ void Particle::Draw() {
     ID3D12GraphicsCommandList *commandList = particleCommon_->GetCommandList();
     particleCommon_->SetBlendMode(blendMode_);
 
+    // 描画前にParticleCommonへモードを設定
+    particleCommon_->SetBlendMode(blendMode_);
+
     // 頂点バッファセット (Commonが持っている板ポリゴン)
     commandList->IASetVertexBuffers(0, 1, &particleCommon_->GetVertexBufferView());
 
