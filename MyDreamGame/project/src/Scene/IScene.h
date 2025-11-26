@@ -8,6 +8,7 @@
 class SceneManager;
 class SpriteCommon;
 class ModelCommon;
+class ParticleCommon;
 
 class IScene {
 public:
@@ -31,4 +32,6 @@ protected:
     // 継承先(TitleSceneなど)で使えるようにする
     SpriteCommon *spriteCommon_ = nullptr;
     ModelCommon *modelCommon_ = nullptr;
+    ParticleCommon *particleCommon_ = nullptr;
+    
 };

@@ -9,6 +9,9 @@
 
 class Particle {
 public:
+
+    Particle() = default;
+    ~Particle();
     // 初期化
     // count: パーティクルの最大数
     // srvIndex: SRVを作るDescriptorHeapの場所(WindowsApplication.cppで計算していたindex)
@@ -20,11 +23,18 @@ public:
     // 描画
     void Draw();
 
+    // セッター
+    void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
+
 private:
     ParticleCommon *particleCommon_ = nullptr;
     uint32_t kParticleCount_ = 0;
 
+<<<<<<< Updated upstream
     // ブレンドモード保持用
+=======
+    // 自分のブレンドモード（デフォルトは通常）
+>>>>>>> Stashed changes
     BlendMode blendMode_ = kBlendModeNomal;
 
     // Instancing用リソース

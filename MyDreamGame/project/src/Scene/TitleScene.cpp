@@ -15,7 +15,16 @@ TitleScene::~TitleScene() {
 void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
 	commandList_ = commandList;
 
-	Microsoft::WRL::ComPtr<ID3D12Device> device;
+	// 1. まず共通部分 (ParticleCommon) を生成して初期化
+	// これをしないと次の行でクラッシュします
+	particleCommon_ = new ParticleCommon();
+	particleCommon_->Initialize(device.Get()); // ★ここで本物の device が必要
+
+	// 2. メンバ変数 particle_ を生成（ローカル変数にしない！）
+	particle_ = new Particle();
+
+	// 3. 初期化
+	particle_->Initialize(commandList.Get(), particleCommon_, 10, "resources/uvChecker.png", 10);
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -31,6 +40,8 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
 	// そのまま呼べる
 	modelCommon_->DrawAll(viewProjectionMatrix);
+
+	particleCommon_->DrawAll();
 
 	if(spriteCommon_) {
 		spriteCommon_->PreDraw(commandList_.Get());
