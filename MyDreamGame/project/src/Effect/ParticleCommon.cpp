@@ -3,7 +3,7 @@
 #include <format>
 #include <dxcapi.h>
 #include "Graphics/TextureManager.h"
-#include "Effect/Particle.h"
+#include "Effect/Particle.h" // Particleの定義が必要なため追加
 
 #pragma comment(lib, "dxcompiler.lib")
 
@@ -22,12 +22,11 @@ void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
 
     // パイプラインステートの設定
     commandList_->SetGraphicsRootSignature(rootSignature_.Get());
-<<<<<<< Updated upstream
-=======
-    // pipelineState_ は空なので使わず、配列の [kBlendModeNomal] をデフォルトにする
-    // BlendMode.h のスペルに合わせています
+    
+    // デフォルトとして「通常ブレンド」を設定しておく（安全性のため）
+    // 実際の描画では Particle::Draw 内で SetBlendMode が呼ばれて上書きされる
     commandList_->SetPipelineState(pipelineStates_[kBlendModeNomal].Get());
->>>>>>> Stashed changes
+    
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // DescriptorHeapの設定 (TextureManagerから借りる)
@@ -42,8 +41,6 @@ void ParticleCommon::SetBlendMode(BlendMode blendMode) {
     }
 }
 
-<<<<<<< Updated upstream
-=======
 // リストへの追加
 void ParticleCommon::AddParticle(Particle *particle) {
     particles_.push_back(particle);
@@ -61,9 +58,7 @@ void ParticleCommon::DrawAll() {
     }
 }
 
->>>>>>> Stashed changes
 void ParticleCommon::CreateRootSignature() {
-    // WindowsApplication.cpp に書いてあった RootSignature 作成コードをここに移動
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -127,10 +122,6 @@ void ParticleCommon::CreateRootSignature() {
 }
 
 void ParticleCommon::CreatePipelineState() {
-<<<<<<< Updated upstream
-=======
-    // --- シェーダーコンパイル (変更なし) ---
->>>>>>> Stashed changes
     IDxcUtils *dxcUtils = nullptr;
     IDxcCompiler3 *dxcCompiler = nullptr;
     IDxcIncludeHandler *includeHandler = nullptr;
@@ -138,13 +129,8 @@ void ParticleCommon::CreatePipelineState() {
     DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
     dxcUtils->CreateDefaultIncludeHandler(&includeHandler);
 
-    // シェーダーコンパイル処理 (lambda) は変更なし
+    // シェーダーコンパイル処理
     auto CompileShader = [&](const std::wstring &filePath, const wchar_t *profile) {
-<<<<<<< Updated upstream
-        // ...元のコードと同じ...
-=======
-        // ... (省略: 元のコードと同じ内容) ...
->>>>>>> Stashed changes
         IDxcBlobEncoding *sourceBlob = nullptr;
         if(FAILED(dxcUtils->LoadFile(filePath.c_str(), nullptr, &sourceBlob))) return Microsoft::WRL::ComPtr<ID3DBlob>();
         LPCWSTR arguments[] = { filePath.c_str(), L"-E", L"main", L"-T", profile, L"-Zi", L"-Qembed_debug", L"-Od", L"-Zpr" };
@@ -165,7 +151,7 @@ void ParticleCommon::CreatePipelineState() {
         result->Release();
         sourceBlob->Release();
         return shaderBlob;
-        };
+    };
 
     auto vsBlob = CompileShader(L"shaders/Particle.VS.hlsl", L"vs_6_0");
     auto psBlob = CompileShader(L"shaders/Particle.PS.hlsl", L"ps_6_0");
@@ -182,19 +168,11 @@ void ParticleCommon::CreatePipelineState() {
     psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
     psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
 
-    // ■■■ 重要: ループの前に共通設定を済ませる ■■■
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-<<<<<<< Updated upstream
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 両面描画
 
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    // パーティクルは半透明が多いので、デプス書き込みはOFFにすることが一般的
-=======
-    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // パーティクルは両面描画が多い
-
-    psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    // 半透明処理をする場合、デプス書き込みはOFFにするのが定石です
->>>>>>> Stashed changes
+    // パーティクルは半透明が多いので、デプス書き込みはOFF
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -204,73 +182,8 @@ void ParticleCommon::CreatePipelineState() {
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
-<<<<<<< Updated upstream
-    // 【重要】ループして全てのブレンドモードのPSOを作成する
-    for(int i = 0; i < kCountOfBlnedMode; ++i) {
-        D3D12_BLEND_DESC blendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-
-        switch(i) {
-        case kBlendModeNone:
-            blendDesc.RenderTarget[0].BlendEnable = FALSE;
-            break;
-        case kBlendModeNomal:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-            break;
-        case kBlendModeAdd:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            // 加算: 原色 * Alpha + 背景 * 1
-            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-            break;
-        case kBlnedModeSubtract:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            // 減算: 背景 * 1 - 原色 * Alpha
-            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
-            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-            break;
-        case kBlendModeMaltily:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            // 乗算: 原色 * 0 + 背景 * 原色
-            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_SRC_COLOR;
-            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-            break;
-        case kBlendModeScreen:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            // スクリーン: 原色 * (1-背景) + 背景 * 1
-            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
-            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-            break;
-        }
-
-        psoDesc.BlendState = blendDesc;
-
-        // 配列のi番目に生成して格納
-        device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineStates_[i]));
-    }
-=======
     // --- ループでブレンド設定を変えながらPSO生成 ---
+    // ここでGit競合が発生していたため、きれいな記述の方を採用して修正
     for(int i = 0; i < kCountOfBlnedMode; ++i) {
         // デフォルト設定にリセット
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -319,9 +232,6 @@ void ParticleCommon::CreatePipelineState() {
         HRESULT hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineStates_[i]));
         assert(SUCCEEDED(hr));
     }
-
-    // ■ ループ後の単体作成コードは削除しました (不要なため)
->>>>>>> Stashed changes
 
     dxcUtils->Release();
     dxcCompiler->Release();

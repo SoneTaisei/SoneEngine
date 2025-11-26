@@ -3,9 +3,6 @@
 #include "Utility/TransformFunctions.h"
 #include <cassert>
 
-<<<<<<< Updated upstream
-void Particle::Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon *particleCommon, uint32_t count, const std::string &textureFilePath, int srvIndex, BlendMode blendMode) {
-=======
 Particle::~Particle() {
     if(particleCommon_) {
         particleCommon_->RemoveParticle(this);
@@ -13,7 +10,6 @@ Particle::~Particle() {
 }
 
 void Particle::Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon *particleCommon, uint32_t count, const std::string &textureFilePath, int srvIndex) {
->>>>>>> Stashed changes
     particleCommon_ = particleCommon;
     kParticleCount_ = count;
     ID3D12Device *device = particleCommon_->GetDevice();
@@ -81,12 +77,6 @@ void Particle::Update(const Matrix4x4 &viewProjection) {
 
 void Particle::Draw() {
     ID3D12GraphicsCommandList *commandList = particleCommon_->GetCommandList();
-
-<<<<<<< Updated upstream
-    // ここでブレンドモードに応じたPSOをセットする
-=======
-    // 描画前にParticleCommonへモードを設定
->>>>>>> Stashed changes
     particleCommon_->SetBlendMode(blendMode_);
 
     // 頂点バッファセット (Commonが持っている板ポリゴン)
