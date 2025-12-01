@@ -239,6 +239,14 @@ void WindowsApplication::Run() {
 				activeCamera_->GetTranslation()   // Translate (現在アクティブなカメラの座標)
 			);
 
+			// ゲームループのどこか
+			if(ImGui::Button("Add Particle")) {
+				// 3個追加する
+				particle_->Emit(3);
+			}
+
+			particle_->DrawImGui();
+
 			// パーティクルの更新
 			particle_->Update(viewProjectionData_->viewProjectionMatrix,cameraMatrix);
 
