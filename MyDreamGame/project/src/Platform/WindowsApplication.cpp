@@ -282,6 +282,7 @@ void WindowsApplication::Finalize() {
 	ImGui::DestroyContext();
 
 	debugCamera_.reset();
+	gameCamera_.reset();
 	sceneManager_.reset();
 
 	if(spriteCommon_) {
