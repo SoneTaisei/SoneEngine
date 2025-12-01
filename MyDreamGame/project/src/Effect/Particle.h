@@ -6,6 +6,16 @@
 #include "Model/ModelCommon.h" 
 #include "ParticleCommon.h"
 #include "Utility/BlendMode.h"
+#include <numbers>
+#include <list>
+#include <random>
+
+struct Emitter {
+    Transform transform; // エミッタのTransform（発生位置など）
+    uint32_t count;      // 一回で発生する数
+    float frequency;     // 発生頻度（秒）
+    float frequencyTime; // 頻度用タイマー
+};
 
 // CPU側で持つ個々のパーティクル情報
 struct ParticleData {
@@ -34,16 +44,34 @@ public:
     void Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon *particleCommon, uint32_t count, const std::string &textureFilePath, int srvIndex, BlendMode blendMode = kBlendModeNomal);
 
     // 更新
-    void Update(const Matrix4x4 &viewProjection);
+    void Update(const Matrix4x4 &viewProjection, const Matrix4x4 &cameraMatrix);
 
     // 描画
     void Draw();
 
+    // 外部からパーティクルを発生させるための関数
+    void Emit(uint32_t count);
+
     // セッター
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
 
+    // ■ 追加: ImGuiを描画する関数
+    void DrawImGui();
+
 private:
-    std::vector<ParticleData> particles_;
+
+    // 座標オフセットを受け取れるように変更
+    ParticleData MakeNewParticle(const Vector3 &translate);
+
+    // Emitterの情報からパーティクルリストを生成する関数
+    std::list<ParticleData> EmitInternal(const Emitter &emitter);
+
+    // 内部で1つ分のパーティクルデータを生成するヘルパー関数
+    ParticleData MakeNewParticle();
+
+    // vector から list へ変更
+    std::list<ParticleData> particles_;
+
     ParticleCommon *particleCommon_ = nullptr;
     uint32_t kParticleCount_ = 0;
 
@@ -65,4 +93,10 @@ private:
 
     // テクスチャハンドル
     uint32_t textureIndex_ = 0;
+
+    // 乱数生成器をメンバに持つ
+    std::mt19937 randomEngine_;
+
+    // このパーティクルマネージャが持つデフォルトのエミッタ
+    Emitter emitter_{};
 };
