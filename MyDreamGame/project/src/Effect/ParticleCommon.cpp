@@ -14,11 +14,24 @@ void ParticleCommon::Initialize(ID3D12Device *device) {
     CreateRootSignature();
     CreatePipelineState();
     CreateMesh();
+
+    // 1. リソース（箱）を作る
+    wvpResource_ = CreateBufferResource(device_, sizeof(Matrix4x4));
+
+    // 2. リソースのアドレスを wvpData_ に紐付ける
+    wvpResource_->Map(0, nullptr, reinterpret_cast<void **>(&wvpData_));
+
+    // 3. データを入れる
+    viewProjection_ = TransformFunctions::MakeIdentity4x4();
+    *wvpData_ = viewProjection_;
 }
 
 void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
     assert(commandList);
     commandList_ = commandList;
+
+    // ■ ここでメンバ変数の値を定数バッファに書き込む
+    *wvpData_ = viewProjection_;
 
     // パイプラインステートの設定
     commandList_->SetGraphicsRootSignature(rootSignature_.Get());
@@ -30,6 +43,10 @@ void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
     // DescriptorHeapの設定 (TextureManagerから借りる)
     ID3D12DescriptorHeap *descriptorHeaps[] = { TextureManager::GetInstance()->GetSrvDescriptorHeap() };
     commandList_->SetDescriptorHeaps(1, descriptorHeaps);
+
+    // ■ 追加: RootParameter[4] に ViewProjection をセット
+    // (ルートシグネチャの修正も忘れずに行ってくださいね！)
+    commandList_->SetGraphicsRootConstantBufferView(4, wvpResource_->GetGPUVirtualAddress());
 }
 
 void ParticleCommon::SetBlendMode(BlendMode blendMode) {
@@ -60,7 +77,7 @@ void ParticleCommon::CreateRootSignature() {
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-    D3D12_ROOT_PARAMETER rootParameters[4] = {};
+    D3D12_ROOT_PARAMETER rootParameters[5] = {};
 
     // [0] Material (CBV b0)
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -95,6 +112,10 @@ void ParticleCommon::CreateRootSignature() {
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[3].Descriptor.ShaderRegister = 1;
+
+    rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // 頂点シェーダーで使う
+    rootParameters[4].Descriptor.ShaderRegister = 2; // b2 レジスタを使用
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;

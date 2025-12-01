@@ -7,6 +7,22 @@
 #include "ParticleCommon.h"
 #include "Utility/BlendMode.h"
 
+// CPU側で持つ個々のパーティクル情報
+struct ParticleData {
+    Transform transform;
+    Vector3 velocity; // 速度
+    Vector4 color;    // 色
+    float lifeTime;
+    float currentTime;
+};
+
+// GPUに送るための専用構造体 (資料スライド2枚目)
+struct ParticleForGPU {
+    Matrix4x4 WVP;
+    Matrix4x4 World;
+    Vector4 color; // 色
+};
+
 class Particle {
 public:
 
@@ -27,16 +43,21 @@ public:
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
 
 private:
+    std::vector<ParticleData> particles_;
     ParticleCommon *particleCommon_ = nullptr;
     uint32_t kParticleCount_ = 0;
+
+    uint32_t numActiveParticles_ = 0;
 
     // 自分のブレンドモード（デフォルトは通常）
     BlendMode blendMode_ = kBlendModeNomal;
 
     // Instancing用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_;
-    TransformMatrix *instancingData_ = nullptr;
     D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU_{};
+
+    // マップ先の型を ParticleForGPU に変更
+    ParticleForGPU *instancingData_ = nullptr;
 
     // マテリアル用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;

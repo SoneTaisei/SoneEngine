@@ -2,6 +2,7 @@
 #include "Graphics/TextureManager.h"
 #include "Utility/TransformFunctions.h"
 #include <cassert>
+#include <random>
 
 Particle::~Particle() {
     if(particleCommon_) {
@@ -15,8 +16,35 @@ void Particle::Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon 
     ID3D12Device *device = particleCommon_->GetDevice();
     blendMode_ = blendMode;
 
+    // --- 乱数生成器の準備 ---
+    std::random_device seedGenerator;
+    std::mt19937 randomEngine(seedGenerator());
+
+    // 分布の設定： -1.0f ～ 1.0f の間の値をランダムに出す
+    std::uniform_real_distribution<float> distribution(-1.0f, 1.0f);
+
+    // 色用の乱数分布 (0.0f ～ 1.0f)
+    std::uniform_real_distribution<float> distColor(0.0f, 1.0f);
+    // ------------------------------------
+    std::uniform_real_distribution<float> distTime(1.0f, 3.0f);
+
+    // CPU側の粒子データのサイズ確保と初期化
+    particles_.resize(kParticleCount_);
+    for(uint32_t i = 0; i < kParticleCount_; ++i) {
+        // --- ランダムに値を設定 ---
+        particles_[i].transform.translate = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+        particles_[i].transform.scale = { 1.0f, 1.0f, 1.0f };
+        particles_[i].transform.rotate = { 0.0f, 0.0f, 0.0f };
+        particles_[i].velocity = { distribution(randomEngine), distribution(randomEngine), distribution(randomEngine) };
+        particles_[i].color = { distColor(randomEngine), distColor(randomEngine), distColor(randomEngine), 1.0f };
+        particles_[i].lifeTime = distTime(randomEngine);
+        particles_[i].currentTime = 0;
+        // ------------------------------------
+    }
+
+
     // 1. Instancingリソースの作成
-    UINT size = kParticleCount_ * sizeof(TransformMatrix);
+    UINT size = kParticleCount_ * sizeof(ParticleForGPU);
     instancingResource_ = CreateBufferResource(device, size);
     instancingResource_->Map(0, nullptr, reinterpret_cast<void **>(&instancingData_));
 
@@ -35,6 +63,9 @@ void Particle::Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon 
     srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
     srvDesc.Buffer.NumElements = kParticleCount_;
     srvDesc.Buffer.StructureByteStride = sizeof(TransformMatrix);
+
+    // ストライド(1要素のサイズ)を ParticleForGPU に合わせる
+    srvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
 
     ID3D12DescriptorHeap *srvHeap = TextureManager::GetInstance()->GetSrvDescriptorHeap();
     UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -65,13 +96,42 @@ void Particle::Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon 
 }
 
 void Particle::Update(const Matrix4x4 &viewProjection) {
-    // 簡易的な更新処理 (例としてInitializeにあったものをここに実装)
+    // 時間の定義 (資料通り固定FPS前提)
+    const float kDeltaTime = 1.0f / 60.0f;
+
+    numActiveParticles_ = 0;
+
     for(uint32_t i = 0; i < kParticleCount_; ++i) {
-        Matrix4x4 worldMatrix = TransformFunctions::MakeTranslateMatrix({ 0.0f + 0.1f * i, 0.0f - 0.1f * i, 0.0f });
+        // 寿命チェック
+        if(particles_[i].lifeTime <= particles_[i].currentTime) {
+            continue; // 死んでいるのでスキップ
+        }
+
+        // 1. 速度を加算して位置を更新 (位置 += 速度 * 時間)
+        particles_[i].transform.translate.x += particles_[i].velocity.x * kDeltaTime;
+        particles_[i].transform.translate.y += particles_[i].velocity.y * kDeltaTime;
+        particles_[i].transform.translate.z += particles_[i].velocity.z * kDeltaTime;
+
+        // 時間を進める処理
+        particles_[i].currentTime += kDeltaTime;
+
+        // 2. 更新した位置情報を使ってワールド行列を作成
+        //    (回転や拡縮も反映させるため、MakeAffineMatrixの使用を推奨しますが、
+        //     今回は資料に合わせMakeTranslateMatrixを使います)
+        Matrix4x4 worldMatrix = TransformFunctions::MakeTranslateMatrix(particles_[i].transform.translate);
+
+        // 3. ビュープロジェクション行列と掛け合わせる
         Matrix4x4 wvpMatrix = TransformFunctions::Multiply(worldMatrix, viewProjection);
 
-        instancingData_[i].World = worldMatrix;
-        instancingData_[i].WVP = wvpMatrix;
+        // 生きているデータをGPUバッファの前から順に詰める
+        if(numActiveParticles_ < kParticleCount_) {
+            instancingData_[numActiveParticles_].World = worldMatrix;
+            instancingData_[numActiveParticles_].WVP = wvpMatrix;
+            instancingData_[numActiveParticles_].color = particles_[i].color;
+
+            // カウントを増やす
+            numActiveParticles_++;
+        }
     }
 }
 
@@ -99,5 +159,7 @@ void Particle::Draw() {
     // 今回は簡易化のため省略するか、別途Setする関数を作る必要があります。
 
     // インスタンシング描画
-    commandList->DrawInstanced(particleCommon_->GetVertexCount(), kParticleCount_, 0, 0);
+    if(numActiveParticles_ > 0) {
+        commandList->DrawInstanced(particleCommon_->GetVertexCount(), numActiveParticles_, 0, 0);
+    }
 }

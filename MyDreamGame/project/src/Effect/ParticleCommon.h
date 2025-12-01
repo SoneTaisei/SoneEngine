@@ -21,6 +21,10 @@ public:
     void Initialize(ID3D12Device *device);
     void PreDraw(ID3D12GraphicsCommandList *commandList);
 
+    void SetViewProjection(const Matrix4x4 &viewProjection) {
+        viewProjection_ = viewProjection;
+    }
+
     // 登録されている全パーティクルを描画する
     void DrawAll();
 
@@ -54,6 +58,13 @@ private:
 
     // 全パーティクルのリスト
     std::list<Particle *> particles_;
+
+    // バッファにデータを書き込むためのポインタ
+    Matrix4x4 viewProjection_;
+
+    // ViewProjection用リソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> wvpResource_;
+    Matrix4x4 *wvpData_ = nullptr;
 
     // 共通の板ポリゴンデータ
     std::vector<ParticleVertexData> vertices_;

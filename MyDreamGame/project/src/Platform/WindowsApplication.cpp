@@ -114,7 +114,7 @@ void WindowsApplication::Initialize() {
 	particle_ = std::make_unique<Particle>();
 	// モデルやテクスチャのロード、初期設定
 	// index 99 は仮のSRVインデックス、10はパーティクル数
-	particle_->Initialize(commandList,particleCommon_.get(), 10, "./resources/uvChecker.png", 99);
+	particle_->Initialize(commandList,particleCommon_.get(), 10, "./resources/circle.png", 99,BlendMode::kBlendModeAdd);
 
 
 	// ViewProjectionリソースの作成
@@ -253,6 +253,8 @@ void WindowsApplication::Run() {
 
 			// SceneManagerによる描画
 			sceneManager_->Draw(viewProjectionData_->viewProjectionMatrix);
+
+			particleCommon_->SetViewProjection(viewProjectionData_->viewProjectionMatrix);
 
 			// パーティクルの描画
 			// 1. 共通設定 (RootSignature, PSO, Mesh, DescriptorHeap)
