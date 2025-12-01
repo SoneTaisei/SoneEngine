@@ -95,11 +95,24 @@ void Particle::Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon 
     textureIndex_ = TextureManager::GetInstance()->Load(textureFilePath, commandList);
 }
 
-void Particle::Update(const Matrix4x4 &viewProjection) {
+void Particle::Update(const Matrix4x4 &viewProjection, const Matrix4x4 &cameraMatrix) {
     // 時間の定義 (資料通り固定FPS前提)
-    const float kDeltaTime = 1.0f / 60.0f;
+    //const float kDeltaTime = 1.0f / 60.0f;
+    const float kDeltaTime = 0.0f;
 
     numActiveParticles_ = 0;
+
+    // 1. 裏面が見えているので反転させる行列 (Y軸でπ回転)
+    Matrix4x4 backToFrontMatrix = TransformFunctions::MakeRoteYMatrix(std::numbers::pi_v<float>);
+
+    // 2. カメラの回転を適用する (BillboardMatrixの作成)
+    //    ビルボード行列 = 裏面反転行列 * カメラ行列
+    Matrix4x4 billboardMatrix = TransformFunctions::Multiply(backToFrontMatrix, cameraMatrix);
+
+    // 3. 平行移動成分を削除する (カメラの回転だけを利用するため)
+    billboardMatrix.m[3][0] = 0.0f;
+    billboardMatrix.m[3][1] = 0.0f;
+    billboardMatrix.m[3][2] = 0.0f;
 
     for(uint32_t i = 0; i < kParticleCount_; ++i) {
         // 寿命チェック
@@ -115,10 +128,19 @@ void Particle::Update(const Matrix4x4 &viewProjection) {
         // 時間を進める処理
         particles_[i].currentTime += kDeltaTime;
 
-        // 2. 更新した位置情報を使ってワールド行列を作成
-        //    (回転や拡縮も反映させるため、MakeAffineMatrixの使用を推奨しますが、
-        //     今回は資料に合わせMakeTranslateMatrixを使います)
-        Matrix4x4 worldMatrix = TransformFunctions::MakeTranslateMatrix(particles_[i].transform.translate);
+        // TransformFunctions::MakeScaleMatrix がある前提で書いています
+        // もしなければ、すべて1.0の単位行列を作るか、関数を追加してください
+        Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(particles_[i].transform.scale);
+
+        // 平行移動行列
+        Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(particles_[i].transform.translate);
+
+        // 1. Scale * Billboard
+        Matrix4x4 stateMatrix = TransformFunctions::Multiply(scaleMatrix, billboardMatrix);
+
+        // 2. (Scale * Billboard) * Translate
+        // これで「worldMatrix」になります
+        Matrix4x4 worldMatrix = TransformFunctions::Multiply(stateMatrix, translateMatrix);
 
         // 3. ビュープロジェクション行列と掛け合わせる
         Matrix4x4 wvpMatrix = TransformFunctions::Multiply(worldMatrix, viewProjection);

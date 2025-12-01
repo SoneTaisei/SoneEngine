@@ -233,9 +233,14 @@ void WindowsApplication::Run() {
 
 			sceneManager_->Update();
 
-			// パーティクルの更新
-			particle_->Update(viewProjectionData_->viewProjectionMatrix);
+			Matrix4x4 cameraMatrix = TransformFunctions::MakeAffineMatrix(
+				{ 1.0f, 1.0f, 1.0f },             // Scale
+				activeCamera_->GetRotation(),     // Rotate (現在アクティブなカメラの回転)
+				activeCamera_->GetTranslation()   // Translate (現在アクティブなカメラの座標)
+			);
 
+			// パーティクルの更新
+			particle_->Update(viewProjectionData_->viewProjectionMatrix,cameraMatrix);
 
 			// --- 描画処理 (Draw) ---
 			dxCommon_->PreDraw();

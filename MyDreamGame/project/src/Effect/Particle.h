@@ -6,6 +6,9 @@
 #include "Model/ModelCommon.h" 
 #include "ParticleCommon.h"
 #include "Utility/BlendMode.h"
+#include <numbers>
+#include <list>
+#include <random>
 
 // CPU側で持つ個々のパーティクル情報
 struct ParticleData {
@@ -34,15 +37,26 @@ public:
     void Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon *particleCommon, uint32_t count, const std::string &textureFilePath, int srvIndex, BlendMode blendMode = kBlendModeNomal);
 
     // 更新
-    void Update(const Matrix4x4 &viewProjection);
+    void Update(const Matrix4x4 &viewProjection, const Matrix4x4 &cameraMatrix);
 
     // 描画
     void Draw();
+
+    // 外部からパーティクルを発生させるための関数
+    // count: 一度に出す数
+    void Emit(uint32_t count);
 
     // セッター
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
 
 private:
+
+    // 内部で1つ分のパーティクルデータを生成するヘルパー関数
+    ParticleData MakeNewParticle();
+
+    // vector から list へ変更
+    std::list<ParticleData> particles_;
+
     std::vector<ParticleData> particles_;
     ParticleCommon *particleCommon_ = nullptr;
     uint32_t kParticleCount_ = 0;
@@ -65,4 +79,7 @@ private:
 
     // テクスチャハンドル
     uint32_t textureIndex_ = 0;
+
+    // 乱数生成器をメンバに持つ
+    std::mt19937 randomEngine_;
 };
