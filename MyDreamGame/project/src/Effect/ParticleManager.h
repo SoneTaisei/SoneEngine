@@ -118,4 +118,7 @@ protected:
 
     // フィールドのメンバ変数
     AccelerationField accelerationField_;
+
+    // ビルボード有効化フラグ
+    bool isBillboard_ = true;
 };

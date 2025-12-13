@@ -187,6 +187,7 @@
     <ClCompile Include="src\Scene\TitleScene.cpp" />
     <ClCompile Include="src\Scene\StageSelectScene.cpp" />
     <ClCompile Include="src\Platform\WindowsApplication.cpp" />
+    <ClCompile Include="src\Effect\windowParticle.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\Object3d.PS.hlsl">
@@ -273,6 +274,7 @@
     <ClInclude Include="src\Scene\TitleScene.h" />
     <ClInclude Include="src\Scene\StageSelectScene.h" />
     <ClInclude Include="src\Platform\WindowsApplication.h" />
+    <ClInclude Include="src\Effect\windowParticle.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />

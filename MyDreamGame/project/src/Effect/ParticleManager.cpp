@@ -19,7 +19,7 @@ void ParticleManager::Initialize(ID3D12GraphicsCommandList *commandList,Particle
 
     // --- 乱数生成器の準備 ---
     std::random_device seedGenerator;
-    std::mt19937 randomEngine(seedGenerator());
+    randomEngine_.seed(seedGenerator());
 
     // 初期化時はリストをクリアするだけ（最初はパーティクル0個）
     particles_.clear();
@@ -177,6 +177,9 @@ void ParticleManager::DrawImGui() {
 
     // (おまけ) 頻度もいじれると便利なので追加しておくと良いでしょう
     ImGui::DragFloat("Emitter Frequency", &emitter_.frequency, 0.01f, 0.0f, 10.0f);
+
+    // ■ 追加: ビルボードのON/OFF切り替え
+    ImGui::Checkbox("Is Billboard", &isBillboard_);
 }
 
 void ParticleManager::Draw(const Matrix4x4 &viewProjection) {
@@ -219,12 +222,22 @@ void ParticleManager::TransferToGPU(const Matrix4x4 &viewProjection) {
 
     numActiveParticles_ = 0;
 
-    // 1. ビルボード行列の計算
-    Matrix4x4 backToFrontMatrix = TransformFunctions::MakeRoteYMatrix(std::numbers::pi_v<float>);
-    Matrix4x4 billboardMatrix = TransformFunctions::Multiply(backToFrontMatrix, cameraMatrix);
-    billboardMatrix.m[3][0] = 0.0f;
-    billboardMatrix.m[3][1] = 0.0f;
-    billboardMatrix.m[3][2] = 0.0f;
+    // ビルボード行列の計算をフラグで分岐させる
+    Matrix4x4 billboardMatrix;
+
+    if(isBillboard_) {
+        // ONの場合: カメラの向きに合わせて回転を作る (既存の処理)
+        Matrix4x4 backToFrontMatrix = TransformFunctions::MakeRoteYMatrix(std::numbers::pi_v<float>);
+        billboardMatrix = TransformFunctions::Multiply(backToFrontMatrix, cameraMatrix);
+        billboardMatrix.m[3][0] = 0.0f;
+        billboardMatrix.m[3][1] = 0.0f;
+        billboardMatrix.m[3][2] = 0.0f;
+    } else {
+        // OFFの場合: 回転なし (単位行列)
+        // ※もしパーティクル個別の回転(it->transform.rotate)を使いたい場合は
+        //   ここで個別に計算する必要がありますが、まずは「向かない」状態にします
+        billboardMatrix = TransformFunctions::MakeIdentity4x4();
+    }
 
     // 2. 全パーティクルをループしてGPUバッファに書き込む
     for(auto it = particles_.begin(); it != particles_.end(); ++it) {

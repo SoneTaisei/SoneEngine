@@ -6,6 +6,8 @@
 #include "Utility/Utilityfunctions.h"
 #include "Effect/ParticleManager.h"
 #include <memory>
+#include "Effect/ParticleCommon.h"
+#include "Effect/windowParticle.h"
 
 class TitleScene : public IScene {
 public:
@@ -24,6 +26,26 @@ private:
 
     std::vector<std::unique_ptr<Model>> models_;
     std::vector<std::unique_ptr<Sprite>> sprites_;
-    std::vector<std::unique_ptr<ParticleManager>> particle_;
+
+    // ■ 追加: パーティクル管理用変数
+
+    // 1. 共通基盤
+    std::unique_ptr<ParticleCommon> particleCommon_;
+
+    // 2. パーティクルリスト (所有権管理用)
+    std::vector<std::unique_ptr<ParticleManager>> particles_;
+
+    // 3. 個別のパーティクル操作用ポインタ (Emit呼び出し用)
+    windowParticle *windowParticle_ = nullptr;
+
+    // 4. エミッタ (発生設定)
+    Emitter windowEmitter_{};
+
+    // 5. SRVインデックス (他と被らない番号)
+    const int srvIndex_ = 20;
+
+    // ■ 追加: タイトルシーン専用カメラ
+    Transform cameraTransform_; // カメラの座標・回転
+    Matrix4x4 viewProjection_;  // 描画に使う行列
 
 };

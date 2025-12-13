@@ -41,6 +41,7 @@
     <ClCompile Include="src\Graphics\Camera.cpp" />
     <ClCompile Include="src\Graphics\GameCamera.cpp" />
     <ClCompile Include="src\Effect\SnowParticle.cpp" />
+    <ClCompile Include="src\Effect\windowParticle.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Scene\SceneManager.h" />
@@ -81,6 +82,7 @@
     <ClInclude Include="src\Graphics\Camera.h" />
     <ClInclude Include="src\Graphics\GameCamera.h" />
     <ClInclude Include="src\Effect\SnowParticle.h" />
+    <ClInclude Include="src\Effect\windowParticle.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
