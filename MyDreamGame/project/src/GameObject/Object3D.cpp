@@ -21,9 +21,13 @@ void Object3D::Initialize(ID3D12Device *device, ModelData *modelData, const std:
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
 
     // テクスチャを読み込み、SRVを作成する (この部分はTextureManagerクラスなどを作るとさらに良くなる)
+
+    cameraResource_ = CreateBufferResource(device, (sizeof(CameraForGPU) + 255) & ~255u);
+    cameraResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedCamera_));
+    mappedCamera_->worldPosition = {0.0f, 0.0f, 0.0f};
 }
 
-void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix) {
+void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix, const Vector3 &cameraPos) {
     // ImGuiで変更されたCPU側のデータをGPUリソースにコピー
     *mappedMaterial_ = material_;
     *mappedLight_ = light_;
@@ -32,12 +36,19 @@ void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMa
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     mappedTransform_->World = worldMatrix;
     mappedTransform_->WVP = worldMatrix * viewMatrix * projectionMatrix;
+
+    // CPU側のカメラ位置をバッファに書き込む
+    mappedCamera_->worldPosition = cameraPos;
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList, ID3D12DescriptorHeap *srvDescriptorHeap) {
     // このオブジェクト用のリソースをシェーダーに設定
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
+    // ※重要: RootSignatureの設定で、新しい定数バッファ(b2)を受け取るスロットを追加する必要があります。
+    // ここでは仮にインデックス「3」が空いているとして設定します。
+    // RootSignatureの構成によってはインデックス番号が変わるので注意してください。
+    commandList->SetGraphicsRootConstantBufferView(3, cameraResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(4, lightResource_->GetGPUVirtualAddress());
 
     // テクスチャを設定

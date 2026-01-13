@@ -7,6 +7,8 @@ ConstantBuffer<Material> gMaterial : register(b0);
 
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 
+ConstantBuffer<Camera> gCamera : register(b2);
+
 struct PixelShaderOutput {
     float4 color : SV_TARGET0;
 };
@@ -22,6 +24,12 @@ cbuffer TransformCB : register(b4) {
 float4 main(VertexShaderOutput input) : SV_TARGET {
     float3 normal = normalize(input.normal);
     float3 lightDir = normalize(-gDirectionalLight.direction);
+    
+    float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
+    
+    float3 halfVector = normalize(lightDir + toEye);
+    float NdotH = dot(normal, halfVector);
+    float specular = pow(saturate(NdotH), 100.0f);
 
     float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);

@@ -2,6 +2,10 @@
 #include "Utility/Structs.h" // 必要な構造体のインクルード
 #include "Utility/UtilityFunctions.h"
 
+struct CameraForGPU {
+    Vector3 worldPosition;
+};
+
 class Object3D {
 public:
     /// <summary>
@@ -14,7 +18,7 @@ public:
     /// <summary>
     /// 毎フレームの更新
     /// </summary>
-    void Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix);
+    void Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix, const Vector3 &cameraPos);
 
     /// <summary>
     /// 描画
@@ -52,5 +56,8 @@ private:
     // テクスチャ関連
     Microsoft::WRL::ComPtr<ID3D12Resource> textureResource_;
     uint32_t textureSrvHandle_ = 0; // SRVヒープ上のインデックス
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
+    CameraForGPU *mappedCamera_ = nullptr;
 };
 
