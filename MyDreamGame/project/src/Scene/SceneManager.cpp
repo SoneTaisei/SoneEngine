@@ -19,8 +19,26 @@ void SceneManager::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> 
 }
 
 void SceneManager::Update() {
-    if(currentScene_) {
-        currentScene_->Update(this); // thisポインタを渡す
+    // 1. まず現在のシーンの更新を行う（これが最後まで走り切る！）
+    if (currentScene_) {
+        currentScene_->Update(this);
+    }
+
+    // 2. 更新が終わった後、「次のシーン」の予約があるかチェック
+    if (nextScene_) {
+        // 現在のシーンを、予約していた新しいシーンに入れ替え
+        currentScene_ = std::move(nextScene_);
+
+        // 各種Commonのセット（ChangeSceneに書いてあった処理をここに移動）
+        if (spriteCommon_)
+            currentScene_->SetSpriteCommon(spriteCommon_);
+        if (modelCommon_)
+            currentScene_->SetModelCommon(modelCommon_);
+        if (particleCommon_)
+            currentScene_->SetParticleCommon(particleCommon_); // 必要なら追加
+
+        // 新しいシーンの初期化
+        currentScene_->Initialize(commandList_);
     }
 }
 
@@ -33,9 +51,5 @@ void SceneManager::Draw(const Matrix4x4 &viewProjectionMatrix) {
 void SceneManager::ChangeScene(IScene *newScene) {
     assert(newScene); // 渡されたシーンがnullptrでないことを確認
 
-    // 現在のシーンを破棄し、新しいシーンを設定
-    currentScene_.reset(newScene);
-    currentScene_->SetSpriteCommon(spriteCommon_);
-    currentScene_->SetModelCommon(modelCommon_);
-    currentScene_->Initialize(commandList_);
+    nextScene_.reset(newScene);
 }

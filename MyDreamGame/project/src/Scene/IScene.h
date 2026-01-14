@@ -33,13 +33,13 @@ public:
         modelCommon_ = modelCommon;
     }
 
-    virtual void SetParticleCommon(std::unique_ptr<ParticleCommon> particleCommon) {
-        particleCommon_ = std::move(particleCommon);
+    virtual void SetParticleCommon(ParticleCommon *particleCommon) {
+        particleCommon_ = particleCommon;
     }
 protected:
     // 継承先(TitleSceneなど)で使えるようにする
     SpriteCommon *spriteCommon_ = nullptr;
     ModelCommon* modelCommon_ = nullptr;
-    std::unique_ptr<ParticleCommon> particleCommon_ = nullptr;
+    ParticleCommon *particleCommon_ = nullptr;
     
 };

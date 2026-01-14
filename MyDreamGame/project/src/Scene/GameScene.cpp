@@ -10,15 +10,11 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
-    // 2. ParticleCommonの生成と初期化
-    particleCommon_ = std::make_unique<ParticleCommon>();
-    particleCommon_->Initialize(device.Get());
-
     // 3. SnowParticleの生成 (unique_ptrで作る)
     auto snowParticle = std::make_unique<SnowParticle>();
 
     // 4. 初期化
-    snowParticle->Initialize(commandList.Get(), particleCommon_.get(), 1000, "resources/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
+    snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "resources/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
 
     // Commonに描画登録する (Modelと同じ仕組みにする)
     particleCommon_->AddParticle(snowParticle.get());
