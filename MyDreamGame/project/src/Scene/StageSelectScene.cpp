@@ -3,6 +3,7 @@
 #include "Graphics/TextureManager.h"
 #include "Input/KeyboardInput.h"
 #include "SceneManager.h"
+#include "Utility/ImGuiHelper.h"
 
 StageSelectScene::~StageSelectScene() {
 }
@@ -27,7 +28,17 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
 
 void StageSelectScene::Update(SceneManager *sceneManager) {
 
-    ImGui::Text("a");
+    ImGui::Begin("Debug Models");
+
+    for (int i = 0; i < models_.size(); ++i) {
+        // 名前を自動生成（Model 0, Model 1...）
+        std::string name = "Model " + std::to_string(i);
+
+        // 便利関数にポイっと渡すだけ！
+        ShowModelGui(name, models_[i].get());
+    }
+
+    ImGui::End();
 
     // スペースキーが押されたらゲームシーンへ
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {

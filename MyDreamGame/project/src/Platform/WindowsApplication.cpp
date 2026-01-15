@@ -165,8 +165,9 @@ void WindowsApplication::Initialize() {
 	materialData = nullptr;
 	materialResource->Map(0, nullptr, reinterpret_cast<void **>(&materialData));
 	materialData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-	materialData->lightingType = 0;
+	materialData->lightingType = 1;
 	materialData->uvTransform = TransformFunctions::MakeIdentity4x4();
+    materialData->shininess = 50.0f;
 	materialResource->Unmap(0, nullptr);
 
 #ifdef _DEBUG
@@ -278,6 +279,9 @@ void WindowsApplication::Run() {
 
 
 			ID3D12GraphicsCommandList *commandList = dxCommon_->GetCommandList();
+
+			ID3D12DescriptorHeap *descriptorHeaps[] = {TextureManager::GetInstance()->GetSrvDescriptorHeap()};
+            commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
 			// 定数バッファの設定 (これはゲーム固有の描画処理)
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());

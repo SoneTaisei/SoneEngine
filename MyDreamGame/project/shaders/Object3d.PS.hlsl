@@ -1,6 +1,6 @@
 #include "object3d.hlsli"
 
-Texture2D<float4> gTexture : register(t3);
+Texture2D<float4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
 ConstantBuffer<Material> gMaterial : register(b0);

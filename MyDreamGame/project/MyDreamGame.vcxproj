@@ -267,6 +267,7 @@
     <ClInclude Include="src\Input\InputManager.h" />
     <ClInclude Include="src\GameObject\Object3D.h" />
     <ClInclude Include="src\GameObject\ResourceObject.h" />
+    <ClInclude Include="src\Utility\ImGuiHelper.h" />
     <ClInclude Include="src\Utility\Structs.h" />
     <ClInclude Include="src\Utility\TransformFunctions.h" />
     <ClInclude Include="src\Utility\UtilityFunctions.h" />

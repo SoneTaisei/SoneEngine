@@ -83,6 +83,7 @@
     <ClInclude Include="src\Graphics\GameCamera.h" />
     <ClInclude Include="src\Effect\SnowParticle.h" />
     <ClInclude Include="src\Effect\windowParticle.h" />
+    <ClInclude Include="src\Utility\ImGuiHelper.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />

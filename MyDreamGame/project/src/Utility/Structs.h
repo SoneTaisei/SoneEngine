@@ -99,6 +99,7 @@ struct Material {
 	int32_t lightingType;
 	float padding[3];
 	Matrix4x4 uvTransform;
+    float shininess;
 };
 
 struct DirectionalLight {

@@ -26,14 +26,14 @@ public:
 
 
     // --- セッター ---
-    void SetPosition(const Vector3 &position) { transform_.translate = position; }
+    void SetTranslation(const Vector3 &position) { transform_.translate = position; }
     void SetRotation(const Vector3 &rotation) { transform_.rotate = rotation; }
     void SetScale(const Vector3 &scale) { transform_.scale = scale; }
     // テクスチャを後から変えたい場合用
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
 
     // --- ゲッター ---
-    const Vector3 &GetPosition() const { return transform_.translate; }
+    const Vector3 &GetTranslation() const { return transform_.translate; }
     const Vector3 &GetRotation() const { return transform_.rotate; }
     const Vector3 &GetScale() const { return transform_.scale; }
     const Transform &GetTransform() const { return transform_; }
