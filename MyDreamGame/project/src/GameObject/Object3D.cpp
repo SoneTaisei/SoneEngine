@@ -1,10 +1,18 @@
 // 実際のコードでは各関数の詳細な実装が必要です。
 #include "Object3D.h"
+#include <DirectXMath.h>
 
 void Object3D::Initialize(ID3D12Device *device, ModelData *modelData, const std::wstring &textureFilePath) {
     // メンバ変数の初期値を設定
     transform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
-    material_ = { {1.0f, 1.0f, 1.0f, 1.0f}, 1, {}, TransformFunctions::MakeIdentity4x4() };
+    material_ = {
+        {1.0f, 1.0f, 1.0f, 1.0f},              // color
+        1,                                     // lightingType
+        1,                                     // enableBlinnPhong (1:有効) ★追加
+        {0.0f, 0.0f},                          // padding[2] (2つ分)
+        TransformFunctions::MakeIdentity4x4(), // uvTransform
+        50.0f                                  // shininess ★追加
+    };
     light_ = { {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 1.0f };
 
     // 頂点バッファやインデックスバッファをmodelDataから作成
@@ -32,10 +40,32 @@ void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMa
     *mappedMaterial_ = material_;
     *mappedLight_ = light_;
 
-    // 座標変換行列を計算してGPUリソースにコピー
+    // --- 1. 世界行列 (WorldMatrix) の計算 ---
+    // ここで計算した worldMatrix をこの後の計算すべてに使います
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+
+    // --- 2. WVP行列の計算 ---
+    Matrix4x4 wvpMatrix = worldMatrix * viewMatrix * projectionMatrix;
+
+    // --- 3. ★逆転置行列 (WorldInverseTranspose) の計算★ ---
+    // DirectXMathを使って計算します
+    // ※自作のMatrix4x4型をDirectXの型として読み込ませるためにキャストしています
+    DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&worldMatrix));
+
+    // 逆行列を計算 (行列式は不要なのでnullptr)
+    DirectX::XMMATRIX worldInv = DirectX::XMMatrixInverse(nullptr, worldX);
+
+    // 転置行列を計算
+    DirectX::XMMATRIX worldInvTrans = DirectX::XMMatrixTranspose(worldInv);
+
+    // --- 4. 定数バッファ (mappedTransform_) に書き込む ---
     mappedTransform_->World = worldMatrix;
-    mappedTransform_->WVP = worldMatrix * viewMatrix * projectionMatrix;
+    mappedTransform_->WVP = wvpMatrix;
+
+    // 計算した逆転置行列をストア (ここもキャストが必要です)
+    DirectX::XMStoreFloat4x4(
+        reinterpret_cast<DirectX::XMFLOAT4X4 *>(&mappedTransform_->WorldInverseTranspose),
+        worldInvTrans);
 
     // CPU側のカメラ位置をバッファに書き込む
     mappedCamera_->worldPosition = cameraPos;

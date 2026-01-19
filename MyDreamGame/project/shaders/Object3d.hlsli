@@ -19,6 +19,8 @@ struct VertexShaderInput {
 struct Material {
     float4 color;
     int32_t lightingType;
+    int enableBlinnPhong;
+    float2 padding;
     float4x4 uvTransform;
     float32_t shininess;
 };
@@ -26,6 +28,7 @@ struct Material {
 struct TransformationMatrix {
     float4x4 WVP;
     float4x4 World;
+    float4x4 WorldInverseTranspose;
 };
 
 struct DirectionalLight {

@@ -86,6 +86,7 @@ struct  Transform {
 struct TransformMatrix {
 	Matrix4x4 WVP;
 	Matrix4x4 World;
+    Matrix4x4 WorldInverseTranspose;
 };
 
 struct VertexData {
@@ -97,7 +98,8 @@ struct VertexData {
 struct Material {
 	Vector4 color;
 	int32_t lightingType;
-	float padding[3];
+    int32_t enableBlinnPhong;
+    float padding[2];
 	Matrix4x4 uvTransform;
     float shininess;
 };
