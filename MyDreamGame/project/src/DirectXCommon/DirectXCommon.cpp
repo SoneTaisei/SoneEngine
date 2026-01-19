@@ -240,11 +240,10 @@ void DirectXCommon::CreatePipelines() {
     rootParameters[0].Descriptor.ShaderRegister = 0;
     rootParameters[0].Descriptor.RegisterSpace = 0;
 
-    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-    rootParameters[1].Constants.Num32BitValues = sizeof(TransformMatrix) / 4;
-    rootParameters[1].Constants.ShaderRegister = 0;
-    rootParameters[1].Constants.RegisterSpace = 0;
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;     // CBVを指定
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // VSで使う
+    rootParameters[1].Descriptor.ShaderRegister = 0;                     // register(b0)
+    rootParameters[1].Descriptor.RegisterSpace = 0;
 
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;

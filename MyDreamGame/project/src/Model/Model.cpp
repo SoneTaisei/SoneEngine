@@ -81,6 +81,18 @@ void Model::CreateBuffers() {
     assert(SUCCEEDED(hr));
     std::memcpy(indexData, modelData_.indices.data(), sizeof(uint32_t) * modelData_.indices.size());
     indexResource_->Unmap(0, nullptr);
+
+    // --- 3. Transform Buffer (変形行列用) の作成 ---
+    // ★重要：サイズを256バイトの倍数にする魔法の計算
+    transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
+
+    // バッファを開いて、書き込み用のポインタを取得する
+    transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
+
+    // 安全のため、最初は単位行列を入れておく
+    mappedTransform_->WVP = TransformFunctions::MakeIdentity4x4();
+    mappedTransform_->World = TransformFunctions::MakeIdentity4x4();
+    mappedTransform_->WorldInverseTranspose = TransformFunctions::MakeIdentity4x4();
 }
 
 void Model::Draw(const Matrix4x4 &viewProjectionMatrix) {
@@ -90,12 +102,29 @@ void Model::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     // 変換行列計算
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    TransformMatrix transformMatrix;
-    transformMatrix.WVP = TransformFunctions::Multiply(worldMatrix, viewProjectionMatrix);
-    transformMatrix.World = worldMatrix;
+
+    // ★修正 1：ローカル変数ではなく、作ったバッファ(mappedTransform_)に直接書き込む
+    if (mappedTransform_) {
+        mappedTransform_->WVP = TransformFunctions::Multiply(worldMatrix, viewProjectionMatrix);
+        mappedTransform_->World = worldMatrix;
+
+        // ★追加：ライティング用の逆転置行列も計算する（Object3Dと同じ処理）
+        // ※これをやるには #include <DirectXMath.h> が必要です
+        DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&worldMatrix));
+        DirectX::XMMATRIX worldInv = DirectX::XMMatrixInverse(nullptr, worldX);
+        // 転置はシェーダーに任せるので、そのまま渡す（以前の修正と同じ）
+        DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4 *>(&mappedTransform_->WorldInverseTranspose), worldInv);
+    }
 
     // コマンド発行
-    commandList->SetGraphicsRoot32BitConstants(1, sizeof(TransformMatrix) / 4, &transformMatrix, 0);
+
+    // ★修正 2：ここを「32BitConstants」から「ConstantBufferView」に変更！
+    // 以前: commandList->SetGraphicsRoot32BitConstants(1, ...);
+    // ↓
+    // 今回: 箱のアドレスを渡す
+    commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
+
+    // 以下はそのまま
     commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->IASetIndexBuffer(&indexBufferView_);

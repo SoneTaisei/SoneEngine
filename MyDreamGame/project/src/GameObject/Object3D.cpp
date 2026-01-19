@@ -25,7 +25,7 @@ void Object3D::Initialize(ID3D12Device *device, ModelData *modelData, const std:
     lightResource_ = CreateBufferResource(device, (sizeof(DirectionalLight) + 255) & ~255u);
     lightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedLight_));
 
-    transformResource_ = CreateBufferResource(device, sizeof(TransformMatrix));
+    transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
 
     // テクスチャを読み込み、SRVを作成する (この部分はTextureManagerクラスなどを作るとさらに良くなる)
@@ -56,7 +56,8 @@ void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMa
     DirectX::XMMATRIX worldInv = DirectX::XMMatrixInverse(nullptr, worldX);
 
     // 転置行列を計算
-    DirectX::XMMATRIX worldInvTrans = DirectX::XMMatrixTranspose(worldInv);
+    //DirectX::XMMATRIX worldInvTrans = DirectX::XMMatrixTranspose(worldInv);
+    DirectX::XMMATRIX worldInvTrans = worldInv;
 
     // --- 4. 定数バッファ (mappedTransform_) に書き込む ---
     mappedTransform_->World = worldMatrix;

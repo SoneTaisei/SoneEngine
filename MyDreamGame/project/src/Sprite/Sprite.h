@@ -39,6 +39,8 @@ private:
     // 個別のリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
     Material *materialData_ = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12Resource> transformResource_; // 行列を入れるための箱
+    TransformMatrix *mappedTransform_ = nullptr;               // 箱の中身へのアクセス権
 
     // 座標変換用
     Transform transform_{ {1.0f,1.0f,1.0f}, {0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f} };

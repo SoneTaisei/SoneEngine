@@ -58,4 +58,7 @@ private:
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_;
     D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> transformResource_; // 行列用の箱
+    TransformMatrix *mappedTransform_ = nullptr;               // 箱の中身へのアクセス権
 };

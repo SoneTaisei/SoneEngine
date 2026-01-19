@@ -78,7 +78,8 @@ void Sprite::Draw() {
 
 	// 行列データ (RootParameter 1番: 32BitConstantsを使用していた場合の例)
 	// ※元のSprite.cppに合わせ、直接値をセットしています
-	commandList->SetGraphicsRoot32BitConstants(1, sizeof(TransformMatrix) / 4, &transformMatrixData, 0);
+	//commandList->SetGraphicsRoot32BitConstants(1, sizeof(TransformMatrix) / 4, &transformMatrixData, 0);
+    commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
 
 	// テクスチャ (RootParameter 2番)
 	D3D12_GPU_DESCRIPTOR_HANDLE textureHandle = TextureManager::GetInstance()->GetGpuHandle(textureIndex_);
