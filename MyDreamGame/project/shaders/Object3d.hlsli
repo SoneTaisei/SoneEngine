@@ -37,6 +37,12 @@ struct DirectionalLight {
     float intensity; 
 };
 
+struct PointLight {
+    float32_t4 color;
+    float32_t3 position;
+    float intensity;
+};
+
 struct ViewProjection {
     matrix viewProjectionMatrix;
     float3 cameraPosition; 

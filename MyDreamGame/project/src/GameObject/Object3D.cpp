@@ -1,109 +1,104 @@
-// 実際のコードでは各関数の詳細な実装が必要です。
 #include "Object3D.h"
 #include <DirectXMath.h>
 
 void Object3D::Initialize(ID3D12Device *device, ModelData *modelData, const std::wstring &textureFilePath) {
     // メンバ変数の初期値を設定
-    transform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+    transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+
+    // マテリアル初期化
     material_ = {
-        {1.0f, 1.0f, 1.0f, 1.0f},              // color
-        1,                                     // lightingType
-        1,                                     // enableBlinnPhong (1:有効) ★追加
-        {0.0f, 0.0f},                          // padding[2] (2つ分)
-        TransformFunctions::MakeIdentity4x4(), // uvTransform
-        50.0f                                  // shininess ★追加
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        1, // lightingType
+        1, // enableBlinnPhong
+        {0.0f, 0.0f},
+        TransformFunctions::MakeIdentity4x4(),
+        50.0f // shininess
     };
-    light_ = { {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 1.0f };
 
-    // 頂点バッファやインデックスバッファをmodelDataから作成
-    // (main.cppのCreateBufferResourceやMap/memcpyなどの処理をここに移動)
+    // 平行光源初期化
+    light_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 1.0f};
 
-    // 各種定数バッファを作成し、Mapしておく
+    // ポイントライト初期化 (★追加)
+    pointLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 2.0f, 0.0f}, 1.0f};
+
+    // --- リソース作成 ---
+
+    // 1. マテリアル
     materialResource_ = CreateBufferResource(device, (sizeof(Material) + 255) & ~255u);
     materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedMaterial_));
 
+    // 2. 平行光源
     lightResource_ = CreateBufferResource(device, (sizeof(DirectionalLight) + 255) & ~255u);
     lightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedLight_));
 
+    // 3. 座標変換
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
 
-    // テクスチャを読み込み、SRVを作成する (この部分はTextureManagerクラスなどを作るとさらに良くなる)
+    // 4. ポイントライト (★ここが抜けていました！)
+    pointLightResource_ = CreateBufferResource(device, (sizeof(PointLight) + 255) & ~255u);
+    pointLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedPointLight_));
+    // 初期値をコピー
+    *mappedPointLight_ = pointLight_;
 
+    // 5. カメラ (★変数を cameraResource_ に統一)
     cameraResource_ = CreateBufferResource(device, (sizeof(CameraForGPU) + 255) & ~255u);
     cameraResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedCamera_));
-    mappedCamera_->worldPosition = {0.0f, 0.0f, 0.0f};
+    mappedCamera_->worldPosition = {0.0f, 0.0f, -5.0f}; // 適当な初期値
+
+    // 頂点バッファ等の作成処理 (省略されている部分はそのまま)
+    // ...
 }
 
 void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix, const Vector3 &cameraPos) {
-    // ImGuiで変更されたCPU側のデータをGPUリソースにコピー
+    // データ転送
     *mappedMaterial_ = material_;
     *mappedLight_ = light_;
 
-    // --- 1. 世界行列 (WorldMatrix) の計算 ---
-    // ここで計算した worldMatrix をこの後の計算すべてに使います
-    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    // ポイントライトも更新 (ImGuiなどで動かすかもしれないので)
+    *mappedPointLight_ = pointLight_;
 
-    // --- 2. WVP行列の計算 ---
+    // 行列計算
+    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     Matrix4x4 wvpMatrix = worldMatrix * viewMatrix * projectionMatrix;
 
-    // --- 3. ★逆転置行列 (WorldInverseTranspose) の計算★ ---
-    // DirectXMathを使って計算します
-    // ※自作のMatrix4x4型をDirectXの型として読み込ませるためにキャストしています
+    // 逆転置行列
     DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&worldMatrix));
-
-    // 逆行列を計算 (行列式は不要なのでnullptr)
     DirectX::XMMATRIX worldInv = DirectX::XMMatrixInverse(nullptr, worldX);
+    DirectX::XMMATRIX worldInvTrans = worldInv; // 転置はhlsl側でするか、ここでするかによりますがコード通り
 
-    // 転置行列を計算
-    //DirectX::XMMATRIX worldInvTrans = DirectX::XMMatrixTranspose(worldInv);
-    DirectX::XMMATRIX worldInvTrans = worldInv;
-
-    // --- 4. 定数バッファ (mappedTransform_) に書き込む ---
+    // 転送
     mappedTransform_->World = worldMatrix;
     mappedTransform_->WVP = wvpMatrix;
+    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4 *>(&mappedTransform_->WorldInverseTranspose), worldInvTrans);
 
-    // 計算した逆転置行列をストア (ここもキャストが必要です)
-    DirectX::XMStoreFloat4x4(
-        reinterpret_cast<DirectX::XMFLOAT4X4 *>(&mappedTransform_->WorldInverseTranspose),
-        worldInvTrans);
-
-    // CPU側のカメラ位置をバッファに書き込む
+    // カメラ位置更新 (★変数を mappedCamera_ に統一)
     mappedCamera_->worldPosition = cameraPos;
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList, ID3D12DescriptorHeap *srvDescriptorHeap) {
-    // このオブジェクト用のリソースをシェーダーに設定
+    // 0: マテリアル
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+
+    // 1: 座標変換
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
-    // ※重要: RootSignatureの設定で、新しい定数バッファ(b2)を受け取るスロットを追加する必要があります。
-    // ここでは仮にインデックス「3」が空いているとして設定します。
-    // RootSignatureの構成によってはインデックス番号が変わるので注意してください。
-    commandList->SetGraphicsRootConstantBufferView(3, cameraResource_->GetGPUVirtualAddress());
+
+    // 2: テクスチャ (DescriptorTable)
+    // ※セット済み前提なら省略可、そうでなければここでセット
+
+    // 3: ポイントライト (b3)
+    // ★ここが大事！作成した pointLightResource_ をセット
+    commandList->SetGraphicsRootConstantBufferView(3, pointLightResource_->GetGPUVirtualAddress());
+
+    // 4: 平行光源 (b1)
     commandList->SetGraphicsRootConstantBufferView(4, lightResource_->GetGPUVirtualAddress());
 
-    // テクスチャを設定
-    // ...
+    // 5: カメラ (b2)
+    // ★ここも大事！作成した cameraResource_ をセット (cameraBuffer_は削除)
+    commandList->SetGraphicsRootConstantBufferView(5, cameraResource_->GetGPUVirtualAddress());
 
-    // 頂点・インデックスバッファを設定
+    // 描画
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->IASetIndexBuffer(&indexBufferView_);
-
-    // 描画コマンド
     commandList->DrawIndexedInstanced(indexCount_, 1, 0, 0, 0);
-}
-
-void Object3D::DisplayImGui(const std::string &label) {
-    //if(ImGui::TreeNode(label.c_str())) {
-    //    // transform_, material_, light_ の各メンバ変数を操作するUIを作成
-    //    ImGui::DragFloat3("Translate", &transform_.translate.x, 0.1f);
-    //    // ... (以下、必要なUIを追加)
-
-    //    const char *items[] = { "No Lighting", "Lambert", "Half Lambert" };
-    //    ImGui::Combo("Lighting", &material_.lightingType, items, IM_ARRAYSIZE(items));
-    //    ImGui::ColorEdit3("Light Color", &light_.color.x);
-    //    ImGui::DragFloat("Light Intensity", &light_.intensity, 0.01f);
-
-    //    ImGui::TreePop();
-    //}
 }

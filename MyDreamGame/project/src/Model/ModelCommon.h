@@ -25,11 +25,18 @@ public:
     ID3D12Device *GetDevice() const { return device_; }
     ID3D12GraphicsCommandList *GetCommandList() const { return commandList_; }
 
+    void SetCamera(const Matrix4x4 &cameraMatrix) {
+        cameraMatrix_ = cameraMatrix;
+    }
+
+
 private:
     ID3D12Device *device_ = nullptr;
     ID3D12GraphicsCommandList *commandList_ = nullptr;
 
     // 全モデルのリスト
     std::list<Model *> models_;
+
+    Matrix4x4 cameraMatrix_ = TransformFunctions::MakeIdentity4x4();
 };
 

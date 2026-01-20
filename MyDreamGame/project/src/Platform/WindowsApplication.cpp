@@ -165,7 +165,7 @@ void WindowsApplication::Initialize() {
 	materialData = nullptr;
 	materialResource->Map(0, nullptr, reinterpret_cast<void **>(&materialData));
 	materialData->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-	materialData->lightingType = 1;
+	materialData->lightingType = 0;
 	materialData->uvTransform = TransformFunctions::MakeIdentity4x4();
     materialData->shininess = 50.0f;
 	materialResource->Unmap(0, nullptr);

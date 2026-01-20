@@ -62,7 +62,7 @@ void Sprite::Draw() {
 	Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(
 		transform_.scale, transform_.rotate, transform_.translate
 	);
-	Matrix4x4 viewMatrix = TransformFunctions::MakeIdentity4x4();
+    Matrix4x4 viewMatrix = spriteCommon_->GetViewMatrix();
 	Matrix4x4 projectionMatrix = spriteCommon_->GetProjectionMatrix();
 
 	// TransformMatrix構造体をGPUに送る

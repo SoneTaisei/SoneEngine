@@ -1,45 +1,39 @@
 #pragma once
-#include "Utility/Structs.h" // 必要な構造体のインクルード
+#include "Utility/Structs.h"
 #include "Utility/UtilityFunctions.h"
 
+// ※CameraForGPU はここにあってもいいですが、他のファイルでも使うなら共通ヘッダー推奨です
 struct CameraForGPU {
     Vector3 worldPosition;
 };
 
 class Object3D {
 public:
-    /// <summary>
-    /// 初期化
-    /// </summary>
-    void Initialize(
-        ID3D12Device *device, ModelData *modelData,
-        const std::wstring &textureFilePath = L"");
-
-    /// <summary>
-    /// 毎フレームの更新
-    /// </summary>
+    void Initialize(ID3D12Device *device, ModelData *modelData, const std::wstring &textureFilePath = L"");
     void Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix, const Vector3 &cameraPos);
-
-    /// <summary>
-    /// 描画
-    /// </summary>
     void Draw(ID3D12GraphicsCommandList *commandList, ID3D12DescriptorHeap *srvDescriptorHeap);
-
-    /// <summary>
-    /// ImGuiでのUI表示
-    /// </summary>
     void DisplayImGui(const std::string &label);
 
 private:
-    // 定数バッファ
+    // マテリアル
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
     Material *mappedMaterial_ = nullptr;
 
+    // 平行光源 (Directional Light)
     Microsoft::WRL::ComPtr<ID3D12Resource> lightResource_;
     DirectionalLight *mappedLight_ = nullptr;
 
+    // 座標変換 (World, WVP)
     Microsoft::WRL::ComPtr<ID3D12Resource> transformResource_;
     TransformMatrix *mappedTransform_ = nullptr;
+
+    // ポイントライト (Point Light)
+    Microsoft::WRL::ComPtr<ID3D12Resource> pointLightResource_;
+    PointLight *mappedPointLight_ = nullptr; // 名前を統一感あるものに変更
+
+    // カメラ (Camera)
+    Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_; // cameraBuffer_ と重複していたのでこれに統一
+    CameraForGPU *mappedCamera_ = nullptr;                  // cameraData_ と重複していたのでこれに統一
 
     // 頂点・インデックスバッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
@@ -52,12 +46,9 @@ private:
     Transform transform_;
     Material material_;
     DirectionalLight light_;
+    PointLight pointLight_; // CPU側でも値を保持しておくと便利
 
     // テクスチャ関連
     Microsoft::WRL::ComPtr<ID3D12Resource> textureResource_;
-    uint32_t textureSrvHandle_ = 0; // SRVヒープ上のインデックス
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
-    CameraForGPU *mappedCamera_ = nullptr;
+    uint32_t textureSrvHandle_ = 0;
 };
-
