@@ -25,11 +25,13 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
     std::unique_ptr<Model> backGroundModel = std::make_unique<Model>();
     backGroundModel->Initialize(modelCommon_, "resources/plane", "plane.obj");
     backGroundModel->SetTextureHandle(backGroundTH);
+    backGroundModel->SetTranslation({0.0f, 0.0f, 1.0f});
+    backGroundModel->SetScale({5.0f, 5.0f, 5.0f});
     backGroundModel->SetRotation({0.0f, 0.0f, 0.0f});
-    models_.push_back(std::move(backGroundModel));
+    //models_.push_back(std::move(backGroundModel));
 
     std::unique_ptr<Model> skydomeModel = std::make_unique<Model>();
-    skydomeModel->Initialize(modelCommon_, "resources/sphere", "sphere.obj");
+    skydomeModel->Initialize(modelCommon_, "resources/newsphere", "newsphere.obj");
     skydomeModel->SetTextureHandle(skydomeTH);
     skydomeModel->SetRotation({0.0f, 0.0f, 0.0f});
     models_.push_back(std::move(skydomeModel));
@@ -61,4 +63,9 @@ void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // ここにステージセレクトシーンの描画処理を記述する
 
     modelCommon_->DrawAll(viewProjectionMatrix);
+
+    for (auto &obj : objects_) {
+        // テクスチャ設定が Object3D::Draw 内で正しく行われていれば、これで描画されます
+        obj->Draw(commandList_.Get(), nullptr);
+    }
 }

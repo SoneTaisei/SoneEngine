@@ -30,6 +30,12 @@ public:
     /// </summary>
     void DisplayImGui(const std::string &label);
 
+    void SetTextureHandle(uint32_t textureSrvHandle) { textureSrvHandle_ = textureSrvHandle; }
+
+    void SetTransform(Transform transform) { transform_ = transform; }
+
+    void SetLightingType(uint32_t lightingType) { material_.lightingType = lightingType; }
+
 private:
     // 定数バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
