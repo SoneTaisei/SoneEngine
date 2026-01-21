@@ -286,6 +286,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="hlsl shaders\object3d.hlsli" />
     <None Include="shaders\Particle.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

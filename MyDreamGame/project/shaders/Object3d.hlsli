@@ -1,8 +1,3 @@
-#define int32_t int
-typedef float float32_t;
-typedef float2 float32_t2;
-typedef float3 float32_t3;
-typedef float4 float32_t4;
 struct VertexShaderOutput {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
@@ -18,11 +13,11 @@ struct VertexShaderInput {
 
 struct Material {
     float4 color;
-    int32_t lightingType;
+    int lightingType;
     int enableBlinnPhong;
     float2 padding;
     float4x4 uvTransform;
-    float32_t shininess;
+    float shininess;
 };
 
 struct TransformationMatrix {
@@ -33,23 +28,25 @@ struct TransformationMatrix {
 
 struct DirectionalLight {
     float4 color;
-    float3 direction; 
-    float intensity; 
-};
-
-struct PointLight {
-    float32_t4 color;
-    float32_t3 position;
+    float3 direction;
     float intensity;
 };
 
+struct PointLight {
+    float4 color;
+    float3 position;
+    float intensity;
+    float radius; // 追加（シェーダ側で距離減衰に使用）
+    float decay; // 追加（減衰のべき乗）
+};
+
 struct ViewProjection {
-    matrix viewProjectionMatrix;
-    float3 cameraPosition; 
-    float padding; 
+    float4x4 viewProjectionMatrix;
+    float3 cameraPosition;
+    float padding;
 };
 
 struct Camera {
     float3 worldPosition;
+    float padding; // 16バイトアラインメントに合わせる
 };
-

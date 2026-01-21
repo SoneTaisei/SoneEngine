@@ -86,16 +86,14 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList, ID3D12DescriptorHeap
     // 2: テクスチャ (DescriptorTable)
     // ※セット済み前提なら省略可、そうでなければここでセット
 
-    // 3: ポイントライト (b3)
-    // ★ここが大事！作成した pointLightResource_ をセット
-    commandList->SetGraphicsRootConstantBufferView(3, pointLightResource_->GetGPUVirtualAddress());
+    // 3: カメラ (rootParameters[3] は ShaderRegister = 3 なので gCamera register(b3) に対応)
+    commandList->SetGraphicsRootConstantBufferView(3, cameraResource_->GetGPUVirtualAddress());
 
-    // 4: 平行光源 (b1)
+    // 4: 平行光源 (rootParameters[4] は ShaderRegister = 1 なので gDirectionalLight register(b1) に対応) [cite: 9]
     commandList->SetGraphicsRootConstantBufferView(4, lightResource_->GetGPUVirtualAddress());
 
-    // 5: カメラ (b2)
-    // ★ここも大事！作成した cameraResource_ をセット (cameraBuffer_は削除)
-    commandList->SetGraphicsRootConstantBufferView(5, cameraResource_->GetGPUVirtualAddress());
+    // 5: ポイントライト (rootParameters[5] は ShaderRegister = 2 なので gPointLight register(b2) に対応)
+    commandList->SetGraphicsRootConstantBufferView(5, pointLightResource_->GetGPUVirtualAddress());
 
     // 描画
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);

@@ -126,6 +126,18 @@ void WindowsApplication::Initialize() {
 	directionalLightData_->direction = { 0.0f, -1.0f, 0.0f };
 	directionalLightData_->intensity = 1.0f;
 
+	// WindowsApplication::Initialize() の中に追加
+    const UINT pointLightBufferSize = (sizeof(PointLight) + 255) & ~255u;
+    pointLightResource_ = CreateBufferResource(device, pointLightBufferSize);
+    pointLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&pointLightData_));
+
+    // 初期設定
+    pointLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白色
+    pointLightData_->position = {0.0f, 2.0f, 0.0f};    // 少し上に配置
+    pointLightData_->intensity = 1.0f;                 // 明るさ
+    pointLightData_->radius = 10.0f;                   // とりあえず10m届くように設定
+    pointLightData_->decay = 1.0f;                     // 1.0だと線形に減衰
+
 	// 1. 本番カメラ生成
 	gameCamera_ = std::make_unique<GameCamera>();
 	gameCamera_->Initialize(kWindowWidth_, kWindowHeight_);
@@ -238,7 +250,7 @@ void WindowsApplication::Run() {
 
             // 1. ライトの向き (X, Y, Z) をスライダーでいじる！
             // 光の向きは "Direction" だから、直感的！
-            ImGui::DragFloat3("Sun Direction", &directionalLightData_->direction.x, 0.01f, -1.0f, 1.0f);
+            ImGui::DragFloat3("Sun Direction", &directionalLightData_->direction.x, 0.01f, -5.0f, 5.0f);
 
             // 2. ライトの色 (R, G, B, A) をカラーピッカーで変える！
             ImGui::ColorEdit4("Sun Color", &directionalLightData_->color.x);
@@ -250,6 +262,12 @@ void WindowsApplication::Run() {
             // Vector3のNormalize関数などがあれば通しておくと完璧です！
             // directionalLightData_->direction = Normalize(directionalLightData_->direction);
 
+            ImGui::End();
+
+			ImGui::Begin("Point Light Manager");
+            ImGui::DragFloat3("Position", &pointLightData_->position.x, 0.1f);
+            ImGui::DragFloat("Radius", &pointLightData_->radius, 0.1f, 0.0f, 100.0f); // 届く距離
+            ImGui::DragFloat("Decay", &pointLightData_->decay, 0.1f, 0.1f, 10.0f);    // 減衰の急峻さ
             ImGui::End();
 
 		#endif
@@ -285,8 +303,9 @@ void WindowsApplication::Run() {
 
 			// 定数バッファの設定 (これはゲーム固有の描画処理)
 			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(4, pointLightResource_->GetGPUVirtualAddress());
 			commandList->SetGraphicsRootConstantBufferView(3, viewProjectionResource_->GetGPUVirtualAddress());
-			commandList->SetGraphicsRootConstantBufferView(4, directionalLightResource_->GetGPUVirtualAddress());
+			//commandList->SetGraphicsRootConstantBufferView(4, directionalLightResource_->GetGPUVirtualAddress());
 
 			// ModelCommonの描画前準備
 			modelCommon_->PreDraw(commandList);

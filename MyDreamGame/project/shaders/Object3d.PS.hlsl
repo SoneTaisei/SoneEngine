@@ -18,67 +18,54 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
     float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
+    // 透明度による抜き処理 [cite: 16, 17]
     if (textureColor.a < 0.5f) {
         discard;
     }
     
     if (gMaterial.lightingType == 1) {
-        
         float3 normal = normalize(input.normal);
         float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
 
-        // ===============================================
-        // 1. Directional Light (平行光源) の計算
-        // ===============================================
+        // --- 1. Directional Light (平行光源) --- [cite: 19, 20, 21, 22, 23]
         float3 directionalLightDir = normalize(-gDirectionalLight.direction);
-        
         float directionalNdotL = dot(normal, directionalLightDir);
-        float directionalCos = pow(directionalNdotL * 0.5f + 0.5f, 2.0f); // Half-Lambert
-        if (gMaterial.lightingType == 1) {
-            directionalCos = saturate(directionalNdotL); // Lambert
-        }
-        
-        // 変数名を diffuse → diffuseDirectional に変更してわかりやすく
+        float directionalCos = saturate(directionalNdotL);
         float3 diffuseDirectional = gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * directionalCos * gDirectionalLight.intensity;
         
         float3 directionalHalfVector = normalize(directionalLightDir + toEye);
         float directionalNdotH = dot(normal, directionalHalfVector);
         float directionalSpecularPow = pow(saturate(directionalNdotH), gMaterial.shininess);
-        
-        // 変数名を specular → specularDirectional に変更
         float3 specularDirectional = gDirectionalLight.color.rgb * gDirectionalLight.intensity * directionalSpecularPow * float3(1.0f, 1.0f, 1.0f);
 
-        // ===============================================
-        // 2. Point Light (ポイントライト) の計算 【ここに追加！】
-        // ===============================================
-        // 資料スクリーンショット1の計算式
-        // input.worldPosition - gPointLight.position は「ライト→床」の向きになるので、
-        // 入射光として扱うならこれでOKですが、拡散反射(dot)の計算には「床→ライト」の向き（-pointLightDir）を使います。
+        // --- 2. Point Light (ポイントライト) 【資料に基づき減衰を追加！】 --- [cite: 24, 25, 26, 27, 28]
+        
+        // 💡 逆二乗則による減衰係数の計算
+        float distance = length(gPointLight.position - input.worldPosition); // ポイントライトへの距離
+        float factor = pow(saturate(-distance/gPointLight.radius+1.0),gPointLight.decay); // 逆二乗則による減衰係数
+
+        // ライトの向きと法線の計算
         float3 pointLightDir = normalize(input.worldPosition - gPointLight.position);
+        float pointNdotL = dot(normal, -pointLightDir);
+        float pointCos = saturate(pointNdotL);
         
-        float pointNdotL = dot(normal, -pointLightDir); // 逆向きにして内積
-        float pointCos = saturate(pointNdotL); // ポイントライトは基本Lambertで計算
-        
-        // 距離による減衰（Intensityだけ使う簡易版）
-        // ※もし距離減衰(Attentuation)を実装するならここで割り算などが入りますが、資料に合わせてIntensityのみにします
-        float3 diffusePoint = gMaterial.color.rgb * textureColor.rgb * gPointLight.color.rgb * pointCos * gPointLight.intensity;
+        // 💡 拡散反射に減衰係数(factor)を乗算
+        float3 diffusePoint = gMaterial.color.rgb * textureColor.rgb * gPointLight.color.rgb * pointCos * gPointLight.intensity * factor;
         
         // ポイントライトの鏡面反射
         float3 pointHalfVector = normalize(-pointLightDir + toEye);
         float pointNdotH = dot(normal, pointHalfVector);
         float pointSpecularPow = pow(saturate(pointNdotH), gMaterial.shininess);
         
-        float3 specularPoint = gPointLight.color.rgb * gPointLight.intensity * pointSpecularPow * float3(1.0f, 1.0f, 1.0f);
+        // 💡 鏡面反射にも減衰係数(factor)を乗算
+        float3 specularPoint = gPointLight.color.rgb * gPointLight.intensity * pointSpecularPow * float3(1.0f, 1.0f, 1.0f) * factor;
 
-        // ===============================================
-        // 3. 全部足す (資料スクリーンショット2)
-        // ===============================================
+        // --- 3. 最終色の合成 --- [cite: 29, 30]
         outputColor.rgb = diffuseDirectional + specularDirectional + diffusePoint + specularPoint;
-        
         outputColor.a = gMaterial.color.a * textureColor.a;
 
     } else {
-        outputColor = gMaterial.color * textureColor;
+        outputColor = gMaterial.color * textureColor; // ライティングなし [cite: 31]
     }
 
     return outputColor;

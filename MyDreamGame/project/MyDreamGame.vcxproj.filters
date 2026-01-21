@@ -98,5 +98,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\Particle.hlsli" />
+    <None Include="hlsl shaders\object3d.hlsli" />
   </ItemGroup>
 </Project>
