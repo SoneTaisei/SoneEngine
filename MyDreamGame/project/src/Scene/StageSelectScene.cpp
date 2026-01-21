@@ -49,6 +49,15 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 
     ImGui::End();
 
+    // ModelCommonからポイントライトのポインタをもらって直接書き換える
+    PointLight *light = modelCommon_->GetPointLight();
+
+    ImGui::Begin("Global Light Settings");
+    ImGui::DragFloat3("PointLight Pos", &light->position.x, 0.1f);
+    ImGui::DragFloat("Radius", &light->radius, 0.1f); // これが逆二乗則に効く！
+    ImGui::DragFloat("Decay", &light->decay, 0.1f);
+    ImGui::End();
+
     // スペースキーが押されたらゲームシーンへ
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
         sceneManager->ChangeScene(new GameScene());

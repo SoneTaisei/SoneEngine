@@ -5,6 +5,10 @@
 
 class Model;
 
+struct CameraForGPU {
+    Vector3 worldPosition;
+};
+
 class ModelCommon {
 public:
     // 初期化（Deviceを受け取る）
@@ -29,10 +33,27 @@ public:
         cameraMatrix_ = cameraMatrix;
     }
 
+    // ライトやカメラのデータを更新するためのゲッター/セッター
+    DirectionalLight *GetDirectionalLight() { return mappedDirectionalLight_; }
+    PointLight *GetPointLight() { return mappedPointLight_; }
+    CameraForGPU *GetCamera() { return mappedCamera_; }
+
 
 private:
     ID3D12Device *device_ = nullptr;
     ID3D12GraphicsCommandList *commandList_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
+    DirectionalLight *mappedDirectionalLight_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> pointLightResource_;
+    PointLight *mappedPointLight_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;
+    CameraForGPU *mappedCamera_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
+    Material *mappedMaterial_ = nullptr;
 
     // 全モデルのリスト
     std::list<Model *> models_;

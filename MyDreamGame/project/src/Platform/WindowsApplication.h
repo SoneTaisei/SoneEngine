@@ -71,9 +71,6 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
 	DirectionalLight *directionalLightData_ = nullptr;
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> pointLightResource_;
-    PointLight *pointLightData_ = nullptr;
-
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource = {};
 	Material *materialData = nullptr;
 
