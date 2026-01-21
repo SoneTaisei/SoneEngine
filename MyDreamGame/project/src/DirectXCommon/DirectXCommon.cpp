@@ -314,8 +314,10 @@ void DirectXCommon::CreatePipelines() {
     blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
     D3D12_RASTERIZER_DESC rasterizerDesc{};
-    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID; // 中身を塗りつぶす
+    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;  // 背面をカリングする
+    // 反時計回り（Counter-Clockwise）を「表」として扱う設定にする
+    rasterizerDesc.FrontCounterClockwise = TRUE;
 
     Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils.Get(), dxcCompiler.Get(), includeHandler.Get());
     assert(vertexShaderBlob != nullptr);
