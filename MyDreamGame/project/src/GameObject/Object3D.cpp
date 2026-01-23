@@ -16,7 +16,7 @@ void Object3D::Initialize(ID3D12Device *device, ModelData *modelData, const std:
     };
 
     // 平行光源初期化
-    light_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 1.0f};
+    light_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 0.0f};
 
     // ポイントライト初期化 (★追加)
     pointLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 2.0f, 0.0f}, 1.0f};

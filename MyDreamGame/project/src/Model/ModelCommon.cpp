@@ -7,18 +7,36 @@ void ModelCommon::Initialize(ID3D12Device *device) {
     assert(device);
     device_ = device;
 
-    // ヘルパー関数（CreateBufferResource）を使ってリソースを作成
-    // 256バイトアライメントを忘れずに！
-    directionalLightResource_ = CreateBufferResource(device_, (sizeof(DirectionalLight) + 255) & ~255u);
+    // 定数バッファ作成の共通処理（256バイトアライメント）
+    auto CreateCB = [&](size_t size) {
+        return CreateBufferResource(device_, (size + 255) & ~255u);
+    };
+
+    // --- 1. リソースの生成とMap ---
+
+    // マテリアルリソースの作成（これが抜けていました）
+    materialResource_ = CreateCB(sizeof(Material));
+    materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedMaterial_));
+
+    // ライトとカメラのリソース（既存の処理）
+    directionalLightResource_ = CreateCB(sizeof(DirectionalLight));
     directionalLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedDirectionalLight_));
 
-    pointLightResource_ = CreateBufferResource(device_, (sizeof(PointLight) + 255) & ~255u);
+    pointLightResource_ = CreateCB(sizeof(PointLight));
     pointLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedPointLight_));
 
-    cameraResource_ = CreateBufferResource(device_, (sizeof(CameraForGPU) + 255) & ~255u);
+    cameraResource_ = CreateCB(sizeof(CameraForGPU));
     cameraResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedCamera_));
 
-    // 初期値を入れておく
+    // --- 2. 初期値の設定 ---
+
+    // モデルを正常に表示させるための初期値設定
+    mappedMaterial_->color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白・不透明
+    mappedMaterial_->lightingType = 1;                 // ライティング有効
+    mappedMaterial_->uvTransform = TransformFunctions::MakeIdentity4x4();
+    mappedMaterial_->shininess = 50.0f;
+
+    // ライトとカメラの初期値
     *mappedDirectionalLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 1.0f};
     *mappedPointLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 2.0f, 0.0f}, 1.0f, 10.0f, 1.0f};
     *mappedCamera_ = {{0.0f, 0.0f, -10.0f}};
@@ -28,13 +46,15 @@ void ModelCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
     assert(commandList);
     commandList_ = commandList;
 
-    // デスクリプタヒープの設定などはそのまま
+    // ヒープとトポロジの設定
     ID3D12DescriptorHeap *descriptorHeaps[] = {TextureManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList_->SetDescriptorHeaps(1, descriptorHeaps);
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // --- 重要：ルートパラメータにバッファをセット ---
-    // DirectXCommon.cpp で定義したスロット番号に合わせます
+    // --- ルートパラメータのセット (DirectXCommon.cppの定義に準拠) ---
+
+    // 0: Material (register b0) ★ここが抜けていたので追加！
+    commandList_->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
 
     // 3: Camera (register b3)
     commandList_->SetGraphicsRootConstantBufferView(3, cameraResource_->GetGPUVirtualAddress());
@@ -44,15 +64,6 @@ void ModelCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
 
     // 5: PointLight (register b2)
     commandList_->SetGraphicsRootConstantBufferView(5, pointLightResource_->GetGPUVirtualAddress());
-
-    //// ★重要修正: テクスチャを使用するための「場所（ヒープ）」をGPUに教える
-    //// これがないと SetGraphicsRootDescriptorTable で必ずクラッシュします
-    //ID3D12DescriptorHeap *descriptorHeaps[] = { TextureManager::GetInstance()->GetSrvDescriptorHeap() };
-    //commandList_->SetDescriptorHeaps(1, descriptorHeaps);
-
-    //// ★推奨: 描画形状（三角形リスト）を指定しておく
-    //// これを忘れると、前の描画設定（線など）が残っていた場合に表示がおかしくなります
-    //commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 void ModelCommon::AddModel(Model *model) {

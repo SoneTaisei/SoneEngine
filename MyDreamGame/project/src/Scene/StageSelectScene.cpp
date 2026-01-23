@@ -36,29 +36,36 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
 }
 
 void StageSelectScene::Update(SceneManager *sceneManager) {
+    // 1. ModelCommonからライトのポインタを取得
+    PointLight *pointLight = modelCommon_->GetPointLight();
 
+    // 2. ImGuiでポイントライトの設定ウィンドウを作成
+    ImGui::Begin("Point Light Settings");
+
+    // 座標の調整
+    ImGui::DragFloat3("Position", &pointLight->position.x, 0.1f);
+
+    // 色の調整
+    ImGui::ColorEdit4("Color", &pointLight->color.x);
+
+    // 輝度（強度）の調整
+    ImGui::DragFloat("Intensity", &pointLight->intensity, 0.01f, 0.0f, 10.0f);
+
+    // ★ 逆二乗則に効くパラメータ
+    ImGui::DragFloat("Radius", &pointLight->radius, 0.1f, 0.0f, 100.0f);
+    ImGui::DragFloat("Decay", &pointLight->decay, 0.01f, 0.0f, 10.0f);
+
+    ImGui::End();
+
+    // --- 既存のモデルデバッグ表示 ---
     ImGui::Begin("Debug Models");
-
     for (int i = 0; i < models_.size(); ++i) {
-        // 名前を自動生成（Model 0, Model 1...）
         std::string name = "Model " + std::to_string(i);
-
-        // 便利関数にポイっと渡すだけ！
         ShowModelGui(name, models_[i].get());
     }
-
     ImGui::End();
 
-    // ModelCommonからポイントライトのポインタをもらって直接書き換える
-    PointLight *light = modelCommon_->GetPointLight();
-
-    ImGui::Begin("Global Light Settings");
-    ImGui::DragFloat3("PointLight Pos", &light->position.x, 0.1f);
-    ImGui::DragFloat("Radius", &light->radius, 0.1f); // これが逆二乗則に効く！
-    ImGui::DragFloat("Decay", &light->decay, 0.1f);
-    ImGui::End();
-
-    // スペースキーが押されたらゲームシーンへ
+    // シーン遷移の処理
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
         sceneManager->ChangeScene(new GameScene());
     }

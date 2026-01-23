@@ -234,21 +234,21 @@ void WindowsApplication::Run() {
 
 			ImGui::End();
 
-			ImGui::Begin("Global Lighting Manager"); // ウィンドウ名！
+			ImGui::Begin("Global Lighting Manager");
 
-            // 1. ライトの向き (X, Y, Z) をスライダーでいじる！
-            // 光の向きは "Direction" だから、直感的！
-            ImGui::DragFloat3("Sun Direction", &directionalLightData_->direction.x, 0.01f, -5.0f, 5.0f);
+            // 💡 ModelCommonから、現在描画に使っている「本物のライト」のポインタをもらってくる
+            DirectionalLight *sun = modelCommon_->GetDirectionalLight();
+            PointLight *bulb = modelCommon_->GetPointLight();
 
-            // 2. ライトの色 (R, G, B, A) をカラーピッカーで変える！
-            ImGui::ColorEdit4("Sun Color", &directionalLightData_->color.x);
+            // 💡 「sun」や「bulb」を直接操作するように書き換える
+            ImGui::DragFloat3("Sun Direction", &sun->direction.x, 0.01f);
 
-            // 3. ライトの強さ (Intensity) もあるならここで！
-            // ImGui::DragFloat("Sun Intensity", &directionalLightData_->intensity, 0.01f, 0.0f, 10.0f);
+            // 💡 ここが重要！太陽を消したい（ポイントライトだけにしたい）なら
+            // 強度(intensity)を 0.0f に設定します。
+            ImGui::DragFloat("Sun Intensity", &sun->intensity, 0.01f, 0.0f, 1.0f);
 
-            // ⚠ 重要：方向ベクトルは正規化（長さを1に）しておかないと計算がおかしくなることがあるので、
-            // Vector3のNormalize関数などがあれば通しておくと完璧です！
-            // directionalLightData_->direction = Normalize(directionalLightData_->direction);
+            ImGui::DragFloat3("Point Light Pos", &bulb->position.x, 0.1f);
+            ImGui::DragFloat("Point Light Radius", &bulb->radius, 0.1f);
 
             ImGui::End();
 
@@ -284,7 +284,7 @@ void WindowsApplication::Run() {
             commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
 			// 定数バッファの設定 (これはゲーム固有の描画処理)
-			commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
+			//commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
             //commandList->SetGraphicsRootConstantBufferView(4, pointLightResource_->GetGPUVirtualAddress());
 			//commandList->SetGraphicsRootConstantBufferView(3, viewProjectionResource_->GetGPUVirtualAddress());
 			//commandList->SetGraphicsRootConstantBufferView(4, directionalLightResource_->GetGPUVirtualAddress());
@@ -304,7 +304,7 @@ void WindowsApplication::Run() {
 			// 2. 共通パラメータ (ViewProjection, Light) をセット
 			// ※ ParticleCommon::CreateRootSignature の定義順序に合わせる
 			// [3] DirectionalLight (CBV b1)
-			commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
+			//commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
 
 			// ImGuiの描画
 			ImGui::Render();
