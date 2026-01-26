@@ -324,3 +324,4 @@ FodyWeavers.xsd
 *.Dumps
 /logs
 /project/imgui.ini
+*.pdb
