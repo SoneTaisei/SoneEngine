@@ -30,6 +30,7 @@ public:
 	ID3D12RootSignature *GetRootSignature() const { return rootSignature_.Get(); }
 	ID3D12PipelineState *GetGraphicsPipelineState() const { return graphicsPipelineState_.Get(); }
 	ID3D12PipelineState *GetSpritePipelineState() const { return spritePipelineState_.Get(); }
+    ID3D12CommandQueue *GetCommandQueue() const { return commandQueue_.Get(); }
 
 private:
 	// DirectXのインスタンス作成

@@ -15,13 +15,6 @@
     <ClCompile Include="src\Input\GamepadInput.cpp" />
     <ClCompile Include="src\Input\KeyboardInput.cpp" />
     <ClCompile Include="src\Graphics\DebugCamera.cpp" />
-    <ClCompile Include="externals\imgui\imgui.cpp" />
-    <ClCompile Include="externals\imgui\imgui_demo.cpp" />
-    <ClCompile Include="externals\imgui\imgui_draw.cpp" />
-    <ClCompile Include="externals\imgui\imgui_impl_dx12.cpp" />
-    <ClCompile Include="externals\imgui\imgui_impl_win32.cpp" />
-    <ClCompile Include="externals\imgui\imgui_tables.cpp" />
-    <ClCompile Include="externals\imgui\imgui_widgets.cpp" />
     <ClCompile Include="src\Input\InputManager.cpp" />
     <ClCompile Include="src\Core\main.cpp" />
     <ClCompile Include="src\GameObject\Object3D.cpp" />
@@ -42,6 +35,13 @@
     <ClCompile Include="src\Graphics\GameCamera.cpp" />
     <ClCompile Include="src\Effect\SnowParticle.cpp" />
     <ClCompile Include="src\Effect\windowParticle.cpp" />
+    <ClCompile Include="externals\imgui\imgui.cpp" />
+    <ClCompile Include="externals\imgui\imgui_demo.cpp" />
+    <ClCompile Include="externals\imgui\imgui_draw.cpp" />
+    <ClCompile Include="externals\imgui\imgui_tables.cpp" />
+    <ClCompile Include="externals\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="externals\imgui\backends\imgui_impl_win32.cpp" />
+    <ClCompile Include="externals\imgui\backends\imgui_impl_dx12.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Scene\SceneManager.h" />
@@ -54,14 +54,6 @@
     <ClInclude Include="src\Input\KeyboardInput.h" />
     <ClInclude Include="src\Utility\BlendMode.h" />
     <ClInclude Include="src\Graphics\DebugCamera.h" />
-    <ClInclude Include="externals\imgui\imconfig.h" />
-    <ClInclude Include="externals\imgui\imgui.h" />
-    <ClInclude Include="externals\imgui\imgui_impl_dx12.h" />
-    <ClInclude Include="externals\imgui\imgui_impl_win32.h" />
-    <ClInclude Include="externals\imgui\imgui_internal.h" />
-    <ClInclude Include="externals\imgui\imstb_rectpack.h" />
-    <ClInclude Include="externals\imgui\imstb_textedit.h" />
-    <ClInclude Include="externals\imgui\imstb_truetype.h" />
     <ClInclude Include="src\Input\InputManager.h" />
     <ClInclude Include="src\GameObject\Object3D.h" />
     <ClInclude Include="src\GameObject\ResourceObject.h" />
@@ -84,9 +76,12 @@
     <ClInclude Include="src\Effect\SnowParticle.h" />
     <ClInclude Include="src\Effect\windowParticle.h" />
     <ClInclude Include="src\Utility\ImGuiHelper.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="externals\imgui\LICENSE.txt" />
+    <ClInclude Include="externals\imgui\imconfig.h" />
+    <ClInclude Include="externals\imgui\imgui.h" />
+    <ClInclude Include="externals\imgui\imgui_internal.h" />
+    <ClInclude Include="externals\imgui\imstb_rectpack.h" />
+    <ClInclude Include="externals\imgui\imstb_textedit.h" />
+    <ClInclude Include="externals\imgui\imstb_truetype.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Engin">
@@ -99,5 +94,11 @@
   <ItemGroup>
     <None Include="shaders\Particle.hlsli" />
     <None Include="hlsl shaders\object3d.hlsli" />
+    <None Include="externals\imgui\.editorconfig" />
+    <None Include="externals\imgui\.gitattributes" />
+    <None Include="externals\imgui\.gitignore" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="externals\imgui\LICENSE.txt" />
   </ItemGroup>
 </Project>

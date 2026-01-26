@@ -12,6 +12,17 @@
 #include <chrono>
 #include "Utility/TransformFunctions.h"
 
+// 枠を借りるための関数
+static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
+    // 前回の回答で TextureManager に追加した関数を呼び出す
+    TextureManager::GetInstance()->AllocateDescriptor(out_cpu_handle, out_gpu_handle);
+}
+
+// 枠を返すための関数 (今は何もしなくてOKですが、定義だけは必要です)
+static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) {
+    // 解放処理が必要な場合はここに書きますが、今は空で大丈夫です
+}
+
 // ImGuiの外部リンケージ
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -143,13 +154,35 @@ void WindowsApplication::Initialize() {
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
 	ImGui_ImplWin32_Init(hwnd_);
-	ImGui_ImplDX12_Init(device,
-						dxCommon_->GetSwapChainDesc().BufferCount,
-						dxCommon_->GetRtvDesc().Format,
-						TextureManager::GetInstance()->GetSrvDescriptorHeap(),
-						TextureManager::GetInstance()->GetSrvDescriptorHeap()->GetCPUDescriptorHandleForHeapStart(),
-						TextureManager::GetInstance()->GetSrvDescriptorHeap()->GetGPUDescriptorHandleForHeapStart()
-	);
+    ImGui_ImplDX12_InitInfo init_info = {};
+    init_info.Device = device;
+    init_info.CommandQueue = dxCommon_->GetCommandQueue();
+    init_info.NumFramesInFlight = dxCommon_->GetSwapChainDesc().BufferCount;
+    init_info.RTVFormat = dxCommon_->GetRtvDesc().Format;
+    init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    init_info.SrvDescriptorHeap = TextureManager::GetInstance()->GetSrvDescriptorHeap();
+
+    // ★ここがポイント！定義した関数を教える
+    init_info.SrvDescriptorAllocFn = ImGuiSrvAlloc;
+    init_info.SrvDescriptorFreeFn = ImGuiSrvFree;
+
+    ImGui_ImplDX12_Init(&init_info);
+	unsigned char *pixels;
+    int width, height;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    ImGuiIO &io = ImGui::GetIO();
+    // ドッキング機能を有効化
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // ウィンドウの外に飛び出させたい場合（マルチビューポート）も有効化
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    ImGuiStyle &style = ImGui::GetStyle();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        // ウィンドウの角を丸くしない（透過時に境界が綺麗に見えます）
+        style.WindowRounding = 0.0f;
+        // 背景の「黒さ」の原因であるアルファ値を調整（0.0fで完全透明、1.0fで不透明）
+        // 0.8f くらいにすると、デスクトップが少し透けて「ツールっぽさ」が増します！✨
+        style.Colors[ImGuiCol_WindowBg].w = 0.8f;
+    }
 
 	// 音声の初期化
 	AudioManager::Initialize();
@@ -358,6 +391,12 @@ void WindowsApplication::Run() {
 			// ImGuiの描画
 			ImGui::Render();
 			ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+			 ImGuiIO &io = ImGui::GetIO();
+			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault();
+            }
 
 			// 描画後処理
 			dxCommon_->PostDraw();
