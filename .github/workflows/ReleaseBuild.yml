@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  SOLUTION_FILE_PATH: MyDreamGame.sln
+  SOLUTION_FILE_PATH: MyDreamGame/project/MyDreamGame.sln
   CONFIGURATION: Release  # 完成版なのでReleaseビルド
 
 jobs:
