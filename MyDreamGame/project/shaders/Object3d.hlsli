@@ -48,6 +48,7 @@ struct SpotLight {
     float distance;
     float decay;
     float cosAngle;
+    float cosFalloffStart;
     float padding;
 };
 

@@ -74,7 +74,8 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
 // ライトの向きと、ピクセルへの方向がどれだけ一致しているか
         float cosTheta = dot(spotLightDirOnSurface, normalize(gSpotLight.direction));
 // 指定された角度（cosAngle）を基準に滑らかに減衰させる
-        float falloffFactor = saturate((cosTheta - gSpotLight.cosAngle) / (1.0f - gSpotLight.cosAngle));
+        float falloffRange = gSpotLight.cosFalloffStart - gSpotLight.cosAngle;
+        float falloffFactor = saturate((cosTheta - gSpotLight.cosAngle) / max(0.001f, falloffRange));
 
 // 拡散反射
         float spotCos = saturate(dot(normal, -spotLightDirOnSurface));
