@@ -3,26 +3,23 @@ name: DebugBuild
 on:
   push:
     branches:
-      - master
+      - master  # 本番ブランチを指定
   workflow_dispatch:
 
 env:
-  # 自分のソリューションファイルのパスに合わせて書き換えてください
-  SOLUTION_FILE_PATH: project/MyDreamGame.sln
-  CONFIGURATION: Debug
+  # 正解のパスを指定
+  SOLUTION_FILE_PATH: MyDreamGame/project/MyDreamGame.sln
+  CONFIGURATION: Debug  # デバッグビルド
 
 jobs:
   build:
     runs-on: windows-2022
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
         with:
           msbuild-architecture: x64
-
       - name: Build
         run: msbuild ${{env.SOLUTION_FILE_PATH}} /p:Platform=x64,Configuration=${{env.CONFIGURATION}}
