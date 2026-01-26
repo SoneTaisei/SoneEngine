@@ -119,6 +119,18 @@ struct PointLight {
     float padding[2]; //!< 16バイト境界に合わせるためのパディング
 };
 
+struct SpotLight {
+    Vector4 color;
+    Vector3 position;
+    float intensity;
+    Vector3 direction;
+    float distance;
+	float decay;
+    float cosAngle;
+    float cosFalloffStart;
+    float padding[2];
+};
+
 struct ViewProjection {
 	Matrix4x4 viewProjectionMatrix;
 	Vector3 cameraPosition;

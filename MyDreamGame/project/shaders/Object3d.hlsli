@@ -36,8 +36,20 @@ struct PointLight {
     float4 color;
     float3 position;
     float intensity;
-    float radius; // 追加（シェーダ側で距離減衰に使用）
-    float decay; // 追加（減衰のべき乗）
+    float radius;
+    float decay; 
+};
+
+struct SpotLight {
+    float4 color; 
+    float3 position;
+    float intensity;
+    float3 direction;
+    float distance;
+    float decay;
+    float cosAngle;
+    float cosFalloffStart;
+    float padding;
 };
 
 struct ViewProjection {

@@ -199,63 +199,109 @@ void WindowsApplication::Run() {
 			KeyboardInput::GetInstance()->Update();
 
 		#ifdef _DEBUG
-			if(KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
-				if(isDebugCameraActive_) {
-					// ▼▼▼ デバッグ → ゲームに戻る時 ▼▼▼
+            // --- 1. デバッグカメラとステータス表示 ---
+            if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
+                if (isDebugCameraActive_) {
+                    activeCamera_ = gameCamera_.get();
+                    isDebugCameraActive_ = false;
+                } else {
+                    debugCamera_->SetTranslation(gameCamera_->GetTranslation());
+                    debugCamera_->SetRotation(gameCamera_->GetRotation());
+                    activeCamera_ = debugCamera_.get();
+                    isDebugCameraActive_ = true;
+                }
+            }
 
-					// 【重要】ここで座標のコピーをしてはいけません！
-					// 何もしなければ、GameCameraはずっと待機していた場所（元の位置）にいます。
-
-					activeCamera_ = gameCamera_.get(); // 指名を変えるだけ
-					isDebugCameraActive_ = false;
-
-				} else {
-					// ▼▼▼ ゲーム → デバッグに行く時 ▼▼▼
-
-					// こちらは「今のゲーム画面の位置」からデバッグ操作を始めたいので
-					// GameCamera の場所を DebugCamera にコピーします。
-					debugCamera_->SetTranslation(gameCamera_->GetTranslation());
-					debugCamera_->SetRotation(gameCamera_->GetRotation());
-
-					activeCamera_ = debugCamera_.get(); // 指名を変える
-					isDebugCameraActive_ = true;
-				}
-			}
-
-			ImGui::Begin("Debug Status");
-
-			if(isDebugCameraActive_) {
-				// ONなら緑色で表示
-				ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Debug Camera: ON");
-			} else {
-				// OFFなら灰色で表示
-				ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Debug Camera: OFF");
-			}
-
-			ImGui::End();
-
-			// 1. ModelCommonからライトのポインタを取得
-            PointLight *pointLight = modelCommon_->GetPointLight();
-
-            // 2. ImGuiでポイントライトの設定ウィンドウを作成
-            ImGui::Begin("Point Light Settings");
-
-            // 座標の調整
-            ImGui::DragFloat3("Position", &pointLight->position.x, 0.1f);
-
-            // 色の調整
-            ImGui::ColorEdit4("Color", &pointLight->color.x);
-
-            // 輝度（強度）の調整
-            ImGui::DragFloat("Intensity", &pointLight->intensity, 0.01f, 0.0f, 10.0f);
-
-            // ★ 逆二乗則に効くパラメータ
-            ImGui::DragFloat("Radius", &pointLight->radius, 0.1f, 0.0f, 100.0f);
-            ImGui::DragFloat("Decay", &pointLight->decay, 0.01f, 0.0f, 10.0f);
-
+            ImGui::Begin("Debug Status");
+            if (isDebugCameraActive_) {
+                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Debug Camera: ON");
+            } else {
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Debug Camera: OFF");
+            }
             ImGui::End();
 
-		#endif
+            // --- 2. ライティング管理 (ここがバグ修正の肝です) ---
+            static int activeLightType = 2; // 0:Directional, 1:Point, 2:Spot
+            static bool enableFog = false;
+
+            // 各ライトの「本来の明るさ」を保持する変数 (これがないと切り替え時に値が消えます)
+            static float dIntensity = 1.0f;
+            static float pIntensity = 1.0f;
+            static float sIntensity = 4.0f;
+
+            // スポットライトの操作用度数法変数
+            static float spotAngleDeg = 30.0f;
+            static float spotFalloffDeg = 20.0f;
+
+            ImGui::Begin("Lighting & Fog Manager");
+
+            ImGui::Text("Active Light Source");
+            ImGui::RadioButton("Directional", &activeLightType, 0);
+            ImGui::SameLine();
+            ImGui::RadioButton("Point", &activeLightType, 1);
+            ImGui::SameLine();
+            ImGui::RadioButton("Spot", &activeLightType, 2);
+            ImGui::Separator();
+
+            // ライトのポインタを取得
+            DirectionalLight *dLight = modelCommon_->GetDirectionalLight();
+            PointLight *pLight = modelCommon_->GetPointLight();
+            SpotLight *sLight = modelCommon_->GetSpotLight();
+
+            // 💡 選択されたライト以外を 0 にし、本来の値を static 変数から復元する
+            if (activeLightType == 0) { // 平行光源
+                dLight->intensity = dIntensity;
+                pLight->intensity = 0.0f;
+                sLight->intensity = 0.0f;
+
+                ImGui::Text("Directional Light Settings");
+                ImGui::ColorEdit4("Color", &dLight->color.x);
+                ImGui::DragFloat("Intensity", &dIntensity, 0.01f, 0.0f, 10.0f);
+                ImGui::DragFloat3("Direction", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
+                dLight->direction = TransformFunctions::Normalize(dLight->direction);
+            } else if (activeLightType == 1) { // ポイントライト
+                pLight->intensity = pIntensity;
+                dLight->intensity = 0.0f;
+                sLight->intensity = 0.0f;
+
+                ImGui::Text("Point Light Settings");
+                ImGui::ColorEdit4("Color", &pLight->color.x);
+                ImGui::DragFloat("Intensity", &pIntensity, 0.01f, 0.0f, 10.0f);
+                ImGui::DragFloat3("Position", &pLight->position.x, 0.1f);
+                ImGui::DragFloat("Radius", &pLight->radius, 0.1f, 0.0f, 100.0f);
+                ImGui::DragFloat("Decay", &pLight->decay, 0.01f, 0.0f, 10.0f);
+            } else if (activeLightType == 2) { // スポットライト
+                sLight->intensity = sIntensity;
+                dLight->intensity = 0.0f;
+                pLight->intensity = 0.0f;
+
+                ImGui::Text("Spot Light Settings");
+                ImGui::ColorEdit4("Color", &sLight->color.x);
+                ImGui::DragFloat("Intensity", &sIntensity, 0.01f, 0.0f, 20.0f);
+                ImGui::DragFloat3("Position", &sLight->position.x, 0.1f);
+
+                if (ImGui::DragFloat3("Direction", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
+                    sLight->direction = TransformFunctions::Normalize(sLight->direction);
+                }
+
+                ImGui::DragFloat("Distance", &sLight->distance, 0.1f, 0.0f, 100.0f);
+                ImGui::DragFloat("Decay", &sLight->decay, 0.01f, 0.0f, 10.0f);
+
+                // 💡 角度とFalloffの調整（image_60f761.png の実装）
+                ImGui::SliderFloat("Total Angle", &spotAngleDeg, 0.0f, 90.0f);
+                ImGui::SliderFloat("Falloff Start", &spotFalloffDeg, 0.0f, spotAngleDeg);
+
+                sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
+                sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
+            }
+
+            ImGui::Separator();
+            ImGui::Checkbox("Enable Fog Effect", &enableFog);
+            if (enableFog) {
+                ImGui::TextColored(ImVec4(0, 1, 1, 1), "Fog is Active! (Add lerp in Pixel Shader)");
+            }
+            ImGui::End();
+#endif
 
 		// ★ 5. アクティブなカメラだけを更新する
 		// デバッグカメラならマウス操作、本番カメラなら追従処理が走る
