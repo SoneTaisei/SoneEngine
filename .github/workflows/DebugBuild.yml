@@ -8,7 +8,7 @@ on:
 
 env:
   # 自分のソリューションファイルのパスに合わせて書き換えてください
-  SOLUTION_FILE_PATH: project/CG2.sln
+  SOLUTION_FILE_PATH: project/MyDreamGame.sln
   CONFIGURATION: Debug
 
 jobs:
