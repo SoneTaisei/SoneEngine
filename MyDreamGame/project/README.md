@@ -1,4 +1,1 @@
-[![C++ Build Workflow](https://github.com/SoneTaisei/CG2-/actions/workflows/DebugBuild.yml/badge.svg)](https://github.com/SoneTaisei/CG2-/actions/workflows/DebugBuild.yml)　
-[![C++ Release Workflow](https://github.com/SoneTaisei/CG2-/actions/workflows/ReleaseBuild.yml/badge.svg)](https://github.com/SoneTaisei/CG2-/actions/workflows/ReleaseBuild.yml)
-[![C++ Development Workflow](https://github.com/SoneTaisei/CG2-/actions/workflows/DevelopmentBuild.yml/badge.svg)](https://github.com/SoneTaisei/CG2-/actions/workflows/DevelopmentBuild.yml)
-
+<img width="1336" height="682" alt="image" src="https://github.com/user-attachments/assets/a80c0796-43ee-44d8-bcb5-d65940603f33" />
