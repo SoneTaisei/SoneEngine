@@ -106,7 +106,6 @@ void WindowsApplication::Initialize() {
 	// SceneManager初期化
 	sceneManager_->Initialize(commandList);
 
-
 	// ParticleCommon の生成と初期化
 	particleCommon_ = std::make_unique<ParticleCommon>();
 	particleCommon_->Initialize(device);
