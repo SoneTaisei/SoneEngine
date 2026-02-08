@@ -5,6 +5,7 @@
 #include "Input/GamepadInput.h"
 #include "Input/KeyboardInput.h"
 #include "Model/Model.h"
+#include "Scene/TitleScene.h"
 #include "Sprite/Sprite.h"
 #include "Utility/TransformFunctions.h"
 #include "Utility/Utilityfunctions.h"
@@ -122,6 +123,9 @@ void WindowsApplication::Initialize() {
     particleCommon_->Initialize(device);
     sceneManager_->SetParticleCommon(particleCommon_.get());
 
+    // 初期シーンはアプリ層で生成して渡す
+    sceneManager_->ChangeScene(new TitleScene());
+
     // ViewProjectionリソースの作成
     UINT viewProjectionSize = (sizeof(ViewProjection) + 255) & ~255;
     viewProjectionResource_ = CreateBufferResource(device, viewProjectionSize);
@@ -207,7 +211,7 @@ void WindowsApplication::Initialize() {
 
 #ifdef USE_IMGUI
     // リソースリークチェッカーのインスタンスを作成
-    leakChecker_ = std::make_unique<D3DResourceLeakChecker>();
+    //leakChecker_ = std::make_unique<D3DResourceLeakChecker>();
 #endif
 }
 

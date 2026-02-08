@@ -4,6 +4,7 @@
 #include "Input/KeyboardInput.h"
 #include "SceneManager.h"
 #include "Utility/ImGuiHelper.h"
+#include "Scene/GameScene.h"
 
 StageSelectScene::~StageSelectScene() {
 }
