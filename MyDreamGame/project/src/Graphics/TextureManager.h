@@ -34,6 +34,8 @@ public:
     // 指定したハンドルのリソース情報（幅・高さなど）を取得
     const D3D12_RESOURCE_DESC GetResourceDesc(uint32_t textureHandle) const;
 
+    void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle);
+
 private:
     // コンストラクタ、デストラクタなどをprivateにする（シングルトン）
     TextureManager() = default;

@@ -89,3 +89,19 @@ const D3D12_RESOURCE_DESC TextureManager::GetResourceDesc(uint32_t textureHandle
     // リソースの情報を取得して返す
     return textures_[textureHandle].resource->GetDesc();
 }
+
+void TextureManager::AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
+    // ヒープの空き容量（最大128など）をチェック
+    assert(nextSrvIndex_ < 128);
+
+    // 現在の空きインデックスを確保し、次回の呼び出しのためにインクリメントする
+    uint32_t currentSrvIndex = nextSrvIndex_++;
+
+    // CPUハンドルの計算
+    *out_cpu_handle = srvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+    out_cpu_handle->ptr += (static_cast<SIZE_T>(descriptorSizeSRV_) * currentSrvIndex);
+
+    // GPUハンドルの計算
+    *out_gpu_handle = srvDescriptorHeap_->GetGPUDescriptorHandleForHeapStart();
+    out_gpu_handle->ptr += (static_cast<SIZE_T>(descriptorSizeSRV_) * currentSrvIndex);
+}
