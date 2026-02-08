@@ -1,5 +1,7 @@
 #pragma once
+#ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h" // ImGuiを使うため
+#endif
 #include "Model/Model.h"
 #include <string>
 
@@ -8,6 +10,7 @@ inline void ShowModelGui(const std::string &name, Model *model) {
     if (model == nullptr)
         return;
 
+#ifdef USE_IMGUI
     // ID被り防止（同じ名前のモデルがいても大丈夫なように、ポインタをIDにする）
     ImGui::PushID(model);
 
@@ -33,4 +36,5 @@ inline void ShowModelGui(const std::string &name, Model *model) {
     }
 
     ImGui::PopID();
+#endif // USE_IMGUI
 }

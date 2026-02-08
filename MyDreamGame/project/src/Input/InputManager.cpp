@@ -1,6 +1,9 @@
 #include "InputManager.h"
 
 void InputManager::UpdateFromImGui() {
+#ifdef USE_IMGUI
+
+
     ImGuiIO &io = ImGui::GetIO();
 
     mouseDelta_ = { io.MouseDelta.x, io.MouseDelta.y };
@@ -11,6 +14,7 @@ void InputManager::UpdateFromImGui() {
     }
 
     ctrlDown_ = io.KeyCtrl;
+#endif // USE_IMGUI
 }
 
 Vector3 InputManager::GetMouseDelta() {

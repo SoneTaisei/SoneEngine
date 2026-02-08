@@ -36,7 +36,7 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
 }
 
 void StageSelectScene::Update(SceneManager *sceneManager) {
-
+#ifdef USE_IMGUI
     // --- 既存のモデルデバッグ表示 ---
     ImGui::Begin("Debug Models");
     for (int i = 0; i < models_.size(); ++i) {
@@ -44,6 +44,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         ShowModelGui(name, models_[i].get());
     }
     ImGui::End();
+#endif //
 
     // シーン遷移の処理
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {

@@ -1,11 +1,11 @@
 #include "TitleScene.h"
-#include "SceneManager.h"
-#include "Input/KeyboardInput.h"
 #include "../externals/imgui/imgui.h"
-#include "Sprite/SpriteCommon.h"
-#include "Model/ModelCommon.h"
-#include "Graphics/TextureManager.h"
 #include "Core/TimeManager.h"
+#include "Graphics/TextureManager.h"
+#include "Input/KeyboardInput.h"
+#include "Model/ModelCommon.h"
+#include "SceneManager.h"
+#include "Sprite/SpriteCommon.h"
 #include "StageSelectScene.h"
 #include <wrl.h>
 
@@ -45,21 +45,23 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     particles_.push_back(std::move(windowP));
 
     // 7. エミッタの設定
-    windowEmitter_.count = 1;         // 1回に出る数
-    windowEmitter_.frequency = 0.5f;  // 発生頻度(秒)
-    windowEmitter_.transform.translate = { 0.0f, 0.0f, 0.0f }; // 発生位置
+    windowEmitter_.count = 1;                                // 1回に出る数
+    windowEmitter_.frequency = 0.5f;                         // 発生頻度(秒)
+    windowEmitter_.transform.translate = {0.0f, 0.0f, 0.0f}; // 発生位置
 
     // ■ 追加: カメラの初期位置設定
-    cameraTransform_.scale = { 1.0f, 1.0f, 1.0f };
-    cameraTransform_.rotate = { 0.0f, 0.0f, 0.0f };
-    cameraTransform_.translate = { 0.0f, 0.0f, -10.0f }; // 少し手前に引く
+    cameraTransform_.scale = {1.0f, 1.0f, 1.0f};
+    cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
+    cameraTransform_.translate = {0.0f, 0.0f, -10.0f}; // 少し手前に引く
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
     // シーン遷移処理
-    if(KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
         sceneManager->ChangeScene(new StageSelectScene());
     }
+
+#ifdef USE_IMGUI
 
     // -------------------------------------------------
     // ■ カメラのImGui操作
@@ -73,7 +75,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
     ImGui::DragFloat3("Camera Translate", &cameraTransform_.translate.x, 0.1f);
 
     ImGui::End();
-
+#endif // USE_IMGUI
 
     // -------------------------------------------------
     // ■ 行列の更新 (数値が変わったら再計算)
@@ -82,11 +84,10 @@ void TitleScene::Update(SceneManager *sceneManager) {
     Matrix4x4 cameraMatrix = TransformFunctions::MakeAffineMatrix(
         cameraTransform_.scale,
         cameraTransform_.rotate,
-        cameraTransform_.translate
-    );
+        cameraTransform_.translate);
 
     // ビルボード計算用に、カメラ行列をParticleCommonに渡す
-    if(particleCommon_) {
+    if (particleCommon_) {
         particleCommon_->SetCamera(cameraMatrix);
     }
 
@@ -95,8 +96,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
 
     // 3. プロジェクション行列 (画角0.45, アスペクト比16:9, 範囲0.1~100)
     Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(
-        0.45f, 1280.0f / 720.0f, 0.1f, 100.0f
-    );
+        0.45f, 1280.0f / 720.0f, 0.1f, 100.0f);
 
     // 4. 合成して描画用行列を作る
     viewProjection_ = TransformFunctions::Multiply(viewMatrix, projectionMatrix);
@@ -104,14 +104,13 @@ void TitleScene::Update(SceneManager *sceneManager) {
     // -------------------------------------------------
     // ■ パーティクルの更新
     // -------------------------------------------------
-    
+
     // 全パーティクルの更新
-    for(auto &particle : particles_) {
+    for (auto &particle : particles_) {
         particle->Update();
 
         particle->DrawImGui();
     }
-
 }
 
 void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
@@ -122,7 +121,7 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // -------------------------------------------------
     // ■ パーティクルの描画
     // -------------------------------------------------
-    if(particleCommon_) {
+    if (particleCommon_) {
         // 前処理
         particleCommon_->PreDraw(commandList_.Get());
 
@@ -130,7 +129,7 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         particleCommon_->DrawAll(viewProjection_);
     }
 
-    if(spriteCommon_) {
+    if (spriteCommon_) {
         spriteCommon_->PreDraw(commandList_.Get());
         spriteCommon_->DrawAll();
     }
