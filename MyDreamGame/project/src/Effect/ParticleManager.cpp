@@ -168,6 +168,9 @@ void ParticleManager::Update() {
 }
 
 void ParticleManager::DrawImGui() {
+#ifdef USE_IMGUI
+
+
     // Emitterの座標をいじる
     // 資料の記述: ImGui::DragFloat3("EmitterTranslate", &emitter.transform.translate.x, 0.01f, -100.0f, 100.0f);
 
@@ -180,6 +183,7 @@ void ParticleManager::DrawImGui() {
 
     // ■ 追加: ビルボードのON/OFF切り替え
     ImGui::Checkbox("Is Billboard", &isBillboard_);
+#endif // USE_IMGUI
 }
 
 void ParticleManager::Draw(const Matrix4x4 &viewProjection) {

@@ -12,6 +12,9 @@ void DebugCamera::Initialize(int kClientWidth, int kClientHeight) {
 }
 
 void DebugCamera::Update() {
+#ifdef USE_IMGUI
+
+
     // --- 定数 ---
     const float moveSpeed = 0.02f;
     const float rotateSpeed = 0.005f;
@@ -47,6 +50,7 @@ void DebugCamera::Update() {
         transform_.translate = TransformFunctions::AddV(transform_.translate, TransformFunctions::MultiplyV(-io.MouseDelta.x * moveSpeed, right));
         transform_.translate = TransformFunctions::AddV(transform_.translate, TransformFunctions::MultiplyV(io.MouseDelta.y * moveSpeed, up));
     }
+#endif // USE_IMGUI
 
     // ★重要: 最後に親クラスの行列計算関数を呼ぶ！
     // これで viewMatrix_ と projectionMatrix_ が更新される
