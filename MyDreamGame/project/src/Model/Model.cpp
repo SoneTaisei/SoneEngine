@@ -2,7 +2,7 @@
 #include <cassert>
 
 // 必要に応じてextern宣言など
-extern ModelData LoadObjFile(const std::string &directoryPath, const std::string &filename);
+extern ModelData LoadModelFile(const std::string &directoryPath, const std::string &filename);
 extern void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &indices, float radius, uint32_t latDiv, uint32_t lonDiv);
 
 Model::~Model() {
@@ -21,7 +21,7 @@ void Model::Initialize(ModelCommon *modelCommon, const std::string &directoryPat
     modelCommon_->AddModel(this);
 
     // 2. データ読み込み
-    modelData_ = LoadObjFile(directoryPath, filename);
+    modelData_ = LoadModelFile(directoryPath, filename);
 
     // 3. バッファ生成
     CreateBuffers();
@@ -96,35 +96,30 @@ void Model::CreateBuffers() {
 }
 
 void Model::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    // ModelCommonからCommandListをもらって描画コマンドを積む
     ID3D12GraphicsCommandList *commandList = modelCommon_->GetCommandList();
     assert(commandList);
 
-    // 変換行列計算
+    // 1. オブジェクト自身の変形行列（Scale/Rotate/Translate）を作成
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
 
-    // ★修正 1：ローカル変数ではなく、作ったバッファ(mappedTransform_)に直接書き込む
-    if (mappedTransform_) {
-        mappedTransform_->WVP = TransformFunctions::Multiply(worldMatrix, viewProjectionMatrix);
-        mappedTransform_->World = worldMatrix;
+    // 2. 資料に基づき、Assimpで読み込んだノード行列を適用する (★ここが重要！)
+    // 最終的なワールド行列 = ルートノードの行列 * オブジェクトのワールド行列
+    Matrix4x4 finalWorldMatrix = modelData_.rootNode.localMatrix * worldMatrix; //
 
-        // ★追加：ライティング用の逆転置行列も計算する（Object3Dと同じ処理）
-        // ※これをやるには #include <DirectXMath.h> が必要です
-        DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&worldMatrix));
+    // 3. 書き込み用のバッファを更新
+    if (mappedTransform_) {
+        // WVP = 最終ワールド行列 * ビュープロジェクション行列
+        mappedTransform_->WVP = TransformFunctions::Multiply(finalWorldMatrix, viewProjectionMatrix); //
+        mappedTransform_->World = finalWorldMatrix;                                                   //
+
+        // ライティング用の逆転置行列も、finalWorldMatrix を元に計算する
+        DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&finalWorldMatrix));
         DirectX::XMMATRIX worldInv = DirectX::XMMatrixInverse(nullptr, worldX);
-        // 転置はシェーダーに任せるので、そのまま渡す（以前の修正と同じ）
         DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4 *>(&mappedTransform_->WorldInverseTranspose), worldInv);
     }
 
-    // コマンド発行
-
-    // ★修正 2：ここを「32BitConstants」から「ConstantBufferView」に変更！
-    // 以前: commandList->SetGraphicsRoot32BitConstants(1, ...);
-    // ↓
-    // 今回: 箱のアドレスを渡す
+    // --- 以下、描画コマンドの発行 ---
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
-
-    // 以下はそのまま
     commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->IASetIndexBuffer(&indexBufferView_);
