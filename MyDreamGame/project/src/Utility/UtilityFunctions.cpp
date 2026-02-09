@@ -2,6 +2,9 @@
 #include <map>
 #include <fstream>
 #include <mutex>
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #ifdef USE_IMGUI
@@ -468,89 +471,96 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 	}
 }
 
-ModelData LoadObjFile(const std::string &directoryPath, const std::string &filename) {
-	ModelData modelData;      // 構築するModelData
-	std::vector<Vector4> positions; // .objファイルから読み込んだ位置情報
-	std::vector<Vector3> normals;   // .objファイルから読み込んだ法線情報
-	std::vector<Vector2> texcoords; // .objファイルから読み込んだテクスチャ座標情報
-	std::string line;         // ファイルから読んだ1行を格納する
+Node ReadNode(aiNode *node) {
+    Node result;
 
-	std::ifstream file(directoryPath + "/" + filename); // ファイルを開く
-	assert(file.is_open()); // 開けなかったら止める
+    // 1. 行列の取得と転置
+    aiMatrix4x4 aiLocalMatrix = node->mTransformation;
+    aiLocalMatrix.Transpose(); // 列ベクトル形式を行ベクトル形式に転置
 
-	// "v/vt/vn" の文字列をキーに、作成済み頂点のインデックスを値として保持するmap
-	std::map<std::string, uint32_t> vertexMap;
+    // 2. 行列の要素をコピー
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            result.localMatrix.m[i][j] = aiLocalMatrix[i][j];
+        }
+    }
 
-	while(std::getline(file, line)) {
-		std::string identifier;
-		std::istringstream s(line);
-		s >> identifier; // 先頭の識別子を読む
+    // 3. 名前と子供の解析
+    result.name = node->mName.C_Str();          // Node名を格納
+    result.children.resize(node->mNumChildren); // 子供の数だけ確保
 
-		// 識別子に応じた処理
-		if(identifier == "v") {
-			Vector4 position;
-			s >> position.x >> position.y >> position.z;
-			position.w = 1.0f;
-			positions.push_back(position);
-		} else if(identifier == "vt") {
-			Vector2 texcoord;
-			s >> texcoord.x >> texcoord.y;
-			// V座標を反転させる
-			texcoord.y = 1.0f - texcoord.y;
-			texcoords.push_back(texcoord);
-		} else if(identifier == "vn") {
-			Vector3 normal;
-			s >> normal.x >> normal.y >> normal.z;
-			// X成分を反転させる
-			normal.x *= -1.0f;
-			normals.push_back(normal);
-		} else if(identifier == "f") {
-			// 面のデータ。3頂点（1トライアングル）ずつ処理する
-			for(int32_t i = 0; i < 3; ++i) {
-				std::string vertexDefinition;
-				s >> vertexDefinition; // "v/vt/vn" の組を読み込む
+    for (uint32_t childIndex = 0; childIndex < node->mNumChildren; ++childIndex) {
+        // 再帰的に読んで階層構造を作っていく
+        result.children[childIndex] = ReadNode(node->mChildren[childIndex]);
+    }
 
-				// この頂点（v/vt/vnの組み合わせ）が初めて登場したかチェック
-				if(vertexMap.find(vertexDefinition) == vertexMap.end()) {
-					// --- 新しい頂点の場合 ---
-					// 1. 新しいVertexDataを作成して modelData.vertices に追加
-					VertexData vertex;
-					std::istringstream v(vertexDefinition);
-					uint32_t posIndex, uvIndex, normIndex;
-					char slash; // スラッシュを読み飛ばす
+    return result;
+}
 
-					v >> posIndex >> slash >> uvIndex >> slash >> normIndex;
+ModelData LoadModelFile(const std::string &directoryPath, const std::string &filename) {
+    ModelData modelData;
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
 
-					// .objは1から、C++のvectorは0からインデックスが始まるので-1する
-					vertex.position = positions[posIndex - 1];
-					vertex.texcoord = texcoords[uvIndex - 1];
-					vertex.normal = normals[normIndex - 1];
+    // 1. ファイルの読み込み
+    // 資料にある通り、三角形化、巻き順反転、UV反転を指定
+    const aiScene *scene = importer.ReadFile(filePath.c_str(),
+                                             aiProcess_Triangulate | aiProcess_FlipUVs);
 
-					modelData.vertices.push_back(vertex);
+    // メッシュがない場合はエラー
+    assert(scene && scene->HasMeshes());
 
-					// 2. 新しく作った頂点のインデックスをmapとindicesベクターに追加
-					uint32_t newIndex = static_cast<uint32_t>(modelData.vertices.size() - 1);
-					modelData.indices.push_back(newIndex);
-					vertexMap[vertexDefinition] = newIndex; // mapに登録
-				} else {
-					// --- 既に登場済みの頂点の場合 ---
-					// mapからインデックスを取得して modelData.indices に追加するだけ
-					modelData.indices.push_back(vertexMap[vertexDefinition]);
-				}
-			}
-			// 元のコードの巻き順を再現するため、インデックスを並び替える (ABC -> ACB)
-			size_t last = modelData.indices.size() - 1;
-			std::swap(modelData.indices[last], modelData.indices[last - 1]);
+    // 2. メッシュの解析（資料に基づき、全メッシュをループ）
+    for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
+        aiMesh *mesh = scene->mMeshes[meshIndex];
 
-		} else if(identifier == "mtllib") {
-			// materialTemplateLibraryファイルの名前を取得する
-			std::string materialFilename;
-			s >> materialFilename;
-			// ディレクトリ名とファイル名を渡してマテリアルを読み込む
-			modelData.material = LoadMaterialTemplateFile(directoryPath, materialFilename);
-		}
-	}
-	return modelData;
+        // 法線とTexcoordがないメッシュは今回は非対応（資料のassert）
+        assert(mesh->HasNormals());
+        assert(mesh->HasTextureCoords(0));
+
+        // 頂点データの解析
+        for (uint32_t vIndex = 0; vIndex < mesh->mNumVertices; ++vIndex) {
+            aiVector3D &position = mesh->mVertices[vIndex];
+            aiVector3D &normal = mesh->mNormals[vIndex];
+            aiVector3D &texcoord = mesh->mTextureCoords[0][vIndex];
+
+            VertexData vertex;
+            vertex.position = {position.x, position.y, position.z, 1.0f};
+            vertex.normal = {normal.x, normal.y, normal.z};
+            vertex.texcoord = {texcoord.x, texcoord.y};
+
+            // 左手系への変換（資料の通り、Xを反転）
+            vertex.position = {position.x, position.y, position.z, 1.0f};
+            vertex.normal = {normal.x, normal.y, normal.z};
+            vertex.texcoord = {texcoord.x, texcoord.y};
+            modelData.vertices.push_back(vertex);
+        }
+
+        // インデックス（Face）の解析（資料：Indexed描画に対応させる）
+        for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
+            aiFace &face = mesh->mFaces[faceIndex];
+            assert(face.mNumIndices == 3); // 三角形のみサポート
+
+            for (uint32_t element = 0; element < face.mNumIndices; ++element) {
+                uint32_t vertexIndex = face.mIndices[element];
+                modelData.indices.push_back(vertexIndex);
+            }
+        }
+    }
+
+    // 3. マテリアルの解析（資料に基づき、Diffuseテクスチャを取得）
+    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
+        aiMaterial *material = scene->mMaterials[materialIndex];
+        if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
+            aiString textureFilePath;
+            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
+            modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
+        }
+    }
+
+	modelData.rootNode = ReadNode(scene->mRootNode);
+
+    return modelData;
 }
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename) {

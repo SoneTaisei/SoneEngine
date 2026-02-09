@@ -46,6 +46,8 @@ void Object3D::Initialize(ID3D12Device *device, ModelData *modelData, const std:
     cameraResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedCamera_));
     mappedCamera_->worldPosition = {0.0f, 0.0f, -5.0f}; // 適当な初期値
 
+    modelData_ = modelData;
+
     // 頂点バッファ等の作成処理 (省略されている部分はそのまま)
     // ...
 }
@@ -54,25 +56,29 @@ void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMa
     // データ転送
     *mappedMaterial_ = material_;
     *mappedLight_ = light_;
-
-    // ポイントライトも更新 (ImGuiなどで動かすかもしれないので)
     *mappedPointLight_ = pointLight_;
 
-    // 行列計算
+    // 1. オブジェクト自身のワールド行列を作成
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    Matrix4x4 wvpMatrix = worldMatrix * viewMatrix * projectionMatrix;
 
-    // 逆転置行列
-    DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&worldMatrix));
+    // 2. 資料に基づき、ノードの行列を適用する (★ここが重要！)
+    // WVP = ノードの行列 * オブジェクトの行列 * ビュー行列 * プロジェクション行列
+    Matrix4x4 nodeMatrix = modelData_->rootNode.localMatrix; // 解析したルートノードの行列
+
+    Matrix4x4 finalWorldMatrix = nodeMatrix * worldMatrix;                  // ノード込みの最終的なワールド行列
+    Matrix4x4 wvpMatrix = finalWorldMatrix * viewMatrix * projectionMatrix; //
+
+    // 3. 逆転置行列の計算 (最終的なワールド行列を使う)
+    DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&finalWorldMatrix));
     DirectX::XMMATRIX worldInv = DirectX::XMMatrixInverse(nullptr, worldX);
-    DirectX::XMMATRIX worldInvTrans = worldInv; // 転置はhlsl側でするか、ここでするかによりますがコード通り
+    DirectX::XMMATRIX worldInvTrans = worldInv; // 必要に応じて転置
 
-    // 転送
-    mappedTransform_->World = worldMatrix;
-    mappedTransform_->WVP = wvpMatrix;
+    // 4. GPUリソースへ転送
+    mappedTransform_->World = finalWorldMatrix; //
+    mappedTransform_->WVP = wvpMatrix;          //
     DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4 *>(&mappedTransform_->WorldInverseTranspose), worldInvTrans);
 
-    // カメラ位置更新 (★変数を mappedCamera_ に統一)
+    // カメラ位置更新
     mappedCamera_->worldPosition = cameraPos;
 }
 

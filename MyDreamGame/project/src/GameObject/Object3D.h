@@ -51,4 +51,6 @@ private:
     // テクスチャ関連
     Microsoft::WRL::ComPtr<ID3D12Resource> textureResource_;
     uint32_t textureSrvHandle_ = 0;
+
+    ModelData *modelData_ = nullptr;
 };

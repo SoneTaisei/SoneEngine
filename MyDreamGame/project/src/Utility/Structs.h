@@ -149,10 +149,17 @@ struct MaterialData {
 	std::string textureFilePath;
 };
 
+struct Node {
+    Matrix4x4 localMatrix;      // ノードのローカル行列
+    std::string name;           // ノード名
+    std::vector<Node> children; // 子供のノード
+};
+
 struct ModelData {
-	std::vector<VertexData> vertices;
-	MaterialData material;
-	std::vector<uint32_t> indices;
+    std::vector<VertexData> vertices;
+    std::vector<uint32_t> indices; // インデックス描画用
+    MaterialData material;
+    Node rootNode; // ルートノードを追加
 };
 
 struct ChunkHeader {

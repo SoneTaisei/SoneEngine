@@ -20,8 +20,9 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
     uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/monsterBall.png", commandList_);
     D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH = TextureManager::GetInstance()->GetGpuHandle(skydomeIndex);
 
+
     std::unique_ptr<Model> skydomeModel = std::make_unique<Model>();
-    skydomeModel->Initialize(modelCommon_, "resources/sphere", "sphere.obj");
+    skydomeModel->Initialize(modelCommon_, "resources/sphere", "sphere.gltf");
     skydomeModel->SetTextureHandle(skydomeTH);
     skydomeModel->SetRotation({0.0f, 0.0f, 0.0f});
     models_.push_back(std::move(skydomeModel));
