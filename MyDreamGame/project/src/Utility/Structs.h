@@ -174,7 +174,7 @@ struct SoundData {
 	// 波形フォーマット
 	WAVEFORMATEX wfex;
 	// バッファの先頭アドレス
-	BYTE *pBuffer;
+    std::unique_ptr<uint8_t[]> pBuffer;
 	// バッファのサイズ
 	unsigned int bufferSize;
 };

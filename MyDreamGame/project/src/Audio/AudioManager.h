@@ -15,6 +15,14 @@ struct SourceVoiceDeleter {
     }
 };
 
+struct VoiceDeleter {
+    void operator()(IXAudio2Voice *p) const {
+        if (p) {
+            p->DestroyVoice();
+        }
+    }
+};
+
 class AudioManager {
 public:
     // 初期化
@@ -35,7 +43,7 @@ public:
 private:
     // XAudio2の本体など
     static Microsoft::WRL::ComPtr<IXAudio2> xAudio2_;
-    static IXAudio2MasteringVoice *masterVoice_;
+    static std::unique_ptr<IXAudio2MasteringVoice, VoiceDeleter> masterVoice_;
 
     // 再生中のボイスを管理するリスト
     static std::list<std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter>> playingVoices_;
