@@ -22,6 +22,10 @@ public:
 	// 描画後処理
 	void PostDraw();
 
+	// 描画後処理を分割して提供
+    void ExecuteCommands(); // コマンドを閉じて実行する
+    void Present();         // 画面に表示して次フレームの準備をする
+
 	// ゲッター関数
 	ID3D12Device *GetDevice() const { return device_.Get(); }
 	ID3D12GraphicsCommandList *GetCommandList() const { return commandList_.Get(); }

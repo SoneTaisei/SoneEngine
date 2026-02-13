@@ -94,8 +94,8 @@ void DirectXCommon::PreDraw() {
 
 }
 
-void DirectXCommon::PostDraw() {
-    // リソースバリアを設定 (描画ターゲット状態から表示状態へ)
+void DirectXCommon::ExecuteCommands() {
+    // 1. リソースバリアを設定 (描画ターゲット状態から表示状態へ)
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -104,39 +104,47 @@ void DirectXCommon::PostDraw() {
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     commandList_->ResourceBarrier(1, &barrier);
 
-    // コマンドリストを確定
+    // 2. コマンドリストを確定
     HRESULT hr = commandList_->Close();
     assert(SUCCEEDED(hr));
 
-    // コマンドキューにコマンドリストを実行させる
-    ID3D12CommandList *commandLists[] = { commandList_.Get() };
+    // 3. コマンドキューにコマンドリストを実行させる
+    ID3D12CommandList *commandLists[] = {commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, commandLists);
+}
 
-    // 画面に表示
+void DirectXCommon::Present() {
+    // 4. 画面に表示 (垂直同期あり)
     swapChain_->Present(1, 0);
 
-    // GPUの処理完了を待つ
+    // 5. GPUの処理完了を待つ (Signal & Wait)
     fenceValue_++;
     commandQueue_->Signal(fence_.Get(), fenceValue_);
-    if(fence_->GetCompletedValue() < fenceValue_) {
+    if (fence_->GetCompletedValue() < fenceValue_) {
         fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
 
+    // 6. FPS固定
     UpdateFixFPS();
 
-    // 次のフレームの準備
-    hr = commandAllocator_->Reset();
+    // 7. 次のフレームの準備 (Reset)
+    HRESULT hr = commandAllocator_->Reset();
     assert(SUCCEEDED(hr));
     hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
     assert(SUCCEEDED(hr));
+}
+
+void DirectXCommon::PostDraw() {
+    ExecuteCommands();
+    Present();
 }
 
 
 void DirectXCommon::CreateDxInstance() {
     // (WindowsApplication::CreateDxInstance の中身をそのまま貼り付け)
     HRESULT hr;
-#ifdef _DEBUG
+#ifdef USE_IMGUI
     Microsoft::WRL::ComPtr<ID3D12Debug1> debugController;
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
         debugController->EnableDebugLayer();
@@ -183,7 +191,8 @@ void DirectXCommon::CreateFinalRenderTargets() {
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
     swapChainDesc.Width = windowWidth_;
     swapChainDesc.Height = windowHeight_;
-    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // ★ ここも一旦 UNORM にしてみる
+    swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.BufferCount = 2;

@@ -10,10 +10,10 @@ TextureManager *TextureManager::GetInstance() {
 }
 
 void TextureManager::Initialize(Microsoft::WRL::ComPtr<ID3D12Device> device) { // <<< 引数をComPtrに変更
-    device_ = device; // ComPtr同士の代入
+    device_ = device;                                                          // ComPtr同士の代入
 
     // CreateDescriptorHeapにdevice_を渡す（device_がComPtrなので、Get()が不要になる）
-    srvDescriptorHeap_ = CreateDescriptorHeap(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
+    srvDescriptorHeap_ = CreateDescriptorHeap(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2048, true);
 
     descriptorSizeSRV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     nextSrvIndex_ = 1;
@@ -28,8 +28,8 @@ void TextureManager::Finalize() {
 
 uint32_t TextureManager::Load(const std::string &filePath, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     // 既に読み込み済みのテクスチャか検索
-    for(uint32_t i = 0; i < textures_.size(); ++i) {
-        if(textures_[i].filePath == filePath) {
+    for (uint32_t i = 0; i < textures_.size(); ++i) {
+        if (textures_[i].filePath == filePath) {
             // 読み込み済みならそのハンドル(インデックス)を返す
             return i;
         }
@@ -51,7 +51,6 @@ uint32_t TextureManager::Load(const std::string &filePath, Microsoft::WRL::ComPt
     // 3. テクスチャデータをGPUにアップロード (引数から.Get()を削除)
     textures_[handle].intermediateResource = UploadTextureData(
         textures_[handle].resource, mipImages, device_, commandList);
-
 
     // 4. シェーダーリソースビュー(SRV)を作成
     assert(nextSrvIndex_ < 128); // ヒープの空き容量をチェック
@@ -92,7 +91,7 @@ const D3D12_RESOURCE_DESC TextureManager::GetResourceDesc(uint32_t textureHandle
 
 void TextureManager::AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
     // ヒープの空き容量（最大128など）をチェック
-    assert(nextSrvIndex_ < 128);
+    assert(nextSrvIndex_ < 2048);
 
     // 現在の空きインデックスを確保し、次回の呼び出しのためにインクリメントする
     uint32_t currentSrvIndex = nextSrvIndex_++;

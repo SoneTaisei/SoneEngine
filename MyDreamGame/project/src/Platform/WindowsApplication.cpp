@@ -15,6 +15,7 @@
 
 // 枠を借りるための関数
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
+    OutputDebugStringA("ImGuiSrvAlloc called!\n"); // これが出るかチェック
     // 前回の回答で TextureManager に追加した関数を呼び出す
     TextureManager::GetInstance()->AllocateDescriptor(out_cpu_handle, out_gpu_handle);
 }
@@ -153,40 +154,44 @@ void WindowsApplication::Initialize() {
     isDebugCameraActive_ = false;
 
 #ifdef USE_IMGUI
-
-    // ImGuiの初期化
+    // 1. ImGuiコンテキストの作成
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+
+    // 2. ★【重要】バックエンド初期化の前にフラグを立てる！
+    // これを先にやらないと、マルチビューポート用の関数ポインタがNULLになります
+    ImGuiIO &io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;   // ドッキング有効化
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // マルチビューポート（画面外）有効化
+
+    // 3. Win32バックエンドの初期化
+    // ViewportsEnableが立っているのを見て、ImGuiが内部でPlatform_RenderWindowなどを登録します
     ImGui_ImplWin32_Init(hwnd_);
+
+    // 4. DirectX12バックエンドの初期化
     ImGui_ImplDX12_InitInfo init_info = {};
     init_info.Device = device;
-    init_info.CommandQueue = dxCommon_->GetCommandQueue();
-    init_info.NumFramesInFlight = dxCommon_->GetSwapChainDesc().BufferCount;
-    init_info.RTVFormat = dxCommon_->GetRtvDesc().Format;
+    init_info.CommandQueue = dxCommon_->GetCommandQueue();                   //
+    init_info.NumFramesInFlight = dxCommon_->GetSwapChainDesc().BufferCount; //
+    init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;                        // ノートPC等の相性を考えSRGBなしを推奨
     init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    init_info.SrvDescriptorHeap = TextureManager::GetInstance()->GetSrvDescriptorHeap();
+    init_info.SrvDescriptorHeap = TextureManager::GetInstance()->GetSrvDescriptorHeap(); //
 
-    // ★ここがポイント！定義した関数を教える
+    // 記述子のアロケータを教える
     init_info.SrvDescriptorAllocFn = ImGuiSrvAlloc;
     init_info.SrvDescriptorFreeFn = ImGuiSrvFree;
 
     ImGui_ImplDX12_Init(&init_info);
-    unsigned char *pixels;
-    int width, height;
-    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-    ImGuiIO &io = ImGui::GetIO();
-    // ドッキング機能を有効化
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    // ウィンドウの外に飛び出させたい場合（マルチビューポート）も有効化
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+    // 5. フォントテクスチャの作成（任意ですが、ここで初期化しておくと安全です）
+    // ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height); などの処理
+
+    // 6. スタイルの微調整
     ImGuiStyle &style = ImGui::GetStyle();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        // ウィンドウの角を丸くしない（透過時に境界が綺麗に見えます）
-        style.WindowRounding = 0.0f;
-        // 背景の「黒さ」の原因であるアルファ値を調整（0.0fで完全透明、1.0fで不透明）
-        // 0.8f くらいにすると、デスクトップが少し透けて「ツールっぽさ」が増します！✨
-        style.Colors[ImGuiCol_WindowBg].w = 0.8f;
+        style.WindowRounding = 0.0f;              // 画面外ウィンドウの角を丸くしない
+        style.Colors[ImGuiCol_WindowBg].w = 1.0f; // 最初は不透明(1.0f)にして描画を確認するのがオススメ！
     }
 #endif // USE_IMGUI
 
@@ -371,12 +376,6 @@ void WindowsApplication::Run() {
             ID3D12DescriptorHeap *descriptorHeaps[] = {TextureManager::GetInstance()->GetSrvDescriptorHeap()};
             commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
-            // 定数バッファの設定 (これはゲーム固有の描画処理)
-            // commandList->SetGraphicsRootConstantBufferView(0, materialResource->GetGPUVirtualAddress());
-            // commandList->SetGraphicsRootConstantBufferView(4, pointLightResource_->GetGPUVirtualAddress());
-            // commandList->SetGraphicsRootConstantBufferView(3, viewProjectionResource_->GetGPUVirtualAddress());
-            // commandList->SetGraphicsRootConstantBufferView(4, directionalLightResource_->GetGPUVirtualAddress());
-
             // ModelCommonの描画前準備
             modelCommon_->PreDraw(commandList);
 
@@ -395,19 +394,26 @@ void WindowsApplication::Run() {
             // commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
 
 #ifdef USE_IMGUI
-            // ImGuiの描画
+            // 1. メインウィンドウ用のImGui描画命令を積む
             ImGui::Render();
             ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+#endif
 
+            // ★ 2. ここでメインのコマンドリストを実行！
+            dxCommon_->ExecuteCommands();
+
+#ifdef USE_IMGUI
+            // ★ 3. メインの実行「後」にサブウィンドウ（画面外）を更新・描画
             ImGuiIO &io = ImGui::GetIO();
             if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
                 ImGui::UpdatePlatformWindows();
+                // ここでImGuiが内部的に独自のコマンドリストを作成・実行します
                 ImGui::RenderPlatformWindowsDefault();
             }
 #endif
 
-            // 描画後処理
-            dxCommon_->PostDraw();
+            // ★ 4. 最後にスワップチェーンを Present して、GPUを待機する
+            dxCommon_->Present();
         }
     }
 }
