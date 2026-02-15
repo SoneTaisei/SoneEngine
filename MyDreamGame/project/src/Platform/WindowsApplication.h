@@ -74,7 +74,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource = {};
 	Material *materialData = nullptr;
 
-#ifdef _DEBUG
+#ifdef USE_IMGUI
 // リソースリークチェッカー
 	std::unique_ptr<D3DResourceLeakChecker> leakChecker_;
 #endif

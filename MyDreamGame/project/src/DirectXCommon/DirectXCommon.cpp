@@ -335,7 +335,7 @@ void DirectXCommon::CreatePipelines() {
     D3D12_RASTERIZER_DESC rasterizerDesc{};
     rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;  // 背面をカリングする
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID; // 中身を塗りつぶす
-    rasterizerDesc.FrontCounterClockwise = TRUE;
+    rasterizerDesc.FrontCounterClockwise = FALSE;
 
     Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils.Get(), dxcCompiler.Get(), includeHandler.Get());
     assert(vertexShaderBlob != nullptr);

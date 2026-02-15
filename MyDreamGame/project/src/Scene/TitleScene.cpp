@@ -20,11 +20,11 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
-     uint32_t planeIndex = TextureManager::GetInstance()->Load("uvChecker.png", commandList_);
+     uint32_t planeIndex = TextureManager::GetInstance()->Load("Sprite/uvChecker.png", commandList_);
     D3D12_GPU_DESCRIPTOR_HANDLE planeTH = TextureManager::GetInstance()->GetGpuHandle(planeIndex);
 
      std::unique_ptr<Model> planeModel = std::make_unique<Model>();
-    planeModel->Initialize(modelCommon_, "plane", "plane.gltf");
+    planeModel->Initialize(modelCommon_, "Object/plane", "plane.gltf");
     planeModel->SetTextureHandle(planeTH);
     planeModel->SetRotation({0.0f, 0.0f, 0.0f});
     models_.push_back(std::move(planeModel));

@@ -17,21 +17,21 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
-    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("monsterBall.png", commandList_);
+    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("Sprite/monsterBall.png", commandList_);
     D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH = TextureManager::GetInstance()->GetGpuHandle(skydomeIndex);
 
 
     std::unique_ptr<Model> skydomeModel = std::make_unique<Model>();
-    skydomeModel->Initialize(modelCommon_, "sphere", "sphere.gltf");
+    skydomeModel->Initialize(modelCommon_, "Object/sphere", "sphere.gltf");
     skydomeModel->SetTextureHandle(skydomeTH);
     skydomeModel->SetRotation({0.0f, 0.0f, 0.0f});
     models_.push_back(std::move(skydomeModel));
 
-    uint32_t terrainIndex = TextureManager::GetInstance()->Load("terrain/grass.png", commandList_);
+    uint32_t terrainIndex = TextureManager::GetInstance()->Load("Object/terrain/grass.png", commandList_);
     D3D12_GPU_DESCRIPTOR_HANDLE terrainTH = TextureManager::GetInstance()->GetGpuHandle(terrainIndex);
 
     std::unique_ptr<Model> terrainModel = std::make_unique<Model>();
-    terrainModel->Initialize(modelCommon_, "terrain", "terrain.obj");
+    terrainModel->Initialize(modelCommon_, "Object/terrain", "terrain.obj");
     terrainModel->SetTextureHandle(terrainTH);
     terrainModel->SetRotation({0.0f, 0.0f, 0.0f});
     models_.push_back(std::move(terrainModel));
