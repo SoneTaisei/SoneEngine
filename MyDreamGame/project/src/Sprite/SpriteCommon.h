@@ -7,11 +7,12 @@
 
 // 前方宣言
 class Sprite;
+class DirectXCommon;
 
 class SpriteCommon {
 public:
     // 初期化 (デバイスとウィンドウサイズを受け取る)
-    void Initialize(ID3D12Device *device, int windowWidth, int windowHeight);
+    void Initialize(DirectXCommon *dxCommon, int windowWidth, int windowHeight);
 
     // 終了処理
     void Finalize();
@@ -41,7 +42,11 @@ private:
     // 共通リソース作成関数
     void CreateCommonResources();
 
+    void CreateGraphicsPipeline();
+
 private:
+    DirectXCommon *dxCommon_ = nullptr;
+
     ID3D12Device *device_ = nullptr;
     ID3D12GraphicsCommandList *commandList_ = nullptr;
 
@@ -50,6 +55,8 @@ private:
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_;
     D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 
     // 射影行列 (画面サイズ依存)
     Matrix4x4 projectionMatrix_{};

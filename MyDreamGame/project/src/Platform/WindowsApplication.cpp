@@ -111,7 +111,7 @@ void WindowsApplication::Initialize() {
 
     // SpriteCommon の生成と初期化
     spriteCommon_ = std::make_unique<SpriteCommon>();
-    spriteCommon_->Initialize(dxCommon_->GetDevice(), kWindowWidth_, kWindowHeight_);
+    spriteCommon_->Initialize(dxCommon_.get(), kWindowWidth_, kWindowHeight_);
 
     // SpriteCommon を SceneManager に渡す
     sceneManager_->SetSpriteCommon(spriteCommon_.get());

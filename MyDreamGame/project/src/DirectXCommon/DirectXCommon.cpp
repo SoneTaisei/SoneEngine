@@ -220,14 +220,12 @@ void DirectXCommon::CreateFinalRenderTargets() {
 void DirectXCommon::CreatePipelines() {
     HRESULT hr;
 
-    Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils = nullptr;
-    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler = nullptr;
-    hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
+    // ★ローカル変数の宣言を削除し、ヘッダーで定義したメンバ変数( _付き )に直接代入する！
+    hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils_));
     assert(SUCCEEDED(hr));
-    hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
+    hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler_));
     assert(SUCCEEDED(hr));
-    Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler = nullptr;
-    hr = dxcUtils->CreateDefaultIncludeHandler(&includeHandler);
+    hr = dxcUtils_->CreateDefaultIncludeHandler(&includeHandler_);
     assert(SUCCEEDED(hr));
 
     D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
@@ -337,9 +335,9 @@ void DirectXCommon::CreatePipelines() {
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID; // 中身を塗りつぶす
     rasterizerDesc.FrontCounterClockwise = FALSE;
 
-    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils.Get(), dxcCompiler.Get(), includeHandler.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(vertexShaderBlob != nullptr);
-    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils.Get(), dxcCompiler.Get(), includeHandler.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(pixelShaderBlob != nullptr);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};

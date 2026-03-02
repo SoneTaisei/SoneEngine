@@ -35,6 +35,9 @@ public:
 	ID3D12PipelineState *GetGraphicsPipelineState() const { return graphicsPipelineState_.Get(); }
 	ID3D12PipelineState *GetSpritePipelineState() const { return spritePipelineState_.Get(); }
     ID3D12CommandQueue *GetCommandQueue() const { return commandQueue_.Get(); }
+    IDxcUtils *GetDxcUtils() const { return dxcUtils_.Get(); }
+    IDxcCompiler3 *GetDxcCompiler() const { return dxcCompiler_.Get(); }
+    IDxcIncludeHandler *GetIncludeHandler() const { return includeHandler_.Get(); }
 
 private:
 	// DirectXのインスタンス作成
@@ -73,6 +76,9 @@ private:
 	D3D12_RECT scissorRect_{};
 	Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource_;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
+    Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
+    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
+    Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

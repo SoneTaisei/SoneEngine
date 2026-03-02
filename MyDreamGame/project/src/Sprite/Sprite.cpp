@@ -23,6 +23,11 @@ void Sprite::Initialize(SpriteCommon *spriteCommon, uint32_t textureIndex) {
 	materialResource_ = CreateBufferResource(device, sizeof(Material));
 	materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&materialData_));
 
+	// 行列用のバッファリソースを作成
+    transformResource_ = CreateBufferResource(device, sizeof(TransformMatrix));
+    // 書き込み用のポインタを紐付ける
+    transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
+
 	// 初期値設定
 	materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	materialData_->lightingType = false;
@@ -69,6 +74,11 @@ void Sprite::Draw() {
 	TransformMatrix transformMatrixData;
 	transformMatrixData.WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(viewMatrix, projectionMatrix));
 	transformMatrixData.World = worldMatrix;
+
+	// 計算結果をGPU上のメモリにコピー！
+    if (mappedTransform_) {
+        *mappedTransform_ = transformMatrixData;
+    }
 
 	// コマンドリストへの設定
 	ID3D12GraphicsCommandList *commandList = spriteCommon_->GetCommandList();
