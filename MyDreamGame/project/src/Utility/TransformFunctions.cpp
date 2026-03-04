@@ -405,3 +405,8 @@ Vector3 TransformFunctions::Normalize(Vector3 v) {
 	return { v.x / length, v.y / length, v.z / length };
 }
 
+
+Matrix4x4 TransformFunctions::MakeViewMatrix(const Vector3 &rotate, const Vector3 &translate) {
+    // アフィン行列の逆行列がビュー行列になる
+    return Inverse(MakeAffineMatrix({1, 1, 1}, rotate, translate));
+}

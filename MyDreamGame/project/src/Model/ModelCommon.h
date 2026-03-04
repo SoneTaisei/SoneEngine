@@ -4,6 +4,7 @@
 #include "Utility/Utilityfunctions.h"
 
 class Model;
+class ModelCommon;
 
 struct CameraForGPU {
     Vector3 worldPosition;

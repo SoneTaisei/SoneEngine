@@ -9,6 +9,7 @@
 #include "Sprite/Sprite.h"
 #include "Utility/TransformFunctions.h"
 #include "Utility/Utilityfunctions.h"
+#include "Model/ModelManager.h"
 #include <cassert>
 #include <chrono>
 #include <format>
@@ -104,6 +105,8 @@ void WindowsApplication::Initialize() {
     // ModelCommonの生成と初期化
     modelCommon_ = std::make_unique<ModelCommon>();
     modelCommon_->Initialize(device);
+
+    ModelManager::GetInstance()->Initialize(modelCommon_.get());
 
     // SceneManagerに渡す
     sceneManager_->SetModelCommon(modelCommon_.get());
@@ -425,6 +428,8 @@ void WindowsApplication::Finalize() {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 #endif
+
+    ModelManager::GetInstance()->Finalize();
 
     // 2. ゲーム層のマネージャー・共通部の解放
     // 下にいくほど「土台」に近いものを消す順番にする

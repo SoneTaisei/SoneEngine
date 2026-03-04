@@ -171,6 +171,7 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="src\Model\ModelManager.cpp" />
     <ClCompile Include="src\Effect\SnowParticle.cpp" />
     <ClCompile Include="src\Graphics\GameCamera.cpp" />
     <ClCompile Include="src\Graphics\Camera.cpp" />
@@ -268,6 +269,7 @@
     <ClInclude Include="externals\imgui\imstb_rectpack.h" />
     <ClInclude Include="externals\imgui\imstb_textedit.h" />
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
+    <ClInclude Include="src\Model\ModelManager.h" />
     <ClInclude Include="src\Effect\SnowParticle.h" />
     <ClInclude Include="src\Graphics\GameCamera.h" />
     <ClInclude Include="src\Graphics\Camera.h" />

@@ -3,6 +3,7 @@
 #include "Model/Model.h"
 #include <d3d12.h>
 #include <memory>
+#include "GameObject/Object3D.h"
 
 class StageSelectScene : public IScene {
 public:
@@ -14,7 +15,7 @@ public:
 private:
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
 
-    std::vector<std::unique_ptr<Model>> models_;
+    std::vector<std::unique_ptr<Object3D>> objects_;
 
     Transform cameraTransform_; // カメラの座標・回転
     Matrix4x4 viewProjection_;  // 描画に使う行列

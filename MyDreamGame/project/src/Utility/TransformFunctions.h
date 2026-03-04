@@ -73,6 +73,7 @@ public:
 	static Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
 
 	static Vector3 Normalize(Vector3 v);
+    static Matrix4x4 MakeViewMatrix(const Vector3 &rotate, const Vector3 &translate);
 
 
 };

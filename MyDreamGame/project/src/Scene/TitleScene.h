@@ -8,6 +8,7 @@
 #include <memory>
 #include "Effect/ParticleCommon.h"
 #include "Effect/windowParticle.h"
+#include "GameObject/Object3D.h"
 
 class TitleScene : public IScene {
 public:
@@ -24,7 +25,7 @@ private:
 
     Model *playerModel_ = nullptr;
 
-    std::vector<std::unique_ptr<Model>> models_;
+    std::vector<std::unique_ptr<Object3D>> objects_;
     std::vector<std::unique_ptr<Sprite>> sprites_;
 
     // ■ 追加: パーティクル管理用変数

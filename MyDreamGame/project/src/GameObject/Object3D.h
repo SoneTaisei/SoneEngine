@@ -1,18 +1,30 @@
 #pragma once
 #include "Utility/Structs.h"
 #include "Utility/UtilityFunctions.h"
-
-// ※CameraForGPU はここにあってもいいですが、他のファイルでも使うなら共通ヘッダー推奨です
-struct CameraForGPU {
-    Vector3 worldPosition;
-};
+#include "Model/Model.h"
 
 class Object3D {
 public:
-    void Initialize(ID3D12Device *device, ModelData *modelData, const std::wstring &textureFilePath = L"");
-    void Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix, const Vector3 &cameraPos);
-    void Draw(ID3D12GraphicsCommandList *commandList, ID3D12DescriptorHeap *srvDescriptorHeap);
+    void Initialize(ID3D12Device *device, Model *model);
+    void Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix);
+    void Draw(ID3D12GraphicsCommandList *commandList);
     void DisplayImGui(const std::string &label);
+
+    // --- Transformのゲッター ---
+    const Vector3 &GetTranslation() const { return transform_.translate; }
+    const Vector3 &GetRotation() const { return transform_.rotate; }
+    const Vector3 &GetScale() const { return transform_.scale; }
+
+    // --- Transformのセッター ---
+    void SetTranslation(const Vector3 &translate) { transform_.translate = translate; }
+    void SetRotation(const Vector3 &rotate) { transform_.rotate = rotate; }
+    void SetScale(const Vector3 &scale) { transform_.scale = scale; }
+    
+    void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+        if (model_) {
+            model_->SetTextureHandle(handle);
+        }
+    }
 
 private:
     // マテリアル
@@ -31,16 +43,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> pointLightResource_;
     PointLight *mappedPointLight_ = nullptr; // 名前を統一感あるものに変更
 
-    // カメラ (Camera)
-    Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_; // cameraBuffer_ と重複していたのでこれに統一
-    CameraForGPU *mappedCamera_ = nullptr;                  // cameraData_ と重複していたのでこれに統一
-
-    // 頂点・インデックスバッファ
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
-    Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer_;
-    D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
-    uint32_t indexCount_ = 0;
+    Model *model_ = nullptr;
 
     // CPU側データ
     Transform transform_;

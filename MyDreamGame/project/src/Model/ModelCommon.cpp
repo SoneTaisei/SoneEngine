@@ -102,6 +102,6 @@ void ModelCommon::RemoveModel(Model *model) {
 void ModelCommon::DrawAll(const Matrix4x4 &viewProjectionMatrix) {
     for(Model *model : models_) {
         // モデル自身のDrawを呼ぶ（引数にはVP行列だけ渡す）
-        model->Draw(viewProjectionMatrix);
+        model->Draw();
     }
 }

@@ -17,9 +17,6 @@ void Model::Initialize(ModelCommon *modelCommon, const std::string &directoryPat
     // 1. Commonをセット
     modelCommon_ = modelCommon;
 
-    // Commonに自分を登録
-    modelCommon_->AddModel(this);
-
     // 2. データ読み込み
     modelData_ = LoadModelFile(directoryPath, filename);
 
@@ -81,47 +78,19 @@ void Model::CreateBuffers() {
     assert(SUCCEEDED(hr));
     std::memcpy(indexData, modelData_.indices.data(), sizeof(uint32_t) * modelData_.indices.size());
     indexResource_->Unmap(0, nullptr);
-
-    // --- 3. Transform Buffer (変形行列用) の作成 ---
-    // ★重要：サイズを256バイトの倍数にする魔法の計算
-    transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
-
-    // バッファを開いて、書き込み用のポインタを取得する
-    transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
-
-    // 安全のため、最初は単位行列を入れておく
-    mappedTransform_->WVP = TransformFunctions::MakeIdentity4x4();
-    mappedTransform_->World = TransformFunctions::MakeIdentity4x4();
-    mappedTransform_->WorldInverseTranspose = TransformFunctions::MakeIdentity4x4();
 }
 
-void Model::Draw(const Matrix4x4 &viewProjectionMatrix) {
+void Model::Draw() {
     ID3D12GraphicsCommandList *commandList = modelCommon_->GetCommandList();
-    assert(commandList);
 
-    // 1. オブジェクト自身の変形行列（Scale/Rotate/Translate）を作成
-    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    // 行列のセット（SetGraphicsRootConstantBufferView）は、
+    // Object3D側で呼ぶようにするか、引数でアドレスを受け取る形にします。
 
-    // 2. 資料に基づき、Assimpで読み込んだノード行列を適用する (★ここが重要！)
-    // 最終的なワールド行列 = ルートノードの行列 * オブジェクトのワールド行列
-    Matrix4x4 finalWorldMatrix = modelData_.rootNode.localMatrix * worldMatrix; //
-
-    // 3. 書き込み用のバッファを更新
-    if (mappedTransform_) {
-        // WVP = 最終ワールド行列 * ビュープロジェクション行列
-        mappedTransform_->WVP = TransformFunctions::Multiply(finalWorldMatrix, viewProjectionMatrix); //
-        mappedTransform_->World = finalWorldMatrix;                                                   //
-
-        // ライティング用の逆転置行列も、finalWorldMatrix を元に計算する
-        DirectX::XMMATRIX worldX = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4 *>(&finalWorldMatrix));
-        DirectX::XMMATRIX worldInv = DirectX::XMMatrixInverse(nullptr, worldX);
-        DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4 *>(&mappedTransform_->WorldInverseTranspose), worldInv);
-    }
-
-    // --- 以下、描画コマンドの発行 ---
-    commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
+    // テクスチャと頂点データのセット
     commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->IASetIndexBuffer(&indexBufferView_);
+
+    // 描画実行
     commandList->DrawIndexedInstanced(UINT(modelData_.indices.size()), 1, 0, 0, 0);
 }
