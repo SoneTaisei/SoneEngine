@@ -31,6 +31,8 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
     skydomeObject->SetTextureHandle(skydomeTH);
     skydomeObject->SetRotation({0.0f, 0.0f, 0.0f});
 
+    cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+
     objects_.push_back(std::move(skydomeObject));
 }
 

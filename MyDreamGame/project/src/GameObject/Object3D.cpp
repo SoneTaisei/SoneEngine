@@ -5,6 +5,12 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
     model_ = model; // 共有されているモデルをセット
     transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
+    // マテリアルが透明にならないように初期値を設定する
+    material_.color = {1.0f, 1.0f, 1.0f, 1.0f};                    // 白色で不透明 (RGBA)
+    material_.lightingType = 1;                                    // ライティング有効
+    material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 以前作った単位行列を返す関数
+    material_.shininess = 50.0f;
+
     // マテリアルと座標変換リソースの作成（自分の分だけ）
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
@@ -34,10 +40,10 @@ void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMa
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
-    // 自分のマテリアルと行列をセット
-    commandList->SetGraphicsRootConstantBufferView(0, transformResource_->GetGPUVirtualAddress()); // 行列
-    commandList->SetGraphicsRootConstantBufferView(1, materialResource_->GetGPUVirtualAddress());  // マテリアル
+    // 💡 スロット1が行列、スロット0がマテリアルが正解です！
+    commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress()); // 行列 (スロット1)
+    commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());  // マテリアル (スロット0)
 
-    // 実際の描画（バッファのセットやDrawコマンド）はModelに任せる！
+    // 実際の描画
     model_->Draw();
 }
