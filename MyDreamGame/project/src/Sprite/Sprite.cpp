@@ -23,8 +23,10 @@ void Sprite::Initialize(SpriteCommon *spriteCommon, uint32_t textureIndex) {
 	materialResource_ = CreateBufferResource(device, sizeof(Material));
 	materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&materialData_));
 
+	size_t sizeAligned = (sizeof(TransformMatrix) + 0xff) & ~0xff;
+
 	// 行列用のバッファリソースを作成
-    transformResource_ = CreateBufferResource(device, sizeof(TransformMatrix));
+    transformResource_ = CreateBufferResource(device,sizeAligned);
     // 書き込み用のポインタを紐付ける
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
 
@@ -67,13 +69,13 @@ void Sprite::Draw() {
 	Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(
 		transform_.scale, transform_.rotate, transform_.translate
 	);
-    Matrix4x4 viewMatrix = spriteCommon_->GetViewMatrix();
-	Matrix4x4 projectionMatrix = spriteCommon_->GetProjectionMatrix();
+    Matrix4x4 viewMatrix = TransformFunctions::MakeIdentity4x4();
+    Matrix4x4 projectionMatrix = spriteCommon_->GetProjectionMatrix();
 
-	// TransformMatrix構造体をGPUに送る
-	TransformMatrix transformMatrixData;
-	transformMatrixData.WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(viewMatrix, projectionMatrix));
-	transformMatrixData.World = worldMatrix;
+    // TransformMatrix構造体をGPUに送る
+    TransformMatrix transformMatrixData;
+    transformMatrixData.WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(viewMatrix, projectionMatrix));
+    transformMatrixData.World = worldMatrix;
 
 	// 計算結果をGPU上のメモリにコピー！
     if (mappedTransform_) {

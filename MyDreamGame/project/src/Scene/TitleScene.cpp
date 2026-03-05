@@ -34,6 +34,20 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     planeObject->SetRotation({0.0f, 0.0f, 0.0f});
 
     objects_.push_back(std::move(planeObject));
+
+    // ② Spriteのインスタンスを生成
+    auto sprite = std::make_unique<Sprite>();
+
+    // ③ 初期化 (spriteCommon_はIScene等で定義されている前提)
+    sprite->Initialize(spriteCommon_, planeIndex);
+
+    // ④ 位置やサイズなどのパラメータを設定
+    // 画面中央付近に配置する例
+    sprite->SetPosition({640.0f, 360.0f}); // 画面中央付近など
+    sprite->SetSize({200.0f, 200.0f});     // しっかり見える大きさにする
+
+    // ⑤ 管理用の配列に追加して保持する
+    sprites_.push_back(std::move(sprite));
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -58,6 +72,10 @@ void TitleScene::Update(SceneManager *sceneManager) {
     // ImGuiもObject3D版を呼ぶ
     for (auto &object : objects_) {
         ShowObject3DGui("Object", object.get());
+    }
+
+    for (auto &sprite : sprites_) {
+        sprite->Update();
     }
 
    

@@ -2,6 +2,7 @@
 #include "DirectXCommon/DirectXCommon.h"
 #include "Sprite.h" // Spriteの定義が必要
 #include <d3dcompiler.h>
+#include "Graphics/TextureManager.h"
 #pragma comment(lib, "d3dcompiler.lib")
 
 void SpriteCommon::Initialize(DirectXCommon *dxCommon, int windowWidth, int windowHeight) {
@@ -162,11 +163,12 @@ void SpriteCommon::CreateGraphicsPipeline() {
 
     // レンダーターゲット設定 (DirectXCommonの設定に合わせる)
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
     psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = UINT_MAX;
 
     // デプスステンシル設定 (スプライトは通常、深度比較のみ行うか書き込まない)
-    psoDesc.DepthStencilState.DepthEnable = TRUE;
+    psoDesc.DepthStencilState.DepthEnable = FALSE;
     psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -181,6 +183,9 @@ void SpriteCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
 
     commandList_->SetGraphicsRootSignature(rootSignature_.Get());
     commandList_->SetPipelineState(pipelineState_.Get());
+
+    ID3D12DescriptorHeap *ppHeaps[] = {TextureManager::GetInstance()->GetSrvDescriptorHeap()};
+    commandList_->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
     // 共通のバッファをセット
     commandList_->IASetVertexBuffers(0, 1, &vertexBufferView_);
