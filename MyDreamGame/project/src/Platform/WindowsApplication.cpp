@@ -103,6 +103,8 @@ void WindowsApplication::Initialize() {
     // SceneManager の生成
     sceneManager_ = std::make_unique<SceneManager>();
 
+    SrvManager::GetInstance()->Initialize(device);
+
     // ModelCommonの生成と初期化
     modelCommon_ = std::make_unique<ModelCommon>();
     modelCommon_->Initialize(device);
