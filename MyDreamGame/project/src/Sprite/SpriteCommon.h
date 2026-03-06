@@ -32,11 +32,14 @@ public:
     ID3D12GraphicsCommandList *GetCommandList() const { return commandList_; }
     const Matrix4x4 &GetProjectionMatrix() const { return projectionMatrix_; }
 
-    // ★追加: ビュー行列のゲッター
+    // ビュー行列のゲッター
     const Matrix4x4 &GetViewMatrix() const { return viewMatrix_; }
 
-    // ★追加: ビュー行列のセッター (メインループからカメラの行列を渡す用)
+    // ビュー行列のセッター (メインループからカメラの行列を渡す用)
     void SetViewMatrix(const Matrix4x4 &matrix) { viewMatrix_ = matrix; }
+
+    // インデックス数のゲッター
+    uint32_t GetIndexCount() const { return indexCount_; }
 
 private:
     // 共通リソース作成関数
@@ -66,5 +69,8 @@ private:
 
     // ★追加: ビュー行列を保持する変数 (初期値は単位行列にしておく)
     Matrix4x4 viewMatrix_ = TransformFunctions::MakeIdentity4x4();
+
+    // ★これを追加: インデックス数を変数として保持する
+    uint32_t indexCount_ = 6;
 };
 

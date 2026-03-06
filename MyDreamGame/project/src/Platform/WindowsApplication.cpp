@@ -2,6 +2,7 @@
 #include "Audio/AudioManager.h"
 #include "Graphics/DebugCamera.h"
 #include "Graphics/TextureManager.h"
+#include "Graphics/SrvManager.h"
 #include "Input/GamepadInput.h"
 #include "Input/KeyboardInput.h"
 #include "Model/Model.h"
@@ -18,7 +19,7 @@
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
     OutputDebugStringA("ImGuiSrvAlloc called!\n"); // これが出るかチェック
     // 前回の回答で TextureManager に追加した関数を呼び出す
-    TextureManager::GetInstance()->AllocateDescriptor(out_cpu_handle, out_gpu_handle);
+    SrvManager::GetInstance()->Allocate(out_cpu_handle, out_gpu_handle);
 }
 
 // 枠を返すための関数 (今は何もしなくてOKですが、定義だけは必要です)
@@ -102,6 +103,8 @@ void WindowsApplication::Initialize() {
     // SceneManager の生成
     sceneManager_ = std::make_unique<SceneManager>();
 
+    SrvManager::GetInstance()->Initialize(device);
+
     // ModelCommonの生成と初期化
     modelCommon_ = std::make_unique<ModelCommon>();
     modelCommon_->Initialize(device);
@@ -179,7 +182,7 @@ void WindowsApplication::Initialize() {
     init_info.NumFramesInFlight = dxCommon_->GetSwapChainDesc().BufferCount; //
     init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;                        // ノートPC等の相性を考えSRGBなしを推奨
     init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    init_info.SrvDescriptorHeap = TextureManager::GetInstance()->GetSrvDescriptorHeap(); //
+    init_info.SrvDescriptorHeap = SrvManager::GetInstance()->GetSrvDescriptorHeap(); //
 
     // 記述子のアロケータを教える
     init_info.SrvDescriptorAllocFn = ImGuiSrvAlloc;
@@ -376,7 +379,7 @@ void WindowsApplication::Run() {
 
             ID3D12GraphicsCommandList *commandList = dxCommon_->GetCommandList();
 
-            ID3D12DescriptorHeap *descriptorHeaps[] = {TextureManager::GetInstance()->GetSrvDescriptorHeap()};
+            ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
             commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
             // ModelCommonの描画前準備

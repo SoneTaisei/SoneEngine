@@ -103,5 +103,5 @@ void Sprite::Draw() {
 	commandList->SetGraphicsRootDescriptorTable(2, textureHandle);
 
 	// 描画実行 (頂点・インデックスはCommonでセット済み)
-	commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+    commandList->DrawIndexedInstanced(spriteCommon_->GetIndexCount(), 1, 0, 0, 0);
 }

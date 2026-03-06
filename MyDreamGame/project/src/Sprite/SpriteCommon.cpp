@@ -3,6 +3,7 @@
 #include "Sprite.h" // Spriteの定義が必要
 #include <d3dcompiler.h>
 #include "Graphics/TextureManager.h"
+#include "Graphics/SrvManager.h"
 #pragma comment(lib, "d3dcompiler.lib")
 
 void SpriteCommon::Initialize(DirectXCommon *dxCommon, int windowWidth, int windowHeight) {
@@ -184,7 +185,7 @@ void SpriteCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
     commandList_->SetGraphicsRootSignature(rootSignature_.Get());
     commandList_->SetPipelineState(pipelineState_.Get());
 
-    ID3D12DescriptorHeap *ppHeaps[] = {TextureManager::GetInstance()->GetSrvDescriptorHeap()};
+    ID3D12DescriptorHeap *ppHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList_->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
     // 共通のバッファをセット

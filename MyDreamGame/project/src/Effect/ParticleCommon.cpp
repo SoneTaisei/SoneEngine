@@ -3,6 +3,7 @@
 #include <format>
 #include <dxcapi.h>
 #include "Graphics/TextureManager.h"
+#include "Graphics/SrvManager.h"
 #include "Effect/ParticleManager.h" // Particleの定義が必要なため追加
 
 #pragma comment(lib, "dxcompiler.lib")
@@ -41,7 +42,7 @@ void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // DescriptorHeapの設定 (TextureManagerから借りる)
-    ID3D12DescriptorHeap *descriptorHeaps[] = { TextureManager::GetInstance()->GetSrvDescriptorHeap() };
+    ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList_->SetDescriptorHeaps(1, descriptorHeaps);
 
     // ■ 追加: RootParameter[4] に ViewProjection をセット
