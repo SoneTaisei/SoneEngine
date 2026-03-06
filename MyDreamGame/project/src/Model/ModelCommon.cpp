@@ -2,6 +2,7 @@
 #include "Model.h"
 #include <cassert>
 #include "Graphics/TextureManager.h"
+#include "Graphics/SrvManager.h"
 #include <numbers> // 数学定数用 (C++20以上)
 #include <cmath>   // std::cos, std::sin用
 
@@ -70,7 +71,7 @@ void ModelCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
     commandList_ = commandList;
 
     // ヒープとトポロジの設定
-    ID3D12DescriptorHeap *descriptorHeaps[] = {TextureManager::GetInstance()->GetSrvDescriptorHeap()};
+    ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList_->SetDescriptorHeaps(1, descriptorHeaps);
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

@@ -1,6 +1,7 @@
 #include "DirectXCommon.h"
 #include <cassert>
 #include "Graphics\TextureManager.h"
+#include "Graphics/SrvManager.h"
 #include <format>
 #include <vector>
 #include <thread>
@@ -81,7 +82,7 @@ void DirectXCommon::PreDraw() {
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
 	// テクスチャ用のSRVヒープを設定
-	ID3D12DescriptorHeap *pHeaps[] = { TextureManager::GetInstance()->GetSrvDescriptorHeap() };
+    ID3D12DescriptorHeap *pHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
 	commandList_->SetDescriptorHeaps(1, pHeaps);
 
 	// 描画設定(ルートシグネチャ、パイプライン、ビューポートなど)

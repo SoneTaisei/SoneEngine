@@ -203,6 +203,7 @@
     <ClCompile Include="src\Scene\StageSelectScene.cpp" />
     <ClCompile Include="src\Platform\WindowsApplication.cpp" />
     <ClCompile Include="src\Effect\windowParticle.cpp" />
+    <ClCompile Include="src\Graphics\SrvManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -302,6 +303,7 @@
     <ClInclude Include="src\Scene\StageSelectScene.h" />
     <ClInclude Include="src\Platform\WindowsApplication.h" />
     <ClInclude Include="src\Effect\windowParticle.h" />
+    <ClInclude Include="src\Graphics\SrvManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

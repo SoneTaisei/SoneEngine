@@ -1,5 +1,6 @@
 #include "ParticleManager.h"
 #include "Graphics/TextureManager.h"
+#include "Graphics/SrvManager.h"
 #include "Utility/TransformFunctions.h"
 #include <cassert>
 #include <random>
@@ -64,7 +65,7 @@ void ParticleManager::Initialize(ID3D12GraphicsCommandList *commandList,Particle
     // ストライド(1要素のサイズ)を ParticleForGPU に合わせる
     srvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
 
-    ID3D12DescriptorHeap *srvHeap = TextureManager::GetInstance()->GetSrvDescriptorHeap();
+    ID3D12DescriptorHeap *srvHeap = SrvManager::GetInstance()->GetSrvDescriptorHeap();
     UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     // ハンドルの計算 (指定されたindexの場所を使う)

@@ -22,9 +22,6 @@ public:
     // テクスチャ読み込み
     uint32_t Load(const std::string &filePath, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList);
 
-    // SRVディスクリプタヒープのポインタを取得
-    ID3D12DescriptorHeap *GetSrvDescriptorHeap() const { return srvDescriptorHeap_.Get(); }
-
     // 指定したハンドルのGPUディスクリプタハンドルを取得
     D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(uint32_t textureHandle) const;
 
@@ -33,8 +30,6 @@ public:
 
     // 指定したハンドルのリソース情報（幅・高さなど）を取得
     const D3D12_RESOURCE_DESC GetResourceDesc(uint32_t textureHandle) const;
-
-    void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle);
 
 private:
     // コンストラクタ、デストラクタなどをprivateにする（シングルトン）
@@ -55,13 +50,6 @@ private:
     // DirectXデバイス
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
 
-    // SRV用のディスクリプタヒープ
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap_;
-    uint32_t descriptorSizeSRV_ = 0;
-
     // 読み込んだテクスチャデータ
     std::vector<TextureData> textures_;
-
-    // 次にディスクリプタを書き込むSRVヒープのインデックス
-    uint32_t nextSrvIndex_ = 0;
 };

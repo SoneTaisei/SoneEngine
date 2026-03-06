@@ -121,6 +121,7 @@
       <Filter>Application\Camera</Filter>
     </ClCompile>
     <ClCompile Include="src\Model\ModelManager.cpp" />
+    <ClCompile Include="src\Graphics\SrvManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -236,6 +237,7 @@
       <Filter>Engine\Graphics\DirectXCommon</Filter>
     </ClInclude>
     <ClInclude Include="src\Model\ModelManager.h" />
+    <ClInclude Include="src\Graphics\SrvManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
