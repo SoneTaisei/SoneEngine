@@ -17,26 +17,26 @@
     <FxCompile Include="resources\shaders\Sprite.VS.hlsl" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\Core\main.cpp" />
-    <ClCompile Include="src\Scene\GameScene.cpp">
+    <ClCompile Include="Project\Core\main.cpp" />
+    <ClCompile Include="Project\Scenes\GameScene.cpp">
       <Filter>Application\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\Scene\StageSelectScene.cpp">
+    <ClCompile Include="Project\Scenes\StageSelectScene.cpp">
       <Filter>Application\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\Scene\TitleScene.cpp">
+    <ClCompile Include="Project\Scenes\TitleScene.cpp">
       <Filter>Application\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\Effect\windowParticle.cpp">
+    <ClCompile Include="Project\Effect\windowParticle.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
-    <ClCompile Include="src\Effect\SnowParticle.cpp">
+    <ClCompile Include="Project\Effect\SnowParticle.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
-    <ClCompile Include="src\Audio\AudioManager.cpp">
+    <ClCompile Include="Engine\Resource\Audio\AudioManager.cpp">
       <Filter>Engine\Audio</Filter>
     </ClCompile>
-    <ClCompile Include="src\Input\GamepadInput.cpp">
+    <ClCompile Include="Engine\Input\GamepadInput.cpp">
       <Filter>Engine\Input</Filter>
     </ClCompile>
     <ClCompile Include="externals\imgui\imgui.cpp">
@@ -60,90 +60,90 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <Filter>Engine\ImGui</Filter>
     </ClCompile>
-    <ClCompile Include="src\Input\InputManager.cpp">
+    <ClCompile Include="Engine\Input\InputManager.cpp">
       <Filter>Engine\Input</Filter>
     </ClCompile>
-    <ClCompile Include="src\Input\KeyboardInput.cpp">
+    <ClCompile Include="Engine\Input\KeyboardInput.cpp">
       <Filter>Engine\Input</Filter>
     </ClCompile>
-    <ClCompile Include="src\Scene\SceneManager.cpp">
+    <ClCompile Include="Engine\Scene\SceneManager.cpp">
       <Filter>Engine\Scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\Utility\TransformFunctions.cpp">
+    <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
-    <ClCompile Include="src\Utility\UtilityFunctions.cpp">
+    <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
-    <ClCompile Include="src\Platform\WindowsApplication.cpp">
+    <ClCompile Include="Engine\Platform\WindowsApplication.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
-    <ClCompile Include="src\DirectXCommon\DirectXCommon.cpp">
+    <ClCompile Include="Engine\Renderer\DirectXCommon\DirectXCommon.cpp">
       <Filter>Engine\Graphics\DirectXCommon</Filter>
     </ClCompile>
-    <ClCompile Include="src\DirectXCommon\D3DResourceLeakChecker.cpp">
+    <ClCompile Include="Engine\Renderer\DirectXCommon\D3DResourceLeakChecker.cpp">
       <Filter>Engine\Graphics\DirectXCommon</Filter>
     </ClCompile>
-    <ClCompile Include="src\Graphics\Camera.cpp">
+    <ClCompile Include="Engine\Graphics\Camera.cpp">
       <Filter>Engine\Graphics\Camera</Filter>
     </ClCompile>
-    <ClCompile Include="src\Graphics\DebugCamera.cpp">
+    <ClCompile Include="Engine\Graphics\DebugCamera.cpp">
       <Filter>Engine\Graphics\Camera</Filter>
     </ClCompile>
-    <ClCompile Include="src\GameObject\Object3D.cpp">
+    <ClCompile Include="Engine\GameObject\Object3D.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="src\Model\Model.cpp">
+    <ClCompile Include="Engine\Resource\Model\Model.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="src\Model\ModelCommon.cpp">
+    <ClCompile Include="Engine\Resource\Model\ModelCommon.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="src\Effect\ParticleCommon.cpp">
+    <ClCompile Include="Engine\Effect\ParticleCommon.cpp">
       <Filter>Engine\Graphics\Particle</Filter>
     </ClCompile>
-    <ClCompile Include="src\Effect\ParticleManager.cpp">
+    <ClCompile Include="Engine\Effect\ParticleManager.cpp">
       <Filter>Engine\Graphics\Particle</Filter>
     </ClCompile>
-    <ClCompile Include="src\GameObject\ResourceObject.cpp">
+    <ClCompile Include="Engine\GameObject\ResourceObject.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="src\Sprite\Sprite.cpp">
+    <ClCompile Include="Engine\Resource\Sprite\Sprite.cpp">
       <Filter>Engine\Graphics\Sprite</Filter>
     </ClCompile>
-    <ClCompile Include="src\Sprite\SpriteCommon.cpp">
+    <ClCompile Include="Engine\Resource\Sprite\SpriteCommon.cpp">
       <Filter>Engine\Graphics\Sprite</Filter>
     </ClCompile>
-    <ClCompile Include="src\Graphics\TextureManager.cpp">
+    <ClCompile Include="Engine\Graphics\TextureManager.cpp">
       <Filter>Engine\Graphics\Sprite</Filter>
     </ClCompile>
-    <ClCompile Include="src\Graphics\GameCamera.cpp">
+    <ClCompile Include="Engine\Graphics\GameCamera.cpp">
       <Filter>Application\Camera</Filter>
     </ClCompile>
-    <ClCompile Include="src\Model\ModelManager.cpp" />
-    <ClCompile Include="src\Graphics\SrvManager.cpp" />
+    <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
+    <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
-    <ClInclude Include="src\Scene\GameScene.h">
+    <ClInclude Include="Project\Scenes\GameScene.h">
       <Filter>Application\Scene</Filter>
     </ClInclude>
-    <ClInclude Include="src\Scene\StageSelectScene.h">
+    <ClInclude Include="Project\Scenes\StageSelectScene.h">
       <Filter>Application\Scene</Filter>
     </ClInclude>
-    <ClInclude Include="src\Scene\TitleScene.h">
+    <ClInclude Include="Project\Scenes\TitleScene.h">
       <Filter>Application\Scene</Filter>
     </ClInclude>
-    <ClInclude Include="src\Effect\windowParticle.h">
+    <ClInclude Include="Project\Effect\windowParticle.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
-    <ClInclude Include="src\Effect\SnowParticle.h">
+    <ClInclude Include="Project\Effect\SnowParticle.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
-    <ClInclude Include="src\Audio\AudioManager.h">
+    <ClInclude Include="Engine\Resource\Audio\AudioManager.h">
       <Filter>Engine\Audio</Filter>
     </ClInclude>
-    <ClInclude Include="src\Input\GamepadInput.h">
+    <ClInclude Include="Engine\Input\GamepadInput.h">
       <Filter>Engine\Input</Filter>
     </ClInclude>
     <ClInclude Include="externals\imgui\imgui.h">
@@ -152,7 +152,7 @@
     <ClInclude Include="externals\imgui\imgui_internal.h">
       <Filter>Engine\ImGui</Filter>
     </ClInclude>
-    <ClInclude Include="src\Utility\ImGuiHelper.h">
+    <ClInclude Include="Engine\Core\Utility\ImGuiHelper.h">
       <Filter>Engine\ImGui</Filter>
     </ClInclude>
     <ClInclude Include="externals\imgui\imstb_rectpack.h">
@@ -164,80 +164,80 @@
     <ClInclude Include="externals\imgui\imstb_truetype.h">
       <Filter>Engine\ImGui</Filter>
     </ClInclude>
-    <ClInclude Include="src\Input\InputManager.h">
+    <ClInclude Include="Engine\Input\InputManager.h">
       <Filter>Engine\Input</Filter>
     </ClInclude>
-    <ClInclude Include="src\Scene\IScene.h">
+    <ClInclude Include="Engine\Scene\IScene.h">
       <Filter>Engine\Scene</Filter>
     </ClInclude>
-    <ClInclude Include="src\Input\KeyboardInput.h">
+    <ClInclude Include="Engine\Input\KeyboardInput.h">
       <Filter>Engine\Input</Filter>
     </ClInclude>
-    <ClInclude Include="src\Scene\SceneManager.h">
+    <ClInclude Include="Engine\Scene\SceneManager.h">
       <Filter>Engine\Scene</Filter>
     </ClInclude>
-    <ClInclude Include="src\Utility\Structs.h">
+    <ClInclude Include="Engine\Core\Utility\Structs.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="src\Core\TimeManager.h">
+    <ClInclude Include="Engine\Core\TimeManager.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="src\Utility\TransformFunctions.h">
+    <ClInclude Include="Engine\Core\Utility\TransformFunctions.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="src\Utility\UtilityFunctions.h">
+    <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="src\Platform\WindowsApplication.h">
+    <ClInclude Include="Engine\Platform\WindowsApplication.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="src\DirectXCommon\DirectXCommon.h">
+    <ClInclude Include="Engine\Renderer\DirectXCommon\DirectXCommon.h">
       <Filter>Engine\Graphics\DirectXCommon</Filter>
     </ClInclude>
-    <ClInclude Include="src\DirectXCommon\D3DResourceLeakChecker.h">
+    <ClInclude Include="Engine\Renderer\DirectXCommon\D3DResourceLeakChecker.h">
       <Filter>Engine\Graphics\DirectXCommon</Filter>
     </ClInclude>
-    <ClInclude Include="src\Graphics\Camera.h">
+    <ClInclude Include="Engine\Graphics\Camera.h">
       <Filter>Engine\Graphics\Camera</Filter>
     </ClInclude>
-    <ClInclude Include="src\Graphics\DebugCamera.h">
+    <ClInclude Include="Engine\Graphics\DebugCamera.h">
       <Filter>Engine\Graphics\Camera</Filter>
     </ClInclude>
-    <ClInclude Include="src\GameObject\Object3D.h">
+    <ClInclude Include="Engine\GameObject\Object3D.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="src\Model\Model.h">
+    <ClInclude Include="Engine\Resource\Model\Model.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="src\Model\ModelCommon.h">
+    <ClInclude Include="Engine\Resource\Model\ModelCommon.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="src\Effect\ParticleCommon.h">
+    <ClInclude Include="Engine\Effect\ParticleCommon.h">
       <Filter>Engine\Graphics\Particle</Filter>
     </ClInclude>
-    <ClInclude Include="src\Effect\ParticleManager.h">
+    <ClInclude Include="Engine\Effect\ParticleManager.h">
       <Filter>Engine\Graphics\Particle</Filter>
     </ClInclude>
-    <ClInclude Include="src\GameObject\ResourceObject.h">
+    <ClInclude Include="Engine\GameObject\ResourceObject.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="src\Sprite\Sprite.h">
+    <ClInclude Include="Engine\Resource\Sprite\Sprite.h">
       <Filter>Engine\Graphics\Sprite</Filter>
     </ClInclude>
-    <ClInclude Include="src\Sprite\SpriteCommon.h">
+    <ClInclude Include="Engine\Resource\Sprite\SpriteCommon.h">
       <Filter>Engine\Graphics\Sprite</Filter>
     </ClInclude>
-    <ClInclude Include="src\Graphics\TextureManager.h">
+    <ClInclude Include="Engine\Graphics\TextureManager.h">
       <Filter>Engine\Graphics\Sprite</Filter>
     </ClInclude>
-    <ClInclude Include="src\Graphics\GameCamera.h">
+    <ClInclude Include="Engine\Graphics\GameCamera.h">
       <Filter>Application\Camera</Filter>
     </ClInclude>
-    <ClInclude Include="src\Utility\BlendMode.h">
+    <ClInclude Include="Engine\Core\Utility\BlendMode.h">
       <Filter>Engine\Graphics\DirectXCommon</Filter>
     </ClInclude>
-    <ClInclude Include="src\Model\ModelManager.h" />
-    <ClInclude Include="src\Graphics\SrvManager.h" />
+    <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
+    <ClInclude Include="Engine\Renderer\SrvManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
