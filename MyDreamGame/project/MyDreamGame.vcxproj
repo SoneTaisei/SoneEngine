@@ -58,8 +58,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)</IntDir>
-    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)</OutDir>
+    <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
@@ -80,7 +80,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -106,7 +106,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -134,7 +134,7 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -171,39 +171,39 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="src\Model\ModelManager.cpp" />
-    <ClCompile Include="src\Effect\SnowParticle.cpp" />
-    <ClCompile Include="src\Graphics\GameCamera.cpp" />
-    <ClCompile Include="src\Graphics\Camera.cpp" />
-    <ClCompile Include="src\Effect\ParticleManager.cpp" />
-    <ClCompile Include="src\Effect\ParticleCommon.cpp" />
-    <ClCompile Include="src\Model\ModelCommon.cpp" />
-    <ClCompile Include="src\DirectXCommon\D3DResourceLeakChecker.cpp" />
-    <ClCompile Include="src\DirectXCommon\DirectXCommon.cpp" />
-    <ClCompile Include="src\Sprite\SpriteCommon.cpp" />
-    <ClCompile Include="src\Scene\SceneManager.cpp" />
-    <ClCompile Include="src\Scene\GameScene.cpp" />
-    <ClCompile Include="src\Model\Model.cpp" />
-    <ClCompile Include="src\Sprite\Sprite.cpp" />
-    <ClCompile Include="src\Audio\AudioManager.cpp" />
-    <ClCompile Include="src\Input\GamepadInput.cpp" />
-    <ClCompile Include="src\Input\KeyboardInput.cpp" />
-    <ClCompile Include="src\Graphics\DebugCamera.cpp" />
-    <ClCompile Include="src\Input\InputManager.cpp" />
-    <ClCompile Include="src\Core\main.cpp">
+    <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
+    <ClCompile Include="Project\Effect\SnowParticle.cpp" />
+    <ClCompile Include="Engine\Graphics\GameCamera.cpp" />
+    <ClCompile Include="Engine\Graphics\Camera.cpp" />
+    <ClCompile Include="Engine\Effect\ParticleManager.cpp" />
+    <ClCompile Include="Engine\Effect\ParticleCommon.cpp" />
+    <ClCompile Include="Engine\Resource\Model\ModelCommon.cpp" />
+    <ClCompile Include="Engine\Renderer\DirectXCommon\D3DResourceLeakChecker.cpp" />
+    <ClCompile Include="Engine\Renderer\DirectXCommon\DirectXCommon.cpp" />
+    <ClCompile Include="Engine\Resource\Sprite\SpriteCommon.cpp" />
+    <ClCompile Include="Engine\Scene\SceneManager.cpp" />
+    <ClCompile Include="Project\Scenes\GameScene.cpp" />
+    <ClCompile Include="Engine\Resource\Model\Model.cpp" />
+    <ClCompile Include="Engine\Resource\Sprite\Sprite.cpp" />
+    <ClCompile Include="Engine\Resource\Audio\AudioManager.cpp" />
+    <ClCompile Include="Engine\Input\GamepadInput.cpp" />
+    <ClCompile Include="Engine\Input\KeyboardInput.cpp" />
+    <ClCompile Include="Engine\Graphics\DebugCamera.cpp" />
+    <ClCompile Include="Engine\Input\InputManager.cpp" />
+    <ClCompile Include="Project\Core\main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
-    <ClCompile Include="src\GameObject\Object3D.cpp" />
-    <ClCompile Include="src\GameObject\ResourceObject.cpp" />
-    <ClCompile Include="src\Utility\TransformFunctions.cpp" />
-    <ClCompile Include="src\Utility\UtilityFunctions.cpp" />
-    <ClCompile Include="src\Graphics\TextureManager.cpp" />
-    <ClCompile Include="src\Scene\TitleScene.cpp" />
-    <ClCompile Include="src\Scene\StageSelectScene.cpp" />
-    <ClCompile Include="src\Platform\WindowsApplication.cpp" />
-    <ClCompile Include="src\Effect\windowParticle.cpp" />
-    <ClCompile Include="src\Graphics\SrvManager.cpp" />
+    <ClCompile Include="Engine\GameObject\Object3D.cpp" />
+    <ClCompile Include="Engine\GameObject\ResourceObject.cpp" />
+    <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp" />
+    <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp" />
+    <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
+    <ClCompile Include="Project\Scenes\TitleScene.cpp" />
+    <ClCompile Include="Project\Scenes\StageSelectScene.cpp" />
+    <ClCompile Include="Engine\Platform\WindowsApplication.cpp" />
+    <ClCompile Include="Project\Effect\windowParticle.cpp" />
+    <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -270,40 +270,40 @@
     <ClInclude Include="externals\imgui\imstb_rectpack.h" />
     <ClInclude Include="externals\imgui\imstb_textedit.h" />
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
-    <ClInclude Include="src\Model\ModelManager.h" />
-    <ClInclude Include="src\Effect\SnowParticle.h" />
-    <ClInclude Include="src\Graphics\GameCamera.h" />
-    <ClInclude Include="src\Graphics\Camera.h" />
-    <ClInclude Include="src\Effect\ParticleManager.h" />
-    <ClInclude Include="src\Effect\ParticleCommon.h" />
-    <ClInclude Include="src\Model\ModelCommon.h" />
-    <ClInclude Include="src\Core\TimeManager.h" />
-    <ClInclude Include="src\DirectXCommon\D3DResourceLeakChecker.h" />
-    <ClInclude Include="src\DirectXCommon\DirectXCommon.h" />
-    <ClInclude Include="src\Sprite\SpriteCommon.h" />
-    <ClInclude Include="src\Scene\SceneManager.h" />
-    <ClInclude Include="src\Scene\GameScene.h" />
-    <ClInclude Include="src\Model\Model.h" />
-    <ClInclude Include="src\Scene\IScene.h" />
-    <ClInclude Include="src\Sprite\Sprite.h" />
-    <ClInclude Include="src\Audio\AudioManager.h" />
-    <ClInclude Include="src\Input\GamepadInput.h" />
-    <ClInclude Include="src\Input\KeyboardInput.h" />
-    <ClInclude Include="src\Utility\BlendMode.h" />
-    <ClInclude Include="src\Graphics\DebugCamera.h" />
-    <ClInclude Include="src\Input\InputManager.h" />
-    <ClInclude Include="src\GameObject\Object3D.h" />
-    <ClInclude Include="src\GameObject\ResourceObject.h" />
-    <ClInclude Include="src\Utility\ImGuiHelper.h" />
-    <ClInclude Include="src\Utility\Structs.h" />
-    <ClInclude Include="src\Utility\TransformFunctions.h" />
-    <ClInclude Include="src\Utility\UtilityFunctions.h" />
-    <ClInclude Include="src\Graphics\TextureManager.h" />
-    <ClInclude Include="src\Scene\TitleScene.h" />
-    <ClInclude Include="src\Scene\StageSelectScene.h" />
-    <ClInclude Include="src\Platform\WindowsApplication.h" />
-    <ClInclude Include="src\Effect\windowParticle.h" />
-    <ClInclude Include="src\Graphics\SrvManager.h" />
+    <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
+    <ClInclude Include="Project\Effect\SnowParticle.h" />
+    <ClInclude Include="Engine\Graphics\GameCamera.h" />
+    <ClInclude Include="Engine\Graphics\Camera.h" />
+    <ClInclude Include="Engine\Effect\ParticleManager.h" />
+    <ClInclude Include="Engine\Effect\ParticleCommon.h" />
+    <ClInclude Include="Engine\Resource\Model\ModelCommon.h" />
+    <ClInclude Include="Engine\Core\TimeManager.h" />
+    <ClInclude Include="Engine\Renderer\DirectXCommon\D3DResourceLeakChecker.h" />
+    <ClInclude Include="Engine\Renderer\DirectXCommon\DirectXCommon.h" />
+    <ClInclude Include="Engine\Resource\Sprite\SpriteCommon.h" />
+    <ClInclude Include="Engine\Scene\SceneManager.h" />
+    <ClInclude Include="Project\Scenes\GameScene.h" />
+    <ClInclude Include="Engine\Resource\Model\Model.h" />
+    <ClInclude Include="Engine\Scene\IScene.h" />
+    <ClInclude Include="Engine\Resource\Sprite\Sprite.h" />
+    <ClInclude Include="Engine\Resource\Audio\AudioManager.h" />
+    <ClInclude Include="Engine\Input\GamepadInput.h" />
+    <ClInclude Include="Engine\Input\KeyboardInput.h" />
+    <ClInclude Include="Engine\Core\Utility\BlendMode.h" />
+    <ClInclude Include="Engine\Graphics\DebugCamera.h" />
+    <ClInclude Include="Engine\Input\InputManager.h" />
+    <ClInclude Include="Engine\GameObject\Object3D.h" />
+    <ClInclude Include="Engine\GameObject\ResourceObject.h" />
+    <ClInclude Include="Engine\Core\Utility\ImGuiHelper.h" />
+    <ClInclude Include="Engine\Core\Utility\Structs.h" />
+    <ClInclude Include="Engine\Core\Utility\TransformFunctions.h" />
+    <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h" />
+    <ClInclude Include="Engine\Graphics\TextureManager.h" />
+    <ClInclude Include="Project\Scenes\TitleScene.h" />
+    <ClInclude Include="Project\Scenes\StageSelectScene.h" />
+    <ClInclude Include="Engine\Platform\WindowsApplication.h" />
+    <ClInclude Include="Project\Effect\windowParticle.h" />
+    <ClInclude Include="Engine\Renderer\SrvManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">
