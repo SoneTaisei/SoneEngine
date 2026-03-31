@@ -19,11 +19,10 @@
 #include "Effect/ParticleCommon.h"
 #include "Effect/ParticleManager.h"
 #include "Effect/SnowParticle.h"
+#include "Window.h"
 
 class WindowsApplication {
 public:
-	// ウィンドウプロシージャ
-	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 	// 定数
 	static const int kWindowWidth_ = 1280;
@@ -34,9 +33,11 @@ public:
 	void Run();
 	void Finalize();
 
+	void Update();
+    void Draw();
+
 private:
-	HWND hwnd_ = nullptr;
-	WNDCLASS wc_{};
+    std::unique_ptr<Window> window_;
 
 	// DirectX関連の処理をまとめたクラス
 	std::unique_ptr<DirectXCommon> dxCommon_;

@@ -1,16 +1,16 @@
 #include "Platform/WindowsApplication.h"
-#include "Resource/Audio/AudioManager.h"
-#include "Graphics/DebugCamera.h"
-#include "Graphics/TextureManager.h"
-#include "Renderer/SrvManager.h"
-#include "Input/GamepadInput.h"
-#include "Input/KeyboardInput.h"
-#include "Resource/Model/Model.h"
-#include "Scenes/TitleScene.h"
-#include "Resource/Sprite/Sprite.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/Utilityfunctions.h"
+#include "Graphics/DebugCamera.h"
+#include "Graphics/TextureManager.h"
+#include "Input/GamepadInput.h"
+#include "Input/KeyboardInput.h"
+#include "Renderer/SrvManager.h"
+#include "Resource/Audio/AudioManager.h"
+#include "Resource/Model/Model.h"
 #include "Resource/Model/ModelManager.h"
+#include "Resource/Sprite/Sprite.h"
+#include "Scenes/TitleScene.h"
 #include <cassert>
 #include <chrono>
 #include <format>
@@ -32,73 +32,34 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 #pragma comment(lib, "winmm.lib")
 
-LRESULT CALLBACK WindowsApplication::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-#ifdef USE_IMGUI
-    // ImGuiへのメッセージ転送
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) {
-        return true;
-    }
-#endif
-
-    // メッセージに応じてゲーム固有の処理を行う
-    switch (msg) {
-        // ウィンドウが破棄された
-    case WM_DESTROY:
-        // OSに対して、アプリの終了を伝える
-        PostQuitMessage(0);
-        return 0;
-    }
-
-    // 標準のメッセージ処理を行う
-    return DefWindowProc(hwnd, msg, wparam, lparam);
-}
-
 void WindowsApplication::Initialize() {
 
     // COMの初期化
     CoInitializeEx(0, COINIT_MULTITHREADED);
 
-    /*********************************************************
-     *WindowsAPIの初期化
-     *********************************************************/
-    wc_.lpfnWndProc = WindowProc;
-    wc_.lpszClassName = L"MyDreamGame";
-    wc_.hInstance = GetModuleHandle(nullptr);
-    wc_.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    RegisterClass(&wc_);
-
-    RECT wrc = {0, 0, kWindowWidth_, kWindowHeight_};
-    AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
-
-    hwnd_ = CreateWindow(
-        wc_.lpszClassName,
-        L"LE2B_13_ソネ_タイセイ",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        wrc.right - wrc.left,
-        wrc.bottom - wrc.top,
-        nullptr,
-        nullptr,
-        wc_.hInstance,
-        nullptr);
-
-    ShowWindow(hwnd_, SW_SHOW);
+    // 窓の作成を任せる
+    window_ = std::make_unique<Window>();
+    window_->Create(L"MyDreamGameEngine", kWindowWidth_, kWindowHeight_);
 
     /*********************************************************
      *DirectX初期化処理
      *********************************************************/
     // DirectXCommonクラスのインスタンスを作成し、初期化
     dxCommon_ = std::make_unique<DirectXCommon>();
-    dxCommon_->Initialize(hwnd_, kWindowWidth_, kWindowHeight_);
+    dxCommon_->Initialize(window_->GetHwnd(), kWindowWidth_, kWindowHeight_);
 
     // dxCommon_から必要なポインタを取得
     ID3D12Device *device = dxCommon_->GetDevice();
     ID3D12GraphicsCommandList *commandList = dxCommon_->GetCommandList();
 
     // キーボードとコントローラーの初期化
-    KeyboardInput::GetInstance()->Initialize(wc_.hInstance, hwnd_);
-    GamepadInput::GetInstance()->Initialize(wc_.hInstance, hwnd_);
+    // HINSTANCE は GetModuleHandle(nullptr) で取得できる！
+    HINSTANCE hInstance = GetModuleHandle(nullptr);
+    HWND hwnd = window_->GetHwnd();
+
+    // 2. 取得した hInstance と hwnd を渡す
+    KeyboardInput::GetInstance()->Initialize(hInstance, hwnd);
+    GamepadInput::GetInstance()->Initialize(hInstance, hwnd);
 
     // SceneManager の生成
     sceneManager_ = std::make_unique<SceneManager>();
@@ -173,7 +134,7 @@ void WindowsApplication::Initialize() {
 
     // 3. Win32バックエンドの初期化
     // ViewportsEnableが立っているのを見て、ImGuiが内部でPlatform_RenderWindowなどを登録します
-    ImGui_ImplWin32_Init(hwnd_);
+    ImGui_ImplWin32_Init(hwnd);
 
     // 4. DirectX12バックエンドの初期化
     ImGui_ImplDX12_InitInfo init_info = {};
@@ -222,206 +183,176 @@ void WindowsApplication::Initialize() {
 
 #ifdef USE_IMGUI
     // リソースリークチェッカーのインスタンスを作成
-    //leakChecker_ = std::make_unique<D3DResourceLeakChecker>();
+    // leakChecker_ = std::make_unique<D3DResourceLeakChecker>();
 #endif
 }
 
 void WindowsApplication::Run() {
+    // 窓が「閉じていいよ」と言うまでループする
+    while (window_->ProcessMessage()) {
+        // 1. 全ての状態を計算・更新する
+        Update();
 
-    MSG msg{};
-    // ウィンドウのxボタンが押されるまでループ
-    while (msg.message != WM_QUIT) {
-        // Windowにメッセージが来てたら最優先で処理させる
-        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+        // 2. 更新された状態をもとに画面を描画する
+        Draw();
+    }
+}
+
+void WindowsApplication::Update() {
+    // デルタタイムを計算
+    // TimeManager::GetInstance().Update();
+
+#ifdef USE_IMGUI
+    // --- ImGui 更新準備 ---
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+#endif
+
+    // 入力の更新
+    KeyboardInput::GetInstance()->Update();
+
+#ifdef USE_IMGUI
+    // --- 1. デバッグカメラとステータス表示 ---
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
+        if (isDebugCameraActive_) {
+            activeCamera_ = gameCamera_.get();
+            isDebugCameraActive_ = false;
         } else {
-
-            // デルタタイムを計算
-            // TimeManager::GetInstance().Update();
-
-#ifdef USE_IMGUI
-            // --- 更新処理 (Update) ---
-            ImGui_ImplDX12_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
-#endif
-
-            KeyboardInput::GetInstance()->Update();
-
-#ifdef USE_IMGUI
-            // --- 1. デバッグカメラとステータス表示 ---
-            if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
-                if (isDebugCameraActive_) {
-                    activeCamera_ = gameCamera_.get();
-                    isDebugCameraActive_ = false;
-                } else {
-                    debugCamera_->SetTranslation(gameCamera_->GetTranslation());
-                    debugCamera_->SetRotation(gameCamera_->GetRotation());
-                    activeCamera_ = debugCamera_.get();
-                    isDebugCameraActive_ = true;
-                }
-            }
-
-            ImGui::Begin("Debug Status");
-            if (isDebugCameraActive_) {
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Debug Camera: ON");
-            } else {
-                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Debug Camera: OFF");
-            }
-            ImGui::End();
-
-            // --- 2. ライティング管理 (ここがバグ修正の肝です) ---
-            static int activeLightType = 2; // 0:Directional, 1:Point, 2:Spot
-            static bool enableFog = false;
-
-            // 各ライトの「本来の明るさ」を保持する変数 (これがないと切り替え時に値が消えます)
-            static float dIntensity = 1.0f;
-            static float pIntensity = 1.0f;
-            static float sIntensity = 4.0f;
-
-            // スポットライトの操作用度数法変数
-            static float spotAngleDeg = 30.0f;
-            static float spotFalloffDeg = 20.0f;
-
-            ImGui::Begin("Lighting & Fog Manager");
-
-            ImGui::Text("Active Light Source");
-            ImGui::RadioButton("Directional", &activeLightType, 0);
-            ImGui::SameLine();
-            ImGui::RadioButton("Point", &activeLightType, 1);
-            ImGui::SameLine();
-            ImGui::RadioButton("Spot", &activeLightType, 2);
-            ImGui::Separator();
-
-            // ライトのポインタを取得
-            DirectionalLight *dLight = modelCommon_->GetDirectionalLight();
-            PointLight *pLight = modelCommon_->GetPointLight();
-            SpotLight *sLight = modelCommon_->GetSpotLight();
-
-            // 💡 選択されたライト以外を 0 にし、本来の値を static 変数から復元する
-            if (activeLightType == 0) { // 平行光源
-                dLight->intensity = dIntensity;
-                pLight->intensity = 0.0f;
-                sLight->intensity = 0.0f;
-
-                ImGui::Text("Directional Light Settings");
-                ImGui::ColorEdit4("Color", &dLight->color.x);
-                ImGui::DragFloat("Intensity", &dIntensity, 0.01f, 0.0f, 10.0f);
-                ImGui::DragFloat3("Direction", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
-                dLight->direction = TransformFunctions::Normalize(dLight->direction);
-            } else if (activeLightType == 1) { // ポイントライト
-                pLight->intensity = pIntensity;
-                dLight->intensity = 0.0f;
-                sLight->intensity = 0.0f;
-
-                ImGui::Text("Point Light Settings");
-                ImGui::ColorEdit4("Color", &pLight->color.x);
-                ImGui::DragFloat("Intensity", &pIntensity, 0.01f, 0.0f, 10.0f);
-                ImGui::DragFloat3("Position", &pLight->position.x, 0.1f);
-                ImGui::DragFloat("Radius", &pLight->radius, 0.1f, 0.0f, 100.0f);
-                ImGui::DragFloat("Decay", &pLight->decay, 0.01f, 0.0f, 10.0f);
-            } else if (activeLightType == 2) { // スポットライト
-                sLight->intensity = sIntensity;
-                dLight->intensity = 0.0f;
-                pLight->intensity = 0.0f;
-
-                ImGui::Text("Spot Light Settings");
-                ImGui::ColorEdit4("Color", &sLight->color.x);
-                ImGui::DragFloat("Intensity", &sIntensity, 0.01f, 0.0f, 20.0f);
-                ImGui::DragFloat3("Position", &sLight->position.x, 0.1f);
-
-                if (ImGui::DragFloat3("Direction", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
-                    sLight->direction = TransformFunctions::Normalize(sLight->direction);
-                }
-
-                ImGui::DragFloat("Distance", &sLight->distance, 0.1f, 0.0f, 100.0f);
-                ImGui::DragFloat("Decay", &sLight->decay, 0.01f, 0.0f, 10.0f);
-
-                // 💡 角度とFalloffの調整（image_60f761.png の実装）
-                ImGui::SliderFloat("Total Angle", &spotAngleDeg, 0.0f, 90.0f);
-                ImGui::SliderFloat("Falloff Start", &spotFalloffDeg, 0.0f, spotAngleDeg);
-
-                sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
-                sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
-            }
-
-            ImGui::Separator();
-            ImGui::Checkbox("Enable Fog Effect", &enableFog);
-            if (enableFog) {
-                ImGui::TextColored(ImVec4(0, 1, 1, 1), "Fog is Active! (Add lerp in Pixel Shader)");
-            }
-            ImGui::End();
-#endif
-
-            // ★ 5. アクティブなカメラだけを更新する
-            // デバッグカメラならマウス操作、本番カメラなら追従処理が走る
-            if (isDebugCameraActive_) {
-                debugCamera_->Update();
-            } else {
-                gameCamera_->Update();
-            }
-            // ViewProjectionを更新
-            Matrix4x4 viewMatrix = activeCamera_->GetViewMatrix();
-            Matrix4x4 projectionMatrix = debugCamera_->GetProjectionMatrix();
-            viewProjectionData_->viewProjectionMatrix = TransformFunctions::Multiply(viewMatrix, projectionMatrix);
-            viewProjectionData_->cameraPosition = debugCamera_->GetTranslation();
-            // --- 描画処理 (Draw) ---
-            dxCommon_->PreDraw();
-
-            sceneManager_->Update();
-
-            Matrix4x4 cameraMatrix = TransformFunctions::MakeAffineMatrix(
-                {1.0f, 1.0f, 1.0f},             // Scale
-                activeCamera_->GetRotation(),   // Rotate (現在アクティブなカメラの回転)
-                activeCamera_->GetTranslation() // Translate (現在アクティブなカメラの座標)
-            );
-
-            ID3D12GraphicsCommandList *commandList = dxCommon_->GetCommandList();
-
-            ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
-            commandList->SetDescriptorHeaps(1, descriptorHeaps);
-
-            // ModelCommonの描画前準備
-            modelCommon_->PreDraw(commandList);
-
-            // SceneManagerによる描画
-            sceneManager_->Draw(viewProjectionData_->viewProjectionMatrix);
-
-            particleCommon_->SetViewProjection(viewProjectionData_->viewProjectionMatrix);
-
-            // パーティクルの描画
-            // 1. 共通設定 (RootSignature, PSO, Mesh, DescriptorHeap)
-            particleCommon_->PreDraw(commandList);
-
-            // 2. 共通パラメータ (ViewProjection, Light) をセット
-            // ※ ParticleCommon::CreateRootSignature の定義順序に合わせる
-            // [3] DirectionalLight (CBV b1)
-            // commandList->SetGraphicsRootConstantBufferView(3, directionalLightResource_->GetGPUVirtualAddress());
-
-#ifdef USE_IMGUI
-            // 1. メインウィンドウ用のImGui描画命令を積む
-            ImGui::Render();
-            ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
-#endif
-
-            // ★ 2. ここでメインのコマンドリストを実行！
-            dxCommon_->ExecuteCommands();
-
-#ifdef USE_IMGUI
-            // ★ 3. メインの実行「後」にサブウィンドウ（画面外）を更新・描画
-            ImGuiIO &io = ImGui::GetIO();
-            if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-                ImGui::UpdatePlatformWindows();
-                // ここでImGuiが内部的に独自のコマンドリストを作成・実行します
-                ImGui::RenderPlatformWindowsDefault();
-            }
-#endif
-
-            // ★ 4. 最後にスワップチェーンを Present して、GPUを待機する
-            dxCommon_->Present();
+            debugCamera_->SetTranslation(gameCamera_->GetTranslation());
+            debugCamera_->SetRotation(gameCamera_->GetRotation());
+            activeCamera_ = debugCamera_.get();
+            isDebugCameraActive_ = true;
         }
     }
+
+    ImGui::Begin("Debug Status");
+    if (isDebugCameraActive_) {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Debug Camera: ON");
+    } else {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Debug Camera: OFF");
+    }
+    ImGui::End();
+
+    // --- 2. ライティング管理 ---
+    static int activeLightType = 2; // 0:Directional, 1:Point, 2:Spot
+    static bool enableFog = false;
+
+    static float dIntensity = 1.0f;
+    static float pIntensity = 1.0f;
+    static float sIntensity = 4.0f;
+
+    static float spotAngleDeg = 30.0f;
+    static float spotFalloffDeg = 20.0f;
+
+    ImGui::Begin("Lighting & Fog Manager");
+    ImGui::Text("Active Light Source");
+    ImGui::RadioButton("Directional", &activeLightType, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton("Point", &activeLightType, 1);
+    ImGui::SameLine();
+    ImGui::RadioButton("Spot", &activeLightType, 2);
+    ImGui::Separator();
+
+    DirectionalLight *dLight = modelCommon_->GetDirectionalLight();
+    PointLight *pLight = modelCommon_->GetPointLight();
+    SpotLight *sLight = modelCommon_->GetSpotLight();
+
+    if (activeLightType == 0) {
+        dLight->intensity = dIntensity;
+        pLight->intensity = 0.0f;
+        sLight->intensity = 0.0f;
+        ImGui::Text("Directional Light Settings");
+        ImGui::ColorEdit4("Color", &dLight->color.x);
+        ImGui::DragFloat("Intensity", &dIntensity, 0.01f, 0.0f, 10.0f);
+        ImGui::DragFloat3("Direction", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
+        dLight->direction = TransformFunctions::Normalize(dLight->direction);
+    } else if (activeLightType == 1) {
+        pLight->intensity = pIntensity;
+        dLight->intensity = 0.0f;
+        sLight->intensity = 0.0f;
+        ImGui::Text("Point Light Settings");
+        ImGui::ColorEdit4("Color", &pLight->color.x);
+        ImGui::DragFloat("Intensity", &pIntensity, 0.01f, 0.0f, 10.0f);
+        ImGui::DragFloat3("Position", &pLight->position.x, 0.1f);
+        ImGui::DragFloat("Radius", &pLight->radius, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Decay", &pLight->decay, 0.01f, 0.0f, 10.0f);
+    } else if (activeLightType == 2) {
+        sLight->intensity = sIntensity;
+        dLight->intensity = 0.0f;
+        pLight->intensity = 0.0f;
+        ImGui::Text("Spot Light Settings");
+        ImGui::ColorEdit4("Color", &sLight->color.x);
+        ImGui::DragFloat("Intensity", &sIntensity, 0.01f, 0.0f, 20.0f);
+        ImGui::DragFloat3("Position", &sLight->position.x, 0.1f);
+        if (ImGui::DragFloat3("Direction", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
+            sLight->direction = TransformFunctions::Normalize(sLight->direction);
+        }
+        ImGui::DragFloat("Distance", &sLight->distance, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Decay", &sLight->decay, 0.01f, 0.0f, 10.0f);
+        ImGui::SliderFloat("Total Angle", &spotAngleDeg, 0.0f, 90.0f);
+        ImGui::SliderFloat("Falloff Start", &spotFalloffDeg, 0.0f, spotAngleDeg);
+        sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
+        sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
+    }
+    ImGui::Separator();
+    ImGui::Checkbox("Enable Fog Effect", &enableFog);
+    ImGui::End();
+#endif
+
+    // ★ シーンの更新 (Drawから救出！)
+    sceneManager_->Update();
+
+    // カメラの更新
+    if (isDebugCameraActive_) {
+        debugCamera_->Update();
+    } else {
+        gameCamera_->Update();
+    }
+
+    // ViewProjectionの更新
+    Matrix4x4 viewMatrix = activeCamera_->GetViewMatrix();
+    Matrix4x4 projectionMatrix = debugCamera_->GetProjectionMatrix();
+    viewProjectionData_->viewProjectionMatrix = TransformFunctions::Multiply(viewMatrix, projectionMatrix);
+    viewProjectionData_->cameraPosition = debugCamera_->GetTranslation();
+}
+
+void WindowsApplication::Draw() {
+    // 描画前処理
+    dxCommon_->PreDraw();
+
+    ID3D12GraphicsCommandList *commandList = dxCommon_->GetCommandList();
+    ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
+    commandList->SetDescriptorHeaps(1, descriptorHeaps);
+
+    // モデルの描画
+    modelCommon_->PreDraw(commandList);
+    sceneManager_->Draw(viewProjectionData_->viewProjectionMatrix);
+
+    // パーティクルの描画
+    particleCommon_->SetViewProjection(viewProjectionData_->viewProjectionMatrix);
+    particleCommon_->PreDraw(commandList);
+
+#ifdef USE_IMGUI
+    // メインウィンドウ用のImGui描画
+    ImGui::Render();
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+#endif
+
+    // ★ メインのコマンドリストを実行
+    dxCommon_->ExecuteCommands();
+
+#ifdef USE_IMGUI
+    // メイン実行「後」にサブウィンドウ（画面外）を更新・描画
+    ImGuiIO &io = ImGui::GetIO();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+#endif
+
+    // スワップチェーンを Present して画面に表示
+    dxCommon_->Present();
 }
 
 void WindowsApplication::Finalize() {
@@ -462,9 +393,6 @@ void WindowsApplication::Finalize() {
     // 6. Windows API 関連のクリーンアップ
     // timeBeginPeriod(1) に対応する解除
     timeEndPeriod(1); // ★追加：タイマー精度を元に戻す
-
-    // ウィンドウクラスの登録解除
-    UnregisterClass(wc_.lpszClassName, wc_.hInstance); // ★追加
 
     // 7. 最後にすべての土台である DirectXCommon を消す
     if (dxCommon_) {

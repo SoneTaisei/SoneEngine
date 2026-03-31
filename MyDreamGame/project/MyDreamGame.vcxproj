@@ -204,6 +204,7 @@
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp" />
     <ClCompile Include="Project\Effect\windowParticle.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
+    <ClCompile Include="Engine\Platform\Window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -304,6 +305,7 @@
     <ClInclude Include="Engine\Platform\WindowsApplication.h" />
     <ClInclude Include="Project\Effect\windowParticle.h" />
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
+    <ClInclude Include="Engine\Platform\Window.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">
