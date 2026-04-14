@@ -1,12 +1,18 @@
 #include "Window.h"
+#ifdef USE_IMGUI
 #include <imgui_impl_win32.h>
+#endif
 
 // ImGuiのプロシージャ宣言（外部にある前提）
+#ifdef USE_IMGUI
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
 
 LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+#ifdef USE_IMGUI
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
         return true;
+#endif
 
     switch (msg) {
     case WM_DESTROY:

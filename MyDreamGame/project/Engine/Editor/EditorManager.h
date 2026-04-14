@@ -1,4 +1,5 @@
 #pragma once
+#ifdef USE_IMGUI
 #include <Windows.h>
 #include <d3d12.h>
 #include <cstdint>
@@ -26,3 +27,4 @@ public:
     // 終了処理 (ImGuiの解放)
     void Finalize();
 };
+#endif

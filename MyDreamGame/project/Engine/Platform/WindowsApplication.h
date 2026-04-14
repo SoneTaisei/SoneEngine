@@ -5,7 +5,9 @@
 
 // 前方宣言
 class Window;
+#ifdef USE_IMGUI
 class EditorManager;
+#endif
 class DirectXCommon;
 class SpriteCommon;
 class ModelCommon;
@@ -39,7 +41,9 @@ public:
 private:
     // --- システム管理 ---
     std::unique_ptr<Window> window_;
+#ifdef USE_IMGUI
     std::unique_ptr<EditorManager> editorManager_;
+#endif
     std::unique_ptr<DirectXCommon> dxCommon_;
 
     // --- 描画共通部 ---
