@@ -1,3 +1,4 @@
+#ifdef USE_IMGUI
 #include "EditorManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Input/KeyboardInput.h"
@@ -167,3 +168,4 @@ void EditorManager::Finalize() {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 }
+#endif
