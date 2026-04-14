@@ -1,36 +1,31 @@
 #include "Platform/WindowsApplication.h"
+
+// ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
+#include "Editor/EditorManager.h"
+#include "Effect/ParticleCommon.h"
+#include "Graphics/DebugCamera.h"
+#include "Graphics/GameCamera.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Resource/Model/ModelCommon.h"
+#include "Resource/Sprite/SpriteCommon.h"
+#include "Scene/SceneManager.h"
+#include "Window.h"
+// (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
+
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/Utilityfunctions.h"
-#include "Graphics/DebugCamera.h"
 #include "Graphics/TextureManager.h"
 #include "Input/GamepadInput.h"
 #include "Input/KeyboardInput.h"
 #include "Renderer/SrvManager.h"
 #include "Resource/Audio/AudioManager.h"
-#include "Resource/Model/Model.h"
 #include "Resource/Model/ModelManager.h"
-#include "Resource/Sprite/Sprite.h"
-#include "Scenes/TitleScene.h"
-#include <cassert>
-#include <chrono>
-#include <format>
-
-// 枠を借りるための関数
-static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
-    OutputDebugStringA("ImGuiSrvAlloc called!\n"); // これが出るかチェック
-    // 前回の回答で TextureManager に追加した関数を呼び出す
-    SrvManager::GetInstance()->Allocate(out_cpu_handle, out_gpu_handle);
-}
-
-// 枠を返すための関数 (今は何もしなくてOKですが、定義だけは必要です)
-static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) {
-    // 解放処理が必要な場合はここに書きますが、今は空で大丈夫です
-}
-
-// ImGuiの外部リンケージ
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+#include "Graphics/ViewProjection.h"
 
 #pragma comment(lib, "winmm.lib")
+
+WindowsApplication::WindowsApplication() = default;
+WindowsApplication::~WindowsApplication() = default;
 
 void WindowsApplication::Initialize() {
 
@@ -91,22 +86,9 @@ void WindowsApplication::Initialize() {
     particleCommon_->Initialize(device);
     sceneManager_->SetParticleCommon(particleCommon_.get());
 
-    // 初期シーンはアプリ層で生成して渡す
-    sceneManager_->ChangeScene(std::make_unique<TitleScene>());
-
     // ViewProjectionリソースの作成
-    UINT viewProjectionSize = (sizeof(ViewProjection) + 255) & ~255;
-    viewProjectionResource_ = CreateBufferResource(device, viewProjectionSize);
-    viewProjectionResource_->Map(0, nullptr, reinterpret_cast<void **>(&viewProjectionData_));
-
-    // DirectionalLightリソースの作成
-    const UINT directionalLightBufferSize = (sizeof(DirectionalLight) + 255) & ~255u;
-    directionalLightResource_ = CreateBufferResource(device, directionalLightBufferSize);
-    directionalLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&directionalLightData_));
-    // 初期値を設定
-    directionalLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
-    directionalLightData_->direction = {0.0f, -1.0f, 0.0f};
-    directionalLightData_->intensity = 1.0f;
+    viewProjection_ = std::make_unique<ViewProjection>();
+    viewProjection_->Initialize(dxCommon_->GetDevice());
 
     // 1. 本番カメラ生成
     gameCamera_ = std::make_unique<GameCamera>();
@@ -120,47 +102,12 @@ void WindowsApplication::Initialize() {
     activeCamera_ = gameCamera_.get();
     isDebugCameraActive_ = false;
 
+// Initialize() の中の #ifdef USE_IMGUI のブロックを以下に置き換え
 #ifdef USE_IMGUI
-    // 1. ImGuiコンテキストの作成
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-
-    // 2. ★【重要】バックエンド初期化の前にフラグを立てる！
-    // これを先にやらないと、マルチビューポート用の関数ポインタがNULLになります
-    ImGuiIO &io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;   // ドッキング有効化
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // マルチビューポート（画面外）有効化
-
-    // 3. Win32バックエンドの初期化
-    // ViewportsEnableが立っているのを見て、ImGuiが内部でPlatform_RenderWindowなどを登録します
-    ImGui_ImplWin32_Init(hwnd);
-
-    // 4. DirectX12バックエンドの初期化
-    ImGui_ImplDX12_InitInfo init_info = {};
-    init_info.Device = device;
-    init_info.CommandQueue = dxCommon_->GetCommandQueue();                   //
-    init_info.NumFramesInFlight = dxCommon_->GetSwapChainDesc().BufferCount; //
-    init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;                        // ノートPC等の相性を考えSRGBなしを推奨
-    init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    init_info.SrvDescriptorHeap = SrvManager::GetInstance()->GetSrvDescriptorHeap(); //
-
-    // 記述子のアロケータを教える
-    init_info.SrvDescriptorAllocFn = ImGuiSrvAlloc;
-    init_info.SrvDescriptorFreeFn = ImGuiSrvFree;
-
-    ImGui_ImplDX12_Init(&init_info);
-
-    // 5. フォントテクスチャの作成（任意ですが、ここで初期化しておくと安全です）
-    // ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height); などの処理
-
-    // 6. スタイルの微調整
-    ImGuiStyle &style = ImGui::GetStyle();
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        style.WindowRounding = 0.0f;              // 画面外ウィンドウの角を丸くしない
-        style.Colors[ImGuiCol_WindowBg].w = 1.0f; // 最初は不透明(1.0f)にして描画を確認するのがオススメ！
-    }
-#endif // USE_IMGUI
+    editorManager_ = std::make_unique<EditorManager>();
+    // commandQueue は dxCommon から取得して渡します
+    editorManager_->Initialize(hwnd, device, dxCommon_->GetCommandQueue());
+#endif
 
     // 音声の初期化
     AudioManager::Initialize();
@@ -170,16 +117,6 @@ void WindowsApplication::Initialize() {
 
     // TimeManager を初期化
     // TimeManager::GetInstance().Initialize();
-
-    const UINT materialBufferSize = (sizeof(Material) + 255) & ~255u;
-    materialResource = CreateBufferResource(device, materialBufferSize);
-    materialData = nullptr;
-    materialResource->Map(0, nullptr, reinterpret_cast<void **>(&materialData));
-    materialData->color = {1.0f, 1.0f, 1.0f, 1.0f};
-    materialData->lightingType = 1;
-    materialData->uvTransform = TransformFunctions::MakeIdentity4x4();
-    materialData->shininess = 50.0f;
-    materialResource->Unmap(0, nullptr);
 
 #ifdef USE_IMGUI
     // リソースリークチェッカーのインスタンスを作成
@@ -202,102 +139,21 @@ void WindowsApplication::Update() {
     // デルタタイムを計算
     // TimeManager::GetInstance().Update();
 
-#ifdef USE_IMGUI
-    // --- ImGui 更新準備 ---
-    ImGui_ImplDX12_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-#endif
-
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
 
 #ifdef USE_IMGUI
-    // --- 1. デバッグカメラとステータス表示 ---
-    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
-        if (isDebugCameraActive_) {
-            activeCamera_ = gameCamera_.get();
-            isDebugCameraActive_ = false;
-        } else {
-            debugCamera_->SetTranslation(gameCamera_->GetTranslation());
-            debugCamera_->SetRotation(gameCamera_->GetRotation());
-            activeCamera_ = debugCamera_.get();
-            isDebugCameraActive_ = true;
-        }
-    }
+    // 1. フレームの開始
+    editorManager_->BeginFrame();
 
-    ImGui::Begin("Debug Status");
-    if (isDebugCameraActive_) {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Debug Camera: ON");
-    } else {
-        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Debug Camera: OFF");
-    }
-    ImGui::End();
-
-    // --- 2. ライティング管理 ---
-    static int activeLightType = 2; // 0:Directional, 1:Point, 2:Spot
-    static bool enableFog = false;
-
-    static float dIntensity = 1.0f;
-    static float pIntensity = 1.0f;
-    static float sIntensity = 4.0f;
-
-    static float spotAngleDeg = 30.0f;
-    static float spotFalloffDeg = 20.0f;
-
-    ImGui::Begin("Lighting & Fog Manager");
-    ImGui::Text("Active Light Source");
-    ImGui::RadioButton("Directional", &activeLightType, 0);
-    ImGui::SameLine();
-    ImGui::RadioButton("Point", &activeLightType, 1);
-    ImGui::SameLine();
-    ImGui::RadioButton("Spot", &activeLightType, 2);
-    ImGui::Separator();
-
-    DirectionalLight *dLight = modelCommon_->GetDirectionalLight();
-    PointLight *pLight = modelCommon_->GetPointLight();
-    SpotLight *sLight = modelCommon_->GetSpotLight();
-
-    if (activeLightType == 0) {
-        dLight->intensity = dIntensity;
-        pLight->intensity = 0.0f;
-        sLight->intensity = 0.0f;
-        ImGui::Text("Directional Light Settings");
-        ImGui::ColorEdit4("Color", &dLight->color.x);
-        ImGui::DragFloat("Intensity", &dIntensity, 0.01f, 0.0f, 10.0f);
-        ImGui::DragFloat3("Direction", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
-        dLight->direction = TransformFunctions::Normalize(dLight->direction);
-    } else if (activeLightType == 1) {
-        pLight->intensity = pIntensity;
-        dLight->intensity = 0.0f;
-        sLight->intensity = 0.0f;
-        ImGui::Text("Point Light Settings");
-        ImGui::ColorEdit4("Color", &pLight->color.x);
-        ImGui::DragFloat("Intensity", &pIntensity, 0.01f, 0.0f, 10.0f);
-        ImGui::DragFloat3("Position", &pLight->position.x, 0.1f);
-        ImGui::DragFloat("Radius", &pLight->radius, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Decay", &pLight->decay, 0.01f, 0.0f, 10.0f);
-    } else if (activeLightType == 2) {
-        sLight->intensity = sIntensity;
-        dLight->intensity = 0.0f;
-        pLight->intensity = 0.0f;
-        ImGui::Text("Spot Light Settings");
-        ImGui::ColorEdit4("Color", &sLight->color.x);
-        ImGui::DragFloat("Intensity", &sIntensity, 0.01f, 0.0f, 20.0f);
-        ImGui::DragFloat3("Position", &sLight->position.x, 0.1f);
-        if (ImGui::DragFloat3("Direction", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
-            sLight->direction = TransformFunctions::Normalize(sLight->direction);
-        }
-        ImGui::DragFloat("Distance", &sLight->distance, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Decay", &sLight->decay, 0.01f, 0.0f, 10.0f);
-        ImGui::SliderFloat("Total Angle", &spotAngleDeg, 0.0f, 90.0f);
-        ImGui::SliderFloat("Falloff Start", &spotFalloffDeg, 0.0f, spotAngleDeg);
-        sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
-        sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
-    }
-    ImGui::Separator();
-    ImGui::Checkbox("Enable Fog Effect", &enableFog);
-    ImGui::End();
+    // 2. UIの更新（巨大なコードがこの1行に！）
+    // ※ activeCamera_ の書き換えができるようにアドレス(&)を渡します
+    editorManager_->UpdateUI(
+        modelCommon_.get(),
+        gameCamera_.get(),
+        debugCamera_.get(),
+        &activeCamera_,
+        isDebugCameraActive_);
 #endif
 
     // ★ シーンの更新 (Drawから救出！)
@@ -311,10 +167,9 @@ void WindowsApplication::Update() {
     }
 
     // ViewProjectionの更新
-    Matrix4x4 viewMatrix = activeCamera_->GetViewMatrix();
-    Matrix4x4 projectionMatrix = debugCamera_->GetProjectionMatrix();
-    viewProjectionData_->viewProjectionMatrix = TransformFunctions::Multiply(viewMatrix, projectionMatrix);
-    viewProjectionData_->cameraPosition = debugCamera_->GetTranslation();
+    viewProjection_->UpdateMatrix(
+        activeCamera_->GetViewMatrix(),
+        activeCamera_->GetProjectionMatrix());
 }
 
 void WindowsApplication::Draw() {
@@ -325,31 +180,24 @@ void WindowsApplication::Draw() {
     ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
-    // モデルの描画
+    // モデルの描画準備
     modelCommon_->PreDraw(commandList);
-    sceneManager_->Draw(viewProjectionData_->viewProjectionMatrix);
+
+    // ★ 修正：GetGPUVirtualAddress() ではなく GetMatrix() に変更！
+    sceneManager_->Draw(viewProjection_->GetMatrix());
 
     // パーティクルの描画
-    particleCommon_->SetViewProjection(viewProjectionData_->viewProjectionMatrix);
+    // ★ 修正：こちらも GetMatrix() に変更！
+    particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw(commandList);
 
 #ifdef USE_IMGUI
-    // メインウィンドウ用のImGui描画
-    ImGui::Render();
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+    // メインウィンドウのImGuiを描画
+    editorManager_->Draw(commandList);
 #endif
 
     // ★ メインのコマンドリストを実行
     dxCommon_->ExecuteCommands();
-
-#ifdef USE_IMGUI
-    // メイン実行「後」にサブウィンドウ（画面外）を更新・描画
-    ImGuiIO &io = ImGui::GetIO();
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-    }
-#endif
 
     // スワップチェーンを Present して画面に表示
     dxCommon_->Present();
@@ -357,10 +205,10 @@ void WindowsApplication::Draw() {
 
 void WindowsApplication::Finalize() {
 #ifdef USE_IMGUI
-    // 1. ImGuiの終了処理 (GPUを使うので早めに消す)
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
+    if (editorManager_) {
+        editorManager_->Finalize();
+        editorManager_.reset(); // ★ここで確実に破棄
+    }
 #endif
 
     ModelManager::GetInstance()->Finalize();
@@ -376,11 +224,7 @@ void WindowsApplication::Finalize() {
     }
     particleCommon_.reset();
 
-    // 3. WindowsApplication自身が持つ GPUリソース (ComPtr) のリセット
-    // 【重要】これらを dxCommon_ より先に消さないと Live Object 110 が出続けます
-    viewProjectionResource_.Reset();   // ★追加
-    directionalLightResource_.Reset(); // ★追加
-    materialResource.Reset();          // ★追加
+    viewProjection_.reset();
 
     // 4. 入力マネージャーの終了処理 (もし実装があれば呼ぶ)
     // KeyboardInput::GetInstance()->Finalize();

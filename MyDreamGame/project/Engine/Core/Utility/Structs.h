@@ -139,7 +139,7 @@ struct SpotLight {
     float padding[2];
 };
 
-struct ViewProjection {
+struct ViewProjectionData {
 	Matrix4x4 viewProjectionMatrix;
 	Vector3 cameraPosition;
 	float padding;  // ← これを忘れず追加！

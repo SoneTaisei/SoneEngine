@@ -15,15 +15,24 @@ void ModelCommon::Initialize(ID3D12Device *device) {
         return CreateBufferResource(device_, (size + 255) & ~255u);
     };
 
-    // --- 1. リソースの生成とMap ---
-
-    // マテリアルリソースの作成（これが抜けていました）
+    // ▼ マテリアルリソースの作成と初期化
     materialResource_ = CreateCB(sizeof(Material));
     materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedMaterial_));
 
-    // ライトとカメラのリソース（既存の処理）
+    // ★ ここに初期値をセット！ (materialData を mappedMaterial_ に変更)
+    mappedMaterial_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    mappedMaterial_->lightingType = 1;
+    mappedMaterial_->uvTransform = TransformFunctions::MakeIdentity4x4();
+    mappedMaterial_->shininess = 50.0f;
+
+    // ▼ 平行光源（DirectionalLight）のリソースの作成と初期化
     directionalLightResource_ = CreateCB(sizeof(DirectionalLight));
     directionalLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedDirectionalLight_));
+
+    // ★ ここに初期値をセット！ (directionalLightData_ を mappedDirectionalLight_ に変更)
+    mappedDirectionalLight_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    mappedDirectionalLight_->direction = {0.0f, -1.0f, 0.0f};
+    mappedDirectionalLight_->intensity = 1.0f;
 
     pointLightResource_ = CreateCB(sizeof(PointLight));
     pointLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedPointLight_));
