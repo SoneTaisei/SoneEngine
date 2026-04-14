@@ -150,6 +150,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Engine\Editor\EditorManager.cpp" />
     <ClCompile Include="externals\imgui\backends\imgui_impl_dx12.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
@@ -204,6 +205,8 @@
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp" />
     <ClCompile Include="Project\Effect\windowParticle.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
+    <ClCompile Include="Engine\Platform\Window.cpp" />
+    <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -264,6 +267,7 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\Editor\EditorManager.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />
     <ClInclude Include="externals\imgui\imgui_internal.h" />
@@ -304,6 +308,8 @@
     <ClInclude Include="Engine\Platform\WindowsApplication.h" />
     <ClInclude Include="Project\Effect\windowParticle.h" />
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
+    <ClInclude Include="Engine\Platform\Window.h" />
+    <ClInclude Include="Engine\Graphics\ViewProjection.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

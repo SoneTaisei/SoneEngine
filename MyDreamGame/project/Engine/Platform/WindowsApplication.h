@@ -1,81 +1,61 @@
 #pragma once
 
 #include <Windows.h>
-#include <cstdint>
-#include <string>
 #include <memory>
-#include <d3d12.h>
-#include <wrl.h>
 
-#include "Scene/SceneManager.h"
-#include "Graphics/DebugCamera.h" 
-#include "Graphics/GameCamera.h" 
-#include "Core/Utility/Utilityfunctions.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h"
-#include "Renderer/DirectXCommon/D3DResourceLeakChecker.h"
-#include "Resource/Sprite/SpriteCommon.h"
-#include "Resource/Model/ModelCommon.h"
-
-#include "Effect/ParticleCommon.h"
-#include "Effect/ParticleManager.h"
-#include "Effect/SnowParticle.h"
+// 前方宣言
+class Window;
+class EditorManager;
+class DirectXCommon;
+class SpriteCommon;
+class ModelCommon;
+class ParticleCommon;
+class SceneManager;
+class GameCamera;
+class DebugCamera;
+class Camera;
+class ViewProjection;
 
 class WindowsApplication {
 public:
-	// ウィンドウプロシージャ
-	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-
-	// 定数
-	static const int kWindowWidth_ = 1280;
-	static const int kWindowHeight_ = 720;
+    // 定数
+    static const int kWindowWidth_ = 1280;
+    static const int kWindowHeight_ = 720;
 
 public:
-	void Initialize();
-	void Run();
-	void Finalize();
+    // コンストラクタとデストラクタ（前方宣言を使っているので明記が必要）
+    WindowsApplication();
+    ~WindowsApplication();
+
+    void Initialize();
+    void Run();
+    void Finalize();
+
+    void Update();
+    void Draw();
+
+    SceneManager *GetSceneManager() const { return sceneManager_.get(); }
 
 private:
-	HWND hwnd_ = nullptr;
-	WNDCLASS wc_{};
+    // --- システム管理 ---
+    std::unique_ptr<Window> window_;
+    std::unique_ptr<EditorManager> editorManager_;
+    std::unique_ptr<DirectXCommon> dxCommon_;
 
-	// DirectX関連の処理をまとめたクラス
-	std::unique_ptr<DirectXCommon> dxCommon_;
+    // --- 描画共通部 ---
+    std::unique_ptr<SpriteCommon> spriteCommon_;
+    std::unique_ptr<ModelCommon> modelCommon_;
+    std::unique_ptr<ParticleCommon> particleCommon_;
+    std::unique_ptr<ViewProjection> viewProjection_; // ★これだけでOK！
 
-	// スプライト共通部のメンバ変数
-	std::unique_ptr<SpriteCommon> spriteCommon_;
+    // --- ゲームロジック・カメラ ---
+    std::unique_ptr<SceneManager> sceneManager_;
+    std::unique_ptr<GameCamera> gameCamera_;
+    std::unique_ptr<DebugCamera> debugCamera_;
 
-	// モデル共通部のメンバ変数
-	std::unique_ptr<ModelCommon> modelCommon_;
+    // 「現在アクティブなカメラ」を指すポインタ（借用）
+    Camera *activeCamera_ = nullptr;
 
-	// パーティクル共通部・個別パーティクル
-	std::unique_ptr<ParticleCommon> particleCommon_;
-
-	// --- DirectX関連以外のメンバ変数 ---
-	std::unique_ptr<SceneManager> sceneManager_;
-
-	// 2つのカメラの実体を持つ（メモリ管理用）
-	std::unique_ptr<GameCamera> gameCamera_;
-	std::unique_ptr<DebugCamera> debugCamera_;
-
-	// 「現在アクティブなカメラ」を指すポインタ（借用）
-	Camera *activeCamera_ = nullptr;
-
-	// 今デバッグモードかどうか
-	bool isDebugCameraActive_ = false;
-
-	// ViewProjection用 (シーン全体で使うため残す)
-	Microsoft::WRL::ComPtr<ID3D12Resource> viewProjectionResource_;
-	ViewProjection *viewProjectionData_ = nullptr;
-
-	// DirectionalLight用 (シーン全体で使うため残す)
-	Microsoft::WRL::ComPtr<ID3D12Resource> directionalLightResource_;
-	DirectionalLight *directionalLightData_ = nullptr;
-
-	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource = {};
-	Material *materialData = nullptr;
-
-#ifdef USE_IMGUI
-// リソースリークチェッカー
-	std::unique_ptr<D3DResourceLeakChecker> leakChecker_;
-#endif
+    // 今デバッグモードかどうか
+    bool isDebugCameraActive_ = false;
 };

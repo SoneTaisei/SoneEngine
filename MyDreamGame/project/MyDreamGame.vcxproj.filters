@@ -122,6 +122,9 @@
     </ClCompile>
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
+    <ClCompile Include="Engine\Platform\Window.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager.cpp" />
+    <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -238,6 +241,9 @@
     </ClInclude>
     <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
+    <ClInclude Include="Engine\Platform\Window.h" />
+    <ClInclude Include="Engine\Editor\EditorManager.h" />
+    <ClInclude Include="Engine\Graphics\ViewProjection.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
