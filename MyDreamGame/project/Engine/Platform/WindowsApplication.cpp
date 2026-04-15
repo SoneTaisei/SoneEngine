@@ -176,7 +176,7 @@ void WindowsApplication::Update() {
 }
 
 void WindowsApplication::Draw() {
-    // 1. RenderTexture への描画準備（画面が赤くクリアされる）
+    // 1. RenderTextureへの描画準備
     dxCommon_->PreDraw();
 
     // --- ここから RenderTexture への描画 ---
@@ -185,19 +185,20 @@ void WindowsApplication::Draw() {
     commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
     modelCommon_->PreDraw(commandList);
-    // GetGPUVirtualAddress() ではなく GetMatrix() に変更！
     sceneManager_->Draw(viewProjection_->GetMatrix());
 
-    // パーティクルの描画
-    // こちらも GetMatrix() に変更！
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw(commandList);
     // ------------------------------------
 
-    // 2. ★追加：描画先を Swapchain（最終画面）に切り替える！
+    // 2. Swapchain（最終画面）への描画準備
     dxCommon_->PreDrawSwapchain();
 
     // --- ここから Swapchain への描画 ---
+
+    // ★追加：RenderTextureに描かれた絵を、Swapchainにコピーして貼り付ける！
+    dxCommon_->DrawRenderTexture();
+
 #ifdef USE_IMGUI
     // メインウィンドウのImGuiを描画
     editorManager_->Draw(commandList);
@@ -208,7 +209,6 @@ void WindowsApplication::Draw() {
     dxCommon_->ExecuteCommands();
     dxCommon_->Present();
 }
-
 void WindowsApplication::Finalize() {
 #ifdef USE_IMGUI
     if (editorManager_) {

@@ -17,6 +17,7 @@ void DirectXCommon::Initialize(HWND hwnd, int32_t windowWidth, int32_t windowHei
 	CreateDxInstance();
 	CreateFinalRenderTargets();
 	CreatePipelines();
+    CreateCopyImagePipeline();
     InitializeFixFPS();
 
 	// フェンスの初期化
@@ -465,4 +466,104 @@ void DirectXCommon::InitializeRenderTexture() {
     srvDesc.Texture2D.MipLevels = 1;
 
     device_->CreateShaderResourceView(renderTextureResource_.Get(), &srvDesc, renderTextureSrvHandleCPU_);
+}
+
+void DirectXCommon::CreateCopyImagePipeline() {
+    HRESULT hr;
+
+    // 1. RootSignatureの作成 (TextureとSamplerが使えるようにする)
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    // Texture用 (t0) の DescriptorRange
+    D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
+    descriptorRange[0].BaseShaderRegister = 0; // t0
+    descriptorRange[0].NumDescriptors = 1;
+    descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // RootParameterにセット
+    D3D12_ROOT_PARAMETER rootParameters[1] = {};
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[0].DescriptorTable.pDescriptorRanges = descriptorRange;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+
+    // Sampler用 (s0)
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[0].ShaderRegister = 0; // s0
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
+    rootSignatureDesc.pStaticSamplers = staticSamplers;
+    rootSignatureDesc.NumStaticSamplers = _countof(staticSamplers);
+
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
+    D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    device_->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&copyImageRootSignature_));
+
+    // 2. シェーダーのコンパイル
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"shaders/CopyImage.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psBlob = CompileShader(L"shaders/CopyImage.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+
+    // 3. PipelineState (PSO) の作成
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
+    psoDesc.pRootSignature = copyImageRootSignature_.Get();
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
+
+    // ★資料の指示1：InputLayoutは利用しない
+    psoDesc.InputLayout.pInputElementDescs = nullptr;
+    psoDesc.InputLayout.NumElements = 0;
+
+    // ★資料の指示2：Depthは不要なのでfalse
+    psoDesc.DepthStencilState.DepthEnable = false;
+
+    // その他の必須設定（画面に描くための基本的な設定）
+    psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // カリングなし
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; // Swapchainのフォーマットに合わせる
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&copyImagePipelineState_));
+    assert(SUCCEEDED(hr));
+}
+
+void DirectXCommon::DrawRenderTexture() {
+    // 1. バリアを張る (RenderTarget -> PixelShaderResource に状態遷移)
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = renderTextureResource_.Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    commandList_->ResourceBarrier(1, &barrier);
+
+    // 2. コピー用パイプラインの設定
+    commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
+    commandList_->SetPipelineState(copyImagePipelineState_.Get());
+
+    // テクスチャ(SRV)をルートパラメータ0番にセット
+    commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
+
+    // ★資料の指示通り、3頂点だけを描画 (全画面を覆う三角形が1枚描かれます)
+    commandList_->DrawInstanced(3, 1, 0, 0);
+
+    // 3. バリアを戻す (PixelShaderResource -> RenderTarget に状態遷移)
+    // ※次のフレームでまたRenderTextureに書き込むため、元の状態に戻しておく必要があります
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    commandList_->ResourceBarrier(1, &barrier);
 }

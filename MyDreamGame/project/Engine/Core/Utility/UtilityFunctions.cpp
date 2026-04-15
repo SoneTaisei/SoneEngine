@@ -200,13 +200,14 @@ IDxcBlob *CompileShader(
 	*********************************************************/
 
 	LPCWSTR arguments[] = {
-	  filePath.c_str(),// コンパイル対象のhlslファイル名
-	  L"-E",L"main",// エントリーポイントの指定。基本的にmain以外にはしない
-	  L"-T",profile,// ShaderProfileの設定
-	  L"-Zi",L"-Qembed_debug",// デバッグ用の情報を埋め込む
-	  L"-Od",// 最適化を外しておく
-	  L"-Zpr",// メモリレイアウトは行優先
-	};
+        filePath.c_str(),         // コンパイル対象のhlslファイル名
+        L"-E", L"main",           // エントリーポイントの指定。基本的にmain以外にはしない
+        L"-T", profile,           // ShaderProfileの設定
+        L"-Zi", L"-Qembed_debug", // デバッグ用の情報を埋め込む
+        L"-Od",                   // 最適化を外しておく
+        L"-Zpr",                  // メモリレイアウトは行優先
+        L"-HV", L"2021",          // ★ これを追加！ HLSL2021ルールを適用してC++と同じ型名を使えるようにする
+    };
 	// 実際にShaderをコンパイルする
 	IDxcResult *shaderResult = nullptr;
 	hr = dxcCompiler->Compile(
