@@ -26,6 +26,12 @@ public:
     void ExecuteCommands(); // コマンドを閉じて実行する
     void Present();         // 画面に表示して次フレームの準備をする
 
+	// ImGuiを描く直前に、描画先をSwapchainに戻すための関数
+    void PreDrawSwapchain();
+
+	// RenderTextureを初期化する専用関数
+    void InitializeRenderTexture();
+
 	// ゲッター関数
 	ID3D12Device *GetDevice() const { return device_.Get(); }
 	ID3D12GraphicsCommandList *GetCommandList() const { return commandList_.Get(); }
@@ -79,6 +85,12 @@ private:
     Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
     Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
     Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
+
+	// RenderTexture関連の変数
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTextureResource_;
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTextureRtvHandle_{};    // RTV用
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTextureSrvHandleCPU_{}; // SRV用 (CPU)
+    D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandleGPU_{}; // SRV用 (GPU)
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

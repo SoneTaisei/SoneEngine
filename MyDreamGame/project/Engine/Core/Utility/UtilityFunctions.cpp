@@ -769,3 +769,51 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
     return soundData;
 }
 
+Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
+    Microsoft::WRL::ComPtr<ID3D12Device> device,
+    uint32_t width,
+    uint32_t height,
+    DXGI_FORMAT format,
+    const Vector4 &clearColor) {
+
+    assert(device != nullptr);
+
+    // 生成するResourceの設定
+    D3D12_RESOURCE_DESC resourceDesc{};
+    resourceDesc.Width = width;
+    resourceDesc.Height = height;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.Format = format;
+    resourceDesc.SampleDesc.Count = 1;
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+    // ★資料の指示1: RenderTargetとして利用可能にする特殊なフラグ
+    resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+    // 利用するHeapの設定
+    D3D12_HEAP_PROPERTIES heapProperties{};
+    // ★資料の指示2: 当然VRAM上に作る (DEFAULT)
+    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+    // クリア時の色を設定（レンダーターゲット生成時にはこれが必要です）
+    D3D12_CLEAR_VALUE clearValue{};
+    clearValue.Format = format;
+    clearValue.Color[0] = clearColor.x; // R
+    clearValue.Color[1] = clearColor.y; // G
+    clearValue.Color[2] = clearColor.z; // B
+    clearValue.Color[3] = clearColor.w; // A
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
+    HRESULT hr = device->CreateCommittedResource(
+        &heapProperties,
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_RENDER_TARGET, // 初期状態は書き込み可能(レンダーターゲット)にしておく
+        &clearValue,
+        IID_PPV_ARGS(&resource));
+    assert(SUCCEEDED(hr));
+
+    return resource;
+}
+
