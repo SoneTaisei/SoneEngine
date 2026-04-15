@@ -80,3 +80,10 @@ bool IsKeyUp(BYTE keys);
 
 SoundData SoundLoadMediaFoundation(const char *filename);
 
+Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
+    Microsoft::WRL::ComPtr<ID3D12Device> device,
+    uint32_t width,
+    uint32_t height,
+    DXGI_FORMAT format,
+    const Vector4 &clearColor);
+

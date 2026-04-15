@@ -61,6 +61,9 @@ void WindowsApplication::Initialize() {
 
     SrvManager::GetInstance()->Initialize(device);
 
+    // SrvManagerの準備が完了したので、RenderTextureを作る！
+    dxCommon_->InitializeRenderTexture();
+
     // ModelCommonの生成と初期化
     modelCommon_ = std::make_unique<ModelCommon>();
     modelCommon_->Initialize(device);
@@ -173,36 +176,39 @@ void WindowsApplication::Update() {
 }
 
 void WindowsApplication::Draw() {
-    // 描画前処理
+    // 1. RenderTextureへの描画準備
     dxCommon_->PreDraw();
 
+    // --- ここから RenderTexture への描画 ---
     ID3D12GraphicsCommandList *commandList = dxCommon_->GetCommandList();
     ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
-    // モデルの描画準備
     modelCommon_->PreDraw(commandList);
-
-    // ★ 修正：GetGPUVirtualAddress() ではなく GetMatrix() に変更！
     sceneManager_->Draw(viewProjection_->GetMatrix());
 
-    // パーティクルの描画
-    // ★ 修正：こちらも GetMatrix() に変更！
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw(commandList);
+    // ------------------------------------
+
+    // 2. Swapchain（最終画面）への描画準備
+    dxCommon_->PreDrawSwapchain();
+
+    // --- ここから Swapchain への描画 ---
+
+    // ★追加：RenderTextureに描かれた絵を、Swapchainにコピーして貼り付ける！
+    dxCommon_->DrawRenderTexture();
 
 #ifdef USE_IMGUI
     // メインウィンドウのImGuiを描画
     editorManager_->Draw(commandList);
 #endif
+    // ------------------------------------
 
-    // ★ メインのコマンドリストを実行
+    // コマンドの実行と画面の表示
     dxCommon_->ExecuteCommands();
-
-    // スワップチェーンを Present して画面に表示
     dxCommon_->Present();
 }
-
 void WindowsApplication::Finalize() {
 #ifdef USE_IMGUI
     if (editorManager_) {
