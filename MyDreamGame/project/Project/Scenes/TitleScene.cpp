@@ -22,14 +22,14 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
     // 1. マネージャからモデル（素材）を取得（なければロードされる）
-    Model *planeModel = ModelManager::GetInstance()->GetModel("Object/plane", "plane.gltf");
+    Model *planeModel = ModelManager::GetInstance()->GetModel("Object/School/plane", "plane.gltf");
 
     // 2. Object3D（実体）を生成して初期化
     auto planeObject = std::make_unique<Object3D>();
     planeObject->Initialize(device.Get(), planeModel);
 
     // 3. 座標やテクスチャの設定（Object3Dに対して行う！）
-    uint32_t planeIndex = TextureManager::GetInstance()->Load("Sprite/uvChecker.png", commandList_);
+    uint32_t planeIndex = TextureManager::GetInstance()->Load("Sprite/School/uvChecker.png", commandList_);
     planeObject->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
     planeObject->SetRotation({0.0f, 0.0f, 0.0f});
 
