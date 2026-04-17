@@ -653,7 +653,7 @@ void DirectXCommon::CreateSkyboxPipeline() {
 
     // ★重要設定1：カリングは内側を見るため FRONT (または NONE)
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
     // ★重要設定2：深度書き込みを ZERO にする
     psoDesc.DepthStencilState.DepthEnable = true;

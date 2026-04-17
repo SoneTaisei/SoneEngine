@@ -1,4 +1,5 @@
 #include "Object3D.h"
+#include "Graphics/CameraManager.h"
 #include <DirectXMath.h>
 
 void Object3D::Initialize(ID3D12Device *device, Model *model) {
@@ -19,12 +20,16 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
     materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedMaterial_));
 }
 
-void Object3D::Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix) {
+void Object3D::Update() {
     *mappedMaterial_ = material_;
+
+    // ★ マネージャから最新のカメラ情報をゲット！
+    CameraManager *cameraMgr = CameraManager::GetInstance();
+    Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
+    Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
     // 自身のワールド行列作成
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-
     // モデル側のデータを使って最終的な行列を計算
     Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
     Matrix4x4 finalWorldMatrix = nodeMatrix * worldMatrix;

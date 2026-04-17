@@ -10,7 +10,7 @@ public:
     void Initialize(ID3D12Device *device, uint32_t textureHandle);
 
     // 更新（カメラの位置と、ビュー・プロジェクション行列を受け取る）
-    void Update(const Vector3 &cameraPos, const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix);
+    void Update();
 
     // 描画（ルールは内部でDirectXCommonから取得するため引数はスッキリ！）
     void Draw(ID3D12GraphicsCommandList *commandList);

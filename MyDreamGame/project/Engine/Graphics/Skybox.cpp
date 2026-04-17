@@ -3,6 +3,7 @@
 #include "Core/Utility/UtilityFunctions.h"
 #include "Graphics/TextureManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h" // GetInstance()を使うために必要！
+#include "CameraManager.h"
 
 void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {
     textureHandle_ = textureHandle;
@@ -48,16 +49,19 @@ void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {
     mappedMaterial_->color = {1.0f, 1.0f, 1.0f, 1.0f};
 }
 
-void Skybox::Update(const Vector3 &cameraPos, const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix) {
-    // ワールド行列の位置を、常にカメラの位置に追従させる
+void Skybox::Update() {
+    // マネージャから勝手に取ってくる
+    CameraManager *cameraMgr = CameraManager::GetInstance();
+    Vector3 cameraPos = cameraMgr->GetCameraPos();
+    Matrix4x4 view = cameraMgr->GetViewMatrix();
+    Matrix4x4 projection = cameraMgr->GetProjectionMatrix();
+
+    // あとはこれを使って WVP を計算するだけ
     Matrix4x4 worldMatrix = TransformFunctions::MakeTranslateMatrix(cameraPos);
 
-    // WVP行列の計算
-    Matrix4x4 wvpMatrix = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(viewMatrix, projectionMatrix));
-
-    // バッファに書き込み
+    // LaTeX表記での行列合成: $$WVP = World \times View \times Projection$$
+    mappedTransform_->WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(view, projection));
     mappedTransform_->World = worldMatrix;
-    mappedTransform_->WVP = wvpMatrix;
 }
 
 void Skybox::Draw(ID3D12GraphicsCommandList *commandList) {

@@ -10,6 +10,7 @@
 #include "Effect/windowParticle.h"
 #include "GameObject/Object3D.h"
 #include "Graphics/Skybox.h"
+#include "Graphics/DebugCamera.h"
 
 class TitleScene : public IScene {
 public:
@@ -52,5 +53,7 @@ private:
 
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
+
+    std::unique_ptr<DebugCamera> debugCamera_;
 
 };
