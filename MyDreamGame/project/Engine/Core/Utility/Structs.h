@@ -216,4 +216,7 @@ inline Matrix4x4 operator*(const Matrix4x4 &m1, const Matrix4x4 &m2) {
 	return result;
 }
 
-
+// Skybox専用の頂点構造体
+struct SkyboxVertexData {
+    Vector4 position;
+};

@@ -48,6 +48,18 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ⑤ 管理用の配列に追加して保持する
     sprites_.push_back(std::move(sprite));
+
+    // ★ Skyboxの初期化処理を追加
+    // 1. テクスチャをロード
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/School/rostock_laage_airport_4k.dds", commandList_);
+
+    // 2. インスタンスを生成
+    skybox_ = std::make_unique<Skybox>();
+
+    // 3. 初期化（※dxCommon_ の取得方法はエンジンの設計に合わせてください！）
+    // もし TitleScene に dxCommon_ が無い場合は、DirectXCommon::GetInstance() などを使うか、
+    // SceneManager から引っ張ってくる必要があります。
+    skybox_->Initialize(device.Get(), skyboxTextureHandle_);
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -78,6 +90,9 @@ void TitleScene::Update(SceneManager *sceneManager) {
         sprite->Update();
     }
 
+    if (skybox_) {
+        skybox_->Update(cameraTransform_.translate, viewMatrix, projectionMatrix);
+    }
    
 }
 
@@ -86,6 +101,11 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 各オブジェクトに「自分の行列で描画して！」と頼む
     for (auto &object : objects_) {
         object->Draw(commandList_.Get());
+    }
+
+    // ★ 3Dオブジェクトの直後にSkyboxを描画！
+    if (skybox_) {
+        skybox_->Draw(commandList_.Get());
     }
 
     // -------------------------------------------------

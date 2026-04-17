@@ -17,6 +17,8 @@
     <FxCompile Include="resources\shaders\Sprite.VS.hlsl" />
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl" />
     <FxCompile Include="resources\shaders\CopyImage.VS.hlsl" />
+    <FxCompile Include="resources\shaders\Skybox.PS.hlsl" />
+    <FxCompile Include="resources\shaders\Skybox.VS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Project\Core\main.cpp" />
@@ -127,6 +129,7 @@
     <ClCompile Include="Engine\Platform\Window.cpp" />
     <ClCompile Include="Engine\Editor\EditorManager.cpp" />
     <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
+    <ClCompile Include="Engine\Graphics\Skybox.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -246,6 +249,7 @@
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
+    <ClInclude Include="Engine\Graphics\Skybox.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
@@ -318,6 +322,7 @@
     </None>
     <None Include="resources\shaders\Sprite.hlsli" />
     <None Include="resources\shaders\CopyImage.hlsli" />
+    <None Include="resources\shaders\Skybox.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />
