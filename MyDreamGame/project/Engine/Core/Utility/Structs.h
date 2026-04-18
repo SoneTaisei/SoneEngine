@@ -34,6 +34,9 @@
 
 // Transformするための呼び出し
 #include "TransformFunctions.h"
+#include "Vector2.h"
+#include "Vector3.h"
+#include "Vector4.h"
 
 // ImGuiを使うための宣言
 #include "../externals/imgui/imgui.h"
@@ -73,17 +76,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 *構造体
 *********************************************************/
 
-struct Vector2 {
-	float x;
-	float y;
-};
-
-struct Vector4 {
-	float x;
-	float y;
-	float z;
-	float w;
-};
 
 struct  Transform {
 	Vector3 scale;
