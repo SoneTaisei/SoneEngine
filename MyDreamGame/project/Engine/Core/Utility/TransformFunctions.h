@@ -5,7 +5,7 @@
 
 inline Vector3 operator*(const Matrix4x4& mat, const Vector3& vec) {
 	Vector3 result;
-	// 方向ベクトルのため、w成分は0として計算
+	// 座標変換ではなく方向ベクトルとして計算（w=0相当）
 	result.x = vec.x * mat.m[0][0] + vec.y * mat.m[1][0] + vec.z * mat.m[2][0];
 	result.y = vec.x * mat.m[0][1] + vec.y * mat.m[1][1] + vec.z * mat.m[2][1];
 	result.z = vec.x * mat.m[0][2] + vec.y * mat.m[1][2] + vec.z * mat.m[2][2];
@@ -43,8 +43,8 @@ public:
 	static Vector3 SubtractV(const Vector3& a, const Vector3& b);
 	static Matrix4x4 Multiply(const Matrix4x4& matrix1, const Matrix4x4& matrix2);
 	static Vector3 MultiplyV(float scalar, Vector3 vector);
-	static Matrix4x4 Inverse(const Matrix4x4& m);
-	static Matrix4x4 Transpose(const Matrix4x4& m);
+	static Matrix4x4 Inverse(const Matrix4x4& matrix);
+	static Matrix4x4 Transpose(const Matrix4x4& matrix);
 	static Matrix4x4 MakeIdentity4x4();
 	static Vector3 Cross(const Vector3& v1, const Vector3& v2);
 	// 1.透視投影行列
