@@ -34,10 +34,10 @@
 #pragma comment(lib,"dxcompiler.lib")
 
 // Transformするための呼び出し
-#include "TransformFunctions.h"
 #include "Vector2.h"
 #include "Vector3.h"
 #include "Vector4.h"
+#include "TransformFunctions.h"
 
 // ImGuiを使うための宣言
 #include "../externals/imgui/imgui.h"
@@ -179,31 +179,6 @@ struct SoundData {
 	unsigned int bufferSize;
 };
 
-inline Vector3 operator*(const Matrix4x4 &mat, const Vector3 &vec) {
-	Vector3 result;
-	// 方向ベクトルのため、w成分は0として計算
-	result.x = vec.x * mat.m[0][0] + vec.y * mat.m[1][0] + vec.z * mat.m[2][0];
-	result.y = vec.x * mat.m[0][1] + vec.y * mat.m[1][1] + vec.z * mat.m[2][1];
-	result.z = vec.x * mat.m[0][2] + vec.y * mat.m[1][2] + vec.z * mat.m[2][2];
-	// w成分は方向ベクトルのため無視
-	return result;
-}
-
-inline Matrix4x4 operator*(const Matrix4x4 &m1, const Matrix4x4 &m2) {
-	Matrix4x4 result{};
-
-	for(int row = 0; row < 4; ++row) {
-		for(int col = 0; col < 4; ++col) {
-			result.m[row][col] =
-				m1.m[row][0] * m2.m[0][col] +
-				m1.m[row][1] * m2.m[1][col] +
-				m1.m[row][2] * m2.m[2][col] +
-				m1.m[row][3] * m2.m[3][col];
-		}
-	}
-
-	return result;
-}
 
 // Skybox専用の頂点構造体
 struct SkyboxVertexData {
