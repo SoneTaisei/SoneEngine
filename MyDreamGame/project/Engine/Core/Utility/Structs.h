@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
+#include <memory>
 
 #include <d3d12.h>
 #pragma comment(lib,"d3d12.lib")
@@ -186,10 +187,6 @@ inline Vector3 operator*(const Matrix4x4 &mat, const Vector3 &vec) {
 	result.z = vec.x * mat.m[0][2] + vec.y * mat.m[1][2] + vec.z * mat.m[2][2];
 	// w成分は方向ベクトルのため無視
 	return result;
-}
-
-inline Vector3 operator*(float scalar, const Vector3 &vec) {
-	return vec * scalar;
 }
 
 inline Matrix4x4 operator*(const Matrix4x4 &m1, const Matrix4x4 &m2) {
