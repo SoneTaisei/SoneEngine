@@ -50,8 +50,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 #pragma comment(lib, "windowscodecs.lib")
 
 #include"../externals/DirectXTex/d3dx12.h"
-#include"vector"
-
+#include <vector>
 #include <sstream>
 
 #include <wrl.h>

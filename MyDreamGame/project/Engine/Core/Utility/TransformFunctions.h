@@ -9,7 +9,7 @@ struct Matrix3x3 {
 	float m[3][3];
 };
 
-inline Vector3 operator*(const Matrix4x4 &mat, const Vector3 &vec) {
+inline Vector3 operator*(const Matrix4x4& mat, const Vector3& vec) {
 	Vector3 result;
 	// 方向ベクトルのため、w成分は0として計算
 	result.x = vec.x * mat.m[0][0] + vec.y * mat.m[1][0] + vec.z * mat.m[2][0];
@@ -19,7 +19,7 @@ inline Vector3 operator*(const Matrix4x4 &mat, const Vector3 &vec) {
 	return result;
 }
 
-inline Matrix4x4 operator*(const Matrix4x4 &m1, const Matrix4x4 &m2) {
+inline Matrix4x4 operator*(const Matrix4x4& m1, const Matrix4x4& m2) {
 	Matrix4x4 result{};
 
 	for (int row = 0; row < 4; ++row) {
