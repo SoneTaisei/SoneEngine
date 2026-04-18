@@ -1,13 +1,7 @@
 #pragma once
 #include "Vector3.h"
-
-struct Matrix4x4 {
-	float m[4][4];
-};
-
-struct Matrix3x3 {
-	float m[3][3];
-};
+#include "Matrix4x4.h"
+#include "Matrix3x3.h"
 
 inline Vector3 operator*(const Matrix4x4& mat, const Vector3& vec) {
 	Vector3 result;
