@@ -9,6 +9,8 @@
 #include "Effect/ParticleCommon.h"
 #include "Effect/windowParticle.h"
 #include "GameObject/Object3D.h"
+#include "Graphics/Skybox.h"
+#include "Graphics/DebugCamera.h"
 
 class TitleScene : public IScene {
 public:
@@ -48,5 +50,10 @@ private:
     // ■ 追加: タイトルシーン専用カメラ
     Transform cameraTransform_{}; // カメラの座標・回転
     Matrix4x4 viewProjection_{};  // 描画に使う行列
+
+    std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
+    uint32_t skyboxTextureHandle_ = 0;
+
+    std::unique_ptr<DebugCamera> debugCamera_;
 
 };

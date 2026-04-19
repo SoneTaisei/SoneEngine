@@ -8,7 +8,16 @@
 
 using namespace Microsoft::WRL;
 
+// ★ 静的変数の実体を定義（ファイルの一番上の方に）
+DirectXCommon *DirectXCommon::instance_ = nullptr;
+
+DirectXCommon *DirectXCommon::GetInstance() {
+    return instance_;
+}
+
 void DirectXCommon::Initialize(HWND hwnd, int32_t windowWidth, int32_t windowHeight) {
+    instance_ = this;
+
 	hwnd_ = hwnd;
 	windowWidth_ = windowWidth;
 	windowHeight_ = windowHeight;
@@ -18,6 +27,8 @@ void DirectXCommon::Initialize(HWND hwnd, int32_t windowWidth, int32_t windowHei
 	CreateFinalRenderTargets();
 	CreatePipelines();
     CreateCopyImagePipeline();
+    // Skybox用のパイプラインを作る指示を出す
+    CreateSkyboxPipeline();
     InitializeFixFPS();
 
 	// フェンスの初期化
@@ -566,4 +577,96 @@ void DirectXCommon::DrawRenderTexture() {
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     commandList_->ResourceBarrier(1, &barrier);
+}
+
+void DirectXCommon::CreateSkyboxPipeline() {
+    HRESULT hr;
+
+    // 1. RootSignatureの作成
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
+    descriptorRange[0].BaseShaderRegister = 0; // t0
+    descriptorRange[0].NumDescriptors = 1;
+    descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameters[3] = {};
+    // b0 (Transform用)
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[0].Descriptor.ShaderRegister = 0;
+    // b1 (Material用)
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[1].Descriptor.ShaderRegister = 1; // ★PS側は b1
+    // t0 (TextureCube用)
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+
+    // サンプラー (s0)
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
+    rootSignatureDesc.pStaticSamplers = staticSamplers;
+    rootSignatureDesc.NumStaticSamplers = _countof(staticSamplers);
+
+    Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob = nullptr;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
+    D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    device_->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&skyboxRootSignature_));
+
+    // 2. 頂点レイアウト (Positionだけ！)
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[1] = {};
+    inputElementDescs[0].SemanticName = "POSITION";
+    inputElementDescs[0].SemanticIndex = 0;
+    inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT; // Vector4に合わせる
+    inputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+    D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
+    inputLayoutDesc.pInputElementDescs = inputElementDescs;
+    inputLayoutDesc.NumElements = _countof(inputElementDescs);
+
+    // 3. シェーダーコンパイル
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"shaders/Skybox.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psBlob = CompileShader(L"shaders/Skybox.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+
+    // 4. PSO作成
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
+    psoDesc.pRootSignature = skyboxRootSignature_.Get();
+    psoDesc.InputLayout = inputLayoutDesc;
+    psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
+    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
+    psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+
+    // ★重要設定1：カリングは内側を見るため FRONT (または NONE)
+    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    // ★重要設定2：深度書き込みを ZERO にする
+    psoDesc.DepthStencilState.DepthEnable = true;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // <= にする
+    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&skyboxPipelineState_));
+    assert(SUCCEEDED(hr));
 }

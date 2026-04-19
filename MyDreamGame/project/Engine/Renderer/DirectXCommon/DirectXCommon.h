@@ -10,6 +10,8 @@
 
 class DirectXCommon {
 public:
+    static DirectXCommon *GetInstance();
+
 	// 初期化処理
 	void Initialize(HWND hwnd,int32_t windowWidth,int32_t windowHeight);
 
@@ -35,6 +37,8 @@ public:
 	// RenderTextureの内容を現在の画面にコピーして描画する関数
     void DrawRenderTexture();
 
+	void CreateSkyboxPipeline();
+
 	// ゲッター関数
 	ID3D12Device *GetDevice() const { return device_.Get(); }
 	ID3D12GraphicsCommandList *GetCommandList() const { return commandList_.Get(); }
@@ -49,6 +53,8 @@ public:
     IDxcIncludeHandler *GetIncludeHandler() const { return includeHandler_.Get(); }
     ID3D12RootSignature *GetCopyImageRootSignature() const { return copyImageRootSignature_.Get(); }
     ID3D12PipelineState *GetCopyImagePipelineState() const { return copyImagePipelineState_.Get(); }
+    ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
+    ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
 
 private:
 	// DirectXのインスタンス作成
@@ -65,6 +71,9 @@ private:
 	void UpdateFixFPS();
 
 private:
+	// ★ インスタンスを保持する静的変数
+    static DirectXCommon *instance_;
+
 	// ウィンドウハンドル
 	HWND hwnd_ = nullptr;
 	// ウィンドウサイズ
@@ -101,6 +110,9 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> copyImageRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyImagePipelineState_;
+
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

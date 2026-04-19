@@ -47,7 +47,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 
     // 全オブジェクトの更新（座標変換行列の計算など）
     for (auto &object : objects_) {
-        object->Update(viewMatrix, projectionMatrix);
+        object->Update();
     }
 
     // ImGuiもObject3D版を呼ぶ

@@ -49,12 +49,25 @@ uint32_t TextureManager::Load(const std::string &filePath, Microsoft::WRL::ComPt
     // 4. シェーダーリソースビュー(SRV)を作成
     SrvManager::GetInstance()->Allocate(&textures_[handle].srvHandleCPU, &textures_[handle].srvHandleGPU);
 
-    // SRVの設定
+    // --- ここから資料の内容で SRV の設定を行う ---
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Format = metadata.format;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = static_cast<UINT>(metadata.mipLevels);
+
+    // ★資料の指示：CubeMapか判定して設定を分岐
+    if (metadata.IsCubemap()) {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+        srvDesc.TextureCube.MostDetailedMip = 0;
+        srvDesc.TextureCube.MipLevels = UINT_MAX; // 全レベル使用
+        srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+    } else {
+        // 今まで通りの 2D テクスチャ設定
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = static_cast<UINT>(metadata.mipLevels);
+        srvDesc.Texture2D.MostDetailedMip = 0;
+        srvDesc.Texture2D.PlaneSlice = 0;
+        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+    }
 
     // SRVの生成
     device_->CreateShaderResourceView(textures_[handle].resource.Get(), &srvDesc, textures_[handle].srvHandleCPU);

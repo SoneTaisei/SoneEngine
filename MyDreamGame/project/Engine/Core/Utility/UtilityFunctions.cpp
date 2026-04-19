@@ -297,23 +297,37 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
 
 // Textureデータを読む
 DirectX::ScratchImage LoadTexture(const std::string &filePath) {
-	// ★ ファイルパス確認用のログ
-	OutputDebugStringA(("LoadTexture: " + filePath + "\n").c_str());
+    // ファイルパス確認用のログ
+    OutputDebugStringA(("LoadTexture: " + filePath + "\n").c_str());
 
-	// テクスチャファイルを読んでプログラムで扱えるようにする
-	DirectX::ScratchImage image{};
-	std::wstring filePathW = ConvertString(filePath);
-	HRESULT hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
-	assert(SUCCEEDED(hr));
+    DirectX::ScratchImage image{};
+    std::wstring filePathW = ConvertString(filePath);
+    HRESULT hr;
 
-	// ミニマップの作成
-	DirectX::ScratchImage mipImages{};
-	hr = DirectX::GenerateMipMaps(image.GetImages(), image.GetImageCount(), image.GetMetadata(), DirectX::TEX_FILTER_SRGB, 0, mipImages);
-	assert(SUCCEEDED(hr));
+    // ★資料の指示1：DDSファイルに対応する
+    if (filePathW.ends_with(L".dds")) {
+        // .ddsで終わっていたらDDSとして読み込む。sRGB情報が含まれているのでフラグはNONE
+        hr = DirectX::LoadFromDDSFile(filePathW.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image);
+    } else {
+        // それ以外は従来通りWIC（PNGやJPGなど）として読み込む
+        hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+    }
+    assert(SUCCEEDED(hr));
 
-	// ミニマップ付きのデータを返す
-	return mipImages;
+    // ★資料の指示2：圧縮フォーマットか判定してミップマップ生成を分ける
+    DirectX::ScratchImage mipImages{};
+    if (DirectX::IsCompressed(image.GetMetadata().format)) {
+        // 圧縮フォーマットならそのまま使う（DirectXTexが直接のミップマップ生成に非対応なため）
+        mipImages = std::move(image);
+    } else {
+        // 非圧縮ならミップマップを作成する
+        hr = DirectX::GenerateMipMaps(
+            image.GetImages(), image.GetImageCount(), image.GetMetadata(),
+            DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) を 4 など任意に変更可能
+        assert(SUCCEEDED(hr));
+    }
 
+    return mipImages;
 }
 
 // DirectX12のTextureResourceを作る
@@ -818,3 +832,50 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     return resource;
 }
 
+void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t> &indices) {
+    vertices.resize(24);
+
+    // --- 頂点座標の定義 ---
+    // 右面 (+X)
+    vertices[0].position = {1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[1].position = {1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[2].position = {1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[3].position = {1.0f, -1.0f, -1.0f, 1.0f};
+    // 左面 (-X)
+    vertices[4].position = {-1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[5].position = {-1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[6].position = {-1.0f, -1.0f, -1.0f, 1.0f};
+    vertices[7].position = {-1.0f, -1.0f, 1.0f, 1.0f};
+    // 前面 (+Z)
+    vertices[8].position = {-1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[9].position = {1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[10].position = {-1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[11].position = {1.0f, -1.0f, 1.0f, 1.0f};
+    // 後面 (-Z)
+    vertices[12].position = {1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[13].position = {-1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[14].position = {1.0f, -1.0f, -1.0f, 1.0f};
+    vertices[15].position = {-1.0f, -1.0f, -1.0f, 1.0f};
+    // 上面 (+Y)
+    vertices[16].position = {-1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[17].position = {1.0f, 1.0f, -1.0f, 1.0f};
+    vertices[18].position = {-1.0f, 1.0f, 1.0f, 1.0f};
+    vertices[19].position = {1.0f, 1.0f, 1.0f, 1.0f};
+    // 下面 (-Y)
+    vertices[20].position = {-1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[21].position = {1.0f, -1.0f, 1.0f, 1.0f};
+    vertices[22].position = {-1.0f, -1.0f, -1.0f, 1.0f};
+    vertices[23].position = {1.0f, -1.0f, -1.0f, 1.0f};
+
+    // --- インデックスの定義（内側を向く順序） ---
+    // 各面 [0,1,2][2,1,3] のパターンで計36個
+    for (uint32_t i = 0; i < 6; ++i) {
+        uint32_t offset = i * 4;
+        indices.push_back(offset + 0);
+        indices.push_back(offset + 1);
+        indices.push_back(offset + 2);
+        indices.push_back(offset + 2);
+        indices.push_back(offset + 1);
+        indices.push_back(offset + 3);
+    }
+}

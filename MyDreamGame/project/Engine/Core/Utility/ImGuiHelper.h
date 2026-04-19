@@ -3,6 +3,7 @@
 #include "../externals/imgui/imgui.h" // ImGuiを使うため
 #endif
 #include "GameObject/Object3D.h"
+#include "Core/Utility/Structs.h"
 #include <string>
 
 // これが魔法の関数！モデルを渡すだけでGUIが出る
