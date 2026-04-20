@@ -15,7 +15,7 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     auto snowParticle = std::make_unique<SnowParticle>();
 
     // 4. 初期化
-    snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
+    snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/School/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
 
     // Commonに描画登録する (Modelと同じ仕組みにする)
     particleCommon_->AddParticle(snowParticle.get());

@@ -1,5 +1,6 @@
 #include "Camera.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算関数
+#include "CameraManager.h" // カメラ情報を管理するクラス
 
 void Camera::Initialize(int kClientWidth, int kClientHeight) {
     kClientWidth_ = kClientWidth;
@@ -33,4 +34,6 @@ void Camera::UpdateMatrix() {
         float(kClientWidth_) / float(kClientHeight_),
         0.1f, 100.0f
     );
+
+    CameraManager::GetInstance()->SetCameraInfo(transform_.translate, viewMatrix_, projectionMatrix_);
 }

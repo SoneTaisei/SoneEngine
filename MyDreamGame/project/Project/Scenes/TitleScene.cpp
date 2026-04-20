@@ -22,14 +22,14 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
     // 1. マネージャからモデル（素材）を取得（なければロードされる）
-    Model *planeModel = ModelManager::GetInstance()->GetModel("Object/plane", "plane.gltf");
+    Model *planeModel = ModelManager::GetInstance()->GetModel("Object/School/plane", "plane.gltf");
 
     // 2. Object3D（実体）を生成して初期化
     auto planeObject = std::make_unique<Object3D>();
     planeObject->Initialize(device.Get(), planeModel);
 
     // 3. 座標やテクスチャの設定（Object3Dに対して行う！）
-    uint32_t planeIndex = TextureManager::GetInstance()->Load("Sprite/uvChecker.png", commandList_);
+    uint32_t planeIndex = TextureManager::GetInstance()->Load("Sprite/School/uvChecker.png", commandList_);
     planeObject->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
     planeObject->SetRotation({0.0f, 0.0f, 0.0f});
 
@@ -48,6 +48,21 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ⑤ 管理用の配列に追加して保持する
     sprites_.push_back(std::move(sprite));
+
+    // ★ Skyboxの初期化処理を追加
+    // 1. テクスチャをロード
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
+
+    // 2. インスタンスを生成
+    skybox_ = std::make_unique<Skybox>();
+
+    // 3. 初期化（※dxCommon_ の取得方法はエンジンの設計に合わせてください！）
+    // もし TitleScene に dxCommon_ が無い場合は、DirectXCommon::GetInstance() などを使うか、
+    // SceneManager から引っ張ってくる必要があります。
+    skybox_->Initialize(device.Get(), skyboxTextureHandle_);
+
+    debugCamera_ = std::make_unique<DebugCamera>();
+    debugCamera_->Initialize(1280, 720);
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -56,17 +71,13 @@ void TitleScene::Update(SceneManager *sceneManager) {
         sceneManager->ChangeScene(std::make_unique<StageSelectScene>());
     }
 
-    // 1. カメラのTransformからビュー行列を作成
-    // cameraTransform_ は TitleScene.h で宣言されているものを使います
-    Matrix4x4 viewMatrix = TransformFunctions::MakeViewMatrix(cameraTransform_.rotate, cameraTransform_.translate);
+    if (debugCamera_) {
+        debugCamera_->Update();
+    }
 
-    // 2. プロジェクション行列（透視投影行列）を作成
-    // 一般的な設定：視野角0.45rad, アスペクト比16:9, 近平面0.1, 遠平面1000.0
-    Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
-
-// 全オブジェクトの更新（座標変換行列の計算など）
+    // 全オブジェクトの更新（座標変換行列の計算など）
     for (auto &object : objects_) {
-        object->Update(viewMatrix, projectionMatrix);
+        object->Update();
     }
 
     // ImGuiもObject3D版を呼ぶ
@@ -78,6 +89,9 @@ void TitleScene::Update(SceneManager *sceneManager) {
         sprite->Update();
     }
 
+    if (skybox_) {
+        skybox_->Update();
+    }
    
 }
 
@@ -86,6 +100,11 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 各オブジェクトに「自分の行列で描画して！」と頼む
     for (auto &object : objects_) {
         object->Draw(commandList_.Get());
+    }
+
+    // ★ 3Dオブジェクトの直後にSkyboxを描画！
+    if (skybox_) {
+        skybox_->Draw(commandList_.Get());
     }
 
     // -------------------------------------------------

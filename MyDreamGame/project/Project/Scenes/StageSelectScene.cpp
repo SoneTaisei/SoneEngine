@@ -19,8 +19,8 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
     // 1. マネージャから素材を借りる（頂点バッファを重複させない！）
-    Model *skydomeModelResource = ModelManager::GetInstance()->GetModel("Object/sphere", "sphere.gltf");
-    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("Sprite/monsterBall.png", commandList_);
+    Model *skydomeModelResource = ModelManager::GetInstance()->GetModel("Object/Original/sphere", "sphere.gltf");
+    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("Sprite/School/monsterBall.png", commandList_);
     D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH = TextureManager::GetInstance()->GetGpuHandle(skydomeIndex);
 
     // 2. 実体(Object3D)を作る
@@ -47,7 +47,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 
     // 全オブジェクトの更新（座標変換行列の計算など）
     for (auto &object : objects_) {
-        object->Update(viewMatrix, projectionMatrix);
+        object->Update();
     }
 
     // ImGuiもObject3D版を呼ぶ

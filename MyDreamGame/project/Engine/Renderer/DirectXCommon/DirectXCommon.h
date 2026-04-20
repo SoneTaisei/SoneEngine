@@ -10,6 +10,8 @@
 
 class DirectXCommon {
 public:
+    static DirectXCommon *GetInstance();
+
 	// 初期化処理
 	void Initialize(HWND hwnd,int32_t windowWidth,int32_t windowHeight);
 
@@ -26,6 +28,17 @@ public:
     void ExecuteCommands(); // コマンドを閉じて実行する
     void Present();         // 画面に表示して次フレームの準備をする
 
+	// ImGuiを描く直前に、描画先をSwapchainに戻すための関数
+    void PreDrawSwapchain();
+
+	// RenderTextureを初期化する専用関数
+    void InitializeRenderTexture();
+    
+	// RenderTextureの内容を現在の画面にコピーして描画する関数
+    void DrawRenderTexture();
+
+	void CreateSkyboxPipeline();
+
 	// ゲッター関数
 	ID3D12Device *GetDevice() const { return device_.Get(); }
 	ID3D12GraphicsCommandList *GetCommandList() const { return commandList_.Get(); }
@@ -38,6 +51,10 @@ public:
     IDxcUtils *GetDxcUtils() const { return dxcUtils_.Get(); }
     IDxcCompiler3 *GetDxcCompiler() const { return dxcCompiler_.Get(); }
     IDxcIncludeHandler *GetIncludeHandler() const { return includeHandler_.Get(); }
+    ID3D12RootSignature *GetCopyImageRootSignature() const { return copyImageRootSignature_.Get(); }
+    ID3D12PipelineState *GetCopyImagePipelineState() const { return copyImagePipelineState_.Get(); }
+    ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
+    ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
 
 private:
 	// DirectXのインスタンス作成
@@ -46,12 +63,17 @@ private:
 	void CreateFinalRenderTargets();
 	// パイプラインステートオブジェクト(描画ルール)の作成
 	void CreatePipelines();
+    // CopyImage専用のパイプライン作成関数
+	void CreateCopyImagePipeline();
 	// FPS固定初期化
 	void InitializeFixFPS();
 	// FPS固定更新
 	void UpdateFixFPS();
 
 private:
+	// ★ インスタンスを保持する静的変数
+    static DirectXCommon *instance_;
+
 	// ウィンドウハンドル
 	HWND hwnd_ = nullptr;
 	// ウィンドウサイズ
@@ -79,6 +101,18 @@ private:
     Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
     Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
     Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
+
+	// RenderTexture関連の変数
+    Microsoft::WRL::ComPtr<ID3D12Resource> renderTextureResource_;
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTextureRtvHandle_{};    // RTV用
+    D3D12_CPU_DESCRIPTOR_HANDLE renderTextureSrvHandleCPU_{}; // SRV用 (CPU)
+    D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandleGPU_{}; // SRV用 (GPU)
+
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> copyImageRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> copyImagePipelineState_;
+
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

@@ -6,7 +6,7 @@
 class Object3D {
 public:
     void Initialize(ID3D12Device *device, Model *model);
-    void Update(const Matrix4x4 &viewMatrix, const Matrix4x4 &projectionMatrix);
+    void Update();
     void Draw(ID3D12GraphicsCommandList *commandList);
     void DisplayImGui(const std::string &label);
 

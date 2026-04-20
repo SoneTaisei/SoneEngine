@@ -31,7 +31,6 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     // 2. フラグの設定
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;   // ドッキング有効化
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // マルチビューポート有効化
 
     // 3. Win32バックエンドの初期化
     ImGui_ImplWin32_Init(hwnd);
@@ -154,13 +153,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 void EditorManager::Draw(ID3D12GraphicsCommandList *commandList) {
     ImGui::Render();
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
-
-    // マルチビューポート（画面外ウィンドウ）の更新・描画
-    ImGuiIO &io = ImGui::GetIO();
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-    }
 }
 
 void EditorManager::Finalize() {
