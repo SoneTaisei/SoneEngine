@@ -263,8 +263,8 @@ void DirectXCommon::CreatePipelines() {
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-    descriptorRange[0].BaseShaderRegister = 0;
-    descriptorRange[0].NumDescriptors = 1;
+    descriptorRange[0].BaseShaderRegister = 0; // t0から開始
+    descriptorRange[0].NumDescriptors = 2;     // t0 と t1 の 2枚分を確保！✨
     descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     /*descriptorRange[1].BaseShaderRegister = 4;
