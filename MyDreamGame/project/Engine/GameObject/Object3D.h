@@ -26,6 +26,10 @@ public:
         }
     }
 
+    void SetEnvironmentMapHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+        environmentMapSrvHandle_ = handle;
+    }
+
 private:
     // マテリアル
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
@@ -54,6 +58,9 @@ private:
     // テクスチャ関連
     Microsoft::WRL::ComPtr<ID3D12Resource> textureResource_;
     uint32_t textureSrvHandle_ = 0;
+
+    // 環境マップ用
+    D3D12_GPU_DESCRIPTOR_HANDLE environmentMapSrvHandle_{};
 
     ModelData *modelData_ = nullptr;
 };

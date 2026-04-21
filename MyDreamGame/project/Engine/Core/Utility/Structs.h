@@ -99,7 +99,8 @@ struct Material {
 	Vector4 color;
 	int32_t lightingType;
     int32_t enableBlinnPhong;
-    float padding[2];
+    int32_t enableEnvironmentMap; // 環境マップ有効フラグ
+    float environmentCoefficient; // 環境マップ反射係数
 	Matrix4x4 uvTransform;
     float shininess;
 };
