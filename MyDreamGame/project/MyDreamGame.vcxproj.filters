@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -131,6 +131,18 @@
     <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
     <ClCompile Include="Engine\Graphics\Skybox.cpp" />
     <ClCompile Include="Engine\Graphics\CameraManager.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\Primitive.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Effect\HitEffect.cpp">
+      <Filter>Engine\Graphics\Particle</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -252,6 +264,18 @@
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
     <ClInclude Include="Engine\Graphics\Skybox.h" />
     <ClInclude Include="Engine\Graphics\CameraManager.h" />
+    <ClInclude Include="Engine\Resource\Primitive\Primitive.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Effect\HitEffect.h">
+      <Filter>Engine\Graphics\Particle</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
