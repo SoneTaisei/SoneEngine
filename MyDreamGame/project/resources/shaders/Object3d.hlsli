@@ -18,6 +18,8 @@ struct Material {
     float2 padding;
     float4x4 uvTransform;
     float shininess;
+    float environmentCoefficient;
+    float2 padding2;
 };
 
 struct TransformationMatrix {

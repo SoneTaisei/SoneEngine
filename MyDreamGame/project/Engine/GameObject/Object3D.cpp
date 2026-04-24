@@ -1,6 +1,9 @@
 #include "Object3D.h"
 #include "Graphics/CameraManager.h"
 #include <DirectXMath.h>
+#include "../externals/imgui/imgui.h"
+
+D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
 
 void Object3D::Initialize(ID3D12Device *device, Model *model) {
     model_ = model; // 共有されているモデルをセット
@@ -11,6 +14,7 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
     material_.lightingType = 1;                                    // ライティング有効
     material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 以前作った単位行列を返す関数
     material_.shininess = 50.0f;
+    material_.environmentCoefficient = 0.1f;
 
     // マテリアルと座標変換リソースの作成（自分の分だけ）
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
@@ -49,6 +53,31 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress()); // 行列 (スロット1)
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());  // マテリアル (スロット0)
 
+    // 環境マップをスロット7にセット
+    if (sEnvironmentMapHandle.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(7, sEnvironmentMapHandle);
+    }
+
     // 実際の描画
     model_->Draw();
+}
+
+void Object3D::DisplayImGui(const std::string &label) {
+#ifdef USE_IMGUI
+    if (ImGui::TreeNode(label.c_str())) {
+        ImGui::DragFloat3("Scale", &transform_.scale.x, 0.01f);
+        ImGui::DragFloat3("Rotate", &transform_.rotate.x, 0.01f);
+        ImGui::DragFloat3("Translate", &transform_.translate.x, 0.01f);
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+        if (ImGui::TreeNode("Material")) {
+            ImGui::ColorEdit4("Color", &material_.color.x);
+            ImGui::DragFloat("Shininess", &material_.shininess, 0.1f, 0.1f, 100.0f);
+            ImGui::SliderFloat("Environment Coefficient", &material_.environmentCoefficient, 0.0f, 1.0f);
+            ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
+            ImGui::TreePop();
+        }
+        ImGui::TreePop();
+    }
+#endif
 }

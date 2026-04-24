@@ -52,6 +52,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
     skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList_);
 
     // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
@@ -60,6 +61,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     // もし TitleScene に dxCommon_ が無い場合は、DirectXCommon::GetInstance() などを使うか、
     // SceneManager から引っ張ってくる必要があります。
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
+    Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(1280, 720);
@@ -81,9 +83,11 @@ void TitleScene::Update(SceneManager *sceneManager) {
     }
 
     // ImGuiもObject3D版を呼ぶ
+    ImGui::Begin("Objects");
     for (auto &object : objects_) {
         ShowObject3DGui("Object", object.get());
     }
+    ImGui::End();
 
     for (auto &sprite : sprites_) {
         sprite->Update();
