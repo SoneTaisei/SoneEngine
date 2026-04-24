@@ -263,16 +263,18 @@ void DirectXCommon::CreatePipelines() {
     descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-    descriptorRange[0].BaseShaderRegister = 0;
-    descriptorRange[0].NumDescriptors = 1;
+    descriptorRange[0].BaseShaderRegister = 0; // t0
+    descriptorRange[0].NumDescriptors = 1;     // t0 の 1枚分
     descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-    /*descriptorRange[1].BaseShaderRegister = 4;
-    descriptorRange[1].NumDescriptors = 3;
-    descriptorRange[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-    descriptorRange[1].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;*/
 
-    D3D12_ROOT_PARAMETER rootParameters[7] = {};
+    D3D12_DESCRIPTOR_RANGE descriptorRangeEnv[1] = {};
+    descriptorRangeEnv[0].BaseShaderRegister = 1; // t1
+    descriptorRangeEnv[0].NumDescriptors = 1;     // t1 の 1枚分
+    descriptorRangeEnv[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeEnv[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameters[8] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -307,6 +309,11 @@ void DirectXCommon::CreatePipelines() {
     rootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[6].Descriptor.ShaderRegister = 4; // register(b4)
     rootParameters[6].Descriptor.RegisterSpace = 0;
+
+    rootParameters[7].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[7].DescriptorTable.pDescriptorRanges = descriptorRangeEnv;
+    rootParameters[7].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeEnv);
 
     descriptionRootSignature.pParameters = rootParameters;
     descriptionRootSignature.NumParameters = _countof(rootParameters);

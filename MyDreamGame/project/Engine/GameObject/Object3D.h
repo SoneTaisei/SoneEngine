@@ -10,6 +10,13 @@ public:
     void Draw(ID3D12GraphicsCommandList *commandList);
     void DisplayImGui(const std::string &label);
 
+    static void SetEnvironmentMapHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+        sEnvironmentMapHandle = handle;
+    }
+    static D3D12_GPU_DESCRIPTOR_HANDLE GetEnvironmentMapHandle() {
+        return sEnvironmentMapHandle;
+    }
+
     // --- Transformのゲッター ---
     const Vector3 &GetTranslation() const { return transform_.translate; }
     const Vector3 &GetRotation() const { return transform_.rotate; }
@@ -26,9 +33,7 @@ public:
         }
     }
 
-    void SetEnvironmentMapHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {
-        environmentMapSrvHandle_ = handle;
-    }
+    Material &GetMaterial() { return material_; }
 
 private:
     // マテリアル
@@ -54,6 +59,8 @@ private:
     Material material_;
     DirectionalLight light_;
     PointLight pointLight_; // CPU側でも値を保持しておくと便利
+
+    static D3D12_GPU_DESCRIPTOR_HANDLE sEnvironmentMapHandle;
 
     // テクスチャ関連
     Microsoft::WRL::ComPtr<ID3D12Resource> textureResource_;
