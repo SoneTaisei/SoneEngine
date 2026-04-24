@@ -165,7 +165,47 @@ void ParticleManager::Emit(const Emitter &emitter) {
     }
 }
 
+void ParticleManager::EmitCustom(const Vector3& position, const ParticleProperty& minProp, const ParticleProperty& maxProp, uint32_t count) {
+    std::uniform_real_distribution<float> distScaleX(minProp.scale.x, maxProp.scale.x);
+    std::uniform_real_distribution<float> distScaleY(minProp.scale.y, maxProp.scale.y);
+    std::uniform_real_distribution<float> distScaleZ(minProp.scale.z, maxProp.scale.z);
+    std::uniform_real_distribution<float> distRotateX(minProp.rotate.x, maxProp.rotate.x);
+    std::uniform_real_distribution<float> distRotateY(minProp.rotate.y, maxProp.rotate.y);
+    std::uniform_real_distribution<float> distRotateZ(minProp.rotate.z, maxProp.rotate.z);
+    std::uniform_real_distribution<float> distVelX(minProp.velocity.x, maxProp.velocity.x);
+    std::uniform_real_distribution<float> distVelY(minProp.velocity.y, maxProp.velocity.y);
+    std::uniform_real_distribution<float> distVelZ(minProp.velocity.z, maxProp.velocity.z);
+    std::uniform_real_distribution<float> distColorR(minProp.color.x, maxProp.color.x);
+    std::uniform_real_distribution<float> distColorG(minProp.color.y, maxProp.color.y);
+    std::uniform_real_distribution<float> distColorB(minProp.color.z, maxProp.color.z);
+    std::uniform_real_distribution<float> distColorA(minProp.color.w, maxProp.color.w);
+    std::uniform_real_distribution<float> distLife(minProp.lifeTime, maxProp.lifeTime);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        ParticleData p;
+        p.transform.translate = position;
+        p.transform.scale = { distScaleX(randomEngine_), distScaleY(randomEngine_), distScaleZ(randomEngine_) };
+        p.transform.rotate = { distRotateX(randomEngine_), distRotateY(randomEngine_), distRotateZ(randomEngine_) };
+        p.velocity = { distVelX(randomEngine_), distVelY(randomEngine_), distVelZ(randomEngine_) };
+        p.color = { distColorR(randomEngine_), distColorG(randomEngine_), distColorB(randomEngine_), distColorA(randomEngine_) };
+        p.lifeTime = distLife(randomEngine_);
+        p.currentTime = 0.0f;
+        particles_.push_back(p);
+    }
+}
+
 void ParticleManager::Update() {
+    for (auto it = particles_.begin(); it != particles_.end(); ) {
+        it->currentTime += 1.0f / 60.0f; // 簡易的に60FPS固定
+        if (it->currentTime >= it->lifeTime) {
+            it = particles_.erase(it);
+        } else {
+            it->transform.translate.x += it->velocity.x * (1.0f / 60.0f);
+            it->transform.translate.y += it->velocity.y * (1.0f / 60.0f);
+            it->transform.translate.z += it->velocity.z * (1.0f / 60.0f);
+            ++it;
+        }
+    }
 }
 
 void ParticleManager::DrawImGui() {

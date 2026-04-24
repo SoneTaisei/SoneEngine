@@ -43,6 +43,14 @@ struct ParticleForGPU {
     Vector4 color; // 色
 };
 
+struct ParticleProperty {
+    Vector3 scale = { 1.0f, 1.0f, 1.0f };
+    Vector3 rotate = { 0.0f, 0.0f, 0.0f };
+    Vector3 velocity = { 0.0f, 0.0f, 0.0f };
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    float lifeTime = 1.0f;
+};
+
 class ParticleManager {
 public:
 
@@ -61,6 +69,9 @@ public:
 
     // 外部からパーティクルを発生させるための関数
     void Emit(const Emitter &emitter);
+
+    // 詳細なパラメータを指定して発生させる
+    void EmitCustom(const Vector3& position, const ParticleProperty& minProp, const ParticleProperty& maxProp, uint32_t count);
 
     // セッター
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }

@@ -209,6 +209,10 @@
     <ClCompile Include="Engine\Platform\Window.cpp" />
     <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
     <ClCompile Include="Engine\Graphics\Skybox.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\Primitive.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
+    <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
+    <ClCompile Include="Engine\Effect\HitEffect.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
@@ -349,6 +353,10 @@
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
     <ClInclude Include="Engine\Graphics\Skybox.h" />
+    <ClInclude Include="Engine\Resource\Primitive\Primitive.h" />
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
+    <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
+    <ClInclude Include="Engine\Effect\HitEffect.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">
