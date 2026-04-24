@@ -11,8 +11,6 @@
 #include "GameObject/Object3D.h"
 #include "Graphics/Skybox.h"
 #include "Graphics/DebugCamera.h"
-#include "Resource/Primitive/PrimitiveManager.h"
-#include "GameObject/PrimitiveObject.h"
 
 class TitleScene : public IScene {
 public:
@@ -58,6 +56,4 @@ private:
 
     std::unique_ptr<DebugCamera> debugCamera_;
 
-    // ■ 追加: プリミティブを使ったパーティクル
-    std::vector<std::unique_ptr<PrimitiveObject>> primitiveParticles_;
 };
