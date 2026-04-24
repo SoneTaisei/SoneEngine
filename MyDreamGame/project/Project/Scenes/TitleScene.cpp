@@ -10,6 +10,8 @@
 #include <wrl.h>
 #include "Core/Utility/ImGuiHelper.h"
 #include "Resource/Model/ModelManager.h"
+#include "Graphics/CameraManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 
 TitleScene::~TitleScene() {
 }
@@ -47,7 +49,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     sprite->SetSize({200.0f, 200.0f});     // しっかり見える大きさにする
 
     // ⑤ 管理用の配列に追加して保持する
-    sprites_.push_back(std::move(sprite));
+    //sprites_.push_back(std::move(sprite));
 
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
@@ -65,6 +67,23 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(1280, 720);
+
+    // ■ プリミティブパーティクルの初期化
+    PrimitiveManager::GetInstance()->Initialize(device.Get());
+    
+    // 8個のパーティクルを生成
+    for (int i = 0; i < 8; ++i) {
+        auto pObj = std::make_unique<PrimitiveObject>();
+        // ランダムな形状を選択
+        PrimitiveType type = static_cast<PrimitiveType>(rand() % 9);
+        pObj->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(type));
+        
+        pObj->SetScale({0.05f, 2.5f, 0.05f});
+        pObj->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
+        pObj->GetMaterial().color = {1.0f, 1.0f, 1.0f, 0.0f}; // 最初は透明
+        
+        primitiveParticles_.push_back(std::move(pObj));
+    }
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -75,6 +94,8 @@ void TitleScene::Update(SceneManager *sceneManager) {
 
     if (debugCamera_) {
         debugCamera_->Update();
+        // ★ debugCamera_->Update() の中で CameraManager::GetInstance()->SetCameraInfo(...) 
+        //    が自動的に呼ばれるため、ここでの手動セットは不要です。
     }
 
     // 全オブジェクトの更新（座標変換行列の計算など）
@@ -96,11 +117,38 @@ void TitleScene::Update(SceneManager *sceneManager) {
     if (skybox_) {
         skybox_->Update();
     }
-   
+
+    // ■ プリミティブパーティクルの更新 (フラッシュ/フェード演出)
+    static float flashTimer = 0.0f;
+    flashTimer += 1.0f / 60.0f;
+    bool shouldReset = (flashTimer > 0.6f); // 0.6秒ごとにパッと表示
+    if (shouldReset) flashTimer = 0.0f;
+
+    for (size_t i = 0; i < primitiveParticles_.size(); ++i) {
+        auto& p = primitiveParticles_[i];
+        
+        if (shouldReset) {
+            // リセット：ランダムな角度でパッと表示
+            float angle = (float(rand()) / RAND_MAX) * 2.0f * 3.141592f;
+            float dist = 0.3f; // 中心からの距離
+            p->SetTranslation({cosf(angle) * dist, sinf(angle) * dist, 0.0f});
+            p->SetScale({0.05f, 2.5f, 0.05f});
+            p->SetRotation({0.0f, 0.0f, angle - 1.5708f}); // 角度に合わせて回転
+            p->GetMaterial().color.w = 1.0f;
+        } else {
+            p->GetMaterial().color.w *= 0.85f;
+        }
+
+        p->Update();
+    }
 }
 
 void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    // 既存の描画
+    // ★ モデル描画の前準備
+    if (modelCommon_) {
+        modelCommon_->PreDraw(commandList_.Get());
+    }
+
     // 各オブジェクトに「自分の行列で描画して！」と頼む
     for (auto &object : objects_) {
         object->Draw(commandList_.Get());
@@ -109,6 +157,20 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // ★ 3Dオブジェクトの直後にSkyboxを描画！
     if (skybox_) {
         skybox_->Draw(commandList_.Get());
+        
+        // ★ Skyboxの描画後はPSOが切り替わってしまうため、再度モデル用の設定を呼び出す
+        auto dxCommon = DirectXCommon::GetInstance();
+        commandList_.Get()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        commandList_.Get()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+
+        if (modelCommon_) {
+            modelCommon_->PreDraw(commandList_.Get());
+        }
+    }
+
+    // ■ プリミティブパーティクルの描画
+    for (auto& p : primitiveParticles_) {
+        p->Draw(commandList_.Get());
     }
 
     // -------------------------------------------------
@@ -118,8 +180,8 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         // 前処理
         particleCommon_->PreDraw(commandList_.Get());
 
-        // 一括描画 (viewProjectionMatrixを渡す)
-        particleCommon_->DrawAll(viewProjection_);
+        // 一括描画 (引数の viewProjectionMatrix を渡す)
+        particleCommon_->DrawAll(viewProjectionMatrix);
     }
 
     if (spriteCommon_) {

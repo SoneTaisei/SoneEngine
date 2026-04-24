@@ -13,6 +13,9 @@ public:
     static void SetEnvironmentMapHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {
         sEnvironmentMapHandle = handle;
     }
+    static D3D12_GPU_DESCRIPTOR_HANDLE GetEnvironmentMapHandle() {
+        return sEnvironmentMapHandle;
+    }
 
     // --- Transformのゲッター ---
     const Vector3 &GetTranslation() const { return transform_.translate; }
