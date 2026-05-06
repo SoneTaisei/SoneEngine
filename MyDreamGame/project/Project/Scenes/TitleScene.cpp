@@ -103,12 +103,14 @@ void TitleScene::Update(SceneManager *sceneManager) {
         object->Update();
     }
 
+#ifdef _DEBUG
     // ImGuiもObject3D版を呼ぶ
     ImGui::Begin("Objects");
     for (auto &object : objects_) {
         ShowObject3DGui("Object", object.get());
     }
     ImGui::End();
+#endif
 
     for (auto &sprite : sprites_) {
         sprite->Update();
