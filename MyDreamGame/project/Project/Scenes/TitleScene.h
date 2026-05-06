@@ -11,6 +11,9 @@
 #include "GameObject/Object3D.h"
 #include "Graphics/Skybox.h"
 #include "Graphics/DebugCamera.h"
+#include "Resource/Primitive/PrimitiveManager.h"
+#include "GameObject/PrimitiveObject.h"
+#include <vector>
 
 class TitleScene : public IScene {
 public:
@@ -55,5 +58,7 @@ private:
     uint32_t skyboxTextureHandle_ = 0;
 
     std::unique_ptr<DebugCamera> debugCamera_;
+
+    std::vector<std::unique_ptr<PrimitiveObject>> primitiveParticles_;
 
 };
