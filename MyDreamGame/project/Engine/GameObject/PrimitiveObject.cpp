@@ -12,6 +12,7 @@ void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     material_.enableBlinnPhong = 0;
     material_.uvTransform = TransformFunctions::MakeIdentity4x4();
     material_.shininess = 50.0f;
+    material_.enableEnvironmentMap = 0;
     material_.environmentCoefficient = 0.0f;
 
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
@@ -61,6 +62,8 @@ void PrimitiveObject::DisplayImGui(const std::string& label) {
         if (ImGui::TreeNode("Material")) {
             ImGui::ColorEdit4("Color", &material_.color.x);
             ImGui::DragFloat("Shininess", &material_.shininess, 0.1f, 0.1f, 100.0f);
+            ImGui::SliderFloat("Environment Coefficient", &material_.environmentCoefficient, 0.0f, 1.0f);
+            ImGui::Checkbox("Enable Environment Map", (bool*)&material_.enableEnvironmentMap);
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
             ImGui::TreePop();
         }

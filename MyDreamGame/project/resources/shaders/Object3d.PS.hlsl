@@ -83,7 +83,9 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
                           diffuseSpot + specularSpot; // スポットライト
 
         // 環境マップによるLightingを追加する（置き換えるのではなく、そのまま足す）
-        outputColor.rgb += environmentColor.rgb * gMaterial.environmentCoefficient;
+        if (gMaterial.enableEnvironmentMap != 0) {
+            outputColor.rgb += environmentColor.rgb * gMaterial.environmentCoefficient;
+        }
 
 // アルファ値の設定
         outputColor.a = gMaterial.color.a * textureColor.a;
