@@ -110,6 +110,16 @@ void TitleScene::Update(SceneManager *sceneManager) {
         ShowObject3DGui("Object", object.get());
     }
     ImGui::End();
+
+    // ■ プリミティブパーティクルの調整用UIを追加
+    ImGui::Begin("Primitive Particles");
+    for (size_t i = 0; i < primitiveParticles_.size(); ++i) {
+        std::string label = "Particle " + std::to_string(i);
+        ImGui::PushID((int)i); // IDのバッティングを防ぐ
+        primitiveParticles_[i]->DisplayImGui(label);
+        ImGui::PopID();
+    }
+    ImGui::End();
 #endif
 
     for (auto &sprite : sprites_) {

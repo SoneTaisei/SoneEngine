@@ -14,6 +14,7 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
     material_.lightingType = 1;                                    // ライティング有効
     material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 以前作った単位行列を返す関数
     material_.shininess = 50.0f;
+    material_.enableEnvironmentMap = 1;
     material_.environmentCoefficient = 0.1f;
 
     // マテリアルと座標変換リソースの作成（自分の分だけ）
@@ -74,6 +75,7 @@ void Object3D::DisplayImGui(const std::string &label) {
             ImGui::ColorEdit4("Color", &material_.color.x);
             ImGui::DragFloat("Shininess", &material_.shininess, 0.1f, 0.1f, 100.0f);
             ImGui::SliderFloat("Environment Coefficient", &material_.environmentCoefficient, 0.0f, 1.0f);
+            ImGui::Checkbox("Enable Environment Map", (bool*)&material_.enableEnvironmentMap);
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
             ImGui::TreePop();
         }
