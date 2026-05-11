@@ -9,6 +9,11 @@
 #include "Graphics/GameCamera.h"
 #include "Resource/Model/ModelCommon.h"
 
+class SceneManager;
+class ParticleManager;
+class Object3D;
+class PrimitiveObject;
+
 class EditorManager {
 public:
     // 初期化 (ImGuiのセットアップ)
@@ -19,7 +24,7 @@ public:
 
     // 実際のUI構築 (ライトやカメラの調整)
     // 💡 値を書き換えるため、ポインタや参照を受け取ります
-    void UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive);
+    void UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, SceneManager *sceneManager);
 
     // 描画処理 (コマンドリストへImGuiの描画命令を積む)
     void Draw(ID3D12GraphicsCommandList *commandList);
@@ -33,5 +38,10 @@ public:
 
 private:
     bool isPlaying_ = false; // ゲーム再生中かどうか
+
+    // 選択中のオブジェクト
+    Object3D *selectedObject_ = nullptr;
+    ParticleManager *selectedParticle_ = nullptr;
+    PrimitiveObject *selectedPrimitive_ = nullptr;
 };
 #endif

@@ -76,10 +76,15 @@ public:
     // セッター
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
 
+    // 名前
+    const std::string &GetName() const { return name_; }
+    void SetName(const std::string &name) { name_ = name; }
+
     // ImGuiを描画する関数
     void DrawImGui();
 
 protected:
+    std::string name_ = "ParticleSystem";
 
     // 座標オフセットを受け取れるように変更
     ParticleData MakeNewParticle(const Vector3 &translate);

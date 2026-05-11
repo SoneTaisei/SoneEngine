@@ -2,7 +2,6 @@
 #include "Scene/SceneManager.h"
 #include "TitleScene.h" // ← これを追加
 #include "Input/KeyboardInput.h"
-#include "../externals/imgui/imgui.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
@@ -16,6 +15,7 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 
     // 4. 初期化
     snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/School/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
+    snowParticle->SetName("Snow Particles");
 
     // Commonに描画登録する (Modelと同じ仕組みにする)
     particleCommon_->AddParticle(snowParticle.get());
@@ -53,4 +53,12 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     // 雪の描画
     particleCommon_->DrawAll(viewProjectionMatrix);
+}
+
+std::vector<ParticleManager *> GameScene::GetParticles() {
+    std::vector<ParticleManager *> result;
+    for (auto &p : particles_) {
+        result.push_back(p.get());
+    }
+    return result;
 }

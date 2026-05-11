@@ -22,6 +22,11 @@ public:
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
 
+    // ヒエラルキー用
+    std::vector<Object3D *> GetObjects() override;
+    std::vector<ParticleManager *> GetParticles() override;
+    std::vector<PrimitiveObject *> GetPrimitives() override;
+
 private:
     // メンバ変数としてモデル、テクスチャ、座標を持つ
     uint32_t textureHandle_ = 0;

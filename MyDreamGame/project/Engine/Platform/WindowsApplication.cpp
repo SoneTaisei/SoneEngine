@@ -101,9 +101,9 @@ void WindowsApplication::Initialize() {
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(kWindowWidth_, kWindowHeight_);
 
-    // 3. 最初は「本番カメラ」をアクティブにする
-    activeCamera_ = gameCamera_.get();
-    isDebugCameraActive_ = false;
+    // 3. 最初は「エディターモード（停止中）」としてデバッグカメラを有効にする
+    activeCamera_ = debugCamera_.get();
+    isDebugCameraActive_ = true;
 
 // Initialize() の中の #ifdef USE_IMGUI のブロックを以下に置き換え
 #ifdef USE_IMGUI
@@ -156,7 +156,9 @@ void WindowsApplication::Update() {
         gameCamera_.get(),
         debugCamera_.get(),
         &activeCamera_,
-        isDebugCameraActive_);
+        isDebugCameraActive_,
+        dxCommon_->GetRenderTextureSrvHandleGPU(),
+        sceneManager_.get());
 #endif
 
     // ★ シーンの更新 (再生中のみ、またはIMGUI未使用時のみ実行)
@@ -202,8 +204,8 @@ void WindowsApplication::Draw() {
 
     // --- ここから Swapchain への描画 ---
 
-    // ★追加：RenderTextureに描かれた絵を、Swapchainにコピーして貼り付ける！
-    dxCommon_->DrawRenderTexture();
+    // ★ImGuiのGameViewウィンドウで描画するため、ここでの直接描画はコメントアウト
+    // dxCommon_->DrawRenderTexture();
 
 #ifdef USE_IMGUI
     // メインウィンドウのImGuiを描画

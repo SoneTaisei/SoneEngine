@@ -13,6 +13,10 @@ public:
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
 
+    // ヒエラルキー用
+    std::vector<Object3D *> GetObjects() override { return {}; }
+    std::vector<ParticleManager *> GetParticles() override;
+
 private:
     // パーティクル管理クラス
     SnowParticle *snowParticle_ = nullptr;

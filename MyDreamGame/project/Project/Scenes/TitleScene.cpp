@@ -8,7 +8,7 @@
 #include "Resource/Sprite/SpriteCommon.h"
 #include "StageSelectScene.h"
 #include <wrl.h>
-#include "Core/Utility/ImGuiHelper.h"
+#include "Resource/Model/ModelManager.h"
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
@@ -34,6 +34,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     uint32_t planeIndex = TextureManager::GetInstance()->Load("Sprite/School/uvChecker.png", commandList_);
     planeObject->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
     planeObject->SetRotation({0.0f, 0.0f, 0.0f});
+    planeObject->SetName("Ground Plane");
 
     objects_.push_back(std::move(planeObject));
 
@@ -79,6 +80,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
         ring->GetMaterial().environmentCoefficient = 0.3f;
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
         ring->SetTranslation({-2.5f, 0.0f, 0.0f});
+        ring->SetName("Standard Ring");
         primitiveParticles_.push_back(std::move(ring));
     }
 
@@ -88,6 +90,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
         ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.8f, 1.2f, 64, 0.0f, 3.14159f, {0,0,1,1}, {1,0,0,1}, false));
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
         ring->SetTranslation({0.0f, 0.0f, 0.0f});
+        ring->SetName("Fan Ring");
         primitiveParticles_.push_back(std::move(ring));
     }
 
@@ -97,6 +100,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
         ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.3f, 1.5f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, true));
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
         ring->SetTranslation({2.5f, 0.0f, 0.0f});
+        ring->SetName("Radial UV Ring");
         primitiveParticles_.push_back(std::move(ring));
     }
 }
@@ -118,24 +122,6 @@ void TitleScene::Update(SceneManager *sceneManager) {
         object->Update();
     }
 
-#ifdef USE_IMGUI
-    // ImGuiもObject3D版を呼ぶ
-    ImGui::Begin("Objects");
-    for (auto &object : objects_) {
-        ShowObject3DGui("Object", object.get());
-    }
-    ImGui::End();
-
-    // ■ プリミティブパーティクルの調整用UIを追加
-    ImGui::Begin("Primitive Particles");
-    for (size_t i = 0; i < primitiveParticles_.size(); ++i) {
-        std::string label = "Particle " + std::to_string(i);
-        ImGui::PushID((int)i); // IDのバッティングを防ぐ
-        primitiveParticles_[i]->DisplayImGui(label);
-        ImGui::PopID();
-    }
-    ImGui::End();
-#endif
 
     for (auto &sprite : sprites_) {
         sprite->Update();
@@ -204,4 +190,28 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         spriteCommon_->PreDraw(commandList_.Get());
         spriteCommon_->DrawAll();
     }
+}
+
+std::vector<Object3D *> TitleScene::GetObjects() {
+    std::vector<Object3D *> result;
+    for (auto &obj : objects_) {
+        result.push_back(obj.get());
+    }
+    return result;
+}
+
+std::vector<ParticleManager *> TitleScene::GetParticles() {
+    std::vector<ParticleManager *> result;
+    for (auto &p : particles_) {
+        result.push_back(p.get());
+    }
+    return result;
+}
+
+std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
+    std::vector<PrimitiveObject *> result;
+    for (auto &p : primitiveParticles_) {
+        result.push_back(p.get());
+    }
+    return result;
 }

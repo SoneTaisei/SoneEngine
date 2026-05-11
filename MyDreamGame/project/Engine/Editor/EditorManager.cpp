@@ -3,9 +3,15 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "Input/KeyboardInput.h"
 #include "Renderer/SrvManager.h"
+#include "Scene/SceneManager.h"
+#include "Scene/IScene.h"
+#include "GameObject/Object3D.h"
+#include "GameObject/PrimitiveObject.h"
+#include "Effect/ParticleManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_impl_dx12.h>
 #include <imgui_impl_win32.h>
 
@@ -63,7 +69,97 @@ void EditorManager::BeginFrame() {
     ImGui::NewFrame();
 }
 
-void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive) {
+void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, SceneManager *sceneManager) {
+    // --- ドッキングの設定 ---
+    ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+
+    // 初回起動時にレイアウトを自動的に構成する
+    static bool first_time = true;
+    if (first_time) {
+        first_time = false;
+
+        // 一度ノードをクリアして再構築
+        ImGui::DockBuilderRemoveNode(dockspace_id);
+        ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+        ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+
+        ImGuiID dock_id_main = dockspace_id;
+        // 左側に「デバッグステータス」
+        ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
+        // 右側に「ライティング・フォグ」
+        ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
+
+        // 中央エリアをさらに上下に分割：上部に「再生コントロール」、残りに「ゲームビュー」
+        ImGuiID dock_id_center_top = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Up, 0.10f, NULL, &dock_id_main);
+
+        // 各ウィンドウを各ノードに割り当てる
+        ImGui::DockBuilderDockWindow("Game Control", dock_id_center_top);
+        ImGui::DockBuilderDockWindow("Game View", dock_id_main);
+        ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
+        ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
+
+        ImGui::DockBuilderFinish(dockspace_id);
+    }
+
+    // --- Game View ウィンドウ ---
+    ImGui::Begin("Game View");
+    {
+        // ウィンドウのサイズに合わせてアスペクト比を維持して描画
+        ImVec2 contentSize = ImGui::GetContentRegionAvail();
+        float aspect = 1280.0f / 720.0f; // 元のアスペクト比
+        float windowAspect = contentSize.x / contentSize.y;
+        ImVec2 imageSize;
+        if (windowAspect > aspect) {
+            imageSize.y = contentSize.y;
+            imageSize.x = contentSize.y * aspect;
+        } else {
+            imageSize.x = contentSize.x;
+            imageSize.y = contentSize.x / aspect;
+        }
+        // 中央寄せ
+        ImVec2 currentPos = ImGui::GetCursorPos();
+        ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+        ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+    }
+    ImGui::End();
+
+    // --- Hierarchy ウィンドウ ---
+    ImGui::Begin("Hierarchy");
+    IScene *activeScene = sceneManager->GetCurrentScene();
+    if (activeScene) {
+        if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (auto *obj : activeScene->GetObjects()) {
+                bool isSelected = (selectedObject_ == obj);
+                if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
+                    selectedObject_ = obj;
+                    selectedParticle_ = nullptr;
+                    selectedPrimitive_ = nullptr;
+                }
+            }
+        }
+        if (ImGui::CollapsingHeader("Particles", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (auto *particle : activeScene->GetParticles()) {
+                bool isSelected = (selectedParticle_ == particle);
+                if (ImGui::Selectable(particle->GetName().c_str(), isSelected)) {
+                    selectedParticle_ = particle;
+                    selectedObject_ = nullptr;
+                    selectedPrimitive_ = nullptr;
+                }
+            }
+        }
+        if (ImGui::CollapsingHeader("Primitives", ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (auto *primitive : activeScene->GetPrimitives()) {
+                bool isSelected = (selectedPrimitive_ == primitive);
+                if (ImGui::Selectable(primitive->GetName().c_str(), isSelected)) {
+                    selectedPrimitive_ = primitive;
+                    selectedObject_ = nullptr;
+                    selectedParticle_ = nullptr;
+                }
+            }
+        }
+    }
+    ImGui::End();
+
     // --- デバッグカメラの切り替え制御 ---
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
         if (isDebugCameraActive) {
@@ -77,21 +173,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
     }
 
-    ImGui::Begin("Debug Status");
-    if (isDebugCameraActive) {
-        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Debug Camera: ON");
-    } else {
-        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Debug Camera: OFF");
-    }
-    ImGui::End();
-
     // --- ゲーム再生制御 (Play/Stop) ---
+    // ドッキングを有効にし、タイトルバーを表示
     ImGui::Begin("Game Control");
     if (!isPlaying_) {
         // 停止中：再生ボタンを表示
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.0f, 1.0f));
+        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - 100) * 0.5f);
         if (ImGui::Button("PLAY", ImVec2(100, 30))) {
             isPlaying_ = true;
             // 再生開始時にゲームカメラへ切り替え
@@ -104,6 +194,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
+        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - 100) * 0.5f);
         if (ImGui::Button("STOP", ImVec2(100, 30))) {
             isPlaying_ = false;
             // 停止時にデバッグカメラへ切り替え（編集しやすくするため）
@@ -114,20 +205,29 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         ImGui::PopStyleColor(3);
     }
-    ImGui::Text("Status: %s", isPlaying_ ? "Playing" : "Stopped");
     ImGui::End();
 
-    // --- ライティング管理 ---
-    static int activeLightType = 2;
-    static bool enableFog = false;
-    static float dIntensity = 1.0f;
-    static float pIntensity = 1.0f;
-    static float sIntensity = 4.0f;
-    static float spotAngleDeg = 30.0f;
-    static float spotFalloffDeg = 20.0f;
+    // --- Inspector ウィンドウ ---
+    ImGui::Begin("Inspector");
+    if (selectedObject_) {
+        selectedObject_->DisplayImGui("Object Properties");
+    } else if (selectedParticle_) {
+        selectedParticle_->DrawImGui();
+    } else if (selectedPrimitive_) {
+        selectedPrimitive_->DisplayImGui("Primitive Properties");
+    } else {
+        ImGui::Text("Global Settings (Lighting)");
+        ImGui::Separator();
 
-    ImGui::Begin("Lighting & Fog Manager");
-    ImGui::Text("Active Light Source");
+        static int activeLightType = 2;
+        static bool enableFog = false;
+        static float dIntensity = 1.0f;
+        static float pIntensity = 1.0f;
+        static float sIntensity = 4.0f;
+        static float spotAngleDeg = 30.0f;
+        static float spotFalloffDeg = 20.0f;
+
+        ImGui::Text("Active Light Source");
     ImGui::RadioButton("Directional", &activeLightType, 0);
     ImGui::SameLine();
     ImGui::RadioButton("Point", &activeLightType, 1);
@@ -179,6 +279,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Fog Effect", &enableFog);
+    }
     ImGui::End();
 }
 

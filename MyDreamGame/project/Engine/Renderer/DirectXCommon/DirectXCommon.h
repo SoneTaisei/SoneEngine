@@ -55,6 +55,7 @@ public:
     ID3D12PipelineState *GetCopyImagePipelineState() const { return copyImagePipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
 
 private:
 	// DirectXのインスタンス作成

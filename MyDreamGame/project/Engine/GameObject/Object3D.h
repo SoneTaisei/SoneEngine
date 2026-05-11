@@ -35,7 +35,12 @@ public:
 
     Material &GetMaterial() { return material_; }
 
+    // --- 名前関連 ---
+    const std::string &GetName() const { return name_; }
+    void SetName(const std::string &name) { name_ = name; }
+
 private:
+    std::string name_ = "GameObject"; // ヒエラルキー表示用の名前
     // マテリアル
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
     Material *mappedMaterial_ = nullptr;

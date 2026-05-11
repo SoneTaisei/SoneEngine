@@ -21,7 +21,12 @@ public:
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     Material& GetMaterial() { return material_; }
 
+    // --- 名前関連 ---
+    const std::string &GetName() const { return name_; }
+    void SetName(const std::string &name) { name_ = name; }
+
 private:
+    std::string name_ = "PrimitiveObject";
     Primitive* primitive_ = nullptr;
 
     // マテリアル
