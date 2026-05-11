@@ -12,8 +12,8 @@ void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     material_.enableBlinnPhong = 0;
     material_.uvTransform = TransformFunctions::MakeIdentity4x4();
     material_.shininess = 50.0f;
-    material_.enableEnvironmentMap = 0;
-    material_.environmentCoefficient = 0.0f;
+    material_.enableEnvironmentMap = 1;
+    material_.environmentCoefficient = 0.1f;
 
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTransform_));
@@ -39,6 +39,9 @@ void PrimitiveObject::Update() {
 void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+
+    // カメラの定数バッファをセット (スロット3)
+    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
     
     if (textureHandle_.ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);

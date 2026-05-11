@@ -461,10 +461,10 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 			// 頂点データを作成
 			VertexData v{};
 			v.position = { radius * x, radius * y, radius * z, 1.0f }; // 球の表面上の点
-			v.normal = TransformFunctions::Normalize({ v.position.x,v.position.y,v.position.z });
-			v.texcoord = { float(lon) / lonDiv, float(lat) / latDiv }; // UV座標（テクスチャ用）
-
-			vertices.push_back(v); // 頂点リストに追加
+			v.normal = {v.position.x / radius, v.position.y / radius, v.position.z / radius};
+            v.texcoord = { (float)lon / lonDiv, (float)lat / latDiv };
+            v.color = {1.0f, 1.0f, 1.0f, 1.0f};
+            vertices.push_back(v); // 頂点リストに追加
 		}
 	}
 	// 三角形インデックスの生成（頂点をつなぐ）
@@ -557,6 +557,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             vertex.position = {position.x, position.y, position.z, 1.0f};
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
+            vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
             modelData.vertices.push_back(vertex);
         }
 

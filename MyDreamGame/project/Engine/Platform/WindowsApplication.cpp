@@ -159,8 +159,14 @@ void WindowsApplication::Update() {
         isDebugCameraActive_);
 #endif
 
-    // ★ シーンの更新 (Drawから救出！)
+    // ★ シーンの更新 (再生中のみ、またはIMGUI未使用時のみ実行)
+#ifdef USE_IMGUI
+    if (editorManager_->IsPlaying()) {
+        sceneManager_->Update();
+    }
+#else
     sceneManager_->Update();
+#endif
 
     // カメラの更新
     if (isDebugCameraActive_) {

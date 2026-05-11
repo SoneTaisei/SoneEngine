@@ -53,6 +53,8 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
     // 💡 スロット1が行列、スロット0がマテリアルが正解です！
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress()); // 行列 (スロット1)
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());  // マテリアル (スロット0)
+    // カメラの定数バッファをセット (スロット3)
+    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
     // 環境マップをスロット7にセット
     if (sEnvironmentMapHandle.ptr != 0) {

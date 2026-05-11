@@ -53,8 +53,8 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList_);
 
     // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
@@ -68,21 +68,36 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(1280, 720);
 
-    // ■ プリミティブパーティクルの初期化
+    // ■ 拡張Ringプリミティブのデモ実装
     PrimitiveManager::GetInstance()->Initialize(device.Get());
+    uint32_t gradationHandle = TextureManager::GetInstance()->Load("Sprite/School/gradationLine.png", commandList_);
     
-    // 8個のパーティクルを生成
-    for (int i = 0; i < 8; ++i) {
-        auto pObj = std::make_unique<PrimitiveObject>();
-        // ランダムな形状を選択
-        PrimitiveType type = static_cast<PrimitiveType>(rand() % 9);
-        pObj->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(type));
-        
-        pObj->SetScale({0.05f, 2.5f, 0.05f});
-        pObj->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
-        pObj->GetMaterial().color = {1.0f, 1.0f, 1.0f, 0.0f}; // 最初は透明
-        
-        primitiveParticles_.push_back(std::move(pObj));
+    // Ring 1: 標準的なRing (UVスクロールあり)
+    {
+        auto ring = std::make_unique<PrimitiveObject>();
+        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
+        ring->GetMaterial().environmentCoefficient = 0.3f;
+        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
+        ring->SetTranslation({-2.5f, 0.0f, 0.0f});
+        primitiveParticles_.push_back(std::move(ring));
+    }
+
+    // Ring 2: 扇形 (グラデーションカラー)
+    {
+        auto ring = std::make_unique<PrimitiveObject>();
+        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.8f, 1.2f, 64, 0.0f, 3.14159f, {0,0,1,1}, {1,0,0,1}, false));
+        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
+        ring->SetTranslation({0.0f, 0.0f, 0.0f});
+        primitiveParticles_.push_back(std::move(ring));
+    }
+
+    // Ring 3: 放射状UV
+    {
+        auto ring = std::make_unique<PrimitiveObject>();
+        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.3f, 1.5f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, true));
+        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
+        ring->SetTranslation({2.5f, 0.0f, 0.0f});
+        primitiveParticles_.push_back(std::move(ring));
     }
 }
 
@@ -103,7 +118,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
         object->Update();
     }
 
-#ifdef _DEBUG
+#ifdef USE_IMGUI
     // ImGuiもObject3D版を呼ぶ
     ImGui::Begin("Objects");
     for (auto &object : objects_) {
@@ -130,26 +145,15 @@ void TitleScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
-    // ■ プリミティブパーティクルの更新 (フラッシュ/フェード演出)
-    static float flashTimer = 0.0f;
-    flashTimer += 1.0f / 60.0f;
-    bool shouldReset = (flashTimer > 0.6f); // 0.6秒ごとにパッと表示
-    if (shouldReset) flashTimer = 0.0f;
+    // ■ 拡張Ringプリミティブの更新 (UVスクロール)
+    static float uvOffset = 0.0f;
+    uvOffset -= 0.01f;
 
     for (size_t i = 0; i < primitiveParticles_.size(); ++i) {
         auto& p = primitiveParticles_[i];
         
-        if (shouldReset) {
-            // リセット：ランダムな角度でパッと表示
-            float angle = (float(rand()) / RAND_MAX) * 2.0f * 3.141592f;
-            float dist = 0.3f; // 中心からの距離
-            p->SetTranslation({cosf(angle) * dist, sinf(angle) * dist, 0.0f});
-            p->SetScale({0.05f, 2.5f, 0.05f});
-            p->SetRotation({0.0f, 0.0f, angle - 1.5708f}); // 角度に合わせて回転
-            p->GetMaterial().color.w = 1.0f;
-        } else {
-            p->GetMaterial().color.w *= 0.85f;
-        }
+        // UVスクロール行列を作成してセット
+        p->GetMaterial().uvTransform = TransformFunctions::MakeTranslateMatrix({uvOffset, 0.0f, 0.0f});
 
         p->Update();
     }

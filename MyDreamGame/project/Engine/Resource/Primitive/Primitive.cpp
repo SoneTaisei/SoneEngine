@@ -5,6 +5,15 @@
 #include <cmath>
 #include <numbers>
 
+void Primitive::InitializeRing(ID3D12Device* device, float innerRadius, float outerRadius, uint32_t segments, float startAngle, float endAngle, const Vector4& innerColor, const Vector4& outerColor, bool isRadialUV) {
+    modelData_.vertices.clear();
+    modelData_.indices.clear();
+
+    CreateRing(innerRadius, outerRadius, segments, startAngle, endAngle, innerColor, outerColor, isRadialUV);
+
+    CreateBuffers(device);
+}
+
 void Primitive::Initialize(ID3D12Device* device, PrimitiveType type, float size, uint32_t segments) {
     modelData_.vertices.clear();
     modelData_.indices.clear();
@@ -51,10 +60,10 @@ void Primitive::Draw(ID3D12GraphicsCommandList* commandList) {
 void Primitive::CreatePlane(float size) {
     float halfSize = size * 0.5f;
     modelData_.vertices = {
-        {{-halfSize, 0.0f,  halfSize, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{ halfSize, 0.0f,  halfSize, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{-halfSize, 0.0f, -halfSize, 1.0f}, {0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
-        {{ halfSize, 0.0f, -halfSize, 1.0f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+        {{-halfSize, 0.0f,  halfSize, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ halfSize, 0.0f,  halfSize, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-halfSize, 0.0f, -halfSize, 1.0f}, {0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ halfSize, 0.0f, -halfSize, 1.0f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
     };
     modelData_.indices = {0, 1, 2, 2, 1, 3};
 }
@@ -63,35 +72,35 @@ void Primitive::CreateBox(float size) {
     float h = size * 0.5f;
     modelData_.vertices = {
         // Front
-        {{-h, -h,  h, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-        {{ h, -h,  h, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-        {{-h,  h,  h, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-        {{ h,  h,  h, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        {{-h, -h,  h, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h, -h,  h, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h,  h,  h, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h,  h,  h, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         // Back
-        {{ h, -h, -h, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
-        {{-h, -h, -h, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
-        {{ h,  h, -h, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
-        {{-h,  h, -h, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
+        {{ h, -h, -h, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h, -h, -h, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h,  h, -h, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h,  h, -h, 1.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         // Left
-        {{-h, -h, -h, 1.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
-        {{-h, -h,  h, 1.0f}, {1.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
-        {{-h,  h, -h, 1.0f}, {0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
-        {{-h,  h,  h, 1.0f}, {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
+        {{-h, -h, -h, 1.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h, -h,  h, 1.0f}, {1.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h,  h, -h, 1.0f}, {0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h,  h,  h, 1.0f}, {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         // Right
-        {{ h, -h,  h, 1.0f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
-        {{ h, -h, -h, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
-        {{ h,  h,  h, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-        {{ h,  h, -h, 1.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{ h, -h,  h, 1.0f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h, -h, -h, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h,  h,  h, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h,  h, -h, 1.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         // Top
-        {{-h,  h,  h, 1.0f}, {0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
-        {{ h,  h,  h, 1.0f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
-        {{-h,  h, -h, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{ h,  h, -h, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{-h,  h,  h, 1.0f}, {0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h,  h,  h, 1.0f}, {1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h,  h, -h, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h,  h, -h, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         // Bottom
-        {{-h, -h, -h, 1.0f}, {0.0f, 1.0f}, {0.0f, -1.0f, 0.0f}},
-        {{ h, -h, -h, 1.0f}, {1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}},
-        {{-h, -h,  h, 1.0f}, {0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}},
-        {{ h, -h,  h, 1.0f}, {1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}},
+        {{-h, -h, -h, 1.0f}, {0.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h, -h, -h, 1.0f}, {1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h, -h,  h, 1.0f}, {0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h, -h,  h, 1.0f}, {1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
     };
     for (int i = 0; i < 6; ++i) {
         uint32_t offset = i * 4;
@@ -113,6 +122,7 @@ void Primitive::CreateCircle(float size, uint32_t segments) {
     center.position = {0.0f, 0.0f, 0.0f, 1.0f};
     center.normal = {0.0f, 0.0f, 1.0f};
     center.texcoord = {0.5f, 0.5f};
+    center.color = {1.0f, 1.0f, 1.0f, 1.0f};
     modelData_.vertices.push_back(center);
 
     for (uint32_t i = 0; i <= segments; ++i) {
@@ -121,6 +131,7 @@ void Primitive::CreateCircle(float size, uint32_t segments) {
         v.position = {size * cosf(angle), size * sinf(angle), 0.0f, 1.0f};
         v.normal = {0.0f, 0.0f, 1.0f};
         v.texcoord = {0.5f + 0.5f * cosf(angle), 0.5f - 0.5f * sinf(angle)};
+        v.color = {1.0f, 1.0f, 1.0f, 1.0f};
         modelData_.vertices.push_back(v);
     }
 
@@ -131,36 +142,71 @@ void Primitive::CreateCircle(float size, uint32_t segments) {
     }
 }
 
-void Primitive::CreateRing(float innerRadius, float outerRadius, uint32_t segments) {
-    for (uint32_t i = 0; i <= segments; ++i) {
-        float angle = 2.0f * std::numbers::pi_v<float> * i / segments;
-        float cosA = cosf(angle);
-        float sinA = sinf(angle);
-
-        VertexData vInner{}, vOuter{};
-        vInner.position = {innerRadius * cosA, innerRadius * sinA, 0.0f, 1.0f};
-        vInner.normal = {0.0f, 0.0f, 1.0f};
-        vInner.texcoord = {0.5f + 0.5f * innerRadius / outerRadius * cosA, 0.5f - 0.5f * innerRadius / outerRadius * sinA};
-
-        vOuter.position = {outerRadius * cosA, outerRadius * sinA, 0.0f, 1.0f};
-        vOuter.normal = {0.0f, 0.0f, 1.0f};
-        vOuter.texcoord = {0.5f + 0.5f * cosA, 0.5f - 0.5f * sinA};
-
-        modelData_.vertices.push_back(vInner);
-        modelData_.vertices.push_back(vOuter);
-    }
+void Primitive::CreateRing(float innerRadius, float outerRadius, uint32_t segments, float startAngle, float endAngle, const Vector4& innerColor, const Vector4& outerColor, bool isRadialUV) {
+    float angleRange = endAngle - startAngle;
 
     for (uint32_t i = 0; i < segments; ++i) {
-        uint32_t base = i * 2;
-        modelData_.indices.push_back(base);
-        modelData_.indices.push_back(base + 1);
-        modelData_.indices.push_back(base + 2);
+        float ratioCurrent = (float)i / segments;
+        float ratioNext = (float)(i + 1) / segments;
+        
+        float angleCurrent = startAngle + ratioCurrent * angleRange;
+        float angleNext = startAngle + ratioNext * angleRange;
 
-        modelData_.indices.push_back(base + 2);
-        modelData_.indices.push_back(base + 1);
-        modelData_.indices.push_back(base + 3);
+        float sinCurrent = sinf(angleCurrent);
+        float cosCurrent = cosf(angleCurrent);
+        float sinNext = sinf(angleNext);
+        float cosNext = cosf(angleNext);
+
+        VertexData vertices[4];
+
+        // 資料に基づいた座標計算 (-sin, cos)
+        vertices[0].position = { -sinCurrent * outerRadius, cosCurrent * outerRadius, 0.0f, 1.0f };
+        vertices[1].position = { -sinNext * outerRadius, cosNext * outerRadius, 0.0f, 1.0f };
+        vertices[2].position = { -sinCurrent * innerRadius, cosCurrent * innerRadius, 0.0f, 1.0f };
+        vertices[3].position = { -sinNext * innerRadius, cosNext * innerRadius, 0.0f, 1.0f };
+
+        // 頂点カラーの設定
+        vertices[0].color = outerColor;
+        vertices[1].color = outerColor;
+        vertices[2].color = innerColor;
+        vertices[3].color = innerColor;
+
+        // UV座標の設定
+        if (isRadialUV) {
+            // Vertical (Radial) UV: V方向が半径方向 (内側 1.0, 外側 0.0)
+            vertices[0].texcoord = { ratioCurrent, 0.0f };
+            vertices[1].texcoord = { ratioNext, 0.0f };
+            vertices[2].texcoord = { ratioCurrent, 1.0f };
+            vertices[3].texcoord = { ratioNext, 1.0f };
+        } else {
+            // Horizontal (Circular) UV: U方向が円周方向 (0.0 ~ 1.0)
+            vertices[0].texcoord = { ratioCurrent, 0.0f };
+            vertices[1].texcoord = { ratioNext, 0.0f };
+            vertices[2].texcoord = { ratioCurrent, 1.0f };
+            vertices[3].texcoord = { ratioNext, 1.0f };
+            // Note: 現在の実装では Circular がデフォルト
+        }
+
+        // 法線の設定
+        for (int j = 0; j < 4; ++j) {
+            vertices[j].normal = { 0.0f, 0.0f, 1.0f };
+        }
+
+        uint32_t baseIndex = static_cast<uint32_t>(modelData_.vertices.size());
+        for (int j = 0; j < 4; ++j) {
+            modelData_.vertices.push_back(vertices[j]);
+        }
+
+        modelData_.indices.push_back(baseIndex + 2); // 内周(現)
+        modelData_.indices.push_back(baseIndex + 0); // 外周(現)
+        modelData_.indices.push_back(baseIndex + 1); // 外周(次)
+
+        modelData_.indices.push_back(baseIndex + 2); // 内周(現)
+        modelData_.indices.push_back(baseIndex + 1); // 外周(次)
+        modelData_.indices.push_back(baseIndex + 3); // 内周(次)
     }
 }
+
 
 void Primitive::CreateCylinder(float radius, float height, uint32_t segments) {
     float halfH = height * 0.5f;
@@ -174,10 +220,12 @@ void Primitive::CreateCylinder(float radius, float height, uint32_t segments) {
         vBottom.position = {radius * cosA, -halfH, radius * sinA, 1.0f};
         vBottom.normal = {cosA, 0.0f, sinA};
         vBottom.texcoord = {static_cast<float>(i) / segments, 1.0f};
+        vBottom.color = {1.0f, 1.0f, 1.0f, 1.0f};
 
         vTop.position = {radius * cosA, halfH, radius * sinA, 1.0f};
         vTop.normal = {cosA, 0.0f, sinA};
         vTop.texcoord = {static_cast<float>(i) / segments, 0.0f};
+        vTop.color = {1.0f, 1.0f, 1.0f, 1.0f};
 
         modelData_.vertices.push_back(vBottom);
         modelData_.vertices.push_back(vTop);
@@ -212,6 +260,7 @@ void Primitive::CreateCone(float radius, float height, uint32_t segments) {
         v.position = {radius * cosA, -halfH, radius * sinA, 1.0f};
         v.normal = TransformFunctions::Normalize({cosA, radius / height, sinA});
         v.texcoord = {static_cast<float>(i) / segments, 1.0f};
+        v.color = {1.0f, 1.0f, 1.0f, 1.0f};
         modelData_.vertices.push_back(v);
     }
 
@@ -242,6 +291,7 @@ void Primitive::CreateTorus(float ringRadius, float tubeRadius, uint32_t segment
             Vector3 center = {ringRadius * cosTheta, 0.0f, ringRadius * sinTheta};
             v.normal = TransformFunctions::Normalize({v.position.x - center.x, v.position.y - center.y, v.position.z - center.z});
             v.texcoord = {static_cast<float>(i) / segments, static_cast<float>(j) / segments};
+            v.color = {1.0f, 1.0f, 1.0f, 1.0f};
 
             modelData_.vertices.push_back(v);
         }
@@ -266,9 +316,9 @@ void Primitive::CreateTorus(float ringRadius, float tubeRadius, uint32_t segment
 void Primitive::CreateTriangle(float size) {
     float h = size * 0.5f;
     modelData_.vertices = {
-        {{ 0.0f,  h, 0.0f, 1.0f}, {0.5f, 0.0f}, {0.0f, 0.0f, -1.0f}},
-        {{ h, -h, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
-        {{-h, -h, 0.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
+        {{ 0.0f,  h, 0.0f, 1.0f}, {0.5f, 0.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{ h, -h, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+        {{-h, -h, 0.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
     };
     modelData_.indices = {0, 1, 2};
 }

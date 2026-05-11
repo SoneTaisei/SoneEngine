@@ -85,6 +85,38 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     }
     ImGui::End();
 
+    // --- ゲーム再生制御 (Play/Stop) ---
+    ImGui::Begin("Game Control");
+    if (!isPlaying_) {
+        // 停止中：再生ボタンを表示
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.0f, 1.0f));
+        if (ImGui::Button("PLAY", ImVec2(100, 30))) {
+            isPlaying_ = true;
+            // 再生開始時にゲームカメラへ切り替え
+            *activeCamera = gameCamera;
+            isDebugCameraActive = false;
+        }
+        ImGui::PopStyleColor(3);
+    } else {
+        // 再生中：停止ボタンを表示
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
+        if (ImGui::Button("STOP", ImVec2(100, 30))) {
+            isPlaying_ = false;
+            // 停止時にデバッグカメラへ切り替え（編集しやすくするため）
+            debugCamera->SetTranslation(gameCamera->GetTranslation());
+            debugCamera->SetRotation(gameCamera->GetRotation());
+            *activeCamera = debugCamera;
+            isDebugCameraActive = true;
+        }
+        ImGui::PopStyleColor(3);
+    }
+    ImGui::Text("Status: %s", isPlaying_ ? "Playing" : "Stopped");
+    ImGui::End();
+
     // --- ライティング管理 ---
     static int activeLightType = 2;
     static bool enableFog = false;

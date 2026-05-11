@@ -26,5 +26,12 @@ public:
 
     // 終了処理 (ImGuiの解放)
     void Finalize();
+
+    // 再生状態の取得・設定
+    bool IsPlaying() const { return isPlaying_; }
+    void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
+
+private:
+    bool isPlaying_ = false; // ゲーム再生中かどうか
 };
 #endif

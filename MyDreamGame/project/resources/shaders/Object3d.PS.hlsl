@@ -78,9 +78,9 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         // --- 3. 最終色の合成 ---
 
         // まず、全てのライティング（拡散反射・鏡面反射）の合計値を計算する
-        outputColor.rgb = diffuseDirectional + specularDirectional + // 平行光源
-                          diffusePoint + specularPoint + // ポイントライト
-                          diffuseSpot + specularSpot; // スポットライト
+        outputColor.rgb = (diffuseDirectional + specularDirectional + // 平行光源
+                           diffusePoint + specularPoint + // ポイントライト
+                           diffuseSpot + specularSpot) * input.color.rgb; // スポットライト
 
         // 環境マップによるLightingを追加する（置き換えるのではなく、そのまま足す）
         if (gMaterial.enableEnvironmentMap != 0) {
@@ -88,10 +88,10 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         }
 
 // アルファ値の設定
-        outputColor.a = gMaterial.color.a * textureColor.a;
+        outputColor.a = gMaterial.color.a * textureColor.a * input.color.a;
 
     } else {
-        outputColor = gMaterial.color * textureColor;
+        outputColor = gMaterial.color * textureColor * input.color;
     }
 
     return outputColor;
