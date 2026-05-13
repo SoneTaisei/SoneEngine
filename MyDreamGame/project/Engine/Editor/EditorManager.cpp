@@ -311,10 +311,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     {
         ImGui::Text("Post Effect Settings");
         ImGui::Separator();
-        const char* postEffectItems[] = { "None", "Grayscale", "Sepia" };
+        const char* postEffectItems[] = { "None", "Grayscale", "Sepia", "Vignette" };
         int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
         if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
             DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);
+        }
+
+        if (currentEffect == (int)DirectXCommon::PostEffect::kVignette) {
+            ImGui::Spacing();
+            ImGui::Text("Vignette Settings");
+            ImGui::Separator();
+            auto params = DirectXCommon::GetInstance()->GetVignetteParamsData();
+            if (params) {
+                ImGui::ColorEdit4("Color", params->color);
+                ImGui::DragFloat("Scale", &params->scale, 0.1f, 0.0f, 100.0f);
+                ImGui::DragFloat("Power", &params->power, 0.01f, 0.0f, 10.0f);
+            }
         }
     }
     ImGui::End();

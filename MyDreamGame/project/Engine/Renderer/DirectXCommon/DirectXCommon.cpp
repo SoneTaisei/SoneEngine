@@ -554,11 +554,16 @@ void DirectXCommon::CreatePostEffectPipelines() {
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
     // RootParameterにセット
-    D3D12_ROOT_PARAMETER rootParameters[1] = {};
+    D3D12_ROOT_PARAMETER rootParameters[2] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].DescriptorTable.pDescriptorRanges = descriptorRange;
     rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+
+    // b0 (VignetteParams)
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[1].Descriptor.ShaderRegister = 0;
 
     // Sampler用 (s0)
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
@@ -586,6 +591,7 @@ void DirectXCommon::CreatePostEffectPipelines() {
     Microsoft::WRL::ComPtr<IDxcBlob> psCopyBlob = CompileShader(L"shaders/CopyImage.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psGrayscaleBlob = CompileShader(L"shaders/Grayscale.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = CompileShader(L"shaders/Sepia.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psVignetteBlob = CompileShader(L"shaders/Vignette.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
     // 3. PipelineState (PSO) の作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -622,6 +628,21 @@ void DirectXCommon::CreatePostEffectPipelines() {
     psoDesc.PS = {psSepiaBlob->GetBufferPointer(), psSepiaBlob->GetBufferSize()};
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&sepiaPipelineState_));
     assert(SUCCEEDED(hr));
+
+    // ヴィネット用のPSOを作成
+    psoDesc.PS = {psVignetteBlob->GetBufferPointer(), psVignetteBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&vignettePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // ヴィネット用定数バッファの作成
+    vignetteParamResource_ = CreateBufferResource(device_.Get(), sizeof(VignetteParams));
+    vignetteParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&vignetteParamsData_));
+    vignetteParamsData_->color[0] = 0.0f;
+    vignetteParamsData_->color[1] = 0.0f;
+    vignetteParamsData_->color[2] = 0.0f;
+    vignetteParamsData_->color[3] = 1.0f;
+    vignetteParamsData_->scale = 16.0f;
+    vignetteParamsData_->power = 0.8f;
 }
 
 void DirectXCommon::ExecutePostEffect() {
@@ -657,6 +678,9 @@ void DirectXCommon::ExecutePostEffect() {
         commandList_->SetPipelineState(grayscalePipelineState_.Get());
     } else if (postEffect_ == PostEffect::kSepia) {
         commandList_->SetPipelineState(sepiaPipelineState_.Get());
+    } else if (postEffect_ == PostEffect::kVignette) {
+        commandList_->SetPipelineState(vignettePipelineState_.Get());
+        commandList_->SetGraphicsRootConstantBufferView(1, vignetteParamResource_->GetGPUVirtualAddress());
     } else {
         commandList_->SetPipelineState(copyImagePipelineState_.Get());
     }

@@ -16,6 +16,13 @@ public:
         kNone,
         kGrayscale,
         kSepia,
+        kVignette,
+    };
+
+    struct VignetteParams {
+        float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        float scale = 16.0f;
+        float power = 0.8f;
     };
 
 	// 初期化処理
@@ -72,10 +79,12 @@ public:
     ID3D12PipelineState *GetCopyImagePipelineState() const { return copyImagePipelineState_.Get(); }
     ID3D12PipelineState *GetGrayscalePipelineState() const { return grayscalePipelineState_.Get(); }
     ID3D12PipelineState *GetSepiaPipelineState() const { return sepiaPipelineState_.Get(); }
+    ID3D12PipelineState *GetVignettePipelineState() const { return vignettePipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return postProcessSrvHandleGPU_; }
+    VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
 
 private:
 	// DirectXのインスタンス作成
@@ -143,6 +152,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyImagePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> vignetteParamResource_;
+    VignetteParams* vignetteParamsData_ = nullptr;
 
     PostEffect postEffect_ = PostEffect::kNone;
 
