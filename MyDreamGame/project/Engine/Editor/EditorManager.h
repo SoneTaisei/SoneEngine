@@ -8,6 +8,7 @@
 #include "Graphics/DebugCamera.h"
 #include "Graphics/GameCamera.h"
 #include "Resource/Model/ModelCommon.h"
+#include "Scene/SceneFactory.h"
 
 class SceneManager;
 class ParticleManager;
@@ -44,6 +45,13 @@ public:
     bool UseDebugCamera() const { return useDebugCamera_; }
     void SetUseDebugCamera(bool use) { useDebugCamera_ = use; }
 
+    // シーン設定のJSON保存・読込み
+    void SaveSceneConfig();
+    void LoadSceneConfig();
+
+    // 現在選択中のシーンタイプを取得
+    SceneType GetCurrentSceneType() const { return currentSceneType_; }
+
 private:
     bool isPlaying_ = false; // ゲーム再生中かどうか
     bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
@@ -54,6 +62,9 @@ private:
     PrimitiveObject *selectedPrimitive_ = nullptr;
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
+
+    // エディターで選択中のシーンタイプ
+    SceneType currentSceneType_ = SceneType::kTitle;
 
     static bool showObjects_;
     static bool showEffects_;
