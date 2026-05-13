@@ -311,7 +311,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     {
         ImGui::Text("Post Effect Settings");
         ImGui::Separator();
-        const char* postEffectItems[] = { "None", "Grayscale", "Sepia", "Vignette" };
+        const char* postEffectItems[] = { "None", "Grayscale", "Sepia", "Vignette", "Smoothing" };
         int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
         if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
             DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);
@@ -326,6 +326,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::ColorEdit4("Color", params->color);
                 ImGui::DragFloat("Scale", &params->scale, 0.1f, 0.0f, 100.0f);
                 ImGui::DragFloat("Power", &params->power, 0.01f, 0.0f, 10.0f);
+            }
+        }
+
+        if (currentEffect == (int)DirectXCommon::PostEffect::kSmoothing) {
+            ImGui::Spacing();
+            ImGui::Text("Smoothing Settings");
+            ImGui::Separator();
+            auto params = DirectXCommon::GetInstance()->GetSmoothingParamsData();
+            if (params) {
+                ImGui::SliderInt("Kernel Size", &params->kernelSize, 1, 5);
+                ImGui::SliderFloat("Strength", &params->strength, 0.0f, 1.0f);
             }
         }
     }
