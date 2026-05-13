@@ -1,10 +1,8 @@
 #include "StageSelectScene.h"
 #include "../externals/imgui/imgui.h"
 #include "Graphics/TextureManager.h"
-#include "Input/KeyboardInput.h"
 #include "Scene/SceneManager.h"
 #include "Core/Utility/ImGuiHelper.h"
-#include "Scenes/GameScene.h"
 #include "Resource/Model/ModelManager.h"
 
 StageSelectScene::~StageSelectScene() {
@@ -52,10 +50,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         object->Update();
     }
 
-    // シーン遷移の処理
-    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
-        sceneManager->ChangeScene(std::make_unique<GameScene>());
-    }
+
 }
 
 void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {

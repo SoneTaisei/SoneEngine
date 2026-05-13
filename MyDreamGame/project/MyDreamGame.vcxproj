@@ -184,6 +184,7 @@
     <ClCompile Include="Engine\Renderer\DirectXCommon\DirectXCommon.cpp" />
     <ClCompile Include="Engine\Resource\Sprite\SpriteCommon.cpp" />
     <ClCompile Include="Engine\Scene\SceneManager.cpp" />
+    <ClCompile Include="Engine\Scene\SceneFactory.cpp" />
     <ClCompile Include="Project\Scenes\GameScene.cpp" />
     <ClCompile Include="Engine\Resource\Model\Model.cpp" />
     <ClCompile Include="Engine\Resource\Sprite\Sprite.cpp" />
@@ -331,6 +332,7 @@
     <ClInclude Include="Project\Scenes\GameScene.h" />
     <ClInclude Include="Engine\Resource\Model\Model.h" />
     <ClInclude Include="Engine\Scene\IScene.h" />
+    <ClInclude Include="Engine\Scene\SceneFactory.h" />
     <ClInclude Include="Engine\Resource\Sprite\Sprite.h" />
     <ClInclude Include="Engine\Resource\Audio\AudioManager.h" />
     <ClInclude Include="Engine\Input\GamepadInput.h" />

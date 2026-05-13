@@ -1,7 +1,5 @@
 #include "GameScene.h"
 #include "Scene/SceneManager.h"
-#include "TitleScene.h" // ← これを追加
-#include "Input/KeyboardInput.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -42,10 +40,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         particle->Update();
     }
 
-    // スペースキーが押されたらタイトルシーンへ戻る
-    if(KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
-        sceneManager->ChangeScene(std::make_unique<TitleScene>());
-    }
+
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
