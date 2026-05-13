@@ -1,7 +1,9 @@
 #include "Platform/WindowsApplication.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
+#ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
+#endif
 #include "Effect/ParticleCommon.h"
 #include "Graphics/DebugCamera.h"
 #include "Graphics/GameCamera.h"
@@ -102,9 +104,15 @@ void WindowsApplication::Initialize() {
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(kWindowWidth_, kWindowHeight_);
 
+#ifdef USE_IMGUI
     // 3. 最初は「停止中（PLAYボタン表示）」としてデバッグカメラを有効にする
     activeCamera_ = debugCamera_.get();
     isDebugCameraActive_ = true;
+#else
+    // 3. ImGuiを使わない場合は最初から本番カメラ
+    activeCamera_ = gameCamera_.get();
+    isDebugCameraActive_ = false;
+#endif
 
 // Initialize() の中の #ifdef USE_IMGUI のブロックを以下に置き換え
 #ifdef USE_IMGUI
@@ -214,12 +222,12 @@ void WindowsApplication::Draw() {
 
     // --- ここから Swapchain への描画 ---
 
-    // ★ImGuiのGameViewウィンドウで描画するため、ここでの直接描画はコメントアウト
-    // dxCommon_->DrawRenderTexture();
-
 #ifdef USE_IMGUI
     // メインウィンドウのImGuiを描画
     editorManager_->Draw(commandList);
+#else
+    // ImGuiを使わない場合はRenderTextureを直接画面に描画する
+    dxCommon_->DrawRenderTexture();
 #endif
     // ------------------------------------
 

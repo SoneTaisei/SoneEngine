@@ -2,7 +2,9 @@
 #include "Scene/SceneManager.h"
 #include "TitleScene.h" // ← これを追加
 #include "Input/KeyboardInput.h"
+#ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
+#endif
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
@@ -53,9 +55,13 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     particleCommon_->PreDraw(commandList_); // ※commandListを保持している場合
 
     // 雪の描画
+#ifdef USE_IMGUI
     if (EditorManager::IsShowEffects()) {
+#endif
         particleCommon_->DrawAll(viewProjectionMatrix);
+#ifdef USE_IMGUI
     }
+#endif
 }
 
 std::vector<ParticleManager *> GameScene::GetParticles() {
