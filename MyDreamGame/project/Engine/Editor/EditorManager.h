@@ -41,8 +41,12 @@ public:
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }
 
+    bool UseDebugCamera() const { return useDebugCamera_; }
+    void SetUseDebugCamera(bool use) { useDebugCamera_ = use; }
+
 private:
     bool isPlaying_ = false; // ゲーム再生中かどうか
+    bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
 
     // 選択中のオブジェクト
     Object3D *selectedObject_ = nullptr;
