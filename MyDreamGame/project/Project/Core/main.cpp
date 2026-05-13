@@ -5,7 +5,10 @@
 #include <memory> // std::unique_ptr を使うために追加
 
 #include "Scene/SceneManager.h"
-#include "Scenes/TitleScene.h"
+#include "Scene/SceneFactory.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#endif
 
 // windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -20,7 +23,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         // 初期化
         app->Initialize();
 
-        app->GetSceneManager()->ChangeScene(std::make_unique<TitleScene>());
+        // 起動シーンの決定
+        SceneType startScene = SceneType::kTitle;
+#ifdef USE_IMGUI
+        // エディターの場合はJSON設定から前回のシーンを復元
+        EditorManager* editor = app->GetEditorManager();
+        if (editor) {
+            editor->LoadSceneConfig();
+            startScene = editor->GetCurrentSceneType();
+        }
+#endif
+        app->GetSceneManager()->ChangeScene(SceneFactory::CreateScene(startScene));
 
         // メインループの実行
         app->Run();
@@ -28,4 +41,4 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         app->Finalize();
     }
 	return 0;
-}
+}

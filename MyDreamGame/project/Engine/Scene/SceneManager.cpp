@@ -17,7 +17,12 @@ void SceneManager::Update() {
         currentScene_->Update(this);
     }
 
-    // 2. 更新が終わった後、「次のシーン」の予約があるかチェック
+    // 2. 更新が終わった後、シーン遷移を処理する
+    ProcessSceneTransition();
+}
+
+void SceneManager::ProcessSceneTransition() {
+    // 「次のシーン」の予約があるかチェック
     if (nextScene_) {
         // 現在のシーンを、予約していた新しいシーンに入れ替え
         currentScene_ = std::move(nextScene_);
