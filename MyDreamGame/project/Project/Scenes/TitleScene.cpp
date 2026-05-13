@@ -6,7 +6,6 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneManager.h"
 #include "Resource/Sprite/SpriteCommon.h"
-#include "StageSelectScene.h"
 #include <wrl.h>
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/TextureManager.h"
@@ -162,11 +161,6 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
-    // シーン遷移処理
-    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
-        sceneManager->ChangeScene(std::make_unique<StageSelectScene>());
-    }
-
     if (debugCamera_) {
         debugCamera_->Update();
         // ★ debugCamera_->Update() の中で CameraManager::GetInstance()->SetCameraInfo(...) 

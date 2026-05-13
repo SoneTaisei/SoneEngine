@@ -37,6 +37,9 @@ public:
     void Draw();
 
     SceneManager *GetSceneManager() const { return sceneManager_.get(); }
+#ifdef USE_IMGUI
+    EditorManager *GetEditorManager() const { return editorManager_.get(); }
+#endif
 
 private:
     // --- システム管理 ---

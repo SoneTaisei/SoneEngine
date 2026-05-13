@@ -18,6 +18,9 @@
 
 #include <cmath>
 #include <numbers>
+#include <fstream>
+#include <string>
+#include <filesystem>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
@@ -74,6 +77,60 @@ void EditorManager::BeginFrame() {
 }
 
 void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, SceneManager *sceneManager) {
+
+    // --- メインメニューバー ---
+    if (ImGui::BeginMainMenuBar()) {
+        // PLAY / STOP ボタン
+        if (!isPlaying_) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.0f, 1.0f));
+            if (ImGui::Button("PLAY")) {
+                isPlaying_ = true;
+                useDebugCamera_ = false;
+            }
+            ImGui::PopStyleColor(3);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
+            if (ImGui::Button("STOP")) {
+                isPlaying_ = false;
+                useDebugCamera_ = true;
+                debugCamera->SetTranslation(gameCamera->GetTranslation());
+                debugCamera->SetRotation(gameCamera->GetRotation());
+            }
+            ImGui::PopStyleColor(3);
+        }
+
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+
+        // Debug Camera チェックボックス
+        ImGui::Checkbox("Debug Camera", &useDebugCamera_);
+
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+
+        // シーン切替コンボ
+        ImGui::Text("Scene:");
+        ImGui::SetNextItemWidth(130.0f);
+        {
+            int sceneIndex = static_cast<int>(currentSceneType_);
+            if (ImGui::Combo("##Scene", &sceneIndex, kSceneTypeNames, static_cast<int>(SceneType::kCount))) {
+                SceneType newType = static_cast<SceneType>(sceneIndex);
+                if (newType != currentSceneType_) {
+                    currentSceneType_ = newType;
+                    sceneManager->ChangeScene(SceneFactory::CreateScene(currentSceneType_));
+                    selectedObject_ = nullptr;
+                    selectedParticle_ = nullptr;
+                    selectedPrimitive_ = nullptr;
+                    SaveSceneConfig();
+                }
+            }
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+
     // --- ドッキングの設定 ---
     ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
@@ -88,20 +145,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
         ImGuiID dock_id_main = dockspace_id;
-        // 左側に「デバッグステータス」
+        // 左側に「Hierarchy」
         ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
-        // 右側に「ライティング・フォグ」
+        // 右側に「Inspector」
         ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
 
-        // 中央エリアをさらに上下に分割：上部に「再生コントロール」、残りに「ゲームビュー」
-        ImGuiID dock_id_center_top = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Up, 0.10f, NULL, &dock_id_main);
-
         // 各ウィンドウを各ノードに割り当てる
-        ImGui::DockBuilderDockWindow("Game Control", dock_id_center_top);
         ImGui::DockBuilderDockWindow("Game View", dock_id_main);
         ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
         ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
-        ImGui::DockBuilderDockWindow("PostEffect", dock_id_right); // Inspectorと同じ場所にタブとして追加
+        ImGui::DockBuilderDockWindow("PostEffect", dock_id_right);
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
@@ -174,55 +227,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             debugCamera->SetRotation(gameCamera->GetRotation());
         }
     }
-
-    // --- ゲーム再生制御 (Play/Stop) ---
-    // ドッキングを有効にし、タイトルバーを表示
-    ImGui::Begin("Game Control");
-
-    ImVec2 contentRegion = ImGui::GetContentRegionAvail();
-    // ボタン(100) + マージン(10) + チェックボックス(約120) = 230
-    float totalWidth = 230.0f;
-    ImGui::SetCursorPosX((contentRegion.x - totalWidth) * 0.5f);
-
-    ImGui::BeginGroup();
-
-    if (!isPlaying_) {
-        // 停止中：再生ボタンを表示
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.0f, 1.0f));
-        if (ImGui::Button("PLAY", ImVec2(100, 30))) {
-            isPlaying_ = true;
-            // 再生開始：デバッグカメラをOFFにする
-            useDebugCamera_ = false;
-        }
-        ImGui::PopStyleColor(3);
-    } else {
-        // 再生中：停止ボタンを表示
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
-        if (ImGui::Button("STOP", ImVec2(100, 30))) {
-            isPlaying_ = false;
-            // 停止：デバッグカメラをONにする
-            useDebugCamera_ = true;
-            // デバッグカメラに切り替わった時にゲームカメラの位置を引き継ぐ
-            debugCamera->SetTranslation(gameCamera->GetTranslation());
-            debugCamera->SetRotation(gameCamera->GetRotation());
-        }
-        ImGui::PopStyleColor(3);
-    }
-
-    ImGui::SameLine(0, 10.0f);
-    
-    // チェックボックスをボタンの中央の高さに合わせる
-    float currentY = ImGui::GetCursorPosY();
-    ImGui::SetCursorPosY(currentY + 5.0f);
-    ImGui::Checkbox("Debug Camera", &useDebugCamera_);
-
-    ImGui::EndGroup();
-
-    ImGui::End();
 
     // --- Inspector ウィンドウ ---
     ImGui::Begin("Inspector");
@@ -352,5 +356,51 @@ void EditorManager::Finalize() {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
+}
+
+void EditorManager::SaveSceneConfig() {
+    // ディレクトリが存在しない場合は作成する
+    std::filesystem::create_directories("json");
+
+    std::ofstream ofs("json/editor_config.json");
+    if (ofs.is_open()) {
+        ofs << "{" << std::endl;
+        ofs << "  \"currentScene\": \"" << SceneFactory::GetSceneTypeName(currentSceneType_) << "\"" << std::endl;
+        ofs << "}" << std::endl;
+        ofs.close();
+    }
+}
+
+void EditorManager::LoadSceneConfig() {
+    std::ifstream ifs("json/editor_config.json");
+    if (!ifs.is_open()) {
+        return; // ファイルがない場合はデフォルトのまま
+    }
+
+    std::string content;
+    std::string line;
+    while (std::getline(ifs, line)) {
+        content += line;
+    }
+    ifs.close();
+
+    // 簡易的なJSONパーサー: "currentScene": "xxx" を抽出
+    const std::string key = "\"currentScene\"";
+    size_t keyPos = content.find(key);
+    if (keyPos == std::string::npos) return;
+
+    // ':' の後の最初の '"' を見つける
+    size_t colonPos = content.find(':', keyPos + key.length());
+    if (colonPos == std::string::npos) return;
+
+    size_t valueStart = content.find('"', colonPos + 1);
+    if (valueStart == std::string::npos) return;
+    valueStart++; // '"' の次の文字から
+
+    size_t valueEnd = content.find('"', valueStart);
+    if (valueEnd == std::string::npos) return;
+
+    std::string sceneName = content.substr(valueStart, valueEnd - valueStart);
+    currentSceneType_ = SceneFactory::GetSceneTypeFromName(sceneName);
 }
 #endif

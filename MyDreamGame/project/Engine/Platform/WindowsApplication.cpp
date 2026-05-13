@@ -173,8 +173,11 @@ void WindowsApplication::Update() {
     // --- エディターの状態に応じて更新処理を切り替え ---
 #ifdef USE_IMGUI
     if (editorManager_->IsPlaying()) {
-        // 【再生中】シーンを更新する
+        // 【再生中】シーンを更新する（遷移処理も含む）
         sceneManager_->Update();
+    } else {
+        // 【停止中】シーン遷移のみ処理する（エディターからのシーン切替に対応）
+        sceneManager_->ProcessSceneTransition();
     }
     
     // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
@@ -246,6 +249,8 @@ void WindowsApplication::Draw() {
 void WindowsApplication::Finalize() {
 #ifdef USE_IMGUI
     if (editorManager_) {
+        // ウィンドウ閉じ時に現在のシーンをJSONに保存する
+        editorManager_->SaveSceneConfig();
         editorManager_->Finalize();
         editorManager_.reset(); // ★ここで確実に破棄
     }
