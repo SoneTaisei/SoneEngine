@@ -51,6 +51,12 @@ void Object3D::Update() {
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
+    // 描画直前に最新のカメラ行列でWVPを再計算してGPUに送る（停止中のデバッグカメラ追従のため）
+    CameraManager *cameraMgr = CameraManager::GetInstance();
+    Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
+    Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
+    mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(mappedTransform_->World, viewMatrix), projectionMatrix);
+
     auto dxCommon = DirectXCommon::GetInstance();
 
     // --- パイプラインステートの選択 ---

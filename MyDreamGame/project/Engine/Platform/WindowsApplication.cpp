@@ -173,18 +173,23 @@ void WindowsApplication::Update() {
     // --- エディターの状態に応じて更新処理を切り替え ---
 #ifdef USE_IMGUI
     if (editorManager_->IsPlaying()) {
-        // 【再生中】ゲームカメラを強制し、シーンを更新する
-        activeCamera_ = gameCamera_.get();
-        isDebugCameraActive_ = false;
+        // 【再生中】シーンを更新する
         sceneManager_->Update();
-        gameCamera_->Update();
-    } else {
-        // 【停止中】デバッグカメラを強制し、シーンの更新は止める
+    }
+    
+    // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
+    gameCamera_->Update();
+
+    // カメラの切り替え（チェックボックスの状態を優先）
+    if (editorManager_->UseDebugCamera()) {
         activeCamera_ = debugCamera_.get();
         isDebugCameraActive_ = true;
         
         bool allowCameraInput = editorManager_->IsGameViewHovered() || !ImGui::GetIO().WantCaptureMouse;
         debugCamera_->Update(allowCameraInput);
+    } else {
+        activeCamera_ = gameCamera_.get();
+        isDebugCameraActive_ = false;
     }
 #else
     // IMGUI未使用時は通常通り更新

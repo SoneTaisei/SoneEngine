@@ -166,31 +166,33 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- デバッグカメラの切り替え制御 ---
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
-        if (isDebugCameraActive) {
-            *activeCamera = gameCamera;
-            isDebugCameraActive = false;
-        } else {
+        useDebugCamera_ = !useDebugCamera_;
+        if (useDebugCamera_) {
             debugCamera->SetTranslation(gameCamera->GetTranslation());
             debugCamera->SetRotation(gameCamera->GetRotation());
-            *activeCamera = debugCamera;
-            isDebugCameraActive = true;
         }
     }
 
     // --- ゲーム再生制御 (Play/Stop) ---
     // ドッキングを有効にし、タイトルバーを表示
     ImGui::Begin("Game Control");
+
+    ImVec2 contentRegion = ImGui::GetContentRegionAvail();
+    // ボタン(100) + マージン(10) + チェックボックス(約120) = 230
+    float totalWidth = 230.0f;
+    ImGui::SetCursorPosX((contentRegion.x - totalWidth) * 0.5f);
+
+    ImGui::BeginGroup();
+
     if (!isPlaying_) {
         // 停止中：再生ボタンを表示
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.0f, 1.0f));
-        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - 100) * 0.5f);
         if (ImGui::Button("PLAY", ImVec2(100, 30))) {
             isPlaying_ = true;
-            // 再生開始：本番のゲームカメラ視点に切り替え
-            *activeCamera = gameCamera;
-            isDebugCameraActive = false;
+            // 再生開始：デバッグカメラをOFFにする
+            useDebugCamera_ = false;
         }
         ImGui::PopStyleColor(3);
     } else {
@@ -198,17 +200,26 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
-        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - 100) * 0.5f);
         if (ImGui::Button("STOP", ImVec2(100, 30))) {
             isPlaying_ = false;
-            // 停止：デバッグカメラに切り替えて自由に動かせるようにする
+            // 停止：デバッグカメラをONにする
+            useDebugCamera_ = true;
+            // デバッグカメラに切り替わった時にゲームカメラの位置を引き継ぐ
             debugCamera->SetTranslation(gameCamera->GetTranslation());
             debugCamera->SetRotation(gameCamera->GetRotation());
-            *activeCamera = debugCamera;
-            isDebugCameraActive = true;
         }
         ImGui::PopStyleColor(3);
     }
+
+    ImGui::SameLine(0, 10.0f);
+    
+    // チェックボックスをボタンの中央の高さに合わせる
+    float currentY = ImGui::GetCursorPosY();
+    ImGui::SetCursorPosY(currentY + 5.0f);
+    ImGui::Checkbox("Debug Camera", &useDebugCamera_);
+
+    ImGui::EndGroup();
+
     ImGui::End();
 
     // --- Inspector ウィンドウ ---
