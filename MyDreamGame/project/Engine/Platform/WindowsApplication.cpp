@@ -166,7 +166,7 @@ void WindowsApplication::Update() {
         debugCamera_.get(),
         &activeCamera_,
         isDebugCameraActive_,
-        dxCommon_->GetRenderTextureSrvHandleGPU(),
+        dxCommon_->GetPostProcessSrvHandleGPU(),
         sceneManager_.get());
 #endif
 
@@ -221,6 +221,9 @@ void WindowsApplication::Draw() {
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw(commandList);
     // ------------------------------------
+
+    // ★ ポストエフェクトを実行 (RenderTexture -> PostProcessTexture)
+    dxCommon_->ExecutePostEffect();
 
     // 2. Swapchain（最終画面）への描画準備
     dxCommon_->PreDrawSwapchain();
