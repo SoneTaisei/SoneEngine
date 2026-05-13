@@ -12,6 +12,9 @@ public:
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
 
+    // ヒエラルキー用
+    std::vector<Object3D *> GetObjects() override;
+
 private:
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
 

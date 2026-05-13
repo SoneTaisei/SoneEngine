@@ -15,6 +15,8 @@ public:
     void Update();
     void Draw(const Matrix4x4 &viewProjectionMatrix);
 
+    IScene *GetCurrentScene() const { return currentScene_.get(); }
+
     void ChangeScene(std::unique_ptr<IScene> nextScene);
 
     // SpriteCommonをセットする関数

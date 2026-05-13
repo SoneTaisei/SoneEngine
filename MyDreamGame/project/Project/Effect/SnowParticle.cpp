@@ -39,7 +39,8 @@ void SnowParticle::Update() {
         it->transform.translate.z += it->velocity.z * kDeltaTime;
 
         it->currentTime += kDeltaTime;
-        it->color = { 1.0f,1.0f,1.0f,0.5f };
+        float alpha = 1.0f - (it->currentTime / it->lifeTime);
+        it->color.w = alpha;
         ++it;
     }
 }

@@ -33,6 +33,8 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
+    skydomeObject->SetName("Skydome");
+
     objects_.push_back(std::move(skydomeObject));
 }
 
@@ -50,11 +52,6 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         object->Update();
     }
 
-    // ImGuiもObject3D版を呼ぶ
-    for (auto &object : objects_) {
-        ShowObject3DGui("Object", object.get());
-    }
-
     // シーン遷移の処理
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
         sceneManager->ChangeScene(std::make_unique<GameScene>());
@@ -66,4 +63,12 @@ void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     for (auto &object : objects_) {
         object->Draw(commandList_.Get());
     }
+}
+
+std::vector<Object3D *> StageSelectScene::GetObjects() {
+    std::vector<Object3D *> result;
+    for (auto &obj : objects_) {
+        result.push_back(obj.get());
+    }
+    return result;
 }

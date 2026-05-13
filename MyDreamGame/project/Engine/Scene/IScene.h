@@ -9,6 +9,9 @@ class SceneManager;
 class SpriteCommon;
 class ModelCommon;
 class ParticleCommon;
+class Object3D;
+class ParticleManager;
+class PrimitiveObject;
 
 class IScene {
 public:
@@ -22,6 +25,11 @@ public:
 
     // 描画
     virtual void Draw(const Matrix4x4 &viewProjectionMatrix) = 0;
+
+    // ヒエラルキー用: オブジェクトリストの取得 (デフォルトは空)
+    virtual std::vector<Object3D *> GetObjects() { return {}; }
+    virtual std::vector<ParticleManager *> GetParticles() { return {}; }
+    virtual std::vector<PrimitiveObject *> GetPrimitives() { return {}; }
 
     // セット用関数
     void SetSpriteCommon(SpriteCommon* spriteCommon) {

@@ -57,7 +57,7 @@ void ModelCommon::Initialize(ID3D12Device *device) {
     // ライトとカメラの初期値
     *mappedDirectionalLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 0.0f};
     *mappedPointLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 2.0f, 0.0f}, 1.0f, 10.0f, 1.0f};
-    *mappedCamera_ = {{0.0f, 0.0f, -10.0f}};
+    mappedCamera_->worldPosition = {0.0f, 0.0f, -10.0f};
 
     // 💡 資料通りの設定値に更新
     mappedSpotLight_->color = {1.0f, 1.0f, 1.0f, 1.0f};
