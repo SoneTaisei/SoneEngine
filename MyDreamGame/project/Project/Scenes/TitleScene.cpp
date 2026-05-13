@@ -11,7 +11,9 @@
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/TextureManager.h"
 #include "Graphics/CameraManager.h"
+#ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
+#endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 
 TitleScene::~TitleScene() {
@@ -225,21 +227,29 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     }
 
     // 3Dモデルの描画
+#ifdef USE_IMGUI
     if (EditorManager::IsShowObjects()) {
+#endif
         for (auto &object : objects_) {
             object->Draw(commandList_.Get());
         }
+#ifdef USE_IMGUI
     }
+#endif
 
     // パーティクルの描画
+#ifdef USE_IMGUI
     if (EditorManager::IsShowEffects()) {
+#endif
         particleCommon_->DrawAll(viewProjectionMatrix);
 
         // ■ プリミティブパーティクルの描画
         for (auto& p : primitiveParticles_) {
             p->Draw(commandList_.Get());
         }
+#ifdef USE_IMGUI
     }
+#endif
 
     // -------------------------------------------------
     // ■ パーティクルの描画
