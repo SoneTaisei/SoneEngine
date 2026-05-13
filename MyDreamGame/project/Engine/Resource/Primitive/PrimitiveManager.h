@@ -15,6 +15,7 @@ public:
 
     // プリミティブを取得する。存在しない場合は生成する。
     Primitive* GetPrimitive(PrimitiveType type, float size = 1.0f, uint32_t segments = 16);
+    Primitive* GetRing(float innerRadius, float outerRadius, uint32_t segments, float startAngle, float endAngle, const Vector4& innerColor, const Vector4& outerColor, bool isRadialUV);
 
 private:
     PrimitiveManager() = default;

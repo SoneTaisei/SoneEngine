@@ -12,6 +12,7 @@ VertexShaderOutput main(VertexShaderInput input) {
     output.worldPosition = mul(input.position, gTransformationMatrix.World).xyz;
     output.texcoord = input.texcoord;
     output.normal = normalize(mul(input.normal, (float3x3) gTransformationMatrix.WorldInverseTranspose));
+    output.color = input.color;
     
     return output;
 }

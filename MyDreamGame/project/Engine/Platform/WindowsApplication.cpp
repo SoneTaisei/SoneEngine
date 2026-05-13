@@ -10,6 +10,7 @@
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
 #include "Window.h"
+#include "Core/TimeManager.h"
 // (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
 
 #include "Core/Utility/TransformFunctions.h"
@@ -101,9 +102,9 @@ void WindowsApplication::Initialize() {
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(kWindowWidth_, kWindowHeight_);
 
-    // 3. 最初は「本番カメラ」をアクティブにする
-    activeCamera_ = gameCamera_.get();
-    isDebugCameraActive_ = false;
+    // 3. 最初は「停止中（PLAYボタン表示）」としてデバッグカメラを有効にする
+    activeCamera_ = debugCamera_.get();
+    isDebugCameraActive_ = true;
 
 // Initialize() の中の #ifdef USE_IMGUI のブロックを以下に置き換え
 #ifdef USE_IMGUI
@@ -119,7 +120,7 @@ void WindowsApplication::Initialize() {
     timeBeginPeriod(1);
 
     // TimeManager を初期化
-    // TimeManager::GetInstance().Initialize();
+    TimeManager::GetInstance().Initialize();
 
 #ifdef USE_IMGUI
     // リソースリークチェッカーのインスタンスを作成
@@ -140,7 +141,7 @@ void WindowsApplication::Run() {
 
 void WindowsApplication::Update() {
     // デルタタイムを計算
-    // TimeManager::GetInstance().Update();
+    TimeManager::GetInstance().Update();
 
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
@@ -156,23 +157,40 @@ void WindowsApplication::Update() {
         gameCamera_.get(),
         debugCamera_.get(),
         &activeCamera_,
-        isDebugCameraActive_);
+        isDebugCameraActive_,
+        dxCommon_->GetRenderTextureSrvHandleGPU(),
+        sceneManager_.get());
 #endif
 
-    // ★ シーンの更新 (Drawから救出！)
-    sceneManager_->Update();
-
-    // カメラの更新
-    if (isDebugCameraActive_) {
-        debugCamera_->Update();
-    } else {
+    // --- エディターの状態に応じて更新処理を切り替え ---
+#ifdef USE_IMGUI
+    if (editorManager_->IsPlaying()) {
+        // 【再生中】ゲームカメラを強制し、シーンを更新する
+        activeCamera_ = gameCamera_.get();
+        isDebugCameraActive_ = false;
+        sceneManager_->Update();
         gameCamera_->Update();
+    } else {
+        // 【停止中】デバッグカメラを強制し、シーンの更新は止める
+        activeCamera_ = debugCamera_.get();
+        isDebugCameraActive_ = true;
+        
+        bool allowCameraInput = editorManager_->IsGameViewHovered() || !ImGui::GetIO().WantCaptureMouse;
+        debugCamera_->Update(allowCameraInput);
     }
+#else
+    // IMGUI未使用時は通常通り更新
+    sceneManager_->Update();
+    gameCamera_->Update();
+#endif
 
-    // ViewProjectionの更新
+    // 現在のアクティブカメラの行列をViewProjectionに反映
     viewProjection_->UpdateMatrix(
         activeCamera_->GetViewMatrix(),
         activeCamera_->GetProjectionMatrix());
+    
+    // 他のオブジェクトが使うCameraManagerも同期させる
+    activeCamera_->UpdateMatrix(); 
 }
 
 void WindowsApplication::Draw() {
@@ -196,8 +214,8 @@ void WindowsApplication::Draw() {
 
     // --- ここから Swapchain への描画 ---
 
-    // ★追加：RenderTextureに描かれた絵を、Swapchainにコピーして貼り付ける！
-    dxCommon_->DrawRenderTexture();
+    // ★ImGuiのGameViewウィンドウで描画するため、ここでの直接描画はコメントアウト
+    // dxCommon_->DrawRenderTexture();
 
 #ifdef USE_IMGUI
     // メインウィンドウのImGuiを描画

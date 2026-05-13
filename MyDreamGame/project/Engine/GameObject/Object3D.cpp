@@ -2,6 +2,7 @@
 #include "Graphics/CameraManager.h"
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 
 D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
 
@@ -50,9 +51,34 @@ void Object3D::Update() {
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
+    auto dxCommon = DirectXCommon::GetInstance();
+
+    // --- パイプラインステートの選択 ---
+    if (blendMode_ == BlendMode::kBlendModeAdd) {
+        if (isDoubleSided_) {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());
+        } else {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateAdditive());
+        }
+    } else {
+        // 通常合成 (kBlendModeNomal)
+        // アルファ値が1.0未満、または意図的に半透明として扱う場合はデプス書き込みなしのパイプラインを使う
+        if (material_.color.w < 1.0f) {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateTransparent());
+        } else {
+            if (isDoubleSided_) {
+                commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCull());
+            } else {
+                commandList->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+            }
+        }
+    }
+
     // 💡 スロット1が行列、スロット0がマテリアルが正解です！
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress()); // 行列 (スロット1)
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());  // マテリアル (スロット0)
+    // カメラの定数バッファをセット (スロット3)
+    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
     // 環境マップをスロット7にセット
     if (sEnvironmentMapHandle.ptr != 0) {

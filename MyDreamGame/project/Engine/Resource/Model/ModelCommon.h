@@ -6,9 +6,7 @@
 class Model;
 class ModelCommon;
 
-struct CameraForGPU {
-    Vector3 worldPosition;
-};
+// CameraForGPU は Structs.h に移動しました
 
 class ModelCommon {
 public:

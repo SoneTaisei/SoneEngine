@@ -14,6 +14,9 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 #include <vector>
+#include "Resource/Model/ModelCommon.h"
+#include "Resource/Sprite/SpriteCommon.h"
+#include "Effect/ParticleCommon.h"
 
 class TitleScene : public IScene {
 public:
@@ -21,6 +24,11 @@ public:
     void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
+
+    // ヒエラルキー用
+    std::vector<Object3D *> GetObjects() override;
+    std::vector<ParticleManager *> GetParticles() override;
+    std::vector<PrimitiveObject *> GetPrimitives() override;
 
 private:
     // メンバ変数としてモデル、テクスチャ、座標を持つ
@@ -36,6 +44,8 @@ private:
     // ■ 追加: パーティクル管理用変数
 
     // 1. 共通基盤
+    std::unique_ptr<ModelCommon> modelCommon_{};
+    std::unique_ptr<SpriteCommon> spriteCommon_{};
     std::unique_ptr<ParticleCommon> particleCommon_{};
 
     // 2. パーティクルリスト (所有権管理用)
@@ -60,5 +70,10 @@ private:
     std::unique_ptr<DebugCamera> debugCamera_;
 
     std::vector<std::unique_ptr<PrimitiveObject>> primitiveParticles_;
+    std::unique_ptr<PrimitiveObject> ringEffectRoot_;
+
+    // --- エフェクトアニメーション用 ---
+    float ringEffectTimer_ = 0.0f;
+    const float kRingEffectDuration = 2.0f;
 
 };
