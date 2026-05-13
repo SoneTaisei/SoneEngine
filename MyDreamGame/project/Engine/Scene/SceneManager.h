@@ -5,6 +5,7 @@
 class SpriteCommon;
 class ModelCommon;
 class ParticleCommon;
+class GameCamera;
 
 class SceneManager {
 public:
@@ -31,6 +32,9 @@ public:
         particleCommon_ = particleCommon;
     }
 
+    // GameCameraをセットする関数
+    void SetGameCamera(GameCamera* gameCamera) { gameCamera_ = gameCamera; }
+
     // SpriteCommonを取得する関数
     SpriteCommon *GetSpriteCommon() const { return spriteCommon_; }
     ModelCommon *GetModelCommon()const { return modelCommon_; }
@@ -41,6 +45,7 @@ private:
     SpriteCommon *spriteCommon_ = nullptr;
     ModelCommon *modelCommon_ = nullptr;
     ParticleCommon* particleCommon_ = nullptr;
+    GameCamera* gameCamera_ = nullptr;
 
     // 次のシーンを予約しておく変数
     std::unique_ptr<IScene> nextScene_ = nullptr;

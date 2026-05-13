@@ -1,0 +1,87 @@
+#pragma once
+#include "GameObject/PrimitiveObject.h"
+#include "Resource/Primitive/PrimitiveManager.h"
+#include "Input/KeyboardInput.h"
+#include "Core/TimeManager.h"
+#include "Core/Utility/Structs.h"
+#include <vector>
+
+// 前方宣言
+class MapChip2D;
+
+/// <summary>
+/// 2Dスクロールゲーム用プレイヤークラス
+/// PrimitiveObject(Box)を内部に持ち、重力・移動・ジャンプを処理する
+/// </summary>
+class Player2D {
+public:
+    void Initialize(ID3D12GraphicsCommandList* commandList);
+    void Update(const MapChip2D& map);
+    void Draw(ID3D12GraphicsCommandList* commandList);
+    void DisplayImGui();
+
+    // プレイヤーの位置を取得（カメラ追従用）
+    const Vector3& GetPosition() const { return position_; }
+    void SetPosition(const Vector3& pos) { position_ = pos; }
+
+    // AABBの取得（当たり判定用）
+    struct AABB {
+        float left, top, right, bottom;
+    };
+    AABB GetAABB() const;
+
+    // ヒエラルキー用
+    PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
+
+private:
+    // 入力処理
+    void HandleInput();
+
+    // 物理シミュレーション
+    void ApplyGravity(float deltaTime);
+
+    // マップとの当たり判定
+    void ResolveCollisionY(const MapChip2D& map);
+    void ResolveCollisionX(const MapChip2D& map);
+
+private:
+    std::unique_ptr<PrimitiveObject> primitiveObj_;
+
+    // 物理パラメータ
+    Vector3 position_ = { 2.0f, 5.0f, 0.0f }; // 初期位置
+    Vector3 velocity_ = { 0.0f, 0.0f, 0.0f };
+
+    float moveSpeed_ = 5.0f;       // 左右移動速度
+    float jumpPower_ = 10.0f;      // ジャンプ力
+    float gravity_ = -20.0f;       // 重力加速度
+    float maxFallSpeed_ = -15.0f;  // 最大落下速度
+
+    bool isOnGround_ = false;      // 地面にいるか
+    
+    // ダッシュ用パラメータ
+    bool canDash_ = true;          // ダッシュ可能か（接地で回復）
+    bool isDashing_ = false;       // ダッシュ中か
+    float dashTimer_ = 0.0f;       // ダッシュ経過時間
+    float dashDuration_ = 0.15f;   // ダッシュ継続時間
+    float dashSpeed_ = 15.0f;      // ダッシュの速さ
+    Vector3 dashVelocity_ = {0.0f, 0.0f, 0.0f}; // ダッシュ中の固定速度
+
+    // プレイヤーの色
+    Vector4 colorNormal_ = { 0.2f, 0.6f, 1.0f, 1.0f }; // 通常時（青）
+    Vector4 colorDashed_ = { 1.0f, 1.0f, 1.0f, 1.0f }; // ダッシュ使用後（白）
+
+    // 壁ジャンプ用パラメータ
+    bool isTouchingWallRight_ = false;
+    bool isTouchingWallLeft_ = false;
+    float wallJumpTimer_ = 0.0f;       // 壁ジャンプ後の入力制限時間
+    float wallJumpDuration_ = 0.2f;    // 制限時間の長さ
+    Vector2 wallJumpPower_ = { 8.0f, 10.0f }; // 壁ジャンプ時の X, Y 速度
+    
+    // 壁ずり落ち・張り付き用パラメータ
+    float wallSlideSpeed_ = -2.0f;     // 壁ずり落ち時の最大落下速度
+    bool isWallSliding_ = false;       // 壁ずり落ち中か
+    bool isWallClinging_ = false;      // 壁張り付き中か
+
+    float halfWidth_ = 0.4f;
+    float halfHeight_ = 0.4f;
+};

@@ -1,5 +1,8 @@
 #include "GameScene.h"
 #include "Scene/SceneManager.h"
+#include "Resource/Primitive/PrimitiveManager.h"
+#include "Resource/Model/ModelCommon.h"
+#include "Graphics/GameCamera.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -7,62 +10,77 @@
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
 
-    // 1. Device取得
+    // Device取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
-    // 3. SnowParticleの生成 (unique_ptrで作る)
-    auto snowParticle = std::make_unique<SnowParticle>();
+    // PrimitiveManagerの初期化（まだの場合）
+    PrimitiveManager::GetInstance()->Initialize(device.Get());
 
-    // 4. 初期化
-    snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/School/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
-    snowParticle->SetName("Snow Particles");
+    // マップの生成と初期化
+    map_ = std::make_unique<MapChip2D>();
+    map_->Initialize(commandList.Get());
 
-    // Commonに描画登録する (Modelと同じ仕組みにする)
-    particleCommon_->AddParticle(snowParticle.get());
+    // プレイヤーの生成と初期化
+    player_ = std::make_unique<Player2D>();
+    player_->Initialize(commandList.Get());
 
-    // 5. エミッタ用に生ポインタを保存しておく
-    snowParticle_ = snowParticle.get();
-
-    // 6. リストに所有権を移動 (push_back)
-    particles_.push_back(std::move(snowParticle));
+    // GameCameraを正射影モード（2D表示）に切り替え
+    if (gameCamera_) {
+        gameCamera_->InitializeOrthographic(1280, 720, 20.0f, 11.25f);
+        // プレイヤーの位置をカメラ追従ターゲットに設定
+        gameCamera_->SetFollowTarget(&player_->GetPosition());
+    }
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
-// 1. 雪を発生させる (個別のポインタを使う)
-    if(snowParticle_) {
-        snowParticle_->Emit(snowEmitter_);
+    // プレイヤーの更新（入力・物理・当たり判定）
+    if (player_ && map_) {
+        player_->Update(*map_);
     }
 
-    // 2. 全パーティクルを更新する (リストを使って一括更新)
-    // これにより、パーティクルの種類が増えてもループ一つで済みます
-    for(auto &particle : particles_) {
-        particle->Update();
+    // マップの更新
+    if (map_) {
+        map_->Update();
     }
+}
 
-
+void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
+#ifdef USE_IMGUI
+    if (player_ && player_->GetPrimitiveObject() == selectedPrimitive) {
+        player_->DisplayImGui();
+    }
+#endif
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // ModelCommonの描画前処理
+    modelCommon_->PreDraw(commandList_);
 
-   // Draw
-    // 描画前処理 (ParticleCommonのPreDrawが必要なら呼ぶ)
-    particleCommon_->PreDraw(commandList_); // ※commandListを保持している場合
-
-    // 雪の描画
-#ifdef USE_IMGUI
-    if (EditorManager::IsShowEffects()) {
-#endif
-        particleCommon_->DrawAll(viewProjectionMatrix);
-#ifdef USE_IMGUI
+    // マップの描画
+    if (map_) {
+        map_->Draw(commandList_);
     }
-#endif
+
+    // プレイヤーの描画
+    if (player_) {
+        player_->Draw(commandList_);
+    }
 }
 
-std::vector<ParticleManager *> GameScene::GetParticles() {
-    std::vector<ParticleManager *> result;
-    for (auto &p : particles_) {
-        result.push_back(p.get());
+std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
+    std::vector<PrimitiveObject *> result;
+
+    // プレイヤー
+    if (player_) {
+        result.push_back(player_->GetPrimitiveObject());
     }
+
+    // マップチップ
+    if (map_) {
+        auto mapPrims = map_->GetPrimitiveObjects();
+        result.insert(result.end(), mapPrims.begin(), mapPrims.end());
+    }
+
     return result;
 }

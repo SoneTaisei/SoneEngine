@@ -236,7 +236,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         selectedParticle_->DrawImGui();
     } else if (selectedPrimitive_) {
         selectedPrimitive_->DisplayImGui("Primitive Properties");
+        if (activeScene) {
+            activeScene->DisplayImGui(selectedPrimitive_);
+        }
     } else {
+        if (activeScene) {
+            activeScene->DisplayImGui(nullptr);
+        }
         ImGui::Text("Global Visibility Settings");
         ImGui::Separator();
         ImGui::Checkbox("Show Objects (Models)", &showObjects_);
