@@ -11,6 +11,26 @@
 class DirectXCommon {
 public:
     static DirectXCommon *GetInstance();
+    
+    enum class PostEffect {
+        kNone,
+        kGrayscale,
+        kSepia,
+        kVignette,
+        kSmoothing,
+    };
+
+    struct VignetteParams {
+        float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        float scale = 16.0f;
+        float power = 0.8f;
+    };
+
+    struct SmoothingParams {
+        int kernelSize = 1;       // カーネルの半径 (1=3x3, 2=5x5, 3=7x7)
+        float texelSize[2] = {};  // 1.0 / テクスチャ解像度
+        float strength = 1.0f;    // スムージングの強度 (0=元画像, 1=完全にぼかす)
+    };
 
 	// 初期化処理
 	void Initialize(HWND hwnd,int32_t windowWidth,int32_t windowHeight);
@@ -34,10 +54,17 @@ public:
 	// RenderTextureを初期化する専用関数
     void InitializeRenderTexture();
     
+    // ポストエフェクトを実行する関数 (RenderTexture -> PostProcessTexture)
+    void ExecutePostEffect();
+
 	// RenderTextureの内容を現在の画面にコピーして描画する関数
     void DrawRenderTexture();
 
 	void CreateSkyboxPipeline();
+    
+    // ポストエフェクトの設定
+    void SetPostEffect(PostEffect effect) { postEffect_ = effect; }
+    PostEffect GetPostEffect() const { return postEffect_; }
 
 	// ゲッター関数
 	ID3D12Device *GetDevice() const { return device_.Get(); }
@@ -57,9 +84,16 @@ public:
     IDxcIncludeHandler *GetIncludeHandler() const { return includeHandler_.Get(); }
     ID3D12RootSignature *GetCopyImageRootSignature() const { return copyImageRootSignature_.Get(); }
     ID3D12PipelineState *GetCopyImagePipelineState() const { return copyImagePipelineState_.Get(); }
+    ID3D12PipelineState *GetGrayscalePipelineState() const { return grayscalePipelineState_.Get(); }
+    ID3D12PipelineState *GetSepiaPipelineState() const { return sepiaPipelineState_.Get(); }
+    ID3D12PipelineState *GetVignettePipelineState() const { return vignettePipelineState_.Get(); }
+    ID3D12PipelineState *GetSmoothingPipelineState() const { return smoothingPipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return postProcessSrvHandleGPU_; }
+    VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
+    SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
 
 private:
 	// DirectXのインスタンス作成
@@ -68,8 +102,8 @@ private:
 	void CreateFinalRenderTargets();
 	// パイプラインステートオブジェクト(描画ルール)の作成
 	void CreatePipelines();
-    // CopyImage専用のパイプライン作成関数
-	void CreateCopyImagePipeline();
+    // ポストエフェクト専用のパイプライン作成関数
+	void CreatePostEffectPipelines();
 	// FPS固定初期化
 	void InitializeFixFPS();
 	// FPS固定更新
@@ -117,8 +151,26 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE renderTextureSrvHandleCPU_{}; // SRV用 (CPU)
     D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandleGPU_{}; // SRV用 (GPU)
 
+    // ポストプロセス用のリソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> postProcessResource_;
+    D3D12_CPU_DESCRIPTOR_HANDLE postProcessRtvHandle_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE postProcessSrvHandleCPU_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE postProcessSrvHandleGPU_{};
+
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> copyImageRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyImagePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> smoothingPipelineState_;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> vignetteParamResource_;
+    VignetteParams* vignetteParamsData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> smoothingParamResource_;
+    SmoothingParams* smoothingParamsData_ = nullptr;
+
+    PostEffect postEffect_ = PostEffect::kNone;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;

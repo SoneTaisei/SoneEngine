@@ -8,6 +8,7 @@
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
 #include "Effect/ParticleManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -100,6 +101,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::DockBuilderDockWindow("Game View", dock_id_main);
         ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
         ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
+        ImGui::DockBuilderDockWindow("PostEffect", dock_id_right); // Inspectorと同じ場所にタブとして追加
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
@@ -237,6 +239,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::Checkbox("Show Effects (Particles/Primitives)", &showEffects_);
         ImGui::Spacing();
 
+
         ImGui::Text("Global Settings (Lighting)");
         ImGui::Separator();
 
@@ -300,6 +303,42 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Fog Effect", &enableFog);
+    }
+    ImGui::End();
+
+    // --- PostEffect ウィンドウ ---
+    ImGui::Begin("PostEffect");
+    {
+        ImGui::Text("Post Effect Settings");
+        ImGui::Separator();
+        const char* postEffectItems[] = { "None", "Grayscale", "Sepia", "Vignette", "Smoothing" };
+        int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
+        if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
+            DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);
+        }
+
+        if (currentEffect == (int)DirectXCommon::PostEffect::kVignette) {
+            ImGui::Spacing();
+            ImGui::Text("Vignette Settings");
+            ImGui::Separator();
+            auto params = DirectXCommon::GetInstance()->GetVignetteParamsData();
+            if (params) {
+                ImGui::ColorEdit4("Color", params->color);
+                ImGui::DragFloat("Scale", &params->scale, 0.1f, 0.0f, 100.0f);
+                ImGui::DragFloat("Power", &params->power, 0.01f, 0.0f, 10.0f);
+            }
+        }
+
+        if (currentEffect == (int)DirectXCommon::PostEffect::kSmoothing) {
+            ImGui::Spacing();
+            ImGui::Text("Smoothing Settings");
+            ImGui::Separator();
+            auto params = DirectXCommon::GetInstance()->GetSmoothingParamsData();
+            if (params) {
+                ImGui::SliderInt("Kernel Size", &params->kernelSize, 1, 5);
+                ImGui::SliderFloat("Strength", &params->strength, 0.0f, 1.0f);
+            }
+        }
     }
     ImGui::End();
 }

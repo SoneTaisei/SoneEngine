@@ -27,7 +27,7 @@ void DirectXCommon::Initialize(HWND hwnd, int32_t windowWidth, int32_t windowHei
 	CreateDxInstance();
 	CreateFinalRenderTargets();
 	CreatePipelines();
-    CreateCopyImagePipeline();
+    CreatePostEffectPipelines();
     // Skybox用のパイプラインを作る指示を出す
     CreateSkyboxPipeline();
     InitializeFixFPS();
@@ -236,8 +236,8 @@ void DirectXCommon::CreateFinalRenderTargets() {
     hr = dxgiFactory_->CreateSwapChainForHwnd(commandQueue_.Get(), hwnd_, &swapChainDesc, nullptr, nullptr, reinterpret_cast<IDXGISwapChain1 **>(swapChain_.GetAddressOf()));
     assert(SUCCEEDED(hr));
 
-    // RTVの枠を「2」から「3」に増やす！（スワップチェーン2個 + RenderTexture1個）
-    rtvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 3, false);
+    // RTVの枠を「3」から「4」に増やす！（スワップチェーン2個 + RenderTexture1個 + PostProcess1個）
+    rtvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 4, false);
 
     for(int i = 0; i < 2; ++i) {
         hr = swapChain_->GetBuffer(i, IID_PPV_ARGS(&swapChainResources_[i]));
@@ -521,9 +521,25 @@ void DirectXCommon::InitializeRenderTexture() {
     srvDesc.Texture2D.MipLevels = 1;
 
     device_->CreateShaderResourceView(renderTextureResource_.Get(), &srvDesc, renderTextureSrvHandleCPU_);
+
+    // --- ポストプロセス用テクスチャの作成 ---
+    postProcessResource_ = CreateRenderTextureResource(
+        device_.Get(), windowWidth_, windowHeight_,
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kRenderTargetClearValue);
+
+    // RTVの作成 (4番目: インデックス3)
+    postProcessRtvHandle_ = GetCPUDescriptorHandle(
+        rtvDescriptorHeap_.Get(),
+        device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV), 3);
+    
+    device_->CreateRenderTargetView(postProcessResource_.Get(), &rtvDesc, postProcessRtvHandle_);
+
+    // SRVの作成
+    SrvManager::GetInstance()->Allocate(&postProcessSrvHandleCPU_, &postProcessSrvHandleGPU_);
+    device_->CreateShaderResourceView(postProcessResource_.Get(), &srvDesc, postProcessSrvHandleCPU_);
 }
 
-void DirectXCommon::CreateCopyImagePipeline() {
+void DirectXCommon::CreatePostEffectPipelines() {
     HRESULT hr;
 
     // 1. RootSignatureの作成 (TextureとSamplerが使えるようにする)
@@ -538,11 +554,16 @@ void DirectXCommon::CreateCopyImagePipeline() {
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
     // RootParameterにセット
-    D3D12_ROOT_PARAMETER rootParameters[1] = {};
+    D3D12_ROOT_PARAMETER rootParameters[2] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].DescriptorTable.pDescriptorRanges = descriptorRange;
     rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+
+    // b0 (VignetteParams)
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[1].Descriptor.ShaderRegister = 0;
 
     // Sampler用 (s0)
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
@@ -566,14 +587,18 @@ void DirectXCommon::CreateCopyImagePipeline() {
     device_->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&copyImageRootSignature_));
 
     // 2. シェーダーのコンパイル
-    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"shaders/CopyImage.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psBlob = CompileShader(L"shaders/CopyImage.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"shaders/Fullscreen.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psCopyBlob = CompileShader(L"shaders/CopyImage.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psGrayscaleBlob = CompileShader(L"shaders/Grayscale.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = CompileShader(L"shaders/Sepia.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psVignetteBlob = CompileShader(L"shaders/Vignette.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psSmoothingBlob = CompileShader(L"shaders/Smoothing.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
     // 3. PipelineState (PSO) の作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
     psoDesc.pRootSignature = copyImageRootSignature_.Get();
     psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
-    psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
+    psoDesc.PS = {psCopyBlob->GetBufferPointer(), psCopyBlob->GetBufferSize()};
 
     // ★資料の指示1：InputLayoutは利用しない
     psoDesc.InputLayout.pInputElementDescs = nullptr;
@@ -594,33 +619,108 @@ void DirectXCommon::CreateCopyImagePipeline() {
 
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&copyImagePipelineState_));
     assert(SUCCEEDED(hr));
+
+    // グレースケール用のPSOを作成
+    psoDesc.PS = {psGrayscaleBlob->GetBufferPointer(), psGrayscaleBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&grayscalePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // セピア用のPSOを作成
+    psoDesc.PS = {psSepiaBlob->GetBufferPointer(), psSepiaBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&sepiaPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // ヴィネット用のPSOを作成
+    psoDesc.PS = {psVignetteBlob->GetBufferPointer(), psVignetteBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&vignettePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // ヴィネット用定数バッファの作成
+    vignetteParamResource_ = CreateBufferResource(device_.Get(), sizeof(VignetteParams));
+    vignetteParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&vignetteParamsData_));
+    vignetteParamsData_->color[0] = 0.0f;
+    vignetteParamsData_->color[1] = 0.0f;
+    vignetteParamsData_->color[2] = 0.0f;
+    vignetteParamsData_->color[3] = 1.0f;
+    vignetteParamsData_->scale = 16.0f;
+    vignetteParamsData_->power = 0.8f;
+
+    // スムージング用のPSOを作成
+    psoDesc.PS = {psSmoothingBlob->GetBufferPointer(), psSmoothingBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&smoothingPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // スムージング用定数バッファの作成
+    smoothingParamResource_ = CreateBufferResource(device_.Get(), sizeof(SmoothingParams));
+    smoothingParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&smoothingParamsData_));
+    smoothingParamsData_->kernelSize = 2;
+    smoothingParamsData_->texelSize[0] = 1.0f / (float)windowWidth_;
+    smoothingParamsData_->texelSize[1] = 1.0f / (float)windowHeight_;
+    smoothingParamsData_->strength = 1.0f;
+}
+
+void DirectXCommon::ExecutePostEffect() {
+    // 1. バリアを張る (RenderTexture: RT -> SRV, PostProcess: SRV -> RT)
+    D3D12_RESOURCE_BARRIER barriers[2] = {};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource = renderTextureResource_.Get();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[1].Transition.pResource = postProcessResource_.Get();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    commandList_->ResourceBarrier(2, barriers);
+
+    // 2. 描画先を PostProcessTexture に設定
+    commandList_->OMSetRenderTargets(1, &postProcessRtvHandle_, false, nullptr);
+    float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    commandList_->ClearRenderTargetView(postProcessRtvHandle_, clearColor, 0, nullptr);
+
+    // ビューポートとシザーの設定
+    commandList_->RSSetViewports(1, &viewport_);
+    commandList_->RSSetScissorRects(1, &scissorRect_);
+
+    // 3. パイプライン設定
+    commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
+    
+    // エフェクトに応じてパイプラインを切り替える
+    if (postEffect_ == PostEffect::kGrayscale) {
+        commandList_->SetPipelineState(grayscalePipelineState_.Get());
+    } else if (postEffect_ == PostEffect::kSepia) {
+        commandList_->SetPipelineState(sepiaPipelineState_.Get());
+    } else if (postEffect_ == PostEffect::kVignette) {
+        commandList_->SetPipelineState(vignettePipelineState_.Get());
+        commandList_->SetGraphicsRootConstantBufferView(1, vignetteParamResource_->GetGPUVirtualAddress());
+    } else if (postEffect_ == PostEffect::kSmoothing) {
+        commandList_->SetPipelineState(smoothingPipelineState_.Get());
+        commandList_->SetGraphicsRootConstantBufferView(1, smoothingParamResource_->GetGPUVirtualAddress());
+    } else {
+        commandList_->SetPipelineState(copyImagePipelineState_.Get());
+    }
+
+    commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
+    commandList_->DrawInstanced(3, 1, 0, 0);
+
+    // 4. バリアを戻す (PostProcess: RT -> SRV, RenderTexture: SRV -> RT)
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    commandList_->ResourceBarrier(2, barriers);
 }
 
 void DirectXCommon::DrawRenderTexture() {
-    // 1. バリアを張る (RenderTarget -> PixelShaderResource に状態遷移)
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.Transition.pResource = renderTextureResource_.Get();
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    commandList_->ResourceBarrier(1, &barrier);
-
-    // 2. コピー用パイプラインの設定
+    // ポストプロセス済みのテクスチャ(SRV)を Swapchain (RT) にコピーする
     commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
     commandList_->SetPipelineState(copyImagePipelineState_.Get());
 
-    // テクスチャ(SRV)をルートパラメータ0番にセット
-    commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
-
-    // ★資料の指示通り、3頂点だけを描画 (全画面を覆う三角形が1枚描かれます)
+    commandList_->SetGraphicsRootDescriptorTable(0, postProcessSrvHandleGPU_);
     commandList_->DrawInstanced(3, 1, 0, 0);
-
-    // 3. バリアを戻す (PixelShaderResource -> RenderTarget に状態遷移)
-    // ※次のフレームでまたRenderTextureに書き込むため、元の状態に戻しておく必要があります
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    commandList_->ResourceBarrier(1, &barrier);
 }
 
 void DirectXCommon::CreateSkyboxPipeline() {
