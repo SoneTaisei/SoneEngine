@@ -585,6 +585,7 @@ void DirectXCommon::CreatePostEffectPipelines() {
     Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"shaders/Fullscreen.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psCopyBlob = CompileShader(L"shaders/CopyImage.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psGrayscaleBlob = CompileShader(L"shaders/Grayscale.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = CompileShader(L"shaders/Sepia.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
     // 3. PipelineState (PSO) の作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -615,6 +616,11 @@ void DirectXCommon::CreatePostEffectPipelines() {
     // グレースケール用のPSOを作成
     psoDesc.PS = {psGrayscaleBlob->GetBufferPointer(), psGrayscaleBlob->GetBufferSize()};
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&grayscalePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // セピア用のPSOを作成
+    psoDesc.PS = {psSepiaBlob->GetBufferPointer(), psSepiaBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&sepiaPipelineState_));
     assert(SUCCEEDED(hr));
 }
 
@@ -649,6 +655,8 @@ void DirectXCommon::ExecutePostEffect() {
     // エフェクトに応じてパイプラインを切り替える
     if (postEffect_ == PostEffect::kGrayscale) {
         commandList_->SetPipelineState(grayscalePipelineState_.Get());
+    } else if (postEffect_ == PostEffect::kSepia) {
+        commandList_->SetPipelineState(sepiaPipelineState_.Get());
     } else {
         commandList_->SetPipelineState(copyImagePipelineState_.Get());
     }

@@ -311,7 +311,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     {
         ImGui::Text("Post Effect Settings");
         ImGui::Separator();
-        const char* postEffectItems[] = { "None", "Grayscale" };
+        const char* postEffectItems[] = { "None", "Grayscale", "Sepia" };
         int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
         if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
             DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);

@@ -15,6 +15,7 @@ public:
     enum class PostEffect {
         kNone,
         kGrayscale,
+        kSepia,
     };
 
 	// 初期化処理
@@ -70,6 +71,7 @@ public:
     ID3D12RootSignature *GetCopyImageRootSignature() const { return copyImageRootSignature_.Get(); }
     ID3D12PipelineState *GetCopyImagePipelineState() const { return copyImagePipelineState_.Get(); }
     ID3D12PipelineState *GetGrayscalePipelineState() const { return grayscalePipelineState_.Get(); }
+    ID3D12PipelineState *GetSepiaPipelineState() const { return sepiaPipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
@@ -140,6 +142,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> copyImageRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyImagePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> grayscalePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
 
     PostEffect postEffect_ = PostEffect::kNone;
 
