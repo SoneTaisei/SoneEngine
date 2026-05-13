@@ -592,6 +592,7 @@ void DirectXCommon::CreatePostEffectPipelines() {
     Microsoft::WRL::ComPtr<IDxcBlob> psGrayscaleBlob = CompileShader(L"shaders/Grayscale.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = CompileShader(L"shaders/Sepia.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psVignetteBlob = CompileShader(L"shaders/Vignette.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psSmoothingBlob = CompileShader(L"shaders/Smoothing.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
     // 3. PipelineState (PSO) の作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -643,6 +644,19 @@ void DirectXCommon::CreatePostEffectPipelines() {
     vignetteParamsData_->color[3] = 1.0f;
     vignetteParamsData_->scale = 16.0f;
     vignetteParamsData_->power = 0.8f;
+
+    // スムージング用のPSOを作成
+    psoDesc.PS = {psSmoothingBlob->GetBufferPointer(), psSmoothingBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&smoothingPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // スムージング用定数バッファの作成
+    smoothingParamResource_ = CreateBufferResource(device_.Get(), sizeof(SmoothingParams));
+    smoothingParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&smoothingParamsData_));
+    smoothingParamsData_->kernelSize = 2;
+    smoothingParamsData_->texelSize[0] = 1.0f / (float)windowWidth_;
+    smoothingParamsData_->texelSize[1] = 1.0f / (float)windowHeight_;
+    smoothingParamsData_->strength = 1.0f;
 }
 
 void DirectXCommon::ExecutePostEffect() {
@@ -681,6 +695,9 @@ void DirectXCommon::ExecutePostEffect() {
     } else if (postEffect_ == PostEffect::kVignette) {
         commandList_->SetPipelineState(vignettePipelineState_.Get());
         commandList_->SetGraphicsRootConstantBufferView(1, vignetteParamResource_->GetGPUVirtualAddress());
+    } else if (postEffect_ == PostEffect::kSmoothing) {
+        commandList_->SetPipelineState(smoothingPipelineState_.Get());
+        commandList_->SetGraphicsRootConstantBufferView(1, smoothingParamResource_->GetGPUVirtualAddress());
     } else {
         commandList_->SetPipelineState(copyImagePipelineState_.Get());
     }
