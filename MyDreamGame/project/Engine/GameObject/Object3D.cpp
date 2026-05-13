@@ -51,6 +51,17 @@ void Object3D::Update() {
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
+    // --- 追加: エディタでの変更を即時反映させるため、Draw直前にもマテリアルとワールド行列を更新 ---
+    *mappedMaterial_ = material_;
+
+    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
+    Matrix4x4 finalWorldMatrix = nodeMatrix * worldMatrix;
+
+    mappedTransform_->World = finalWorldMatrix;
+    mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+    // -------------------------------------------------------------------------------------------------
+
     // 描画直前に最新のカメラ行列でWVPを再計算してGPUに送る（停止中のデバッグカメラ追従のため）
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();

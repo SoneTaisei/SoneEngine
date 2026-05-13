@@ -72,35 +72,44 @@ void PrimitiveObject::Update() {
 }
 
 void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
-    // 描画直前に最新のカメラ行列でWVPとワールド行列を再計算してGPUに送る（停止中のデバッグカメラ・ビルボード追従のため）
+    // 描画直前に最新のパラメータでマテリアルを更新
+    *mappedMaterial_ = material_;
+
+    // 描画直前に最新のカメラ行列でWVPとワールド行列を再計算してGPUに送る（停止中のデバッグカメラ・ビルボード追従、およびエディタでの即時反映のため）
     CameraManager* cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
+    Matrix4x4 billboardMatrix = TransformFunctions::MakeIdentity4x4();
     if (isBillboard_) {
-        Matrix4x4 billboardMatrix = TransformFunctions::Inverse(viewMatrix);
+        Matrix4x4 cameraMatrix = TransformFunctions::Inverse(viewMatrix);
+        billboardMatrix = cameraMatrix;
         billboardMatrix.m[3][0] = 0.0f;
         billboardMatrix.m[3][1] = 0.0f;
         billboardMatrix.m[3][2] = 0.0f;
-
-        Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(transform_.scale);
-        Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(transform_.rotate.x);
-        Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(transform_.rotate.y);
-        Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(transform_.rotate.z);
-        Matrix4x4 rotateMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(rotateXMatrix, rotateYMatrix), rotateZMatrix);
-        Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(transform_.translate);
-
-        Matrix4x4 localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
-        worldMatrix_ = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
-        
-        if (parent_) {
-            worldMatrix_ = TransformFunctions::Multiply(worldMatrix_, parent_->GetWorldMatrix());
-        }
-        mappedTransform_->World = worldMatrix_;
-        mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix_));
     }
 
-    // WVPを最新のカメラで更新
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(transform_.scale);
+    Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(transform_.rotate.x);
+    Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(transform_.rotate.y);
+    Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(transform_.rotate.z);
+    Matrix4x4 rotateMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(rotateXMatrix, rotateYMatrix), rotateZMatrix);
+    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(transform_.translate);
+
+    Matrix4x4 localMatrix;
+    if (isBillboard_) {
+        localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
+    } else {
+        localMatrix = rotateMatrix;
+    }
+    
+    worldMatrix_ = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
+    if (parent_) {
+        worldMatrix_ = TransformFunctions::Multiply(worldMatrix_, parent_->GetWorldMatrix());
+    }
+    
+    mappedTransform_->World = worldMatrix_;
+    mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix_));
     mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix_, viewMatrix), projectionMatrix);
 
     auto dxCommon = DirectXCommon::GetInstance();
