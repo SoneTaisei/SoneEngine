@@ -8,6 +8,7 @@
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
 #include "Effect/ParticleManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -100,6 +101,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::DockBuilderDockWindow("Game View", dock_id_main);
         ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
         ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
+        ImGui::DockBuilderDockWindow("PostEffect", dock_id_right); // Inspectorと同じ場所にタブとして追加
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
@@ -237,6 +239,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::Checkbox("Show Effects (Particles/Primitives)", &showEffects_);
         ImGui::Spacing();
 
+
         ImGui::Text("Global Settings (Lighting)");
         ImGui::Separator();
 
@@ -300,6 +303,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     ImGui::Separator();
     ImGui::Checkbox("Enable Fog Effect", &enableFog);
+    }
+    ImGui::End();
+
+    // --- PostEffect ウィンドウ ---
+    ImGui::Begin("PostEffect");
+    {
+        ImGui::Text("Post Effect Settings");
+        ImGui::Separator();
+        const char* postEffectItems[] = { "None", "Grayscale" };
+        int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
+        if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
+            DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);
+        }
     }
     ImGui::End();
 }

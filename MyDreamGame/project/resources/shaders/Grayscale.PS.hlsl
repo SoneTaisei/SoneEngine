@@ -12,5 +12,11 @@ PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
     output.color = gTexture.Sample(gSampler, input.texcoord);
+    
+    // Calculate luma using BT.709 coefficients
+    float32_t luma = dot(output.color.rgb, float32_t3(0.2125f, 0.7154f, 0.0721f));
+    
+    output.color.rgb = float32_t3(luma, luma, luma);
+    
     return output;
 }
