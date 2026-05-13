@@ -46,6 +46,10 @@ public:
 	D3D12_RENDER_TARGET_VIEW_DESC GetRtvDesc() const { return rtvDesc_; }
 	ID3D12RootSignature *GetRootSignature() const { return rootSignature_.Get(); }
 	ID3D12PipelineState *GetGraphicsPipelineState() const { return graphicsPipelineState_.Get(); }
+	ID3D12PipelineState *GetGraphicsPipelineStateNoCull() const { return graphicsPipelineStateNoCull_.Get(); }
+	ID3D12PipelineState *GetGraphicsPipelineStateAdditive() const { return graphicsPipelineStateAdditive_.Get(); }
+	ID3D12PipelineState *GetGraphicsPipelineStateNoCullAdditive() const { return graphicsPipelineStateNoCullAdditive_.Get(); }
+	ID3D12PipelineState *GetGraphicsPipelineStateTransparent() const { return graphicsPipelineStateTransparent_.Get(); }
 	ID3D12PipelineState *GetSpritePipelineState() const { return spritePipelineState_.Get(); }
     ID3D12CommandQueue *GetCommandQueue() const { return commandQueue_.Get(); }
     IDxcUtils *GetDxcUtils() const { return dxcUtils_.Get(); }
@@ -94,6 +98,10 @@ private:
 	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc_{};
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateNoCull_;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateAdditive_;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateNoCullAdditive_;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateTransparent_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> spritePipelineState_;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT scissorRect_{};

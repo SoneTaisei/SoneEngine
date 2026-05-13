@@ -3,6 +3,7 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "GameObject/Object3D.h"
 #include "../externals/imgui/imgui.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 
 void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     primitive_ = primitive;
@@ -29,14 +30,66 @@ void PrimitiveObject::Update() {
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
-    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    Matrix4x4 billboardMatrix = TransformFunctions::MakeIdentity4x4();
+    if (isBillboard_) {
+        // カメラのワールド行列（ビュー行列の逆行列）を取得
+        Matrix4x4 cameraMatrix = TransformFunctions::Inverse(viewMatrix);
+        // 回転成分のみを抽出してビルボード行列とする
+        billboardMatrix = cameraMatrix;
+        billboardMatrix.m[3][0] = 0.0f;
+        billboardMatrix.m[3][1] = 0.0f;
+        billboardMatrix.m[3][2] = 0.0f;
+    }
+
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(transform_.scale);
     
-    mappedTransform_->World = worldMatrix;
-    mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
-    mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+    // 回転行列の作成 (XYZの順で合成)
+    Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(transform_.rotate.x);
+    Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(transform_.rotate.y);
+    Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(transform_.rotate.z);
+    Matrix4x4 rotateMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(rotateXMatrix, rotateYMatrix), rotateZMatrix);
+
+    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(transform_.translate);
+
+    // ビルボードが有効な場合は、ビルボード回転を適用した後にローカル回転を適用する
+    // (Z回転などで表示を傾けられるようにするため)
+    Matrix4x4 localMatrix;
+    if (isBillboard_) {
+        localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
+    } else {
+        localMatrix = rotateMatrix;
+    }
+    
+    worldMatrix_ = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
+    
+    if (parent_) {
+        worldMatrix_ = TransformFunctions::Multiply(worldMatrix_, parent_->GetWorldMatrix());
+    }
+    
+    mappedTransform_->World = worldMatrix_;
+    mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix_, viewMatrix), projectionMatrix);
+    mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix_));
 }
 
 void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
+    auto dxCommon = DirectXCommon::GetInstance();
+    
+    // パイプラインステートの選択
+    if (blendMode_ == BlendMode::kBlendModeAdd) {
+        if (isDoubleSided_) {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());
+        } else {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateAdditive());
+        }
+    } else {
+        // 通常合成 (または未対応のモード)
+        if (isDoubleSided_) {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCull());
+        } else {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+        }
+    }
+
     commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
 
@@ -52,7 +105,9 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
     }
 
-    primitive_->Draw(commandList);
+    if (primitive_) {
+        primitive_->Draw(commandList);
+    }
 }
 
 void PrimitiveObject::DisplayImGui(const std::string& label) {

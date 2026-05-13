@@ -2,6 +2,7 @@
 #include "Core/Utility/Structs.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Primitive/Primitive.h"
+#include "Core/Utility/BlendMode.h"
 
 class PrimitiveObject {
 public:
@@ -20,6 +21,14 @@ public:
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     Material& GetMaterial() { return material_; }
+
+    // --- 親子関係 ---
+    void SetParent(PrimitiveObject* parent) { parent_ = parent; }
+    const Matrix4x4& GetWorldMatrix() const { return worldMatrix_; }
+
+    void SetIsBillboard(bool isBillboard) { isBillboard_ = isBillboard; }
+    void SetIsDoubleSided(bool isDoubleSided) { isDoubleSided_ = isDoubleSided; }
+    void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
 
     // --- 名前関連 ---
     const std::string &GetName() const { return name_; }
@@ -40,6 +49,12 @@ private:
     // CPU側データ
     Transform transform_;
     Material material_;
+    Matrix4x4 worldMatrix_;
+
+    PrimitiveObject* parent_ = nullptr;
+    bool isBillboard_ = false;
+    bool isDoubleSided_ = false;
+    BlendMode blendMode_ = BlendMode::kBlendModeNomal;
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
 };

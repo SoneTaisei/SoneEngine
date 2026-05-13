@@ -10,6 +10,7 @@
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
 #include "Window.h"
+#include "Core/TimeManager.h"
 // (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
 
 #include "Core/Utility/TransformFunctions.h"
@@ -101,7 +102,7 @@ void WindowsApplication::Initialize() {
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(kWindowWidth_, kWindowHeight_);
 
-    // 3. 最初は「エディターモード（停止中）」としてデバッグカメラを有効にする
+    // 3. 最初は「停止中（PLAYボタン表示）」としてデバッグカメラを有効にする
     activeCamera_ = debugCamera_.get();
     isDebugCameraActive_ = true;
 
@@ -119,7 +120,7 @@ void WindowsApplication::Initialize() {
     timeBeginPeriod(1);
 
     // TimeManager を初期化
-    // TimeManager::GetInstance().Initialize();
+    TimeManager::GetInstance().Initialize();
 
 #ifdef USE_IMGUI
     // リソースリークチェッカーのインスタンスを作成
@@ -140,7 +141,7 @@ void WindowsApplication::Run() {
 
 void WindowsApplication::Update() {
     // デルタタイムを計算
-    // TimeManager::GetInstance().Update();
+    TimeManager::GetInstance().Update();
 
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
@@ -161,26 +162,35 @@ void WindowsApplication::Update() {
         sceneManager_.get());
 #endif
 
-    // ★ シーンの更新 (再生中のみ、またはIMGUI未使用時のみ実行)
+    // --- エディターの状態に応じて更新処理を切り替え ---
 #ifdef USE_IMGUI
     if (editorManager_->IsPlaying()) {
+        // 【再生中】ゲームカメラを強制し、シーンを更新する
+        activeCamera_ = gameCamera_.get();
+        isDebugCameraActive_ = false;
         sceneManager_->Update();
+        gameCamera_->Update();
+    } else {
+        // 【停止中】デバッグカメラを強制し、シーンの更新は止める
+        activeCamera_ = debugCamera_.get();
+        isDebugCameraActive_ = true;
+        
+        bool allowCameraInput = editorManager_->IsGameViewHovered() || !ImGui::GetIO().WantCaptureMouse;
+        debugCamera_->Update(allowCameraInput);
     }
 #else
+    // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
+    gameCamera_->Update();
 #endif
 
-    // カメラの更新
-    if (isDebugCameraActive_) {
-        debugCamera_->Update();
-    } else {
-        gameCamera_->Update();
-    }
-
-    // ViewProjectionの更新
+    // 現在のアクティブカメラの行列をViewProjectionに反映
     viewProjection_->UpdateMatrix(
         activeCamera_->GetViewMatrix(),
         activeCamera_->GetProjectionMatrix());
+    
+    // 他のオブジェクトが使うCameraManagerも同期させる
+    activeCamera_->UpdateMatrix(); 
 }
 
 void WindowsApplication::Draw() {

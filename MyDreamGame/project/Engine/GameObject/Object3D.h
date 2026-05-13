@@ -2,6 +2,7 @@
 #include "Core/Utility/Structs.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Model/Model.h"
+#include "Core/Utility/BlendMode.h"
 
 class Object3D {
 public:
@@ -38,9 +39,13 @@ public:
     // --- 名前関連 ---
     const std::string &GetName() const { return name_; }
     void SetName(const std::string &name) { name_ = name; }
+    void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
+    void SetIsDoubleSided(bool isDoubleSided) { isDoubleSided_ = isDoubleSided; }
 
 private:
     std::string name_ = "GameObject"; // ヒエラルキー表示用の名前
+    BlendMode blendMode_ = BlendMode::kBlendModeNomal;
+    bool isDoubleSided_ = false;
     // マテリアル
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
     Material *mappedMaterial_ = nullptr;

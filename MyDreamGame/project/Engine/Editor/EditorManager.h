@@ -36,6 +36,11 @@ public:
     bool IsPlaying() const { return isPlaying_; }
     void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
 
+    bool IsGameViewHovered() const { return isGameViewHovered_; }
+
+    static bool IsShowObjects() { return showObjects_; }
+    static bool IsShowEffects() { return showEffects_; }
+
 private:
     bool isPlaying_ = false; // ゲーム再生中かどうか
 
@@ -43,5 +48,10 @@ private:
     Object3D *selectedObject_ = nullptr;
     ParticleManager *selectedParticle_ = nullptr;
     PrimitiveObject *selectedPrimitive_ = nullptr;
+
+    bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
+
+    static bool showObjects_;
+    static bool showEffects_;
 };
 #endif

@@ -2,6 +2,7 @@
 #include "Scene/SceneManager.h"
 #include "TitleScene.h" // ← これを追加
 #include "Input/KeyboardInput.h"
+#include "Editor/EditorManager.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
@@ -52,7 +53,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     particleCommon_->PreDraw(commandList_); // ※commandListを保持している場合
 
     // 雪の描画
-    particleCommon_->DrawAll(viewProjectionMatrix);
+    if (EditorManager::IsShowEffects()) {
+        particleCommon_->DrawAll(viewProjectionMatrix);
+    }
 }
 
 std::vector<ParticleManager *> GameScene::GetParticles() {

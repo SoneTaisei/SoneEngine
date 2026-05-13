@@ -23,6 +23,9 @@ static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HA
     SrvManager::GetInstance()->Allocate(out_cpu_handle, out_gpu_handle);
 }
 
+bool EditorManager::showObjects_ = true;
+bool EditorManager::showEffects_ = true;
+
 // 枠を返すための関数
 static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) {
     // 空でOK
@@ -103,6 +106,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- Game View ウィンドウ ---
     ImGui::Begin("Game View");
+    isGameViewHovered_ = ImGui::IsWindowHovered();
     {
         // ウィンドウのサイズに合わせてアスペクト比を維持して描画
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -184,7 +188,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x - 100) * 0.5f);
         if (ImGui::Button("PLAY", ImVec2(100, 30))) {
             isPlaying_ = true;
-            // 再生開始時にゲームカメラへ切り替え
+            // 再生開始：本番のゲームカメラ視点に切り替え
             *activeCamera = gameCamera;
             isDebugCameraActive = false;
         }
@@ -197,7 +201,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x - 100) * 0.5f);
         if (ImGui::Button("STOP", ImVec2(100, 30))) {
             isPlaying_ = false;
-            // 停止時にデバッグカメラへ切り替え（編集しやすくするため）
+            // 停止：デバッグカメラに切り替えて自由に動かせるようにする
             debugCamera->SetTranslation(gameCamera->GetTranslation());
             debugCamera->SetRotation(gameCamera->GetRotation());
             *activeCamera = debugCamera;
@@ -216,6 +220,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     } else if (selectedPrimitive_) {
         selectedPrimitive_->DisplayImGui("Primitive Properties");
     } else {
+        ImGui::Text("Global Visibility Settings");
+        ImGui::Separator();
+        ImGui::Checkbox("Show Objects (Models)", &showObjects_);
+        ImGui::Checkbox("Show Effects (Particles/Primitives)", &showEffects_);
+        ImGui::Spacing();
+
         ImGui::Text("Global Settings (Lighting)");
         ImGui::Separator();
 

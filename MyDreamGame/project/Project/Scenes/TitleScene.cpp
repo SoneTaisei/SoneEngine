@@ -9,8 +9,9 @@
 #include "StageSelectScene.h"
 #include <wrl.h>
 #include "Resource/Model/ModelManager.h"
-#include "Resource/Model/ModelManager.h"
+#include "Graphics/TextureManager.h"
 #include "Graphics/CameraManager.h"
+#include "Editor/EditorManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 
 TitleScene::~TitleScene() {
@@ -22,6 +23,16 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+
+    // --- 各種共通管理クラスの初期化 ---
+    modelCommon_ = std::make_unique<ModelCommon>();
+    modelCommon_->Initialize(device.Get());
+
+    spriteCommon_ = std::make_unique<SpriteCommon>();
+    spriteCommon_->Initialize(DirectXCommon::GetInstance(), 1280, 720);
+
+    particleCommon_ = std::make_unique<ParticleCommon>();
+    particleCommon_->Initialize(device.Get());
 
     // 1. マネージャからモデル（素材）を取得（なければロードされる）
     Model *planeModel = ModelManager::GetInstance()->GetModel("Object/School/plane", "plane.gltf");
@@ -42,7 +53,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     auto sprite = std::make_unique<Sprite>();
 
     // ③ 初期化 (spriteCommon_はIScene等で定義されている前提)
-    sprite->Initialize(spriteCommon_, planeIndex);
+    sprite->Initialize(spriteCommon_.get(), planeIndex);
 
     // ④ 位置やサイズなどのパラメータを設定
     // 画面中央付近に配置する例
@@ -73,34 +84,77 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     PrimitiveManager::GetInstance()->Initialize(device.Get());
     uint32_t gradationHandle = TextureManager::GetInstance()->Load("Sprite/School/gradationLine.png", commandList_);
     
-    // Ring 1: 標準的なRing (UVスクロールあり)
+    // ■ RingEffectのルートオブジェクト作成
+    ringEffectRoot_ = std::make_unique<PrimitiveObject>();
+    ringEffectRoot_->Initialize(device.Get(), nullptr); // 描画しない
+    ringEffectRoot_->SetName("RingEffect");
+    ringEffectRoot_->SetTranslation({0.0f, 0.0f, 0.0f});
+
+    // Ring 1
     {
         auto ring = std::make_unique<PrimitiveObject>();
         ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().environmentCoefficient = 0.3f;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
-        ring->SetTranslation({-2.5f, 0.0f, 0.0f});
-        ring->SetName("Standard Ring");
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Ring 2: 扇形 (グラデーションカラー)
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.8f, 1.2f, 64, 0.0f, 3.14159f, {0,0,1,1}, {1,0,0,1}, false));
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetName("Fan Ring");
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Ring 3: 放射状UV
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.3f, 1.5f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, true));
+        ring->GetMaterial().enableEnvironmentMap = 0;
+        ring->GetMaterial().lightingType = 0;
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({2.5f, 0.0f, 0.0f});
-        ring->SetName("Radial UV Ring");
+        ring->SetTranslation({0.0f, 0.0f, 0.0f});
+        ring->SetRotation({0.4f, 0.0f, 0.0f}); // 少し傾ける
+        ring->SetIsBillboard(false);          // 立体感を出すためにビルボードOFF
+        ring->SetIsDoubleSided(true);
+        ring->SetBlendMode(BlendMode::kBlendModeAdd);
+        ring->SetName("Ring 1");
+        ring->SetParent(ringEffectRoot_.get());
+        primitiveParticles_.push_back(std::move(ring));
+    }
+
+    // Ring 2
+    {
+        auto ring = std::make_unique<PrimitiveObject>();
+        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
+        ring->GetMaterial().enableEnvironmentMap = 0;
+        ring->GetMaterial().lightingType = 0;
+        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
+        ring->SetTranslation({0.0f, 0.0f, 0.0f});
+        ring->SetRotation({0.4f, 0.785f, 0.0f}); // 45度
+        ring->SetIsBillboard(false);
+        ring->SetIsDoubleSided(true);
+        ring->SetBlendMode(BlendMode::kBlendModeAdd);
+        ring->SetName("Ring 2");
+        ring->SetParent(ringEffectRoot_.get());
+        primitiveParticles_.push_back(std::move(ring));
+    }
+
+    // Ring 3
+    {
+        auto ring = std::make_unique<PrimitiveObject>();
+        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
+        ring->GetMaterial().enableEnvironmentMap = 0;
+        ring->GetMaterial().lightingType = 0;
+        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
+        ring->SetTranslation({0.0f, 0.0f, 0.0f});
+        ring->SetRotation({0.4f, 1.57f, 0.0f});  // 90度
+        ring->SetIsBillboard(false);
+        ring->SetIsDoubleSided(true);
+        ring->SetBlendMode(BlendMode::kBlendModeAdd);
+        ring->SetName("Ring 3");
+        ring->SetParent(ringEffectRoot_.get());
+        primitiveParticles_.push_back(std::move(ring));
+    }
+
+    // Ring 4
+    {
+        auto ring = std::make_unique<PrimitiveObject>();
+        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1, 1, 1, 1}, {1, 1, 1, 1}, false));
+        ring->GetMaterial().enableEnvironmentMap = 0;
+        ring->GetMaterial().lightingType = 0;
+        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
+        ring->SetTranslation({0.0f, 0.0f, 0.0f});
+        ring->SetRotation({0.4f, 2.355f, 0.0f}); // 135度
+        ring->SetIsBillboard(false);
+        ring->SetIsDoubleSided(true);
+        ring->SetBlendMode(BlendMode::kBlendModeAdd);
+        ring->SetName("Ring 4");
+        ring->SetParent(ringEffectRoot_.get());
         primitiveParticles_.push_back(std::move(ring));
     }
 }
@@ -131,17 +185,22 @@ void TitleScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
-    // ■ 拡張Ringプリミティブの更新 (UVスクロール)
-    static float uvOffset = 0.0f;
-    uvOffset -= 0.01f;
+    // リングのアニメーション更新 (1秒周期でパッと出てゆっくり消える)
+    ringEffectTimer_ += TimeManager::GetInstance().GetDeltaTime();
+    if (ringEffectTimer_ > kRingEffectDuration) {
+        ringEffectTimer_ = 0.0f; // ループ
+    }
 
-    for (size_t i = 0; i < primitiveParticles_.size(); ++i) {
-        auto& p = primitiveParticles_[i];
-        
-        // UVスクロール行列を作成してセット
-        p->GetMaterial().uvTransform = TransformFunctions::MakeTranslateMatrix({uvOffset, 0.0f, 0.0f});
-
-        p->Update();
+    // 1.0 -> 0.0 へフェードアウト
+    float alpha = 1.0f - (ringEffectTimer_ / kRingEffectDuration);
+    
+    // リング全体の更新
+    if (ringEffectRoot_) {
+        ringEffectRoot_->Update();
+    }
+    for (auto& ring : primitiveParticles_) {
+        ring->GetMaterial().color.w = alpha; // 透明度を適用
+        ring->Update();
     }
 }
 
@@ -149,11 +208,6 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // ★ モデル描画の前準備
     if (modelCommon_) {
         modelCommon_->PreDraw(commandList_.Get());
-    }
-
-    // 各オブジェクトに「自分の行列で描画して！」と頼む
-    for (auto &object : objects_) {
-        object->Draw(commandList_.Get());
     }
 
     // ★ 3Dオブジェクトの直後にSkyboxを描画！
@@ -170,9 +224,21 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         }
     }
 
-    // ■ プリミティブパーティクルの描画
-    for (auto& p : primitiveParticles_) {
-        p->Draw(commandList_.Get());
+    // 3Dモデルの描画
+    if (EditorManager::IsShowObjects()) {
+        for (auto &object : objects_) {
+            object->Draw(commandList_.Get());
+        }
+    }
+
+    // パーティクルの描画
+    if (EditorManager::IsShowEffects()) {
+        particleCommon_->DrawAll(viewProjectionMatrix);
+
+        // ■ プリミティブパーティクルの描画
+        for (auto& p : primitiveParticles_) {
+            p->Draw(commandList_.Get());
+        }
     }
 
     // -------------------------------------------------
@@ -210,8 +276,9 @@ std::vector<ParticleManager *> TitleScene::GetParticles() {
 
 std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
-    for (auto &p : primitiveParticles_) {
-        result.push_back(p.get());
+    if (ringEffectRoot_) {
+        result.push_back(ringEffectRoot_.get());
     }
+    // 子要素は返さないことでエディター上の表示を1つにまとめる
     return result;
 }

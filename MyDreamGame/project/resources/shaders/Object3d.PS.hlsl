@@ -20,7 +20,7 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
     float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
-    if (textureColor.a < 0.5f) {
+    if (textureColor.a <= 0.0f) {
         discard;
     }
     
@@ -76,19 +76,27 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         float4 environmentColor = gEnvironmentMap.Sample(gSampler, reflectedVector);
 
         // --- 3. 最終色の合成 ---
-
-        // まず、全てのライティング（拡散反射・鏡面反射）の合計値を計算する
-        outputColor.rgb = (diffuseDirectional + specularDirectional + // 平行光源
-                           diffusePoint + specularPoint + // ポイントライト
-                           diffuseSpot + specularSpot) * input.color.rgb; // スポットライト
+        float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpot) * input.color.rgb;
+        float3 specularTotal = (specularDirectional + specularPoint + specularSpot) * input.color.rgb;
+        float3 ambient = gMaterial.color.rgb * textureColor.rgb * 0.1f;
 
         // 環境マップによるLightingを追加する（置き換えるのではなく、そのまま足す）
         if (gMaterial.enableEnvironmentMap != 0) {
-            outputColor.rgb += environmentColor.rgb * gMaterial.environmentCoefficient;
+            specularTotal += environmentColor.rgb * gMaterial.environmentCoefficient;
         }
 
-// アルファ値の設定
-        outputColor.a = gMaterial.color.a * textureColor.a * input.color.a;
+        // アルファ値の設定
+        float alpha = gMaterial.color.a * textureColor.a * input.color.a;
+
+        // 半透明ブレンド環境下でも鏡面反射が薄くならないように補正
+        // (描画時の SRC_ALPHA 乗算を相殺するためにアルファで割る)
+        if (alpha > 0.0f && alpha < 1.0f) {
+            float safeAlpha = max(alpha, 0.01f);
+            specularTotal /= safeAlpha;
+        }
+
+        outputColor.rgb = diffuseTotal + ambient + specularTotal;
+        outputColor.a = alpha;
 
     } else {
         outputColor = gMaterial.color * textureColor * input.color;
