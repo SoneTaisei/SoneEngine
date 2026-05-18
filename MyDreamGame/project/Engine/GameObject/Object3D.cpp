@@ -24,6 +24,12 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
 
     materialResource_ = CreateBufferResource(device, (sizeof(Material) + 255) & ~255u);
     materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedMaterial_));
+
+    // Write initial state to mapped memory immediately to prevent all-zeroes on first frame
+    *mappedMaterial_ = material_;
+    Matrix4x4 identity = TransformFunctions::MakeIdentity4x4();
+    mappedTransform_->World = identity;
+    mappedTransform_->WVP = identity;
 }
 
 void Object3D::Update() {
@@ -70,7 +76,31 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
 
     auto dxCommon = DirectXCommon::GetInstance();
 
-    // --- パイプラインステートの選択 ---
+    // Ensure common model root signature is bound
+    commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+
+    // --- Outline drawing pass (Draw outline first) ---
+    // 半透明のオブジェクト、加算合成のもの、ライティングが無効なエフェクト類はアウトラインを描画しない
+    if (dxCommon->IsOutlineEnabled() && material_.color.w >= 1.0f && blendMode_ != BlendMode::kBlendModeAdd && material_.lightingType != 0) {
+        // Set the outline pipeline
+        commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateOutline());
+        
+        // Set outline params CBV to Root parameter slot 8
+        commandList->SetGraphicsRootConstantBufferView(8, dxCommon->GetOutlineParamsGPUAddress());
+        
+        // Set matrices & material CBVs for the outline pass
+        commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress()); // 行列 (スロット1)
+        commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());  // マテリアル (スロット0)
+        commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+        if (sEnvironmentMapHandle.ptr != 0) {
+            commandList->SetGraphicsRootDescriptorTable(7, sEnvironmentMapHandle);
+        }
+
+        // Draw expanded black silhouette
+        model_->Draw();
+    }
+
+    // --- Main drawing pass (Draw colored mesh second) ---
     if (blendMode_ == BlendMode::kBlendModeAdd) {
         if (isDoubleSided_) {
             commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());

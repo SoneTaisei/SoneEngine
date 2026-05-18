@@ -66,6 +66,12 @@ private:
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;
 
+    // 各ウィンドウの表示状態フラグ
+    bool showInspector_ = true;
+    bool showHierarchy_ = true;
+    bool showGameView_ = true;
+    bool showPostEffect_ = true;
+
     static bool showObjects_;
     static bool showEffects_;
 };

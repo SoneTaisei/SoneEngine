@@ -37,6 +37,9 @@ void SceneManager::ProcessSceneTransition() {
 
         // 新しいシーンの初期化
         currentScene_->Initialize(commandList_);
+        
+        // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
+        currentScene_->Update(this);
     }
 }
 
@@ -61,6 +64,9 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
             currentScene_->SetParticleCommon(particleCommon_);
 
         currentScene_->Initialize(commandList_);
+        
+        // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
+        currentScene_->Update(this);
     } else {
         // 次のフレームで切り替える（安全な遷移）
         nextScene_ = std::move(nextScene);
