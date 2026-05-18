@@ -278,7 +278,7 @@ void DirectXCommon::CreatePipelines() {
     descriptorRangeEnv[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRangeEnv[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[8] = {};
+    D3D12_ROOT_PARAMETER rootParameters[9] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -318,6 +318,11 @@ void DirectXCommon::CreatePipelines() {
     rootParameters[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[7].DescriptorTable.pDescriptorRanges = descriptorRangeEnv;
     rootParameters[7].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeEnv);
+
+    rootParameters[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; // Used in Outline VS
+    rootParameters[8].Descriptor.ShaderRegister = 1;                     // register(b1)
+    rootParameters[8].Descriptor.RegisterSpace = 0;
 
     descriptionRootSignature.pParameters = rootParameters;
     descriptionRootSignature.NumParameters = _countof(rootParameters);
@@ -441,6 +446,31 @@ void DirectXCommon::CreatePipelines() {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC spritePipelineStateDesc = graphicsPipelineStateDesc;
     spritePipelineStateDesc.DepthStencilState.DepthEnable = false;
     hr = device_->CreateGraphicsPipelineState(&spritePipelineStateDesc, IID_PPV_ARGS(&spritePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // --- Outline Pipeline State ---
+    Microsoft::WRL::ComPtr<IDxcBlob> outlineVSBlob = CompileShader(L"shaders/Outline.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    assert(outlineVSBlob != nullptr);
+    Microsoft::WRL::ComPtr<IDxcBlob> outlinePSBlob = CompileShader(L"shaders/Outline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    assert(outlinePSBlob != nullptr);
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC outlinePipelineStateDesc = graphicsPipelineStateDesc;
+    outlinePipelineStateDesc.VS = { outlineVSBlob->GetBufferPointer(), outlineVSBlob->GetBufferSize() };
+    outlinePipelineStateDesc.PS = { outlinePSBlob->GetBufferPointer(), outlinePSBlob->GetBufferSize() };
+    
+    // No culling for outline pass so it works perfectly for single/double-sided and flat shapes (we draw the outline FIRST, then colored mesh on top)
+    outlinePipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    outlinePipelineStateDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    
+    // Depth settings: Enable depth testing, but DISABLE depth writing to prevent Z-fighting with the main pass
+    outlinePipelineStateDesc.DepthStencilState.DepthEnable = true;
+    outlinePipelineStateDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    outlinePipelineStateDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    
+    // Opaque drawing for the outline
+    outlinePipelineStateDesc.BlendState.RenderTarget[0].BlendEnable = FALSE;
+
+    hr = device_->CreateGraphicsPipelineState(&outlinePipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStateOutline_));
     assert(SUCCEEDED(hr));
 
     depthStencilResource_ = CreateDepthStencilTextureResource(device_.Get(), windowWidth_, windowHeight_); // 変更
@@ -644,6 +674,11 @@ void DirectXCommon::CreatePostEffectPipelines() {
     vignetteParamsData_->color[3] = 1.0f;
     vignetteParamsData_->scale = 16.0f;
     vignetteParamsData_->power = 0.8f;
+
+    // アウトライン用定数バッファの作成
+    outlineParamResource_ = CreateBufferResource(device_.Get(), 256);
+    outlineParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&outlineParamsData_));
+    outlineParamsData_->thickness = 0.015f;
 
     // スムージング用のPSOを作成
     psoDesc.PS = {psSmoothingBlob->GetBufferPointer(), psSmoothingBlob->GetBufferSize()};

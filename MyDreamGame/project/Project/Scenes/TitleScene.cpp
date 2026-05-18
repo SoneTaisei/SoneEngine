@@ -231,11 +231,16 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     }
 #endif
 
-    // パーティクルの描画
+    // -------------------------------------------------
+    // ■ エフェクト/パーティクルの描画
+    // -------------------------------------------------
 #ifdef USE_IMGUI
     if (EditorManager::IsShowEffects()) {
 #endif
-        particleCommon_->DrawAll(viewProjectionMatrix);
+        if (particleCommon_) {
+            particleCommon_->PreDraw(commandList_.Get());
+            particleCommon_->DrawAll(viewProjectionMatrix);
+        }
 
         // ■ プリミティブパーティクルの描画
         for (auto& p : primitiveParticles_) {
@@ -244,17 +249,6 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     }
 #endif
-
-    // -------------------------------------------------
-    // ■ パーティクルの描画
-    // -------------------------------------------------
-    if (particleCommon_) {
-        // 前処理
-        particleCommon_->PreDraw(commandList_.Get());
-
-        // 一括描画 (引数の viewProjectionMatrix を渡す)
-        particleCommon_->DrawAll(viewProjectionMatrix);
-    }
 
     if (spriteCommon_) {
         spriteCommon_->PreDraw(commandList_.Get());
