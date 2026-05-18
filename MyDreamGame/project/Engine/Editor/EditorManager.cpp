@@ -128,6 +128,29 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
         }
 
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+
+        // Window開閉制御メニュー
+        if (ImGui::BeginMenu("Window")) {
+            ImGui::MenuItem("Inspector", nullptr, &showInspector_);
+            ImGui::MenuItem("Hierarchy", nullptr, &showHierarchy_);
+            ImGui::MenuItem("Game View", nullptr, &showGameView_);
+            ImGui::MenuItem("PostEffect", nullptr, &showPostEffect_);
+            ImGui::EndMenu();
+        }
+
+        // インスペクターが閉じている場合に表示する復元ボタン
+        if (!showInspector_) {
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.45f, 0.8f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.55f, 0.9f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.35f, 0.7f, 1.0f));
+            if (ImGui::Button("Open Inspector")) {
+                showInspector_ = true;
+            }
+            ImGui::PopStyleColor(3);
+        }
+
         ImGui::EndMainMenuBar();
     }
 
@@ -160,64 +183,70 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     }
 
     // --- Game View ウィンドウ ---
-    ImGui::Begin("Game View");
-    isGameViewHovered_ = ImGui::IsWindowHovered();
-    {
-        // ウィンドウのサイズに合わせてアスペクト比を維持して描画
-        ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        float aspect = 1280.0f / 720.0f; // 元のアスペクト比
-        float windowAspect = contentSize.x / contentSize.y;
-        ImVec2 imageSize;
-        if (windowAspect > aspect) {
-            imageSize.y = contentSize.y;
-            imageSize.x = contentSize.y * aspect;
-        } else {
-            imageSize.x = contentSize.x;
-            imageSize.y = contentSize.x / aspect;
+    if (showGameView_) {
+        if (ImGui::Begin("Game View", &showGameView_)) {
+            isGameViewHovered_ = ImGui::IsWindowHovered();
+            {
+                // ウィンドウのサイズに合わせてアスペクト比を維持して描画
+                ImVec2 contentSize = ImGui::GetContentRegionAvail();
+                float aspect = 1280.0f / 720.0f; // 元のアスペクト比
+                float windowAspect = contentSize.x / contentSize.y;
+                ImVec2 imageSize;
+                if (windowAspect > aspect) {
+                    imageSize.y = contentSize.y;
+                    imageSize.x = contentSize.y * aspect;
+                } else {
+                    imageSize.x = contentSize.x;
+                    imageSize.y = contentSize.x / aspect;
+                }
+                // 中央寄せ
+                ImVec2 currentPos = ImGui::GetCursorPos();
+                ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+                ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+            }
         }
-        // 中央寄せ
-        ImVec2 currentPos = ImGui::GetCursorPos();
-        ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
-        ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+        ImGui::End();
     }
-    ImGui::End();
 
     // --- Hierarchy ウィンドウ ---
-    ImGui::Begin("Hierarchy");
-    IScene *activeScene = sceneManager->GetCurrentScene();
-    if (activeScene) {
-        if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (auto *obj : activeScene->GetObjects()) {
-                bool isSelected = (selectedObject_ == obj);
-                if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
-                    selectedObject_ = obj;
-                    selectedParticle_ = nullptr;
-                    selectedPrimitive_ = nullptr;
+    if (showHierarchy_) {
+        if (ImGui::Begin("Hierarchy", &showHierarchy_)) {
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (auto *obj : activeScene->GetObjects()) {
+                        bool isSelected = (selectedObject_ == obj);
+                        if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
+                            selectedObject_ = obj;
+                            selectedParticle_ = nullptr;
+                            selectedPrimitive_ = nullptr;
+                        }
+                    }
+                }
+                if (ImGui::CollapsingHeader("Particles", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (auto *particle : activeScene->GetParticles()) {
+                        bool isSelected = (selectedParticle_ == particle);
+                        if (ImGui::Selectable(particle->GetName().c_str(), isSelected)) {
+                            selectedParticle_ = particle;
+                            selectedObject_ = nullptr;
+                            selectedPrimitive_ = nullptr;
+                        }
+                    }
+                }
+                if (ImGui::CollapsingHeader("Primitives", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (auto *primitive : activeScene->GetPrimitives()) {
+                        bool isSelected = (selectedPrimitive_ == primitive);
+                        if (ImGui::Selectable(primitive->GetName().c_str(), isSelected)) {
+                            selectedPrimitive_ = primitive;
+                            selectedObject_ = nullptr;
+                            selectedParticle_ = nullptr;
+                        }
+                    }
                 }
             }
         }
-        if (ImGui::CollapsingHeader("Particles", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (auto *particle : activeScene->GetParticles()) {
-                bool isSelected = (selectedParticle_ == particle);
-                if (ImGui::Selectable(particle->GetName().c_str(), isSelected)) {
-                    selectedParticle_ = particle;
-                    selectedObject_ = nullptr;
-                    selectedPrimitive_ = nullptr;
-                }
-            }
-        }
-        if (ImGui::CollapsingHeader("Primitives", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (auto *primitive : activeScene->GetPrimitives()) {
-                bool isSelected = (selectedPrimitive_ == primitive);
-                if (ImGui::Selectable(primitive->GetName().c_str(), isSelected)) {
-                    selectedPrimitive_ = primitive;
-                    selectedObject_ = nullptr;
-                    selectedParticle_ = nullptr;
-                }
-            }
-        }
+        ImGui::End();
     }
-    ImGui::End();
 
     // --- デバッグカメラの切り替え制御 ---
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
@@ -229,128 +258,159 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     }
 
     // --- Inspector ウィンドウ ---
-    ImGui::Begin("Inspector");
-    if (selectedObject_) {
-        selectedObject_->DisplayImGui("Object Properties");
-    } else if (selectedParticle_) {
-        selectedParticle_->DrawImGui();
-    } else if (selectedPrimitive_) {
-        selectedPrimitive_->DisplayImGui("Primitive Properties");
-        if (activeScene) {
-            activeScene->DisplayImGui(selectedPrimitive_);
+    if (showInspector_) {
+        if (ImGui::Begin("Inspector", &showInspector_)) {
+            if (selectedObject_ || selectedParticle_ || selectedPrimitive_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
+                if (ImGui::Button("Show Global Settings", ImVec2(-1, 0))) {
+                    selectedObject_ = nullptr;
+                    selectedParticle_ = nullptr;
+                    selectedPrimitive_ = nullptr;
+                }
+                ImGui::PopStyleColor(3);
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+            }
+
+            if (selectedObject_) {
+                selectedObject_->DisplayImGui("Object Properties");
+            } else if (selectedParticle_) {
+                selectedParticle_->DrawImGui();
+            } else if (selectedPrimitive_) {
+                selectedPrimitive_->DisplayImGui("Primitive Properties");
+            } else {
+                ImGui::Text("Global Visibility Settings");
+                ImGui::Separator();
+                ImGui::Checkbox("Show Objects (Models)", &showObjects_);
+                ImGui::Checkbox("Show Effects (Particles/Primitives)", &showEffects_);
+                ImGui::Spacing();
+
+                ImGui::Text("Outline Settings");
+                ImGui::Separator();
+                {
+                    auto dxCommon = DirectXCommon::GetInstance();
+                    bool outlineEnabled = dxCommon->IsOutlineEnabled();
+                    if (ImGui::Checkbox("Enable Outline", &outlineEnabled)) {
+                        dxCommon->SetOutlineEnabled(outlineEnabled);
+                        SaveSceneConfig();
+                    }
+                    if (outlineEnabled) {
+                        float thickness = dxCommon->GetOutlineThickness();
+                        if (ImGui::DragFloat("Outline Thickness", &thickness, 0.001f, 0.0f, 0.5f, "%.3f")) {
+                            dxCommon->SetOutlineThickness(thickness);
+                            SaveSceneConfig();
+                        }
+                    }
+                }
+                ImGui::Spacing();
+
+                ImGui::Text("Global Settings (Lighting)");
+                ImGui::Separator();
+
+                static int activeLightType = 2;
+                static bool enableFog = false;
+                static float dIntensity = 1.0f;
+                static float pIntensity = 1.0f;
+                static float sIntensity = 4.0f;
+                static float spotAngleDeg = 30.0f;
+                static float spotFalloffDeg = 20.0f;
+
+                ImGui::Text("Active Light Source");
+                ImGui::RadioButton("Directional", &activeLightType, 0);
+                ImGui::SameLine();
+                ImGui::RadioButton("Point", &activeLightType, 1);
+                ImGui::SameLine();
+                ImGui::RadioButton("Spot", &activeLightType, 2);
+                ImGui::Separator();
+
+                DirectionalLight *dLight = modelCommon->GetDirectionalLight();
+                PointLight *pLight = modelCommon->GetPointLight();
+                SpotLight *sLight = modelCommon->GetSpotLight();
+
+                if (activeLightType == 0) {
+                    dLight->intensity = dIntensity;
+                    pLight->intensity = 0.0f;
+                    sLight->intensity = 0.0f;
+                    ImGui::Text("Directional Light Settings");
+                    ImGui::ColorEdit4("Color", &dLight->color.x);
+                    ImGui::DragFloat("Intensity", &dIntensity, 0.01f, 0.0f, 10.0f);
+                    ImGui::DragFloat3("Direction", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
+                    dLight->direction = TransformFunctions::Normalize(dLight->direction);
+                } else if (activeLightType == 1) {
+                    pLight->intensity = pIntensity;
+                    dLight->intensity = 0.0f;
+                    sLight->intensity = 0.0f;
+                    ImGui::Text("Point Light Settings");
+                    ImGui::ColorEdit4("Color", &pLight->color.x);
+                    ImGui::DragFloat("Intensity", &pIntensity, 0.01f, 0.0f, 10.0f);
+                    ImGui::DragFloat3("Position", &pLight->position.x, 0.1f);
+                    ImGui::DragFloat("Radius", &pLight->radius, 0.1f, 0.0f, 100.0f);
+                    ImGui::DragFloat("Decay", &pLight->decay, 0.01f, 0.0f, 10.0f);
+                } else if (activeLightType == 2) {
+                    sLight->intensity = sIntensity;
+                    dLight->intensity = 0.0f;
+                    pLight->intensity = 0.0f;
+                    ImGui::Text("Spot Light Settings");
+                    ImGui::ColorEdit4("Color", &sLight->color.x);
+                    ImGui::DragFloat("Intensity", &sIntensity, 0.01f, 0.0f, 20.0f);
+                    ImGui::DragFloat3("Position", &sLight->position.x, 0.1f);
+                    if (ImGui::DragFloat3("Direction", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
+                        sLight->direction = TransformFunctions::Normalize(sLight->direction);
+                    }
+                    ImGui::DragFloat("Distance", &sLight->distance, 0.1f, 0.0f, 100.0f);
+                    ImGui::DragFloat("Decay", &sLight->decay, 0.01f, 0.0f, 10.0f);
+                    ImGui::SliderFloat("Total Angle", &spotAngleDeg, 0.0f, 90.0f);
+                    ImGui::SliderFloat("Falloff Start", &spotFalloffDeg, 0.0f, spotAngleDeg);
+                    sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
+                    sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
+                }
+
+                ImGui::Separator();
+                ImGui::Checkbox("Enable Fog Effect", &enableFog);
+            }
         }
-    } else {
-        if (activeScene) {
-            activeScene->DisplayImGui(nullptr);
-        }
-        ImGui::Text("Global Visibility Settings");
-        ImGui::Separator();
-        ImGui::Checkbox("Show Objects (Models)", &showObjects_);
-        ImGui::Checkbox("Show Effects (Particles/Primitives)", &showEffects_);
-        ImGui::Spacing();
-
-
-        ImGui::Text("Global Settings (Lighting)");
-        ImGui::Separator();
-
-        static int activeLightType = 2;
-        static bool enableFog = false;
-        static float dIntensity = 1.0f;
-        static float pIntensity = 1.0f;
-        static float sIntensity = 4.0f;
-        static float spotAngleDeg = 30.0f;
-        static float spotFalloffDeg = 20.0f;
-
-        ImGui::Text("Active Light Source");
-    ImGui::RadioButton("Directional", &activeLightType, 0);
-    ImGui::SameLine();
-    ImGui::RadioButton("Point", &activeLightType, 1);
-    ImGui::SameLine();
-    ImGui::RadioButton("Spot", &activeLightType, 2);
-    ImGui::Separator();
-
-    DirectionalLight *dLight = modelCommon->GetDirectionalLight();
-    PointLight *pLight = modelCommon->GetPointLight();
-    SpotLight *sLight = modelCommon->GetSpotLight();
-
-    if (activeLightType == 0) {
-        dLight->intensity = dIntensity;
-        pLight->intensity = 0.0f;
-        sLight->intensity = 0.0f;
-        ImGui::Text("Directional Light Settings");
-        ImGui::ColorEdit4("Color", &dLight->color.x);
-        ImGui::DragFloat("Intensity", &dIntensity, 0.01f, 0.0f, 10.0f);
-        ImGui::DragFloat3("Direction", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
-        dLight->direction = TransformFunctions::Normalize(dLight->direction);
-    } else if (activeLightType == 1) {
-        pLight->intensity = pIntensity;
-        dLight->intensity = 0.0f;
-        sLight->intensity = 0.0f;
-        ImGui::Text("Point Light Settings");
-        ImGui::ColorEdit4("Color", &pLight->color.x);
-        ImGui::DragFloat("Intensity", &pIntensity, 0.01f, 0.0f, 10.0f);
-        ImGui::DragFloat3("Position", &pLight->position.x, 0.1f);
-        ImGui::DragFloat("Radius", &pLight->radius, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Decay", &pLight->decay, 0.01f, 0.0f, 10.0f);
-    } else if (activeLightType == 2) {
-        sLight->intensity = sIntensity;
-        dLight->intensity = 0.0f;
-        pLight->intensity = 0.0f;
-        ImGui::Text("Spot Light Settings");
-        ImGui::ColorEdit4("Color", &sLight->color.x);
-        ImGui::DragFloat("Intensity", &sIntensity, 0.01f, 0.0f, 20.0f);
-        ImGui::DragFloat3("Position", &sLight->position.x, 0.1f);
-        if (ImGui::DragFloat3("Direction", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
-            sLight->direction = TransformFunctions::Normalize(sLight->direction);
-        }
-        ImGui::DragFloat("Distance", &sLight->distance, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Decay", &sLight->decay, 0.01f, 0.0f, 10.0f);
-        ImGui::SliderFloat("Total Angle", &spotAngleDeg, 0.0f, 90.0f);
-        ImGui::SliderFloat("Falloff Start", &spotFalloffDeg, 0.0f, spotAngleDeg);
-        sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
-        sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
+        ImGui::End();
     }
-
-    ImGui::Separator();
-    ImGui::Checkbox("Enable Fog Effect", &enableFog);
-    }
-    ImGui::End();
 
     // --- PostEffect ウィンドウ ---
-    ImGui::Begin("PostEffect");
-    {
-        ImGui::Text("Post Effect Settings");
-        ImGui::Separator();
-        const char* postEffectItems[] = { "None", "Grayscale", "Sepia", "Vignette", "Smoothing" };
-        int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
-        if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
-            DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);
-        }
-
-        if (currentEffect == (int)DirectXCommon::PostEffect::kVignette) {
-            ImGui::Spacing();
-            ImGui::Text("Vignette Settings");
+    if (showPostEffect_) {
+        if (ImGui::Begin("PostEffect", &showPostEffect_)) {
+            ImGui::Text("Post Effect Settings");
             ImGui::Separator();
-            auto params = DirectXCommon::GetInstance()->GetVignetteParamsData();
-            if (params) {
-                ImGui::ColorEdit4("Color", params->color);
-                ImGui::DragFloat("Scale", &params->scale, 0.1f, 0.0f, 100.0f);
-                ImGui::DragFloat("Power", &params->power, 0.01f, 0.0f, 10.0f);
+            const char* postEffectItems[] = { "None", "Grayscale", "Sepia", "Vignette", "Smoothing" };
+            int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
+            if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
+                DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);
+            }
+
+            if (currentEffect == (int)DirectXCommon::PostEffect::kVignette) {
+                ImGui::Spacing();
+                ImGui::Text("Vignette Settings");
+                ImGui::Separator();
+                auto params = DirectXCommon::GetInstance()->GetVignetteParamsData();
+                if (params) {
+                    ImGui::ColorEdit4("Color", params->color);
+                    ImGui::DragFloat("Scale", &params->scale, 0.1f, 0.0f, 100.0f);
+                    ImGui::DragFloat("Power", &params->power, 0.01f, 0.0f, 10.0f);
+                }
+            }
+
+            if (currentEffect == (int)DirectXCommon::PostEffect::kSmoothing) {
+                ImGui::Spacing();
+                ImGui::Text("Smoothing Settings");
+                ImGui::Separator();
+                auto params = DirectXCommon::GetInstance()->GetSmoothingParamsData();
+                if (params) {
+                    ImGui::SliderInt("Kernel Size", &params->kernelSize, 1, 5);
+                    ImGui::SliderFloat("Strength", &params->strength, 0.0f, 1.0f);
+                }
             }
         }
-
-        if (currentEffect == (int)DirectXCommon::PostEffect::kSmoothing) {
-            ImGui::Spacing();
-            ImGui::Text("Smoothing Settings");
-            ImGui::Separator();
-            auto params = DirectXCommon::GetInstance()->GetSmoothingParamsData();
-            if (params) {
-                ImGui::SliderInt("Kernel Size", &params->kernelSize, 1, 5);
-                ImGui::SliderFloat("Strength", &params->strength, 0.0f, 1.0f);
-            }
-        }
+        ImGui::End();
     }
-    ImGui::End();
 }
 
 void EditorManager::Draw(ID3D12GraphicsCommandList *commandList) {
@@ -370,8 +430,11 @@ void EditorManager::SaveSceneConfig() {
 
     std::ofstream ofs("json/editor_config.json");
     if (ofs.is_open()) {
+        auto dxCommon = DirectXCommon::GetInstance();
         ofs << "{" << std::endl;
-        ofs << "  \"currentScene\": \"" << SceneFactory::GetSceneTypeName(currentSceneType_) << "\"" << std::endl;
+        ofs << "  \"currentScene\": \"" << SceneFactory::GetSceneTypeName(currentSceneType_) << "\"," << std::endl;
+        ofs << "  \"isOutlineEnabled\": " << (dxCommon->IsOutlineEnabled() ? "true" : "false") << "," << std::endl;
+        ofs << "  \"outlineThickness\": " << dxCommon->GetOutlineThickness() << std::endl;
         ofs << "}" << std::endl;
         ofs.close();
     }
@@ -391,22 +454,67 @@ void EditorManager::LoadSceneConfig() {
     ifs.close();
 
     // 簡易的なJSONパーサー: "currentScene": "xxx" を抽出
-    const std::string key = "\"currentScene\"";
-    size_t keyPos = content.find(key);
-    if (keyPos == std::string::npos) return;
+    {
+        const std::string key = "\"currentScene\"";
+        size_t keyPos = content.find(key);
+        if (keyPos != std::string::npos) {
+            // ':' の後の最初の '"' を見つける
+            size_t colonPos = content.find(':', keyPos + key.length());
+            if (colonPos != std::string::npos) {
+                size_t valueStart = content.find('"', colonPos + 1);
+                if (valueStart != std::string::npos) {
+                    valueStart++; // '"' の次の文字から
+                    size_t valueEnd = content.find('"', valueStart);
+                    if (valueEnd != std::string::npos) {
+                        std::string sceneName = content.substr(valueStart, valueEnd - valueStart);
+                        currentSceneType_ = SceneFactory::GetSceneTypeFromName(sceneName);
+                    }
+                }
+            }
+        }
+    }
 
-    // ':' の後の最初の '"' を見つける
-    size_t colonPos = content.find(':', keyPos + key.length());
-    if (colonPos == std::string::npos) return;
+    // isOutlineEnabled のパース
+    {
+        const std::string key = "\"isOutlineEnabled\"";
+        size_t keyPos = content.find(key);
+        if (keyPos != std::string::npos) {
+            size_t colonPos = content.find(':', keyPos + key.length());
+            if (colonPos != std::string::npos) {
+                size_t valPos = content.find_first_not_of(" \t\r\n", colonPos + 1);
+                if (valPos != std::string::npos) {
+                    if (content.compare(valPos, 4, "true") == 0) {
+                        DirectXCommon::GetInstance()->SetOutlineEnabled(true);
+                    } else if (content.compare(valPos, 5, "false") == 0) {
+                        DirectXCommon::GetInstance()->SetOutlineEnabled(false);
+                    }
+                }
+            }
+        }
+    }
 
-    size_t valueStart = content.find('"', colonPos + 1);
-    if (valueStart == std::string::npos) return;
-    valueStart++; // '"' の次の文字から
-
-    size_t valueEnd = content.find('"', valueStart);
-    if (valueEnd == std::string::npos) return;
-
-    std::string sceneName = content.substr(valueStart, valueEnd - valueStart);
-    currentSceneType_ = SceneFactory::GetSceneTypeFromName(sceneName);
+    // outlineThickness のパース
+    {
+        const std::string key = "\"outlineThickness\"";
+        size_t keyPos = content.find(key);
+        if (keyPos != std::string::npos) {
+            size_t colonPos = content.find(':', keyPos + key.length());
+            if (colonPos != std::string::npos) {
+                size_t valPos = content.find_first_not_of(" \t\r\n", colonPos + 1);
+                if (valPos != std::string::npos) {
+                    size_t endPos = content.find_first_of(",}", valPos);
+                    if (endPos != std::string::npos) {
+                        std::string numStr = content.substr(valPos, endPos - valPos);
+                        try {
+                            float thickness = std::stof(numStr);
+                            DirectXCommon::GetInstance()->SetOutlineThickness(thickness);
+                        } catch (...) {
+                            // 例外は無視
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 #endif

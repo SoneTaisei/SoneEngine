@@ -19,6 +19,8 @@
     <FxCompile Include="resources\shaders\CopyImage.VS.hlsl" />
     <FxCompile Include="resources\shaders\Skybox.PS.hlsl" />
     <FxCompile Include="resources\shaders\Skybox.VS.hlsl" />
+    <FxCompile Include="resources\shaders\Outline.PS.hlsl" />
+    <FxCompile Include="resources\shaders\Outline.VS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Project\Core\main.cpp" />
