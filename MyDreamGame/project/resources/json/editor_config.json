@@ -1,3 +1,5 @@
 {
-  "currentScene": "Title"
+  "currentScene": "Title",
+  "isOutlineEnabled": true,
+  "outlineThickness": 0.008
 }

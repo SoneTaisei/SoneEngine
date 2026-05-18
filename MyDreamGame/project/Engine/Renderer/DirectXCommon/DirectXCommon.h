@@ -95,6 +95,30 @@ public:
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
 
+    struct OutlineParams {
+        float thickness = 0.015f;
+        float padding[3];
+    };
+
+    ID3D12PipelineState *GetGraphicsPipelineStateOutline() const { return graphicsPipelineStateOutline_.Get(); }
+    bool IsOutlineEnabled() const {
+#ifndef USE_IMGUI
+        return false; // リリースビルドのみアウトラインを非表示
+#else
+        return isOutlineEnabled_;
+#endif
+    }
+    void SetOutlineEnabled(bool enabled) { isOutlineEnabled_ = enabled; }
+    float GetOutlineThickness() const { return outlineParamsData_ ? outlineParamsData_->thickness : 0.015f; }
+    void SetOutlineThickness(float thickness) {
+        if (outlineParamsData_) {
+            outlineParamsData_->thickness = thickness;
+        }
+    }
+    D3D12_GPU_VIRTUAL_ADDRESS GetOutlineParamsGPUAddress() const {
+        return outlineParamResource_->GetGPUVirtualAddress();
+    }
+
 private:
 	// DirectXのインスタンス作成
 	void CreateDxInstance();
@@ -174,6 +198,11 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateOutline_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> outlineParamResource_;
+    OutlineParams* outlineParamsData_ = nullptr;
+    bool isOutlineEnabled_ = true;
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

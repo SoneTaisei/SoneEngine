@@ -21,6 +21,13 @@ void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
 
     materialResource_ = CreateBufferResource(device, (sizeof(Material) + 255) & ~255u);
     materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedMaterial_));
+
+    // Write initial state to mapped memory immediately to prevent all-zeroes on first frame
+    *mappedMaterial_ = material_;
+    Matrix4x4 identity = TransformFunctions::MakeIdentity4x4();
+    mappedTransform_->World = identity;
+    mappedTransform_->WVP = identity;
+    mappedTransform_->WorldInverseTranspose = identity;
 }
 
 void PrimitiveObject::Update() {
@@ -114,7 +121,36 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
 
     auto dxCommon = DirectXCommon::GetInstance();
     
-    // パイプラインステートの選択
+    // Ensure common model root signature is bound
+    commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+    
+    // --- Outline drawing pass (Draw outline first) ---
+    // 半透明のオブジェクト、加算合成のもの、ライティングが無効なエフェクト類はアウトラインを描画しない
+    if (dxCommon->IsOutlineEnabled() && material_.color.w >= 1.0f && blendMode_ != BlendMode::kBlendModeAdd && material_.lightingType != 0) {
+        // Set the outline pipeline
+        commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateOutline());
+        
+        // Set outline params CBV to Root parameter slot 8
+        commandList->SetGraphicsRootConstantBufferView(8, dxCommon->GetOutlineParamsGPUAddress());
+        
+        // Bind other constant buffers & textures
+        commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+        if (textureHandle_.ptr != 0) {
+            commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
+        }
+        if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+            commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+        }
+
+        // Draw expanded black silhouette
+        if (primitive_) {
+            primitive_->Draw(commandList);
+        }
+    }
+
+    // --- Main drawing pass (Draw colored primitive second) ---
     if (blendMode_ == BlendMode::kBlendModeAdd) {
         if (isDoubleSided_) {
             commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());
