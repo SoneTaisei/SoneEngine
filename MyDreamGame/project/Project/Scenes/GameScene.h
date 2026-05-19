@@ -7,6 +7,9 @@
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <d3d12.h>
 
+#include "GameObject/PrimitiveObject.h"
+#include "Resource/Primitive/PrimitiveManager.h"
+
 class GameScene : public IScene {
 public:
     void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
@@ -16,12 +19,14 @@ public:
     // ヒエラルキー用
     std::vector<Object3D *> GetObjects() override { return {}; }
     std::vector<ParticleManager *> GetParticles() override;
+    std::vector<PrimitiveObject *> GetPrimitives() override;
 
 private:
     // パーティクル管理クラス
     SnowParticle *snowParticle_ = nullptr;
 
     std::vector<std::unique_ptr<ParticleManager>> particles_;
+    std::vector<std::unique_ptr<PrimitiveObject>> primitives_;
 
     // エミッタ（発生装置）
     Emitter snowEmitter_;

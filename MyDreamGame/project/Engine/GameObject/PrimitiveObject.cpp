@@ -5,6 +5,8 @@
 #include "../externals/imgui/imgui.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 
+D3D12_GPU_DESCRIPTOR_HANDLE PrimitiveObject::sDefaultTextureHandle_ = {};
+
 void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     primitive_ = primitive;
     transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
@@ -120,37 +122,17 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
     mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix_, viewMatrix), projectionMatrix);
 
     auto dxCommon = DirectXCommon::GetInstance();
-    
+    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = textureHandle_;
+    if (activeTexture.ptr == 0) {
+        activeTexture = sDefaultTextureHandle_;
+    }
+
     // Ensure common model root signature is bound
     commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
     
-    // --- Outline drawing pass (Draw outline first) ---
-    // 半透明のオブジェクト、加算合成のもの、ライティングが無効なエフェクト類はアウトラインを描画しない
-    if (dxCommon->IsOutlineEnabled() && material_.color.w >= 1.0f && blendMode_ != BlendMode::kBlendModeAdd && material_.lightingType != 0) {
-        // Set the outline pipeline
-        commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateOutline());
-        
-        // Set outline params CBV to Root parameter slot 8
-        commandList->SetGraphicsRootConstantBufferView(8, dxCommon->GetOutlineParamsGPUAddress());
-        
-        // Bind other constant buffers & textures
-        commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
-        commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-        commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-        if (textureHandle_.ptr != 0) {
-            commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
-        }
-        if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
-            commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
-        }
-
-        // Draw expanded black silhouette
-        if (primitive_) {
-            primitive_->Draw(commandList);
-        }
-    }
-
-    // --- Main drawing pass (Draw colored primitive second) ---
+    // ==============================================================
+    // ★ 1. 先に Main drawing pass (本体のプリミティブ) を描画する！
+    // ==============================================================
     if (blendMode_ == BlendMode::kBlendModeAdd) {
         if (isDoubleSided_) {
             commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());
@@ -172,8 +154,8 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
     // カメラの定数バッファをセット (スロット3)
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
     
-    if (textureHandle_.ptr != 0) {
-        commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
+    if (activeTexture.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
     }
 
     // ★ 環境マップをセット (Object3D.PS.hlsl が register(t1) = スロット7 を使うため)
@@ -183,6 +165,20 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
 
     if (primitive_) {
         primitive_->Draw(commandList);
+    }
+
+    // ==============================================================
+    // ★ 2. 後から Outline drawing pass (ワイヤーフレーム) を重ねる！
+    // ==============================================================
+    if (dxCommon->IsOutlineEnabled() && material_.color.w >= 1.0f && blendMode_ != BlendMode::kBlendModeAdd) {
+        commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateOutline());
+        commandList->SetGraphicsRootConstantBufferView(8, dxCommon->GetOutlineParamsGPUAddress());
+        
+        // ※ルートパラメータ（行列やマテリアル、テクスチャ）は本体描画時にセット済みなのでそのまま使えます
+        
+        if (primitive_) {
+            primitive_->Draw(commandList);
+        }
     }
 }
 

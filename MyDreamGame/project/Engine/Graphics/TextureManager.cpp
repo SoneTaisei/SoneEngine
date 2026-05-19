@@ -35,8 +35,19 @@ uint32_t TextureManager::Load(const std::string &filePath, Microsoft::WRL::ComPt
     textures_.resize(handle + 1);
     textures_[handle].filePath = filePath;
 
-    // 1. テクスチャファイルを読み込む (変更なし)
-    DirectX::ScratchImage mipImages = LoadTexture(filePath);
+    // 1. テクスチャファイルを読み込む
+    DirectX::ScratchImage mipImages;
+    if (filePath == "white") {
+        HRESULT hr = mipImages.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+        assert(SUCCEEDED(hr));
+        uint8_t* pixels = mipImages.GetPixels();
+        pixels[0] = 255; // R
+        pixels[1] = 255; // G
+        pixels[2] = 255; // B
+        pixels[3] = 255; // A
+    } else {
+        mipImages = LoadTexture(filePath);
+    }
     const DirectX::TexMetadata &metadata = mipImages.GetMetadata();
 
     // 2. GPU上にテクスチャリソースを作成 (device_はComPtrなので.Get()は不要)
