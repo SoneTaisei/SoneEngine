@@ -15,19 +15,6 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
-    // 2. PrimitiveManagerの初期化（まだの場合）
-    PrimitiveManager::GetInstance()->Initialize(device.Get());
-
-    // 3. SnowParticleの生成 (unique_ptrで作る)
-    auto snowParticle = std::make_unique<SnowParticle>();
-    snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/School/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
-    snowParticle->SetName("Snow Particles");
-
-    // Commonに描画登録する (Modelと同じ仕組みにする)
-    particleCommon_->AddParticle(snowParticle.get());
-    snowParticle_ = snowParticle.get();
-    particles_.push_back(std::move(snowParticle));
-
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
     map_->Initialize(commandList.Get());
