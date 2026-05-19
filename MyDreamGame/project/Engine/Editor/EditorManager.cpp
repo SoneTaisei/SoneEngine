@@ -297,13 +297,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         dxCommon->SetOutlineEnabled(outlineEnabled);
                         SaveSceneConfig();
                     }
-                    if (outlineEnabled) {
-                        float thickness = dxCommon->GetOutlineThickness();
-                        if (ImGui::DragFloat("Outline Thickness", &thickness, 0.001f, 0.0f, 0.5f, "%.3f")) {
-                            dxCommon->SetOutlineThickness(thickness);
-                            SaveSceneConfig();
-                        }
-                    }
                 }
                 ImGui::Spacing();
 

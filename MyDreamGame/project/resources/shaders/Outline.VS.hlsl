@@ -14,9 +14,8 @@ ConstantBuffer<OutlineParams> gOutlineParams : register(b1);
 VertexShaderOutput main(VertexShaderInput input) {
     VertexShaderOutput output;
     
-    // Extrude the vertex position along the normal using the thickness parameter
+    // Use the original vertex positions directly without extrusion
     float4 localPos = input.position;
-    localPos.xyz += input.normal * gOutlineParams.thickness;
     
     // Transform position to clip space
     output.position = mul(localPos, gTransformationMatrix.WVP);
