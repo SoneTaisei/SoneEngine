@@ -80,18 +80,44 @@ void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
 
 void Player2D::DisplayImGui() {
 #ifdef USE_IMGUI
-    if (ImGui::TreeNode("Player2D")) {
+    if (ImGui::TreeNode("Player2D Settings")) {
+        ImGui::Text("--- Physics & Position ---");
         ImGui::DragFloat3("Position", &position_.x, 0.1f);
         ImGui::DragFloat3("Velocity", &velocity_.x, 0.1f);
-        ImGui::DragFloat("MoveSpeed", &moveSpeed_, 0.1f, 0.0f, 20.0f);
-        ImGui::DragFloat("JumpPower", &jumpPower_, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat("Gravity", &gravity_, 0.1f, -50.0f, 0.0f);
-        ImGui::Checkbox("OnGround", &isOnGround_);
-        ImGui::Separator();
-        ImGui::Checkbox("CanDash", &canDash_);
-        ImGui::Checkbox("IsDashing", &isDashing_);
-        ImGui::DragFloat("DashSpeed", &dashSpeed_, 0.1f, 0.0f, 50.0f);
-        ImGui::DragFloat("DashDuration", &dashDuration_, 0.01f, 0.0f, 1.0f);
+        ImGui::Checkbox("On Ground", &isOnGround_);
+
+        ImGui::Text("--- Movement ---");
+        ImGui::DragFloat("Move Speed", &moveSpeed_, 0.1f, 0.0f, 50.0f);
+        ImGui::DragFloat("Jump Power", &jumpPower_, 0.1f, 0.0f, 50.0f);
+        ImGui::DragFloat("Gravity", &gravity_, 0.1f, -100.0f, 0.0f);
+        ImGui::DragFloat("Max Fall Speed", &maxFallSpeed_, 0.1f, -100.0f, 0.0f);
+
+        ImGui::Text("--- Dash Settings ---");
+        ImGui::Checkbox("Can Dash", &canDash_);
+        ImGui::Checkbox("Is Dashing", &isDashing_);
+        ImGui::DragFloat("Dash Speed", &dashSpeed_, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Dash Duration", &dashDuration_, 0.01f, 0.0f, 2.0f);
+
+        ImGui::Text("--- Wall Action Settings ---");
+        ImGui::DragFloat("Wall Slide Speed", &wallSlideSpeed_, 0.1f, -50.0f, 0.0f);
+        ImGui::DragFloat("Wall Jump Duration", &wallJumpDuration_, 0.01f, 0.0f, 2.0f);
+        ImGui::DragFloat2("Wall Jump Power (X, Y)", &wallJumpPower_.x, 0.1f, 0.0f, 50.0f);
+        
+        ImGui::Text("--- Visuals & Size ---");
+        ImGui::ColorEdit4("Normal Color", &colorNormal_.x);
+        ImGui::ColorEdit4("Dashed Color", &colorDashed_.x);
+        
+        bool sizeChanged = false;
+        if (ImGui::DragFloat("Half Width", &halfWidth_, 0.01f, 0.05f, 5.0f)) {
+            sizeChanged = true;
+        }
+        if (ImGui::DragFloat("Half Height", &halfHeight_, 0.01f, 0.05f, 5.0f)) {
+            sizeChanged = true;
+        }
+        if (sizeChanged && primitiveObj_) {
+            primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+        }
+
         ImGui::TreePop();
     }
 #endif
