@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "Scene/SceneManager.h"
+#include "Effect/SnowParticle.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Graphics/GameCamera.h"
@@ -26,33 +27,6 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     particleCommon_->AddParticle(snowParticle.get());
     snowParticle_ = snowParticle.get();
     particles_.push_back(std::move(snowParticle));
-
-    // 4. 3Dプリミティブオブジェクトの作成
-    // 橙色の球体（環境マップ・ライティング有効）
-    {
-        auto sphere = std::make_unique<PrimitiveObject>();
-        sphere->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Sphere, 1.0f, 32));
-        sphere->SetTranslation({2.0f, 0.0f, 0.0f});
-        sphere->GetMaterial().color = {1.0f, 0.5f, 0.0f, 1.0f};
-        sphere->GetMaterial().enableEnvironmentMap = 1;
-        sphere->GetMaterial().environmentCoefficient = 0.5f;
-        sphere->GetMaterial().lightingType = 1;
-        sphere->SetName("Game Sphere");
-        primitives_.push_back(std::move(sphere));
-    }
-
-    // 水色の箱（環境マップ・ライティング有効）
-    {
-        auto box = std::make_unique<PrimitiveObject>();
-        box->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f));
-        box->SetTranslation({-2.0f, 0.0f, 0.0f});
-        box->GetMaterial().color = {0.0f, 0.8f, 1.0f, 1.0f};
-        box->GetMaterial().enableEnvironmentMap = 1;
-        box->GetMaterial().environmentCoefficient = 0.5f;
-        box->GetMaterial().lightingType = 1;
-        box->SetName("Game Box");
-        primitives_.push_back(std::move(box));
-    }
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();

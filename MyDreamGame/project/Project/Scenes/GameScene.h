@@ -12,6 +12,7 @@
 #include "Game2D/MapChip2D.h"
 
 class GameCamera;
+class SnowParticle;
 
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
