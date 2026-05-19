@@ -214,6 +214,8 @@
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
     <ClCompile Include="Engine\Effect\HitEffect.cpp" />
+    <ClCompile Include="Project\Game2D\Player2D.cpp" />
+    <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
@@ -375,6 +377,8 @@
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
     <ClInclude Include="Engine\Effect\HitEffect.h" />
+    <ClInclude Include="Project\Game2D\Player2D.h" />
+    <ClInclude Include="Project\Game2D\MapChip2D.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

@@ -11,7 +11,7 @@ public:
     virtual void Initialize(int kClientWidth, int kClientHeight);
 
     // 行列を更新する（位置や角度が変わったら呼ぶ）
-    void UpdateMatrix();
+    virtual void UpdateMatrix();
 
     // --- ゲッター ---
     const Matrix4x4 &GetViewMatrix() const { return viewMatrix_; }

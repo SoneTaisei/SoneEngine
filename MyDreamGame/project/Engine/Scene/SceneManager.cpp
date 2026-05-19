@@ -34,6 +34,8 @@ void SceneManager::ProcessSceneTransition() {
             currentScene_->SetModelCommon(modelCommon_);
         if (particleCommon_)
             currentScene_->SetParticleCommon(particleCommon_);
+        if (gameCamera_)
+            currentScene_->SetGameCamera(gameCamera_);
 
         // 新しいシーンの初期化
         currentScene_->Initialize(commandList_);
@@ -62,6 +64,8 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
             currentScene_->SetModelCommon(modelCommon_);
         if (particleCommon_)
             currentScene_->SetParticleCommon(particleCommon_);
+        if (gameCamera_)
+            currentScene_->SetGameCamera(gameCamera_);
 
         currentScene_->Initialize(commandList_);
         

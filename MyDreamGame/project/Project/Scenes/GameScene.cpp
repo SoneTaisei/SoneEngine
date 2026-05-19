@@ -1,5 +1,8 @@
 #include "GameScene.h"
 #include "Scene/SceneManager.h"
+#include "Resource/Primitive/PrimitiveManager.h"
+#include "Resource/Model/ModelCommon.h"
+#include "Graphics/GameCamera.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -11,23 +14,20 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
+    // 2. PrimitiveManagerの初期化（まだの場合）
+    PrimitiveManager::GetInstance()->Initialize(device.Get());
+
     // 3. SnowParticleの生成 (unique_ptrで作る)
     auto snowParticle = std::make_unique<SnowParticle>();
-
-    // 4. 初期化
     snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/School/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
     snowParticle->SetName("Snow Particles");
 
     // Commonに描画登録する (Modelと同じ仕組みにする)
     particleCommon_->AddParticle(snowParticle.get());
-
-    // 5. エミッタ用に生ポインタを保存しておく
     snowParticle_ = snowParticle.get();
-
-    // 6. リストに所有権を移動 (push_back)
     particles_.push_back(std::move(snowParticle));
 
-    // 7. プリミティブオブジェクトの作成
+    // 4. 3Dプリミティブオブジェクトの作成
     // 橙色の球体（環境マップ・ライティング有効）
     {
         auto sphere = std::make_unique<PrimitiveObject>();
@@ -53,10 +53,25 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
         box->SetName("Game Box");
         primitives_.push_back(std::move(box));
     }
+
+    // 5. マップの生成と初期化
+    map_ = std::make_unique<MapChip2D>();
+    map_->Initialize(commandList.Get());
+
+    // 6. プレイヤーの生成と初期化
+    player_ = std::make_unique<Player2D>();
+    player_->Initialize(commandList.Get());
+
+    // 7. GameCameraを正射影モード（2D表示）に切り替え
+    if (gameCamera_) {
+        gameCamera_->InitializeOrthographic(1280, 720, 20.0f, 11.25f);
+        // プレイヤーの位置をカメラ追従ターゲットに設定
+        gameCamera_->SetFollowTarget(&player_->GetPosition());
+    }
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
-// 1. 雪を発生させる (個別のポインタを使う)
+    // 1. 雪を発生させる (個別のポインタを使う)
     if(snowParticle_) {
         snowParticle_->Emit(snowEmitter_);
     }
@@ -66,7 +81,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         particle->Update();
     }
 
-    // 3. プリミティブオブジェクトの回転と更新
+    // 3. 3Dプリミティブオブジェクトの回転と更新
     static float rotateTimer = 0.0f;
     rotateTimer += 1.0f / 60.0f;
     if (primitives_.size() >= 2) {
@@ -77,10 +92,28 @@ void GameScene::Update(SceneManager *sceneManager) {
     for (auto &primitive : primitives_) {
         primitive->Update();
     }
+
+    // 4. プレイヤーの更新（入力・物理・当たり判定）
+    if (player_ && map_) {
+        player_->Update(*map_);
+    }
+
+    // 5. マップの更新
+    if (map_) {
+        map_->Update();
+    }
+}
+
+void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
+#ifdef USE_IMGUI
+    if (player_ && player_->GetPrimitiveObject() == selectedPrimitive) {
+        player_->DisplayImGui();
+    }
+#endif
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    // 1. プリミティブの描画
+    // 1. 3Dプリミティブの描画
 #ifdef USE_IMGUI
     if (EditorManager::IsShowObjects()) {
 #endif
@@ -91,7 +124,21 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     }
 #endif
 
-    // 2. パーティクルの描画
+    // 2. 2Dオブジェクト（マップ・プレイヤー）の描画
+    // ModelCommonの描画前処理
+    modelCommon_->PreDraw(commandList_);
+
+    // マップの描画
+    if (map_) {
+        map_->Draw(commandList_);
+    }
+
+    // プレイヤーの描画
+    if (player_) {
+        player_->Draw(commandList_);
+    }
+
+    // 3. パーティクルの描画
     // 描画前処理
     particleCommon_->PreDraw(commandList_);
 
@@ -115,8 +162,22 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
 
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
+
+    // 1. 3Dプリミティブオブジェクト
     for (auto &p : primitives_) {
         result.push_back(p.get());
     }
+
+    // 2. プレイヤー
+    if (player_) {
+        result.push_back(player_->GetPrimitiveObject());
+    }
+
+    // 3. マップチップ
+    if (map_) {
+        auto mapPrims = map_->GetPrimitiveObjects();
+        result.insert(result.end(), mapPrims.begin(), mapPrims.end());
+    }
+
     return result;
 }

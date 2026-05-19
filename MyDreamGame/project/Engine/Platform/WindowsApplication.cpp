@@ -116,6 +116,9 @@ void WindowsApplication::Initialize() {
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(kWindowWidth_, kWindowHeight_);
 
+    // GameCameraをSceneManagerにセット（シーンからカメラモードを切り替え可能にする）
+    sceneManager_->SetGameCamera(gameCamera_.get());
+
 #ifdef USE_IMGUI
     // 3. 最初は「停止中（PLAYボタン表示）」としてデバッグカメラを有効にする
     activeCamera_ = debugCamera_.get();

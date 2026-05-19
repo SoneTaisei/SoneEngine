@@ -148,6 +148,12 @@
     <ClCompile Include="Engine\Effect\HitEffect.cpp">
       <Filter>Engine\Graphics\Particle</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Player2D.cpp">
+      <Filter>Application\Game2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\MapChip2D.cpp">
+      <Filter>Application\Game2D</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -284,6 +290,12 @@
     <ClInclude Include="Engine\Effect\HitEffect.h">
       <Filter>Engine\Graphics\Particle</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Player2D.h">
+      <Filter>Application\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\MapChip2D.h">
+      <Filter>Application\Game2D</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
@@ -342,6 +354,9 @@
     </Filter>
     <Filter Include="Shader\Particle">
       <UniqueIdentifier>{b0a45bce-8649-4e77-9121-20a0039a8550}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Application\Game2D">
+      <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
