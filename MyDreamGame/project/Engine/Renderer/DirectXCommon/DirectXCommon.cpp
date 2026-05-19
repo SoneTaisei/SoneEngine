@@ -460,7 +460,12 @@ void DirectXCommon::CreatePipelines() {
     
     // No culling for outline pass so it works perfectly for single/double-sided and flat shapes (we draw the outline FIRST, then colored mesh on top)
     outlinePipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-    outlinePipelineStateDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    outlinePipelineStateDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+    
+    // Wireframe offset depth bias to prevent Z-fighting with the main pass
+    outlinePipelineStateDesc.RasterizerState.DepthBias = -1000;
+    outlinePipelineStateDesc.RasterizerState.DepthBiasClamp = 0.0f;
+    outlinePipelineStateDesc.RasterizerState.SlopeScaledDepthBias = 0.0f;
     
     // Depth settings: Enable depth testing, but DISABLE depth writing to prevent Z-fighting with the main pass
     outlinePipelineStateDesc.DepthStencilState.DepthEnable = true;
