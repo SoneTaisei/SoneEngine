@@ -15,6 +15,8 @@
 #include "Core/TimeManager.h"
 // (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
 #include "GameObject/Object3D.h"
+#include "Resource/Primitive/PrimitiveManager.h"
+#include "GameObject/PrimitiveObject.h"
 
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/Utilityfunctions.h"
@@ -77,10 +79,15 @@ void WindowsApplication::Initialize() {
     // SceneManagerに渡す
     sceneManager_->SetModelCommon(modelCommon_.get());
     TextureManager::GetInstance()->Initialize(device);
+    PrimitiveManager::GetInstance()->Initialize(device);
 
     // デフォルトの環境マップ（スカイボックス用テクスチャ）をロードして設定
     uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(defaultSkyboxHandle));
+
+    // 1x1ピクセルのデフォルト白テクスチャをロードして PrimitiveObject に設定
+    uint32_t defaultWhiteHandle = TextureManager::GetInstance()->Load("white", commandList);
+    PrimitiveObject::SetDefaultTextureHandle(TextureManager::GetInstance()->GetGpuHandle(defaultWhiteHandle));
 
     // SpriteCommon の生成と初期化
     spriteCommon_ = std::make_unique<SpriteCommon>();

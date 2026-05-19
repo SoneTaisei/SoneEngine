@@ -79,28 +79,9 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
     // Ensure common model root signature is bound
     commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
 
-    // --- Outline drawing pass (Draw outline first) ---
-    // 半透明のオブジェクト、加算合成のもの、ライティングが無効なエフェクト類はアウトラインを描画しない
-    if (dxCommon->IsOutlineEnabled() && material_.color.w >= 1.0f && blendMode_ != BlendMode::kBlendModeAdd && material_.lightingType != 0) {
-        // Set the outline pipeline
-        commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateOutline());
-        
-        // Set outline params CBV to Root parameter slot 8
-        commandList->SetGraphicsRootConstantBufferView(8, dxCommon->GetOutlineParamsGPUAddress());
-        
-        // Set matrices & material CBVs for the outline pass
-        commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress()); // 行列 (スロット1)
-        commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());  // マテリアル (スロット0)
-        commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-        if (sEnvironmentMapHandle.ptr != 0) {
-            commandList->SetGraphicsRootDescriptorTable(7, sEnvironmentMapHandle);
-        }
-
-        // Draw expanded black silhouette
-        model_->Draw();
-    }
-
-    // --- Main drawing pass (Draw colored mesh second) ---
+    // ==============================================================
+    // ★ 1. 先に Main drawing pass (本体のメッシュ) を描画する！
+    // ==============================================================
     if (blendMode_ == BlendMode::kBlendModeAdd) {
         if (isDoubleSided_) {
             commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());
@@ -132,8 +113,21 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
         commandList->SetGraphicsRootDescriptorTable(7, sEnvironmentMapHandle);
     }
 
-    // 実際の描画
+    // 本体の描画
     model_->Draw();
+
+    // ==============================================================
+    // ★ 2. 後から Outline drawing pass (ワイヤーフレーム) を重ねる！
+    // ==============================================================
+    if (dxCommon->IsOutlineEnabled() && material_.color.w >= 1.0f && blendMode_ != BlendMode::kBlendModeAdd) {
+        commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateOutline());
+        commandList->SetGraphicsRootConstantBufferView(8, dxCommon->GetOutlineParamsGPUAddress());
+        
+        // ※ルートパラメータ（行列やマテリアル）は本体描画時にセット済みなのでそのまま使えます
+        
+        // ワイヤーフレームの描画
+        model_->Draw();
+    }
 }
 
 void Object3D::DisplayImGui(const std::string &label) {

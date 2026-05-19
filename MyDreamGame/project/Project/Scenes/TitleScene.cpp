@@ -8,7 +8,6 @@
 #include "Resource/Sprite/SpriteCommon.h"
 #include <wrl.h>
 #include "Resource/Model/ModelManager.h"
-#include "Graphics/TextureManager.h"
 #include "Graphics/CameraManager.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
