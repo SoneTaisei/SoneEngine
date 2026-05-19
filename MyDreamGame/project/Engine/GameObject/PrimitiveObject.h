@@ -20,6 +20,7 @@ public:
     void SetScale(const Vector3& scale) { transform_.scale = scale; }
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
+    static void SetDefaultTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { sDefaultTextureHandle_ = handle; }
     Material& GetMaterial() { return material_; }
 
     // --- 親子関係 ---
@@ -57,4 +58,5 @@ private:
     BlendMode blendMode_ = BlendMode::kBlendModeNomal;
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
+    static D3D12_GPU_DESCRIPTOR_HANDLE sDefaultTextureHandle_;
 };
