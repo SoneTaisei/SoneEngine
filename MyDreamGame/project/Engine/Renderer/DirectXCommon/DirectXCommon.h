@@ -21,7 +21,6 @@ public:
         kGaussian,
         kComposite,
         kDepthBasedOutline,
-        kRadialBlur,
     };
 
     struct VignetteParams {
@@ -65,13 +64,21 @@ public:
         float radialBlurWidth = 0.0f;
         int32_t radialBlurSamples = 10;
         float radialPadding[3] = {}; // 16-byte alignment padding
+
+        // Dissolve
+        int enableDissolve = 0;
+        float dissolveThreshold = 0.0f;
+        float dissolveEdgeWidth = 0.03f;
+        float dissolvePadding = 0.0f; // Align dissolveEdgeColor to 16 bytes
+
+        float dissolveEdgeColor[3] = {1.0f, 0.4f, 0.3f};
+        float dissolvePadding2 = 0.0f; // Align dissolveBgColor to 16 bytes
+
+        float dissolveBgColor[3] = {0.0f, 0.0f, 0.0f};
+        float dissolvePadding3 = 0.0f; // total size alignment (144 bytes total)
     };
     
-    struct RadialBlurParams {
-        float center[2] = {0.5f, 0.5f};
-        float blurWidth = 0.01f;
-        int32_t numSamples = 10;
-    };
+
 
 	// 初期化処理
 	void Initialize(HWND hwnd,int32_t windowWidth,int32_t windowHeight);
@@ -140,8 +147,8 @@ public:
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
     GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
     CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
-    RadialBlurParams* GetRadialBlurParamsData() { return radialBlurParamsData_; }
-    ID3D12PipelineState* GetRadialBlurPipelineState() const { return radialBlurPipelineState_.Get(); }
+
+    void SetDissolveMaskTexture(D3D12_GPU_DESCRIPTOR_HANDLE handle) { dissolveMaskSrvHandleGPU_ = handle; }
 
     struct OutlineParams {
         float thickness = 0.015f;
@@ -250,9 +257,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeParamResource_;
     CompositeParams* compositeParamsData_ = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> radialBlurParamResource_;
-    RadialBlurParams* radialBlurParamsData_ = nullptr;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> radialBlurPipelineState_;
+
+    D3D12_GPU_DESCRIPTOR_HANDLE dissolveMaskSrvHandleGPU_{};
 
     PostEffect postEffect_ = PostEffect::kComposite;
 

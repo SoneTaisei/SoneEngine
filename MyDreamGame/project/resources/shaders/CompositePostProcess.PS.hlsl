@@ -1,6 +1,7 @@
 #include "Fullscreen.hlsli"
 
 Texture2D<float32_t4> gTexture : register(t0);
+Texture2D<float32_t4> gMaskTexture : register(t1);
 SamplerState gSampler : register(s0);
 
 // Unified Composite Post-Process Parameters (96 bytes, 16-byte aligned)
@@ -31,6 +32,20 @@ struct CompositeParams {
     float radialBlurWidth;   // width/strength of radial blur
     int radialBlurSamples;   // number of samples for radial blur
     float3 radialPadding;    // padding to align to 16 bytes
+
+    // Vector 7 (16 bytes)
+    int enableDissolve;      // 1 to enable dissolve, 0 to disable
+    float dissolveThreshold; // dissolve cutoff threshold [0.0, 1.0]
+    float dissolveEdgeWidth; // width of the highlight edge
+    float dissolvePadding;   // alignment padding
+
+    // Vector 8 (16 bytes)
+    float3 dissolveEdgeColor;// RGB color of the glowing edge
+    float dissolvePadding2;  // alignment padding
+
+    // Vector 9 (16 bytes)
+    float3 dissolveBgColor;  // RGB color of the dissolved background
+    float dissolvePadding3;  // alignment padding
 };
 ConstantBuffer<CompositeParams> gCompositeParams : register(b0);
 
@@ -141,6 +156,20 @@ PixelShaderOutput main(VertexShaderOutput input) {
         
         // Average the accumulated color samples
         processedColor.rgb = totalRadialColor.rgb * rcp(float32_t(numSamples));
+    }
+    
+    // 6. Apply Dissolve Effect
+    if (gCompositeParams.enableDissolve != 0) {
+        float32_t mask = gMaskTexture.Sample(gSampler, input.texcoord).r;
+        
+        // Calculate edge highlight intensity
+        float32_t edge = 1.0f - smoothstep(gCompositeParams.dissolveThreshold, gCompositeParams.dissolveThreshold + gCompositeParams.dissolveEdgeWidth, mask);
+        processedColor.rgb += edge * gCompositeParams.dissolveEdgeColor;
+
+        // Background color replacement (instead of discard, so we can change background color)
+        if (mask <= gCompositeParams.dissolveThreshold) {
+            processedColor.rgb = gCompositeParams.dissolveBgColor;
+        }
     }
     
     output.color.rgb = processedColor.rgb;

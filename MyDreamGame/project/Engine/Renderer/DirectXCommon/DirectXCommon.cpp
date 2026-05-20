@@ -672,7 +672,7 @@ void DirectXCommon::CreatePostEffectPipelines() {
     Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = CompileShader(L"shaders/GaussianFilter.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psCompositeBlob = CompileShader(L"shaders/CompositePostProcess.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psDepthBasedOutlineBlob = CompileShader(L"shaders/DepthBasedOutline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psRadialBlurBlob = CompileShader(L"shaders/RadialBlur.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+
 
     // 3. PipelineState (PSO) の作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -785,24 +785,25 @@ void DirectXCommon::CreatePostEffectPipelines() {
     compositeParamsData_->radialBlurWidth = 0.01f;
     compositeParamsData_->radialBlurSamples = 10;
     std::memset(compositeParamsData_->radialPadding, 0, sizeof(compositeParamsData_->radialPadding));
+    compositeParamsData_->enableDissolve = 0;
+    compositeParamsData_->dissolveThreshold = 0.0f;
+    compositeParamsData_->dissolveEdgeWidth = 0.03f;
+    compositeParamsData_->dissolvePadding = 0.0f;
+    compositeParamsData_->dissolveEdgeColor[0] = 1.0f;
+    compositeParamsData_->dissolveEdgeColor[1] = 0.4f;
+    compositeParamsData_->dissolveEdgeColor[2] = 0.3f;
+    compositeParamsData_->dissolvePadding2 = 0.0f;
+    compositeParamsData_->dissolveBgColor[0] = 0.0f;
+    compositeParamsData_->dissolveBgColor[1] = 0.0f;
+    compositeParamsData_->dissolveBgColor[2] = 0.0f;
+    compositeParamsData_->dissolvePadding3 = 0.0f;
 
     // DepthBasedOutline 用のPSOを作成
     psoDesc.PS = {psDepthBasedOutlineBlob->GetBufferPointer(), psDepthBasedOutlineBlob->GetBufferSize()};
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&depthBasedOutlinePipelineState_));
     assert(SUCCEEDED(hr));
 
-    // 放射状ブラー用のPSOを作成
-    psoDesc.PS = {psRadialBlurBlob->GetBufferPointer(), psRadialBlurBlob->GetBufferSize()};
-    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&radialBlurPipelineState_));
-    assert(SUCCEEDED(hr));
 
-    // 放射状ブラー用定数バッファの作成
-    radialBlurParamResource_ = CreateBufferResource(device_.Get(), 256);
-    radialBlurParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&radialBlurParamsData_));
-    radialBlurParamsData_->center[0] = 0.5f;
-    radialBlurParamsData_->center[1] = 0.5f;
-    radialBlurParamsData_->blurWidth = 0.01f;
-    radialBlurParamsData_->numSamples = 10;
 
     // 逆プロジェクション行列用定数バッファの作成
     projectionInverseParamResource_ = CreateBufferResource(device_.Get(), sizeof(ProjectionInverseParams));
@@ -918,9 +919,8 @@ void DirectXCommon::ExecutePostEffect() {
         } else if (postEffect_ == PostEffect::kComposite) {
             commandList_->SetPipelineState(compositePipelineState_.Get());
             commandList_->SetGraphicsRootConstantBufferView(1, compositeParamResource_->GetGPUVirtualAddress());
-        } else if (postEffect_ == PostEffect::kRadialBlur) {
-            commandList_->SetPipelineState(radialBlurPipelineState_.Get());
-            commandList_->SetGraphicsRootConstantBufferView(1, radialBlurParamResource_->GetGPUVirtualAddress());
+            commandList_->SetGraphicsRootDescriptorTable(2, dissolveMaskSrvHandleGPU_);
+
         } else {
             // kNone または想定外
             commandList_->SetPipelineState(copyImagePipelineState_.Get());
