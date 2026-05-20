@@ -375,6 +375,38 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::Separator();
             ImGui::Spacing();
 
+            auto dxCommon = DirectXCommon::GetInstance();
+
+            // ポストエフェクト選択Combo
+            const char* effectNames[] = {
+                "None",
+                "Composite (Unified Effects)",
+                "Depth-Based Outline"
+            };
+            
+            int currentComboIndex = 0;
+            auto activeEffect = dxCommon->GetPostEffect();
+            if (activeEffect == DirectXCommon::PostEffect::kComposite) {
+                currentComboIndex = 1;
+            } else if (activeEffect == DirectXCommon::PostEffect::kDepthBasedOutline) {
+                currentComboIndex = 2;
+            }
+
+            ImGui::Text("Active Effect");
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            if (ImGui::Combo("##ActiveEffect", &currentComboIndex, effectNames, IM_ARRAYSIZE(effectNames))) {
+                if (currentComboIndex == 0) {
+                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kNone);
+                } else if (currentComboIndex == 1) {
+                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kComposite);
+                } else if (currentComboIndex == 2) {
+                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kDepthBasedOutline);
+                }
+            }
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
             // ドラッグとキーボード入力（Ctrl+クリック等）が一体化したfloat調整用ヘルパー関数（Objectエディタと同様の仕様）
             // 改行レイアウト：ラベル名の下に入力欄を表示することで、文字被りを完全に防ぎ、幅広く操作できるようにします
             auto DrawFloatControl = [](const char* label, float* val, float minVal, float maxVal, float speed = 0.005f) {
@@ -401,9 +433,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::PopID();
             };
 
-            auto dxCommon = DirectXCommon::GetInstance();
             auto params = dxCommon->GetCompositeParamsData();
-            if (params) {
+            if (params && dxCommon->GetPostEffect() == DirectXCommon::PostEffect::kComposite) {
                 if (ImGui::CollapsingHeader("Grayscale Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     DrawFloatControl("Grayscale Strength", &params->grayscaleStrength, 0.0f, 1.0f);

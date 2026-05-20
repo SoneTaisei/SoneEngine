@@ -572,6 +572,17 @@ void DirectXCommon::InitializeRenderTexture() {
     // SRVの作成
     SrvManager::GetInstance()->Allocate(&postProcessSrvHandleCPU_, &postProcessSrvHandleGPU_);
     device_->CreateShaderResourceView(postProcessResource_.Get(), &srvDesc, postProcessSrvHandleCPU_);
+
+    // --- デプスバッファのSRVを作成 ---
+    SrvManager::GetInstance()->Allocate(&depthStencilSrvHandleCPU_, &depthStencilSrvHandleGPU_);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC depthSrvDesc{};
+    depthSrvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    depthSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    depthSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    depthSrvDesc.Texture2D.MipLevels = 1;
+
+    device_->CreateShaderResourceView(depthStencilResource_.Get(), &depthSrvDesc, depthStencilSrvHandleCPU_);
 }
 
 void DirectXCommon::CreatePostEffectPipelines() {
@@ -588,20 +599,40 @@ void DirectXCommon::CreatePostEffectPipelines() {
     descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    // 深度テクスチャ用 (t1) の DescriptorRange
+    D3D12_DESCRIPTOR_RANGE depthDescriptorRange[1] = {};
+    depthDescriptorRange[0].BaseShaderRegister = 1; // t1
+    depthDescriptorRange[0].NumDescriptors = 1;
+    depthDescriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    depthDescriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
     // RootParameterにセット
-    D3D12_ROOT_PARAMETER rootParameters[2] = {};
+    D3D12_ROOT_PARAMETER rootParameters[4] = {};
+    // rootParameters[0]: t0
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].DescriptorTable.pDescriptorRanges = descriptorRange;
     rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
 
-    // b0 (VignetteParams)
+    // rootParameters[1]: b0 (VignetteParams 等)
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[1].Descriptor.ShaderRegister = 0;
 
-    // Sampler用 (s0)
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    // rootParameters[2]: t1 (DepthTexture)
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[2].DescriptorTable.pDescriptorRanges = depthDescriptorRange;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+
+    // rootParameters[3]: b1 (ProjectionInverseParams)
+    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[3].Descriptor.ShaderRegister = 1;
+
+    // Sampler用 (s0, s1)
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
+    // Linear (s0)
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -610,6 +641,16 @@ void DirectXCommon::CreatePostEffectPipelines() {
     staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
     staticSamplers[0].ShaderRegister = 0; // s0
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // Point (s1)
+    staticSamplers[1].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[1].ShaderRegister = 1; // s1
+    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.NumParameters = _countof(rootParameters);
@@ -630,6 +671,7 @@ void DirectXCommon::CreatePostEffectPipelines() {
     Microsoft::WRL::ComPtr<IDxcBlob> psSmoothingBlob = CompileShader(L"shaders/Smoothing.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = CompileShader(L"shaders/GaussianFilter.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psCompositeBlob = CompileShader(L"shaders/CompositePostProcess.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psDepthBasedOutlineBlob = CompileShader(L"shaders/DepthBasedOutline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
     // 3. PipelineState (PSO) の作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -736,50 +778,142 @@ void DirectXCommon::CreatePostEffectPipelines() {
     compositeParamsData_->texelSize[0] = 1.0f / (float)windowWidth_;
     compositeParamsData_->texelSize[1] = 1.0f / (float)windowHeight_;
     compositeParamsData_->padding = 0.0f;
+
+    // DepthBasedOutline 用のPSOを作成
+    psoDesc.PS = {psDepthBasedOutlineBlob->GetBufferPointer(), psDepthBasedOutlineBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&depthBasedOutlinePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // 逆プロジェクション行列用定数バッファの作成
+    projectionInverseParamResource_ = CreateBufferResource(device_.Get(), sizeof(ProjectionInverseParams));
+    projectionInverseParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&projectionInverseParamsData_));
+    projectionInverseParamsData_->projectionInverse = TransformFunctions::MakeIdentity4x4();
 }
 
 void DirectXCommon::ExecutePostEffect() {
-    // 1. バリアを張る (RenderTexture: RT -> SRV, PostProcess: SRV -> RT)
-    D3D12_RESOURCE_BARRIER barriers[2] = {};
-    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[0].Transition.pResource = renderTextureResource_.Get();
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    if (postEffect_ == PostEffect::kDepthBasedOutline) {
+        // 1. バリアを張る (RenderTexture: RT -> SRV, PostProcess: SRV -> RT, DepthStencil: WRITE -> SRV)
+        D3D12_RESOURCE_BARRIER barriers[3] = {};
+        barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barriers[0].Transition.pResource = renderTextureResource_.Get();
+        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
-    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = postProcessResource_.Get();
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    commandList_->ResourceBarrier(2, barriers);
+        barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barriers[1].Transition.pResource = postProcessResource_.Get();
+        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
-    // 2. 描画先を PostProcessTexture に設定
-    commandList_->OMSetRenderTargets(1, &postProcessRtvHandle_, false, nullptr);
-    float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
-    commandList_->ClearRenderTargetView(postProcessRtvHandle_, clearColor, 0, nullptr);
+        barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barriers[2].Transition.pResource = depthStencilResource_.Get();
+        barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList_->ResourceBarrier(3, barriers);
 
-    // ビューポートとシザーの設定
-    commandList_->RSSetViewports(1, &viewport_);
-    commandList_->RSSetScissorRects(1, &scissorRect_);
+        // 2. 描画先を PostProcessTexture に設定
+        commandList_->OMSetRenderTargets(1, &postProcessRtvHandle_, false, nullptr);
+        float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
+        commandList_->ClearRenderTargetView(postProcessRtvHandle_, clearColor, 0, nullptr);
 
-    // 3. パイプライン設定
-    commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
-    
-    // 常に統合ポストプロセス（重ね掛け・ブレンド対応）を適用する
-    commandList_->SetPipelineState(compositePipelineState_.Get());
-    commandList_->SetGraphicsRootConstantBufferView(1, compositeParamResource_->GetGPUVirtualAddress());
+        // ビューポートとシザーの設定
+        commandList_->RSSetViewports(1, &viewport_);
+        commandList_->RSSetScissorRects(1, &scissorRect_);
 
-    commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
-    commandList_->DrawInstanced(3, 1, 0, 0);
+        // 3. パイプライン設定
+        commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
+        commandList_->SetPipelineState(depthBasedOutlinePipelineState_.Get());
 
-    // 4. バリアを戻す (PostProcess: RT -> SRV, RenderTexture: SRV -> RT)
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    commandList_->ResourceBarrier(2, barriers);
+        // 逆プロジェクション行列の更新
+        if (projectionInverseParamsData_) {
+            Matrix4x4 projectionMatrix = CameraManager::GetInstance()->GetProjectionMatrix();
+            projectionInverseParamsData_->projectionInverse = TransformFunctions::Inverse(projectionMatrix);
+        }
+        commandList_->SetGraphicsRootConstantBufferView(3, projectionInverseParamResource_->GetGPUVirtualAddress());
+
+        // ディスクリプタテーブルのバインド
+        // t0
+        commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
+        // t1 (DepthTexture)
+        commandList_->SetGraphicsRootDescriptorTable(2, depthStencilSrvHandleGPU_);
+
+        commandList_->DrawInstanced(3, 1, 0, 0);
+
+        // 4. バリアを戻す (PostProcess: RT -> SRV, RenderTexture: SRV -> RT, DepthStencil: SRV -> WRITE)
+        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        commandList_->ResourceBarrier(3, barriers);
+    }
+    else {
+        // 既存のポストプロセス
+        // 1. バリアを張る (RenderTexture: RT -> SRV, PostProcess: SRV -> RT)
+        D3D12_RESOURCE_BARRIER barriers[2] = {};
+        barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barriers[0].Transition.pResource = renderTextureResource_.Get();
+        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barriers[1].Transition.pResource = postProcessResource_.Get();
+        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(2, barriers);
+
+        // 2. 描画先を PostProcessTexture に設定
+        commandList_->OMSetRenderTargets(1, &postProcessRtvHandle_, false, nullptr);
+        float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
+        commandList_->ClearRenderTargetView(postProcessRtvHandle_, clearColor, 0, nullptr);
+
+        // ビューポートとシザーの設定
+        commandList_->RSSetViewports(1, &viewport_);
+        commandList_->RSSetScissorRects(1, &scissorRect_);
+
+        // 3. パイプライン設定
+        commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
+        
+        // 選択されたエフェクトに応じて PSO を切り替える
+        if (postEffect_ == PostEffect::kGrayscale) {
+            commandList_->SetPipelineState(grayscalePipelineState_.Get());
+        } else if (postEffect_ == PostEffect::kSepia) {
+            commandList_->SetPipelineState(sepiaPipelineState_.Get());
+        } else if (postEffect_ == PostEffect::kVignette) {
+            commandList_->SetPipelineState(vignettePipelineState_.Get());
+            commandList_->SetGraphicsRootConstantBufferView(1, vignetteParamResource_->GetGPUVirtualAddress());
+        } else if (postEffect_ == PostEffect::kSmoothing) {
+            commandList_->SetPipelineState(smoothingPipelineState_.Get());
+            commandList_->SetGraphicsRootConstantBufferView(1, smoothingParamResource_->GetGPUVirtualAddress());
+        } else if (postEffect_ == PostEffect::kGaussian) {
+            commandList_->SetPipelineState(gaussianPipelineState_.Get());
+            commandList_->SetGraphicsRootConstantBufferView(1, gaussianParamResource_->GetGPUVirtualAddress());
+        } else if (postEffect_ == PostEffect::kComposite) {
+            commandList_->SetPipelineState(compositePipelineState_.Get());
+            commandList_->SetGraphicsRootConstantBufferView(1, compositeParamResource_->GetGPUVirtualAddress());
+        } else {
+            // kNone または想定外
+            commandList_->SetPipelineState(copyImagePipelineState_.Get());
+        }
+
+        commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
+        commandList_->DrawInstanced(3, 1, 0, 0);
+
+        // 4. バリアを戻す (PostProcess: RT -> SRV, RenderTexture: SRV -> RT)
+        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        
+        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList_->ResourceBarrier(2, barriers);
+    }
 }
 
 void DirectXCommon::DrawRenderTexture() {
