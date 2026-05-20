@@ -603,6 +603,35 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Spacing();
                     }
                 }
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("Noise Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    bool enableNoise = (params->enableNoise != 0);
+                    if (ImGui::Checkbox("Enable Noise", &enableNoise)) {
+                        params->enableNoise = enableNoise ? 1 : 0;
+                    }
+                    if (enableNoise) {
+                        ImGui::Spacing();
+                        DrawFloatControl("Noise Strength", &params->noiseStrength, 0.0f, 1.0f, 0.005f);
+                        ImGui::Spacing();
+                        DrawFloatControl("Noise Scale", &params->noiseScale, 1.0f, 1000.0f, 1.0f);
+                        ImGui::Spacing();
+
+                        ImGui::Text("Noise Blend Mode");
+                        const char* blendModeNames[] = {
+                            "Normal",
+                            "Add",
+                            "Multiply",
+                            "Screen",
+                            "Overlay"
+                        };
+                        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                        ImGui::Combo("##NoiseBlendMode", &params->noiseBlendMode, blendModeNames, IM_ARRAYSIZE(blendModeNames));
+                        ImGui::PopItemWidth();
+                        ImGui::Spacing();
+                    }
+                }
             }
 
 

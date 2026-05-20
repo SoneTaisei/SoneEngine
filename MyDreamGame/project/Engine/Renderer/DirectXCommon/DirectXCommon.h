@@ -76,6 +76,15 @@ public:
 
         float dissolveBgColor[3] = {0.0f, 0.0f, 0.0f};
         float dissolvePadding3 = 0.0f; // total size alignment (144 bytes total)
+
+        // Noise (32 bytes aligned)
+        int enableNoise = 0;
+        float noiseStrength = 0.3f;
+        int noiseBlendMode = 1; // 0: Normal, 1: Add, 2: Multiply, 3: Screen, 4: Overlay
+        float noiseScale = 128.0f; // Default noise scale (grain size)
+
+        float noiseTime = 0.0f;
+        float noisePadding[3] = {};
     };
     
 
@@ -294,5 +303,7 @@ private:
 	// 記録時間(FPS固定用)
 	std::chrono::steady_clock::time_point reference_;
 
+    // エフェクト時間管理用
+    std::chrono::steady_clock::time_point startTime_;
 };
 

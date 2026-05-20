@@ -31,6 +31,7 @@ void DirectXCommon::Initialize(HWND hwnd, int32_t windowWidth, int32_t windowHei
     // Skybox用のパイプラインを作る指示を出す
     CreateSkyboxPipeline();
     InitializeFixFPS();
+    startTime_ = std::chrono::steady_clock::now();
 
 	// フェンスの初期化
 	HRESULT hr = device_->CreateFence(fenceValue_, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_));
@@ -798,6 +799,14 @@ void DirectXCommon::CreatePostEffectPipelines() {
     compositeParamsData_->dissolveBgColor[2] = 0.0f;
     compositeParamsData_->dissolvePadding3 = 0.0f;
 
+    // Noise
+    compositeParamsData_->enableNoise = 0;
+    compositeParamsData_->noiseStrength = 0.3f;
+    compositeParamsData_->noiseBlendMode = 1;
+    compositeParamsData_->noiseScale = 128.0f;
+    compositeParamsData_->noiseTime = 0.0f;
+    std::memset(compositeParamsData_->noisePadding, 0, sizeof(compositeParamsData_->noisePadding));
+
     // DepthBasedOutline 用のPSOを作成
     psoDesc.PS = {psDepthBasedOutlineBlob->GetBufferPointer(), psDepthBasedOutlineBlob->GetBufferSize()};
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&depthBasedOutlinePipelineState_));
@@ -917,6 +926,11 @@ void DirectXCommon::ExecutePostEffect() {
             commandList_->SetPipelineState(gaussianPipelineState_.Get());
             commandList_->SetGraphicsRootConstantBufferView(1, gaussianParamResource_->GetGPUVirtualAddress());
         } else if (postEffect_ == PostEffect::kComposite) {
+            if (compositeParamsData_) {
+                auto now = std::chrono::steady_clock::now();
+                float elapsedSeconds = std::chrono::duration<float>(now - startTime_).count();
+                compositeParamsData_->noiseTime = elapsedSeconds;
+            }
             commandList_->SetPipelineState(compositePipelineState_.Get());
             commandList_->SetGraphicsRootConstantBufferView(1, compositeParamResource_->GetGPUVirtualAddress());
             commandList_->SetGraphicsRootDescriptorTable(2, dissolveMaskSrvHandleGPU_);
