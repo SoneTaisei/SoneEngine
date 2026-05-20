@@ -46,6 +46,16 @@ struct CompositeParams {
     // Vector 9 (16 bytes)
     float3 dissolveBgColor;  // RGB color of the dissolved background
     float dissolvePadding3;  // alignment padding
+
+    // Vector 10 (16 bytes)
+    int enableNoise;         // 1 to enable noise, 0 to disable
+    float noiseStrength;     // noise blending strength [0.0, 1.0]
+    int noiseBlendMode;      // 0: Normal, 1: Add, 2: Multiply, 3: Screen, 4: Overlay
+    float noiseScale;        // noise scale factor (grain size)
+
+    // Vector 11 (16 bytes)
+    float noiseTime;         // time factor for noise animation
+    float3 noisePadding;     // alignment padding
 };
 ConstantBuffer<CompositeParams> gCompositeParams : register(b0);
 
@@ -53,7 +63,13 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
+// Generate 1D pseudo-random number from 2D coordinates
+float32_t rand2dTo1d(float32_t2 uv) {
+    return frac(sin(dot(uv, float32_t2(12.9898f, 78.233f))) * 43758.5453123f);
+}
+
 static const float32_t PI = 3.14159265f;
+
 
 // 2D Gaussian function
 float gauss(float x, float y, float sigma) {
@@ -170,6 +186,41 @@ PixelShaderOutput main(VertexShaderOutput input) {
         if (mask <= gCompositeParams.dissolveThreshold) {
             processedColor.rgb = gCompositeParams.dissolveBgColor;
         }
+    }
+    
+    // 7. Apply Noise Effect
+    if (gCompositeParams.enableNoise != 0) {
+        // Use noiseScale to control grain size, and offset by fractional pseudo-random values generated from noiseTime to make it pop and animate beautifully
+        float32_t2 timeOffset = float32_t2(
+            frac(sin(gCompositeParams.noiseTime) * 43758.5453f),
+            frac(cos(gCompositeParams.noiseTime) * 43758.5453f)
+        );
+        float32_t2 noiseUv = input.texcoord * gCompositeParams.noiseScale + timeOffset;
+        
+        float32_t noiseVal = rand2dTo1d(noiseUv);
+        float32_t3 noiseColor = float32_t3(noiseVal, noiseVal, noiseVal);
+        float32_t3 blendedColor = processedColor.rgb;
+        
+        if (gCompositeParams.noiseBlendMode == 0) {
+            // Normal (Lerp / Mix)
+            blendedColor = noiseColor;
+        } else if (gCompositeParams.noiseBlendMode == 1) {
+            // Add
+            blendedColor = processedColor.rgb + noiseColor;
+        } else if (gCompositeParams.noiseBlendMode == 2) {
+            // Multiply
+            blendedColor = processedColor.rgb * noiseColor;
+        } else if (gCompositeParams.noiseBlendMode == 3) {
+            // Screen
+            blendedColor = 1.0f - (1.0f - processedColor.rgb) * (1.0f - noiseColor);
+        } else if (gCompositeParams.noiseBlendMode == 4) {
+            // Overlay
+            float32_t3 overlayLow = 2.0f * processedColor.rgb * noiseColor;
+            float32_t3 overlayHigh = 1.0f - 2.0f * (1.0f - processedColor.rgb) * (1.0f - noiseColor);
+            blendedColor = lerp(overlayLow, overlayHigh, step(0.5f, processedColor.rgb));
+        }
+        
+        processedColor.rgb = lerp(processedColor.rgb, blendedColor, gCompositeParams.noiseStrength);
     }
     
     output.color.rgb = processedColor.rgb;
