@@ -1,26 +1,26 @@
 #ifdef USE_IMGUI
 #include "EditorManager.h"
 #include "Core/Utility/TransformFunctions.h"
-#include "Input/KeyboardInput.h"
-#include "Renderer/SrvManager.h"
-#include "Scene/SceneManager.h"
-#include "Scene/IScene.h"
+#include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
-#include "Effect/ParticleManager.h"
+#include "Input/KeyboardInput.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Renderer/SrvManager.h"
+#include "Scene/IScene.h"
+#include "Scene/SceneManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
-#include <imgui_internal.h>
 #include <imgui_impl_dx12.h>
 #include <imgui_impl_win32.h>
+#include <imgui_internal.h>
 
 #include <cmath>
-#include <numbers>
-#include <fstream>
-#include <string>
 #include <filesystem>
+#include <fstream>
+#include <numbers>
+#include <string>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
@@ -43,7 +43,13 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
 
     // 2. フラグの設定
     ImGuiIO &io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;   // ドッキング有効化
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // ドッキング有効化
+
+    // =================================================================
+    // 日本語フォントの読み込み設定
+    // =================================================================
+    // Windows標準の「メイリオ」フォントをサイズ18で読み込み、日本語の文字範囲（グリフ）を適用します。
+    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\meiryo.ttc", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
 
     // 3. Win32バックエンドの初期化
     ImGui_ImplWin32_Init(hwnd);
@@ -52,7 +58,6 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     ImGui_ImplDX12_InitInfo init_info = {};
     init_info.Device = device;
     init_info.CommandQueue = commandQueue;
-    // BufferCount は決め打ち(通常2か3)にするか、引数で貰うかします（ここでは一般的な2とします）
     init_info.NumFramesInFlight = 2;
     init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -85,7 +90,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.0f, 1.0f));
-            if (ImGui::Button("PLAY")) {
+            if (ImGui::Button("再生 (PLAY)")) {
                 isPlaying_ = true;
                 useDebugCamera_ = false;
             }
@@ -94,8 +99,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.0f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
-            if (ImGui::Button("STOP")) {
-                isPlaying_ = false;
+            if (ImGui::Button("停止 (STOP)")) {
+                isPlaying_ = false; // ← ここを修正しました
                 useDebugCamera_ = true;
                 debugCamera->SetTranslation(gameCamera->GetTranslation());
                 debugCamera->SetRotation(gameCamera->GetRotation());
@@ -106,12 +111,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
 
         // Debug Camera チェックボックス
-        ImGui::Checkbox("Debug Camera", &useDebugCamera_);
+        ImGui::Checkbox("デバッグカメラ", &useDebugCamera_);
 
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
 
         // シーン切替コンボ
-        ImGui::Text("Scene:");
+        ImGui::Text("シーン:");
         ImGui::SetNextItemWidth(130.0f);
         {
             int sceneIndex = static_cast<int>(currentSceneType_);
@@ -131,11 +136,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
 
         // Window開閉制御メニュー
-        if (ImGui::BeginMenu("Window")) {
-            ImGui::MenuItem("Inspector", nullptr, &showInspector_);
-            ImGui::MenuItem("Hierarchy", nullptr, &showHierarchy_);
-            ImGui::MenuItem("Game View", nullptr, &showGameView_);
-            ImGui::MenuItem("PostEffect", nullptr, &showPostEffect_);
+        if (ImGui::BeginMenu("ウィンドウ")) {
+            ImGui::MenuItem("インスペクター", nullptr, &showInspector_);
+            ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_);
+            ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_);
+            ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_);
             ImGui::EndMenu();
         }
 
@@ -145,7 +150,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.45f, 0.8f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.55f, 0.9f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.05f, 0.35f, 0.7f, 1.0f));
-            if (ImGui::Button("Open Inspector")) {
+            if (ImGui::Button("インスペクターを開く")) {
                 showInspector_ = true;
             }
             ImGui::PopStyleColor(3);
@@ -168,23 +173,23 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
         ImGuiID dock_id_main = dockspace_id;
-        // 左側に「Hierarchy」
+        // 左側に「ヒエラルキー」
         ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
-        // 右側に「Inspector」
+        // 右側に「インスペクター」
         ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
 
-        // 各ウィンドウを各ノードに割り当てる
-        ImGui::DockBuilderDockWindow("Game View", dock_id_main);
-        ImGui::DockBuilderDockWindow("Hierarchy", dock_id_left);
-        ImGui::DockBuilderDockWindow("Inspector", dock_id_right);
-        ImGui::DockBuilderDockWindow("PostEffect", dock_id_right);
+        // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
+        ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
+        ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
+        ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
+        ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
 
     // --- Game View ウィンドウ ---
     if (showGameView_) {
-        if (ImGui::Begin("Game View", &showGameView_)) {
+        if (ImGui::Begin("ゲームビュー", &showGameView_)) {
             isGameViewHovered_ = ImGui::IsWindowHovered();
             {
                 // ウィンドウのサイズに合わせてアスペクト比を維持して描画
@@ -210,10 +215,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- Hierarchy ウィンドウ ---
     if (showHierarchy_) {
-        if (ImGui::Begin("Hierarchy", &showHierarchy_)) {
+        if (ImGui::Begin("ヒエラルキー", &showHierarchy_)) {
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
-                if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("オブジェクト (Objects)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     for (auto *obj : activeScene->GetObjects()) {
                         bool isSelected = (selectedObject_ == obj);
                         if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
@@ -223,7 +228,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
                 }
-                if (ImGui::CollapsingHeader("Particles", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("パーティクル (Particles)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     for (auto *particle : activeScene->GetParticles()) {
                         bool isSelected = (selectedParticle_ == particle);
                         if (ImGui::Selectable(particle->GetName().c_str(), isSelected)) {
@@ -233,7 +238,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
                 }
-                if (ImGui::CollapsingHeader("Primitives", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("プリミティブ (Primitives)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     for (auto *primitive : activeScene->GetPrimitives()) {
                         bool isSelected = (selectedPrimitive_ == primitive);
                         if (ImGui::Selectable(primitive->GetName().c_str(), isSelected)) {
@@ -259,12 +264,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- Inspector ウィンドウ ---
     if (showInspector_) {
-        if (ImGui::Begin("Inspector", &showInspector_)) {
+        if (ImGui::Begin("インスペクター", &showInspector_)) {
             if (selectedObject_ || selectedParticle_ || selectedPrimitive_) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
-                if (ImGui::Button("Show Global Settings", ImVec2(-1, 0))) {
+                if (ImGui::Button("グローバル設定を表示", ImVec2(-1, 0))) {
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
@@ -282,25 +287,25 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             } else if (selectedPrimitive_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
             } else {
-                ImGui::Text("Global Visibility Settings");
+                ImGui::Text("グローバル表示設定");
                 ImGui::Separator();
-                ImGui::Checkbox("Show Objects (Models)", &showObjects_);
-                ImGui::Checkbox("Show Effects (Particles/Primitives)", &showEffects_);
+                ImGui::Checkbox("オブジェクトを表示 (モデル)", &showObjects_);
+                ImGui::Checkbox("エフェクトを表示 (パーティクル/プリミティブ)", &showEffects_);
                 ImGui::Spacing();
 
-                ImGui::Text("Outline Settings");
+                ImGui::Text("アウトライン設定");
                 ImGui::Separator();
                 {
                     auto dxCommon = DirectXCommon::GetInstance();
                     bool outlineEnabled = dxCommon->IsOutlineEnabled();
-                    if (ImGui::Checkbox("Enable Outline", &outlineEnabled)) {
+                    if (ImGui::Checkbox("アウトラインを有効化", &outlineEnabled)) {
                         dxCommon->SetOutlineEnabled(outlineEnabled);
                         SaveSceneConfig();
                     }
                 }
                 ImGui::Spacing();
 
-                ImGui::Text("Global Settings (Lighting)");
+                ImGui::Text("グローバル設定 (ライティング)");
                 ImGui::Separator();
 
                 static int activeLightType = 2;
@@ -311,12 +316,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 static float spotAngleDeg = 30.0f;
                 static float spotFalloffDeg = 20.0f;
 
-                ImGui::Text("Active Light Source");
-                ImGui::RadioButton("Directional", &activeLightType, 0);
+                ImGui::Text("アクティブな光源");
+                ImGui::RadioButton("平行光源 (Directional)", &activeLightType, 0);
                 ImGui::SameLine();
-                ImGui::RadioButton("Point", &activeLightType, 1);
+                ImGui::RadioButton("点光源 (Point)", &activeLightType, 1);
                 ImGui::SameLine();
-                ImGui::RadioButton("Spot", &activeLightType, 2);
+                ImGui::RadioButton("スポットライト (Spot)", &activeLightType, 2);
                 ImGui::Separator();
 
                 DirectionalLight *dLight = modelCommon->GetDirectionalLight();
@@ -327,42 +332,42 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     dLight->intensity = dIntensity;
                     pLight->intensity = 0.0f;
                     sLight->intensity = 0.0f;
-                    ImGui::Text("Directional Light Settings");
-                    ImGui::ColorEdit4("Color", &dLight->color.x);
-                    ImGui::DragFloat("Intensity", &dIntensity, 0.01f, 0.0f, 10.0f);
-                    ImGui::DragFloat3("Direction", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
+                    ImGui::Text("平行光源設定");
+                    ImGui::ColorEdit4("色", &dLight->color.x);
+                    ImGui::DragFloat("輝度 (Intensity)", &dIntensity, 0.01f, 0.0f, 10.0f);
+                    ImGui::DragFloat3("方向", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
                     dLight->direction = TransformFunctions::Normalize(dLight->direction);
                 } else if (activeLightType == 1) {
                     pLight->intensity = pIntensity;
                     dLight->intensity = 0.0f;
                     sLight->intensity = 0.0f;
-                    ImGui::Text("Point Light Settings");
-                    ImGui::ColorEdit4("Color", &pLight->color.x);
-                    ImGui::DragFloat("Intensity", &pIntensity, 0.01f, 0.0f, 10.0f);
-                    ImGui::DragFloat3("Position", &pLight->position.x, 0.1f);
-                    ImGui::DragFloat("Radius", &pLight->radius, 0.1f, 0.0f, 100.0f);
-                    ImGui::DragFloat("Decay", &pLight->decay, 0.01f, 0.0f, 10.0f);
+                    ImGui::Text("点光源設定");
+                    ImGui::ColorEdit4("色", &pLight->color.x);
+                    ImGui::DragFloat("輝度 (Intensity)", &pIntensity, 0.01f, 0.0f, 10.0f);
+                    ImGui::DragFloat3("位置", &pLight->position.x, 0.1f);
+                    ImGui::DragFloat("半径 (Radius)", &pLight->radius, 0.1f, 0.0f, 100.0f);
+                    ImGui::DragFloat("減衰 (Decay)", &pLight->decay, 0.01f, 0.0f, 10.0f);
                 } else if (activeLightType == 2) {
                     sLight->intensity = sIntensity;
                     dLight->intensity = 0.0f;
                     pLight->intensity = 0.0f;
-                    ImGui::Text("Spot Light Settings");
-                    ImGui::ColorEdit4("Color", &sLight->color.x);
-                    ImGui::DragFloat("Intensity", &sIntensity, 0.01f, 0.0f, 20.0f);
-                    ImGui::DragFloat3("Position", &sLight->position.x, 0.1f);
-                    if (ImGui::DragFloat3("Direction", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
+                    ImGui::Text("スポットライト設定");
+                    ImGui::ColorEdit4("色", &sLight->color.x);
+                    ImGui::DragFloat("輝度 (Intensity)", &sIntensity, 0.01f, 0.0f, 20.0f);
+                    ImGui::DragFloat3("位置", &sLight->position.x, 0.1f);
+                    if (ImGui::DragFloat3("方向", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
                         sLight->direction = TransformFunctions::Normalize(sLight->direction);
                     }
-                    ImGui::DragFloat("Distance", &sLight->distance, 0.1f, 0.0f, 100.0f);
-                    ImGui::DragFloat("Decay", &sLight->decay, 0.01f, 0.0f, 10.0f);
-                    ImGui::SliderFloat("Total Angle", &spotAngleDeg, 0.0f, 90.0f);
-                    ImGui::SliderFloat("Falloff Start", &spotFalloffDeg, 0.0f, spotAngleDeg);
+                    ImGui::DragFloat("距離", &sLight->distance, 0.1f, 0.0f, 100.0f);
+                    ImGui::DragFloat("減衰 (Decay)", &sLight->decay, 0.01f, 0.0f, 10.0f);
+                    ImGui::SliderFloat("全角 (Total Angle)", &spotAngleDeg, 0.0f, 90.0f);
+                    ImGui::SliderFloat("フォールオフ開始角", &spotFalloffDeg, 0.0f, spotAngleDeg);
                     sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
                     sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
                 }
 
                 ImGui::Separator();
-                ImGui::Checkbox("Enable Fog Effect", &enableFog);
+                ImGui::Checkbox("フォグエフェクトを有効化", &enableFog);
             }
         }
         ImGui::End();
@@ -370,20 +375,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- PostEffect ウィンドウ ---
     if (showPostEffect_) {
-        if (ImGui::Begin("PostEffect", &showPostEffect_)) {
-            ImGui::Text("Post Effect Settings");
+        if (ImGui::Begin("ポストエフェクト", &showPostEffect_)) {
+            ImGui::Text("ポストエフェクト設定");
             ImGui::Separator();
             ImGui::Spacing();
 
             auto dxCommon = DirectXCommon::GetInstance();
 
             // ポストエフェクト選択Combo
-            const char* effectNames[] = {
-                "None",
-                "Composite (Unified Effects)",
-                "Depth-Based Outline"
-            };
-            
+            const char *effectNames[] = {
+                "なし (None)",
+                "コンポジット (統合エフェクト)",
+                "深度ベース・アウトライン"};
+
             int currentComboIndex = 0;
             auto activeEffect = dxCommon->GetPostEffect();
             if (activeEffect == DirectXCommon::PostEffect::kComposite) {
@@ -391,8 +395,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             } else if (activeEffect == DirectXCommon::PostEffect::kDepthBasedOutline) {
                 currentComboIndex = 2;
             }
- 
-            ImGui::Text("Active Effect");
+
+            ImGui::Text("アクティブなエフェクト");
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
             if (ImGui::Combo("##ActiveEffect", &currentComboIndex, effectNames, IM_ARRAYSIZE(effectNames))) {
                 if (currentComboIndex == 0) {
@@ -407,51 +411,48 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::Separator();
             ImGui::Spacing();
 
-            // ドラッグとキーボード入力（Ctrl+クリック等）が一体化したfloat調整用ヘルパー関数（Objectエディタと同様の仕様）
-            // 改行レイアウト：ラベル名の下に入力欄を表示することで、文字被りを完全に防ぎ、幅広く操作できるようにします
-            auto DrawFloatControl = [](const char* label, float* val, float minVal, float maxVal, float speed = 0.005f) {
-                ImGui::Text("%s", label); // ラベルの描画（改行）
-                
+            // ドラッグとキーボード入力（Ctrl+クリック等）が一体化したfloat調整用ヘルパー関数
+            auto DrawFloatControl = [](const char *label, float *val, float minVal, float maxVal, float speed = 0.005f) {
+                ImGui::Text("%s", label); // ラベルの描画
+
                 ImGui::PushID(label);
-                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x); // 横幅いっぱいに広げる
-                // DragFloatはドラッグによる調整と数値のキーボード入力を一体化して処理します
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                 ImGui::DragFloat("##drag", val, speed, minVal, maxVal, "%.3f");
                 ImGui::PopItemWidth();
                 ImGui::PopID();
             };
 
             // ドラッグとキーボード入力が一体化したint調整用ヘルパー関数
-            // 改行レイアウト：ラベル名の下に入力欄を表示します
-            auto DrawIntControl = [](const char* label, int* val, int minVal, int maxVal, float speed = 0.05f) {
-                ImGui::Text("%s", label); // ラベルの描画（改行）
-                
+            auto DrawIntControl = [](const char *label, int *val, int minVal, int maxVal, float speed = 0.05f) {
+                ImGui::Text("%s", label);
+
                 ImGui::PushID(label);
-                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x); // 横幅いっぱいに広げる
-                // DragIntはドラッグによる調整と数値のキーボード入力を一体化して処理します
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                 ImGui::DragInt("##drag", val, speed, minVal, maxVal);
                 ImGui::PopItemWidth();
                 ImGui::PopID();
             };
-            // Lambda to draw the interactive radial blur canvas and inputs, reused for standalone and composite
-            auto DrawRadialBlurCanvas = [&](float* center, float* blurWidth, int* sampleCount, int* enableFlag = nullptr) {
+
+            // ラジアルブラー描画用ラムダ
+            auto DrawRadialBlurCanvas = [&](float *center, float *blurWidth, int *sampleCount, int *enableFlag = nullptr) {
                 if (enableFlag) {
                     bool enabled = (*enableFlag != 0);
-                    if (ImGui::Checkbox("Enable Radial Blur", &enabled)) {
+                    if (ImGui::Checkbox("ラジアルブラーを有効化", &enabled)) {
                         *enableFlag = enabled ? 1 : 0;
                     }
-                    if (!enabled) return;
+                    if (!enabled)
+                        return;
                 }
-                
+
                 ImGui::Spacing();
-                DrawFloatControl("Blur Width", blurWidth, 0.0f, 0.1f, 0.001f);
+                DrawFloatControl("ブラー幅 (Blur Width)", blurWidth, 0.0f, 0.1f, 0.001f);
                 ImGui::Spacing();
-                DrawIntControl("Sample Count (Blur Quality)", sampleCount, 1, 30);
+                DrawIntControl("サンプル数 (ブラー品質)", sampleCount, 1, 30);
                 ImGui::Spacing();
 
-                ImGui::Text("Center Position (Click/Drag to Position)");
+                ImGui::Text("中心位置 (クリック/ドラッグで調整)");
                 ImGui::Spacing();
 
-                // Calculate aspect ratio dynamically from window dimensions
                 float aspect = 1.0f;
                 int32_t width = dxCommon->GetWindowWidth();
                 int32_t height = dxCommon->GetWindowHeight();
@@ -462,16 +463,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
                 ImVec2 canvas_size = ImVec2(200.0f, 200.0f * aspect);
 
-                // Add transparent button to capture mouse input
                 ImGui::InvisibleButton("##canvas", canvas_size);
-                bool is_active = ImGui::IsItemActive(); // Clicked or dragging
+                bool is_active = ImGui::IsItemActive();
 
                 if (is_active) {
                     ImVec2 mouse_pos = ImGui::GetIO().MousePos;
                     float x_uv = (mouse_pos.x - canvas_pos.x) / canvas_size.x;
                     float y_uv = (mouse_pos.y - canvas_pos.y) / canvas_size.y;
-                    
-                    // Clamp coordinates to [0.0, 1.0] range
+
                     x_uv = (std::max)(0.0f, (std::min)(1.0f, x_uv));
                     y_uv = (std::max)(0.0f, (std::min)(1.0f, y_uv));
 
@@ -479,14 +478,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     center[1] = y_uv;
                 }
 
-                // Render custom visualization inside the canvas
-                ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                
-                // Draw square/aspect-ratio canvas background & border
+                ImDrawList *draw_list = ImGui::GetWindowDrawList();
+
                 draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(35, 35, 35, 255));
                 draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(80, 80, 80, 255));
 
-                // Draw crosshair lines for reference
                 draw_list->AddLine(
                     ImVec2(canvas_pos.x, canvas_pos.y + canvas_size.y * 0.5f),
                     ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y * 0.5f),
@@ -496,18 +492,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImVec2(canvas_pos.x + canvas_size.x * 0.5f, canvas_pos.y + canvas_size.y),
                     IM_COL32(100, 100, 100, 100));
 
-                // Draw the interactive center point (red circle with white border)
                 ImVec2 dot_pos = ImVec2(canvas_pos.x + center[0] * canvas_size.x, canvas_pos.y + center[1] * canvas_size.y);
                 draw_list->AddCircleFilled(dot_pos, 6.0f, IM_COL32(255, 100, 100, 255));
                 draw_list->AddCircle(dot_pos, 6.0f, IM_COL32(255, 255, 255, 255), 0, 1.5f);
 
-                // Show current numeric coordinates
                 ImGui::Spacing();
-                ImGui::Text("Center UV: (%.3f, %.3f)", center[0], center[1]);
-                
-                // DragFloat2 for manual numerical input
+                ImGui::Text("中心 UV: (%.3f, %.3f)", center[0], center[1]);
+
                 ImGui::Spacing();
-                ImGui::Text("Manual Input");
+                ImGui::Text("数値手動入力");
                 ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                 ImGui::DragFloat2("##center_input", center, 0.002f, 0.0f, 1.0f, "%.3f");
                 ImGui::PopItemWidth();
@@ -516,87 +509,87 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             auto params = dxCommon->GetCompositeParamsData();
             if (params && dxCommon->GetPostEffect() == DirectXCommon::PostEffect::kComposite) {
-                if (ImGui::CollapsingHeader("Grayscale Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("グレースケール設定 (Grayscale)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
-                    DrawFloatControl("Grayscale Strength", &params->grayscaleStrength, 0.0f, 1.0f);
-                    ImGui::Spacing();
-                }
-                ImGui::Spacing();
-
-                if (ImGui::CollapsingHeader("Sepia Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::Spacing();
-                    DrawFloatControl("Sepia Strength", &params->sepiaStrength, 0.0f, 1.0f);
+                    DrawFloatControl("グレースケール強度", &params->grayscaleStrength, 0.0f, 1.0f);
                     ImGui::Spacing();
                 }
                 ImGui::Spacing();
 
-                if (ImGui::CollapsingHeader("Vignette Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("セピア設定 (Sepia)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    DrawFloatControl("セピア強度", &params->sepiaStrength, 0.0f, 1.0f);
+                    ImGui::Spacing();
+                }
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("ヴィニエット設定 (Vignette)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     bool enableVignette = (params->enableVignette != 0);
-                    if (ImGui::Checkbox("Enable Vignette", &enableVignette)) {
+                    if (ImGui::Checkbox("ヴィニエットを有効化", &enableVignette)) {
                         params->enableVignette = enableVignette ? 1 : 0;
                     }
                     if (enableVignette) {
-                        ImGui::Text("Vignette Color");
-                        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x); // 横幅いっぱいに広げる
+                        ImGui::Text("ヴィニエット色");
+                        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                         ImGui::ColorEdit4("##vignetteColor", params->vignetteColor);
                         ImGui::PopItemWidth();
 
-                        DrawFloatControl("Vignette Scale", &params->vignetteScale, 0.0f, 100.0f, 0.1f);
-                        DrawFloatControl("Vignette Power", &params->vignettePower, 0.0f, 10.0f, 0.01f);
+                        DrawFloatControl("ヴィニエットスケール", &params->vignetteScale, 0.0f, 100.0f, 0.1f);
+                        DrawFloatControl("ヴィニエット強度 (Power)", &params->vignettePower, 0.0f, 10.0f, 0.01f);
                     }
                     ImGui::Spacing();
                 }
                 ImGui::Spacing();
 
-                if (ImGui::CollapsingHeader("Blur Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("ブラー設定 (Blur)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
-                    ImGui::Text("Blur Type");
-                    ImGui::RadioButton("None", &params->blurType, 0);
+                    ImGui::Text("ブラータイプ");
+                    ImGui::RadioButton("なし", &params->blurType, 0);
                     ImGui::SameLine();
-                    ImGui::RadioButton("Box", &params->blurType, 1); // 見切れ防止のためシンプルな表記
+                    ImGui::RadioButton("ボックスブラー", &params->blurType, 1);
                     ImGui::SameLine();
-                    ImGui::RadioButton("Gaussian", &params->blurType, 2); // 見切れ防止のためシンプルな表記
-                    
+                    ImGui::RadioButton("ガウシアンブラー", &params->blurType, 2);
+
                     if (params->blurType == 1) {
                         ImGui::Spacing();
-                        DrawIntControl("Kernel Size", &params->boxBlurKernelSize, 1, 5);
-                        DrawFloatControl("Blur Strength", &params->boxBlurStrength, 0.0f, 1.0f);
+                        DrawIntControl("カーネルサイズ", &params->boxBlurKernelSize, 1, 5);
+                        DrawFloatControl("ブラー強度", &params->boxBlurStrength, 0.0f, 1.0f);
                     } else if (params->blurType == 2) {
                         ImGui::Spacing();
-                        DrawFloatControl("Gaussian Sigma", &params->gaussianSigma, 0.1f, 10.0f, 0.1f);
+                        DrawFloatControl("ガウシアンシグマ (Sigma)", &params->gaussianSigma, 0.1f, 10.0f, 0.1f);
                     }
                     ImGui::Spacing();
                 }
                 ImGui::Spacing();
 
-                if (ImGui::CollapsingHeader("Radial Blur Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("ラジアルブラー設定 (Radial Blur)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     DrawRadialBlurCanvas(params->radialBlurCenter, &params->radialBlurWidth, &params->radialBlurSamples, &params->enableRadialBlur);
                     ImGui::Spacing();
                 }
                 ImGui::Spacing();
 
-                if (ImGui::CollapsingHeader("Dissolve Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("ディゾルブ設定 (Dissolve)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     bool enableDissolve = (params->enableDissolve != 0);
-                    if (ImGui::Checkbox("Enable Dissolve", &enableDissolve)) {
+                    if (ImGui::Checkbox("ディゾルブを有効化", &enableDissolve)) {
                         params->enableDissolve = enableDissolve ? 1 : 0;
                     }
                     if (enableDissolve) {
                         ImGui::Spacing();
-                        DrawFloatControl("Threshold", &params->dissolveThreshold, 0.0f, 1.0f, 0.005f);
+                        DrawFloatControl("しきい値 (Threshold)", &params->dissolveThreshold, 0.0f, 1.0f, 0.005f);
                         ImGui::Spacing();
-                        DrawFloatControl("Edge Width", &params->dissolveEdgeWidth, 0.0f, 0.2f, 0.002f);
+                        DrawFloatControl("エッジ幅", &params->dissolveEdgeWidth, 0.0f, 0.2f, 0.002f);
                         ImGui::Spacing();
-                        
-                        ImGui::Text("Edge Color");
+
+                        ImGui::Text("エッジ色");
                         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                         ImGui::ColorEdit3("##dissolveEdgeColor", params->dissolveEdgeColor);
                         ImGui::PopItemWidth();
                         ImGui::Spacing();
 
-                        ImGui::Text("Background Color (Body)");
+                        ImGui::Text("背景色 (本体)");
                         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                         ImGui::ColorEdit3("##dissolveBgColor", params->dissolveBgColor);
                         ImGui::PopItemWidth();
@@ -605,27 +598,26 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 }
                 ImGui::Spacing();
 
-                if (ImGui::CollapsingHeader("Noise Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("ノイズ設定 (Noise)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     bool enableNoise = (params->enableNoise != 0);
-                    if (ImGui::Checkbox("Enable Noise", &enableNoise)) {
+                    if (ImGui::Checkbox("ノイズを有効化", &enableNoise)) {
                         params->enableNoise = enableNoise ? 1 : 0;
                     }
                     if (enableNoise) {
                         ImGui::Spacing();
-                        DrawFloatControl("Noise Strength", &params->noiseStrength, 0.0f, 1.0f, 0.005f);
+                        DrawFloatControl("ノイズ強度", &params->noiseStrength, 0.0f, 1.0f, 0.005f);
                         ImGui::Spacing();
-                        DrawFloatControl("Noise Scale", &params->noiseScale, 1.0f, 1000.0f, 1.0f);
+                        DrawFloatControl("ノイズスケール", &params->noiseScale, 1.0f, 1000.0f, 1.0f);
                         ImGui::Spacing();
 
-                        ImGui::Text("Noise Blend Mode");
-                        const char* blendModeNames[] = {
-                            "Normal",
-                            "Add",
-                            "Multiply",
-                            "Screen",
-                            "Overlay"
-                        };
+                        ImGui::Text("ノイズ合成モード (Blend Mode)");
+                        const char *blendModeNames[] = {
+                            "通常 (Normal)",
+                            "加算 (Add)",
+                            "乗算 (Multiply)",
+                            "スクリーン (Screen)",
+                            "オーバーレイ (Overlay)"};
                         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                         ImGui::Combo("##NoiseBlendMode", &params->noiseBlendMode, blendModeNames, IM_ARRAYSIZE(blendModeNames));
                         ImGui::PopItemWidth();
@@ -633,10 +625,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
                 }
             }
-
-
-
-
         }
         ImGui::End();
     }
@@ -654,7 +642,6 @@ void EditorManager::Finalize() {
 }
 
 void EditorManager::SaveSceneConfig() {
-    // ディレクトリが存在しない場合は作成する
     std::filesystem::create_directories("json");
 
     std::ofstream ofs("json/editor_config.json");
@@ -672,7 +659,7 @@ void EditorManager::SaveSceneConfig() {
 void EditorManager::LoadSceneConfig() {
     std::ifstream ifs("json/editor_config.json");
     if (!ifs.is_open()) {
-        return; // ファイルがない場合はデフォルトのまま
+        return;
     }
 
     std::string content;
@@ -682,17 +669,15 @@ void EditorManager::LoadSceneConfig() {
     }
     ifs.close();
 
-    // 簡易的なJSONパーサー: "currentScene": "xxx" を抽出
     {
         const std::string key = "\"currentScene\"";
         size_t keyPos = content.find(key);
         if (keyPos != std::string::npos) {
-            // ':' の後の最初の '"' を見つける
             size_t colonPos = content.find(':', keyPos + key.length());
             if (colonPos != std::string::npos) {
                 size_t valueStart = content.find('"', colonPos + 1);
                 if (valueStart != std::string::npos) {
-                    valueStart++; // '"' の次の文字から
+                    valueStart++;
                     size_t valueEnd = content.find('"', valueStart);
                     if (valueEnd != std::string::npos) {
                         std::string sceneName = content.substr(valueStart, valueEnd - valueStart);
@@ -703,7 +688,6 @@ void EditorManager::LoadSceneConfig() {
         }
     }
 
-    // isOutlineEnabled のパース
     {
         const std::string key = "\"isOutlineEnabled\"";
         size_t keyPos = content.find(key);
@@ -722,7 +706,6 @@ void EditorManager::LoadSceneConfig() {
         }
     }
 
-    // outlineThickness のパース
     {
         const std::string key = "\"outlineThickness\"";
         size_t keyPos = content.find(key);
@@ -738,7 +721,6 @@ void EditorManager::LoadSceneConfig() {
                             float thickness = std::stof(numStr);
                             DirectXCommon::GetInstance()->SetOutlineThickness(thickness);
                         } catch (...) {
-                            // 例外は無視
                         }
                     }
                 }
