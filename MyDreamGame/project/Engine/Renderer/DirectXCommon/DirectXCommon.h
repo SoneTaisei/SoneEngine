@@ -20,6 +20,7 @@ public:
         kSmoothing,
         kGaussian,
         kComposite,
+        kDepthBasedOutline,
     };
 
     struct VignetteParams {
@@ -231,7 +232,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeParamResource_;
     CompositeParams* compositeParamsData_ = nullptr;
 
-    PostEffect postEffect_ = PostEffect::kNone;
+    PostEffect postEffect_ = PostEffect::kComposite;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;
@@ -240,6 +241,16 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> outlineParamResource_;
     OutlineParams* outlineParamsData_ = nullptr;
     bool isOutlineEnabled_ = true;
+
+    // --- DepthBasedOutline ポストエフェクト関連 ---
+    struct ProjectionInverseParams {
+        Matrix4x4 projectionInverse;
+    };
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> depthBasedOutlinePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> projectionInverseParamResource_;
+    ProjectionInverseParams* projectionInverseParamsData_ = nullptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE depthStencilSrvHandleCPU_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE depthStencilSrvHandleGPU_{};
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
