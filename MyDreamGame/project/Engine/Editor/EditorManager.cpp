@@ -381,8 +381,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             const char* effectNames[] = {
                 "None",
                 "Composite (Unified Effects)",
-                "Depth-Based Outline",
-                "Radial Blur"
+                "Depth-Based Outline"
             };
             
             int currentComboIndex = 0;
@@ -391,8 +390,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 currentComboIndex = 1;
             } else if (activeEffect == DirectXCommon::PostEffect::kDepthBasedOutline) {
                 currentComboIndex = 2;
-            } else if (activeEffect == DirectXCommon::PostEffect::kRadialBlur) {
-                currentComboIndex = 3;
             }
  
             ImGui::Text("Active Effect");
@@ -404,8 +401,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     dxCommon->SetPostEffect(DirectXCommon::PostEffect::kComposite);
                 } else if (currentComboIndex == 2) {
                     dxCommon->SetPostEffect(DirectXCommon::PostEffect::kDepthBasedOutline);
-                } else if (currentComboIndex == 3) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kRadialBlur);
                 }
             }
             ImGui::Spacing();
@@ -580,14 +575,39 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     DrawRadialBlurCanvas(params->radialBlurCenter, &params->radialBlurWidth, &params->radialBlurSamples, &params->enableRadialBlur);
                     ImGui::Spacing();
                 }
-            }
+                ImGui::Spacing();
 
-            auto radialParams = dxCommon->GetRadialBlurParamsData();
-            if (radialParams && dxCommon->GetPostEffect() == DirectXCommon::PostEffect::kRadialBlur) {
-                if (ImGui::CollapsingHeader("Radial Blur Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    DrawRadialBlurCanvas(radialParams->center, &radialParams->blurWidth, &radialParams->numSamples);
+                if (ImGui::CollapsingHeader("Dissolve Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    bool enableDissolve = (params->enableDissolve != 0);
+                    if (ImGui::Checkbox("Enable Dissolve", &enableDissolve)) {
+                        params->enableDissolve = enableDissolve ? 1 : 0;
+                    }
+                    if (enableDissolve) {
+                        ImGui::Spacing();
+                        DrawFloatControl("Threshold", &params->dissolveThreshold, 0.0f, 1.0f, 0.005f);
+                        ImGui::Spacing();
+                        DrawFloatControl("Edge Width", &params->dissolveEdgeWidth, 0.0f, 0.2f, 0.002f);
+                        ImGui::Spacing();
+                        
+                        ImGui::Text("Edge Color");
+                        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                        ImGui::ColorEdit3("##dissolveEdgeColor", params->dissolveEdgeColor);
+                        ImGui::PopItemWidth();
+                        ImGui::Spacing();
+
+                        ImGui::Text("Background Color (Body)");
+                        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                        ImGui::ColorEdit3("##dissolveBgColor", params->dissolveBgColor);
+                        ImGui::PopItemWidth();
+                        ImGui::Spacing();
+                    }
                 }
             }
+
+
+
+
         }
         ImGui::End();
     }
