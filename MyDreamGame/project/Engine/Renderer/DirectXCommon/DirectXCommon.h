@@ -21,6 +21,7 @@ public:
         kGaussian,
         kComposite,
         kDepthBasedOutline,
+        kRadialBlur,
     };
 
     struct VignetteParams {
@@ -57,6 +58,19 @@ public:
         float gaussianSigma = 2.0f;
         float texelSize[2] = {};
         float padding = 0.0f;
+
+        // Radial Blur
+        int enableRadialBlur = 0;
+        float radialBlurCenter[2] = {0.5f, 0.5f};
+        float radialBlurWidth = 0.0f;
+        int32_t radialBlurSamples = 10;
+        float radialPadding[3] = {}; // 16-byte alignment padding
+    };
+    
+    struct RadialBlurParams {
+        float center[2] = {0.5f, 0.5f};
+        float blurWidth = 0.01f;
+        int32_t numSamples = 10;
     };
 
 	// 初期化処理
@@ -92,6 +106,8 @@ public:
     // ポストエフェクトの設定
     void SetPostEffect(PostEffect effect) { postEffect_ = effect; }
     PostEffect GetPostEffect() const { return postEffect_; }
+    int32_t GetWindowWidth() const { return windowWidth_; }
+    int32_t GetWindowHeight() const { return windowHeight_; }
 
 	// ゲッター関数
 	ID3D12Device *GetDevice() const { return device_.Get(); }
@@ -124,6 +140,8 @@ public:
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
     GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
     CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
+    RadialBlurParams* GetRadialBlurParamsData() { return radialBlurParamsData_; }
+    ID3D12PipelineState* GetRadialBlurPipelineState() const { return radialBlurPipelineState_.Get(); }
 
     struct OutlineParams {
         float thickness = 0.015f;
@@ -231,6 +249,10 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeParamResource_;
     CompositeParams* compositeParamsData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> radialBlurParamResource_;
+    RadialBlurParams* radialBlurParamsData_ = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> radialBlurPipelineState_;
 
     PostEffect postEffect_ = PostEffect::kComposite;
 

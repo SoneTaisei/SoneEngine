@@ -381,7 +381,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             const char* effectNames[] = {
                 "None",
                 "Composite (Unified Effects)",
-                "Depth-Based Outline"
+                "Depth-Based Outline",
+                "Radial Blur"
             };
             
             int currentComboIndex = 0;
@@ -390,8 +391,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 currentComboIndex = 1;
             } else if (activeEffect == DirectXCommon::PostEffect::kDepthBasedOutline) {
                 currentComboIndex = 2;
+            } else if (activeEffect == DirectXCommon::PostEffect::kRadialBlur) {
+                currentComboIndex = 3;
             }
-
+ 
             ImGui::Text("Active Effect");
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
             if (ImGui::Combo("##ActiveEffect", &currentComboIndex, effectNames, IM_ARRAYSIZE(effectNames))) {
@@ -401,6 +404,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     dxCommon->SetPostEffect(DirectXCommon::PostEffect::kComposite);
                 } else if (currentComboIndex == 2) {
                     dxCommon->SetPostEffect(DirectXCommon::PostEffect::kDepthBasedOutline);
+                } else if (currentComboIndex == 3) {
+                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kRadialBlur);
                 }
             }
             ImGui::Spacing();
@@ -431,6 +436,87 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::DragInt("##drag", val, speed, minVal, maxVal);
                 ImGui::PopItemWidth();
                 ImGui::PopID();
+            };
+            // Lambda to draw the interactive radial blur canvas and inputs, reused for standalone and composite
+            auto DrawRadialBlurCanvas = [&](float* center, float* blurWidth, int* sampleCount, int* enableFlag = nullptr) {
+                if (enableFlag) {
+                    bool enabled = (*enableFlag != 0);
+                    if (ImGui::Checkbox("Enable Radial Blur", &enabled)) {
+                        *enableFlag = enabled ? 1 : 0;
+                    }
+                    if (!enabled) return;
+                }
+                
+                ImGui::Spacing();
+                DrawFloatControl("Blur Width", blurWidth, 0.0f, 0.1f, 0.001f);
+                ImGui::Spacing();
+                DrawIntControl("Sample Count (Blur Quality)", sampleCount, 1, 30);
+                ImGui::Spacing();
+
+                ImGui::Text("Center Position (Click/Drag to Position)");
+                ImGui::Spacing();
+
+                // Calculate aspect ratio dynamically from window dimensions
+                float aspect = 1.0f;
+                int32_t width = dxCommon->GetWindowWidth();
+                int32_t height = dxCommon->GetWindowHeight();
+                if (width > 0 && height > 0) {
+                    aspect = (float)height / (float)width;
+                }
+
+                ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+                ImVec2 canvas_size = ImVec2(200.0f, 200.0f * aspect);
+
+                // Add transparent button to capture mouse input
+                ImGui::InvisibleButton("##canvas", canvas_size);
+                bool is_active = ImGui::IsItemActive(); // Clicked or dragging
+
+                if (is_active) {
+                    ImVec2 mouse_pos = ImGui::GetIO().MousePos;
+                    float x_uv = (mouse_pos.x - canvas_pos.x) / canvas_size.x;
+                    float y_uv = (mouse_pos.y - canvas_pos.y) / canvas_size.y;
+                    
+                    // Clamp coordinates to [0.0, 1.0] range
+                    x_uv = (std::max)(0.0f, (std::min)(1.0f, x_uv));
+                    y_uv = (std::max)(0.0f, (std::min)(1.0f, y_uv));
+
+                    center[0] = x_uv;
+                    center[1] = y_uv;
+                }
+
+                // Render custom visualization inside the canvas
+                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                
+                // Draw square/aspect-ratio canvas background & border
+                draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(35, 35, 35, 255));
+                draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(80, 80, 80, 255));
+
+                // Draw crosshair lines for reference
+                draw_list->AddLine(
+                    ImVec2(canvas_pos.x, canvas_pos.y + canvas_size.y * 0.5f),
+                    ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y * 0.5f),
+                    IM_COL32(100, 100, 100, 100));
+                draw_list->AddLine(
+                    ImVec2(canvas_pos.x + canvas_size.x * 0.5f, canvas_pos.y),
+                    ImVec2(canvas_pos.x + canvas_size.x * 0.5f, canvas_pos.y + canvas_size.y),
+                    IM_COL32(100, 100, 100, 100));
+
+                // Draw the interactive center point (red circle with white border)
+                ImVec2 dot_pos = ImVec2(canvas_pos.x + center[0] * canvas_size.x, canvas_pos.y + center[1] * canvas_size.y);
+                draw_list->AddCircleFilled(dot_pos, 6.0f, IM_COL32(255, 100, 100, 255));
+                draw_list->AddCircle(dot_pos, 6.0f, IM_COL32(255, 255, 255, 255), 0, 1.5f);
+
+                // Show current numeric coordinates
+                ImGui::Spacing();
+                ImGui::Text("Center UV: (%.3f, %.3f)", center[0], center[1]);
+                
+                // DragFloat2 for manual numerical input
+                ImGui::Spacing();
+                ImGui::Text("Manual Input");
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                ImGui::DragFloat2("##center_input", center, 0.002f, 0.0f, 1.0f, "%.3f");
+                ImGui::PopItemWidth();
+                ImGui::Spacing();
             };
 
             auto params = dxCommon->GetCompositeParamsData();
@@ -486,6 +572,20 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         DrawFloatControl("Gaussian Sigma", &params->gaussianSigma, 0.1f, 10.0f, 0.1f);
                     }
                     ImGui::Spacing();
+                }
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("Radial Blur Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    DrawRadialBlurCanvas(params->radialBlurCenter, &params->radialBlurWidth, &params->radialBlurSamples, &params->enableRadialBlur);
+                    ImGui::Spacing();
+                }
+            }
+
+            auto radialParams = dxCommon->GetRadialBlurParamsData();
+            if (radialParams && dxCommon->GetPostEffect() == DirectXCommon::PostEffect::kRadialBlur) {
+                if (ImGui::CollapsingHeader("Radial Blur Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    DrawRadialBlurCanvas(radialParams->center, &radialParams->blurWidth, &radialParams->numSamples);
                 }
             }
         }
