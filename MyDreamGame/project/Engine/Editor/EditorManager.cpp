@@ -373,32 +373,88 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("PostEffect", &showPostEffect_)) {
             ImGui::Text("Post Effect Settings");
             ImGui::Separator();
-            const char* postEffectItems[] = { "None", "Grayscale", "Sepia", "Vignette", "Smoothing" };
-            int currentEffect = (int)DirectXCommon::GetInstance()->GetPostEffect();
-            if (ImGui::Combo("Effect Type", &currentEffect, postEffectItems, IM_ARRAYSIZE(postEffectItems))) {
-                DirectXCommon::GetInstance()->SetPostEffect((DirectXCommon::PostEffect)currentEffect);
-            }
+            ImGui::Spacing();
 
-            if (currentEffect == (int)DirectXCommon::PostEffect::kVignette) {
-                ImGui::Spacing();
-                ImGui::Text("Vignette Settings");
-                ImGui::Separator();
-                auto params = DirectXCommon::GetInstance()->GetVignetteParamsData();
-                if (params) {
-                    ImGui::ColorEdit4("Color", params->color);
-                    ImGui::DragFloat("Scale", &params->scale, 0.1f, 0.0f, 100.0f);
-                    ImGui::DragFloat("Power", &params->power, 0.01f, 0.0f, 10.0f);
+            // ドラッグとキーボード入力（Ctrl+クリック等）が一体化したfloat調整用ヘルパー関数（Objectエディタと同様の仕様）
+            // 改行レイアウト：ラベル名の下に入力欄を表示することで、文字被りを完全に防ぎ、幅広く操作できるようにします
+            auto DrawFloatControl = [](const char* label, float* val, float minVal, float maxVal, float speed = 0.005f) {
+                ImGui::Text("%s", label); // ラベルの描画（改行）
+                
+                ImGui::PushID(label);
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x); // 横幅いっぱいに広げる
+                // DragFloatはドラッグによる調整と数値のキーボード入力を一体化して処理します
+                ImGui::DragFloat("##drag", val, speed, minVal, maxVal, "%.3f");
+                ImGui::PopItemWidth();
+                ImGui::PopID();
+            };
+
+            // ドラッグとキーボード入力が一体化したint調整用ヘルパー関数
+            // 改行レイアウト：ラベル名の下に入力欄を表示します
+            auto DrawIntControl = [](const char* label, int* val, int minVal, int maxVal, float speed = 0.05f) {
+                ImGui::Text("%s", label); // ラベルの描画（改行）
+                
+                ImGui::PushID(label);
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x); // 横幅いっぱいに広げる
+                // DragIntはドラッグによる調整と数値のキーボード入力を一体化して処理します
+                ImGui::DragInt("##drag", val, speed, minVal, maxVal);
+                ImGui::PopItemWidth();
+                ImGui::PopID();
+            };
+
+            auto dxCommon = DirectXCommon::GetInstance();
+            auto params = dxCommon->GetCompositeParamsData();
+            if (params) {
+                if (ImGui::CollapsingHeader("Grayscale Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    DrawFloatControl("Grayscale Strength", &params->grayscaleStrength, 0.0f, 1.0f);
+                    ImGui::Spacing();
                 }
-            }
-
-            if (currentEffect == (int)DirectXCommon::PostEffect::kSmoothing) {
                 ImGui::Spacing();
-                ImGui::Text("Smoothing Settings");
-                ImGui::Separator();
-                auto params = DirectXCommon::GetInstance()->GetSmoothingParamsData();
-                if (params) {
-                    ImGui::SliderInt("Kernel Size", &params->kernelSize, 1, 5);
-                    ImGui::SliderFloat("Strength", &params->strength, 0.0f, 1.0f);
+
+                if (ImGui::CollapsingHeader("Sepia Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    DrawFloatControl("Sepia Strength", &params->sepiaStrength, 0.0f, 1.0f);
+                    ImGui::Spacing();
+                }
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("Vignette Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    bool enableVignette = (params->enableVignette != 0);
+                    if (ImGui::Checkbox("Enable Vignette", &enableVignette)) {
+                        params->enableVignette = enableVignette ? 1 : 0;
+                    }
+                    if (enableVignette) {
+                        ImGui::Text("Vignette Color");
+                        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x); // 横幅いっぱいに広げる
+                        ImGui::ColorEdit4("##vignetteColor", params->vignetteColor);
+                        ImGui::PopItemWidth();
+
+                        DrawFloatControl("Vignette Scale", &params->vignetteScale, 0.0f, 100.0f, 0.1f);
+                        DrawFloatControl("Vignette Power", &params->vignettePower, 0.0f, 10.0f, 0.01f);
+                    }
+                    ImGui::Spacing();
+                }
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("Blur Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    ImGui::Text("Blur Type");
+                    ImGui::RadioButton("None", &params->blurType, 0);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Box", &params->blurType, 1); // 見切れ防止のためシンプルな表記
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Gaussian", &params->blurType, 2); // 見切れ防止のためシンプルな表記
+                    
+                    if (params->blurType == 1) {
+                        ImGui::Spacing();
+                        DrawIntControl("Kernel Size", &params->boxBlurKernelSize, 1, 5);
+                        DrawFloatControl("Blur Strength", &params->boxBlurStrength, 0.0f, 1.0f);
+                    } else if (params->blurType == 2) {
+                        ImGui::Spacing();
+                        DrawFloatControl("Gaussian Sigma", &params->gaussianSigma, 0.1f, 10.0f, 0.1f);
+                    }
+                    ImGui::Spacing();
                 }
             }
         }

@@ -2,6 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
+#include "../Effect/SnowParticle.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <d3d12.h>

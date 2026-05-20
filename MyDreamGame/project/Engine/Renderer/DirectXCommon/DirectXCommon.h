@@ -18,6 +18,8 @@ public:
         kSepia,
         kVignette,
         kSmoothing,
+        kGaussian,
+        kComposite,
     };
 
     struct VignetteParams {
@@ -30,6 +32,30 @@ public:
         int kernelSize = 1;       // カーネルの半径 (1=3x3, 2=5x5, 3=7x7)
         float texelSize[2] = {};  // 1.0 / テクスチャ解像度
         float strength = 1.0f;    // スムージングの強度 (0=元画像, 1=完全にぼかす)
+    };
+
+    struct GaussianParams {
+        float sigma = 2.0f;       // 標準偏差
+        float texelSize[2] = {};  // 1.0 / テクスチャ解像度
+        float padding[1];         // 16バイトアライメント用のパディング
+    };
+
+    struct CompositeParams {
+        float grayscaleStrength = 0.0f;
+        float sepiaStrength = 0.0f;
+        int enableVignette = 0;
+        float vignetteScale = 16.0f;
+
+        float vignettePower = 0.8f;
+        int blurType = 0; // 0: なし, 1: ボックスぼかし, 2: ガウスぼかし
+        int boxBlurKernelSize = 1;
+        float boxBlurStrength = 1.0f;
+
+        float vignetteColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+
+        float gaussianSigma = 2.0f;
+        float texelSize[2] = {};
+        float padding = 0.0f;
     };
 
 	// 初期化処理
@@ -88,12 +114,15 @@ public:
     ID3D12PipelineState *GetSepiaPipelineState() const { return sepiaPipelineState_.Get(); }
     ID3D12PipelineState *GetVignettePipelineState() const { return vignettePipelineState_.Get(); }
     ID3D12PipelineState *GetSmoothingPipelineState() const { return smoothingPipelineState_.Get(); }
+    ID3D12PipelineState *GetGaussianPipelineState() const { return gaussianPipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return postProcessSrvHandleGPU_; }
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
+    GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
+    CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
 
     struct OutlineParams {
         float thickness = 0.015f;
@@ -187,12 +216,20 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smoothingPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> compositePipelineState_;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vignetteParamResource_;
     VignetteParams* vignetteParamsData_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> smoothingParamResource_;
     SmoothingParams* smoothingParamsData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> gaussianParamResource_;
+    GaussianParams* gaussianParamsData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> compositeParamResource_;
+    CompositeParams* compositeParamsData_ = nullptr;
 
     PostEffect postEffect_ = PostEffect::kNone;
 
