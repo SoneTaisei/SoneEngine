@@ -18,6 +18,9 @@ public:
         kSepia,
         kVignette,
         kSmoothing,
+        kGaussian,
+        kComposite,
+        kDepthBasedOutline,
     };
 
     struct VignetteParams {
@@ -31,6 +34,60 @@ public:
         float texelSize[2] = {};  // 1.0 / テクスチャ解像度
         float strength = 1.0f;    // スムージングの強度 (0=元画像, 1=完全にぼかす)
     };
+
+    struct GaussianParams {
+        float sigma = 2.0f;       // 標準偏差
+        float texelSize[2] = {};  // 1.0 / テクスチャ解像度
+        float padding[1];         // 16バイトアライメント用のパディング
+    };
+
+    struct CompositeParams {
+        float grayscaleStrength = 0.0f;
+        float sepiaStrength = 0.0f;
+        int enableVignette = 0;
+        float vignetteScale = 16.0f;
+
+        float vignettePower = 0.8f;
+        int blurType = 0; // 0: なし, 1: ボックスぼかし, 2: ガウスぼかし
+        int boxBlurKernelSize = 1;
+        float boxBlurStrength = 1.0f;
+
+        float vignetteColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+
+        float gaussianSigma = 2.0f;
+        float texelSize[2] = {};
+        float padding = 0.0f;
+
+        // Radial Blur
+        int enableRadialBlur = 0;
+        float radialBlurCenter[2] = {0.5f, 0.5f};
+        float radialBlurWidth = 0.0f;
+        int32_t radialBlurSamples = 10;
+        float radialPadding[3] = {}; // 16-byte alignment padding
+
+        // Dissolve
+        int enableDissolve = 0;
+        float dissolveThreshold = 0.0f;
+        float dissolveEdgeWidth = 0.03f;
+        float dissolvePadding = 0.0f; // Align dissolveEdgeColor to 16 bytes
+
+        float dissolveEdgeColor[3] = {1.0f, 0.4f, 0.3f};
+        float dissolvePadding2 = 0.0f; // Align dissolveBgColor to 16 bytes
+
+        float dissolveBgColor[3] = {0.0f, 0.0f, 0.0f};
+        float dissolvePadding3 = 0.0f; // total size alignment (144 bytes total)
+
+        // Noise (32 bytes aligned)
+        int enableNoise = 0;
+        float noiseStrength = 0.3f;
+        int noiseBlendMode = 1; // 0: Normal, 1: Add, 2: Multiply, 3: Screen, 4: Overlay
+        float noiseScale = 128.0f; // Default noise scale (grain size)
+
+        float noiseTime = 0.0f;
+        float noisePadding[3] = {};
+    };
+    
+
 
 	// 初期化処理
 	void Initialize(HWND hwnd,int32_t windowWidth,int32_t windowHeight);
@@ -65,6 +122,8 @@ public:
     // ポストエフェクトの設定
     void SetPostEffect(PostEffect effect) { postEffect_ = effect; }
     PostEffect GetPostEffect() const { return postEffect_; }
+    int32_t GetWindowWidth() const { return windowWidth_; }
+    int32_t GetWindowHeight() const { return windowHeight_; }
 
 	// ゲッター関数
 	ID3D12Device *GetDevice() const { return device_.Get(); }
@@ -88,12 +147,17 @@ public:
     ID3D12PipelineState *GetSepiaPipelineState() const { return sepiaPipelineState_.Get(); }
     ID3D12PipelineState *GetVignettePipelineState() const { return vignettePipelineState_.Get(); }
     ID3D12PipelineState *GetSmoothingPipelineState() const { return smoothingPipelineState_.Get(); }
+    ID3D12PipelineState *GetGaussianPipelineState() const { return gaussianPipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return postProcessSrvHandleGPU_; }
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
+    GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
+    CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
+
+    void SetDissolveMaskTexture(D3D12_GPU_DESCRIPTOR_HANDLE handle) { dissolveMaskSrvHandleGPU_ = handle; }
 
     struct OutlineParams {
         float thickness = 0.015f;
@@ -187,6 +251,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sepiaPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> vignettePipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smoothingPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> compositePipelineState_;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vignetteParamResource_;
     VignetteParams* vignetteParamsData_ = nullptr;
@@ -194,7 +260,16 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> smoothingParamResource_;
     SmoothingParams* smoothingParamsData_ = nullptr;
 
-    PostEffect postEffect_ = PostEffect::kNone;
+    Microsoft::WRL::ComPtr<ID3D12Resource> gaussianParamResource_;
+    GaussianParams* gaussianParamsData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> compositeParamResource_;
+    CompositeParams* compositeParamsData_ = nullptr;
+
+
+    D3D12_GPU_DESCRIPTOR_HANDLE dissolveMaskSrvHandleGPU_{};
+
+    PostEffect postEffect_ = PostEffect::kComposite;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;
@@ -203,6 +278,16 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> outlineParamResource_;
     OutlineParams* outlineParamsData_ = nullptr;
     bool isOutlineEnabled_ = true;
+
+    // --- DepthBasedOutline ポストエフェクト関連 ---
+    struct ProjectionInverseParams {
+        Matrix4x4 projectionInverse;
+    };
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> depthBasedOutlinePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> projectionInverseParamResource_;
+    ProjectionInverseParams* projectionInverseParamsData_ = nullptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE depthStencilSrvHandleCPU_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE depthStencilSrvHandleGPU_{};
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
@@ -218,5 +303,7 @@ private:
 	// 記録時間(FPS固定用)
 	std::chrono::steady_clock::time_point reference_;
 
+    // エフェクト時間管理用
+    std::chrono::steady_clock::time_point startTime_;
 };
 

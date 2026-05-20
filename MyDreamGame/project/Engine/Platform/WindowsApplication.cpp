@@ -89,6 +89,10 @@ void WindowsApplication::Initialize() {
     uint32_t defaultWhiteHandle = TextureManager::GetInstance()->Load("white", commandList);
     PrimitiveObject::SetDefaultTextureHandle(TextureManager::GetInstance()->GetGpuHandle(defaultWhiteHandle));
 
+    // ディゾルブ用のマスクテクスチャをロードして設定
+    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("Sprite/School/noise0.png", commandList);
+    dxCommon_->SetDissolveMaskTexture(TextureManager::GetInstance()->GetGpuHandle(dissolveMaskHandle));
+
     // SpriteCommon の生成と初期化
     spriteCommon_ = std::make_unique<SpriteCommon>();
     spriteCommon_->Initialize(dxCommon_.get(), kWindowWidth_, kWindowHeight_);
