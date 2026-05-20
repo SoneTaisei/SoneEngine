@@ -3,7 +3,7 @@
 Texture2D<float32_t4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
-// Unified Composite Post-Process Parameters (64 bytes, 16-byte aligned)
+// Unified Composite Post-Process Parameters (96 bytes, 16-byte aligned)
 struct CompositeParams {
     // Vector 1 (16 bytes)
     float grayscaleStrength;
@@ -24,6 +24,13 @@ struct CompositeParams {
     float gaussianSigma;     // standard deviation for Gaussian blur
     float2 texelSize;        // 1.0 / textureResolution
     float padding;           // padding to align to 16 bytes
+
+    // Vector 5 & 6 (32 bytes aligned)
+    int enableRadialBlur;    // 1 to enable radial blur, 0 to disable
+    float2 radialBlurCenter; // center of radial blur in UV coordinates
+    float radialBlurWidth;   // width/strength of radial blur
+    int radialBlurSamples;   // number of samples for radial blur
+    float3 radialPadding;    // padding to align to 16 bytes
 };
 ConstantBuffer<CompositeParams> gCompositeParams : register(b0);
 
@@ -115,6 +122,25 @@ PixelShaderOutput main(VertexShaderOutput input) {
         vignette = saturate(pow(vignette, gCompositeParams.vignettePower));
         // Interpolate: 0 = edge (vignette color), 1 = center (original processed color)
         processedColor.rgb = lerp(gCompositeParams.vignetteColor.rgb, processedColor.rgb, vignette);
+    }
+    
+    // 5. Apply Radial Blur (dynamic-sample radial blur overlay)
+    if (gCompositeParams.enableRadialBlur != 0) {
+        int32_t numSamples = clamp(gCompositeParams.radialBlurSamples, 1, 30);
+        
+        // Calculate direction from the center to current uv coordinate.
+        float32_t2 direction = input.texcoord - gCompositeParams.radialBlurCenter;
+        
+        float32_t3 totalRadialColor = float32_t3(0.0f, 0.0f, 0.0f);
+        
+        for (int32_t sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex) {
+            // Step along the direction vector from current uv, scaled by radialBlurWidth
+            float32_t2 texcoord = input.texcoord + direction * gCompositeParams.radialBlurWidth * float32_t(sampleIndex);
+            totalRadialColor.rgb += gTexture.Sample(gSampler, texcoord).rgb;
+        }
+        
+        // Average the accumulated color samples
+        processedColor.rgb = totalRadialColor.rgb * rcp(float32_t(numSamples));
     }
     
     output.color.rgb = processedColor.rgb;
