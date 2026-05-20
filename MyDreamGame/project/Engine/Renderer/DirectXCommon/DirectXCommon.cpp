@@ -458,21 +458,21 @@ void DirectXCommon::CreatePipelines() {
     outlinePipelineStateDesc.VS = { outlineVSBlob->GetBufferPointer(), outlineVSBlob->GetBufferSize() };
     outlinePipelineStateDesc.PS = { outlinePSBlob->GetBufferPointer(), outlinePSBlob->GetBufferSize() };
     
-    // No culling for outline pass so it works perfectly for single/double-sided and flat shapes (we draw the outline FIRST, then colored mesh on top)
+    // 背面カリングは行わない（アウトラインパスは片面/両面・平面に関わらず動作するよう。先にアウトラインを描いてから本体を重ねるため）
     outlinePipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     outlinePipelineStateDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
     
-    // Wireframe offset depth bias to prevent Z-fighting with the main pass
+    // メインパスとのZバッファ競合（Z-fighting）を防ぐための深度バイアス設定
     outlinePipelineStateDesc.RasterizerState.DepthBias = -1000;
     outlinePipelineStateDesc.RasterizerState.DepthBiasClamp = 0.0f;
     outlinePipelineStateDesc.RasterizerState.SlopeScaledDepthBias = 0.0f;
     
-    // Depth settings: Enable depth testing, but DISABLE depth writing to prevent Z-fighting with the main pass
+    // 深度設定: 深度テストは有効にするが、メインパスとのZバッファ競合を防ぐため深度書き込みは無効（DISABLE）にする
     outlinePipelineStateDesc.DepthStencilState.DepthEnable = true;
     outlinePipelineStateDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     outlinePipelineStateDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     
-    // Opaque drawing for the outline
+    // アウトライン用の不透明描画設定
     outlinePipelineStateDesc.BlendState.RenderTarget[0].BlendEnable = FALSE;
 
     hr = device_->CreateGraphicsPipelineState(&outlinePipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStateOutline_));
@@ -628,6 +628,8 @@ void DirectXCommon::CreatePostEffectPipelines() {
     Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = CompileShader(L"shaders/Sepia.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psVignetteBlob = CompileShader(L"shaders/Vignette.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psSmoothingBlob = CompileShader(L"shaders/Smoothing.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = CompileShader(L"shaders/GaussianFilter.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psCompositeBlob = CompileShader(L"shaders/CompositePostProcess.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
     // 3. PipelineState (PSO) の作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
@@ -697,6 +699,43 @@ void DirectXCommon::CreatePostEffectPipelines() {
     smoothingParamsData_->texelSize[0] = 1.0f / (float)windowWidth_;
     smoothingParamsData_->texelSize[1] = 1.0f / (float)windowHeight_;
     smoothingParamsData_->strength = 1.0f;
+
+    // ガウスフィルター用のPSOを作成
+    psoDesc.PS = {psGaussianBlob->GetBufferPointer(), psGaussianBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gaussianPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // ガウスフィルター用定数バッファの作成
+    gaussianParamResource_ = CreateBufferResource(device_.Get(), sizeof(GaussianParams));
+    gaussianParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&gaussianParamsData_));
+    gaussianParamsData_->sigma = 2.0f;
+    gaussianParamsData_->texelSize[0] = 1.0f / (float)windowWidth_;
+    gaussianParamsData_->texelSize[1] = 1.0f / (float)windowHeight_;
+
+    // 統合ポストプロセス用のPSOを作成
+    psoDesc.PS = {psCompositeBlob->GetBufferPointer(), psCompositeBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&compositePipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // 統合ポストプロセス用定数バッファの作成
+    compositeParamResource_ = CreateBufferResource(device_.Get(), sizeof(CompositeParams));
+    compositeParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&compositeParamsData_));
+    compositeParamsData_->grayscaleStrength = 0.0f;
+    compositeParamsData_->sepiaStrength = 0.0f;
+    compositeParamsData_->enableVignette = 0;
+    compositeParamsData_->vignetteScale = 16.0f;
+    compositeParamsData_->vignettePower = 0.8f;
+    compositeParamsData_->blurType = 0;
+    compositeParamsData_->boxBlurKernelSize = 1;
+    compositeParamsData_->boxBlurStrength = 1.0f;
+    compositeParamsData_->vignetteColor[0] = 0.0f;
+    compositeParamsData_->vignetteColor[1] = 0.0f;
+    compositeParamsData_->vignetteColor[2] = 0.0f;
+    compositeParamsData_->vignetteColor[3] = 1.0f;
+    compositeParamsData_->gaussianSigma = 2.0f;
+    compositeParamsData_->texelSize[0] = 1.0f / (float)windowWidth_;
+    compositeParamsData_->texelSize[1] = 1.0f / (float)windowHeight_;
+    compositeParamsData_->padding = 0.0f;
 }
 
 void DirectXCommon::ExecutePostEffect() {
@@ -727,20 +766,9 @@ void DirectXCommon::ExecutePostEffect() {
     // 3. パイプライン設定
     commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
     
-    // エフェクトに応じてパイプラインを切り替える
-    if (postEffect_ == PostEffect::kGrayscale) {
-        commandList_->SetPipelineState(grayscalePipelineState_.Get());
-    } else if (postEffect_ == PostEffect::kSepia) {
-        commandList_->SetPipelineState(sepiaPipelineState_.Get());
-    } else if (postEffect_ == PostEffect::kVignette) {
-        commandList_->SetPipelineState(vignettePipelineState_.Get());
-        commandList_->SetGraphicsRootConstantBufferView(1, vignetteParamResource_->GetGPUVirtualAddress());
-    } else if (postEffect_ == PostEffect::kSmoothing) {
-        commandList_->SetPipelineState(smoothingPipelineState_.Get());
-        commandList_->SetGraphicsRootConstantBufferView(1, smoothingParamResource_->GetGPUVirtualAddress());
-    } else {
-        commandList_->SetPipelineState(copyImagePipelineState_.Get());
-    }
+    // 常に統合ポストプロセス（重ね掛け・ブレンド対応）を適用する
+    commandList_->SetPipelineState(compositePipelineState_.Get());
+    commandList_->SetGraphicsRootConstantBufferView(1, compositeParamResource_->GetGPUVirtualAddress());
 
     commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
     commandList_->DrawInstanced(3, 1, 0, 0);
