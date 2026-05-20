@@ -71,6 +71,7 @@ private:
     bool showHierarchy_ = true;
     bool showGameView_ = true;
     bool showPostEffect_ = true;
+    bool showMapEditor_ = true;
 
     static bool showObjects_;
     static bool showEffects_;

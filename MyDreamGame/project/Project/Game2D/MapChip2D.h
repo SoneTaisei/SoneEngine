@@ -37,8 +37,30 @@ public:
     int GetHeight() const { return mapHeight_; }
     float GetChipSize() const { return chipSize_; }
 
+    // マップサイズを動的に変更
+    void Resize(int newWidth, int newHeight);
+
     // ヒエラルキー用
     std::vector<PrimitiveObject*> GetPrimitiveObjects();
+
+    // チップを設定
+    void SetChip(int x, int y, ChipType type);
+
+    // チップを取得
+    ChipType GetChip(int x, int y) const;
+
+    // マップをすべてクリア
+    void ClearMap();
+
+    // マップを再構築（初期のBuildMapを呼び出し）
+    void ResetMap();
+
+    // マップデータの動的再構築
+    void RebuildChipObjects();
+
+    // マップデータのセーブ＆ロード
+    bool SaveToFile(const std::string& filepath);
+    bool LoadFromFile(const std::string& filepath);
 
 private:
     void BuildMap();
@@ -53,4 +75,8 @@ private:
 
     // 描画用オブジェクト（ブロックのみ）
     std::vector<std::unique_ptr<PrimitiveObject>> chipObjects_;
+
+    // 実行時の動的再構築用のキャッシュ
+    Microsoft::WRL::ComPtr<ID3D12Device> device_;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_{};
 };
