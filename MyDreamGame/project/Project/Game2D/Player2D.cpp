@@ -169,10 +169,10 @@ void Player2D::HandleInput() {
                 velocity_.y = jumpPower_;
                 isOnGround_ = false;
             } else if (isTouchingWallRight_) {
-                // 壁張り付き状態、または壁方向への入力・Control入力がある場合は真上ジャンプを優先
+                // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
                 bool isPressingCling = keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL);
-                if (isWallSliding_ || isWallClinging_ || inputRight || isPressingCling) {
-                    // 壁張り付き/ずり落ち中は真上ジャンプ
+                if (isWallClinging_ || isPressingCling) {
+                    // 壁張り付き中は真上ジャンプ
                     velocity_.x = 0.0f;
                     velocity_.y = jumpPower_;
                 } else {
@@ -185,10 +185,10 @@ void Player2D::HandleInput() {
                 isWallSliding_ = false;
                 isWallClinging_ = false;
             } else if (isTouchingWallLeft_) {
-                // 壁張り付き状態、または壁方向への入力・Control入力がある場合は真上ジャンプを優先
+                // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
                 bool isPressingCling = keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL);
-                if (isWallSliding_ || isWallClinging_ || inputLeft || isPressingCling) {
-                    // 壁張り付き/ずり落ち中は真上ジャンプ
+                if (isWallClinging_ || isPressingCling) {
+                    // 壁張り付き中は真上ジャンプ
                     velocity_.x = 0.0f;
                     velocity_.y = jumpPower_;
                 } else {
