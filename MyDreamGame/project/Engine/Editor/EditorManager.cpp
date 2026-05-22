@@ -6,6 +6,7 @@
 #include "GameObject/PrimitiveObject.h"
 #include "Input/KeyboardInput.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Game2D/MapChip2D.h"
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
@@ -629,6 +630,214 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Spacing();
                     }
                 }
+            }
+        }
+        ImGui::End();
+    }
+
+    // --- Map Editor ウィンドウ ---
+    if (showMapEditor_) {
+        if (ImGui::Begin("Map Editor", &showMapEditor_)) {
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                MapChip2D* mapChip = activeScene->GetMapChip();
+                if (mapChip) {
+                    // 静的変数
+                    static char stageFilename[128] = "map_data.txt";
+                    static int inputWidth = -1;
+                    static int inputHeight = -1;
+
+                    if (inputWidth == -1) {
+                        inputWidth = mapChip->GetWidth();
+                    }
+                    if (inputHeight == -1) {
+                        inputHeight = mapChip->GetHeight();
+                    }
+
+                    // ペイントツール選択
+                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint)
+                    ImGui::Text("Paint Tool:");
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Erase (None)", &selectedTool, 0);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Paint (Block)", &selectedTool, 1);
+
+                    ImGui::Separator();
+
+                    // json ディレクトリ内の .txt ファイルを自動走査
+                    std::vector<std::string> stageFiles;
+                    try {
+                        if (std::filesystem::exists("json")) {
+                            for (const auto& entry : std::filesystem::directory_iterator("json")) {
+                                if (entry.is_regular_file()) {
+                                    std::string filename = entry.path().filename().string();
+                                    if (filename.length() >= 4) {
+                                        std::string ext = filename.substr(filename.length() - 4);
+                                        if (ext == ".txt" || ext == ".TXT") {
+                                            stageFiles.push_back(filename);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (...) {
+                        // エラー時は無視
+                    }
+
+                    // 既存のマップファイルを選択するコンボボックス
+                    if (!stageFiles.empty()) {
+                        static int selectedFileIndex = -1;
+                        std::string currentFile = stageFilename;
+                        if (currentFile.length() < 4 || (currentFile.compare(currentFile.length() - 4, 4, ".txt") != 0 && currentFile.compare(currentFile.length() - 4, 4, ".TXT") != 0)) {
+                            currentFile += ".txt";
+                        }
+                        
+                        selectedFileIndex = -1;
+                        for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
+                            if (stageFiles[i] == currentFile) {
+                                selectedFileIndex = i;
+                                break;
+                            }
+                        }
+
+                        std::string comboPreview = (selectedFileIndex != -1) ? stageFiles[selectedFileIndex] : "Select existing map...";
+                        if (ImGui::BeginCombo("Select Map File", comboPreview.c_str())) {
+                            for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
+                                bool isSelected = (selectedFileIndex == i);
+                                if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
+                                    strcpy_s(stageFilename, sizeof(stageFilename), stageFiles[i].c_str());
+                                    selectedFileIndex = i;
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+
+                    // ファイル名入力
+                    ImGui::InputText("Filename", stageFilename, sizeof(stageFilename));
+
+                    // マップサイズ入力と適用ボタン
+                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::InputInt("Width", &inputWidth);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::InputInt("Height", &inputHeight);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Apply Size")) {
+                        if (inputWidth < 1) inputWidth = 1;
+                        if (inputHeight < 1) inputHeight = 1;
+                        mapChip->Resize(inputWidth, inputHeight);
+                    }
+
+                    ImGui::Spacing();
+
+                    // ファイルパス取得用ラムダ（.txtの自動付与）
+                    auto GetFullFilePath = [](const char* filename) {
+                        std::string name = filename;
+                        bool hasExt = false;
+                        if (name.length() >= 4) {
+                            std::string ext = name.substr(name.length() - 4);
+                            if (ext == ".txt" || ext == ".TXT") {
+                                hasExt = true;
+                            }
+                        }
+                        if (!hasExt) {
+                            name += ".txt";
+                        }
+                        return std::string("json/") + name;
+                    };
+
+                    // 操作ボタン
+                    if (ImGui::Button("Save Map")) {
+                        mapChip->SaveToFile(GetFullFilePath(stageFilename));
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Load Map")) {
+                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename))) {
+                            inputWidth = mapChip->GetWidth();
+                            inputHeight = mapChip->GetHeight();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Clear Map")) {
+                        mapChip->ClearMap();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Reset Default")) {
+                        mapChip->ResetMap();
+                        inputWidth = mapChip->GetWidth();
+                        inputHeight = mapChip->GetHeight();
+                    }
+
+                    ImGui::Separator();
+
+                    // 2Dグリッド描画
+                    int mapWidth = mapChip->GetWidth();
+                    int mapHeight = mapChip->GetHeight();
+                    float buttonSize = 18.0f;
+
+                    // ホバー色・アクティブ色を作成するラムダ
+                    auto MakeHoverColor = [](ImVec4 c) {
+                        return ImVec4((std::min)(c.x * 1.2f, 1.0f), (std::min)(c.y * 1.2f, 1.0f), (std::min)(c.z * 1.2f, 1.0f), c.w);
+                    };
+                    auto MakeActiveColor = [](ImVec4 c) {
+                        return ImVec4(c.x * 0.8f, c.y * 0.8f, c.z * 0.8f, c.w);
+                    };
+
+                    // 横スクロールを可能にするために子ウィンドウを開始
+                    if (ImGui::BeginChild("MapGridScroll", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar)) {
+                        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
+
+                        // Y軸は下側が0なので、画面上は上から下に向かって Y を逆順 (Height-1 から 0) で描画
+                        for (int y = mapHeight - 1; y >= 0; --y) {
+                            for (int x = 0; x < mapWidth; ++x) {
+                                MapChip2D::ChipType cellType = mapChip->GetChip(x, y);
+                                std::string btnId = "##cell_" + std::to_string(x) + "_" + std::to_string(y);
+
+                                ImVec4 btnColor;
+                                if (cellType == MapChip2D::ChipType::kBlock) {
+                                    if (y <= 1) {
+                                        btnColor = ImVec4(0.55f, 0.35f, 0.17f, 1.0f); // 地面: 茶色
+                                    } else if (x == 0 || x == mapWidth - 1) {
+                                        btnColor = ImVec4(0.5f, 0.5f, 0.55f, 1.0f);   // 壁: 灰色
+                                    } else {
+                                        btnColor = ImVec4(0.3f, 0.7f, 0.3f, 1.0f);    // その他: 緑
+                                    }
+                                } else {
+                                    btnColor = ImVec4(0.15f, 0.15f, 0.15f, 0.5f);     // 空中: 暗い半透明
+                                }
+
+                                ImGui::PushStyleColor(ImGuiCol_Button, btnColor);
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, MakeHoverColor(btnColor));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, MakeActiveColor(btnColor));
+
+                                if (x > 0) {
+                                    ImGui::SameLine();
+                                }
+
+                                if (ImGui::Button(btnId.c_str(), ImVec2(buttonSize, buttonSize))) {
+                                    mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
+                                }
+                                if (ImGui::IsItemActive() || (ImGui::IsItemHovered() && ImGui::IsMouseDown(0))) {
+                                    if (mapChip->GetChip(x, y) != static_cast<MapChip2D::ChipType>(selectedTool)) {
+                                        mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
+                                    }
+                                }
+
+                                ImGui::PopStyleColor(3);
+                            }
+                        }
+                        ImGui::PopStyleVar();
+                        ImGui::EndChild();
+                    }
+                } else {
+                    ImGui::Text("Active scene does not support 2D map editing.");
+                }
+            } else {
+                ImGui::Text("No active scene.");
             }
         }
         ImGui::End();

@@ -30,6 +30,9 @@ public:
     std::vector<ParticleManager *> GetParticles() override;
     std::vector<PrimitiveObject *> GetPrimitives() override;
 
+    // マップチップの取得
+    MapChip2D* GetMapChip() override { return map_.get(); }
+
 private:
     // ---------------------------------------------------
     // 3D・パーティクル関連 (develop)
