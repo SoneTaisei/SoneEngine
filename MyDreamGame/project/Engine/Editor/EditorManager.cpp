@@ -370,7 +370,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 }
 
                 ImGui::Separator();
-                ImGui::Checkbox("Enable Fog Effect", &enableFog);
+                ImGui::Checkbox("フォグエフェクトを有効化", &enableFog);
+            }
+
+            // アクティブなシーン特有のImGui描画（独立ウィンドウや追加インスペクターなど）を呼び出す
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                activeScene->DisplayImGui(selectedPrimitive_);
             }
         }
         ImGui::End();
@@ -433,12 +439,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
 
                     // ペイントツール選択
-                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint)
+                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock)
                     ImGui::Text("Paint Tool:");
                     ImGui::SameLine();
                     ImGui::RadioButton("Erase (None)", &selectedTool, 0);
                     ImGui::SameLine();
                     ImGui::RadioButton("Paint (Block)", &selectedTool, 1);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Death (DeathBlock)", &selectedTool, 2);
 
                     ImGui::Separator();
 
@@ -576,7 +584,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 std::string btnId = "##cell_" + std::to_string(x) + "_" + std::to_string(y);
 
                                 ImVec4 btnColor;
-                                if (cellType == MapChip2D::ChipType::kBlock) {
+                                if (cellType == MapChip2D::ChipType::kDeathBlock) {
+                                    btnColor = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);        // デスブロック: 赤色
+                                } else if (cellType == MapChip2D::ChipType::kBlock) {
                                     if (y <= 1) {
                                         btnColor = ImVec4(0.55f, 0.35f, 0.17f, 1.0f); // 地面: 茶色
                                     } else if (x == 0 || x == mapWidth - 1) {

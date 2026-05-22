@@ -15,6 +15,7 @@ public:
     enum class ChipType : int {
         kNone = 0,  // 空気（何もなし）
         kBlock = 1, // ブロック（地面・壁）
+        kDeathBlock = 2, // デスブロック（触れたら死ぬ）
     };
 
     void Initialize(ID3D12GraphicsCommandList* commandList);
@@ -23,6 +24,9 @@ public:
 
     // 指定座標がブロックかどうか判定
     bool IsBlock(int chipX, int chipY) const;
+
+    // 指定座標のチップの種類を取得
+    ChipType GetChipType(int chipX, int chipY) const;
 
     // ワールド座標 → チップ座標 変換
     int WorldToChipX(float worldX) const;

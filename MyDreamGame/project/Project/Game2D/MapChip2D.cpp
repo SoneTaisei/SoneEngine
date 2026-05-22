@@ -22,7 +22,6 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList) {
 }
 
 void MapChip2D::Update() {
-    // マップチップは動かないので特に何もしない
     for (auto& obj : chipObjects_) {
         obj->Update();
     }
@@ -43,7 +42,11 @@ bool MapChip2D::IsBlock(int chipX, int chipY) const {
     if (chipY >= mapHeight_) {
         return false;
     }
-    return mapData_[chipY][chipX] == ChipType::kBlock;
+    return mapData_[chipY][chipX] == ChipType::kBlock || mapData_[chipY][chipX] == ChipType::kDeathBlock;
+}
+
+MapChip2D::ChipType MapChip2D::GetChipType(int chipX, int chipY) const {
+    return GetChip(chipX, chipY);
 }
 
 int MapChip2D::WorldToChipX(float worldX) const {
@@ -100,11 +103,11 @@ void MapChip2D::BuildMap() {
         mapData_[y][mapWidth_ - 1] = ChipType::kBlock;
     }
 
-    // --- 穴を作る（x=8〜9は地面なし）---
-    mapData_[0][8] = ChipType::kNone;
-    mapData_[1][8] = ChipType::kNone;
-    mapData_[0][9] = ChipType::kNone;
-    mapData_[1][9] = ChipType::kNone;
+    // --- 穴を作る（代わりにデスブロックを設置）---
+    mapData_[0][8] = ChipType::kDeathBlock;
+    mapData_[1][8] = ChipType::kDeathBlock;
+    mapData_[0][9] = ChipType::kDeathBlock;
+    mapData_[1][9] = ChipType::kDeathBlock;
 
     // --- 段差（x=12〜14, y=2〜3）---
     for (int x = 12; x <= 14; ++x) {
@@ -136,6 +139,9 @@ void MapChip2D::BuildMap() {
     for (int x = 15; x <= 17; ++x) {
         mapData_[6][x] = ChipType::kBlock;
     }
+
+    // --- 地面の上にデスブロックを1つ追加 ---
+    mapData_[2][20] = ChipType::kDeathBlock;
 }
 
 void MapChip2D::CreateChipObjects(ID3D12GraphicsCommandList* commandList) {
@@ -178,7 +184,7 @@ void MapChip2D::RebuildChipObjects() {
 
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
-            if (mapData_[y][x] == ChipType::kBlock) {
+            if (mapData_[y][x] == ChipType::kBlock || mapData_[y][x] == ChipType::kDeathBlock) {
                 auto obj = std::make_unique<PrimitiveObject>();
                 obj->Initialize(device_.Get(), boxPrimitive);
                 
@@ -192,8 +198,11 @@ void MapChip2D::RebuildChipObjects() {
                 obj->SetTranslation({ worldX, worldY, 0.0f });
                 obj->SetScale({ chipSize_, chipSize_, chipSize_ });
 
-                // 地面と壁で色を変える
-                if (y <= 1) {
+                // 地面と壁とデスブロックで色を変える
+                if (mapData_[y][x] == ChipType::kDeathBlock) {
+                    // デスブロック：赤色
+                    obj->GetMaterial().color = { 1.0f, 0.2f, 0.2f, 1.0f };
+                } else if (y <= 1) {
                     // 地面：茶色
                     obj->GetMaterial().color = { 0.55f, 0.35f, 0.17f, 1.0f };
                 } else if (x == 0 || x == mapWidth_ - 1) {
@@ -292,3 +301,5 @@ void MapChip2D::Resize(int newWidth, int newHeight) {
     // 描画オブジェクトを再構築
     RebuildChipObjects();
 }
+
+
