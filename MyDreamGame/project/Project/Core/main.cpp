@@ -41,4 +41,4 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         app->Finalize();
     }
 	return 0;
-}
+}
