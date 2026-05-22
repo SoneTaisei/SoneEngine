@@ -142,6 +142,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_);
             ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_);
             ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_);
+            ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_);
             ImGui::EndMenu();
         }
 
@@ -181,6 +182,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
         // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
         ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
+        ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
         ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
         ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
         ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
@@ -637,7 +639,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- Map Editor ウィンドウ ---
     if (showMapEditor_) {
-        if (ImGui::Begin("Map Editor", &showMapEditor_)) {
+        if (ImGui::Begin("マップチップ画面", &showMapEditor_)) {
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
                 MapChip2D* mapChip = activeScene->GetMapChip();
@@ -818,10 +820,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     ImGui::SameLine();
                                 }
 
+                                ImVec2 pos = ImGui::GetCursorScreenPos();
+
                                 if (ImGui::Button(btnId.c_str(), ImVec2(buttonSize, buttonSize))) {
                                     mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
                                 }
-                                if (ImGui::IsItemActive() || (ImGui::IsItemHovered() && ImGui::IsMouseDown(0))) {
+
+                                ImVec2 mousePos = ImGui::GetIO().MousePos;
+                                if (ImGui::IsMouseDown(0) &&
+                                    mousePos.x >= pos.x && mousePos.x <= pos.x + buttonSize &&
+                                    mousePos.y >= pos.y && mousePos.y <= pos.y + buttonSize) {
                                     if (mapChip->GetChip(x, y) != static_cast<MapChip2D::ChipType>(selectedTool)) {
                                         mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
                                     }
