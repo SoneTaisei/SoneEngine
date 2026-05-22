@@ -84,4 +84,13 @@ private:
 
     float halfWidth_ = 0.4f;
     float halfHeight_ = 0.4f;
+
+    // 死亡演出用パラメータ
+    bool isDead_ = false;           // 死亡演出中か
+    float deathTimer_ = 0.0f;       // 死亡経過時間
+    float deathDuration_ = 0.5f;    // 死亡演出の時間
+    Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f }; // スタート地点・リスポーン位置
+
+    // イージング関数
+    float EaseInElastic(float t) const;
 };
