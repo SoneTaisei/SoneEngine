@@ -71,6 +71,11 @@ private:
 
     std::vector<std::unique_ptr<PrimitiveObject>> primitiveParticles_;
     std::unique_ptr<PrimitiveObject> ringEffectRoot_;
+    std::unique_ptr<PrimitiveObject> cylinderEffectRoot_;
+    std::unique_ptr<PrimitiveObject> cylinderObject_;
+
+    // --- エディター停止中用 ---
+    void UpdateEditor() override;
 
     // --- エフェクトアニメーション用 ---
     float ringEffectTimer_ = 0.0f;

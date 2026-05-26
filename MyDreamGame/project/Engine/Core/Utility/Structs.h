@@ -101,7 +101,7 @@ struct Material {
     int32_t lightingType;
     int32_t enableBlinnPhong;
     int32_t enableEnvironmentMap; // 環境マップ有効フラグ
-    float padding;                // パディング
+    float alphaReference;         // アルファしきい値
     Matrix4x4 uvTransform;
     float shininess;
     float environmentCoefficient; // 環境マップ反射係数

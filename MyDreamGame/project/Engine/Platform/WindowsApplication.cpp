@@ -195,7 +195,11 @@ void WindowsApplication::Update() {
         // 【再生中】シーンを更新する（遷移処理も含む）
         sceneManager_->Update();
     } else {
-        // 【停止中】シーン遷移のみ処理する（エディターからのシーン切替に対応）
+        // 【停止中】トランスフォーム等の行列再計算のみ実行
+        if (sceneManager_->GetCurrentScene()) {
+            sceneManager_->GetCurrentScene()->UpdateEditor();
+        }
+        // シーン遷移のみ処理する（エディターからのシーン切替に対応）
         sceneManager_->ProcessSceneTransition();
     }
     

@@ -181,3 +181,22 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 
     return result;
 }
+
+void GameScene::UpdateEditor() {
+    for (auto &primitive : primitives_) {
+        primitive->Update();
+    }
+    if (player_) {
+        auto* playerPrim = player_->GetPrimitiveObject();
+        if (playerPrim) {
+            playerPrim->Update();
+        }
+    }
+    if (map_) {
+        for (auto* mapPrim : map_->GetPrimitiveObjects()) {
+            if (mapPrim) {
+                mapPrim->Update();
+            }
+        }
+    }
+}

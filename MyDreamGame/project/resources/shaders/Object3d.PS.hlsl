@@ -20,7 +20,8 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
     float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
-    if (textureColor.a <= 0.0f) {
+    // Perform alpha discard using threshold from material
+    if (textureColor.a <= gMaterial.alphaReference) {
         discard;
     }
     

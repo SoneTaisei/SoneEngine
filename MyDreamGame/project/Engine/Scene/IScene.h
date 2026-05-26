@@ -24,6 +24,9 @@ public:
     // 更新
     virtual void Update(SceneManager *sceneManager) = 0;
 
+    // エディター停止中のトランスフォーム行列等の再計算用
+    virtual void UpdateEditor() {}
+
     // 描画
     virtual void Draw(const Matrix4x4 &viewProjectionMatrix) = 0;
 
