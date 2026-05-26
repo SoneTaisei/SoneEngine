@@ -65,8 +65,8 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList_);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList_);
 
     // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
@@ -89,6 +89,12 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     ringEffectRoot_->Initialize(device.Get(), nullptr); // 描画しない
     ringEffectRoot_->SetName("RingEffect");
     ringEffectRoot_->SetTranslation({0.0f, 0.0f, 0.0f});
+
+    // ■ CylinderEffectのルートオブジェクト作成
+    cylinderEffectRoot_ = std::make_unique<PrimitiveObject>();
+    cylinderEffectRoot_->Initialize(device.Get(), nullptr); // 描画しない
+    cylinderEffectRoot_->SetName("CylinderEffect");
+    cylinderEffectRoot_->SetTranslation({0.0f, 0.0f, 0.0f});
 
     // Ring 1
     {
@@ -157,6 +163,24 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
         ring->SetParent(ringEffectRoot_.get());
         primitiveParticles_.push_back(std::move(ring));
     }
+
+    // Cylinder
+    {
+        cylinderObject_ = std::make_unique<PrimitiveObject>();
+        cylinderObject_->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Cylinder, 1.0f, 64));
+        cylinderObject_->GetMaterial().enableEnvironmentMap = 0;
+        cylinderObject_->GetMaterial().lightingType = 0;
+        cylinderObject_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
+        cylinderObject_->SetTranslation({0.0f, 0.0f, 0.0f});
+        cylinderObject_->SetScale({1.5f, 2.0f, 1.5f});
+        cylinderObject_->SetRotation({0.0f, 0.0f, 0.0f});
+        cylinderObject_->SetIsBillboard(false);
+        cylinderObject_->SetIsDoubleSided(true);
+        cylinderObject_->SetBlendMode(BlendMode::kBlendModeAdd);
+        cylinderObject_->GetMaterial().alphaReference = 0.0f;
+        cylinderObject_->SetName("Cylinder");
+        cylinderObject_->SetParent(cylinderEffectRoot_.get());
+    }
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -193,9 +217,20 @@ void TitleScene::Update(SceneManager *sceneManager) {
     if (ringEffectRoot_) {
         ringEffectRoot_->Update();
     }
+    if (cylinderEffectRoot_) {
+        cylinderEffectRoot_->Update();
+    }
+    // リングのみフェードアニメーションと更新を行う
     for (auto& ring : primitiveParticles_) {
         ring->GetMaterial().color.w = alpha; // 透明度を適用
         ring->Update();
+    }
+    // シリンダーは点滅させずに回転させる
+    if (cylinderObject_) {
+        Vector3 rotation = cylinderObject_->GetRotation();
+        rotation.y += 0.01f; // 毎フレーム少しずつ回転
+        cylinderObject_->SetRotation(rotation);
+        cylinderObject_->Update();
     }
 }
 
@@ -245,6 +280,9 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         for (auto& p : primitiveParticles_) {
             p->Draw(commandList_.Get());
         }
+        if (cylinderObject_) {
+            cylinderObject_->Draw(commandList_.Get());
+        }
 #ifdef USE_IMGUI
     }
 #endif
@@ -276,6 +314,33 @@ std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
     if (ringEffectRoot_) {
         result.push_back(ringEffectRoot_.get());
     }
+    if (cylinderEffectRoot_) {
+        result.push_back(cylinderEffectRoot_.get());
+    }
     // 子要素は返さないことでエディター上の表示を1つにまとめる
     return result;
+}
+
+void TitleScene::UpdateEditor() {
+    for (auto &object : objects_) {
+        object->Update();
+    }
+    for (auto &sprite : sprites_) {
+        sprite->Update();
+    }
+    if (skybox_) {
+        skybox_->Update();
+    }
+    if (ringEffectRoot_) {
+        ringEffectRoot_->Update();
+    }
+    if (cylinderEffectRoot_) {
+        cylinderEffectRoot_->Update();
+    }
+    for (auto& ring : primitiveParticles_) {
+        ring->Update();
+    }
+    if (cylinderObject_) {
+        cylinderObject_->Update();
+    }
 }
