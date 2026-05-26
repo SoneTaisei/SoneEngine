@@ -17,6 +17,7 @@ void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     material_.shininess = 50.0f;
     material_.enableEnvironmentMap = 1;
     material_.environmentCoefficient = 0.1f;
+    material_.alphaReference = 0.0f;
 
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTransform_));
@@ -195,6 +196,7 @@ void PrimitiveObject::DisplayImGui(const std::string& label) {
             ImGui::SliderFloat("Environment Coefficient", &material_.environmentCoefficient, 0.0f, 1.0f);
             ImGui::Checkbox("Enable Environment Map", (bool*)&material_.enableEnvironmentMap);
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
+            ImGui::DragFloat("Alpha Reference", &material_.alphaReference, 0.01f, 0.0f, 1.0f);
             ImGui::TreePop();
         }
         ImGui::TreePop();
