@@ -6,9 +6,12 @@
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
+#include "Game2D/ReplayManager.h"
+#include "Core/TimeManager.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
+    rotateTimer_ = 0.0f; // 回転タイマーを確実にリセット
 
     // 1. Device取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
@@ -16,6 +19,9 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 
     // 2. PrimitiveManagerの初期化（まだの場合）
     PrimitiveManager::GetInstance()->Initialize(device.Get());
+
+    // リプレイ保存リストの読み込み
+    ReplayManager::GetInstance()->LoadSavedList();
 
     // 3. SnowParticleの生成 (unique_ptrで作る)
     auto snowParticle = std::make_unique<SnowParticle>();
@@ -82,11 +88,11 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     // 3. 3Dプリミティブオブジェクトの回転と更新
-    static float rotateTimer = 0.0f;
-    rotateTimer += 1.0f / 60.0f;
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    rotateTimer_ += deltaTime;
     if (primitives_.size() >= 2) {
-        primitives_[0]->SetRotation({0.0f, rotateTimer, 0.0f}); // 球体のY軸回転
-        primitives_[1]->SetRotation({rotateTimer * 0.5f, rotateTimer, 0.0f}); // 箱の多軸回転
+        primitives_[0]->SetRotation({0.0f, rotateTimer_, 0.0f}); // 球体のY軸回転
+        primitives_[1]->SetRotation({rotateTimer_ * 0.5f, rotateTimer_, 0.0f}); // 箱の多軸回転
     }
 
     for (auto &primitive : primitives_) {
@@ -95,7 +101,48 @@ void GameScene::Update(SceneManager *sceneManager) {
 
     // 4. プレイヤーの更新（入力・物理・当たり判定）
     if (player_ && map_) {
+        // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
+        static bool wasPlayingLastFrame = false;
+        if (ReplayManager::GetInstance()->IsPlaying()) {
+            if (!wasPlayingLastFrame) {
+                // 再生開始時に初期位置へ自動ワープ
+                player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
+                if (gameCamera_) {
+                    // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
+                    gameCamera_->SetFollowTarget(nullptr);
+                    gameCamera_->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
+                }
+                wasPlayingLastFrame = true;
+            }
+            Vector3 pos = player_->GetPosition();
+            Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+            ReplayManager::GetInstance()->UpdatePlayback(pos, camPos);
+            player_->SetPosition(pos);
+            if (gameCamera_) {
+                gameCamera_->SetTranslation(camPos);
+            }
+        } else {
+            wasPlayingLastFrame = false;
+        }
+
         player_->Update(*map_);
+
+        // プレイ中の場合、リプレイ録画を行う
+        bool isCurrentlyPlaying = true;
+#ifdef USE_IMGUI
+        isCurrentlyPlaying = EditorManager::IsPlaying();
+#endif
+        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
+            Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+            if (!ReplayManager::GetInstance()->IsRecording()) {
+                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos);
+            }
+            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos);
+        } else {
+            if (ReplayManager::GetInstance()->IsRecording()) {
+                ReplayManager::GetInstance()->StopRecord();
+            }
+        }
     }
 
     // 5. マップの更新
@@ -183,6 +230,11 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 }
 
 void GameScene::UpdateEditor() {
+    // 録画状態のままエディタが停止した場合、確実に停止させて履歴に保存する
+    if (ReplayManager::GetInstance()->IsRecording()) {
+        ReplayManager::GetInstance()->StopRecord();
+    }
+
     for (auto &primitive : primitives_) {
         primitive->Update();
     }
