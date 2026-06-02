@@ -1,5 +1,8 @@
 #include "SceneManager.h"
 #include <cassert>
+#include "Resource/Sprite/SpriteCommon.h"
+#include "Resource/Model/ModelCommon.h"
+#include "Effect/ParticleCommon.h"
 
 SceneManager::SceneManager() {}
 
@@ -24,6 +27,11 @@ void SceneManager::Update() {
 void SceneManager::ProcessSceneTransition() {
     // 「次のシーン」の予約があるかチェック
     if (nextScene_) {
+        // 現在のシーンを削除する前に、Commonに登録されている描画オブジェクトの参照をクリアする
+        if (spriteCommon_) spriteCommon_->ClearAll();
+        if (modelCommon_) modelCommon_->ClearAll();
+        if (particleCommon_) particleCommon_->ClearAll();
+
         // 現在のシーンを、予約していた新しいシーンに入れ替え
         currentScene_ = std::move(nextScene_);
 

@@ -59,4 +59,17 @@ private:
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
     static D3D12_GPU_DESCRIPTOR_HANDLE sDefaultTextureHandle_;
+
+    // --- 残像 (Trail) 設定 ---
+    bool showReplayTrail_ = false;
+    int trailStep_ = 5;
+    int trailLength_ = 60;
+    BlendMode trailBlendMode_ = BlendMode::kBlendModeAdd;
+    float trailStartAlpha_ = 0.5f;
+
+    static const int kMaxTrails = 128;
+    Microsoft::WRL::ComPtr<ID3D12Resource> trailTransformResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> trailMaterialResource_;
+    uint8_t* mappedTrailTransform_ = nullptr;
+    uint8_t* mappedTrailMaterial_ = nullptr;
 };

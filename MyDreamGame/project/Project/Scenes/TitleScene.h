@@ -58,7 +58,7 @@ private:
     Emitter windowEmitter_{};
 
     // 5. SRVインデックス (他と被らない番号)
-    const int srvIndex_ = 20;
+    const int srvIndex_ = 110;
 
     // ■ 追加: タイトルシーン専用カメラ
     Transform cameraTransform_{}; // カメラの座標・回転

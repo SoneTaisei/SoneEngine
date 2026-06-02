@@ -28,6 +28,14 @@ public:
     // キーが離された瞬間かを取得
     bool IsKeyReleased(BYTE keyCode);
 
+    // リプレイ介入用
+    void SetReplayMode(bool enable) { isReplayMode_ = enable; }
+    bool IsReplayMode() const { return isReplayMode_; }
+    void SetReplayKeyStates(const BYTE* keys, const BYTE* preKeys) {
+        if (keys) memcpy(keys_, keys, 256);
+        if (preKeys) memcpy(preKeys_, preKeys, 256);
+    }
+
 private:
     // シングルトンにするため、コンストラクタなどをprivateにする
     KeyboardInput() = default;
@@ -42,5 +50,7 @@ private:
     // 現在と前フレームのキー入力状態
     BYTE keys_[256] = {};
     BYTE preKeys_[256] = {};
+
+    bool isReplayMode_ = false;
 };
 
