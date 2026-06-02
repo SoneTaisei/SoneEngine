@@ -31,6 +31,7 @@ public:
     // リスト管理用
     void AddParticle(ParticleManager *ParticleManager);
     void RemoveParticle(ParticleManager *ParticleManager);
+    void ClearAll() { particles_.clear(); }
 
     // ブレンドモード切り替え関数 (BlendMode型を受け取る)
     void SetBlendMode(BlendMode blendMode);

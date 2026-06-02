@@ -43,7 +43,7 @@ private:
     Emitter snowEmitter_;
 
     // SRVのインデックス (定数またはメンバ変数として管理)
-    const int srvIndex_ = 10; // テクスチャ等と被らない場所を指定
+    const int srvIndex_ = 100; // テクスチャ等と被らない場所を指定
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();

@@ -707,7 +707,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::PushID(static_cast<int>(i));
                             ImGui::Text("履歴 #%d (%s) - %d F", static_cast<int>(i + 1), history[i].dateStr.c_str(), history[i].totalFrames);
                             
-                            ImGui::SameLine();
                             if (ImGui::Button("再生")) {
                                 replayMgr->StartPlayback(static_cast<int>(i));
                             }
@@ -743,7 +742,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::PushID(static_cast<int>(i + 100));
                             ImGui::Text("📁 %s", saved[i].c_str());
                             
-                            ImGui::SameLine();
                             if (ImGui::Button("ロード再生")) {
                                 replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
                             }

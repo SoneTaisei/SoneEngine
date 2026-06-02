@@ -126,7 +126,7 @@ void ReplayManager::ResumePlayback() {
 }
 
 void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
-    if (!isPlaying_ || isPaused_) return;
+    if (!isPlaying_) return;
 
     if (currentFrame_ >= currentReplay_.totalFrames) {
         if (isLoopPlay_) {
@@ -139,48 +139,55 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         }
     }
 
-    // 1. KeyboardInputへキーを注入
     const FrameData& currentFrame = currentReplay_.frames[currentFrame_];
-    BYTE keys[256] = {};
-    BYTE preKeys[256] = {};
 
-    // 現在のキー状態の構築
-    if (currentFrame.keys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
-    if (currentFrame.keys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
-    if (currentFrame.keys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
-    if (currentFrame.keys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
-    if (currentFrame.keys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
+    if (!isPaused_) {
+        // 1. KeyboardInputへキーを注入
+        BYTE keys[256] = {};
+        BYTE preKeys[256] = {};
 
-    // 1フレーム前のキー状態の構築
-    if (currentFrame_ > 0) {
-        const FrameData& prevFrame = currentReplay_.frames[currentFrame_ - 1];
-        if (prevFrame.keys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
-        if (prevFrame.keys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
-        if (prevFrame.keys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
-        if (prevFrame.keys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
-        if (prevFrame.keys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
-    }
+        // 現在のキー状態の構築
+        if (currentFrame.keys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
+        if (currentFrame.keys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
+        if (currentFrame.keys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
+        if (currentFrame.keys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
+        if (currentFrame.keys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
 
-    KeyboardInput::GetInstance()->SetReplayKeyStates(keys, preKeys);
+        // 1フレーム前のキー状態の構築
+        if (currentFrame_ > 0) {
+            const FrameData& prevFrame = currentReplay_.frames[currentFrame_ - 1];
+            if (prevFrame.keys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
+            if (prevFrame.keys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
+            if (prevFrame.keys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
+            if (prevFrame.keys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
+            if (prevFrame.keys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
+        }
 
-    // 2. 二重発動防止：現在の物理位置と記録されている位置を比較し、
-    // ズレが 0.05f 以上の一定の閾値を超えた場合のみ、正しい座標に吸着（補正）させます。
-    const Vector3& recordedPos = currentFrame.position;
-    float dx = playerPos.x - recordedPos.x;
-    float dy = playerPos.y - recordedPos.y;
-    float dz = playerPos.z - recordedPos.z;
-    float distSq = dx * dx + dy * dy + dz * dz;
+        KeyboardInput::GetInstance()->SetReplayKeyStates(keys, preKeys);
 
-    // ズレが 0.05f 以上の時（二乗距離で 0.0025f 以上）に補正をかける
-    if (distSq > 0.0025f) {
-        playerPos = recordedPos;
+        // 2. 二重発動防止：現在の物理位置と記録されている位置を比較し、
+        // ズレが 0.05f 以上の一定の閾値を超えた場合のみ、正しい座標に吸着（補正）させます。
+        const Vector3& recordedPos = currentFrame.position;
+        float dx = playerPos.x - recordedPos.x;
+        float dy = playerPos.y - recordedPos.y;
+        float dz = playerPos.z - recordedPos.z;
+        float distSq = dx * dx + dy * dy + dz * dz;
+
+        if (distSq > 0.0025f) {
+            playerPos = recordedPos;
+        }
+    } else {
+        // ★ PAUSE中の場合は物理演算が止まらない対策として常に指定フレームの座標に強制上書きする
+        playerPos = currentFrame.position;
     }
 
     // カメラ座標の同期（カメラはキー操作で物理挙動しないためダイレクトに同期）
     cameraPos = currentFrame.cameraPosition;
 
     // フレームを進める
-    currentFrame_++;
+    if (!isPaused_) {
+        currentFrame_++;
+    }
 }
 
 void ReplayManager::SetCurrentFrame(int frame) {
