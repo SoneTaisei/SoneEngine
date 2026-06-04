@@ -84,103 +84,13 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     PrimitiveManager::GetInstance()->Initialize(device.Get());
     uint32_t gradationHandle = TextureManager::GetInstance()->Load("Sprite/School/gradationLine.png", commandList_);
     
-    // ■ RingEffectのルートオブジェクト作成
-    ringEffectRoot_ = std::make_unique<PrimitiveObject>();
-    ringEffectRoot_->Initialize(device.Get(), nullptr); // 描画しない
-    ringEffectRoot_->SetName("RingEffect");
-    ringEffectRoot_->SetTranslation({0.0f, 0.0f, 0.0f});
+    // ■ RingEffectの作成
+    ringEffect_ = std::make_unique<RingEffect>();
+    ringEffect_->Initialize(device.Get(), gradationHandle);
 
-    // ■ CylinderEffectのルートオブジェクト作成
-    cylinderEffectRoot_ = std::make_unique<PrimitiveObject>();
-    cylinderEffectRoot_->Initialize(device.Get(), nullptr); // 描画しない
-    cylinderEffectRoot_->SetName("CylinderEffect");
-    cylinderEffectRoot_->SetTranslation({0.0f, 0.0f, 0.0f});
-
-    // Ring 1
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 0.0f, 0.0f}); // 少し傾ける
-        ring->SetIsBillboard(false);          // 立体感を出すためにビルボードOFF
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 1");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Ring 2
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 0.785f, 0.0f}); // 45度
-        ring->SetIsBillboard(false);
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 2");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Ring 3
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 1.57f, 0.0f});  // 90度
-        ring->SetIsBillboard(false);
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 3");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Ring 4
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1, 1, 1, 1}, {1, 1, 1, 1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 2.355f, 0.0f}); // 135度
-        ring->SetIsBillboard(false);
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 4");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Cylinder
-    {
-        cylinderObject_ = std::make_unique<PrimitiveObject>();
-        cylinderObject_->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Cylinder, 1.0f, 64));
-        cylinderObject_->GetMaterial().enableEnvironmentMap = 0;
-        cylinderObject_->GetMaterial().lightingType = 0;
-        cylinderObject_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        cylinderObject_->SetTranslation({0.0f, 0.0f, 0.0f});
-        cylinderObject_->SetScale({1.5f, 2.0f, 1.5f});
-        cylinderObject_->SetRotation({0.0f, 0.0f, 0.0f});
-        cylinderObject_->SetIsBillboard(false);
-        cylinderObject_->SetIsDoubleSided(true);
-        cylinderObject_->SetBlendMode(BlendMode::kBlendModeAdd);
-        cylinderObject_->GetMaterial().alphaReference = 0.0f;
-        cylinderObject_->SetName("Cylinder");
-        cylinderObject_->SetParent(cylinderEffectRoot_.get());
-    }
+    // ■ CylinderEffectの作成
+    cylinderEffect_ = std::make_unique<CylinderEffect>();
+    cylinderEffect_->Initialize(device.Get(), gradationHandle);
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -204,33 +114,13 @@ void TitleScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
-    // リングのアニメーション更新 (1秒周期でパッと出てゆっくり消える)
-    ringEffectTimer_ += TimeManager::GetInstance().GetDeltaTime();
-    if (ringEffectTimer_ > kRingEffectDuration) {
-        ringEffectTimer_ = 0.0f; // ループ
+    // エフェクトの更新
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    if (ringEffect_) {
+        ringEffect_->Update(deltaTime);
     }
-
-    // 1.0 -> 0.0 へフェードアウト
-    float alpha = 1.0f - (ringEffectTimer_ / kRingEffectDuration);
-    
-    // リング全体の更新
-    if (ringEffectRoot_) {
-        ringEffectRoot_->Update();
-    }
-    if (cylinderEffectRoot_) {
-        cylinderEffectRoot_->Update();
-    }
-    // リングのみフェードアニメーションと更新を行う
-    for (auto& ring : primitiveParticles_) {
-        ring->GetMaterial().color.w = alpha; // 透明度を適用
-        ring->Update();
-    }
-    // シリンダーは点滅させずに回転させる
-    if (cylinderObject_) {
-        Vector3 rotation = cylinderObject_->GetRotation();
-        rotation.y += 0.01f; // 毎フレーム少しずつ回転
-        cylinderObject_->SetRotation(rotation);
-        cylinderObject_->Update();
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(deltaTime);
     }
 }
 
@@ -277,11 +167,11 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         }
 
         // ■ プリミティブパーティクルの描画
-        for (auto& p : primitiveParticles_) {
-            p->Draw(commandList_.Get());
+        if (ringEffect_) {
+            ringEffect_->Draw(commandList_.Get());
         }
-        if (cylinderObject_) {
-            cylinderObject_->Draw(commandList_.Get());
+        if (cylinderEffect_) {
+            cylinderEffect_->Draw(commandList_.Get());
         }
 #ifdef USE_IMGUI
     }
@@ -311,11 +201,11 @@ std::vector<ParticleManager *> TitleScene::GetParticles() {
 
 std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
-    if (ringEffectRoot_) {
-        result.push_back(ringEffectRoot_.get());
+    if (ringEffect_) {
+        result.push_back(ringEffect_->GetRoot());
     }
-    if (cylinderEffectRoot_) {
-        result.push_back(cylinderEffectRoot_.get());
+    if (cylinderEffect_) {
+        result.push_back(cylinderEffect_->GetRoot());
     }
     // 子要素は返さないことでエディター上の表示を1つにまとめる
     return result;
@@ -331,16 +221,10 @@ void TitleScene::UpdateEditor() {
     if (skybox_) {
         skybox_->Update();
     }
-    if (ringEffectRoot_) {
-        ringEffectRoot_->Update();
+    if (ringEffect_) {
+        ringEffect_->Update(0.0f);
     }
-    if (cylinderEffectRoot_) {
-        cylinderEffectRoot_->Update();
-    }
-    for (auto& ring : primitiveParticles_) {
-        ring->Update();
-    }
-    if (cylinderObject_) {
-        cylinderObject_->Update();
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(0.0f);
     }
 }

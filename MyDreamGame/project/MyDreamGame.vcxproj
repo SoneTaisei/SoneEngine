@@ -175,6 +175,8 @@
     </ClCompile>
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
     <ClCompile Include="Project\Effect\SnowParticle.cpp" />
+    <ClCompile Include="Project\Effect\RingEffect.cpp" />
+    <ClCompile Include="Project\Effect\CylinderEffect.cpp" />
     <ClCompile Include="Engine\Graphics\GameCamera.cpp" />
     <ClCompile Include="Engine\Graphics\Camera.cpp" />
     <ClCompile Include="Engine\Effect\ParticleManager.cpp" />
@@ -338,6 +340,8 @@
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
     <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
     <ClInclude Include="Project\Effect\SnowParticle.h" />
+    <ClInclude Include="Project\Effect\RingEffect.h" />
+    <ClInclude Include="Project\Effect\CylinderEffect.h" />
     <ClInclude Include="Engine\Graphics\GameCamera.h" />
     <ClInclude Include="Engine\Graphics\Camera.h" />
     <ClInclude Include="Engine\Effect\ParticleManager.h" />
