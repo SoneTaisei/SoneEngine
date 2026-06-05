@@ -29,6 +29,10 @@ void HitEffect::Update() {
     for (auto& p : particles_) {
         float alpha = 1.0f - (p.currentTime / p.lifeTime);
         if (alpha < 0.0f) alpha = 0.0f;
+        // 加算ブレンドでも通常ブレンドでも確実に透明（または見えなくなる）ように、RGBにもアルファを掛ける
+        p.color.x = alpha;
+        p.color.y = alpha;
+        p.color.z = alpha;
         p.color.w = alpha;
     }
 }
