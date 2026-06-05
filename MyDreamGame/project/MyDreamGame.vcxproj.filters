@@ -151,8 +151,8 @@
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Effect\HitEffect.cpp">
-      <Filter>Engine\Graphics\Particle</Filter>
+    <ClCompile Include="Project\Effect\HitEffect.cpp">
+      <Filter>Application\Particle</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Player2D.cpp">
       <Filter>Application\Game2D</Filter>
@@ -302,8 +302,8 @@
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Effect\HitEffect.h">
-      <Filter>Engine\Graphics\Particle</Filter>
+    <ClInclude Include="Project\Effect\HitEffect.h">
+      <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Player2D.h">
       <Filter>Application\Game2D</Filter>

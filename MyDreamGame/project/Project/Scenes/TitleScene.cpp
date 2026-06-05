@@ -91,6 +91,10 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     // ■ CylinderEffectの作成
     cylinderEffect_ = std::make_unique<CylinderEffect>();
     cylinderEffect_->Initialize(device.Get(), gradationHandle);
+
+    // ■ HitEffectの作成
+    hitEffect_ = std::make_unique<HitEffect>();
+    hitEffect_->Initialize(commandList_.Get(), particleCommon_.get(), 1024, "Sprite/School/circle2.png", 112, kBlendModeAdd);
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -121,6 +125,9 @@ void TitleScene::Update(SceneManager *sceneManager) {
     }
     if (cylinderEffect_) {
         cylinderEffect_->Update(deltaTime);
+    }
+    if (hitEffect_) {
+        hitEffect_->Update();
     }
 }
 
@@ -165,6 +172,9 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             particleCommon_->PreDraw(commandList_.Get());
             particleCommon_->DrawAll(viewProjectionMatrix);
         }
+        if (hitEffect_) {
+            hitEffect_->Draw(viewProjectionMatrix);
+        }
 
         // ■ プリミティブパーティクルの描画
         if (ringEffect_) {
@@ -196,6 +206,9 @@ std::vector<ParticleManager *> TitleScene::GetParticles() {
     for (auto &p : particles_) {
         result.push_back(p.get());
     }
+    if (hitEffect_) {
+        result.push_back(hitEffect_.get());
+    }
     return result;
 }
 
@@ -226,5 +239,8 @@ void TitleScene::UpdateEditor() {
     }
     if (cylinderEffect_) {
         cylinderEffect_->Update(0.0f);
+    }
+    if (hitEffect_) {
+        hitEffect_->Update();
     }
 }
