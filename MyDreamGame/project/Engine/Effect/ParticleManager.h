@@ -81,7 +81,7 @@ public:
     void SetName(const std::string &name) { name_ = name; }
 
     // ImGuiを描画する関数
-    void DrawImGui();
+    virtual void DrawImGui();
 
 protected:
     std::string name_ = "ParticleSystem";
