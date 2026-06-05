@@ -1,4 +1,5 @@
 #include "Platform/WindowsApplication.h"
+#include "Game2D/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
 #ifdef USE_IMGUI
@@ -11,6 +12,7 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
+#include "Scene/SceneFactory.h"
 #include "Window.h"
 #include "Core/TimeManager.h"
 // (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
@@ -191,10 +193,22 @@ void WindowsApplication::Update() {
 
     // --- エディターの状態に応じて更新処理を切り替え ---
 #ifdef USE_IMGUI
-    if (editorManager_->IsPlaying()) {
-        // 【再生中】シーンを更新する（遷移処理も含む）
+    static bool wasActive = false;
+    bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
+    if (isCurrentlyActive) {
+        // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
         sceneManager_->Update();
+        wasActive = true;
     } else {
+        if (wasActive) {
+            // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
+            sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
+            
+            // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
+            editorManager_->ClearSelection();
+            
+            wasActive = false;
+        }
         // 【停止中】トランスフォーム等の行列再計算のみ実行
         if (sceneManager_->GetCurrentScene()) {
             sceneManager_->GetCurrentScene()->UpdateEditor();

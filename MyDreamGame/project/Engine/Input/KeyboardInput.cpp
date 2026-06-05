@@ -43,6 +43,10 @@ bool KeyboardInput::Initialize(HINSTANCE hInstance, HWND hwnd) {
 
 // 更新処理
 void KeyboardInput::Update() {
+    if (isReplayMode_) {
+        return;
+    }
+
     // 前フレームのキー状態を現在の状態としてコピー
     memcpy(preKeys_, keys_, sizeof(keys_));
 
