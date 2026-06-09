@@ -65,8 +65,8 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList_);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList_);
 
     // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
@@ -84,79 +84,17 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     PrimitiveManager::GetInstance()->Initialize(device.Get());
     uint32_t gradationHandle = TextureManager::GetInstance()->Load("Sprite/School/gradationLine.png", commandList_);
     
-    // ■ RingEffectのルートオブジェクト作成
-    ringEffectRoot_ = std::make_unique<PrimitiveObject>();
-    ringEffectRoot_->Initialize(device.Get(), nullptr); // 描画しない
-    ringEffectRoot_->SetName("RingEffect");
-    ringEffectRoot_->SetTranslation({0.0f, 0.0f, 0.0f});
+    // ■ RingEffectの作成
+    ringEffect_ = std::make_unique<RingEffect>();
+    ringEffect_->Initialize(device.Get(), gradationHandle);
 
-    // Ring 1
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 0.0f, 0.0f}); // 少し傾ける
-        ring->SetIsBillboard(false);          // 立体感を出すためにビルボードOFF
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 1");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
+    // ■ CylinderEffectの作成
+    cylinderEffect_ = std::make_unique<CylinderEffect>();
+    cylinderEffect_->Initialize(device.Get(), gradationHandle);
 
-    // Ring 2
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 0.785f, 0.0f}); // 45度
-        ring->SetIsBillboard(false);
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 2");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Ring 3
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 1.57f, 0.0f});  // 90度
-        ring->SetIsBillboard(false);
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 3");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
-
-    // Ring 4
-    {
-        auto ring = std::make_unique<PrimitiveObject>();
-        ring->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1, 1, 1, 1}, {1, 1, 1, 1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
-        ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(gradationHandle));
-        ring->SetTranslation({0.0f, 0.0f, 0.0f});
-        ring->SetRotation({0.4f, 2.355f, 0.0f}); // 135度
-        ring->SetIsBillboard(false);
-        ring->SetIsDoubleSided(true);
-        ring->SetBlendMode(BlendMode::kBlendModeAdd);
-        ring->SetName("Ring 4");
-        ring->SetParent(ringEffectRoot_.get());
-        primitiveParticles_.push_back(std::move(ring));
-    }
+    // ■ HitEffectの作成
+    hitEffect_ = std::make_unique<HitEffect>();
+    hitEffect_->Initialize(commandList_.Get(), particleCommon_.get(), 1024, "Sprite/School/circle2.png", 112, kBlendModeAdd);
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -180,22 +118,16 @@ void TitleScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
-    // リングのアニメーション更新 (1秒周期でパッと出てゆっくり消える)
-    ringEffectTimer_ += TimeManager::GetInstance().GetDeltaTime();
-    if (ringEffectTimer_ > kRingEffectDuration) {
-        ringEffectTimer_ = 0.0f; // ループ
+    // エフェクトの更新
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    if (ringEffect_) {
+        ringEffect_->Update(deltaTime);
     }
-
-    // 1.0 -> 0.0 へフェードアウト
-    float alpha = 1.0f - (ringEffectTimer_ / kRingEffectDuration);
-    
-    // リング全体の更新
-    if (ringEffectRoot_) {
-        ringEffectRoot_->Update();
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(deltaTime);
     }
-    for (auto& ring : primitiveParticles_) {
-        ring->GetMaterial().color.w = alpha; // 透明度を適用
-        ring->Update();
+    if (hitEffect_) {
+        hitEffect_->Update();
     }
 }
 
@@ -240,10 +172,16 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             particleCommon_->PreDraw(commandList_.Get());
             particleCommon_->DrawAll(viewProjectionMatrix);
         }
+        if (hitEffect_) {
+            hitEffect_->Draw(viewProjectionMatrix);
+        }
 
         // ■ プリミティブパーティクルの描画
-        for (auto& p : primitiveParticles_) {
-            p->Draw(commandList_.Get());
+        if (ringEffect_) {
+            ringEffect_->Draw(commandList_.Get());
+        }
+        if (cylinderEffect_) {
+            cylinderEffect_->Draw(commandList_.Get());
         }
 #ifdef USE_IMGUI
     }
@@ -268,14 +206,41 @@ std::vector<ParticleManager *> TitleScene::GetParticles() {
     for (auto &p : particles_) {
         result.push_back(p.get());
     }
+    if (hitEffect_) {
+        result.push_back(hitEffect_.get());
+    }
     return result;
 }
 
 std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
-    if (ringEffectRoot_) {
-        result.push_back(ringEffectRoot_.get());
+    if (ringEffect_) {
+        result.push_back(ringEffect_->GetRoot());
+    }
+    if (cylinderEffect_) {
+        result.push_back(cylinderEffect_->GetRoot());
     }
     // 子要素は返さないことでエディター上の表示を1つにまとめる
     return result;
+}
+
+void TitleScene::UpdateEditor() {
+    for (auto &object : objects_) {
+        object->Update();
+    }
+    for (auto &sprite : sprites_) {
+        sprite->Update();
+    }
+    if (skybox_) {
+        skybox_->Update();
+    }
+    if (ringEffect_) {
+        ringEffect_->Update(0.0f);
+    }
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(0.0f);
+    }
+    if (hitEffect_) {
+        hitEffect_->Update();
+    }
 }

@@ -30,6 +30,34 @@ void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
 void Player2D::Update(const MapChip2D& map) {
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
 
+    // 死亡演出中の更新処理
+    if (isDead_) {
+        deathTimer_ += deltaTime;
+        float t = (std::min)(deathTimer_ / deathDuration_, 1.0f);
+        float scaleProgress = EaseInElastic(t);
+        float sizeScale = 1.0f - scaleProgress;
+
+        // イージングによって縮小
+        primitiveObj_->SetScale({ (halfWidth_ * 2.0f) * sizeScale, (halfHeight_ * 2.0f) * sizeScale, 1.0f });
+
+        if (t >= 1.0f) {
+            // スタート地点に復活
+            position_ = startPosition_;
+            velocity_ = { 0.0f, 0.0f, 0.0f };
+            isDead_ = false;
+            deathTimer_ = 0.0f;
+            isDashing_ = false;
+            canDash_ = true;
+            // スケールを通常に戻す
+            primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+        }
+
+        // PrimitiveObjectの座標を更新
+        primitiveObj_->SetTranslation(position_);
+        primitiveObj_->Update();
+        return;
+    }
+
     // 壁ジャンプタイマーの更新
     if (wallJumpTimer_ > 0.0f) {
         wallJumpTimer_ -= deltaTime;
@@ -58,12 +86,36 @@ void Player2D::Update(const MapChip2D& map) {
     position_.x += velocity_.x * deltaTime;
     ResolveCollisionX(map);
 
-    // 画面外落下時のリスポーン
+    // デスブロックとの接触判定
+    {
+        AABB aabb = GetAABB();
+        // 押し戻しによって境界線上に位置した際も検知できるよう、わずかなマージン（拡張）を持たせる
+        const float margin = 0.02f;
+        int leftChip = map.WorldToChipX(aabb.left - margin);
+        int rightChip = map.WorldToChipX(aabb.right + margin);
+        int bottomChip = map.WorldToChipY(aabb.bottom - margin);
+        int topChip = map.WorldToChipY(aabb.top + margin);
+
+        for (int cy = bottomChip; cy <= topChip; ++cy) {
+            for (int cx = leftChip; cx <= rightChip; ++cx) {
+                if (map.GetChipType(cx, cy) == MapChip2D::ChipType::kDeathBlock) {
+                    isDead_ = true;
+                    deathTimer_ = 0.0f;
+                    velocity_ = { 0.0f, 0.0f, 0.0f };
+                    isDashing_ = false;
+                    break;
+                }
+            }
+            if (isDead_) break;
+        }
+    }
+
+    // 画面外落下時のリスポーン演出移行
     if (position_.y < -10.0f) {
-        position_ = { 2.0f, 5.0f, 0.0f };
+        isDead_ = true;
+        deathTimer_ = 0.0f;
         velocity_ = { 0.0f, 0.0f, 0.0f };
         isDashing_ = false;
-        canDash_ = true;
     }
 
     // 色の更新
@@ -80,30 +132,9 @@ void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
 
 void Player2D::DisplayImGui() {
 #ifdef USE_IMGUI
-    if (ImGui::TreeNode("Player2D Settings")) {
-        ImGui::Text("--- Physics & Position ---");
+    if (ImGui::TreeNode("Player2D")) {
         ImGui::DragFloat3("Position", &position_.x, 0.1f);
         ImGui::DragFloat3("Velocity", &velocity_.x, 0.1f);
-        ImGui::Checkbox("On Ground", &isOnGround_);
-
-        ImGui::Text("--- Movement ---");
-        ImGui::DragFloat("Move Speed", &moveSpeed_, 0.1f, 0.0f, 50.0f);
-        ImGui::DragFloat("Jump Power", &jumpPower_, 0.1f, 0.0f, 50.0f);
-        ImGui::DragFloat("Gravity", &gravity_, 0.1f, -100.0f, 0.0f);
-        ImGui::DragFloat("Max Fall Speed", &maxFallSpeed_, 0.1f, -100.0f, 0.0f);
-
-        ImGui::Text("--- Dash Settings ---");
-        ImGui::Checkbox("Can Dash", &canDash_);
-        ImGui::Checkbox("Is Dashing", &isDashing_);
-        ImGui::DragFloat("Dash Speed", &dashSpeed_, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Dash Duration", &dashDuration_, 0.01f, 0.0f, 2.0f);
-
-        ImGui::Text("--- Wall Action Settings ---");
-        ImGui::DragFloat("Wall Slide Speed", &wallSlideSpeed_, 0.1f, -50.0f, 0.0f);
-        ImGui::DragFloat("Wall Jump Duration", &wallJumpDuration_, 0.01f, 0.0f, 2.0f);
-        ImGui::DragFloat2("Wall Jump Power (X, Y)", &wallJumpPower_.x, 0.1f, 0.0f, 50.0f);
-        
-        ImGui::Text("--- Visuals & Size ---");
         ImGui::ColorEdit4("Normal Color", &colorNormal_.x);
         ImGui::ColorEdit4("Dashed Color", &colorDashed_.x);
         
@@ -169,10 +200,10 @@ void Player2D::HandleInput() {
                 velocity_.y = jumpPower_;
                 isOnGround_ = false;
             } else if (isTouchingWallRight_) {
-                // 壁張り付き状態、または壁方向への入力・Control入力がある場合は真上ジャンプを優先
+                // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
                 bool isPressingCling = keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL);
-                if (isWallSliding_ || isWallClinging_ || inputRight || isPressingCling) {
-                    // 壁張り付き/ずり落ち中は真上ジャンプ
+                if (isWallClinging_ || isPressingCling) {
+                    // 壁張り付き中は真上ジャンプ
                     velocity_.x = 0.0f;
                     velocity_.y = jumpPower_;
                 } else {
@@ -185,10 +216,10 @@ void Player2D::HandleInput() {
                 isWallSliding_ = false;
                 isWallClinging_ = false;
             } else if (isTouchingWallLeft_) {
-                // 壁張り付き状態、または壁方向への入力・Control入力がある場合は真上ジャンプを優先
+                // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
                 bool isPressingCling = keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL);
-                if (isWallSliding_ || isWallClinging_ || inputLeft || isPressingCling) {
-                    // 壁張り付き/ずり落ち中は真上ジャンプ
+                if (isWallClinging_ || isPressingCling) {
+                    // 壁張り付き中は真上ジャンプ
                     velocity_.x = 0.0f;
                     velocity_.y = jumpPower_;
                 } else {
@@ -324,4 +355,11 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
             }
         }
     }
+}
+
+float Player2D::EaseInElastic(float t) const {
+    const float c4 = (2.0f * 3.14159265f) / 3.0f;
+    if (t <= 0.0f) return 0.0f;
+    if (t >= 1.0f) return 1.0f;
+    return -std::pow(2.0f, 10.0f * t - 10.0f) * std::sin((t * 10.0f - 10.75f) * c4);
 }

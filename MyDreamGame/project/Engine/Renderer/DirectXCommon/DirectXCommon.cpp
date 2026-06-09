@@ -122,8 +122,8 @@ void DirectXCommon::PreDrawSwapchain() {
     commandList_->ClearRenderTargetView(rtvHandles_[backBufferIndex_], clearColor, 0, nullptr);
 
     // ビューポートとシザー矩形を再設定
-    commandList_->RSSetViewports(1, &viewport_);
-    commandList_->RSSetScissorRects(1, &scissorRect_);
+    commandList_->RSSetViewports(1, &swapchainViewport_);
+    commandList_->RSSetScissorRects(1, &swapchainScissorRect_);
 }
 
 void DirectXCommon::ExecuteCommands() {
@@ -172,6 +172,43 @@ void DirectXCommon::PostDraw() {
     Present();
 }
 
+void DirectXCommon::ResizeSwapchain(int32_t width, int32_t height) {
+    if (!swapChain_) return;
+
+    // 1. GPUが現在のコマンドリストの実行を完了するまで待機
+    fenceValue_++;
+    commandQueue_->Signal(fence_.Get(), fenceValue_);
+    if (fence_->GetCompletedValue() < fenceValue_) {
+        fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+
+    // 2. スワップチェーンのバッファ参照を解放
+    for (int i = 0; i < 2; ++i) {
+        swapChainResources_[i].Reset();
+    }
+
+    // 3. バッファをリサイズ
+    HRESULT hr = swapChain_->ResizeBuffers(2, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+    if (FAILED(hr)) return;
+
+    // 4. ウィンドウサイズを更新
+    windowWidth_ = width;
+    windowHeight_ = height;
+
+    // 5. 新しいバッファを取得してRTVを作り直す
+    for (int i = 0; i < 2; ++i) {
+        hr = swapChain_->GetBuffer(i, IID_PPV_ARGS(&swapChainResources_[i]));
+        assert(SUCCEEDED(hr));
+        device_->CreateRenderTargetView(swapChainResources_[i].Get(), &rtvDesc_, rtvHandles_[i]);
+    }
+
+    // 6. ビューポートとシザー矩形を更新
+    swapchainViewport_.Width = (float)width;
+    swapchainViewport_.Height = (float)height;
+    swapchainScissorRect_.right = width;
+    swapchainScissorRect_.bottom = height;
+}
 
 void DirectXCommon::CreateDxInstance() {
     // (WindowsApplication::CreateDxInstance の中身をそのまま貼り付け)
@@ -499,6 +536,9 @@ void DirectXCommon::CreatePipelines() {
     scissorRect_.right = windowWidth_;
     scissorRect_.top = 0;
     scissorRect_.bottom = windowHeight_;
+
+    swapchainViewport_ = viewport_;
+    swapchainScissorRect_ = scissorRect_;
 }
 
 void DirectXCommon::InitializeFixFPS() {
@@ -954,12 +994,41 @@ void DirectXCommon::ExecutePostEffect() {
 }
 
 void DirectXCommon::DrawRenderTexture() {
+    // 1. スワップチェーンのサイズと論理サイズ(1280x720)からレターボックス用のビューポートを計算
+    float scale = (std::min)((float)windowWidth_ / 1280.0f, (float)windowHeight_ / 720.0f);
+    float vpWidth = 1280.0f * scale;
+    float vpHeight = 720.0f * scale;
+    float vpX = ((float)windowWidth_ - vpWidth) / 2.0f;
+    float vpY = ((float)windowHeight_ - vpHeight) / 2.0f;
+
+    D3D12_VIEWPORT letterboxViewport{};
+    letterboxViewport.TopLeftX = vpX;
+    letterboxViewport.TopLeftY = vpY;
+    letterboxViewport.Width = vpWidth;
+    letterboxViewport.Height = vpHeight;
+    letterboxViewport.MinDepth = 0.0f;
+    letterboxViewport.MaxDepth = 1.0f;
+
+    D3D12_RECT letterboxScissor{};
+    letterboxScissor.left = static_cast<LONG>(vpX);
+    letterboxScissor.top = static_cast<LONG>(vpY);
+    letterboxScissor.right = static_cast<LONG>(vpX + vpWidth);
+    letterboxScissor.bottom = static_cast<LONG>(vpY + vpHeight);
+
+    // ビューポートとシザーを適用（元のswapchainViewport_からは一時的に変更）
+    commandList_->RSSetViewports(1, &letterboxViewport);
+    commandList_->RSSetScissorRects(1, &letterboxScissor);
+
     // ポストプロセス済みのテクスチャ(SRV)を Swapchain (RT) にコピーする
     commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
     commandList_->SetPipelineState(copyImagePipelineState_.Get());
 
     commandList_->SetGraphicsRootDescriptorTable(0, postProcessSrvHandleGPU_);
     commandList_->DrawInstanced(3, 1, 0, 0);
+
+    // ビューポートとシザーを元に戻す（念のため）
+    commandList_->RSSetViewports(1, &swapchainViewport_);
+    commandList_->RSSetScissorRects(1, &swapchainScissorRect_);
 }
 
 void DirectXCommon::CreateSkyboxPipeline() {

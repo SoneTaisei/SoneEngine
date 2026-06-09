@@ -175,6 +175,8 @@
     </ClCompile>
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
     <ClCompile Include="Project\Effect\SnowParticle.cpp" />
+    <ClCompile Include="Project\Effect\RingEffect.cpp" />
+    <ClCompile Include="Project\Effect\CylinderEffect.cpp" />
     <ClCompile Include="Engine\Graphics\GameCamera.cpp" />
     <ClCompile Include="Engine\Graphics\Camera.cpp" />
     <ClCompile Include="Engine\Effect\ParticleManager.cpp" />
@@ -213,9 +215,10 @@
     <ClCompile Include="Engine\Resource\Primitive\Primitive.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
-    <ClCompile Include="Engine\Effect\HitEffect.cpp" />
+    <ClCompile Include="Project\Effect\HitEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player2D.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
+    <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
@@ -337,6 +340,8 @@
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
     <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
     <ClInclude Include="Project\Effect\SnowParticle.h" />
+    <ClInclude Include="Project\Effect\RingEffect.h" />
+    <ClInclude Include="Project\Effect\CylinderEffect.h" />
     <ClInclude Include="Engine\Graphics\GameCamera.h" />
     <ClInclude Include="Engine\Graphics\Camera.h" />
     <ClInclude Include="Engine\Effect\ParticleManager.h" />
@@ -376,9 +381,10 @@
     <ClInclude Include="Engine\Resource\Primitive\Primitive.h" />
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
-    <ClInclude Include="Engine\Effect\HitEffect.h" />
+    <ClInclude Include="Project\Effect\HitEffect.h" />
     <ClInclude Include="Project\Game2D\Player2D.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
+    <ClInclude Include="Engine\Editor\ReplayManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

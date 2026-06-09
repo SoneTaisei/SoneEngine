@@ -3,6 +3,7 @@
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Core/Utility/BlendMode.h"
+#include <deque>
 
 class PrimitiveObject {
 public:
@@ -30,6 +31,7 @@ public:
     void SetIsBillboard(bool isBillboard) { isBillboard_ = isBillboard; }
     void SetIsDoubleSided(bool isDoubleSided) { isDoubleSided_ = isDoubleSided; }
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
+    BlendMode GetBlendMode() const { return blendMode_; }
 
     // --- 名前関連 ---
     const std::string &GetName() const { return name_; }
@@ -59,4 +61,24 @@ private:
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
     static D3D12_GPU_DESCRIPTOR_HANDLE sDefaultTextureHandle_;
+
+    // --- 残像 (Trail) 設定 ---
+    bool showTrail_ = false;
+
+    // --- 外部からの残像(ゴースト)描画用 ---
+    static const int kMaxGhosts = 10000;
+    Microsoft::WRL::ComPtr<ID3D12Resource> ghostTransformResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> ghostMaterialResource_;
+    uint8_t* mappedGhostTransform_ = nullptr;
+    uint8_t* mappedGhostMaterial_ = nullptr;
+    int currentGhostIndex_ = 0;
+
+public:
+    bool GetShowTrail() const { return showTrail_; }
+    void SetShowTrail(bool show) { showTrail_ = show; }
+
+    const Transform& GetTransform() const { return transform_; }
+
+    void ResetGhostIndex() { currentGhostIndex_ = 0; }
+    void DrawGhost(ID3D12GraphicsCommandList* commandList, const Transform& transform, const Material& material);
 };

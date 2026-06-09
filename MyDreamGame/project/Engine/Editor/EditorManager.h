@@ -34,8 +34,8 @@ public:
     void Finalize();
 
     // 再生状態の取得・設定
-    bool IsPlaying() const { return isPlaying_; }
-    void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
+    static bool IsPlaying() { return isPlaying_; }
+    static void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
 
@@ -52,8 +52,21 @@ public:
     // 現在選択中のシーンタイプを取得
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
 
+    // 選択状態のクリア (シーン再生成時にワイルドポインタになるのを防ぐ)
+    void ClearSelection() {
+        selectedObject_ = nullptr;
+        selectedParticle_ = nullptr;
+        selectedPrimitive_ = nullptr;
+        sceneJustReset_ = true; // シーンリセットのフラグを立てる
+    }
+
 private:
-    bool isPlaying_ = false; // ゲーム再生中かどうか
+    bool sceneJustReset_ = false;
+    bool loadMapDataStrNextFrame_ = false;
+    std::string mapDataStrToLoad_ = "";
+    char stageFilename_[128] = "map_data.txt";
+
+    static bool isPlaying_; // ゲーム再生中かどうか
     bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
 
     // 選択中のオブジェクト
@@ -71,6 +84,7 @@ private:
     bool showHierarchy_ = true;
     bool showGameView_ = true;
     bool showPostEffect_ = true;
+    bool showReplayManager_ = true;
     bool showMapEditor_ = true;
 
     static bool showObjects_;

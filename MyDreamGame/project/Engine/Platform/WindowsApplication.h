@@ -36,6 +36,9 @@ public:
     void Update();
     void Draw();
 
+    void LoadWindowConfig();
+    void SaveWindowConfig();
+
     SceneManager *GetSceneManager() const { return sceneManager_.get(); }
 #ifdef USE_IMGUI
     EditorManager *GetEditorManager() const { return editorManager_.get(); }
@@ -65,4 +68,9 @@ private:
 
     // 今デバッグモードかどうか
     bool isDebugCameraActive_ = false;
+
+    // --- ウィンドウ状態復元用 ---
+    int frameCount_ = 0;
+    bool pendingMaximized_ = false;
+    bool pendingFullscreen_ = false;
 };
