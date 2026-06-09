@@ -136,7 +136,8 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
             Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
             if (!ReplayManager::GetInstance()->IsRecording()) {
-                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos);
+                std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
+                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
             }
             Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
             Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);

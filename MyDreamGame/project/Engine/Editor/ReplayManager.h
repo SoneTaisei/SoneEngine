@@ -24,6 +24,8 @@ struct FrameData {
 struct ReplayData {
     std::string filename;                     // ファイル名（永久保存用）
     std::string dateStr;                      // 録画日時
+    std::string stageFilename;                // ★このリプレイを録画した時のマップファイル名
+    std::string mapDataStr;                   // ★このリプレイを録画した時の生マップデータ
     Vector3 playerInitPos;                    // プレイヤーの初期座標
     Vector3 cameraInitPos;                    // カメラの初期座標
     int totalFrames = 0;                      // 総フレーム数
@@ -40,7 +42,7 @@ public:
     static ReplayManager* GetInstance();
 
     // 録画制御
-    void StartRecord(const Vector3& initPos, const Vector3& cameraInitPos);
+    void StartRecord(const Vector3& initPos, const Vector3& cameraInitPos, const std::string& mapDataStr = "");
     void RecordFrame(const Vector3& pos, const Vector3& cameraPos, const Vector4& color = {1.0f, 1.0f, 1.0f, 1.0f}, const Vector3& scale = {1.0f, 1.0f, 1.0f}, const Vector3& rotation = {0.0f, 0.0f, 0.0f});
     void StopRecord();
 
@@ -84,6 +86,8 @@ public:
     const std::vector<ReplayData>& GetHistory() const { return history_; }
     const std::vector<std::string>& GetSavedList() const { return savedList_; }
 
+    void SetCurrentStageFilename(const std::string& filename) { currentStageFilename_ = filename; }
+
 private:
     ReplayManager() = default;
     ~ReplayManager() = default;
@@ -103,6 +107,8 @@ private:
 
     Vector3 playerInitPos_ = { 0.0f, 0.0f, 0.0f };
     Vector3 cameraInitPos_ = { 0.0f, 0.0f, 0.0f };
+    std::string currentStageFilename_ = "";           // 録画時に参照するマップファイル名
+    std::string currentMapDataStr_ = "";              // 録画時に参照する生マップデータ
     std::vector<FrameData> temporaryRecordedFrames_; // 録画中の一時バッファ
 
     ReplayData currentReplay_;                        // 現在アクティブなリプレイ（再生用・編集用）

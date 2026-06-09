@@ -57,9 +57,15 @@ public:
         selectedObject_ = nullptr;
         selectedParticle_ = nullptr;
         selectedPrimitive_ = nullptr;
+        sceneJustReset_ = true; // シーンリセットのフラグを立てる
     }
 
 private:
+    bool sceneJustReset_ = false;
+    bool loadMapDataStrNextFrame_ = false;
+    std::string mapDataStrToLoad_ = "";
+    char stageFilename_[128] = "map_data.txt";
+
     static bool isPlaying_; // ゲーム再生中かどうか
     bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
 

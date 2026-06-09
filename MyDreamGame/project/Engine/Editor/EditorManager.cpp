@@ -88,6 +88,46 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     static bool resetLayout = false;
 
+    // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
+    ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
+
+    // --- シーンリセット直後のマップ復元処理 ---
+    if (sceneJustReset_) {
+        IScene* activeScene = sceneManager->GetCurrentScene();
+        if (activeScene) {
+            MapChip2D* mapChip = activeScene->GetMapChip();
+            if (mapChip) {
+                if (loadMapDataStrNextFrame_) {
+                    mapChip->LoadFromString(mapDataStrToLoad_);
+                    loadMapDataStrNextFrame_ = false;
+                } else {
+                    std::string name = stageFilename_;
+                    bool hasExt = false;
+                    if (name.length() >= 4) {
+                        std::string ext = name.substr(name.length() - 4);
+                        if (ext == ".txt" || ext == ".TXT") hasExt = true;
+                    }
+                    if (!hasExt) name += ".txt";
+                    std::string filepath = "json/" + name;
+                    mapChip->LoadFromFile(filepath);
+                }
+            }
+        }
+        sceneJustReset_ = false;
+    }
+
+    // --- リプレイ終了時の自動デバッグカメラ復帰処理 ---
+    static bool wasReplayingLastFrame = false;
+    bool isReplayingNow = ReplayManager::GetInstance()->IsPlaying();
+    if (wasReplayingLastFrame && !isReplayingNow) {
+        useDebugCamera_ = true;
+        if (gameCamera && debugCamera) {
+            debugCamera->SetTranslation(gameCamera->GetTranslation());
+            debugCamera->SetRotation(gameCamera->GetRotation());
+        }
+    }
+    wasReplayingLastFrame = isReplayingNow;
+
     // --- メインメニューバー ---
     if (ImGui::BeginMainMenuBar()) {
         // PLAY / STOP ボタン
@@ -718,7 +758,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 MapChip2D* mapChip = activeScene->GetMapChip();
                 if (mapChip) {
                     // 静的変数
-                    static char stageFilename[128] = "map_data.txt";
                     static int inputWidth = -1;
                     static int inputHeight = -1;
 
@@ -764,7 +803,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // 既存のマップファイルを選択するコンボボックス
                     if (!stageFiles.empty()) {
                         static int selectedFileIndex = -1;
-                        std::string currentFile = stageFilename;
+                        std::string currentFile = stageFilename_;
                         if (currentFile.length() < 4 || (currentFile.compare(currentFile.length() - 4, 4, ".txt") != 0 && currentFile.compare(currentFile.length() - 4, 4, ".TXT") != 0)) {
                             currentFile += ".txt";
                         }
@@ -782,7 +821,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
                                 bool isSelected = (selectedFileIndex == i);
                                 if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
-                                    strcpy_s(stageFilename, sizeof(stageFilename), stageFiles[i].c_str());
+                                    strcpy_s(stageFilename_, sizeof(stageFilename_), stageFiles[i].c_str());
                                     selectedFileIndex = i;
                                 }
                                 if (isSelected) {
@@ -794,7 +833,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
 
                     // ファイル名入力
-                    ImGui::InputText("Filename", stageFilename, sizeof(stageFilename));
+                    ImGui::InputText("Filename", stageFilename_, sizeof(stageFilename_));
 
                     // マップサイズ入力と適用ボタン
                     ImGui::SetNextItemWidth(100.0f);
@@ -829,11 +868,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     // 操作ボタン
                     if (ImGui::Button("Save Map")) {
-                        mapChip->SaveToFile(GetFullFilePath(stageFilename));
+                        mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("Load Map")) {
-                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename))) {
+                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
                             inputWidth = mapChip->GetWidth();
                             inputHeight = mapChip->GetHeight();
                         }
@@ -964,6 +1003,21 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             
                             if (ImGui::Button("再生")) {
                                 replayMgr->StartPlayback(static_cast<int>(i));
+                                useDebugCamera_ = false;
+                                
+                                // リプレイのマップ情報があればロードする
+                                std::string rMapStr = history[i].mapDataStr;
+                                std::string rMap = history[i].stageFilename;
+                                if (!rMapStr.empty()) {
+                                    mapDataStrToLoad_ = rMapStr;
+                                    loadMapDataStrNextFrame_ = true;
+                                    sceneJustReset_ = true;
+                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                } else if (!rMap.empty()) {
+                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                    // シーンリセットフラグを立てて次のフレームでマップを復元させる
+                                    sceneJustReset_ = true;
+                                }
                             }
                             
                             ImGui::SameLine();
@@ -1004,6 +1058,21 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             
                             if (ImGui::Button("ロード再生")) {
                                 replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
+                                useDebugCamera_ = false;
+                                
+                                // リプレイのマップ情報があればロードする
+                                std::string rMapStr = replayMgr->GetCurrentReplay().mapDataStr;
+                                std::string rMap = replayMgr->GetCurrentReplay().stageFilename;
+                                if (!rMapStr.empty()) {
+                                    mapDataStrToLoad_ = rMapStr;
+                                    loadMapDataStrNextFrame_ = true;
+                                    sceneJustReset_ = true;
+                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                } else if (!rMap.empty()) {
+                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                    // シーンリセットフラグを立てて次のフレームでマップを復元させる
+                                    sceneJustReset_ = true;
+                                }
                             }
                             
                             ImGui::SameLine();

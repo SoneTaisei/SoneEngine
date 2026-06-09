@@ -253,26 +253,44 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
     std::ifstream ifs(filepath);
     if (!ifs.is_open()) return false;
 
-    int width = 0;
-    int height = 0;
-    if (!(ifs >> width >> height)) return false;
+    std::stringstream buffer;
+    buffer << ifs.rdbuf();
+    return LoadFromString(buffer.str());
+}
 
-    mapWidth_ = width;
-    mapHeight_ = height;
+std::string MapChip2D::GetMapDataAsString() const {
+    std::stringstream ss;
+    ss << mapWidth_ << " " << mapHeight_ << "\n";
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            ss << static_cast<int>(mapData_[y][x]);
+            if (x < mapWidth_ - 1) ss << " ";
+        }
+        ss << "\n";
+    }
+    return ss.str();
+}
 
-    mapData_.clear();
-    mapData_.resize(mapHeight_, std::vector<ChipType>(mapWidth_, ChipType::kNone));
+bool MapChip2D::LoadFromString(const std::string& data) {
+    if (data.empty()) return false;
+    std::stringstream iss(data);
+
+    int w, h;
+    if (!(iss >> w >> h)) return false;
+    if (w < 1 || h < 1) return false;
+
+    mapWidth_ = w;
+    mapHeight_ = h;
+    mapData_.assign(mapHeight_, std::vector<ChipType>(mapWidth_, ChipType::kNone));
 
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
-            int val = 0;
-            if (ifs >> val) {
+            int val;
+            if (iss >> val) {
                 mapData_[y][x] = static_cast<ChipType>(val);
             }
         }
     }
-    ifs.close();
-
     RebuildChipObjects();
     return true;
 }

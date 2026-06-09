@@ -62,9 +62,12 @@ public:
     // マップデータの動的再構築
     void RebuildChipObjects();
 
-    // マップデータのセーブ＆ロード
     bool SaveToFile(const std::string& filepath);
     bool LoadFromFile(const std::string& filepath);
+
+    // 文字列ベースのマップデータ取得＆設定（リプレイ用）
+    std::string GetMapDataAsString() const;
+    bool LoadFromString(const std::string& data);
 
 private:
     void BuildMap();

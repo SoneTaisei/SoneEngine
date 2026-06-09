@@ -13,13 +13,17 @@ ReplayManager* ReplayManager::GetInstance() {
     return &instance;
 }
 
-void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraInitPos) {
+void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraInitPos, const std::string& mapDataStr) {
+    if (isRecording_) return;
+    
     isRecording_ = true;
     isPlaying_ = false;
     isPaused_ = false;
     currentFrame_ = 0;
+
     playerInitPos_ = initPos;
     cameraInitPos_ = cameraInitPos;
+    currentMapDataStr_ = mapDataStr;
     temporaryRecordedFrames_.clear();
     
     // 注入モードがオンになっていればオフにする
@@ -61,6 +65,8 @@ void ReplayManager::StopRecord() {
     ReplayData data;
     data.playerInitPos = playerInitPos_;
     data.cameraInitPos = cameraInitPos_;
+    data.stageFilename = currentStageFilename_;
+    data.mapDataStr = currentMapDataStr_;
     data.totalFrames = static_cast<int>(temporaryRecordedFrames_.size());
     data.frames = temporaryRecordedFrames_;
 
@@ -340,10 +346,19 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
     ofs << "# MML Replay File" << std::endl;
     ofs << "[Metadata]" << std::endl;
     ofs << "Date=" << data.dateStr << std::endl;
+    ofs << "StageFilename=" << data.stageFilename << std::endl;
     ofs << "TotalFrames=" << data.totalFrames << std::endl;
     ofs << "PlayerInitPos=" << data.playerInitPos.x << "," << data.playerInitPos.y << "," << data.playerInitPos.z << std::endl;
     ofs << "CameraInitPos=" << data.cameraInitPos.x << "," << data.cameraInitPos.y << "," << data.cameraInitPos.z << std::endl;
     ofs << std::endl;
+
+    // 生マップデータセクション
+    if (!data.mapDataStr.empty()) {
+        ofs << "[MapData]" << std::endl;
+        ofs << data.mapDataStr;
+        if (data.mapDataStr.back() != '\n') ofs << std::endl;
+        ofs << std::endl;
+    }
 
     // MML トラックセクション
     ofs << "[MML]" << std::endl;
@@ -395,10 +410,14 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
         std::stringstream ss(line);
         std::string key, value;
 
-        if (currentSection == "Metadata") {
+        if (currentSection == "MapData") {
+            outData.mapDataStr += line + "\n";
+        } else if (currentSection == "Metadata") {
             if (std::getline(ss, key, '=') && std::getline(ss, value)) {
                 if (key == "Date") {
                     outData.dateStr = value;
+                } else if (key == "StageFilename") {
+                    outData.stageFilename = value;
                 } else if (key == "TotalFrames") {
                     outData.totalFrames = std::stoi(value);
                 } else if (key == "PlayerInitPos") {
