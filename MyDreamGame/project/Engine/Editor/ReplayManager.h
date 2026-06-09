@@ -13,6 +13,9 @@ struct FrameData {
     Vector3 position;      // プレイヤーの座標
     Vector3 cameraPosition;// カメラの座標
     char keys[6];          // "LRJDC" のうち押されているものを文字で表した5文字の文字列（+終端文字）。例: "-R-D-"
+    Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f}; // プレイヤーの色
+    Vector3 scale = {1.0f, 1.0f, 1.0f};       // プレイヤーのスケール
+    Vector3 rotation = {0.0f, 0.0f, 0.0f};    // プレイヤーの回転
 };
 
 /// <summary>
@@ -38,7 +41,7 @@ public:
 
     // 録画制御
     void StartRecord(const Vector3& initPos, const Vector3& cameraInitPos);
-    void RecordFrame(const Vector3& pos, const Vector3& cameraPos);
+    void RecordFrame(const Vector3& pos, const Vector3& cameraPos, const Vector4& color = {1.0f, 1.0f, 1.0f, 1.0f}, const Vector3& scale = {1.0f, 1.0f, 1.0f}, const Vector3& rotation = {0.0f, 0.0f, 0.0f});
     void StopRecord();
 
     // 再生制御
@@ -46,6 +49,9 @@ public:
     void StopPlayback();
     void PausePlayback();
     void ResumePlayback();
+    
+    // 選択のみ（再生はしない、残像表示用）
+    void SelectReplay(int historyIndex = -1, const std::string& filepath = "");
     
     // 再生更新 (毎フレーム呼び出す、二重発動バグを防ぐ補正ロジックを内包)
     void UpdatePlayback(Vector3& playerPos, Vector3& cameraPos);
