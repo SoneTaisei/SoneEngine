@@ -160,9 +160,7 @@
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Application\Game2D</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Game2D\ReplayManager.cpp">
-      <Filter>Application\Game2D</Filter>
-    </ClCompile>
+    <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -311,9 +309,7 @@
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Application\Game2D</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Game2D\ReplayManager.h">
-      <Filter>Application\Game2D</Filter>
-    </ClInclude>
+    <ClInclude Include="Engine\Editor\ReplayManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">

@@ -6,7 +6,7 @@
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
-#include "Game2D/ReplayManager.h"
+#include "Editor/ReplayManager.h"
 #include "Core/TimeManager.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {

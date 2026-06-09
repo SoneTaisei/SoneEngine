@@ -1,5 +1,5 @@
 #include "Platform/WindowsApplication.h"
-#include "Game2D/ReplayManager.h"
+#include "Editor/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
 #ifdef USE_IMGUI
