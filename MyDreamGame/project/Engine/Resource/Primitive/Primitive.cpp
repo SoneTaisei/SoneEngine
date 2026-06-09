@@ -209,38 +209,69 @@ void Primitive::CreateRing(float innerRadius, float outerRadius, uint32_t segmen
 
 
 void Primitive::CreateCylinder(float radius, float height, uint32_t segments) {
-    float halfH = height * 0.5f;
-    // Side
-    for (uint32_t i = 0; i <= segments; ++i) {
-        float angle = 2.0f * std::numbers::pi_v<float> * i / segments;
-        float cosA = cosf(angle);
-        float sinA = sinf(angle);
+    float kTopRadius = radius;
+    float kBottomRadius = radius;
+    float kHeight = height;
+    uint32_t kCylinderDivide = segments;
+    float radianPerDivide = 2.0f * std::numbers::pi_v<float> / float(kCylinderDivide);
 
-        VertexData vBottom{}, vTop{};
-        vBottom.position = {radius * cosA, -halfH, radius * sinA, 1.0f};
-        vBottom.normal = {cosA, 0.0f, sinA};
-        vBottom.texcoord = {static_cast<float>(i) / segments, 1.0f};
-        vBottom.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    for (uint32_t index = 0; index < kCylinderDivide; ++index) {
+        float sinVal = std::sin(index * radianPerDivide);
+        float cosVal = std::cos(index * radianPerDivide);
+        float sinNext = std::sin((index + 1) * radianPerDivide);
+        float cosNext = std::cos((index + 1) * radianPerDivide);
+        float u = float(index) / float(kCylinderDivide);
+        float uNext = float(index + 1) / float(kCylinderDivide);
 
-        vTop.position = {radius * cosA, halfH, radius * sinA, 1.0f};
-        vTop.normal = {cosA, 0.0f, sinA};
-        vTop.texcoord = {static_cast<float>(i) / segments, 0.0f};
-        vTop.color = {1.0f, 1.0f, 1.0f, 1.0f};
+        // UV flip
+        float vTop = 1.0f;
+        float vBottom = 0.0f;
 
-        modelData_.vertices.push_back(vBottom);
-        modelData_.vertices.push_back(vTop);
+        // 6 vertices per segment
+        VertexData v[6];
+        
+        // 1: Top (index)
+        v[0].position = {-sinVal * kTopRadius, kHeight, cosVal * kTopRadius, 1.0f};
+        v[0].texcoord = {u, vTop};
+        v[0].normal = {-sinVal, 0.0f, cosVal};
+        v[0].color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        // 2: Top (index+1)
+        v[1].position = {-sinNext * kTopRadius, kHeight, cosNext * kTopRadius, 1.0f};
+        v[1].texcoord = {uNext, vTop};
+        v[1].normal = {-sinNext, 0.0f, cosNext};
+        v[1].color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        // 3: Bottom (index)
+        v[2].position = {-sinVal * kBottomRadius, 0.0f, cosVal * kBottomRadius, 1.0f};
+        v[2].texcoord = {u, vBottom};
+        v[2].normal = {-sinVal, 0.0f, cosVal};
+        v[2].color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        // 4: Bottom (index)
+        v[3].position = {-sinVal * kBottomRadius, 0.0f, cosVal * kBottomRadius, 1.0f};
+        v[3].texcoord = {u, vBottom};
+        v[3].normal = {-sinVal, 0.0f, cosVal};
+        v[3].color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        // 5: Top (index+1)
+        v[4].position = {-sinNext * kTopRadius, kHeight, cosNext * kTopRadius, 1.0f};
+        v[4].texcoord = {uNext, vTop};
+        v[4].normal = {-sinNext, 0.0f, cosNext};
+        v[4].color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        // 6: Bottom (index+1)
+        v[5].position = {-sinNext * kBottomRadius, 0.0f, cosNext * kBottomRadius, 1.0f};
+        v[5].texcoord = {uNext, vBottom};
+        v[5].normal = {-sinNext, 0.0f, cosNext};
+        v[5].color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        uint32_t baseIndex = static_cast<uint32_t>(modelData_.vertices.size());
+        for (int j = 0; j < 6; ++j) {
+            modelData_.vertices.push_back(v[j]);
+            modelData_.indices.push_back(baseIndex + j);
+        }
     }
-
-    for (uint32_t i = 0; i < segments; ++i) {
-        uint32_t base = i * 2;
-        modelData_.indices.push_back(base);
-        modelData_.indices.push_back(base + 1);
-        modelData_.indices.push_back(base + 2);
-        modelData_.indices.push_back(base + 2);
-        modelData_.indices.push_back(base + 1);
-        modelData_.indices.push_back(base + 3);
-    }
-    // Caps could be added here if needed
 }
 
 void Primitive::CreateCone(float radius, float height, uint32_t segments) {

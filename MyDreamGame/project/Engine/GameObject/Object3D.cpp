@@ -3,6 +3,8 @@
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Editor/ReplayManager.h"
+#include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
 
@@ -30,6 +32,16 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
     Matrix4x4 identity = TransformFunctions::MakeIdentity4x4();
     mappedTransform_->World = identity;
     mappedTransform_->WVP = identity;
+
+    // Trail resources
+    uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
+    uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
+    
+    trailTransformResource_ = CreateBufferResource(device, transformSize * kMaxTrails);
+    trailTransformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTrailTransform_));
+    
+    trailMaterialResource_ = CreateBufferResource(device, materialSize * kMaxTrails);
+    trailMaterialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTrailMaterial_));
 }
 
 void Object3D::Update() {
@@ -54,6 +66,12 @@ void Object3D::Update() {
 
     // ★ 追加：法線用行列の計算（これがないとライティングが真っ黒になります）
     mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+
+    // 軌跡用履歴の保存
+    trailHistory_.push_front(transform_);
+    if (trailHistory_.size() > kMaxHistory) {
+        trailHistory_.pop_back();
+    }
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
@@ -78,6 +96,66 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
 
     // Ensure common model root signature is bound
     commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+
+    // ==============================================================
+    // ★ 0. トレイル (残像) の描画 (設定されている場合のみ)
+    // ==============================================================
+    if (showTrail_ && model_) {
+        if (!trailHistory_.empty() && trailLength_ > 0 && trailStep_ > 0) {
+            
+            // トレイル用のブレンドモード設定
+            if (trailBlendMode_ == BlendMode::kBlendModeAdd) {
+                commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCullAdditive() : dxCommon->GetGraphicsPipelineStateAdditive());
+            } else {
+                commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCull() : dxCommon->GetGraphicsPipelineState());
+            }
+
+            int trailCount = 0;
+            uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
+            uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
+
+            Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
+
+            size_t maxTrails = (std::min)(trailHistory_.size(), (size_t)trailLength_);
+            for (size_t i = 0; i < maxTrails; i += trailStep_) {
+                if (trailCount >= kMaxTrails) break;
+                
+                Vector3 pastPos = trailHistory_[i].translate;
+                Vector3 pastRot = trailHistory_[i].rotate;
+                Vector3 pastScale = trailHistory_[i].scale;
+                
+                // --- WorldMatrix 計算 ---
+                Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
+                Matrix4x4 finalWorldMatrix = nodeMatrix * tWorldMatrix;
+
+                // --- CBV に書き込み ---
+                TransformMatrix* tMat = reinterpret_cast<TransformMatrix*>(mappedTrailTransform_ + transformSize * trailCount);
+                tMat->World = finalWorldMatrix;
+                tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+                tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(finalWorldMatrix, viewMatrix), projectionMatrix);
+
+                Material* mMat = reinterpret_cast<Material*>(mappedTrailMaterial_ + materialSize * trailCount);
+                *mMat = material_;
+                // 過去に行くほどアルファ値を下げるか
+                float alphaFactor = 1.0f;
+                if (trailFadeOut_) {
+                    alphaFactor = 1.0f - (static_cast<float>(i) / static_cast<float>(maxTrails));
+                }
+                mMat->color.w = material_.color.w * trailStartAlpha_ * alphaFactor;
+
+                // --- 描画 ---
+                commandList->SetGraphicsRootConstantBufferView(1, trailTransformResource_->GetGPUVirtualAddress() + transformSize * trailCount);
+                commandList->SetGraphicsRootConstantBufferView(0, trailMaterialResource_->GetGPUVirtualAddress() + materialSize * trailCount);
+                commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+                if (sEnvironmentMapHandle.ptr != 0) {
+                    commandList->SetGraphicsRootDescriptorTable(7, sEnvironmentMapHandle);
+                }
+                model_->Draw();
+
+                trailCount++;
+            }
+        }
+    }
 
     // ==============================================================
     // ★ 1. 先に Main drawing pass (本体のメッシュ) を描画する！
@@ -144,6 +222,20 @@ void Object3D::DisplayImGui(const std::string &label) {
             ImGui::SliderFloat("Environment Coefficient", &material_.environmentCoefficient, 0.0f, 1.0f);
             ImGui::Checkbox("Enable Environment Map", (bool*)&material_.enableEnvironmentMap);
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
+            ImGui::Checkbox("Show Trail", &showTrail_);
+            if (showTrail_) {
+                ImGui::Checkbox("Fade Out", &trailFadeOut_);
+                ImGui::DragInt("Trail Step", &trailStep_, 1, 1, 60);
+                ImGui::DragInt("Trail Length", &trailLength_, 1, 1, kMaxHistory);
+                ImGui::DragFloat("Start Alpha", &trailStartAlpha_, 0.01f, 0.0f, 1.0f);
+                int blendModeIdx = static_cast<int>(trailBlendMode_);
+                if (ImGui::Combo("Blend Mode", &blendModeIdx, "Normal\0Add\0Subtract\0Multiply\0Screen\0")) {
+                    trailBlendMode_ = static_cast<BlendMode>(blendModeIdx);
+                }
+            }
             ImGui::TreePop();
         }
         ImGui::TreePop();

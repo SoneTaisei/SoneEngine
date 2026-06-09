@@ -1,4 +1,5 @@
 #include "Platform/WindowsApplication.h"
+#include "Editor/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
 #ifdef USE_IMGUI
@@ -11,6 +12,7 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
+#include "Scene/SceneFactory.h"
 #include "Window.h"
 #include "Core/TimeManager.h"
 // (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
@@ -27,6 +29,8 @@
 #include "Resource/Audio/AudioManager.h"
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/ViewProjection.h"
+#include <fstream>
+#include <filesystem>
 
 #pragma comment(lib, "winmm.lib")
 
@@ -41,6 +45,8 @@ void WindowsApplication::Initialize() {
     // 窓の作成を任せる
     window_ = std::make_unique<Window>();
     window_->Create(L"MyDreamGameEngine", kWindowWidth_, kWindowHeight_);
+
+    LoadWindowConfig();
 
     /*********************************************************
      *DirectX初期化処理
@@ -170,8 +176,39 @@ void WindowsApplication::Update() {
     // デルタタイムを計算
     TimeManager::GetInstance().Update();
 
+    frameCount_++;
+    if (frameCount_ == 2) {
+        if (pendingMaximized_) {
+            window_->SetMaximized(true);
+        }
+        if (pendingFullscreen_) {
+            window_->SetFullscreen(true);
+        }
+    }
+
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
+
+    // フルスクリーン切り替え
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F11)) {
+        window_->ToggleFullscreen();
+        SaveWindowConfig();
+    }
+
+#ifdef USE_IMGUI
+    // ESCキーの処理 (閉じる / 最小化) - リリース版では無効化
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE)) {
+        bool isShiftDown = KeyboardInput::GetInstance()->IsKeyDown(DIK_LSHIFT) || 
+                           KeyboardInput::GetInstance()->IsKeyDown(DIK_RSHIFT);
+        if (isShiftDown) {
+            // Shift + ESC で最小化
+            ShowWindow(window_->GetHwnd(), SW_MINIMIZE);
+        } else {
+            // ESC のみで終了
+            SendMessage(window_->GetHwnd(), WM_CLOSE, 0, 0);
+        }
+    }
+#endif
 
 #ifdef USE_IMGUI
     // 1. フレームの開始
@@ -191,11 +228,27 @@ void WindowsApplication::Update() {
 
     // --- エディターの状態に応じて更新処理を切り替え ---
 #ifdef USE_IMGUI
-    if (editorManager_->IsPlaying()) {
-        // 【再生中】シーンを更新する（遷移処理も含む）
+    static bool wasActive = false;
+    bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
+    if (isCurrentlyActive) {
+        // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
         sceneManager_->Update();
+        wasActive = true;
     } else {
-        // 【停止中】シーン遷移のみ処理する（エディターからのシーン切替に対応）
+        if (wasActive) {
+            // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
+            sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
+            
+            // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
+            editorManager_->ClearSelection();
+            
+            wasActive = false;
+        }
+        // 【停止中】トランスフォーム等の行列再計算のみ実行
+        if (sceneManager_->GetCurrentScene()) {
+            sceneManager_->GetCurrentScene()->UpdateEditor();
+        }
+        // シーン遷移のみ処理する（エディターからのシーン切替に対応）
         sceneManager_->ProcessSceneTransition();
     }
     
@@ -310,6 +363,55 @@ void WindowsApplication::Finalize() {
         dxCommon_.reset();
     }
 
+    // 終了前に現在のウィンドウ状態を保存する
+    SaveWindowConfig();
+
     // 8. COMの終了処理
     CoUninitialize();
+}
+
+void WindowsApplication::LoadWindowConfig() {
+    std::ifstream ifs("json/window_config.json");
+    if (!ifs.is_open()) {
+        return;
+    }
+
+    std::string content;
+    std::string line;
+    while (std::getline(ifs, line)) {
+        content += line;
+    }
+    ifs.close();
+
+    bool isFullscreen = false;
+    bool isMaximized = false;
+
+    auto getBool = [&](const std::string& key, bool& out) {
+        size_t pos = content.find(key);
+        if (pos != std::string::npos) {
+            size_t colon = content.find(':', pos);
+            size_t valStart = content.find_first_not_of(" \t", colon + 1);
+            if (content.substr(valStart, 4) == "true") out = true;
+            else if (content.substr(valStart, 5) == "false") out = false;
+        }
+    };
+
+    getBool("\"isFullscreen\"", isFullscreen);
+    getBool("\"isMaximized\"", isMaximized);
+
+    pendingFullscreen_ = isFullscreen;
+    pendingMaximized_ = isMaximized;
+}
+
+void WindowsApplication::SaveWindowConfig() {
+    std::filesystem::create_directories("json");
+
+    std::ofstream ofs("json/window_config.json");
+    if (ofs.is_open()) {
+        ofs << "{" << std::endl;
+        ofs << "  \"isFullscreen\": " << (window_->IsFullscreen() ? "true" : "false") << "," << std::endl;
+        ofs << "  \"isMaximized\": " << (window_->IsMaximized() ? "true" : "false") << std::endl;
+        ofs << "}" << std::endl;
+        ofs.close();
+    }
 }

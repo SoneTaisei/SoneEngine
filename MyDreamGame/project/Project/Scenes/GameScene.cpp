@@ -7,13 +7,59 @@
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
+#include "Editor/ReplayManager.h"
+#include "Core/TimeManager.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
+    rotateTimer_ = 0.0f; // 回転タイマーを確実にリセット
 
     // 1. Device取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
+
+    // 2. PrimitiveManagerの初期化（まだの場合）
+    PrimitiveManager::GetInstance()->Initialize(device.Get());
+
+    // リプレイ保存リストの読み込み
+    ReplayManager::GetInstance()->LoadSavedList();
+
+    // 3. SnowParticleの生成 (unique_ptrで作る)
+    auto snowParticle = std::make_unique<SnowParticle>();
+    snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/School/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
+    snowParticle->SetName("Snow Particles");
+
+    // Commonに描画登録する (Modelと同じ仕組みにする)
+    particleCommon_->AddParticle(snowParticle.get());
+    snowParticle_ = snowParticle.get();
+    particles_.push_back(std::move(snowParticle));
+
+    // 4. 3Dプリミティブオブジェクトの作成
+    // 橙色の球体（環境マップ・ライティング有効）
+    {
+        auto sphere = std::make_unique<PrimitiveObject>();
+        sphere->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Sphere, 1.0f, 32));
+        sphere->SetTranslation({2.0f, 0.0f, 0.0f});
+        sphere->GetMaterial().color = {1.0f, 0.5f, 0.0f, 1.0f};
+        sphere->GetMaterial().enableEnvironmentMap = 1;
+        sphere->GetMaterial().environmentCoefficient = 0.5f;
+        sphere->GetMaterial().lightingType = 1;
+        sphere->SetName("Game Sphere");
+        primitives_.push_back(std::move(sphere));
+    }
+
+    // 水色の箱（環境マップ・ライティング有効）
+    {
+        auto box = std::make_unique<PrimitiveObject>();
+        box->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f));
+        box->SetTranslation({-2.0f, 0.0f, 0.0f});
+        box->GetMaterial().color = {0.0f, 0.8f, 1.0f, 1.0f};
+        box->GetMaterial().enableEnvironmentMap = 1;
+        box->GetMaterial().environmentCoefficient = 0.5f;
+        box->GetMaterial().lightingType = 1;
+        box->SetName("Game Box");
+        primitives_.push_back(std::move(box));
+    }
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
@@ -43,11 +89,11 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     // 3. 3Dプリミティブオブジェクトの回転と更新
-    static float rotateTimer = 0.0f;
-    rotateTimer += 1.0f / 60.0f;
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    rotateTimer_ += deltaTime;
     if (primitives_.size() >= 2) {
-        primitives_[0]->SetRotation({0.0f, rotateTimer, 0.0f}); // 球体のY軸回転
-        primitives_[1]->SetRotation({rotateTimer * 0.5f, rotateTimer, 0.0f}); // 箱の多軸回転
+        primitives_[0]->SetRotation({0.0f, rotateTimer_, 0.0f}); // 球体のY軸回転
+        primitives_[1]->SetRotation({rotateTimer_ * 0.5f, rotateTimer_, 0.0f}); // 箱の多軸回転
     }
 
     for (auto &primitive : primitives_) {
@@ -56,7 +102,51 @@ void GameScene::Update(SceneManager *sceneManager) {
 
     // 4. プレイヤーの更新（入力・物理・当たり判定）
     if (player_ && map_) {
+        // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
+        static bool wasPlayingLastFrame = false;
+        if (ReplayManager::GetInstance()->IsPlaying()) {
+            if (!wasPlayingLastFrame) {
+                // 再生開始時に初期位置へ自動ワープ
+                player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
+                if (gameCamera_) {
+                    // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
+                    gameCamera_->SetFollowTarget(nullptr);
+                    gameCamera_->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
+                }
+                wasPlayingLastFrame = true;
+            }
+            Vector3 pos = player_->GetPosition();
+            Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+            ReplayManager::GetInstance()->UpdatePlayback(pos, camPos);
+            player_->SetPosition(pos);
+            if (gameCamera_) {
+                gameCamera_->SetTranslation(camPos);
+            }
+        } else {
+            wasPlayingLastFrame = false;
+        }
+
         player_->Update(*map_);
+
+        // プレイ中の場合、リプレイ録画を行う
+        bool isCurrentlyPlaying = true;
+#ifdef USE_IMGUI
+        isCurrentlyPlaying = EditorManager::IsPlaying();
+#endif
+        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
+            Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+            if (!ReplayManager::GetInstance()->IsRecording()) {
+                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos);
+            }
+            Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+            Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
+            Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
+            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
+        } else {
+            if (ReplayManager::GetInstance()->IsRecording()) {
+                ReplayManager::GetInstance()->StopRecord();
+            }
+        }
     }
 
     // 5. マップの更新
@@ -98,6 +188,67 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (player_) {
         player_->Draw(commandList_);
     }
+
+#ifdef USE_IMGUI
+    // --- ゴースト残像の描画（マリオメーカー仕様） ---
+    // エディタ停止中で、かつリプレイの再生/録画もしていない時に「選択中のリプレイ全体」の軌跡を表示する
+    if (!EditorManager::IsPlaying() && player_) {
+        ReplayManager* replayManager = ReplayManager::GetInstance();
+        if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
+            ReplayData& currentReplay = replayManager->GetCurrentReplay();
+            if (!currentReplay.frames.empty()) {
+                const float GHOST_ALPHA = 0.5f;
+                // 全フレーム描画すると線のように繋がってしまうため、一定間隔（例：10フレーム毎）で描画して軌跡を表現
+                const int FRAME_STEP = 10;
+
+                auto* playerPrim = player_->GetPrimitiveObject();
+                // エディターの「Show Trail」がONのときだけ残像を描画する
+                if (playerPrim && playerPrim->GetShowTrail()) {
+                    // 描画前にゴースト用のインデックスをリセット
+                    playerPrim->ResetGhostIndex();
+
+                    // ベースとなるプレイヤーのTransformと色を取得
+                    Vector4 baseColor = playerPrim->GetMaterial().color;
+
+                    // 選択されているリプレイの全フレームを通して軌跡を描画
+                    for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
+                        const FrameData& frameData = currentReplay.frames[i];
+
+                        // 直前に描画したゴーストと座標がほぼ同じならスキップ(立ち止まっている時のZファイティング/濃くなりすぎ防止)
+                        if (i >= FRAME_STEP) {
+                            int prevIndex = i - FRAME_STEP;
+                            if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
+                                Vector3 diff;
+                                diff.x = frameData.position.x - currentReplay.frames[prevIndex].position.x;
+                                diff.y = frameData.position.y - currentReplay.frames[prevIndex].position.y;
+                                diff.z = frameData.position.z - currentReplay.frames[prevIndex].position.z;
+                                float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+                                if (distSq < 0.0001f) {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        // ゴースト用のTransformとMaterialを作成
+                        Transform ghostTransform = playerPrim->GetTransform();
+                        ghostTransform.translate = frameData.position;
+                        ghostTransform.scale = frameData.scale;
+                        ghostTransform.rotate = frameData.rotation;
+
+                        Material ghostMaterial = playerPrim->GetMaterial();
+                        // 記録されていた色（スプライト/モデルのカラー情報）を取り出し、アルファ値をかけて半透明にする
+                        Vector4 ghostColor = frameData.color;
+                        ghostColor.w *= GHOST_ALPHA; // 元のアルファ値に掛け算する
+                        ghostMaterial.color = ghostColor;
+
+                        // プレイヤーのPrimitiveを使って残像(ゴースト)を描画
+                        playerPrim->DrawGhost(commandList_, ghostTransform, ghostMaterial);
+                    }
+                }
+            }
+        }
+    }
+#endif
 
     // 3. パーティクルの描画
     // 描画前処理
@@ -141,4 +292,28 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     }
 
     return result;
+}
+
+void GameScene::UpdateEditor() {
+    // 録画状態のままエディタが停止した場合、確実に停止させて履歴に保存する
+    if (ReplayManager::GetInstance()->IsRecording()) {
+        ReplayManager::GetInstance()->StopRecord();
+    }
+
+    for (auto &primitive : primitives_) {
+        primitive->Update();
+    }
+    if (player_) {
+        auto* playerPrim = player_->GetPrimitiveObject();
+        if (playerPrim) {
+            playerPrim->Update();
+        }
+    }
+    if (map_) {
+        for (auto* mapPrim : map_->GetPrimitiveObjects()) {
+            if (mapPrim) {
+                mapPrim->Update();
+            }
+        }
+    }
 }

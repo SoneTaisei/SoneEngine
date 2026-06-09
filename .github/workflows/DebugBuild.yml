@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master  # 本番ブランチを指定
+      - Game_master
   workflow_dispatch:
 
 env:

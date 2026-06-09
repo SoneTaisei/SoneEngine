@@ -18,7 +18,7 @@ struct Material {
     int lightingType;
     int enableBlinnPhong;
     int enableEnvironmentMap;
-    float padding;
+    float alphaReference;
     float4x4 uvTransform;
     float shininess;
     float environmentCoefficient;

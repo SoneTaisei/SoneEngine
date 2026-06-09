@@ -39,6 +39,12 @@
     <ClCompile Include="Project\Effect\SnowParticle.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Effect\RingEffect.cpp">
+      <Filter>Application\Particle</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Effect\CylinderEffect.cpp">
+      <Filter>Application\Particle</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Resource\Audio\AudioManager.cpp">
       <Filter>Engine\Audio</Filter>
     </ClCompile>
@@ -145,8 +151,8 @@
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Effect\HitEffect.cpp">
-      <Filter>Engine\Graphics\Particle</Filter>
+    <ClCompile Include="Project\Effect\HitEffect.cpp">
+      <Filter>Application\Particle</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Player2D.cpp">
       <Filter>Application\Game2D</Filter>
@@ -154,6 +160,7 @@
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Application\Game2D</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
@@ -170,6 +177,12 @@
       <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Project\Effect\SnowParticle.h">
+      <Filter>Application\Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Effect\RingEffect.h">
+      <Filter>Application\Particle</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Effect\CylinderEffect.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Resource\Audio\AudioManager.h">
@@ -287,8 +300,8 @@
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Effect\HitEffect.h">
-      <Filter>Engine\Graphics\Particle</Filter>
+    <ClInclude Include="Project\Effect\HitEffect.h">
+      <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Player2D.h">
       <Filter>Application\Game2D</Filter>
@@ -296,6 +309,7 @@
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Application\Game2D</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Editor\ReplayManager.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">

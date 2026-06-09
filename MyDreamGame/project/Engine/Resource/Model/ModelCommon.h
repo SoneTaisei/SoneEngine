@@ -23,6 +23,7 @@ public:
     // リスト管理用
     void AddModel(Model *model);
     void RemoveModel(Model *model);
+    void ClearAll() { models_.clear(); }
 
     // ゲッター
     ID3D12Device *GetDevice() const { return device_; }

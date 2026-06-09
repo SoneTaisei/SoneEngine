@@ -17,6 +17,9 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Effect/ParticleCommon.h"
+#include "Effect/RingEffect.h"
+#include "Effect/CylinderEffect.h"
+#include "Effect/HitEffect.h"
 
 class TitleScene : public IScene {
 public:
@@ -58,7 +61,7 @@ private:
     Emitter windowEmitter_{};
 
     // 5. SRVインデックス (他と被らない番号)
-    const int srvIndex_ = 20;
+    const int srvIndex_ = 110;
 
     // ■ 追加: タイトルシーン専用カメラ
     Transform cameraTransform_{}; // カメラの座標・回転
@@ -69,11 +72,13 @@ private:
 
     std::unique_ptr<DebugCamera> debugCamera_;
 
-    std::vector<std::unique_ptr<PrimitiveObject>> primitiveParticles_;
-    std::unique_ptr<PrimitiveObject> ringEffectRoot_;
+    std::unique_ptr<RingEffect> ringEffect_;
+    std::unique_ptr<CylinderEffect> cylinderEffect_;
+    std::unique_ptr<HitEffect> hitEffect_;
 
-    // --- エフェクトアニメーション用 ---
-    float ringEffectTimer_ = 0.0f;
-    const float kRingEffectDuration = 2.0f;
+    // --- エディター停止中用 ---
+    void UpdateEditor() override;
+
+
 
 };
