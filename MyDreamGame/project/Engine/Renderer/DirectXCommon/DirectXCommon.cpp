@@ -994,12 +994,41 @@ void DirectXCommon::ExecutePostEffect() {
 }
 
 void DirectXCommon::DrawRenderTexture() {
+    // 1. スワップチェーンのサイズと論理サイズ(1280x720)からレターボックス用のビューポートを計算
+    float scale = (std::min)((float)windowWidth_ / 1280.0f, (float)windowHeight_ / 720.0f);
+    float vpWidth = 1280.0f * scale;
+    float vpHeight = 720.0f * scale;
+    float vpX = ((float)windowWidth_ - vpWidth) / 2.0f;
+    float vpY = ((float)windowHeight_ - vpHeight) / 2.0f;
+
+    D3D12_VIEWPORT letterboxViewport{};
+    letterboxViewport.TopLeftX = vpX;
+    letterboxViewport.TopLeftY = vpY;
+    letterboxViewport.Width = vpWidth;
+    letterboxViewport.Height = vpHeight;
+    letterboxViewport.MinDepth = 0.0f;
+    letterboxViewport.MaxDepth = 1.0f;
+
+    D3D12_RECT letterboxScissor{};
+    letterboxScissor.left = static_cast<LONG>(vpX);
+    letterboxScissor.top = static_cast<LONG>(vpY);
+    letterboxScissor.right = static_cast<LONG>(vpX + vpWidth);
+    letterboxScissor.bottom = static_cast<LONG>(vpY + vpHeight);
+
+    // ビューポートとシザーを適用（元のswapchainViewport_からは一時的に変更）
+    commandList_->RSSetViewports(1, &letterboxViewport);
+    commandList_->RSSetScissorRects(1, &letterboxScissor);
+
     // ポストプロセス済みのテクスチャ(SRV)を Swapchain (RT) にコピーする
     commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
     commandList_->SetPipelineState(copyImagePipelineState_.Get());
 
     commandList_->SetGraphicsRootDescriptorTable(0, postProcessSrvHandleGPU_);
     commandList_->DrawInstanced(3, 1, 0, 0);
+
+    // ビューポートとシザーを元に戻す（念のため）
+    commandList_->RSSetViewports(1, &swapchainViewport_);
+    commandList_->RSSetScissorRects(1, &swapchainScissorRect_);
 }
 
 void DirectXCommon::CreateSkyboxPipeline() {

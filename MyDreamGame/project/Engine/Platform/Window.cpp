@@ -25,6 +25,10 @@ LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         }
         return 0;
     }
+    case WM_CLOSE:
+        // ウィンドウが破棄される前にメインループを抜け、終了処理（JSON保存など）を安全に行えるようにする
+        PostQuitMessage(0);
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -80,10 +84,11 @@ Window::~Window() {
     UnregisterClass(wc_.lpszClassName, wc_.hInstance);
 }
 
-void Window::ToggleFullscreen() {
+void Window::SetFullscreen(bool fullscreen) {
     if (!hwnd_) return;
+    if (isFullscreen_ == fullscreen) return;
 
-    if (!isFullscreen_) {
+    if (fullscreen) {
         // 現在のウィンドウの位置とサイズを記憶
         GetWindowRect(hwnd_, &windowRect_);
 
@@ -113,4 +118,39 @@ void Window::ToggleFullscreen() {
             SWP_NOZORDER | SWP_FRAMECHANGED);
         isFullscreen_ = false;
     }
+}
+
+void Window::ToggleFullscreen() {
+    SetFullscreen(!isFullscreen_);
+}
+
+bool Window::IsMaximized() const {
+    if (!hwnd_) return false;
+    WINDOWPLACEMENT wp = { sizeof(wp) };
+    GetWindowPlacement(hwnd_, &wp);
+    return wp.showCmd == SW_SHOWMAXIMIZED;
+}
+
+void Window::SetMaximized(bool maximized) {
+    if (!hwnd_) return;
+    ShowWindow(hwnd_, maximized ? SW_MAXIMIZE : SW_RESTORE);
+}
+
+int32_t Window::GetNormalWindowWidth() const {
+    if (!hwnd_) return 1280;
+    WINDOWPLACEMENT wp = { sizeof(wp) };
+    GetWindowPlacement(hwnd_, &wp);
+    return wp.rcNormalPosition.right - wp.rcNormalPosition.left;
+}
+
+int32_t Window::GetNormalWindowHeight() const {
+    if (!hwnd_) return 720;
+    WINDOWPLACEMENT wp = { sizeof(wp) };
+    GetWindowPlacement(hwnd_, &wp);
+    return wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
+}
+
+void Window::SetWindowSize(int32_t width, int32_t height) {
+    if (!hwnd_) return;
+    SetWindowPos(hwnd_, nullptr, 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER);
 }
