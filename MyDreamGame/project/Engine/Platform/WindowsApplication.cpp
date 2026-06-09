@@ -175,6 +175,24 @@ void WindowsApplication::Update() {
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
 
+    // フルスクリーン切り替え
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F11)) {
+        window_->ToggleFullscreen();
+    }
+
+    // ESCキーの処理 (閉じる / 最小化)
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE)) {
+        bool isShiftDown = KeyboardInput::GetInstance()->IsKeyDown(DIK_LSHIFT) || 
+                           KeyboardInput::GetInstance()->IsKeyDown(DIK_RSHIFT);
+        if (isShiftDown) {
+            // Shift + ESC で最小化
+            ShowWindow(window_->GetHwnd(), SW_MINIMIZE);
+        } else {
+            // ESC のみで終了
+            SendMessage(window_->GetHwnd(), WM_CLOSE, 0, 0);
+        }
+    }
+
 #ifdef USE_IMGUI
     // 1. フレームの開始
     editorManager_->BeginFrame();

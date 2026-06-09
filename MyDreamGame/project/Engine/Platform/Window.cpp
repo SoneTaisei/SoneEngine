@@ -1,4 +1,6 @@
 #include "Window.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+
 #ifdef USE_IMGUI
 #include <imgui_impl_win32.h>
 #endif
@@ -15,6 +17,14 @@ LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 #endif
 
     switch (msg) {
+    case WM_SIZE: {
+        int width = LOWORD(lparam);
+        int height = HIWORD(lparam);
+        if (DirectXCommon::GetInstance() && width > 0 && height > 0) {
+            DirectXCommon::GetInstance()->ResizeSwapchain(width, height);
+        }
+        return 0;
+    }
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -68,4 +78,39 @@ Window::~Window() {
 
     // 2. ウィンドウクラスの登録を解除する
     UnregisterClass(wc_.lpszClassName, wc_.hInstance);
+}
+
+void Window::ToggleFullscreen() {
+    if (!hwnd_) return;
+
+    if (!isFullscreen_) {
+        // 現在のウィンドウの位置とサイズを記憶
+        GetWindowRect(hwnd_, &windowRect_);
+
+        // ボーダレスウィンドウに変更
+        SetWindowLong(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+
+        // モニターのサイズを取得して全画面に広げる
+        HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFO info = { sizeof(info) };
+        if (GetMonitorInfo(monitor, &info)) {
+            SetWindowPos(hwnd_, HWND_TOP,
+                info.rcMonitor.left, info.rcMonitor.top,
+                info.rcMonitor.right - info.rcMonitor.left,
+                info.rcMonitor.bottom - info.rcMonitor.top,
+                SWP_NOZORDER | SWP_FRAMECHANGED);
+        }
+        isFullscreen_ = true;
+    } else {
+        // 元のウィンドウスタイルに戻す
+        SetWindowLong(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+        // 元の位置とサイズに戻す
+        SetWindowPos(hwnd_, HWND_TOP,
+            windowRect_.left, windowRect_.top,
+            windowRect_.right - windowRect_.left,
+            windowRect_.bottom - windowRect_.top,
+            SWP_NOZORDER | SWP_FRAMECHANGED);
+        isFullscreen_ = false;
+    }
 }

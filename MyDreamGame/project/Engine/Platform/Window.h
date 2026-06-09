@@ -19,7 +19,12 @@ public:
     // デストラクタを追加（後片付け用）
     ~Window();
 
+    // フルスクリーンの切り替え
+    void ToggleFullscreen();
+
 private:
     HWND hwnd_ = nullptr;
     WNDCLASS wc_{};
+    bool isFullscreen_ = false;
+    RECT windowRect_{};
 };

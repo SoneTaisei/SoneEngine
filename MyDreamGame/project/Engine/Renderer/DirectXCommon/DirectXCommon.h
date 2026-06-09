@@ -119,6 +119,9 @@ public:
 
 	void CreateSkyboxPipeline();
     
+    // スワップチェーンのサイズ変更
+    void ResizeSwapchain(int32_t width, int32_t height);
+    
     // ポストエフェクトの設定
     void SetPostEffect(PostEffect effect) { postEffect_ = effect; }
     PostEffect GetPostEffect() const { return postEffect_; }
@@ -227,6 +230,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> spritePipelineState_;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT scissorRect_{};
+
+    // Swapchain用のビューポートとシザー矩形
+	D3D12_VIEWPORT swapchainViewport_{};
+	D3D12_RECT swapchainScissorRect_{};
 	Microsoft::WRL::ComPtr<ID3D12Resource> depthStencilResource_;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
     Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
