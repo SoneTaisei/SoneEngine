@@ -26,13 +26,16 @@ void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraIni
     KeyboardInput::GetInstance()->SetReplayMode(false);
 }
 
-void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos) {
+void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, const Vector4& color, const Vector3& scale, const Vector3& rotation) {
     if (!isRecording_) return;
 
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
     FrameData frame;
     frame.position = pos;
     frame.cameraPosition = cameraPos;
+    frame.color = color;
+    frame.scale = scale;
+    frame.rotation = rotation;
 
     // "LRJDC" の初期文字列
     frame.keys[0] = (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) ? 'L' : '-';
@@ -101,6 +104,21 @@ void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath)
 
     // KeyboardInput をリプレイモードに切り替える
     KeyboardInput::GetInstance()->SetReplayMode(true);
+}
+
+void ReplayManager::SelectReplay(int historyIndex, const std::string& filepath) {
+    // 再生中や録画中なら停止する
+    if (isPlaying_) StopPlayback();
+    if (isRecording_) StopRecord();
+
+    if (historyIndex >= 0 && historyIndex < static_cast<int>(history_.size())) {
+        currentReplay_ = history_[historyIndex];
+    } else if (!filepath.empty()) {
+        LoadFromFile(filepath, currentReplay_);
+    }
+    
+    // 再生は開始せず、フレームを0にしておく
+    currentFrame_ = 0;
 }
 
 void ReplayManager::StopPlayback() {
@@ -336,14 +354,17 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
     ofs << std::endl;
 
     // 1フレームずつの状態データ (STR)
-    // フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC
+    // フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z
     ofs << "[STR]" << std::endl;
     for (int i = 0; i < data.totalFrames; ++i) {
         const auto& frame = data.frames[i];
         ofs << "F" << std::setw(4) << std::setfill('0') << i << "|"
             << frame.position.x << "," << frame.position.y << "," << frame.position.z << "|"
             << frame.cameraPosition.x << "," << frame.cameraPosition.y << "," << frame.cameraPosition.z << "|"
-            << frame.keys << std::endl;
+            << frame.keys << "|"
+            << frame.color.x << "," << frame.color.y << "," << frame.color.z << "," << frame.color.w << "|"
+            << frame.scale.x << "," << frame.scale.y << "," << frame.scale.z << "|"
+            << frame.rotation.x << "," << frame.rotation.y << "," << frame.rotation.z << std::endl;
     }
 
     ofs.close();
@@ -402,12 +423,12 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                 else if (key == "T3_Cling") outData.mmlTracks[3] = value;
             }
         } else if (currentSection == "STR") {
-            // 新フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC
-            // 旧フォーマット: F0000|PlayerX,Y,Z|LRJDC
-            std::string parts[4];
+            // 新フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z
+            // 旧フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A  または F0000|PlayerX,Y,Z|LRJDC
+            std::string parts[7];
             int partCount = 0;
             std::string part;
-            while (std::getline(ss, part, '|') && partCount < 4) {
+            while (std::getline(ss, part, '|') && partCount < 7) {
                 parts[partCount++] = part;
             }
             
@@ -416,10 +437,21 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                 std::string posStr = parts[1];
                 std::string keysStr = parts[2];
                 std::string camPosStr = "";
+                std::string colorStr = "";
+                std::string scaleStr = "";
+                std::string rotStr = "";
                 
                 if (partCount == 4) {
                     camPosStr = parts[2];
                     keysStr = parts[3];
+                } else if (partCount >= 5) {
+                    camPosStr = parts[2];
+                    keysStr = parts[3];
+                    colorStr = parts[4];
+                    if (partCount >= 7) {
+                        scaleStr = parts[5];
+                        rotStr = parts[6];
+                    }
                 }
                 
                 // 座標パース
@@ -444,6 +476,33 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                     frame.keys[i] = keysStr[i];
                 }
                 frame.keys[5] = '\0';
+                
+                // カラーのパース
+                if (!colorStr.empty()) {
+                    std::stringstream css(colorStr);
+                    std::string r, g, b, a;
+                    if (std::getline(css, r, ',') && std::getline(css, g, ',') && std::getline(css, b, ',') && std::getline(css, a)) {
+                        frame.color = { std::stof(r), std::stof(g), std::stof(b), std::stof(a) };
+                    }
+                }
+
+                // スケールのパース
+                if (!scaleStr.empty()) {
+                    std::stringstream sss(scaleStr);
+                    std::string sx, sy, sz;
+                    if (std::getline(sss, sx, ',') && std::getline(sss, sy, ',') && std::getline(sss, sz)) {
+                        frame.scale = { std::stof(sx), std::stof(sy), std::stof(sz) };
+                    }
+                }
+
+                // 回転のパース
+                if (!rotStr.empty()) {
+                    std::stringstream rss(rotStr);
+                    std::string rx, ry, rz;
+                    if (std::getline(rss, rx, ',') && std::getline(rss, ry, ',') && std::getline(rss, rz)) {
+                        frame.rotation = { std::stof(rx), std::stof(ry), std::stof(rz) };
+                    }
+                }
                 
                 outData.frames.push_back(frame);
             }

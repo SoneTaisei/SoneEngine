@@ -9,7 +9,7 @@
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "Game2D/ReplayManager.h"
+#include "ReplayManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -84,6 +84,8 @@ void EditorManager::BeginFrame() {
 }
 
 void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, SceneManager *sceneManager) {
+
+    static bool resetLayout = false;
 
     // --- メインメニューバー ---
     if (ImGui::BeginMainMenuBar()) {
@@ -184,6 +186,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_);
             ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_);
             ImGui::MenuItem("リプレイマネージャー", nullptr, &showReplayManager_);
+            ImGui::Separator();
+            if (ImGui::MenuItem("レイアウトをリセット")) {
+                resetLayout = true;
+            }
             ImGui::EndMenu();
         }
 
@@ -205,30 +211,45 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- ドッキングの設定 ---
     ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-    // 初回起動時にレイアウトを自動的に構成する
+    // 初回起動時またはレイアウト初期化時に自動的に構成する
     static bool first_time = true;
-    if (first_time) {
+    if (first_time || resetLayout) {
         first_time = false;
+        
+        // iniファイルが存在しない、もしくは手動リセットの場合のみレイアウトを再構築
+        bool hasIniFile = false;
+        if (ImGui::GetIO().IniFilename) {
+            FILE* f = nullptr;
+            fopen_s(&f, ImGui::GetIO().IniFilename, "r");
+            if (f) {
+                hasIniFile = true;
+                fclose(f);
+            }
+        }
 
-        // 一度ノードをクリアして再構築
-        ImGui::DockBuilderRemoveNode(dockspace_id);
-        ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-        ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+        if (resetLayout || !hasIniFile) {
+            resetLayout = false;
 
-        ImGuiID dock_id_main = dockspace_id;
-        // 左側に「ヒエラルキー」
-        ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
-        // 右側に「インスペクター」
-        ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
+            // 一度ノードをクリアして再構築
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
-        // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
-        ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
-        ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
-        ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
-        ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
-        ImGui::DockBuilderDockWindow("リプレイマネージャー", dock_id_right);
+            ImGuiID dock_id_main = dockspace_id;
+            // 左側に「ヒエラルキー」
+            ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
+            // 右側に「インスペクター」
+            ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
 
-        ImGui::DockBuilderFinish(dockspace_id);
+            // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
+            ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
+            ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
+            ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
+            ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+            ImGui::DockBuilderDockWindow("リプレイマネージャー", dock_id_right);
+
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
     }
 
     // --- Game View ウィンドウ ---
@@ -712,6 +733,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                             
                             ImGui::SameLine();
+                            if (ImGui::Button("選択(残像表示)")) {
+                                replayMgr->SelectReplay(static_cast<int>(i));
+                            }
+                            
+                            ImGui::SameLine();
                             static char fileNameBuf[3][64] = {};
                             if (fileNameBuf[i][0] == '\0') {
                                 sprintf_s(fileNameBuf[i], "replay_history_%d", static_cast<int>(i + 1));
@@ -744,6 +770,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             
                             if (ImGui::Button("ロード再生")) {
                                 replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
+                            }
+                            
+                            ImGui::SameLine();
+                            if (ImGui::Button("選択(残像表示)")) {
+                                replayMgr->SelectReplay(-1, "json/saved_replays/" + saved[i]);
                             }
                             
                             ImGui::SameLine();

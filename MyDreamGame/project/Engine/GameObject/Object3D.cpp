@@ -3,7 +3,7 @@
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
-#include "Game2D/ReplayManager.h"
+#include "Editor/ReplayManager.h"
 #include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
@@ -66,6 +66,12 @@ void Object3D::Update() {
 
     // ★ 追加：法線用行列の計算（これがないとライティングが真っ黒になります）
     mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+
+    // 軌跡用履歴の保存
+    trailHistory_.push_front(transform_);
+    if (trailHistory_.size() > kMaxHistory) {
+        trailHistory_.pop_back();
+    }
 }
 
 void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
@@ -94,10 +100,8 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
     // ==============================================================
     // ★ 0. トレイル (残像) の描画 (設定されている場合のみ)
     // ==============================================================
-    if (showReplayTrail_ && model_) {
-        auto replayMgr = ReplayManager::GetInstance();
-        const auto& replay = replayMgr->GetCurrentReplay();
-        if (replay.totalFrames > 0 && trailLength_ > 0 && trailStep_ > 0) {
+    if (showTrail_ && model_) {
+        if (!trailHistory_.empty() && trailLength_ > 0 && trailStep_ > 0) {
             
             // トレイル用のブレンドモード設定
             if (trailBlendMode_ == BlendMode::kBlendModeAdd) {
@@ -106,22 +110,22 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
                 commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCull() : dxCommon->GetGraphicsPipelineState());
             }
 
-            int curFrame = replayMgr->GetCurrentFrame();
-            int startFrame = (std::max)(0, curFrame - trailLength_);
-            
             int trailCount = 0;
             uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
             uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
 
             Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
 
-            for (int f = curFrame - trailStep_; f >= startFrame; f -= trailStep_) {
+            size_t maxTrails = (std::min)(trailHistory_.size(), (size_t)trailLength_);
+            for (size_t i = 0; i < maxTrails; i += trailStep_) {
                 if (trailCount >= kMaxTrails) break;
                 
-                Vector3 pastPos = replay.frames[f].position;
+                Vector3 pastPos = trailHistory_[i].translate;
+                Vector3 pastRot = trailHistory_[i].rotate;
+                Vector3 pastScale = trailHistory_[i].scale;
                 
                 // --- WorldMatrix 計算 ---
-                Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, pastPos);
+                Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
                 Matrix4x4 finalWorldMatrix = nodeMatrix * tWorldMatrix;
 
                 // --- CBV に書き込み ---
@@ -132,10 +136,10 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
 
                 Material* mMat = reinterpret_cast<Material*>(mappedTrailMaterial_ + materialSize * trailCount);
                 *mMat = material_;
-                // 過去に行くほどアルファ値を下げる
+                // 過去に行くほどアルファ値を下げるか
                 float alphaFactor = 1.0f;
-                if (curFrame > startFrame) {
-                    alphaFactor = static_cast<float>(f - startFrame) / static_cast<float>(curFrame - startFrame);
+                if (trailFadeOut_) {
+                    alphaFactor = 1.0f - (static_cast<float>(i) / static_cast<float>(maxTrails));
                 }
                 mMat->color.w = material_.color.w * trailStartAlpha_ * alphaFactor;
 
@@ -220,11 +224,12 @@ void Object3D::DisplayImGui(const std::string &label) {
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Replay Trail (残像)")) {
-            ImGui::Checkbox("Show Trail", &showReplayTrail_);
-            if (showReplayTrail_) {
+        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
+            ImGui::Checkbox("Show Trail", &showTrail_);
+            if (showTrail_) {
+                ImGui::Checkbox("Fade Out", &trailFadeOut_);
                 ImGui::DragInt("Trail Step", &trailStep_, 1, 1, 60);
-                ImGui::DragInt("Trail Length", &trailLength_, 1, 1, 1000);
+                ImGui::DragInt("Trail Length", &trailLength_, 1, 1, kMaxHistory);
                 ImGui::DragFloat("Start Alpha", &trailStartAlpha_, 0.01f, 0.0f, 1.0f);
                 int blendModeIdx = static_cast<int>(trailBlendMode_);
                 if (ImGui::Combo("Blend Mode", &blendModeIdx, "Normal\0Add\0Subtract\0Multiply\0Screen\0")) {
