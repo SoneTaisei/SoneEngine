@@ -733,6 +733,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                             
                             ImGui::SameLine();
+                            if (ImGui::Button("選択(残像表示)")) {
+                                replayMgr->SelectReplay(static_cast<int>(i));
+                            }
+                            
+                            ImGui::SameLine();
                             static char fileNameBuf[3][64] = {};
                             if (fileNameBuf[i][0] == '\0') {
                                 sprintf_s(fileNameBuf[i], "replay_history_%d", static_cast<int>(i + 1));
@@ -765,6 +770,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             
                             if (ImGui::Button("ロード再生")) {
                                 replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
+                            }
+                            
+                            ImGui::SameLine();
+                            if (ImGui::Button("選択(残像表示)")) {
+                                replayMgr->SelectReplay(-1, "json/saved_replays/" + saved[i]);
                             }
                             
                             ImGui::SameLine();

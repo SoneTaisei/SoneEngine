@@ -34,15 +34,15 @@ void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     mappedTransform_->WVP = identity;
     mappedTransform_->WorldInverseTranspose = identity;
 
-    // Trail resources
+    // ゴースト描画用リソースの初期化
     uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
     uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
     
-    trailTransformResource_ = CreateBufferResource(device, transformSize * kMaxTrails);
-    trailTransformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTrailTransform_));
+    ghostTransformResource_ = CreateBufferResource(device, transformSize * kMaxGhosts);
+    ghostTransformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedGhostTransform_));
     
-    trailMaterialResource_ = CreateBufferResource(device, materialSize * kMaxTrails);
-    trailMaterialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTrailMaterial_));
+    ghostMaterialResource_ = CreateBufferResource(device, materialSize * kMaxGhosts);
+    ghostMaterialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedGhostMaterial_));
 }
 
 void PrimitiveObject::Update() {
@@ -90,13 +90,8 @@ void PrimitiveObject::Update() {
     
     mappedTransform_->World = worldMatrix_;
     mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix_, viewMatrix), projectionMatrix);
+    mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix_, viewMatrix), projectionMatrix);
     mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix_));
-
-    // 軌跡用履歴の保存
-    trailHistory_.push_front(transform_);
-    if (trailHistory_.size() > kMaxHistory) {
-        trailHistory_.pop_back();
-    }
 }
 
 void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
@@ -148,73 +143,6 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
 
     // Ensure common model root signature is bound
     commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-    
-    // ==============================================================
-    // ★ 0. トレイル (残像) の描画 (設定されている場合のみ)
-    // ==============================================================
-    if (showTrail_ && primitive_) {
-        if (!trailHistory_.empty() && trailLength_ > 0 && trailStep_ > 0) {
-            
-            // トレイル用のブレンドモード設定
-            if (trailBlendMode_ == BlendMode::kBlendModeAdd) {
-                commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCullAdditive() : dxCommon->GetGraphicsPipelineStateAdditive());
-            } else {
-                commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCull() : dxCommon->GetGraphicsPipelineState());
-            }
-            
-            int trailCount = 0;
-            uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
-            uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
-
-            size_t maxTrails = (std::min)(trailHistory_.size(), (size_t)trailLength_);
-            for (size_t i = 0; i < maxTrails; i += trailStep_) {
-                if (trailCount >= kMaxTrails) break;
-                
-                Vector3 pastPos = trailHistory_[i].translate;
-                Vector3 pastRot = trailHistory_[i].rotate;
-                Vector3 pastScale = trailHistory_[i].scale;
-                
-                // --- WorldMatrix 計算 ---
-                Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
-                if (isBillboard_) {
-                    tWorldMatrix = TransformFunctions::Multiply(TransformFunctions::MakeAffineMatrix(pastScale, pastRot, {0.0f, 0.0f, 0.0f}), billboardMatrix);
-                    tWorldMatrix = TransformFunctions::Multiply(tWorldMatrix, TransformFunctions::MakeTranslateMatrix(pastPos));
-                }
-                if (parent_) {
-                    tWorldMatrix = TransformFunctions::Multiply(tWorldMatrix, parent_->GetWorldMatrix());
-                }
-
-                // --- CBV に書き込み ---
-                TransformMatrix* tMat = reinterpret_cast<TransformMatrix*>(mappedTrailTransform_ + transformSize * trailCount);
-                tMat->World = tWorldMatrix;
-                tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(tWorldMatrix));
-                tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(tWorldMatrix, viewMatrix), projectionMatrix);
-
-                Material* mMat = reinterpret_cast<Material*>(mappedTrailMaterial_ + materialSize * trailCount);
-                *mMat = material_;
-                // 過去に行くほどアルファ値を下げるか
-                float alphaFactor = 1.0f;
-                if (trailFadeOut_) {
-                    alphaFactor = 1.0f - (static_cast<float>(i) / static_cast<float>(maxTrails));
-                }
-                mMat->color.w = material_.color.w * trailStartAlpha_ * alphaFactor;
-
-                // --- 描画 ---
-                commandList->SetGraphicsRootConstantBufferView(1, trailTransformResource_->GetGPUVirtualAddress() + transformSize * trailCount);
-                commandList->SetGraphicsRootConstantBufferView(0, trailMaterialResource_->GetGPUVirtualAddress() + materialSize * trailCount);
-                commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-                if (activeTexture.ptr != 0) {
-                    commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
-                }
-                if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
-                    commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
-                }
-                primitive_->Draw(commandList);
-
-                trailCount++;
-            }
-        }
-    }
 
     // ==============================================================
     // ★ 1. 先に Main drawing pass (本体のプリミティブ) を描画する！
@@ -227,10 +155,15 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
         }
     } else {
         // 通常合成 (または未対応のモード)
-        if (isDoubleSided_) {
-            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCull());
+        if (material_.color.w < 1.0f) {
+            // 半透明の場合はデプス書き込みなしのTransparentパイプラインを使用する
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateTransparent());
         } else {
-            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+            if (isDoubleSided_) {
+                commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCull());
+            } else {
+                commandList->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+            }
         }
     }
 
@@ -268,6 +201,87 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
     }
 }
 
+void PrimitiveObject::DrawGhost(ID3D12GraphicsCommandList* commandList, const Transform& transform, const Material& material) {
+    if (currentGhostIndex_ >= kMaxGhosts || !primitive_) return;
+
+    CameraManager* cameraMgr = CameraManager::GetInstance();
+    Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
+    Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
+
+    Matrix4x4 billboardMatrix = TransformFunctions::MakeIdentity4x4();
+    if (isBillboard_) {
+        Matrix4x4 cameraMatrix = TransformFunctions::Inverse(viewMatrix);
+        billboardMatrix = cameraMatrix;
+        billboardMatrix.m[3][0] = 0.0f;
+        billboardMatrix.m[3][1] = 0.0f;
+        billboardMatrix.m[3][2] = 0.0f;
+    }
+
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(transform.scale);
+    Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(transform.rotate.x);
+    Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(transform.rotate.y);
+    Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(transform.rotate.z);
+    Matrix4x4 rotateMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(rotateXMatrix, rotateYMatrix), rotateZMatrix);
+    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(transform.translate);
+
+    Matrix4x4 localMatrix;
+    if (isBillboard_) {
+        localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
+    } else {
+        localMatrix = rotateMatrix;
+    }
+    
+    Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
+    if (parent_) {
+        worldMatrix = TransformFunctions::Multiply(worldMatrix, parent_->GetWorldMatrix());
+    }
+
+    uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
+    uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
+
+    TransformMatrix* tMat = reinterpret_cast<TransformMatrix*>(mappedGhostTransform_ + transformSize * currentGhostIndex_);
+    tMat->World = worldMatrix;
+    tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+    tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
+
+    Material* mMat = reinterpret_cast<Material*>(mappedGhostMaterial_ + materialSize * currentGhostIndex_);
+    *mMat = material;
+
+    auto dxCommon = DirectXCommon::GetInstance();
+    commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+
+    // ブレンドモードの設定
+    if (blendMode_ == BlendMode::kBlendModeAdd) {
+        if (isDoubleSided_) commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());
+        else commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateAdditive());
+    } else {
+        if (material.color.w < 1.0f) {
+            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateTransparent());
+        } else {
+            if (isDoubleSided_) commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCull());
+            else commandList->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+        }
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(1, ghostTransformResource_->GetGPUVirtualAddress() + transformSize * currentGhostIndex_);
+    commandList->SetGraphicsRootConstantBufferView(0, ghostMaterialResource_->GetGPUVirtualAddress() + materialSize * currentGhostIndex_);
+    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+    
+    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = textureHandle_;
+    if (activeTexture.ptr == 0) activeTexture = sDefaultTextureHandle_;
+    if (activeTexture.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
+    }
+
+    if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+    }
+
+    primitive_->Draw(commandList);
+
+    currentGhostIndex_++;
+}
+
 void PrimitiveObject::DisplayImGui(const std::string& label) {
 #ifdef USE_IMGUI
     if (ImGui::TreeNode(label.c_str())) {
@@ -286,16 +300,6 @@ void PrimitiveObject::DisplayImGui(const std::string& label) {
         }
         if (ImGui::TreeNode("Trail (軌跡・残像)")) {
             ImGui::Checkbox("Show Trail", &showTrail_);
-            if (showTrail_) {
-                ImGui::Checkbox("Fade Out", &trailFadeOut_);
-                ImGui::DragInt("Trail Step", &trailStep_, 1, 1, 60);
-                ImGui::DragInt("Trail Length", &trailLength_, 1, 1, kMaxHistory);
-                ImGui::DragFloat("Start Alpha", &trailStartAlpha_, 0.01f, 0.0f, 1.0f);
-                int blendModeIdx = static_cast<int>(trailBlendMode_);
-                if (ImGui::Combo("Blend Mode", &blendModeIdx, "Normal\0Add\0Subtract\0Multiply\0Screen\0")) {
-                    trailBlendMode_ = static_cast<BlendMode>(blendModeIdx);
-                }
-            }
             ImGui::TreePop();
         }
         ImGui::TreePop();

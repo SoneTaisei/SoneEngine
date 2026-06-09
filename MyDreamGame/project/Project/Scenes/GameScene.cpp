@@ -137,7 +137,10 @@ void GameScene::Update(SceneManager *sceneManager) {
             if (!ReplayManager::GetInstance()->IsRecording()) {
                 ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos);
             }
-            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos);
+            Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+            Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
+            Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
+            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
         } else {
             if (ReplayManager::GetInstance()->IsRecording()) {
                 ReplayManager::GetInstance()->StopRecord();
@@ -184,6 +187,67 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (player_) {
         player_->Draw(commandList_);
     }
+
+#ifdef USE_IMGUI
+    // --- ゴースト残像の描画（マリオメーカー仕様） ---
+    // エディタ停止中で、かつリプレイの再生/録画もしていない時に「選択中のリプレイ全体」の軌跡を表示する
+    if (!EditorManager::IsPlaying() && player_) {
+        ReplayManager* replayManager = ReplayManager::GetInstance();
+        if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
+            ReplayData& currentReplay = replayManager->GetCurrentReplay();
+            if (!currentReplay.frames.empty()) {
+                const float GHOST_ALPHA = 0.5f;
+                // 全フレーム描画すると線のように繋がってしまうため、一定間隔（例：10フレーム毎）で描画して軌跡を表現
+                const int FRAME_STEP = 10;
+
+                auto* playerPrim = player_->GetPrimitiveObject();
+                // エディターの「Show Trail」がONのときだけ残像を描画する
+                if (playerPrim && playerPrim->GetShowTrail()) {
+                    // 描画前にゴースト用のインデックスをリセット
+                    playerPrim->ResetGhostIndex();
+
+                    // ベースとなるプレイヤーのTransformと色を取得
+                    Vector4 baseColor = playerPrim->GetMaterial().color;
+
+                    // 選択されているリプレイの全フレームを通して軌跡を描画
+                    for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
+                        const FrameData& frameData = currentReplay.frames[i];
+
+                        // 直前に描画したゴーストと座標がほぼ同じならスキップ(立ち止まっている時のZファイティング/濃くなりすぎ防止)
+                        if (i >= FRAME_STEP) {
+                            int prevIndex = i - FRAME_STEP;
+                            if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
+                                Vector3 diff;
+                                diff.x = frameData.position.x - currentReplay.frames[prevIndex].position.x;
+                                diff.y = frameData.position.y - currentReplay.frames[prevIndex].position.y;
+                                diff.z = frameData.position.z - currentReplay.frames[prevIndex].position.z;
+                                float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+                                if (distSq < 0.0001f) {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        // ゴースト用のTransformとMaterialを作成
+                        Transform ghostTransform = playerPrim->GetTransform();
+                        ghostTransform.translate = frameData.position;
+                        ghostTransform.scale = frameData.scale;
+                        ghostTransform.rotate = frameData.rotation;
+
+                        Material ghostMaterial = playerPrim->GetMaterial();
+                        // 記録されていた色（スプライト/モデルのカラー情報）を取り出し、アルファ値をかけて半透明にする
+                        Vector4 ghostColor = frameData.color;
+                        ghostColor.w *= GHOST_ALPHA; // 元のアルファ値に掛け算する
+                        ghostMaterial.color = ghostColor;
+
+                        // プレイヤーのPrimitiveを使って残像(ゴースト)を描画
+                        playerPrim->DrawGhost(commandList_, ghostTransform, ghostMaterial);
+                    }
+                }
+            }
+        }
+    }
+#endif
 
     // 3. パーティクルの描画
     // 描画前処理
