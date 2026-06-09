@@ -242,14 +242,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
             // 右側に「インスペクター」
             ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
+            // メインの下側に「マップチップ画面」「リプレイマネージャー」など
+            ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down, 0.35f, NULL, &dock_id_main);
 
             // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
             ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
-            ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
+            ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("リプレイマネージャー", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
             ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
             ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
-            ImGui::DockBuilderDockWindow("リプレイマネージャー", dock_id_right);
 
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -921,8 +923,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 }
             } else {
                 ImGui::Text("No active scene.");
-                    }
-                }
             }
         }
         ImGui::End();
