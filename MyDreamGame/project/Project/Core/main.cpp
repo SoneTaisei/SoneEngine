@@ -24,7 +24,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         app->Initialize();
 
         // 起動シーンの決定
-        SceneType startScene = SceneType::kTitle;
+        SceneType startScene = SceneType::kGame;
 #ifdef USE_IMGUI
         // エディターの場合はJSON設定から前回のシーンを復元
         EditorManager* editor = app->GetEditorManager();
@@ -41,4 +41,4 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         app->Finalize();
     }
 	return 0;
-}
+}

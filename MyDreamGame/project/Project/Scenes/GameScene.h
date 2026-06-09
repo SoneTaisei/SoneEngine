@@ -24,11 +24,15 @@ public:
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
+    void UpdateEditor() override;
 
     // ヒエラルキー用
     std::vector<Object3D *> GetObjects() override { return {}; }
     std::vector<ParticleManager *> GetParticles() override;
     std::vector<PrimitiveObject *> GetPrimitives() override;
+
+    // マップチップの取得
+    MapChip2D* GetMapChip() override { return map_.get(); }
 
 private:
     // ---------------------------------------------------
@@ -43,7 +47,7 @@ private:
     Emitter snowEmitter_;
 
     // SRVのインデックス (定数またはメンバ変数として管理)
-    const int srvIndex_ = 10; // テクスチャ等と被らない場所を指定
+    const int srvIndex_ = 100; // テクスチャ等と被らない場所を指定
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();
@@ -54,6 +58,8 @@ private:
     // ---------------------------------------------------
     std::unique_ptr<Player2D> player_;
     std::unique_ptr<MapChip2D> map_;
+
+    float rotateTimer_ = 0.0f; // プリミティブ回転用タイマー
 
     // ---------------------------------------------------
     // 共通システム

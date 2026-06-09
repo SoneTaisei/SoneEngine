@@ -6,9 +6,11 @@
 #include "GameObject/PrimitiveObject.h"
 #include "Input/KeyboardInput.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Game2D/MapChip2D.h"
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
+#include "ReplayManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -29,6 +31,7 @@ static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HA
 
 bool EditorManager::showObjects_ = true;
 bool EditorManager::showEffects_ = true;
+bool EditorManager::isPlaying_ = false;
 
 // 枠を返すための関数
 static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) {
@@ -83,6 +86,48 @@ void EditorManager::BeginFrame() {
 
 void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, SceneManager *sceneManager) {
 
+    static bool resetLayout = false;
+
+    // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
+    ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
+
+    // --- シーンリセット直後のマップ復元処理 ---
+    if (sceneJustReset_) {
+        IScene* activeScene = sceneManager->GetCurrentScene();
+        if (activeScene) {
+            MapChip2D* mapChip = activeScene->GetMapChip();
+            if (mapChip) {
+                if (loadMapDataStrNextFrame_) {
+                    mapChip->LoadFromString(mapDataStrToLoad_);
+                    loadMapDataStrNextFrame_ = false;
+                } else {
+                    std::string name = stageFilename_;
+                    bool hasExt = false;
+                    if (name.length() >= 4) {
+                        std::string ext = name.substr(name.length() - 4);
+                        if (ext == ".txt" || ext == ".TXT") hasExt = true;
+                    }
+                    if (!hasExt) name += ".txt";
+                    std::string filepath = "json/" + name;
+                    mapChip->LoadFromFile(filepath);
+                }
+            }
+        }
+        sceneJustReset_ = false;
+    }
+
+    // --- リプレイ終了時の自動デバッグカメラ復帰処理 ---
+    static bool wasReplayingLastFrame = false;
+    bool isReplayingNow = ReplayManager::GetInstance()->IsPlaying();
+    if (wasReplayingLastFrame && !isReplayingNow) {
+        useDebugCamera_ = true;
+        if (gameCamera && debugCamera) {
+            debugCamera->SetTranslation(gameCamera->GetTranslation());
+            debugCamera->SetRotation(gameCamera->GetRotation());
+        }
+    }
+    wasReplayingLastFrame = isReplayingNow;
+
     // --- メインメニューバー ---
     if (ImGui::BeginMainMenuBar()) {
         // PLAY / STOP ボタン
@@ -104,6 +149,46 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 useDebugCamera_ = true;
                 debugCamera->SetTranslation(gameCamera->GetTranslation());
                 debugCamera->SetRotation(gameCamera->GetRotation());
+
+                // リプレイ再生中であればそれも同時に停止させる
+                if (ReplayManager::GetInstance()->IsPlaying()) {
+                    ReplayManager::GetInstance()->StopPlayback();
+                }
+            }
+            ImGui::PopStyleColor(3);
+        }
+
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+
+        // リプレイ用 PLAY / STOP ボタン
+        ReplayManager* replayMgr = ReplayManager::GetInstance();
+        if (!replayMgr->IsPlaying()) {
+            bool hasData = (replayMgr->GetCurrentReplay().totalFrames > 0) || !replayMgr->GetHistory().empty();
+            if (hasData) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.45f, 0.8f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.55f, 0.9f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.35f, 0.7f, 1.0f));
+                if (ImGui::Button("リプレイ再生 (REPLAY)")) {
+                    // もしアクティブなデータがなければ履歴の先頭を再生
+                    if (replayMgr->GetCurrentReplay().totalFrames == 0 && !replayMgr->GetHistory().empty()) {
+                        replayMgr->StartPlayback(0);
+                    } else {
+                        replayMgr->StartPlayback();
+                    }
+                    useDebugCamera_ = false;
+                }
+                ImGui::PopStyleColor(3);
+            } else {
+                ImGui::BeginDisabled();
+                ImGui::Button("リプレイ再生 (REPLAY)");
+                ImGui::EndDisabled();
+            }
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.4f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.5f, 0.1f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.75f, 0.3f, 0.0f, 1.0f));
+            if (ImGui::Button("リプレイ停止 (STOP REPLAY)")) {
+                replayMgr->StopPlayback();
             }
             ImGui::PopStyleColor(3);
         }
@@ -141,6 +226,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_);
             ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_);
             ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_);
+            ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_);
+            ImGui::MenuItem("リプレイマネージャー", nullptr, &showReplayManager_);
+            ImGui::Separator();
+            if (ImGui::MenuItem("レイアウトをリセット")) {
+                resetLayout = true;
+            }
             ImGui::EndMenu();
         }
 
@@ -162,29 +253,48 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- ドッキングの設定 ---
     ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-    // 初回起動時にレイアウトを自動的に構成する
+    // 初回起動時またはレイアウト初期化時に自動的に構成する
     static bool first_time = true;
-    if (first_time) {
+    if (first_time || resetLayout) {
         first_time = false;
+        
+        // iniファイルが存在しない、もしくは手動リセットの場合のみレイアウトを再構築
+        bool hasIniFile = false;
+        if (ImGui::GetIO().IniFilename) {
+            FILE* f = nullptr;
+            fopen_s(&f, ImGui::GetIO().IniFilename, "r");
+            if (f) {
+                hasIniFile = true;
+                fclose(f);
+            }
+        }
 
-        // 一度ノードをクリアして再構築
-        ImGui::DockBuilderRemoveNode(dockspace_id);
-        ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-        ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+        if (resetLayout || !hasIniFile) {
+            resetLayout = false;
 
-        ImGuiID dock_id_main = dockspace_id;
-        // 左側に「ヒエラルキー」
-        ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
-        // 右側に「インスペクター」
-        ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
+            // 一度ノードをクリアして再構築
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
-        // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
-        ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
-        ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
-        ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
-        ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+            ImGuiID dock_id_main = dockspace_id;
+            // 左側に「ヒエラルキー」
+            ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
+            // 右側に「インスペクター」
+            ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
+            // メインの下側に「マップチップ画面」「リプレイマネージャー」など
+            ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down, 0.35f, NULL, &dock_id_main);
 
-        ImGui::DockBuilderFinish(dockspace_id);
+            // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
+            ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
+            ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("リプレイマネージャー", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
+            ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
+            ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
     }
 
     // --- Game View ウィンドウ ---
@@ -373,6 +483,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                 ImGui::Separator();
                 ImGui::Checkbox("フォグエフェクトを有効化", &enableFog);
+            }
+
+            // アクティブなシーン特有のImGui描画（独立ウィンドウや追加インスペクターなど）を呼び出す
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                activeScene->DisplayImGui(selectedPrimitive_);
             }
         }
         ImGui::End();
@@ -629,6 +745,481 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Spacing();
                     }
                 }
+            }
+        }
+        ImGui::End();
+    }
+
+    // --- Map Editor ウィンドウ ---
+    if (showMapEditor_) {
+        if (ImGui::Begin("マップチップ画面", &showMapEditor_)) {
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                MapChip2D* mapChip = activeScene->GetMapChip();
+                if (mapChip) {
+                    // 静的変数
+                    static int inputWidth = -1;
+                    static int inputHeight = -1;
+
+                    if (inputWidth == -1) {
+                        inputWidth = mapChip->GetWidth();
+                    }
+                    if (inputHeight == -1) {
+                        inputHeight = mapChip->GetHeight();
+                    }
+
+                    // ペイントツール選択
+                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock)
+                    ImGui::Text("Paint Tool:");
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Erase (None)", &selectedTool, 0);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Paint (Block)", &selectedTool, 1);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Death (DeathBlock)", &selectedTool, 2);
+
+                    ImGui::Separator();
+
+                    // json ディレクトリ内の .txt ファイルを自動走査
+                    std::vector<std::string> stageFiles;
+                    try {
+                        if (std::filesystem::exists("json")) {
+                            for (const auto& entry : std::filesystem::directory_iterator("json")) {
+                                if (entry.is_regular_file()) {
+                                    std::string filename = entry.path().filename().string();
+                                    if (filename.length() >= 4) {
+                                        std::string ext = filename.substr(filename.length() - 4);
+                                        if (ext == ".txt" || ext == ".TXT") {
+                                            stageFiles.push_back(filename);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (...) {
+                        // エラー時は無視
+                    }
+
+                    // 既存のマップファイルを選択するコンボボックス
+                    if (!stageFiles.empty()) {
+                        static int selectedFileIndex = -1;
+                        std::string currentFile = stageFilename_;
+                        if (currentFile.length() < 4 || (currentFile.compare(currentFile.length() - 4, 4, ".txt") != 0 && currentFile.compare(currentFile.length() - 4, 4, ".TXT") != 0)) {
+                            currentFile += ".txt";
+                        }
+                        
+                        selectedFileIndex = -1;
+                        for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
+                            if (stageFiles[i] == currentFile) {
+                                selectedFileIndex = i;
+                                break;
+                            }
+                        }
+
+                        std::string comboPreview = (selectedFileIndex != -1) ? stageFiles[selectedFileIndex] : "Select existing map...";
+                        if (ImGui::BeginCombo("Select Map File", comboPreview.c_str())) {
+                            for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
+                                bool isSelected = (selectedFileIndex == i);
+                                if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
+                                    strcpy_s(stageFilename_, sizeof(stageFilename_), stageFiles[i].c_str());
+                                    selectedFileIndex = i;
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+
+                    // ファイル名入力
+                    ImGui::InputText("Filename", stageFilename_, sizeof(stageFilename_));
+
+                    // マップサイズ入力と適用ボタン
+                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::InputInt("Width", &inputWidth);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::InputInt("Height", &inputHeight);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Apply Size")) {
+                        if (inputWidth < 1) inputWidth = 1;
+                        if (inputHeight < 1) inputHeight = 1;
+                        mapChip->Resize(inputWidth, inputHeight);
+                    }
+
+                    ImGui::Spacing();
+
+                    // ファイルパス取得用ラムダ（.txtの自動付与）
+                    auto GetFullFilePath = [](const char* filename) {
+                        std::string name = filename;
+                        bool hasExt = false;
+                        if (name.length() >= 4) {
+                            std::string ext = name.substr(name.length() - 4);
+                            if (ext == ".txt" || ext == ".TXT") {
+                                hasExt = true;
+                            }
+                        }
+                        if (!hasExt) {
+                            name += ".txt";
+                        }
+                        return std::string("json/") + name;
+                    };
+
+                    // 操作ボタン
+                    if (ImGui::Button("Save Map")) {
+                        mapChip->SaveToFile(GetFullFilePath(stageFilename_));
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Load Map")) {
+                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
+                            inputWidth = mapChip->GetWidth();
+                            inputHeight = mapChip->GetHeight();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Clear Map")) {
+                        mapChip->ClearMap();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Reset Default")) {
+                        mapChip->ResetMap();
+                        inputWidth = mapChip->GetWidth();
+                        inputHeight = mapChip->GetHeight();
+                    }
+
+                    ImGui::Separator();
+
+                    // 2Dグリッド描画
+                    int mapWidth = mapChip->GetWidth();
+                    int mapHeight = mapChip->GetHeight();
+                    float buttonSize = 18.0f;
+
+                    // ホバー色・アクティブ色を作成するラムダ
+                    auto MakeHoverColor = [](ImVec4 c) {
+                        return ImVec4((std::min)(c.x * 1.2f, 1.0f), (std::min)(c.y * 1.2f, 1.0f), (std::min)(c.z * 1.2f, 1.0f), c.w);
+                    };
+                    auto MakeActiveColor = [](ImVec4 c) {
+                        return ImVec4(c.x * 0.8f, c.y * 0.8f, c.z * 0.8f, c.w);
+                    };
+
+                    // 横スクロールを可能にするために子ウィンドウを開始
+                    if (ImGui::BeginChild("MapGridScroll", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar)) {
+                        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
+
+                        // Y軸は下側が0なので、画面上は上から下に向かって Y を逆順 (Height-1 から 0) で描画
+                        for (int y = mapHeight - 1; y >= 0; --y) {
+                            for (int x = 0; x < mapWidth; ++x) {
+                                MapChip2D::ChipType cellType = mapChip->GetChip(x, y);
+                                std::string btnId = "##cell_" + std::to_string(x) + "_" + std::to_string(y);
+
+                                ImVec4 btnColor;
+                                if (cellType == MapChip2D::ChipType::kDeathBlock) {
+                                    btnColor = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);        // デスブロック: 赤色
+                                } else if (cellType == MapChip2D::ChipType::kBlock) {
+                                    if (y <= 1) {
+                                        btnColor = ImVec4(0.55f, 0.35f, 0.17f, 1.0f); // 地面: 茶色
+                                    } else if (x == 0 || x == mapWidth - 1) {
+                                        btnColor = ImVec4(0.5f, 0.5f, 0.55f, 1.0f);   // 壁: 灰色
+                                    } else {
+                                        btnColor = ImVec4(0.3f, 0.7f, 0.3f, 1.0f);    // その他: 緑
+                                    }
+                                } else {
+                                    btnColor = ImVec4(0.15f, 0.15f, 0.15f, 0.5f);     // 空中: 暗い半透明
+                                }
+
+                                ImGui::PushStyleColor(ImGuiCol_Button, btnColor);
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, MakeHoverColor(btnColor));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, MakeActiveColor(btnColor));
+
+                                if (x > 0) {
+                                    ImGui::SameLine();
+                                }
+
+                                ImVec2 pos = ImGui::GetCursorScreenPos();
+
+                                if (ImGui::Button(btnId.c_str(), ImVec2(buttonSize, buttonSize))) {
+                                    mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
+                                }
+
+                                ImVec2 mousePos = ImGui::GetIO().MousePos;
+                                if (ImGui::IsMouseDown(0) &&
+                                    mousePos.x >= pos.x && mousePos.x <= pos.x + buttonSize &&
+                                    mousePos.y >= pos.y && mousePos.y <= pos.y + buttonSize) {
+                                    if (mapChip->GetChip(x, y) != static_cast<MapChip2D::ChipType>(selectedTool)) {
+                                        mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
+                                    }
+                                }
+
+                                ImGui::PopStyleColor(3);
+                            }
+                        }
+                        ImGui::PopStyleVar();
+                        ImGui::EndChild();
+                    }
+                } else {
+                    ImGui::Text("Active scene does not support 2D map editing.");
+                }
+            } else {
+                ImGui::Text("No active scene.");
+            }
+        }
+        ImGui::End();
+    }
+
+    // --- Replay Manager ウィンドウ ---
+    if (showReplayManager_) {
+        if (ImGui::Begin("リプレイマネージャー", &showReplayManager_)) {
+            auto replayMgr = ReplayManager::GetInstance();
+
+            // 状態に応じたヘッダー表示
+            if (replayMgr->IsRecording()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "● 録画中... (%d フレーム)", replayMgr->GetRecordedFrameCount());
+            } else if (replayMgr->IsPlaying()) {
+                if (replayMgr->IsPaused()) {
+                    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.2f, 1.0f), "⏸ 一時停止中 (%d / %d F)", replayMgr->GetCurrentFrame(), replayMgr->GetCurrentReplay().totalFrames);
+                } else {
+                    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "▶ 再生中 (%d / %d F)", replayMgr->GetCurrentFrame(), replayMgr->GetCurrentReplay().totalFrames);
+                }
+            } else {
+                ImGui::Text("待機中 (PLAYすると自動で裏録画されます)");
+            }
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (ImGui::BeginTabBar("ReplayTabBar")) {
+                // --- タブ1：履歴・保存リスト ---
+                if (ImGui::BeginTabItem("履歴・保存リスト")) {
+                    ImGui::Text("過去のプレイ履歴 (直近3回分)");
+                    ImGui::Separator();
+                    
+                    const auto& history = replayMgr->GetHistory();
+                    if (history.empty()) {
+                        ImGui::Text("履歴データはありません。");
+                    } else {
+                        for (size_t i = 0; i < history.size(); ++i) {
+                            ImGui::PushID(static_cast<int>(i));
+                            ImGui::Text("履歴 #%d (%s) - %d F", static_cast<int>(i + 1), history[i].dateStr.c_str(), history[i].totalFrames);
+                            
+                            if (ImGui::Button("再生")) {
+                                replayMgr->StartPlayback(static_cast<int>(i));
+                                useDebugCamera_ = false;
+                                
+                                // リプレイのマップ情報があればロードする
+                                std::string rMapStr = history[i].mapDataStr;
+                                std::string rMap = history[i].stageFilename;
+                                if (!rMapStr.empty()) {
+                                    mapDataStrToLoad_ = rMapStr;
+                                    loadMapDataStrNextFrame_ = true;
+                                    sceneJustReset_ = true;
+                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                } else if (!rMap.empty()) {
+                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                    // シーンリセットフラグを立てて次のフレームでマップを復元させる
+                                    sceneJustReset_ = true;
+                                }
+                            }
+                            
+                            ImGui::SameLine();
+                            if (ImGui::Button("選択(残像表示)")) {
+                                replayMgr->SelectReplay(static_cast<int>(i));
+                            }
+                            
+                            ImGui::SameLine();
+                            static char fileNameBuf[3][64] = {};
+                            if (fileNameBuf[i][0] == '\0') {
+                                sprintf_s(fileNameBuf[i], "replay_history_%d", static_cast<int>(i + 1));
+                            }
+                            ImGui::SetNextItemWidth(150.0f);
+                            ImGui::InputText("##Name", fileNameBuf[i], IM_ARRAYSIZE(fileNameBuf[i]));
+                            
+                            ImGui::SameLine();
+                            if (ImGui::Button("★ 永久保存")) {
+                                std::string fname = fileNameBuf[i];
+                                if (fname.find(".mml") == std::string::npos) fname += ".mml";
+                                replayMgr->SaveToFile(history[i], fname);
+                            }
+                            ImGui::PopID();
+                            ImGui::Spacing();
+                        }
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::Text("永久保存済みリプレイ一覧");
+                    ImGui::Separator();
+
+                    const auto& saved = replayMgr->GetSavedList();
+                    if (saved.empty()) {
+                        ImGui::Text("保存済みのリプレイはありません。");
+                    } else {
+                        for (size_t i = 0; i < saved.size(); ++i) {
+                            ImGui::PushID(static_cast<int>(i + 100));
+                            ImGui::Text("📁 %s", saved[i].c_str());
+                            
+                            if (ImGui::Button("ロード再生")) {
+                                replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
+                                useDebugCamera_ = false;
+                                
+                                // リプレイのマップ情報があればロードする
+                                std::string rMapStr = replayMgr->GetCurrentReplay().mapDataStr;
+                                std::string rMap = replayMgr->GetCurrentReplay().stageFilename;
+                                if (!rMapStr.empty()) {
+                                    mapDataStrToLoad_ = rMapStr;
+                                    loadMapDataStrNextFrame_ = true;
+                                    sceneJustReset_ = true;
+                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                } else if (!rMap.empty()) {
+                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                    // シーンリセットフラグを立てて次のフレームでマップを復元させる
+                                    sceneJustReset_ = true;
+                                }
+                            }
+                            
+                            ImGui::SameLine();
+                            if (ImGui::Button("選択(残像表示)")) {
+                                replayMgr->SelectReplay(-1, "json/saved_replays/" + saved[i]);
+                            }
+                            
+                            ImGui::SameLine();
+                            if (ImGui::Button("削除")) {
+                                replayMgr->DeleteSavedFile(saved[i]);
+                            }
+                            ImGui::PopID();
+                            ImGui::Spacing();
+                        }
+                    }
+
+                    ImGui::EndTabItem();
+                }
+
+                // --- タブ2：再生コントロール ---
+                if (ImGui::BeginTabItem("再生コントロール")) {
+                    if (!replayMgr->IsPlaying()) {
+                        ImGui::Text("現在リプレイ再生中ではありません。");
+                        ImGui::Text("『履歴・保存リスト』から再生を開始してください。");
+                    } else {
+                        ImGui::Text("ファイル: %s", replayMgr->GetCurrentReplay().filename.empty() ? "履歴データ" : replayMgr->GetCurrentReplay().filename.c_str());
+                        ImGui::Spacing();
+
+                        bool isLoop = replayMgr->IsLoopPlay();
+                        if (ImGui::Checkbox("ループ再生 (Loop Play)", &isLoop)) {
+                            replayMgr->SetLoopPlay(isLoop);
+                        }
+                        ImGui::Spacing();
+
+                        if (replayMgr->IsPaused()) {
+                            if (ImGui::Button("再開 (Resume)", ImVec2(120, 30))) {
+                                replayMgr->ResumePlayback();
+                            }
+                        } else {
+                            if (ImGui::Button("一時停止 (Pause)", ImVec2(120, 30))) {
+                                replayMgr->PausePlayback();
+                            }
+                        }
+
+                        ImGui::SameLine();
+                        if (ImGui::Button("停止 (Stop)", ImVec2(120, 30))) {
+                            replayMgr->StopPlayback();
+                        }
+
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Spacing();
+
+                        int curFrame = replayMgr->GetCurrentFrame();
+                        int maxFrame = replayMgr->GetCurrentReplay().totalFrames - 1;
+                        ImGui::Text("再生位置シーク:");
+                        ImGui::SetNextItemWidth(-1);
+                        if (ImGui::SliderInt("##Seek", &curFrame, 0, maxFrame, "Frame %d")) {
+                            replayMgr->SetCurrentFrame(curFrame);
+                        }
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                // --- タブ3：タイムラインエディタ (TAS) ---
+                if (ImGui::BeginTabItem("タイムラインエディタ")) {
+                    auto& activeReplay = replayMgr->GetCurrentReplay();
+                    if (activeReplay.totalFrames == 0) {
+                        ImGui::Text("編集対象のリプレイデータがロードされていません。");
+                        ImGui::Text("履歴から再生するか、ファイルをロード再生してください。");
+                    } else {
+                        ImGui::Text("リプレイ編集 (タイムライン / TAS)");
+                        ImGui::Text("総フレーム: %d | 録画日時: %s", activeReplay.totalFrames, activeReplay.dateStr.c_str());
+                        ImGui::Spacing();
+
+                        static char saveNameBuf[64] = "edited_replay.mml";
+                        ImGui::Text("編集後保存名:");
+                        ImGui::SetNextItemWidth(200.0f);
+                        ImGui::InputText("##SaveName", saveNameBuf, IM_ARRAYSIZE(saveNameBuf));
+                        ImGui::SameLine();
+                        if (ImGui::Button("編集内容を保存 (MML+STR)")) {
+                            replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                        }
+
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Text("フレーム一覧 (クリックでシーク / キー選択で直接編集)");
+                        ImGui::Spacing();
+
+                        // 縦スクロールのタイムライン
+                        ImGui::BeginChild("TimelineScroll", ImVec2(0, 0), true);
+                        for (int f = 0; f < activeReplay.totalFrames; ++f) {
+                            ImGui::PushID(f);
+
+                            // 現在再生中のフレームをオレンジでハイライト
+                            bool isCurrent = (replayMgr->IsPlaying() && replayMgr->GetCurrentFrame() == f);
+                            if (isCurrent) {
+                                ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.9f, 0.6f, 0.0f, 0.4f));
+                                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.0f, 0.7f, 0.1f, 0.5f));
+                            }
+
+                            char label[64];
+                            sprintf_s(label, "F%04d | Pos(%.2f, %.2f)", f, activeReplay.frames[f].position.x, activeReplay.frames[f].position.y);
+
+                            bool selected = isCurrent;
+                            if (ImGui::Selectable(label, &selected, ImGuiSelectableFlags_SpanAllColumns)) {
+                                if (!replayMgr->IsPlaying()) {
+                                    replayMgr->StartPlayback();
+                                    replayMgr->PausePlayback();
+                                }
+                                replayMgr->SetCurrentFrame(f);
+                            }
+
+                            if (isCurrent) {
+                                ImGui::PopStyleColor(2);
+                            }
+
+                            // キー状態トグル (チェックボックスを SameLine で並べる)
+                            ImGui::SameLine(180.0f);
+                            
+                            auto& frameKeys = activeReplay.frames[f].keys;
+                            bool left = (frameKeys[0] == 'L');
+                            bool right = (frameKeys[1] == 'R');
+                            bool jump = (frameKeys[2] == 'J');
+                            bool dash = (frameKeys[3] == 'D');
+                            bool cling = (frameKeys[4] == 'C');
+
+                            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 1));
+                            
+                            if (ImGui::Checkbox("L", &left)) replayMgr->ApplyTimelineEdit(f, 0, left);
+                            ImGui::SameLine();
+                            if (ImGui::Checkbox("R", &right)) replayMgr->ApplyTimelineEdit(f, 1, right);
+                            ImGui::SameLine();
+                            if (ImGui::Checkbox("J", &jump)) replayMgr->ApplyTimelineEdit(f, 2, jump);
+                            ImGui::SameLine();
+                            if (ImGui::Checkbox("D", &dash)) replayMgr->ApplyTimelineEdit(f, 3, dash);
+                            ImGui::SameLine();
+                            if (ImGui::Checkbox("C", &cling)) replayMgr->ApplyTimelineEdit(f, 4, cling);
+
+                            ImGui::PopStyleVar();
+                            ImGui::PopID();
+                        }
+                        ImGui::EndChild();
+                    }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
             }
         }
         ImGui::End();

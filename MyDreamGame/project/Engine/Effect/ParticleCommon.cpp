@@ -36,9 +36,8 @@ void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
 
     // パイプラインステートの設定
     commandList_->SetGraphicsRootSignature(rootSignature_.Get());
-    // pipelineState_ は空なので使わず、配列の [kBlendModeNomal] をデフォルトにする
-    // BlendMode.h のスペルに合わせています
-    commandList_->SetPipelineState(pipelineStates_[kBlendModeNomal].Get());
+    // ★ デバッグのため、デフォルトを強制的に加算ブレンド（kBlendModeAdd）に変更
+    commandList_->SetPipelineState(pipelineStates_[kBlendModeAdd].Get());
     commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // DescriptorHeapの設定 (TextureManagerから借りる)
@@ -219,7 +218,7 @@ void ParticleCommon::CreatePipelineState() {
         blendDesc.BlendEnable = true;
         blendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
         blendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-        blendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
+        blendDesc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA; // PrimitiveObjectに合わせる
 
         switch(mode) {
         case kBlendModeNone:

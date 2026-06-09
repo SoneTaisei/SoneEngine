@@ -233,10 +233,11 @@ void ParticleManager::Draw(const Matrix4x4 &viewProjection) {
     // GPU転送処理呼び出し (引数減った)
     TransferToGPU(viewProjection);
 
-    particleCommon_->SetBlendMode(blendMode_);
+    // ★ デバッグのため、強制的に加算ブレンド（kBlendModeAdd）を指定
+    particleCommon_->SetBlendMode(kBlendModeAdd);
 
     // 描画前にParticleCommonへモードを設定
-    particleCommon_->SetBlendMode(blendMode_);
+    particleCommon_->SetBlendMode(kBlendModeAdd);
 
     // 頂点バッファセット (Commonが持っている板ポリゴン)
     commandList->IASetVertexBuffers(0, 1, &particleCommon_->GetVertexBufferView());
@@ -290,8 +291,15 @@ void ParticleManager::TransferToGPU(const Matrix4x4 &viewProjection) {
 
         // 行列計算
         Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(it->transform.scale);
+        Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(it->transform.rotate.x);
+        Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(it->transform.rotate.y);
+        Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(it->transform.rotate.z);
+        Matrix4x4 rotateMatrix = TransformFunctions::Multiply(rotateXMatrix, TransformFunctions::Multiply(rotateYMatrix, rotateZMatrix));
+        
+        Matrix4x4 localMatrix = TransformFunctions::Multiply(scaleMatrix, rotateMatrix);
+        Matrix4x4 stateMatrix = TransformFunctions::Multiply(localMatrix, billboardMatrix);
+        
         Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(it->transform.translate);
-        Matrix4x4 stateMatrix = TransformFunctions::Multiply(scaleMatrix, billboardMatrix);
         Matrix4x4 worldMatrix = TransformFunctions::Multiply(stateMatrix, translateMatrix);
         Matrix4x4 wvpMatrix = TransformFunctions::Multiply(worldMatrix, viewProjection);
 

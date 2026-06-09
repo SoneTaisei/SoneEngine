@@ -26,6 +26,7 @@ public:
     // リスト管理用 (Spriteクラスから呼ばれる)
     void AddSprite(Sprite *sprite);
     void RemoveSprite(Sprite *sprite);
+    void ClearAll() { sprites_.clear(); }
 
     // ゲッター
     ID3D12Device *GetDevice() const { return device_; }

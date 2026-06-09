@@ -13,6 +13,7 @@ class Object3D;
 class ParticleManager;
 class PrimitiveObject;
 class GameCamera;
+class MapChip2D;
 
 class IScene {
 public:
@@ -24,6 +25,9 @@ public:
     // 更新
     virtual void Update(SceneManager *sceneManager) = 0;
 
+    // エディター停止中のトランスフォーム行列等の再計算用
+    virtual void UpdateEditor() {}
+
     // 描画
     virtual void Draw(const Matrix4x4 &viewProjectionMatrix) = 0;
 
@@ -34,6 +38,9 @@ public:
     virtual std::vector<Object3D *> GetObjects() { return {}; }
     virtual std::vector<ParticleManager *> GetParticles() { return {}; }
     virtual std::vector<PrimitiveObject *> GetPrimitives() { return {}; }
+
+    // マップチップの取得 (デフォルトはnullptr)
+    virtual MapChip2D* GetMapChip() { return nullptr; }
 
     // セット用関数
     void SetSpriteCommon(SpriteCommon* spriteCommon) {
