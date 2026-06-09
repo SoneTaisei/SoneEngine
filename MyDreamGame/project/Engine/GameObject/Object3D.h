@@ -3,6 +3,7 @@
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Model/Model.h"
 #include "Core/Utility/BlendMode.h"
+#include <deque>
 
 class Object3D {
 public:
@@ -82,13 +83,17 @@ private:
     ModelData *modelData_ = nullptr;
 
     // --- 残像 (Trail) 設定 ---
-    bool showReplayTrail_ = false;
+    bool showTrail_ = false;
     int trailStep_ = 5;
-    int trailLength_ = 60;
+    int trailLength_ = 600; // デフォルトで10秒分表示
+    bool trailFadeOut_ = true; // 過去になるほど透明にするか
     BlendMode trailBlendMode_ = BlendMode::kBlendModeAdd;
     float trailStartAlpha_ = 0.5f;
 
-    static const int kMaxTrails = 128;
+    std::deque<Transform> trailHistory_;
+    static const int kMaxHistory = 10000; // 裏で記録しておく最大フレーム数
+
+    static const int kMaxTrails = 1024;
     Microsoft::WRL::ComPtr<ID3D12Resource> trailTransformResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> trailMaterialResource_;
     uint8_t* mappedTrailTransform_ = nullptr;

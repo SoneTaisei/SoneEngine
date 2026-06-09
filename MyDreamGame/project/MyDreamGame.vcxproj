@@ -218,7 +218,7 @@
     <ClCompile Include="Project\Effect\HitEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player2D.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
-    <ClCompile Include="Project\Game2D\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
@@ -384,7 +384,7 @@
     <ClInclude Include="Project\Effect\HitEffect.h" />
     <ClInclude Include="Project\Game2D\Player2D.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
-    <ClInclude Include="Project\Game2D\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\ReplayManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

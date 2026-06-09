@@ -1,4 +1,6 @@
 #include "Window.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+
 #ifdef USE_IMGUI
 #include <imgui_impl_win32.h>
 #endif
@@ -15,6 +17,18 @@ LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 #endif
 
     switch (msg) {
+    case WM_SIZE: {
+        int width = LOWORD(lparam);
+        int height = HIWORD(lparam);
+        if (DirectXCommon::GetInstance() && width > 0 && height > 0) {
+            DirectXCommon::GetInstance()->ResizeSwapchain(width, height);
+        }
+        return 0;
+    }
+    case WM_CLOSE:
+        // ウィンドウが破棄される前にメインループを抜け、終了処理（JSON保存など）を安全に行えるようにする
+        PostQuitMessage(0);
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -68,4 +82,75 @@ Window::~Window() {
 
     // 2. ウィンドウクラスの登録を解除する
     UnregisterClass(wc_.lpszClassName, wc_.hInstance);
+}
+
+void Window::SetFullscreen(bool fullscreen) {
+    if (!hwnd_) return;
+    if (isFullscreen_ == fullscreen) return;
+
+    if (fullscreen) {
+        // 現在のウィンドウの位置とサイズを記憶
+        GetWindowRect(hwnd_, &windowRect_);
+
+        // ボーダレスウィンドウに変更
+        SetWindowLong(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+
+        // モニターのサイズを取得して全画面に広げる
+        HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFO info = { sizeof(info) };
+        if (GetMonitorInfo(monitor, &info)) {
+            SetWindowPos(hwnd_, HWND_TOP,
+                info.rcMonitor.left, info.rcMonitor.top,
+                info.rcMonitor.right - info.rcMonitor.left,
+                info.rcMonitor.bottom - info.rcMonitor.top,
+                SWP_NOZORDER | SWP_FRAMECHANGED);
+        }
+        isFullscreen_ = true;
+    } else {
+        // 元のウィンドウスタイルに戻す
+        SetWindowLong(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+        // 元の位置とサイズに戻す
+        SetWindowPos(hwnd_, HWND_TOP,
+            windowRect_.left, windowRect_.top,
+            windowRect_.right - windowRect_.left,
+            windowRect_.bottom - windowRect_.top,
+            SWP_NOZORDER | SWP_FRAMECHANGED);
+        isFullscreen_ = false;
+    }
+}
+
+void Window::ToggleFullscreen() {
+    SetFullscreen(!isFullscreen_);
+}
+
+bool Window::IsMaximized() const {
+    if (!hwnd_) return false;
+    WINDOWPLACEMENT wp = { sizeof(wp) };
+    GetWindowPlacement(hwnd_, &wp);
+    return wp.showCmd == SW_SHOWMAXIMIZED;
+}
+
+void Window::SetMaximized(bool maximized) {
+    if (!hwnd_) return;
+    ShowWindow(hwnd_, maximized ? SW_MAXIMIZE : SW_RESTORE);
+}
+
+int32_t Window::GetNormalWindowWidth() const {
+    if (!hwnd_) return 1280;
+    WINDOWPLACEMENT wp = { sizeof(wp) };
+    GetWindowPlacement(hwnd_, &wp);
+    return wp.rcNormalPosition.right - wp.rcNormalPosition.left;
+}
+
+int32_t Window::GetNormalWindowHeight() const {
+    if (!hwnd_) return 720;
+    WINDOWPLACEMENT wp = { sizeof(wp) };
+    GetWindowPlacement(hwnd_, &wp);
+    return wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
+}
+
+void Window::SetWindowSize(int32_t width, int32_t height) {
+    if (!hwnd_) return;
+    SetWindowPos(hwnd_, nullptr, 0, 0, width, height, SWP_NOMOVE | SWP_NOZORDER);
 }

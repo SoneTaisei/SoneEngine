@@ -4,7 +4,7 @@
 #include "GameObject/Object3D.h"
 #include "../externals/imgui/imgui.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
-#include "Game2D/ReplayManager.h"
+#include "Editor/ReplayManager.h"
 #include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE PrimitiveObject::sDefaultTextureHandle_ = {};
@@ -91,6 +91,12 @@ void PrimitiveObject::Update() {
     mappedTransform_->World = worldMatrix_;
     mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix_, viewMatrix), projectionMatrix);
     mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix_));
+
+    // 軌跡用履歴の保存
+    trailHistory_.push_front(transform_);
+    if (trailHistory_.size() > kMaxHistory) {
+        trailHistory_.pop_back();
+    }
 }
 
 void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
@@ -146,10 +152,8 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
     // ==============================================================
     // ★ 0. トレイル (残像) の描画 (設定されている場合のみ)
     // ==============================================================
-    if (showReplayTrail_ && primitive_) {
-        auto replayMgr = ReplayManager::GetInstance();
-        const auto& replay = replayMgr->GetCurrentReplay();
-        if (replay.totalFrames > 0 && trailLength_ > 0 && trailStep_ > 0) {
+    if (showTrail_ && primitive_) {
+        if (!trailHistory_.empty() && trailLength_ > 0 && trailStep_ > 0) {
             
             // トレイル用のブレンドモード設定
             if (trailBlendMode_ == BlendMode::kBlendModeAdd) {
@@ -157,22 +161,25 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
             } else {
                 commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCull() : dxCommon->GetGraphicsPipelineState());
             }
-
-            int curFrame = replayMgr->GetCurrentFrame();
-            int startFrame = (std::max)(0, curFrame - trailLength_);
             
             int trailCount = 0;
             uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
             uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
 
-            for (int f = curFrame - trailStep_; f >= startFrame; f -= trailStep_) {
+            size_t maxTrails = (std::min)(trailHistory_.size(), (size_t)trailLength_);
+            for (size_t i = 0; i < maxTrails; i += trailStep_) {
                 if (trailCount >= kMaxTrails) break;
                 
-                Vector3 pastPos = replay.frames[f].position;
+                Vector3 pastPos = trailHistory_[i].translate;
+                Vector3 pastRot = trailHistory_[i].rotate;
+                Vector3 pastScale = trailHistory_[i].scale;
                 
                 // --- WorldMatrix 計算 ---
-                Matrix4x4 translateMat = TransformFunctions::MakeTranslateMatrix(pastPos);
-                Matrix4x4 tWorldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMat);
+                Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
+                if (isBillboard_) {
+                    tWorldMatrix = TransformFunctions::Multiply(TransformFunctions::MakeAffineMatrix(pastScale, pastRot, {0.0f, 0.0f, 0.0f}), billboardMatrix);
+                    tWorldMatrix = TransformFunctions::Multiply(tWorldMatrix, TransformFunctions::MakeTranslateMatrix(pastPos));
+                }
                 if (parent_) {
                     tWorldMatrix = TransformFunctions::Multiply(tWorldMatrix, parent_->GetWorldMatrix());
                 }
@@ -185,10 +192,10 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
 
                 Material* mMat = reinterpret_cast<Material*>(mappedTrailMaterial_ + materialSize * trailCount);
                 *mMat = material_;
-                // 過去に行くほどアルファ値を下げる
+                // 過去に行くほどアルファ値を下げるか
                 float alphaFactor = 1.0f;
-                if (curFrame > startFrame) {
-                    alphaFactor = static_cast<float>(f - startFrame) / static_cast<float>(curFrame - startFrame);
+                if (trailFadeOut_) {
+                    alphaFactor = 1.0f - (static_cast<float>(i) / static_cast<float>(maxTrails));
                 }
                 mMat->color.w = material_.color.w * trailStartAlpha_ * alphaFactor;
 
@@ -277,11 +284,12 @@ void PrimitiveObject::DisplayImGui(const std::string& label) {
             ImGui::DragFloat("Alpha Reference", &material_.alphaReference, 0.01f, 0.0f, 1.0f);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Replay Trail (残像)")) {
-            ImGui::Checkbox("Show Trail", &showReplayTrail_);
-            if (showReplayTrail_) {
+        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
+            ImGui::Checkbox("Show Trail", &showTrail_);
+            if (showTrail_) {
+                ImGui::Checkbox("Fade Out", &trailFadeOut_);
                 ImGui::DragInt("Trail Step", &trailStep_, 1, 1, 60);
-                ImGui::DragInt("Trail Length", &trailLength_, 1, 1, 1000);
+                ImGui::DragInt("Trail Length", &trailLength_, 1, 1, kMaxHistory);
                 ImGui::DragFloat("Start Alpha", &trailStartAlpha_, 0.01f, 0.0f, 1.0f);
                 int blendModeIdx = static_cast<int>(trailBlendMode_);
                 if (ImGui::Combo("Blend Mode", &blendModeIdx, "Normal\0Add\0Subtract\0Multiply\0Screen\0")) {
