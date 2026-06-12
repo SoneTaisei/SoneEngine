@@ -66,6 +66,11 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 }
 
 void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
+    if (modelCommon_) {
+        modelCommon_->PreDraw(commandList_.Get());
+    }
+
     if (skybox_) {
         skybox_->Draw(commandList_.Get());
         

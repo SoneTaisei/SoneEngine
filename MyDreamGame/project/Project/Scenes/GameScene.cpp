@@ -4,7 +4,9 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Graphics/GameCamera.h"
+#include "Scene/SceneFactory.h"
 #ifdef USE_IMGUI
+#include "../externals/imgui/imgui.h"
 #include "Editor/EditorManager.h"
 #endif
 #include "Editor/ReplayManager.h"
@@ -41,6 +43,10 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     particleCommon_->AddParticle(snowParticle.get());
     snowParticle_ = snowParticle.get();
     particles_.push_back(std::move(snowParticle));
+
+    // HitEffectの作成（コイン取得用）
+    hitEffect_ = std::make_unique<HitEffect>();
+    hitEffect_->Initialize(commandList.Get(), particleCommon_, 1024, "Sprite/School/circle2.png", 112, kBlendModeAdd);
 
     // 4. 3Dプリミティブオブジェクトの作成
     // 橙色の球体（環境マップ・ライティング有効）
@@ -95,6 +101,9 @@ void GameScene::Update(SceneManager *sceneManager) {
     for(auto &particle : particles_) {
         particle->Update();
     }
+    if (hitEffect_) {
+        hitEffect_->Update();
+    }
 
     if (skybox_) {
         skybox_->Update();
@@ -140,6 +149,27 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         player_->Update(*map_);
 
+        // ゴール判定
+        if (player_->IsGoalComplete()) {
+            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+            return;
+        }
+
+        // コイン獲得エフェクト
+        int currentScore = player_->GetScore();
+        if (currentScore > previousScore_) {
+            if (hitEffect_) {
+                Emitter hitEmitter{};
+                hitEmitter.transform.translate = player_->GetPosition();
+                hitEmitter.count = 20;
+                hitEmitter.frequency = 0.05f;
+                hitEmitter.frequencyTime = 0.0f;
+                hitEffect_->Emit(hitEmitter);
+            }
+            previousScore_ = currentScore;
+        }
+
+
         // プレイ中の場合、リプレイ録画を行う
         bool isCurrentlyPlaying = true;
 #ifdef USE_IMGUI
@@ -173,10 +203,24 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     if (player_ && player_->GetPrimitiveObject() == selectedPrimitive) {
         player_->DisplayImGui();
     }
+
+    // スコアの簡易表示
+    if (player_) {
+        ImGui::Begin("Game HUD", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetWindowFontScale(2.0f);
+        ImGui::Text("Score: %d", player_->GetScore());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::End();
+    }
 #endif
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
+    if (modelCommon_) {
+        modelCommon_->PreDraw(commandList_);
+    }
+
     if (skybox_) {
         skybox_->Draw(commandList_);
         
@@ -284,6 +328,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (EditorManager::IsShowEffects()) {
 #endif
         particleCommon_->DrawAll(viewProjectionMatrix);
+        if (hitEffect_) {
+            hitEffect_->Draw(viewProjectionMatrix);
+        }
 #ifdef USE_IMGUI
     }
 #endif
@@ -293,6 +340,9 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
     std::vector<ParticleManager *> result;
     for (auto &p : particles_) {
         result.push_back(p.get());
+    }
+    if (hitEffect_) {
+        result.push_back(hitEffect_.get());
     }
     return result;
 }
@@ -330,6 +380,9 @@ void GameScene::UpdateEditor() {
     }
     if (skybox_) {
         skybox_->Update();
+    }
+    if (hitEffect_) {
+        hitEffect_->Update();
     }
     if (player_) {
         auto* playerPrim = player_->GetPrimitiveObject();

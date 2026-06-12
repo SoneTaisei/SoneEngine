@@ -27,8 +27,19 @@ void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
     primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効（2Dなので）
 }
 
-void Player2D::Update(const MapChip2D& map) {
+void Player2D::Update(MapChip2D& map) {
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+
+    if (isGoal_) {
+        goalTimer_ += deltaTime;
+        // ゴール演出：ゆっくり上に浮かぶ
+        velocity_.x = 0.0f;
+        velocity_.y = 2.0f;
+        position_.y += velocity_.y * deltaTime;
+        primitiveObj_->SetTranslation(position_);
+        primitiveObj_->Update();
+        return;
+    }
 
     // 死亡演出中の更新処理
     if (isDead_) {
@@ -86,7 +97,7 @@ void Player2D::Update(const MapChip2D& map) {
     position_.x += velocity_.x * deltaTime;
     ResolveCollisionX(map);
 
-    // デスブロックとの接触判定
+    // デスブロック・ゴール・コインとの接触判定
     {
         AABB aabb = GetAABB();
         // 押し戻しによって境界線上に位置した際も検知できるよう、わずかなマージン（拡張）を持たせる
@@ -98,15 +109,24 @@ void Player2D::Update(const MapChip2D& map) {
 
         for (int cy = bottomChip; cy <= topChip; ++cy) {
             for (int cx = leftChip; cx <= rightChip; ++cx) {
-                if (map.GetChipType(cx, cy) == MapChip2D::ChipType::kDeathBlock) {
+                MapChip2D::ChipType type = map.GetChipType(cx, cy);
+                if (type == MapChip2D::ChipType::kDeathBlock) {
                     isDead_ = true;
                     deathTimer_ = 0.0f;
                     velocity_ = { 0.0f, 0.0f, 0.0f };
                     isDashing_ = false;
                     break;
+                } else if (type == MapChip2D::ChipType::kGoal) {
+                    isGoal_ = true;
+                    goalTimer_ = 0.0f;
+                    velocity_ = { 0.0f, 0.0f, 0.0f };
+                    isDashing_ = false;
+                } else if (type == MapChip2D::ChipType::kCoin) {
+                    map.SetChip(cx, cy, MapChip2D::ChipType::kNone);
+                    score_ += 100;
                 }
             }
-            if (isDead_) break;
+            if (isDead_ || isGoal_) break;
         }
     }
 

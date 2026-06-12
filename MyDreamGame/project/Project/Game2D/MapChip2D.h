@@ -11,11 +11,12 @@
 /// </summary>
 class MapChip2D {
 public:
-    // チップの種類
     enum class ChipType : int {
         kNone = 0,  // 空気（何もなし）
         kBlock = 1, // ブロック（地面・壁）
         kDeathBlock = 2, // デスブロック（触れたら死ぬ）
+        kGoal = 3,  // ゴール
+        kCoin = 4,  // コイン
     };
 
     void Initialize(ID3D12GraphicsCommandList* commandList);
