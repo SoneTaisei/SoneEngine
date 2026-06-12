@@ -45,7 +45,7 @@ public:
 
 private:
     std::string name_ = "GameObject"; // ヒエラルキー表示用の名前
-    BlendMode blendMode_ = BlendMode::kBlendModeNomal;
+    BlendMode blendMode_ = BlendMode::kBlendModeNormal;
     bool isDoubleSided_ = false;
     // マテリアル
     Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;

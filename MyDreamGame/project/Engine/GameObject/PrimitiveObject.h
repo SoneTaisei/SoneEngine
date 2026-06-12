@@ -57,7 +57,7 @@ private:
     PrimitiveObject* parent_ = nullptr;
     bool isBillboard_ = false;
     bool isDoubleSided_ = false;
-    BlendMode blendMode_ = BlendMode::kBlendModeNomal;
+    BlendMode blendMode_ = BlendMode::kBlendModeNormal;
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
     static D3D12_GPU_DESCRIPTOR_HANDLE sDefaultTextureHandle_;
