@@ -69,7 +69,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/yakei/skybox.dds", commandList_);
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/yakei/panoramic-view-beach-sunset.dds", commandList_);
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/School/rostock_laage_airport_4k.dds", commandList_);
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496.dds", commandList_);
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496_direct.dds", commandList_);
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds", commandList_);
 
