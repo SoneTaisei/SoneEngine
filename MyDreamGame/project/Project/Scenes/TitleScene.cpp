@@ -67,9 +67,11 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     // 1. テクスチャをロード
     skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/yakei/skybox.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/yakei/panoramic-view-beach-sunset.dds", commandList_);
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/School/rostock_laage_airport_4k.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496.dds", commandList_);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496.dds", commandList_);
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496_direct.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds", commandList_);
 
     // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
