@@ -67,7 +67,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 
     // PSOを配列で管理 (kCountOfBlendMode は BlendMode.h で定義されている数)
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineStates_[kCountOfBlnedMode];
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineStates_[kCountOfBlendMode];
 
     // 全パーティクルのリスト
     std::list<ParticleManager *> particles_;

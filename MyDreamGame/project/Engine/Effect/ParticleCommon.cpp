@@ -51,7 +51,7 @@ void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
 
 void ParticleCommon::SetBlendMode(BlendMode blendMode) {
     // 範囲チェック
-    if(blendMode >= 0 && blendMode < kCountOfBlnedMode) {
+    if(blendMode >= 0 && blendMode < kCountOfBlendMode) {
         commandList_->SetPipelineState(pipelineStates_[blendMode].Get());
     }
 }
@@ -207,7 +207,7 @@ void ParticleCommon::CreatePipelineState() {
 
     // --- ループでブレンド設定を変えながらPSO生成 ---
     // ここでGit競合が発生していたため、きれいな記述の方を採用して修正
-    for(int i = 0; i < kCountOfBlnedMode; ++i) {
+    for(int i = 0; i < kCountOfBlendMode; ++i) {
         // デフォルト設定にリセット
         psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 
@@ -224,7 +224,7 @@ void ParticleCommon::CreatePipelineState() {
         case kBlendModeNone:
             blendDesc.BlendEnable = false;
             break;
-        case kBlendModeNomal: // 通常α
+        case kBlendModeNormal: // 通常α
             blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
             blendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
             blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
@@ -234,12 +234,12 @@ void ParticleCommon::CreatePipelineState() {
             blendDesc.DestBlend = D3D12_BLEND_ONE;
             blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
             break;
-        case kBlnedModeSubtract: // 減算
+        case kBlendModeSubtract: // 減算
             blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
             blendDesc.DestBlend = D3D12_BLEND_ONE;
             blendDesc.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
             break;
-        case kBlendModeMaltily: // 乗算
+        case kBlendModeMultiply: // 乗算
             blendDesc.SrcBlend = D3D12_BLEND_ZERO;
             blendDesc.DestBlend = D3D12_BLEND_SRC_COLOR;
             blendDesc.BlendOp = D3D12_BLEND_OP_ADD;

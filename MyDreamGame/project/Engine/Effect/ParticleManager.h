@@ -59,7 +59,7 @@ public:
     // 初期化
     // count: パーティクルの最大数
     // srvIndex: SRVを作るDescriptorHeapの場所(WindowsApplication.cppで計算していたindex)
-    void Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon *particleCommon, uint32_t count, const std::string &textureFilePath, int srvIndex, BlendMode blendMode = kBlendModeNomal);
+    void Initialize(ID3D12GraphicsCommandList *commandList,ParticleCommon *particleCommon, uint32_t count, const std::string &textureFilePath, int srvIndex, BlendMode blendMode = kBlendModeNormal);
 
     // 更新
     virtual void Update();
@@ -110,7 +110,7 @@ protected:
     uint32_t numActiveParticles_ = 0;
 
     // 自分のブレンドモード（デフォルトは通常）
-    BlendMode blendMode_ = kBlendModeNomal;
+    BlendMode blendMode_ = kBlendModeNormal;
 
     // Instancing用リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> instancingResource_{};
