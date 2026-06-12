@@ -16,7 +16,7 @@ class MapChip2D;
 class Player2D {
 public:
     void Initialize(ID3D12GraphicsCommandList* commandList);
-    void Update(const MapChip2D& map);
+    void Update(MapChip2D& map);
     void Draw(ID3D12GraphicsCommandList* commandList);
     void DisplayImGui();
 
@@ -32,6 +32,10 @@ public:
 
     // ヒエラルキー用
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
+
+    // ゲーム状態取得用
+    int GetScore() const { return score_; }
+    bool IsGoalComplete() const { return isGoal_ && goalTimer_ >= goalWaitTime_; }
 
 private:
     // 入力処理
@@ -90,6 +94,12 @@ private:
     float deathTimer_ = 0.0f;       // 死亡経過時間
     float deathDuration_ = 0.5f;    // 死亡演出の時間
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f }; // スタート地点・リスポーン位置
+
+    // ゴール・スコア用パラメータ
+    bool isGoal_ = false;
+    float goalTimer_ = 0.0f;
+    float goalWaitTime_ = 2.0f;
+    int score_ = 0;
 
     // イージング関数
     float EaseInElastic(float t) const;
