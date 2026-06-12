@@ -167,7 +167,7 @@ void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
             commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateAdditive());
         }
     } else {
-        // 通常合成 (kBlendModeNomal)
+        // 通常合成 (kBlendModeNormal)
         // アルファ値が1.0未満、または意図的に半透明として扱う場合はデプス書き込みなしのパイプラインを使う
         if (material_.color.w < 1.0f) {
             commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateTransparent());
