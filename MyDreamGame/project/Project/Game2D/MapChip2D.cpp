@@ -142,6 +142,14 @@ void MapChip2D::BuildMap() {
 
     // --- 地面の上にデスブロックを1つ追加 ---
     mapData_[2][20] = ChipType::kDeathBlock;
+
+    // --- ゴール配置 ---
+    mapData_[8][35] = ChipType::kGoal;
+
+    // --- コイン配置 ---
+    mapData_[4][13] = ChipType::kCoin;
+    mapData_[5][20] = ChipType::kCoin;
+    mapData_[4][27] = ChipType::kCoin;
 }
 
 void MapChip2D::CreateChipObjects(ID3D12GraphicsCommandList* commandList) {
@@ -184,7 +192,8 @@ void MapChip2D::RebuildChipObjects() {
 
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
-            if (mapData_[y][x] == ChipType::kBlock || mapData_[y][x] == ChipType::kDeathBlock) {
+            if (mapData_[y][x] == ChipType::kBlock || mapData_[y][x] == ChipType::kDeathBlock ||
+                mapData_[y][x] == ChipType::kGoal || mapData_[y][x] == ChipType::kCoin) {
                 auto obj = std::make_unique<PrimitiveObject>();
                 obj->Initialize(device_.Get(), boxPrimitive);
                 
@@ -202,6 +211,13 @@ void MapChip2D::RebuildChipObjects() {
                 if (mapData_[y][x] == ChipType::kDeathBlock) {
                     // デスブロック：赤色
                     obj->GetMaterial().color = { 1.0f, 0.2f, 0.2f, 1.0f };
+                } else if (mapData_[y][x] == ChipType::kGoal) {
+                    // ゴール：紫色
+                    obj->GetMaterial().color = { 0.8f, 0.2f, 0.8f, 1.0f };
+                } else if (mapData_[y][x] == ChipType::kCoin) {
+                    // コイン：金色
+                    obj->GetMaterial().color = { 1.0f, 0.8f, 0.0f, 1.0f };
+                    obj->SetScale({ chipSize_ * 0.5f, chipSize_ * 0.5f, chipSize_ * 0.5f });
                 } else if (y <= 1) {
                     // 地面：茶色
                     obj->GetMaterial().color = { 0.55f, 0.35f, 0.17f, 1.0f };

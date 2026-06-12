@@ -2,7 +2,8 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
-#include "../Effect/SnowParticle.h"
+#include "Effect/SnowParticle.h"
+#include "Effect/HitEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <d3d12.h>
@@ -17,6 +18,7 @@ class SnowParticle;
 
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
+#include "Graphics/Skybox.h"
 
 class GameScene : public IScene {
 public:
@@ -40,6 +42,7 @@ private:
     // ---------------------------------------------------
     // パーティクル管理クラス
     SnowParticle *snowParticle_ = nullptr;
+    std::unique_ptr<HitEffect> hitEffect_;
     std::vector<std::unique_ptr<ParticleManager>> particles_;
     std::vector<std::unique_ptr<PrimitiveObject>> primitives_;
 
@@ -60,6 +63,11 @@ private:
     std::unique_ptr<MapChip2D> map_;
 
     float rotateTimer_ = 0.0f; // プリミティブ回転用タイマー
+
+    int previousScore_ = 0; // コインエフェクト発生用
+    
+    std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
+    uint32_t skyboxTextureHandle_ = 0;
 
     // ---------------------------------------------------
     // 共通システム

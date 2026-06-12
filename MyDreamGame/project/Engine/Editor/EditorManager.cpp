@@ -769,7 +769,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
 
                     // ペイントツール選択
-                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock)
+                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
                     ImGui::Text("Paint Tool:");
                     ImGui::SameLine();
                     ImGui::RadioButton("Erase (None)", &selectedTool, 0);
@@ -777,6 +777,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::RadioButton("Paint (Block)", &selectedTool, 1);
                     ImGui::SameLine();
                     ImGui::RadioButton("Death (DeathBlock)", &selectedTool, 2);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Goal", &selectedTool, 3);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Coin", &selectedTool, 4);
 
                     ImGui::Separator();
 
@@ -916,6 +920,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 ImVec4 btnColor;
                                 if (cellType == MapChip2D::ChipType::kDeathBlock) {
                                     btnColor = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);        // デスブロック: 赤色
+                                } else if (cellType == MapChip2D::ChipType::kGoal) {
+                                    btnColor = ImVec4(0.8f, 0.2f, 0.8f, 1.0f);        // ゴール: 紫色
+                                } else if (cellType == MapChip2D::ChipType::kCoin) {
+                                    btnColor = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);        // コイン: 金色
                                 } else if (cellType == MapChip2D::ChipType::kBlock) {
                                     if (y <= 1) {
                                         btnColor = ImVec4(0.55f, 0.35f, 0.17f, 1.0f); // 地面: 茶色
