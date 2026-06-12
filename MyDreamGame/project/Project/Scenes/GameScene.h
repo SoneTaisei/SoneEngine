@@ -17,6 +17,7 @@ class SnowParticle;
 
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
+#include "Graphics/Skybox.h"
 
 class GameScene : public IScene {
 public:
@@ -60,6 +61,9 @@ private:
     std::unique_ptr<MapChip2D> map_;
 
     float rotateTimer_ = 0.0f; // プリミティブ回転用タイマー
+
+    std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
+    uint32_t skyboxTextureHandle_ = 0;
 
     // ---------------------------------------------------
     // 共通システム

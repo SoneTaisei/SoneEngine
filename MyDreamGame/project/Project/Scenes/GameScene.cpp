@@ -9,6 +9,8 @@
 #endif
 #include "Editor/ReplayManager.h"
 #include "Core/TimeManager.h"
+#include "Graphics/TextureManager.h"
+#include "GameObject/Object3D.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
@@ -23,6 +25,12 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 
     // リプレイ保存リストの読み込み
     ReplayManager::GetInstance()->LoadSavedList();
+
+    // ★ Skyboxの初期化処理を追加
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList);
+    skybox_ = std::make_unique<Skybox>();
+    skybox_->Initialize(device.Get(), skyboxTextureHandle_);
+    Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 
     // 3. SnowParticleの生成 (unique_ptrで作る)
     auto snowParticle = std::make_unique<SnowParticle>();
@@ -86,6 +94,10 @@ void GameScene::Update(SceneManager *sceneManager) {
     // 2. 全パーティクルを更新する (リストを使って一括更新)
     for(auto &particle : particles_) {
         particle->Update();
+    }
+
+    if (skybox_) {
+        skybox_->Update();
     }
 
     // 3. 3Dプリミティブオブジェクトの回転と更新
@@ -165,6 +177,18 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    if (skybox_) {
+        skybox_->Draw(commandList_);
+        
+        auto dxCommon = DirectXCommon::GetInstance();
+        commandList_->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        commandList_->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+
+        if (modelCommon_) {
+            modelCommon_->PreDraw(commandList_);
+        }
+    }
+
     // 1. 3Dプリミティブの描画
 #ifdef USE_IMGUI
     if (EditorManager::IsShowObjects()) {
@@ -303,6 +327,9 @@ void GameScene::UpdateEditor() {
 
     for (auto &primitive : primitives_) {
         primitive->Update();
+    }
+    if (skybox_) {
+        skybox_->Update();
     }
     if (player_) {
         auto* playerPrim = player_->GetPrimitiveObject();
