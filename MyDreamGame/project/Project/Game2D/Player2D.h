@@ -35,6 +35,11 @@ public:
 
     // ゲーム状態取得用
     int GetScore() const { return score_; }
+    void SetScore(int score) { score_ = score; }
+
+    // リプレイ巻き戻し用の状態復元メソッド
+    void CollectCoins(MapChip2D& map);
+
     bool IsGoalComplete() const { return isGoal_ && goalTimer_ >= goalWaitTime_; }
 
 private:

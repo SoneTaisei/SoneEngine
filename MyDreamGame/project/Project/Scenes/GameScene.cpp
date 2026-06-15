@@ -126,12 +126,37 @@ void GameScene::Update(SceneManager *sceneManager) {
         // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
         static bool wasPlayingLastFrame = false;
         if (ReplayManager::GetInstance()->IsPlaying()) {
+            bool shouldRebuildState = !wasPlayingLastFrame || ReplayManager::GetInstance()->IsForceSnapNextFrame();
+            if (shouldRebuildState) {
+                auto& replayData = ReplayManager::GetInstance()->GetCurrentReplay();
+                int curFrame = ReplayManager::GetInstance()->GetCurrentFrame();
+
+                // 1. マップを初期状態（文字列）から復元
+                if (!replayData.mapDataStr.empty()) {
+                    map_->LoadFromString(replayData.mapDataStr);
+                }
+                
+                // 2. プレイヤースコアをリセット
+                player_->SetScore(0);
+                
+                // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
+                for (int i = 0; i <= curFrame; ++i) {
+                    player_->SetPosition(replayData.frames[i].position);
+                    player_->CollectCoins(*map_);
+                }
+            }
+
             if (!wasPlayingLastFrame) {
                 // 再生開始時に初期位置へ自動ワープ
                 player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
                 if (gameCamera_) {
-                    // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
-                    gameCamera_->SetFollowTarget(nullptr);
+                    if (ReplayManager::GetInstance()->IsSnapEnabled()) {
+                        // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
+                        gameCamera_->SetFollowTarget(nullptr);
+                    } else {
+                        // 座標補正がOFF（TASモード）の場合はプレイヤーに追従させる
+                        gameCamera_->SetFollowTarget(&player_->GetPosition());
+                    }
                     gameCamera_->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
                 }
                 wasPlayingLastFrame = true;
@@ -141,7 +166,13 @@ void GameScene::Update(SceneManager *sceneManager) {
             ReplayManager::GetInstance()->UpdatePlayback(pos, camPos);
             player_->SetPosition(pos);
             if (gameCamera_) {
-                gameCamera_->SetTranslation(camPos);
+                if (ReplayManager::GetInstance()->IsSnapEnabled()) {
+                    gameCamera_->SetFollowTarget(nullptr);
+                    gameCamera_->SetTranslation(camPos);
+                } else {
+                    gameCamera_->SetFollowTarget(&player_->GetPosition());
+                    // 追従モードのため、SetTranslation(camPos) は実行しない
+                }
             }
         } else {
             if (wasPlayingLastFrame) {
