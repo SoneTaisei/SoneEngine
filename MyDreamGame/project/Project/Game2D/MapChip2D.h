@@ -11,10 +11,12 @@
 /// </summary>
 class MapChip2D {
 public:
-    // チップの種類
     enum class ChipType : int {
         kNone = 0,  // 空気（何もなし）
         kBlock = 1, // ブロック（地面・壁）
+        kDeathBlock = 2, // デスブロック（触れたら死ぬ）
+        kGoal = 3,  // ゴール
+        kCoin = 4,  // コイン
     };
 
     void Initialize(ID3D12GraphicsCommandList* commandList);
@@ -23,6 +25,9 @@ public:
 
     // 指定座標がブロックかどうか判定
     bool IsBlock(int chipX, int chipY) const;
+
+    // 指定座標のチップの種類を取得
+    ChipType GetChipType(int chipX, int chipY) const;
 
     // ワールド座標 → チップ座標 変換
     int WorldToChipX(float worldX) const;
@@ -37,8 +42,39 @@ public:
     int GetHeight() const { return mapHeight_; }
     float GetChipSize() const { return chipSize_; }
 
+    // マップサイズを動的に変更
+    void Resize(int newWidth, int newHeight);
+
     // ヒエラルキー用
     std::vector<PrimitiveObject*> GetPrimitiveObjects();
+
+    // チップを設定
+    void SetChip(int x, int y, ChipType type);
+
+    // チップを取得
+    ChipType GetChip(int x, int y) const;
+
+    // マップをすべてクリア
+    void ClearMap();
+
+    // マップを再構築（初期のBuildMapを呼び出し）
+    void ResetMap();
+
+    // マップデータの動的再構築
+    void RebuildChipObjects();
+
+    // シミュレーション時の再構築抑制用
+    void SetRebuildEnabled(bool enabled) { 
+        isRebuildEnabled_ = enabled; 
+        if (enabled) RebuildChipObjects(); 
+    }
+
+    bool SaveToFile(const std::string& filepath);
+    bool LoadFromFile(const std::string& filepath);
+
+    // 文字列ベースのマップデータ取得＆設定（リプレイ用）
+    std::string GetMapDataAsString() const;
+    bool LoadFromString(const std::string& data);
 
 private:
     void BuildMap();
@@ -53,4 +89,10 @@ private:
 
     // 描画用オブジェクト（ブロックのみ）
     std::vector<std::unique_ptr<PrimitiveObject>> chipObjects_;
+
+    // 実行時の動的再構築用のキャッシュ
+    Microsoft::WRL::ComPtr<ID3D12Device> device_;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_{};
+
+    bool isRebuildEnabled_ = true;
 };

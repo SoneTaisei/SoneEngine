@@ -13,13 +13,17 @@ ReplayManager* ReplayManager::GetInstance() {
     return &instance;
 }
 
-void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraInitPos) {
+void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraInitPos, const std::string& mapDataStr) {
+    if (isRecording_) return;
+    
     isRecording_ = true;
     isPlaying_ = false;
     isPaused_ = false;
     currentFrame_ = 0;
+
     playerInitPos_ = initPos;
     cameraInitPos_ = cameraInitPos;
+    currentMapDataStr_ = mapDataStr;
     temporaryRecordedFrames_.clear();
     
     // 注入モードがオンになっていればオフにする
@@ -37,13 +41,15 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
     frame.scale = scale;
     frame.rotation = rotation;
 
-    // "LRJDC" の初期文字列
+    // "LRJDCWS" の初期文字列
     frame.keys[0] = (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) ? 'L' : '-';
     frame.keys[1] = (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) ? 'R' : '-';
     frame.keys[2] = keyboard->IsKeyDown(DIK_SPACE) ? 'J' : '-';
     frame.keys[3] = (keyboard->IsKeyDown(DIK_LSHIFT) || keyboard->IsKeyDown(DIK_RSHIFT)) ? 'D' : '-';
     frame.keys[4] = (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) ? 'C' : '-';
-    frame.keys[5] = '\0';
+    frame.keys[5] = (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) ? 'W' : '-';
+    frame.keys[6] = (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) ? 'S' : '-';
+    frame.keys[7] = '\0';
 
     temporaryRecordedFrames_.push_back(frame);
 }
@@ -61,6 +67,8 @@ void ReplayManager::StopRecord() {
     ReplayData data;
     data.playerInitPos = playerInitPos_;
     data.cameraInitPos = cameraInitPos_;
+    data.stageFilename = currentStageFilename_;
+    data.mapDataStr = currentMapDataStr_;
     data.totalFrames = static_cast<int>(temporaryRecordedFrames_.size());
     data.frames = temporaryRecordedFrames_;
 
@@ -82,6 +90,15 @@ void ReplayManager::StopRecord() {
     history_.insert(history_.begin(), data);
 
     temporaryRecordedFrames_.clear();
+}
+
+bool ReplayManager::PopRecordedFrame(FrameData& outFrame) {
+    if (temporaryRecordedFrames_.empty()) {
+        return false;
+    }
+    outFrame = temporaryRecordedFrames_.back();
+    temporaryRecordedFrames_.pop_back();
+    return true;
 }
 
 void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath) {
@@ -170,6 +187,8 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         if (currentFrame.keys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
         if (currentFrame.keys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
         if (currentFrame.keys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
+        if (currentFrame.keys[5] == 'W') { keys[DIK_W] = 0x80; keys[DIK_UP] = 0x80; }
+        if (currentFrame.keys[6] == 'S') { keys[DIK_S] = 0x80; keys[DIK_DOWN] = 0x80; }
 
         // 1フレーム前のキー状態の構築
         if (currentFrame_ > 0) {
@@ -179,6 +198,8 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
             if (prevFrame.keys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
             if (prevFrame.keys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
             if (prevFrame.keys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
+            if (prevFrame.keys[5] == 'W') { preKeys[DIK_W] = 0x80; preKeys[DIK_UP] = 0x80; }
+            if (prevFrame.keys[6] == 'S') { preKeys[DIK_S] = 0x80; preKeys[DIK_DOWN] = 0x80; }
         }
 
         KeyboardInput::GetInstance()->SetReplayKeyStates(keys, preKeys);
@@ -191,8 +212,10 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         float dz = playerPos.z - recordedPos.z;
         float distSq = dx * dx + dy * dy + dz * dz;
 
-        if (distSq > 0.0025f) {
-            playerPos = recordedPos;
+        if (isSnapEnabled_ || forceSnapNextFrame_) {
+            if (distSq > 0.0025f || forceSnapNextFrame_) {
+                playerPos = recordedPos;
+            }
         }
     } else {
         // ★ PAUSE中の場合は物理演算が止まらない対策として常に指定フレームの座標に強制上書きする
@@ -200,7 +223,11 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
     }
 
     // カメラ座標の同期（カメラはキー操作で物理挙動しないためダイレクトに同期）
-    cameraPos = currentFrame.cameraPosition;
+    if (isSnapEnabled_ || forceSnapNextFrame_ || isPaused_) {
+        cameraPos = currentFrame.cameraPosition;
+    }
+
+    forceSnapNextFrame_ = false;
 
     // フレームを進める
     if (!isPaused_) {
@@ -210,13 +237,17 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
 
 void ReplayManager::SetCurrentFrame(int frame) {
     if (!isPlaying_ || currentReplay_.totalFrames == 0) return;
+    int prevFrame = currentFrame_;
     currentFrame_ = (std::max)(0, (std::min)(frame, currentReplay_.totalFrames - 1));
+    if (prevFrame != currentFrame_) {
+        forceSnapNextFrame_ = true;
+    }
 }
 
 void ReplayManager::ApplyTimelineEdit(int frameIdx, int keyIdx, bool active) {
     if (frameIdx < 0 || frameIdx >= static_cast<int>(currentReplay_.frames.size())) return;
     
-    char keyChars[6] = "LRJDC";
+    char keyChars[8] = "LRJDCWS";
     currentReplay_.frames[frameIdx].keys[keyIdx] = active ? keyChars[keyIdx] : '-';
 
     // キーが変更されたため、MMLトラックを再計算する
@@ -226,23 +257,29 @@ void ReplayManager::ApplyTimelineEdit(int frameIdx, int keyIdx, bool active) {
 void ReplayManager::RebuildMmlFromFrames(ReplayData& data) {
     if (data.frames.empty()) return;
 
-    std::vector<char> rawT0, rawT1, rawT2, rawT3;
+    std::vector<char> rawT0, rawT1, rawT2, rawT3, rawT4;
     rawT0.reserve(data.frames.size());
     rawT1.reserve(data.frames.size());
     rawT2.reserve(data.frames.size());
     rawT3.reserve(data.frames.size());
+    rawT4.reserve(data.frames.size());
 
     for (const auto& frame : data.frames) {
         rawT0.push_back(frame.keys[0]); // 'L', 'R', or '-'
         rawT1.push_back(frame.keys[2]); // 'J' or '-'
         rawT2.push_back(frame.keys[3]); // 'D' or '-'
         rawT3.push_back(frame.keys[4]); // 'C' or '-'
+        // 'W' or 'S' or '-'
+        if (frame.keys[5] == 'W') rawT4.push_back('W');
+        else if (frame.keys[6] == 'S') rawT4.push_back('S');
+        else rawT4.push_back('-');
     }
 
     data.mmlTracks[0] = EncodeTrackToMml(rawT0);
     data.mmlTracks[1] = EncodeTrackToMml(rawT1);
     data.mmlTracks[2] = EncodeTrackToMml(rawT2);
     data.mmlTracks[3] = EncodeTrackToMml(rawT3);
+    data.mmlTracks[4] = EncodeTrackToMml(rawT4);
 }
 
 void ReplayManager::RebuildFramesFromMml(ReplayData& data) {
@@ -252,6 +289,7 @@ void ReplayManager::RebuildFramesFromMml(ReplayData& data) {
     auto track1 = DecodeMmlToTrack(data.mmlTracks[1], data.totalFrames);
     auto track2 = DecodeMmlToTrack(data.mmlTracks[2], data.totalFrames);
     auto track3 = DecodeMmlToTrack(data.mmlTracks[3], data.totalFrames);
+    auto track4 = DecodeMmlToTrack(data.mmlTracks[4], data.totalFrames);
 
     data.frames.resize(data.totalFrames);
     for (int i = 0; i < data.totalFrames; ++i) {
@@ -260,7 +298,11 @@ void ReplayManager::RebuildFramesFromMml(ReplayData& data) {
         data.frames[i].keys[2] = (i < static_cast<int>(track1.size())) ? track1[i] : '-';
         data.frames[i].keys[3] = (i < static_cast<int>(track2.size())) ? track2[i] : '-';
         data.frames[i].keys[4] = (i < static_cast<int>(track3.size())) ? track3[i] : '-';
-        data.frames[i].keys[5] = '\0';
+        
+        char t4Val = (i < static_cast<int>(track4.size())) ? track4[i] : '-';
+        data.frames[i].keys[5] = (t4Val == 'W') ? 'W' : '-';
+        data.frames[i].keys[6] = (t4Val == 'S') ? 'S' : '-';
+        data.frames[i].keys[7] = '\0';
         
         // 座標情報はパース済みの frames から引き継ぐか、初期化
         if (data.frames[i].position.x == 0 && data.frames[i].position.y == 0 && data.frames[i].position.z == 0) {
@@ -340,10 +382,19 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
     ofs << "# MML Replay File" << std::endl;
     ofs << "[Metadata]" << std::endl;
     ofs << "Date=" << data.dateStr << std::endl;
+    ofs << "StageFilename=" << data.stageFilename << std::endl;
     ofs << "TotalFrames=" << data.totalFrames << std::endl;
     ofs << "PlayerInitPos=" << data.playerInitPos.x << "," << data.playerInitPos.y << "," << data.playerInitPos.z << std::endl;
     ofs << "CameraInitPos=" << data.cameraInitPos.x << "," << data.cameraInitPos.y << "," << data.cameraInitPos.z << std::endl;
     ofs << std::endl;
+
+    // 生マップデータセクション
+    if (!data.mapDataStr.empty()) {
+        ofs << "[MapData]" << std::endl;
+        ofs << data.mapDataStr;
+        if (data.mapDataStr.back() != '\n') ofs << std::endl;
+        ofs << std::endl;
+    }
 
     // MML トラックセクション
     ofs << "[MML]" << std::endl;
@@ -351,6 +402,7 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
     ofs << "T1_Jump=" << data.mmlTracks[1] << std::endl;
     ofs << "T2_Dash=" << data.mmlTracks[2] << std::endl;
     ofs << "T3_Cling=" << data.mmlTracks[3] << std::endl;
+    ofs << "T4_UpDown=" << data.mmlTracks[4] << std::endl;
     ofs << std::endl;
 
     // 1フレームずつの状態データ (STR)
@@ -395,10 +447,14 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
         std::stringstream ss(line);
         std::string key, value;
 
-        if (currentSection == "Metadata") {
+        if (currentSection == "MapData") {
+            outData.mapDataStr += line + "\n";
+        } else if (currentSection == "Metadata") {
             if (std::getline(ss, key, '=') && std::getline(ss, value)) {
                 if (key == "Date") {
                     outData.dateStr = value;
+                } else if (key == "StageFilename") {
+                    outData.stageFilename = value;
                 } else if (key == "TotalFrames") {
                     outData.totalFrames = std::stoi(value);
                 } else if (key == "PlayerInitPos") {
@@ -421,6 +477,7 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                 else if (key == "T1_Jump") outData.mmlTracks[1] = value;
                 else if (key == "T2_Dash") outData.mmlTracks[2] = value;
                 else if (key == "T3_Cling") outData.mmlTracks[3] = value;
+                else if (key == "T4_UpDown") outData.mmlTracks[4] = value;
             }
         } else if (currentSection == "STR") {
             // 新フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z
@@ -472,10 +529,14 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                 }
 
                 // キー状態コピー
-                for (int i = 0; i < 5 && i < static_cast<int>(keysStr.length()); ++i) {
+                for (int i = 0; i < 7 && i < static_cast<int>(keysStr.length()); ++i) {
                     frame.keys[i] = keysStr[i];
                 }
-                frame.keys[5] = '\0';
+                // もし元のファイルが古くて文字数が足りなかった場合、残りを '-' で埋める
+                for (int i = static_cast<int>(keysStr.length()); i < 7; ++i) {
+                    frame.keys[i] = '-';
+                }
+                frame.keys[7] = '\0';
                 
                 // カラーのパース
                 if (!colorStr.empty()) {

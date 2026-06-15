@@ -4,6 +4,8 @@
 #include "Scene/SceneManager.h"
 #include "Core/Utility/ImGuiHelper.h"
 #include "Resource/Model/ModelManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Resource/Model/ModelCommon.h"
 
 StageSelectScene::~StageSelectScene() {
 }
@@ -34,6 +36,12 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
     skydomeObject->SetName("Skydome");
 
     objects_.push_back(std::move(skydomeObject));
+
+    // ★ Skyboxの初期化処理を追加
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList);
+    skybox_ = std::make_unique<Skybox>();
+    skybox_->Initialize(device.Get(), skyboxTextureHandle_);
+    Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 }
 
 void StageSelectScene::Update(SceneManager *sceneManager) {
@@ -50,10 +58,31 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         object->Update();
     }
 
+    if (skybox_) {
+        skybox_->Update();
+    }
+
 
 }
 
 void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
+    if (modelCommon_) {
+        modelCommon_->PreDraw(commandList_.Get());
+    }
+
+    if (skybox_) {
+        skybox_->Draw(commandList_.Get());
+        
+        auto dxCommon = DirectXCommon::GetInstance();
+        commandList_.Get()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        commandList_.Get()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+
+        if (modelCommon_) {
+            modelCommon_->PreDraw(commandList_.Get());
+        }
+    }
+
     // 各オブジェクトに「自分の行列で描画して！」と頼む
     for (auto &object : objects_) {
         object->Draw(commandList_.Get());
