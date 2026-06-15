@@ -144,6 +144,12 @@ void GameScene::Update(SceneManager *sceneManager) {
                 gameCamera_->SetTranslation(camPos);
             }
         } else {
+            if (wasPlayingLastFrame) {
+                // リプレイが終了した（またはTAKEOVERで停止した）瞬間に、カメラの追従を復元する
+                if (gameCamera_) {
+                    gameCamera_->SetFollowTarget(&player_->GetPosition());
+                }
+            }
             wasPlayingLastFrame = false;
         }
 
