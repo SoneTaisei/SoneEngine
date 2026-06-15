@@ -54,7 +54,11 @@ void Skybox::Update() {
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Vector3 cameraPos = cameraMgr->GetCameraPos();
     Matrix4x4 view = cameraMgr->GetViewMatrix();
-    Matrix4x4 projection = cameraMgr->GetProjectionMatrix();
+    
+    // Skyboxは常に遠景を描画するため、カメラの投影方式（平行投影など）に関わらず
+    // 透視投影（Perspective）行列を使用して、画面全体を覆うようにする。
+    Matrix4x4 projection = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
+
 
     // あとはこれを使って WVP を計算するだけ
     Matrix4x4 worldMatrix = TransformFunctions::MakeTranslateMatrix(cameraPos);

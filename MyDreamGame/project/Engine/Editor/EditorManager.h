@@ -45,6 +45,8 @@ public:
     bool UseDebugCamera() const { return useDebugCamera_; }
     void SetUseDebugCamera(bool use) { useDebugCamera_ = use; }
 
+    bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
+
     // シーン設定のJSON保存・読込み
     void SaveSceneConfig();
     void LoadSceneConfig();
@@ -57,11 +59,18 @@ public:
         selectedObject_ = nullptr;
         selectedParticle_ = nullptr;
         selectedPrimitive_ = nullptr;
+        sceneJustReset_ = true; // シーンリセットのフラグを立てる
     }
 
 private:
+    bool sceneJustReset_ = false;
+    bool loadMapDataStrNextFrame_ = false;
+    std::string mapDataStrToLoad_ = "";
+    char stageFilename_[128] = "map_data.txt";
+
     static bool isPlaying_; // ゲーム再生中かどうか
     bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
+    float takeoverCountdown_ = 0.0f; // 操作引き継ぎ時のカウントダウン
 
     // 選択中のオブジェクト
     Object3D *selectedObject_ = nullptr;
@@ -79,6 +88,7 @@ private:
     bool showGameView_ = true;
     bool showPostEffect_ = true;
     bool showReplayManager_ = true;
+    bool showMapEditor_ = true;
 
     static bool showObjects_;
     static bool showEffects_;
