@@ -12,7 +12,7 @@ class KeyboardInput;
 struct FrameData {
     Vector3 position;      // プレイヤーの座標
     Vector3 cameraPosition;// カメラの座標
-    char keys[6];          // "LRJDC" のうち押されているものを文字で表した5文字の文字列（+終端文字）。例: "-R-D-"
+    char keys[8];          // "LRJDCWS" のうち押されているものを文字で表した7文字の文字列（+終端文字）。例: "-R-DC--"
     Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f}; // プレイヤーの色
     Vector3 scale = {1.0f, 1.0f, 1.0f};       // プレイヤーのスケール
     Vector3 rotation = {0.0f, 0.0f, 0.0f};    // プレイヤーの回転
@@ -30,8 +30,8 @@ struct ReplayData {
     Vector3 cameraInitPos;                    // カメラの初期座標
     int totalFrames = 0;                      // 総フレーム数
     std::vector<FrameData> frames;            // 1フレームずつのデータ (STR)
-    std::string mmlTracks[4];                 // MMLに圧縮された4つのキー状態トラック
-                                              // T0: 左右移動(L,R,N), T1: ジャンプ(J,N), T2: ダッシュ(D,N), T3: 壁張り付き(C,N)
+    std::string mmlTracks[5];                 // MMLに圧縮された5つのキー状態トラック
+                                              // T0: 左右移動(L,R,N), T1: ジャンプ(J,N), T2: ダッシュ(D,N), T3: 壁張り付き(C,N), T4: 上下移動(W,S,N)
 };
 
 /// <summary>
@@ -78,9 +78,13 @@ public:
     int GetCurrentFrame() const { return currentFrame_; }
     int GetRecordedFrameCount() const { return static_cast<int>(temporaryRecordedFrames_.size()); }
     void SetCurrentFrame(int frame); // シーク用
+    bool IsForceSnapNextFrame() const { return forceSnapNextFrame_; }
 
     bool IsLoopPlay() const { return isLoopPlay_; }
     void SetLoopPlay(bool enable) { isLoopPlay_ = enable; }
+
+    bool IsSnapEnabled() const { return isSnapEnabled_; }
+    void SetSnapEnabled(bool enable) { isSnapEnabled_ = enable; }
 
     ReplayData& GetCurrentReplay() { return currentReplay_; }
     const std::vector<ReplayData>& GetHistory() const { return history_; }
@@ -103,6 +107,8 @@ private:
     bool isPlaying_ = false;
     bool isPaused_ = false;
     bool isLoopPlay_ = false;
+    bool isSnapEnabled_ = true;
+    bool forceSnapNextFrame_ = false; // シーク時に強制スナップするフラグ
     int currentFrame_ = 0;
 
     Vector3 playerInitPos_ = { 0.0f, 0.0f, 0.0f };
