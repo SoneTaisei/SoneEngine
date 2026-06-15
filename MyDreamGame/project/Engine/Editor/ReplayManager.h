@@ -45,6 +45,8 @@ public:
     void StartRecord(const Vector3& initPos, const Vector3& cameraInitPos, const std::string& mapDataStr = "");
     void RecordFrame(const Vector3& pos, const Vector3& cameraPos, const Vector4& color = {1.0f, 1.0f, 1.0f, 1.0f}, const Vector3& scale = {1.0f, 1.0f, 1.0f}, const Vector3& rotation = {0.0f, 0.0f, 0.0f});
     void StopRecord();
+    bool PopRecordedFrame(FrameData& outFrame);
+
 
     // 再生制御
     void StartPlayback(int historyIndex = -1, const std::string& filepath = "");
@@ -91,6 +93,8 @@ public:
     const std::vector<std::string>& GetSavedList() const { return savedList_; }
 
     void SetCurrentStageFilename(const std::string& filename) { currentStageFilename_ = filename; }
+    const std::string& GetCurrentMapDataStr() const { return currentMapDataStr_; }
+    const std::vector<FrameData>& GetTemporaryRecordedFrames() const { return temporaryRecordedFrames_; }
 
 private:
     ReplayManager() = default;

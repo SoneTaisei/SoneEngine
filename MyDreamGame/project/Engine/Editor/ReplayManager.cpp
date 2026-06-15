@@ -92,6 +92,15 @@ void ReplayManager::StopRecord() {
     temporaryRecordedFrames_.clear();
 }
 
+bool ReplayManager::PopRecordedFrame(FrameData& outFrame) {
+    if (temporaryRecordedFrames_.empty()) {
+        return false;
+    }
+    outFrame = temporaryRecordedFrames_.back();
+    temporaryRecordedFrames_.pop_back();
+    return true;
+}
+
 void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath) {
     if (historyIndex >= 0 && historyIndex < static_cast<int>(history_.size())) {
         currentReplay_ = history_[historyIndex];
