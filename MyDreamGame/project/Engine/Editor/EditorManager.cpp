@@ -396,11 +396,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 selectedParticle_->DrawImGui();
             } else if (selectedPrimitive_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
-                // シーン固有のImGui（プレイヤー情報など）も表示する
-                IScene *activeScene = sceneManager->GetCurrentScene();
-                if (activeScene) {
-                    activeScene->DisplayImGui(selectedPrimitive_);
-                }
             } else {
                 ImGui::Text("グローバル表示設定");
                 ImGui::Separator();
