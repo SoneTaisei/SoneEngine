@@ -11,6 +11,7 @@
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
 #include "ReplayManager.h"
+#include "Core/TimeManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -88,6 +89,23 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     static bool resetLayout = false;
 
+    // --- テイクオーバーのカウントダウン処理 ---
+    if (takeoverCountdown_ > 0.0f) {
+        takeoverCountdown_ -= TimeManager::GetInstance().GetDeltaTime();
+        if (takeoverCountdown_ <= 0.0f) {
+            isPlaying_ = true; // カウントダウン終了でプレイ開始
+        } else {
+            // カウントダウン表示UI
+            auto dxCommon = DirectXCommon::GetInstance();
+            ImGui::SetNextWindowPos(ImVec2(dxCommon->GetWindowWidth() / 2.0f, dxCommon->GetWindowHeight() / 3.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::Begin("Takeover Countdown", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+            ImGui::SetWindowFontScale(6.0f);
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "READY... %.1f", takeoverCountdown_);
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::End();
+        }
+    }
+
     // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
     ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
 
@@ -120,10 +138,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     static bool wasReplayingLastFrame = false;
     bool isReplayingNow = ReplayManager::GetInstance()->IsPlaying();
     if (wasReplayingLastFrame && !isReplayingNow) {
-        useDebugCamera_ = true;
-        if (gameCamera && debugCamera) {
-            debugCamera->SetTranslation(gameCamera->GetTranslation());
-            debugCamera->SetRotation(gameCamera->GetRotation());
+        // TAKEOVERによる停止の時はデバッグカメラに強制復帰させない
+        if (takeoverCountdown_ <= 0.0f) {
+            useDebugCamera_ = true;
+            if (gameCamera && debugCamera) {
+                debugCamera->SetTranslation(gameCamera->GetTranslation());
+                debugCamera->SetRotation(gameCamera->GetRotation());
+            }
         }
     }
     wasReplayingLastFrame = isReplayingNow;
@@ -189,6 +210,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.75f, 0.3f, 0.0f, 1.0f));
             if (ImGui::Button("リプレイ停止 (STOP REPLAY)")) {
                 replayMgr->StopPlayback();
+            }
+            ImGui::PopStyleColor(3);
+
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.7f, 0.1f, 1.0f));
+            if (ImGui::Button("操作切替 (TAKEOVER)")) {
+                replayMgr->StopPlayback();
+                takeoverCountdown_ = 1.0f; // 1秒間のカウントダウンを開始
             }
             ImGui::PopStyleColor(3);
         }

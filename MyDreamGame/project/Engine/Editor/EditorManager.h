@@ -45,6 +45,8 @@ public:
     bool UseDebugCamera() const { return useDebugCamera_; }
     void SetUseDebugCamera(bool use) { useDebugCamera_ = use; }
 
+    bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
+
     // シーン設定のJSON保存・読込み
     void SaveSceneConfig();
     void LoadSceneConfig();
@@ -68,6 +70,7 @@ private:
 
     static bool isPlaying_; // ゲーム再生中かどうか
     bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
+    float takeoverCountdown_ = 0.0f; // 操作引き継ぎ時のカウントダウン
 
     // 選択中のオブジェクト
     Object3D *selectedObject_ = nullptr;
