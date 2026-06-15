@@ -230,10 +230,18 @@ void WindowsApplication::Update() {
 #ifdef USE_IMGUI
     static bool wasActive = false;
     bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
-    if (isCurrentlyActive) {
+    bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
+
+    if (isCurrentlyActive && !isTakeoverPausing) {
         // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
         sceneManager_->Update();
         wasActive = true;
+    } else if (isTakeoverPausing) {
+        // カウントダウン中はシーンを更新しないが、wasActiveは維持する
+        wasActive = true; 
+        if (sceneManager_->GetCurrentScene()) {
+            sceneManager_->GetCurrentScene()->UpdateEditor();
+        }
     } else {
         if (wasActive) {
             // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！

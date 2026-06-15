@@ -13,6 +13,7 @@
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "GameObject/Object3D.h"
+#include "Input/KeyboardInput.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
@@ -123,68 +124,172 @@ void GameScene::Update(SceneManager *sceneManager) {
 
     // 4. プレイヤーの更新（入力・物理・当たり判定）
     if (player_ && map_) {
-        // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
-        static bool wasPlayingLastFrame = false;
-        if (ReplayManager::GetInstance()->IsPlaying()) {
-            if (!wasPlayingLastFrame) {
-                // 再生開始時に初期位置へ自動ワープ
-                player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
-                if (gameCamera_) {
-                    // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
-                    gameCamera_->SetFollowTarget(nullptr);
-                    gameCamera_->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
-                }
-                wasPlayingLastFrame = true;
-            }
-            Vector3 pos = player_->GetPosition();
-            Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
-            ReplayManager::GetInstance()->UpdatePlayback(pos, camPos);
-            player_->SetPosition(pos);
-            if (gameCamera_) {
-                gameCamera_->SetTranslation(camPos);
-            }
-        } else {
-            wasPlayingLastFrame = false;
-        }
-
-        player_->Update(*map_);
-
-        // ゴール判定
-        if (player_->IsGoalComplete()) {
-            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
-            return;
-        }
-
-        // コイン獲得エフェクト
-        int currentScore = player_->GetScore();
-        if (currentScore > previousScore_) {
-            if (hitEffect_) {
-                Emitter hitEmitter{};
-                hitEmitter.transform.translate = player_->GetPosition();
-                hitEmitter.count = 20;
-                hitEmitter.frequency = 0.05f;
-                hitEmitter.frequencyTime = 0.0f;
-                hitEffect_->Emit(hitEmitter);
-            }
-            previousScore_ = currentScore;
-        }
-
-
-        // プレイ中の場合、リプレイ録画を行う
         bool isCurrentlyPlaying = true;
 #ifdef USE_IMGUI
         isCurrentlyPlaying = EditorManager::IsPlaying();
 #endif
+
+        bool isRewinding = false;
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
-            Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
-            if (!ReplayManager::GetInstance()->IsRecording()) {
-                std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
-                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
+            auto keyboard = KeyboardInput::GetInstance();
+            if ((keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) &&
+                keyboard->IsKeyDown(DIK_LEFT)) {
+                isRewinding = true;
             }
-            Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-            Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
-            Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
-            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
+        }
+
+        if (isRewinding) {
+            FrameData poppedFrame;
+            if (ReplayManager::GetInstance()->PopRecordedFrame(poppedFrame)) {
+                player_->SetPosition(poppedFrame.position);
+                if (auto* prim = player_->GetPrimitiveObject()) {
+                    prim->GetMaterial().color = poppedFrame.color;
+                    prim->SetScale(poppedFrame.scale);
+                    prim->SetRotation(poppedFrame.rotation);
+                    prim->SetTranslation(poppedFrame.position);
+                    prim->Update();
+                }
+                if (gameCamera_) {
+                    gameCamera_->SetFollowTarget(nullptr);
+                    gameCamera_->SetTranslation(poppedFrame.cameraPosition);
+                }
+
+                // マップチップ（コインなど）の巻き戻し
+                std::string initMapStr = ReplayManager::GetInstance()->GetCurrentMapDataStr();
+                if (!initMapStr.empty()) {
+                    // 再構築を一時停止
+                    map_->SetRebuildEnabled(false);
+
+                    // 初期状態のマップに戻す
+                    map_->LoadFromString(initMapStr);
+                    player_->SetScore(0);
+                    
+                    // 録画されているフレームを最初からたどってコインの取得状態を再構築する
+                    const auto& frames = ReplayManager::GetInstance()->GetTemporaryRecordedFrames();
+                    for (const auto& frame : frames) {
+                        player_->SetPosition(frame.position);
+                        player_->CollectCoins(*map_);
+                    }
+                    
+                    // 今ポップしたフレームの座標でも判定しておく
+                    player_->SetPosition(poppedFrame.position);
+                    player_->CollectCoins(*map_);
+                    
+                    // 再構築を再開（ここで一括構築される）
+                    map_->SetRebuildEnabled(true);
+
+                    // スコアを同期
+                    previousScore_ = player_->GetScore();
+                }
+            }
+        } else {
+            // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
+            static bool wasPlayingLastFrame = false;
+            if (ReplayManager::GetInstance()->IsPlaying()) {
+                bool shouldRebuildState = !wasPlayingLastFrame || ReplayManager::GetInstance()->IsForceSnapNextFrame();
+                if (shouldRebuildState) {
+                    auto& replayData = ReplayManager::GetInstance()->GetCurrentReplay();
+                    int curFrame = ReplayManager::GetInstance()->GetCurrentFrame();
+
+                    // 1. マップを初期状態（文字列）から復元
+                    if (!replayData.mapDataStr.empty()) {
+                        map_->LoadFromString(replayData.mapDataStr);
+                    }
+                    
+                    // 2. プレイヤースコアをリセット
+                    player_->SetScore(0);
+                    
+                    // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
+                    for (int i = 0; i <= curFrame; ++i) {
+                        player_->SetPosition(replayData.frames[i].position);
+                        player_->CollectCoins(*map_);
+                    }
+                }
+
+                if (!wasPlayingLastFrame) {
+                    // 再生開始時に初期位置へ自動ワープ
+                    player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
+                    if (gameCamera_) {
+                        if (ReplayManager::GetInstance()->IsSnapEnabled()) {
+                            // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
+                            gameCamera_->SetFollowTarget(nullptr);
+                        } else {
+                            // 座標補正がOFF（TASモード）の場合はプレイヤーに追従させる
+                            gameCamera_->SetFollowTarget(&player_->GetPosition());
+                        }
+                        gameCamera_->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
+                    }
+                    wasPlayingLastFrame = true;
+                }
+                Vector3 pos = player_->GetPosition();
+                Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+                ReplayManager::GetInstance()->UpdatePlayback(pos, camPos);
+                player_->SetPosition(pos);
+                if (gameCamera_) {
+                    if (ReplayManager::GetInstance()->IsSnapEnabled()) {
+                        gameCamera_->SetFollowTarget(nullptr);
+                        gameCamera_->SetTranslation(camPos);
+                    } else {
+                        gameCamera_->SetFollowTarget(&player_->GetPosition());
+                        // 追従モードのため、SetTranslation(camPos) は実行しない
+                    }
+                }
+            } else {
+                if (wasPlayingLastFrame) {
+                    // リプレイが終了した（またはTAKEOVERで停止した）瞬間に、カメラの追従を復元する
+                    if (gameCamera_) {
+                        gameCamera_->SetFollowTarget(&player_->GetPosition());
+                    }
+                }
+                wasPlayingLastFrame = false;
+
+                // 巻き戻しから通常に戻ったときにカメラ追従を再開する
+            }
+
+            player_->Update(*map_);
+
+            // ゴール判定
+            if (player_->IsGoalComplete()) {
+                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+                return;
+            }
+
+            // コイン獲得エフェクト
+            int currentScore = player_->GetScore();
+            if (currentScore > previousScore_) {
+                if (hitEffect_) {
+                    Emitter hitEmitter{};
+                    hitEmitter.transform.translate = player_->GetPosition();
+                    hitEmitter.count = 20;
+                    hitEmitter.frequency = 0.05f;
+                    hitEmitter.frequencyTime = 0.0f;
+                    hitEffect_->Emit(hitEmitter);
+                }
+                previousScore_ = currentScore;
+            }
+        }
+
+        static bool wasRewindingLastFrame = false;
+        if (!isRewinding && wasRewindingLastFrame) {
+            if (gameCamera_) {
+                gameCamera_->SetFollowTarget(&player_->GetPosition());
+            }
+        }
+        wasRewindingLastFrame = isRewinding;
+
+        // プレイ中の場合、リプレイ録画を行う
+        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
+            if (!isRewinding) {
+                Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+                if (!ReplayManager::GetInstance()->IsRecording()) {
+                    std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
+                    ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
+                }
+                Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+                Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
+                Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
+                ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
+            }
         } else {
             if (ReplayManager::GetInstance()->IsRecording()) {
                 ReplayManager::GetInstance()->StopRecord();

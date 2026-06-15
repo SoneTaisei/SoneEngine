@@ -121,13 +121,13 @@ void Player2D::Update(MapChip2D& map) {
                     goalTimer_ = 0.0f;
                     velocity_ = { 0.0f, 0.0f, 0.0f };
                     isDashing_ = false;
-                } else if (type == MapChip2D::ChipType::kCoin) {
-                    map.SetChip(cx, cy, MapChip2D::ChipType::kNone);
-                    score_ += 100;
                 }
             }
             if (isDead_ || isGoal_) break;
         }
+
+        // コインの回収判定（別関数で共通化）
+        CollectCoins(map);
     }
 
     // 画面外落下時のリスポーン演出移行
@@ -173,6 +173,7 @@ void Player2D::DisplayImGui() {
     }
 #endif
 }
+
 
 Player2D::AABB Player2D::GetAABB() const {
     return {
@@ -382,4 +383,24 @@ float Player2D::EaseInElastic(float t) const {
     if (t <= 0.0f) return 0.0f;
     if (t >= 1.0f) return 1.0f;
     return -std::pow(2.0f, 10.0f * t - 10.0f) * std::sin((t * 10.0f - 10.75f) * c4);
+}
+
+void Player2D::CollectCoins(MapChip2D& map) {
+    AABB aabb = GetAABB();
+    // 押し戻しによって境界線上に位置した際も検知できるよう、わずかなマージンを持たせる
+    const float margin = 0.02f;
+    int leftChip = map.WorldToChipX(aabb.left - margin);
+    int rightChip = map.WorldToChipX(aabb.right + margin);
+    int bottomChip = map.WorldToChipY(aabb.bottom - margin);
+    int topChip = map.WorldToChipY(aabb.top + margin);
+
+    for (int cy = bottomChip; cy <= topChip; ++cy) {
+        for (int cx = leftChip; cx <= rightChip; ++cx) {
+            MapChip2D::ChipType type = map.GetChipType(cx, cy);
+            if (type == MapChip2D::ChipType::kCoin) {
+                map.SetChip(cx, cy, MapChip2D::ChipType::kNone);
+                score_ += 100;
+            }
+        }
+    }
 }

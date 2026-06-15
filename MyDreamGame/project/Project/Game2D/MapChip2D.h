@@ -63,6 +63,12 @@ public:
     // マップデータの動的再構築
     void RebuildChipObjects();
 
+    // シミュレーション時の再構築抑制用
+    void SetRebuildEnabled(bool enabled) { 
+        isRebuildEnabled_ = enabled; 
+        if (enabled) RebuildChipObjects(); 
+    }
+
     bool SaveToFile(const std::string& filepath);
     bool LoadFromFile(const std::string& filepath);
 
@@ -87,4 +93,6 @@ private:
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_{};
+
+    bool isRebuildEnabled_ = true;
 };

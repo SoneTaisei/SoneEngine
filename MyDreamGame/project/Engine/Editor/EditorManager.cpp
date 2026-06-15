@@ -11,6 +11,7 @@
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
 #include "ReplayManager.h"
+#include "Core/TimeManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -88,6 +89,23 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     static bool resetLayout = false;
 
+    // --- テイクオーバーのカウントダウン処理 ---
+    if (takeoverCountdown_ > 0.0f) {
+        takeoverCountdown_ -= TimeManager::GetInstance().GetDeltaTime();
+        if (takeoverCountdown_ <= 0.0f) {
+            isPlaying_ = true; // カウントダウン終了でプレイ開始
+        } else {
+            // カウントダウン表示UI
+            auto dxCommon = DirectXCommon::GetInstance();
+            ImGui::SetNextWindowPos(ImVec2(dxCommon->GetWindowWidth() / 2.0f, dxCommon->GetWindowHeight() / 3.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::Begin("Takeover Countdown", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+            ImGui::SetWindowFontScale(6.0f);
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "READY... %.1f", takeoverCountdown_);
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::End();
+        }
+    }
+
     // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
     ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
 
@@ -120,10 +138,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     static bool wasReplayingLastFrame = false;
     bool isReplayingNow = ReplayManager::GetInstance()->IsPlaying();
     if (wasReplayingLastFrame && !isReplayingNow) {
-        useDebugCamera_ = true;
-        if (gameCamera && debugCamera) {
-            debugCamera->SetTranslation(gameCamera->GetTranslation());
-            debugCamera->SetRotation(gameCamera->GetRotation());
+        // TAKEOVERによる停止の時はデバッグカメラに強制復帰させない
+        if (takeoverCountdown_ <= 0.0f) {
+            useDebugCamera_ = true;
+            if (gameCamera && debugCamera) {
+                debugCamera->SetTranslation(gameCamera->GetTranslation());
+                debugCamera->SetRotation(gameCamera->GetRotation());
+            }
         }
     }
     wasReplayingLastFrame = isReplayingNow;
@@ -189,6 +210,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.75f, 0.3f, 0.0f, 1.0f));
             if (ImGui::Button("リプレイ停止 (STOP REPLAY)")) {
                 replayMgr->StopPlayback();
+            }
+            ImGui::PopStyleColor(3);
+
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.7f, 0.1f, 1.0f));
+            if (ImGui::Button("操作切替 (TAKEOVER)")) {
+                replayMgr->StopPlayback();
+                takeoverCountdown_ = 1.0f; // 1秒間のカウントダウンを開始
             }
             ImGui::PopStyleColor(3);
         }
@@ -396,11 +427,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 selectedParticle_->DrawImGui();
             } else if (selectedPrimitive_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
-                // シーン固有のImGui（プレイヤー情報など）も表示する
-                IScene *activeScene = sceneManager->GetCurrentScene();
-                if (activeScene) {
-                    activeScene->DisplayImGui(selectedPrimitive_);
-                }
             } else {
                 ImGui::Text("グローバル表示設定");
                 ImGui::Separator();
@@ -1113,6 +1139,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (ImGui::Checkbox("ループ再生 (Loop Play)", &isLoop)) {
                             replayMgr->SetLoopPlay(isLoop);
                         }
+
+                        bool isSnap = replayMgr->IsSnapEnabled();
+                        if (ImGui::Checkbox("座標補正 (TAS編集時はOFF推奨)", &isSnap)) {
+                            replayMgr->SetSnapEnabled(isSnap);
+                        }
                         ImGui::Spacing();
 
                         if (replayMgr->IsPaused()) {
@@ -1164,66 +1195,134 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (ImGui::Button("編集内容を保存 (MML+STR)")) {
                             replayMgr->SaveToFile(activeReplay, saveNameBuf);
                         }
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("※編集内容は自動保存されます");
 
                         ImGui::Spacing();
                         ImGui::Separator();
-                        ImGui::Text("フレーム一覧 (クリックでシーク / キー選択で直接編集)");
-                        ImGui::Spacing();
+                        ImGui::Text("▼ カスタムシークバー (右ドラッグで範囲選択)");
+                        
+                        // 1. 表示するキーの選択
+                        static int selectedKeyToVisualize = 0; // Default to Left
+                        const char* keyNames[] = { "Left (L)", "Right (R)", "Jump (J)", "Dash (D)", "Cling (C)", "Up (W)", "Down (S)" };
+                        ImGui::Combo("対象キー", &selectedKeyToVisualize, keyNames, IM_ARRAYSIZE(keyNames));
+                        
+                        // カスタムシークバー描画
+                        ImVec2 p_min = ImGui::GetCursorScreenPos();
+                        float width = ImGui::GetContentRegionAvail().x;
+                        if (width <= 0) width = 200.0f;
+                        float height = 40.0f;
+                        ImVec2 p_max = ImVec2(p_min.x + width, p_min.y + height);
 
-                        // 縦スクロールのタイムライン
-                        ImGui::BeginChild("TimelineScroll", ImVec2(0, 0), true);
-                        for (int f = 0; f < activeReplay.totalFrames; ++f) {
-                            ImGui::PushID(f);
+                        ImGui::InvisibleButton("##CustomSeekbar", ImVec2(width, height));
+                        bool isActive = ImGui::IsItemActive(); 
+                        bool isHovered = ImGui::IsItemHovered();
 
-                            // 現在再生中のフレームをオレンジでハイライト
-                            bool isCurrent = (replayMgr->IsPlaying() && replayMgr->GetCurrentFrame() == f);
-                            if (isCurrent) {
-                                ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.9f, 0.6f, 0.0f, 0.4f));
-                                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.0f, 0.7f, 0.1f, 0.5f));
+                        ImDrawList* drawList = ImGui::GetWindowDrawList();
+                        
+                        int maxFrame = activeReplay.totalFrames - 1;
+                        if (maxFrame < 1) maxFrame = 1;
+
+                        // (1) 背景
+                        drawList->AddRectFilled(p_min, p_max, IM_COL32(50, 50, 50, 255), 4.0f);
+
+                        // (2) キーONの区間を描画
+                        int k = selectedKeyToVisualize;
+                        char target = (k==0)?'L':(k==1)?'R':(k==2)?'J':(k==3)?'D':(k==4)?'C':(k==5)?'W':'S';
+                        int runStart = -1;
+                        for (int i = 0; i <= maxFrame; ++i) {
+                            bool on = (activeReplay.frames[i].keys[k] == target);
+                            if (on && runStart == -1) runStart = i;
+                            else if (!on && runStart != -1) {
+                                float x1 = p_min.x + (width * runStart / maxFrame);
+                                float x2 = p_min.x + (width * i / maxFrame);
+                                drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
+                                runStart = -1;
                             }
-
-                            char label[64];
-                            sprintf_s(label, "F%04d | Pos(%.2f, %.2f)", f, activeReplay.frames[f].position.x, activeReplay.frames[f].position.y);
-
-                            bool selected = isCurrent;
-                            if (ImGui::Selectable(label, &selected, ImGuiSelectableFlags_SpanAllColumns)) {
-                                if (!replayMgr->IsPlaying()) {
-                                    replayMgr->StartPlayback();
-                                    replayMgr->PausePlayback();
-                                }
-                                replayMgr->SetCurrentFrame(f);
-                            }
-
-                            if (isCurrent) {
-                                ImGui::PopStyleColor(2);
-                            }
-
-                            // キー状態トグル (チェックボックスを SameLine で並べる)
-                            ImGui::SameLine(180.0f);
-                            
-                            auto& frameKeys = activeReplay.frames[f].keys;
-                            bool left = (frameKeys[0] == 'L');
-                            bool right = (frameKeys[1] == 'R');
-                            bool jump = (frameKeys[2] == 'J');
-                            bool dash = (frameKeys[3] == 'D');
-                            bool cling = (frameKeys[4] == 'C');
-
-                            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 1));
-                            
-                            if (ImGui::Checkbox("L", &left)) replayMgr->ApplyTimelineEdit(f, 0, left);
-                            ImGui::SameLine();
-                            if (ImGui::Checkbox("R", &right)) replayMgr->ApplyTimelineEdit(f, 1, right);
-                            ImGui::SameLine();
-                            if (ImGui::Checkbox("J", &jump)) replayMgr->ApplyTimelineEdit(f, 2, jump);
-                            ImGui::SameLine();
-                            if (ImGui::Checkbox("D", &dash)) replayMgr->ApplyTimelineEdit(f, 3, dash);
-                            ImGui::SameLine();
-                            if (ImGui::Checkbox("C", &cling)) replayMgr->ApplyTimelineEdit(f, 4, cling);
-
-                            ImGui::PopStyleVar();
-                            ImGui::PopID();
                         }
-                        ImGui::EndChild();
+                        if (runStart != -1) {
+                            float x1 = p_min.x + (width * runStart / maxFrame);
+                            float x2 = p_min.x + width;
+                            drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
+                        }
+
+                        // (3) 範囲選択ロジック
+                        static int rangeStart = -1;
+                        static int rangeEnd = -1;
+                        static bool isSelecting = false;
+
+                        float mouseX = ImGui::GetIO().MousePos.x;
+                        float t = (std::max)(0.0f, (std::min)(1.0f, (mouseX - p_min.x) / width));
+                        int hoverFrame = (int)(t * maxFrame);
+
+                        if (ImGui::IsMouseClicked(1) && isHovered) {
+                            isSelecting = true;
+                            rangeStart = hoverFrame;
+                            rangeEnd = hoverFrame;
+                        }
+                        if (isSelecting) {
+                            if (ImGui::IsMouseDown(1)) {
+                                rangeEnd = hoverFrame;
+                            } else {
+                                isSelecting = false;
+                            }
+                        }
+
+                        // 選択範囲の描画
+                        if (rangeStart != -1 && rangeEnd != -1) {
+                            int r0 = (std::min)(rangeStart, rangeEnd);
+                            int r1 = (std::max)(rangeStart, rangeEnd);
+                            float x1 = p_min.x + (width * r0 / maxFrame);
+                            float x2 = p_min.x + (width * r1 / maxFrame);
+                            drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 100));
+                            drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 255));
+                        }
+
+                        // (4) 現在位置ライン
+                        int curFrame = replayMgr->GetCurrentFrame();
+                        float curX = p_min.x + (width * curFrame / maxFrame);
+                        drawList->AddLine(ImVec2(curX, p_min.y - 2), ImVec2(curX, p_max.y + 2), IM_COL32(255, 50, 50, 255), 2.0f);
+
+                        // 左クリックでシーク
+                        if (isActive && ImGui::IsMouseDown(0)) {
+                            replayMgr->SetCurrentFrame(hoverFrame);
+                        }
+
+                        ImGui::Spacing();
+                        if (rangeStart != -1 && rangeEnd != -1) {
+                            int r0 = (std::min)(rangeStart, rangeEnd);
+                            int r1 = (std::max)(rangeStart, rangeEnd);
+                            ImGui::Text("選択範囲: F%04d ～ F%04d", r0, r1);
+                            
+                            auto DoRangeEditAndSave = [&](bool isOn) {
+                                for(int i=r0; i<=r1; ++i){
+                                    replayMgr->ApplyTimelineEdit(i, k, isOn);
+                                }
+                                if (!activeReplay.filename.empty()) {
+                                    replayMgr->SaveToFile(activeReplay, activeReplay.filename);
+                                } else {
+                                    replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                                }
+                            };
+
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                            if (ImGui::Button("選択範囲を ON にする")) {
+                                DoRangeEditAndSave(true);
+                            }
+                            ImGui::PopStyleColor();
+
+                            ImGui::SameLine();
+                            
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+                            if (ImGui::Button("選択範囲を OFF にする")) {
+                                DoRangeEditAndSave(false);
+                            }
+                            ImGui::PopStyleColor();
+                        } else {
+                            ImGui::Text("※右クリック+ドラッグで範囲を選択できます");
+                        }
+
+
                     }
                     ImGui::EndTabItem();
                 }
