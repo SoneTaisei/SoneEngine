@@ -184,18 +184,24 @@ void MapChip2D::ResetMap() {
 }
 
 void MapChip2D::RebuildChipObjects() {
-    if (!device_) return;
-
-    chipObjects_.clear();
+    if (!device_ || !isRebuildEnabled_) return;
 
     Primitive* boxPrimitive = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f);
+
+    size_t activeCount = 0;
 
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
             if (mapData_[y][x] == ChipType::kBlock || mapData_[y][x] == ChipType::kDeathBlock ||
                 mapData_[y][x] == ChipType::kGoal || mapData_[y][x] == ChipType::kCoin) {
-                auto obj = std::make_unique<PrimitiveObject>();
-                obj->Initialize(device_.Get(), boxPrimitive);
+                
+                if (activeCount >= chipObjects_.size()) {
+                    auto newObj = std::make_unique<PrimitiveObject>();
+                    newObj->Initialize(device_.Get(), boxPrimitive);
+                    chipObjects_.push_back(std::move(newObj));
+                }
+
+                auto& obj = chipObjects_[activeCount];
                 
                 // テクスチャの設定
                 obj->SetTextureHandle(gpuHandle_);
@@ -235,9 +241,13 @@ void MapChip2D::RebuildChipObjects() {
                 obj->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
                 obj->Update();
 
-                chipObjects_.push_back(std::move(obj));
+                activeCount++;
             }
         }
+    }
+
+    if (chipObjects_.size() > activeCount) {
+        chipObjects_.resize(activeCount);
     }
 }
 
