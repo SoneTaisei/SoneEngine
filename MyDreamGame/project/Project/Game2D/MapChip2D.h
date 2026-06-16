@@ -4,6 +4,7 @@
 #include "Core/Utility/Structs.h"
 #include <vector>
 #include <memory>
+#include "Blocks/BaseBlock.h"
 
 /// <summary>
 /// 2Dスクロールゲーム用マップクラス
@@ -17,14 +18,16 @@ public:
         kDeathBlock = 2, // デスブロック（触れたら死ぬ）
         kGoal = 3,  // ゴール
         kCoin = 4,  // コイン
+        kOneWayBlock = 5, // 一方向通行床
+        kPlayerSpawn = 6, // プレイヤー初期位置
     };
 
     void Initialize(ID3D12GraphicsCommandList* commandList);
     void Update();
     void Draw(ID3D12GraphicsCommandList* commandList);
 
-    // 指定座標がブロックかどうか判定
-    bool IsBlock(int chipX, int chipY) const;
+    // 指定座標のブロックを取得する
+    BaseBlock* GetBlock(int chipX, int chipY) const;
 
     // 指定座標のチップの種類を取得
     ChipType GetChipType(int chipX, int chipY) const;
@@ -87,8 +90,8 @@ private:
     int mapHeight_ = 0;
     float chipSize_ = 1.0f; // 1チップのサイズ（ワールド座標）
 
-    // 描画用オブジェクト（ブロックのみ）
-    std::vector<std::unique_ptr<PrimitiveObject>> chipObjects_;
+    // 実行時に生成される各種ブロックのインスタンス
+    std::vector<std::vector<std::unique_ptr<BaseBlock>>> activeBlocks_;
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;

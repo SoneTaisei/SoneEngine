@@ -218,6 +218,11 @@
     <ClCompile Include="Project\Effect\HitEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player2D.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -384,6 +389,12 @@
     <ClInclude Include="Project\Effect\HitEffect.h" />
     <ClInclude Include="Project\Game2D\Player2D.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\CoinBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />
     <ClInclude Include="Engine\Editor\ReplayManager.h" />
   </ItemGroup>
   <ItemGroup>

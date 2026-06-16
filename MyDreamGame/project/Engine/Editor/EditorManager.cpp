@@ -795,7 +795,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
 
                     // ペイントツール選択
-                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
+                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin, 5 = OneWay, 6 = Spawn
                     ImGui::Text("Paint Tool:");
                     ImGui::Spacing();
 
@@ -807,11 +807,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     };
 
                     ToolIcon tools[] = {
+                        { 6, "Spawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f },
                         { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f },
                         { 1, "Block", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
                         { 2, "Death", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
                         { 3, "Goal",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
-                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f } // コインは実際のモデルが0.5倍なので合わせる
+                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f }, // コインは実際のモデルが0.5倍なので合わせる
+                        { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f }
                     };
 
                     int numTools = sizeof(tools) / sizeof(tools[0]);
@@ -1020,6 +1022,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     btnColor = ImVec4(0.8f, 0.2f, 0.8f, 1.0f);        // ゴール: 紫色
                                 } else if (cellType == MapChip2D::ChipType::kCoin) {
                                     btnColor = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);        // コイン: 金色
+                                } else if (cellType == MapChip2D::ChipType::kOneWayBlock) {
+                                    btnColor = ImVec4(0.4f, 0.8f, 0.8f, 1.0f);        // 一方向通行床: 水色
+                                } else if (cellType == MapChip2D::ChipType::kPlayerSpawn) {
+                                    btnColor = ImVec4(0.2f, 0.6f, 1.0f, 1.0f);        // 初期座標: 青色
                                 } else if (cellType == MapChip2D::ChipType::kBlock) {
                                     if (y <= 1) {
                                         btnColor = ImVec4(0.55f, 0.35f, 0.17f, 1.0f); // 地面: 茶色

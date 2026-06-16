@@ -2,9 +2,17 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
 #include <fstream>
+#include <sstream>
+#include <iostream>
+#include "Blocks/NormalBlock.h"
+#include "Blocks/DeathBlock.h"
+#include "Blocks/GoalBlock.h"
+#include "Blocks/CoinBlock.h"
+#include "Blocks/OneWayBlock.h"
+#include <algorithm>
 #include <filesystem>
 #include <string>
-#include <algorithm>
+#include "Resource/Primitive/PrimitiveManager.h"
 
 void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList) {
     commandList->GetDevice(IID_PPV_ARGS(&device_));
@@ -22,27 +30,34 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList) {
 }
 
 void MapChip2D::Update() {
-    for (auto& obj : chipObjects_) {
-        obj->Update();
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            if (activeBlocks_[y][x]) {
+                activeBlocks_[y][x]->Update();
+                if (activeBlocks_[y][x]->IsDestroyed()) {
+                    activeBlocks_[y][x].reset();
+                    mapData_[y][x] = ChipType::kNone;
+                }
+            }
+        }
     }
 }
 
 void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
-    for (auto& obj : chipObjects_) {
-        obj->Draw(commandList);
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            if (activeBlocks_[y][x]) {
+                activeBlocks_[y][x]->Draw(commandList);
+            }
+        }
     }
 }
 
-bool MapChip2D::IsBlock(int chipX, int chipY) const {
-    // 範囲外はブロック扱い（壁として機能させる）
-    if (chipX < 0 || chipX >= mapWidth_ || chipY < 0) {
-        return true;
+BaseBlock* MapChip2D::GetBlock(int chipX, int chipY) const {
+    if (chipX < 0 || chipX >= mapWidth_ || chipY < 0 || chipY >= mapHeight_) {
+        return nullptr;
     }
-    // 上方向に範囲外は空気
-    if (chipY >= mapHeight_) {
-        return false;
-    }
-    return mapData_[chipY][chipX] == ChipType::kBlock || mapData_[chipY][chipX] == ChipType::kDeathBlock;
+    return activeBlocks_[chipY][chipX].get();
 }
 
 MapChip2D::ChipType MapChip2D::GetChipType(int chipX, int chipY) const {
@@ -67,8 +82,15 @@ float MapChip2D::ChipToWorldY(int chipY) const {
 
 std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
     std::vector<PrimitiveObject*> result;
-    for (auto& obj : chipObjects_) {
-        result.push_back(obj.get());
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            if (activeBlocks_[y][x]) {
+                auto* prim = activeBlocks_[y][x]->GetPrimitive();
+                if (prim) {
+                    result.push_back(prim);
+                }
+            }
+        }
     }
     return result;
 }
@@ -158,6 +180,18 @@ void MapChip2D::CreateChipObjects(ID3D12GraphicsCommandList* commandList) {
 
 void MapChip2D::SetChip(int x, int y, ChipType type) {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
+
+    // もしプレイヤー初期位置を置こうとしているなら、他の初期位置を消す
+    if (type == ChipType::kPlayerSpawn) {
+        for (int cy = 0; cy < mapHeight_; ++cy) {
+            for (int cx = 0; cx < mapWidth_; ++cx) {
+                if (mapData_[cy][cx] == ChipType::kPlayerSpawn) {
+                    mapData_[cy][cx] = ChipType::kNone;
+                }
+            }
+        }
+    }
+
     if (mapData_[y][x] != type) {
         mapData_[y][x] = type;
         RebuildChipObjects();
@@ -184,70 +218,43 @@ void MapChip2D::ResetMap() {
 }
 
 void MapChip2D::RebuildChipObjects() {
-    if (!device_ || !isRebuildEnabled_) return;
+    if (!isRebuildEnabled_) return;
+
+    activeBlocks_.clear();
+    activeBlocks_.resize(mapHeight_);
 
     Primitive* boxPrimitive = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f);
 
-    size_t activeCount = 0;
-
     for (int y = 0; y < mapHeight_; ++y) {
+        activeBlocks_[y].resize(mapWidth_);
         for (int x = 0; x < mapWidth_; ++x) {
-            if (mapData_[y][x] == ChipType::kBlock || mapData_[y][x] == ChipType::kDeathBlock ||
-                mapData_[y][x] == ChipType::kGoal || mapData_[y][x] == ChipType::kCoin) {
-                
-                if (activeCount >= chipObjects_.size()) {
-                    auto newObj = std::make_unique<PrimitiveObject>();
-                    newObj->Initialize(device_.Get(), boxPrimitive);
-                    chipObjects_.push_back(std::move(newObj));
+            float worldX = ChipToWorldX(x) + chipSize_ * 0.5f;
+            float worldY = ChipToWorldY(y) + chipSize_ * 0.5f;
+
+            ChipType type = mapData_[y][x];
+            std::unique_ptr<BaseBlock> newBlock = nullptr;
+
+            if (type == ChipType::kBlock) {
+                newBlock = std::make_unique<NormalBlock>(this, x, y);
+            } else if (type == ChipType::kDeathBlock) {
+                newBlock = std::make_unique<DeathBlock>(this, x, y);
+            } else if (type == ChipType::kGoal) {
+                newBlock = std::make_unique<GoalBlock>(this, x, y);
+            } else if (type == ChipType::kCoin) {
+                newBlock = std::make_unique<CoinBlock>(this, x, y);
+            } else if (type == ChipType::kOneWayBlock) {
+                newBlock = std::make_unique<OneWayBlock>(this, x, y);
+            }
+
+            if (newBlock) {
+                newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, chipSize_);
+                // 実行時にオブジェクトに名前を付けたい場合など
+                if (newBlock->GetPrimitive()) {
+                    newBlock->GetPrimitive()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
                 }
-
-                auto& obj = chipObjects_[activeCount];
-                
-                // テクスチャの設定
-                obj->SetTextureHandle(gpuHandle_);
-
-                // チップの中心座標を計算
-                float worldX = x * chipSize_ + chipSize_ * 0.5f;
-                float worldY = y * chipSize_ + chipSize_ * 0.5f;
-
-                obj->SetTranslation({ worldX, worldY, 0.0f });
-                obj->SetScale({ chipSize_, chipSize_, chipSize_ });
-
-                // 地面と壁とデスブロックで色を変える
-                if (mapData_[y][x] == ChipType::kDeathBlock) {
-                    // デスブロック：赤色
-                    obj->GetMaterial().color = { 1.0f, 0.2f, 0.2f, 1.0f };
-                } else if (mapData_[y][x] == ChipType::kGoal) {
-                    // ゴール：紫色
-                    obj->GetMaterial().color = { 0.8f, 0.2f, 0.8f, 1.0f };
-                } else if (mapData_[y][x] == ChipType::kCoin) {
-                    // コイン：金色
-                    obj->GetMaterial().color = { 1.0f, 0.8f, 0.0f, 1.0f };
-                    obj->SetScale({ chipSize_ * 0.5f, chipSize_ * 0.5f, chipSize_ * 0.5f });
-                } else if (y <= 1) {
-                    // 地面：茶色
-                    obj->GetMaterial().color = { 0.55f, 0.35f, 0.17f, 1.0f };
-                } else if (x == 0 || x == mapWidth_ - 1) {
-                    // 壁：灰色
-                    obj->GetMaterial().color = { 0.5f, 0.5f, 0.55f, 1.0f };
-                } else {
-                    // その他のブロック：緑
-                    obj->GetMaterial().color = { 0.3f, 0.7f, 0.3f, 1.0f };
-                }
-
-                // ライティング無効（2Dなので）
-                obj->GetMaterial().lightingType = 0;
-
-                obj->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
-                obj->Update();
-
-                activeCount++;
+                activeBlocks_[y][x] = std::move(newBlock);
             }
         }
-    }
-
-    if (chipObjects_.size() > activeCount) {
-        chipObjects_.resize(activeCount);
     }
 }
 

@@ -24,7 +24,22 @@ void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
     // プレイヤーの見た目設定
     primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
     primitiveObj_->GetMaterial().color = colorNormal_; // 青色
+    primitiveObj_->GetMaterial().color = colorNormal_; // 青色
     primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効（2Dなので）
+}
+
+void Player2D::FindSpawnPoint(const MapChip2D& map) {
+    for (int y = 0; y < map.GetHeight(); ++y) {
+        for (int x = 0; x < map.GetWidth(); ++x) {
+            if (map.GetChipType(x, y) == MapChip2D::ChipType::kPlayerSpawn) {
+                // スポーン地点の中心座標を計算
+                startPosition_.x = map.ChipToWorldX(x) + map.GetChipSize() * 0.5f;
+                startPosition_.y = map.ChipToWorldY(y) + map.GetChipSize() * 0.5f;
+                position_ = startPosition_;
+                return;
+            }
+        }
+    }
 }
 
 void Player2D::Update(MapChip2D& map) {
@@ -97,38 +112,8 @@ void Player2D::Update(MapChip2D& map) {
     position_.x += velocity_.x * deltaTime;
     ResolveCollisionX(map);
 
-    // デスブロック・ゴール・コインとの接触判定
-    {
-        AABB aabb = GetAABB();
-        // 押し戻しによって境界線上に位置した際も検知できるよう、わずかなマージン（拡張）を持たせる
-        const float margin = 0.02f;
-        int leftChip = map.WorldToChipX(aabb.left - margin);
-        int rightChip = map.WorldToChipX(aabb.right + margin);
-        int bottomChip = map.WorldToChipY(aabb.bottom - margin);
-        int topChip = map.WorldToChipY(aabb.top + margin);
-
-        for (int cy = bottomChip; cy <= topChip; ++cy) {
-            for (int cx = leftChip; cx <= rightChip; ++cx) {
-                MapChip2D::ChipType type = map.GetChipType(cx, cy);
-                if (type == MapChip2D::ChipType::kDeathBlock) {
-                    isDead_ = true;
-                    deathTimer_ = 0.0f;
-                    velocity_ = { 0.0f, 0.0f, 0.0f };
-                    isDashing_ = false;
-                    break;
-                } else if (type == MapChip2D::ChipType::kGoal) {
-                    isGoal_ = true;
-                    goalTimer_ = 0.0f;
-                    velocity_ = { 0.0f, 0.0f, 0.0f };
-                    isDashing_ = false;
-                }
-            }
-            if (isDead_ || isGoal_) break;
-        }
-
-        // コインの回収判定（別関数で共通化）
-        CollectCoins(map);
-    }
+    // 各種ブロックとの接触判定（デス、ゴール、コイン等）
+    SimulateCollisions(map);
 
     // 画面外落下時のリスポーン演出移行
     if (position_.y < -10.0f) {
@@ -315,9 +300,29 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
         // 下方向：足元チェック
         int bottomChip = map.WorldToChipY(aabb.bottom);
         for (int cx = leftChip; cx <= rightChip; ++cx) {
-            if (map.IsBlock(cx, bottomChip)) {
-                // 地面の上に押し戻す
+            bool isBlock = false;
+            bool isOneWay = false;
+            BaseBlock* block = map.GetBlock(cx, bottomChip);
+            if (block) {
+                isBlock = block->IsSolid();
+                isOneWay = block->IsOneWay();
+            } else if (cx < 0 || cx >= map.GetWidth() || bottomChip < 0) {
+                isBlock = true; // 範囲外（左右下）は壁・床扱い
+            }
+            
+            if (isBlock || isOneWay) {
                 float blockTop = map.ChipToWorldY(bottomChip) + chipSize;
+                
+                if (isOneWay) {
+                    // 移動前の足元座標を計算
+                    float previousBottom = position_.y - velocity_.y * TimeManager::GetInstance().GetDeltaTime() - halfHeight_;
+                    // もし前のフレームでブロックの上面より下にいた場合はすり抜ける (少しマージンを持たせる)
+                    if (previousBottom < blockTop - 0.05f) {
+                        continue;
+                    }
+                }
+
+                // 地面の上に押し戻す
                 position_.y = blockTop + halfHeight_;
                 velocity_.y = 0.0f;
                 isOnGround_ = true;
@@ -329,7 +334,15 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
         // 上方向：頭上チェック
         int topChip = map.WorldToChipY(aabb.top);
         for (int cx = leftChip; cx <= rightChip; ++cx) {
-            if (map.IsBlock(cx, topChip)) {
+            bool isBlock = false;
+            BaseBlock* block = map.GetBlock(cx, topChip);
+            if (block) {
+                isBlock = block->IsSolid();
+            } else if (cx < 0 || cx >= map.GetWidth()) {
+                isBlock = true;
+            }
+            // 上方向への範囲外は空気扱いとする
+            if (isBlock) {
                 float blockBottom = map.ChipToWorldY(topChip);
                 position_.y = blockBottom - halfHeight_;
                 velocity_.y = 0.0f;
@@ -355,7 +368,15 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
         // 右方向
         int rightChip = map.WorldToChipX(aabb.right);
         for (int cy = bottomChip; cy <= topChip; ++cy) {
-            if (map.IsBlock(rightChip, cy)) {
+            bool isBlock = false;
+            BaseBlock* block = map.GetBlock(rightChip, cy);
+            if (block) {
+                isBlock = block->IsSolid();
+            } else if (rightChip >= map.GetWidth() || cy < 0) {
+                isBlock = true;
+            }
+
+            if (isBlock) {
                 float blockLeft = map.ChipToWorldX(rightChip);
                 position_.x = blockLeft - halfWidth_;
                 velocity_.x = 0.0f;
@@ -367,7 +388,15 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
         // 左方向
         int leftChip = map.WorldToChipX(aabb.left);
         for (int cy = bottomChip; cy <= topChip; ++cy) {
-            if (map.IsBlock(leftChip, cy)) {
+            bool isBlock = false;
+            BaseBlock* block = map.GetBlock(leftChip, cy);
+            if (block) {
+                isBlock = block->IsSolid();
+            } else if (leftChip < 0 || cy < 0) {
+                isBlock = true;
+            }
+
+            if (isBlock) {
                 float blockRight = map.ChipToWorldX(leftChip) + chipSize;
                 position_.x = blockRight + halfWidth_;
                 velocity_.x = 0.0f;
@@ -385,7 +414,7 @@ float Player2D::EaseInElastic(float t) const {
     return -std::pow(2.0f, 10.0f * t - 10.0f) * std::sin((t * 10.0f - 10.75f) * c4);
 }
 
-void Player2D::CollectCoins(MapChip2D& map) {
+void Player2D::SimulateCollisions(MapChip2D& map) {
     AABB aabb = GetAABB();
     // 押し戻しによって境界線上に位置した際も検知できるよう、わずかなマージンを持たせる
     const float margin = 0.02f;
@@ -396,10 +425,9 @@ void Player2D::CollectCoins(MapChip2D& map) {
 
     for (int cy = bottomChip; cy <= topChip; ++cy) {
         for (int cx = leftChip; cx <= rightChip; ++cx) {
-            MapChip2D::ChipType type = map.GetChipType(cx, cy);
-            if (type == MapChip2D::ChipType::kCoin) {
-                map.SetChip(cx, cy, MapChip2D::ChipType::kNone);
-                score_ += 100;
+            BaseBlock* block = map.GetBlock(cx, cy);
+            if (block) {
+                block->OnCollision(this);
             }
         }
     }

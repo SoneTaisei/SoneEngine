@@ -83,6 +83,7 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     // 6. プレイヤーの生成と初期化
     player_ = std::make_unique<Player2D>();
     player_->Initialize(commandList.Get());
+    player_->FindSpawnPoint(*map_);
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
@@ -129,6 +130,12 @@ void GameScene::Update(SceneManager *sceneManager) {
         isCurrentlyPlaying = EditorManager::IsPlaying();
 #endif
 
+        static bool wasCurrentlyPlaying = false;
+        if (isCurrentlyPlaying && !wasCurrentlyPlaying) {
+            player_->FindSpawnPoint(*map_);
+        }
+        wasCurrentlyPlaying = isCurrentlyPlaying;
+
         bool isRewinding = false;
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
             auto keyboard = KeyboardInput::GetInstance();
@@ -168,12 +175,12 @@ void GameScene::Update(SceneManager *sceneManager) {
                     const auto& frames = ReplayManager::GetInstance()->GetTemporaryRecordedFrames();
                     for (const auto& frame : frames) {
                         player_->SetPosition(frame.position);
-                        player_->CollectCoins(*map_);
+                        player_->SimulateCollisions(*map_);
                     }
                     
                     // 今ポップしたフレームの座標でも判定しておく
                     player_->SetPosition(poppedFrame.position);
-                    player_->CollectCoins(*map_);
+                    player_->SimulateCollisions(*map_);
                     
                     // 再構築を再開（ここで一括構築される）
                     map_->SetRebuildEnabled(true);
@@ -202,7 +209,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                     // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
                     for (int i = 0; i <= curFrame; ++i) {
                         player_->SetPosition(replayData.frames[i].position);
-                        player_->CollectCoins(*map_);
+                        player_->SimulateCollisions(*map_);
                     }
                 }
 
@@ -490,8 +497,13 @@ void GameScene::UpdateEditor() {
         hitEffect_->Update();
     }
     if (player_) {
+        // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
+        if (map_) {
+            player_->FindSpawnPoint(*map_);
+        }
         auto* playerPrim = player_->GetPrimitiveObject();
         if (playerPrim) {
+            playerPrim->SetTranslation(player_->GetPosition());
             playerPrim->Update();
         }
     }

@@ -24,6 +24,9 @@ public:
     const Vector3& GetPosition() const { return position_; }
     void SetPosition(const Vector3& pos) { position_ = pos; }
 
+    // マップからプレイヤー初期位置を検索して設定する
+    void FindSpawnPoint(const MapChip2D& map);
+
     // AABBの取得（当たり判定用）
     struct AABB {
         float left, top, right, bottom;
@@ -38,7 +41,28 @@ public:
     void SetScore(int score) { score_ = score; }
 
     // リプレイ巻き戻し用の状態復元メソッド
-    void CollectCoins(MapChip2D& map);
+    void SimulateCollisions(MapChip2D& map);
+
+    // ブロックのOnCollisionから呼ばれるコールバック群
+    void Kill() {
+        if (!isDead_) {
+            isDead_ = true;
+            deathTimer_ = 0.0f;
+            velocity_ = { 0.0f, 0.0f, 0.0f };
+            isDashing_ = false;
+        }
+    }
+    void ReachGoal() {
+        if (!isGoal_) {
+            isGoal_ = true;
+            goalTimer_ = 0.0f;
+            velocity_ = { 0.0f, 0.0f, 0.0f };
+            isDashing_ = false;
+        }
+    }
+    void AddScore(int score) {
+        score_ += score;
+    }
 
     bool IsGoalComplete() const { return isGoal_ && goalTimer_ >= goalWaitTime_; }
 
