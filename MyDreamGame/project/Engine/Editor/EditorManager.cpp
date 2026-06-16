@@ -797,16 +797,86 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // ペイントツール選択
                     static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
                     ImGui::Text("Paint Tool:");
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Erase (None)", &selectedTool, 0);
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Paint (Block)", &selectedTool, 1);
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Death (DeathBlock)", &selectedTool, 2);
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Goal", &selectedTool, 3);
-                    ImGui::SameLine();
-                    ImGui::RadioButton("Coin", &selectedTool, 4);
+                    ImGui::Spacing();
+
+                    struct ToolIcon {
+                        int id;
+                        const char* name;
+                        ImVec4 color;
+                        float scale; // 実際のモデルに合わせたサイズ比率
+                    };
+
+                    ToolIcon tools[] = {
+                        { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f },
+                        { 1, "Block", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
+                        { 2, "Death", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
+                        { 3, "Goal",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
+                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f } // コインは実際のモデルが0.5倍なので合わせる
+                    };
+
+                    int numTools = sizeof(tools) / sizeof(tools[0]);
+                    float itemSize = 64.0f; // アイコン枠のサイズ
+                    float padding = 8.0f;
+                    float totalHeight = itemSize + 24.0f; // アイコン＋テキスト
+                    float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
+                    float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+
+                    for (int i = 0; i < numTools; i++) {
+                        ImGui::PushID(i);
+                        ToolIcon& tool = tools[i];
+
+                        ImVec2 p = ImGui::GetCursorScreenPos();
+                        bool isSelected = (selectedTool == tool.id);
+
+                        // 当たり判定 (InvisibleButton)
+                        if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
+                            selectedTool = tool.id;
+                        }
+
+                        bool isHovered = ImGui::IsItemHovered();
+                        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+                        // 背景 (ホバー時)
+                        if (isHovered) {
+                            drawList->AddRectFilled(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(80, 80, 80, 255), 4.0f);
+                        }
+
+                        // アイコン (四角形 - スケールを適用)
+                        float iconPadding = 4.0f;
+                        float actualIconSize = (itemSize - iconPadding * 2) * tool.scale;
+                        // 中央揃えにするためのオフセット計算
+                        float offset = (itemSize - actualIconSize) * 0.5f;
+
+                        ImVec2 iconMin = ImVec2(p.x + offset, p.y + offset);
+                        ImVec2 iconMax = ImVec2(p.x + offset + actualIconSize, p.y + offset + actualIconSize);
+                        
+                        // Erase(0) の場合は枠線だけにする、それ以外は塗りつぶし
+                        if (tool.id == 0) {
+                            drawList->AddRect(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f, 0, 2.0f);
+                        } else {
+                            drawList->AddRectFilled(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f);
+                        }
+
+                        // テキスト
+                        ImVec2 textSize = ImGui::CalcTextSize(tool.name);
+                        ImVec2 textPos = ImVec2(p.x + (itemSize - textSize.x) * 0.5f, p.y + itemSize + 2.0f);
+                        drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), tool.name);
+
+                        // 選択中の黄色の枠線
+                        if (isSelected) {
+                            drawList->AddRect(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(255, 255, 0, 255), 4.0f, 0, 2.0f);
+                        }
+
+                        ImGui::PopID();
+
+                        // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
+                        float lastButtonX2 = ImGui::GetItemRectMax().x;
+                        float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
+                        if (i + 1 < numTools && nextButtonX2 < windowVisibleX) {
+                            ImGui::SameLine();
+                        }
+                    }
+                    ImGui::Spacing();
 
                     ImGui::Separator();
 
