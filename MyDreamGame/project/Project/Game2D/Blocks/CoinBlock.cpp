@@ -2,11 +2,11 @@
 #include "Game2D/Player2D.h"
 #include "Core/TimeManager.h"
 
-void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float size) {
+void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();
     primitiveObj_->Initialize(device, boxPrimitive);
     primitiveObj_->GetMaterial().color = { 1.0f, 0.8f, 0.0f, 1.0f };
-    primitiveObj_->SetScale({ size * 0.5f, size * 0.5f, size * 0.5f });
+    primitiveObj_->SetScale({ width * 0.5f, height * 0.5f, 0.5f });
     primitiveObj_->SetTranslation({ worldX, worldY, 0.0f });
     primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効化
 }

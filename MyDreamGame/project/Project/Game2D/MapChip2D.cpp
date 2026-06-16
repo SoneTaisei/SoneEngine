@@ -30,25 +30,33 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList) {
 }
 
 void MapChip2D::Update() {
-    for (int y = 0; y < mapHeight_; ++y) {
-        for (int x = 0; x < mapWidth_; ++x) {
-            if (activeBlocks_[y][x]) {
-                activeBlocks_[y][x]->Update();
-                if (activeBlocks_[y][x]->IsDestroyed()) {
-                    activeBlocks_[y][x].reset();
-                    mapData_[y][x] = ChipType::kNone;
+    for (auto it = updateBlocks_.begin(); it != updateBlocks_.end();) {
+        if (*it) {
+            (*it)->Update();
+            if ((*it)->IsDestroyed()) {
+                // Remove from mapData_ and activeBlocks_
+                for (int y = 0; y < mapHeight_; ++y) {
+                    for (int x = 0; x < mapWidth_; ++x) {
+                        if (activeBlocks_[y][x] == *it) {
+                            activeBlocks_[y][x].reset();
+                            mapData_[y][x] = ChipType::kNone;
+                        }
+                    }
                 }
+                it = updateBlocks_.erase(it);
+            } else {
+                ++it;
             }
+        } else {
+            it = updateBlocks_.erase(it);
         }
     }
 }
 
 void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
-    for (int y = 0; y < mapHeight_; ++y) {
-        for (int x = 0; x < mapWidth_; ++x) {
-            if (activeBlocks_[y][x]) {
-                activeBlocks_[y][x]->Draw(commandList);
-            }
+    for (const auto& block : updateBlocks_) {
+        if (block) {
+            block->Draw(commandList);
         }
     }
 }
@@ -82,13 +90,11 @@ float MapChip2D::ChipToWorldY(int chipY) const {
 
 std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
     std::vector<PrimitiveObject*> result;
-    for (int y = 0; y < mapHeight_; ++y) {
-        for (int x = 0; x < mapWidth_; ++x) {
-            if (activeBlocks_[y][x]) {
-                auto* prim = activeBlocks_[y][x]->GetPrimitive();
-                if (prim) {
-                    result.push_back(prim);
-                }
+    for (const auto& block : updateBlocks_) {
+        if (block) {
+            auto* prim = block->GetPrimitive();
+            if (prim) {
+                result.push_back(prim);
             }
         }
     }
@@ -221,39 +227,87 @@ void MapChip2D::RebuildChipObjects() {
     if (!isRebuildEnabled_) return;
 
     activeBlocks_.clear();
-    activeBlocks_.resize(mapHeight_);
+    activeBlocks_.resize(mapHeight_, std::vector<std::shared_ptr<BaseBlock>>(mapWidth_, nullptr));
+    updateBlocks_.clear();
+
+    std::vector<std::vector<bool>> visited(mapHeight_, std::vector<bool>(mapWidth_, false));
 
     Primitive* boxPrimitive = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f);
 
     for (int y = 0; y < mapHeight_; ++y) {
-        activeBlocks_[y].resize(mapWidth_);
         for (int x = 0; x < mapWidth_; ++x) {
-            float worldX = ChipToWorldX(x) + chipSize_ * 0.5f;
-            float worldY = ChipToWorldY(y) + chipSize_ * 0.5f;
+            if (visited[y][x]) continue;
 
             ChipType type = mapData_[y][x];
-            std::unique_ptr<BaseBlock> newBlock = nullptr;
+            if (type == ChipType::kNone || type == ChipType::kPlayerSpawn) {
+                visited[y][x] = true;
+                continue;
+            }
+
+            int spanWidth = 1;
+            int spanHeight = 1;
+            bool canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock);
+            if (canMerge) {
+                // 水平方向のスパンを探索
+                while (x + spanWidth < mapWidth_ && mapData_[y][x + spanWidth] == type && !visited[y][x + spanWidth]) {
+                    spanWidth++;
+                }
+
+                // 垂直方向のスパンを探索
+                bool canExpandUp = true;
+                while (y + spanHeight < mapHeight_ && canExpandUp) {
+                    // 追加する行が全て同じ種類で未訪問かチェック
+                    for (int w = 0; w < spanWidth; ++w) {
+                        if (mapData_[y + spanHeight][x + w] != type || visited[y + spanHeight][x + w]) {
+                            canExpandUp = false;
+                            break;
+                        }
+                    }
+                    if (canExpandUp) {
+                        spanHeight++;
+                    }
+                }
+            }
+
+            float worldX = ChipToWorldX(x) + (spanWidth * chipSize_) * 0.5f;
+            float worldY = ChipToWorldY(y) + (spanHeight * chipSize_) * 0.5f;
+
+            std::shared_ptr<BaseBlock> newBlock = nullptr;
 
             if (type == ChipType::kBlock) {
-                newBlock = std::make_unique<NormalBlock>(this, x, y);
+                newBlock = std::make_shared<NormalBlock>(this, x, y);
             } else if (type == ChipType::kDeathBlock) {
-                newBlock = std::make_unique<DeathBlock>(this, x, y);
+                newBlock = std::make_shared<DeathBlock>(this, x, y);
             } else if (type == ChipType::kGoal) {
-                newBlock = std::make_unique<GoalBlock>(this, x, y);
+                newBlock = std::make_shared<GoalBlock>(this, x, y);
             } else if (type == ChipType::kCoin) {
-                newBlock = std::make_unique<CoinBlock>(this, x, y);
+                newBlock = std::make_shared<CoinBlock>(this, x, y);
             } else if (type == ChipType::kOneWayBlock) {
-                newBlock = std::make_unique<OneWayBlock>(this, x, y);
+                newBlock = std::make_shared<OneWayBlock>(this, x, y);
             }
 
             if (newBlock) {
-                newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, chipSize_);
-                // 実行時にオブジェクトに名前を付けたい場合など
+                newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, spanWidth * chipSize_, spanHeight * chipSize_);
                 if (newBlock->GetPrimitive()) {
                     newBlock->GetPrimitive()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
+                    if (spanWidth > 1 || spanHeight > 1) {
+                        Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({(float)spanWidth, (float)spanHeight, 1.0f});
+                        newBlock->GetPrimitive()->GetMaterial().uvTransform = uvTrans;
+                    }
                 }
-                activeBlocks_[y][x] = std::move(newBlock);
+                updateBlocks_.push_back(newBlock);
+
+                for (int h = 0; h < spanHeight; ++h) {
+                    for (int w = 0; w < spanWidth; ++w) {
+                        activeBlocks_[y + h][x + w] = newBlock;
+                        visited[y + h][x + w] = true;
+                    }
+                }
+            } else {
+                visited[y][x] = true;
             }
+
+            x += spanWidth - 1;
         }
     }
 }

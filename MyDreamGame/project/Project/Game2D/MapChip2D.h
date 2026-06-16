@@ -91,7 +91,10 @@ private:
     float chipSize_ = 1.0f; // 1チップのサイズ（ワールド座標）
 
     // 実行時に生成される各種ブロックのインスタンス
-    std::vector<std::vector<std::unique_ptr<BaseBlock>>> activeBlocks_;
+    std::vector<std::vector<std::shared_ptr<BaseBlock>>> activeBlocks_;
+    
+    // 更新・描画用のユニークなブロックリスト
+    std::vector<std::shared_ptr<BaseBlock>> updateBlocks_;
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;

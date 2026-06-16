@@ -13,7 +13,7 @@ public:
         : map_(map), chipX_(chipX), chipY_(chipY) {}
     virtual ~BaseBlock() = default;
 
-    virtual void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float size) {}
+    virtual void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {}
     
     virtual void Update() {
         if (primitiveObj_) {
