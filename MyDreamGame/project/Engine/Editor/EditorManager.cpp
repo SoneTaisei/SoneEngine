@@ -1302,21 +1302,74 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         // (1) 背景
                         drawList->AddRectFilled(p_min, p_max, IM_COL32(50, 50, 50, 255), 4.0f);
 
-                        // (2) キーONの区間を描画
+                        // 選択されたブロックの保持用
+                        static int selectedBlockStart = -1;
+                        static int selectedBlockEnd = -1;
+                        static int selectedBlockKey = -1;
+
                         int k = selectedKeyToVisualize;
+                        if (selectedBlockKey != k) {
+                            selectedBlockStart = -1;
+                            selectedBlockEnd = -1;
+                            selectedBlockKey = k;
+                        }
+
+                        // (2) キーONの区間を描画
                         char target = (k==0)?'L':(k==1)?'R':(k==2)?'J':(k==3)?'D':(k==4)?'C':(k==5)?'W':'S';
                         int runStart = -1;
                         for (int i = 0; i <= maxFrame; ++i) {
                             bool on = (activeReplay.frames[i].keys[k] == target);
                             if (on && runStart == -1) runStart = i;
                             else if (!on && runStart != -1) {
+                                int runEnd = i - 1;
                                 float x1 = p_min.x + (width * runStart / maxFrame);
                                 float x2 = p_min.x + (width * i / maxFrame);
-                                drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
+                                
+                                bool isThisSelected = (selectedBlockStart == runStart && selectedBlockEnd == runEnd && selectedBlockKey == k);
+                                
+                                // ブロックのクリック判定 (左クリックで選択)
+                                if (isHovered && ImGui::IsMouseClicked(0)) {
+                                    float mouseX = ImGui::GetIO().MousePos.x;
+                                    float mouseY = ImGui::GetIO().MousePos.y;
+                                    if (mouseX >= x1 && mouseX <= x2 && mouseY >= p_min.y && mouseY <= p_max.y) {
+                                        selectedBlockStart = runStart;
+                                        selectedBlockEnd = runEnd;
+                                        isThisSelected = true;
+                                    }
+                                }
+
+                                int jitterAmt = 0;
+                                for (const auto& j : activeReplay.jitters) {
+                                    if (j.keyIdx == k && j.startFrame == runStart && j.endFrame == runEnd && j.maxJitter > 0) {
+                                        jitterAmt = j.maxJitter;
+                                        break;
+                                    }
+                                }
+
+                                // ブレ幅の範囲を青色で描画
+                                if (jitterAmt > 0) {
+                                    float jx1 = p_min.x + (width * (std::max)(0, runStart - jitterAmt) / maxFrame);
+                                    float jx2 = p_min.x + (width * (std::min)(maxFrame, runEnd + jitterAmt) / maxFrame);
+                                    drawList->AddRectFilled(ImVec2(jx1, p_min.y + 1.0f), ImVec2(jx2, p_max.y - 1.0f), IM_COL32(50, 150, 255, 150));
+                                }
+
+                                if (isThisSelected) {
+                                    drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 0, 255));
+                                    drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 255, 255), 0, 2.0f);
+                                } else {
+                                    // ブレ設定がされているブロックは色を少し変える
+                                    if (jitterAmt > 0) {
+                                        drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 180, 0, 200));
+                                    } else {
+                                        drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
+                                    }
+                                }
+
                                 runStart = -1;
                             }
                         }
                         if (runStart != -1) {
+                            int runEnd = maxFrame;
                             float x1 = p_min.x + (width * runStart / maxFrame);
                             float x2 = p_min.x + width;
                             drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
@@ -1395,7 +1448,56 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                             ImGui::PopStyleColor();
                         } else {
-                            ImGui::Text("※右クリック+ドラッグで範囲を選択できます");
+                            ImGui::Text("※右クリック+ドラッグで範囲を選択し、手動でON/OFFを書き換えできます");
+                        }
+
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        if (selectedBlockStart != -1 && selectedBlockEnd != -1) {
+                            ImGui::Text("選択中のブロック: F%04d ～ F%04d", selectedBlockStart, selectedBlockEnd);
+                            
+                            // 既存のJitterSettingを探す
+                            JitterSetting* currentJitter = nullptr;
+                            for (auto& j : activeReplay.jitters) {
+                                if (j.keyIdx == k && j.startFrame == selectedBlockStart && j.endFrame == selectedBlockEnd) {
+                                    currentJitter = &j;
+                                    break;
+                                }
+                            }
+                            
+                            int jitterVal = currentJitter ? currentJitter->maxJitter : 0;
+                            
+                            ImGui::Text("動的なブレ (Jitter) 設定");
+                            if (ImGui::SliderInt("ブレの強さ (±フレーム)##Jitter", &jitterVal, 0, 15)) {
+                                if (currentJitter) {
+                                    currentJitter->maxJitter = jitterVal;
+                                } else if (jitterVal > 0) {
+                                    JitterSetting j;
+                                    j.keyIdx = k;
+                                    j.startFrame = selectedBlockStart;
+                                    j.endFrame = selectedBlockEnd;
+                                    j.maxJitter = jitterVal;
+                                    activeReplay.jitters.push_back(j);
+                                }
+                                
+                                // Jitterが0になったら削除する
+                                if (jitterVal == 0 && currentJitter) {
+                                    auto it = std::remove_if(activeReplay.jitters.begin(), activeReplay.jitters.end(),
+                                        [&](const JitterSetting& js) {
+                                            return js.keyIdx == k && js.startFrame == selectedBlockStart && js.endFrame == selectedBlockEnd;
+                                        });
+                                    activeReplay.jitters.erase(it, activeReplay.jitters.end());
+                                }
+
+                                if (!activeReplay.filename.empty()) {
+                                    replayMgr->SaveToFile(activeReplay, activeReplay.filename);
+                                } else {
+                                    replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                                }
+                            }
+                            ImGui::TextDisabled("※再生・ループのたびに、このブロックのタイミングがランダムに変化します");
+                        } else {
+                            ImGui::TextDisabled("※黄色いブロックをクリックすると、動的なブレを設定できます");
                         }
 
 

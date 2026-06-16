@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 ReplayManager* ReplayManager::GetInstance() {
     static ReplayManager instance;
@@ -121,6 +122,9 @@ void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath)
 
     // KeyboardInput をリプレイモードに切り替える
     KeyboardInput::GetInstance()->SetReplayMode(true);
+    
+    // 実行用キーバッファを生成（ランダムブレの適用）
+    GenerateRuntimeKeys();
 }
 
 void ReplayManager::SelectReplay(int historyIndex, const std::string& filepath) {
@@ -168,6 +172,9 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
             currentFrame_ = 0; // ループ再生：最初に戻す
             playerPos = currentReplay_.playerInitPos; // 座標も初期位置に戻す
             cameraPos = currentReplay_.cameraInitPos; // カメラ座標も初期位置に戻す
+            
+            // ループのたびに実行用キーバッファを再生成（毎回違うブレ）
+            GenerateRuntimeKeys();
         } else {
             StopPlayback(); // ループOFF：完全に停止
             return;
@@ -181,25 +188,27 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         BYTE keys[256] = {};
         BYTE preKeys[256] = {};
 
+        const char* currentKeys = runtimeKeys_[currentFrame_].c_str();
+
         // 現在のキー状態の構築
-        if (currentFrame.keys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
-        if (currentFrame.keys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
-        if (currentFrame.keys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
-        if (currentFrame.keys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
-        if (currentFrame.keys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
-        if (currentFrame.keys[5] == 'W') { keys[DIK_W] = 0x80; keys[DIK_UP] = 0x80; }
-        if (currentFrame.keys[6] == 'S') { keys[DIK_S] = 0x80; keys[DIK_DOWN] = 0x80; }
+        if (currentKeys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
+        if (currentKeys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
+        if (currentKeys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
+        if (currentKeys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
+        if (currentKeys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
+        if (currentKeys[5] == 'W') { keys[DIK_W] = 0x80; keys[DIK_UP] = 0x80; }
+        if (currentKeys[6] == 'S') { keys[DIK_S] = 0x80; keys[DIK_DOWN] = 0x80; }
 
         // 1フレーム前のキー状態の構築
         if (currentFrame_ > 0) {
-            const FrameData& prevFrame = currentReplay_.frames[currentFrame_ - 1];
-            if (prevFrame.keys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
-            if (prevFrame.keys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
-            if (prevFrame.keys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
-            if (prevFrame.keys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
-            if (prevFrame.keys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
-            if (prevFrame.keys[5] == 'W') { preKeys[DIK_W] = 0x80; preKeys[DIK_UP] = 0x80; }
-            if (prevFrame.keys[6] == 'S') { preKeys[DIK_S] = 0x80; preKeys[DIK_DOWN] = 0x80; }
+            const char* prevKeys = runtimeKeys_[currentFrame_ - 1].c_str();
+            if (prevKeys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
+            if (prevKeys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
+            if (prevKeys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
+            if (prevKeys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
+            if (prevKeys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
+            if (prevKeys[5] == 'W') { preKeys[DIK_W] = 0x80; preKeys[DIK_UP] = 0x80; }
+            if (prevKeys[6] == 'S') { preKeys[DIK_S] = 0x80; preKeys[DIK_DOWN] = 0x80; }
         }
 
         KeyboardInput::GetInstance()->SetReplayKeyStates(keys, preKeys);
@@ -250,8 +259,63 @@ void ReplayManager::ApplyTimelineEdit(int frameIdx, int keyIdx, bool active) {
     char keyChars[8] = "LRJDCWS";
     currentReplay_.frames[frameIdx].keys[keyIdx] = active ? keyChars[keyIdx] : '-';
 
+    // 編集時はブロックが壊れる可能性があるため、重複するJitter設定をリセットする
+    auto it = std::remove_if(currentReplay_.jitters.begin(), currentReplay_.jitters.end(),
+        [frameIdx, keyIdx](const JitterSetting& j) {
+            return (j.keyIdx == keyIdx && frameIdx >= j.startFrame && frameIdx <= j.endFrame);
+        });
+    currentReplay_.jitters.erase(it, currentReplay_.jitters.end());
+
     // キーが変更されたため、MMLトラックを再計算する
     RebuildMmlFromFrames(currentReplay_);
+}
+
+void ReplayManager::GenerateRuntimeKeys() {
+    int maxFrame = currentReplay_.totalFrames;
+    if (maxFrame <= 0) return;
+
+    runtimeKeys_.resize(maxFrame);
+    
+    // ベースとして元のキー状態をコピー
+    for (int i = 0; i < maxFrame; ++i) {
+        runtimeKeys_[i] = currentReplay_.frames[i].keys;
+    }
+
+    // Jitter設定を適用
+    for (const auto& jitter : currentReplay_.jitters) {
+        if (jitter.maxJitter <= 0) continue;
+        
+        int startF = jitter.startFrame;
+        int endF = jitter.endFrame;
+        if (startF < 0) startF = 0;
+        if (endF >= maxFrame) endF = maxFrame - 1;
+        if (startF > endF) continue;
+
+        char keyChars[8] = "LRJDCWS";
+        char targetKey = keyChars[jitter.keyIdx];
+
+        int shiftStart = (std::rand() % (jitter.maxJitter * 2 + 1)) - jitter.maxJitter;
+        int shiftEnd = (std::rand() % (jitter.maxJitter * 2 + 1)) - jitter.maxJitter;
+
+        int newStartF = startF + shiftStart;
+        int newEndF = endF + shiftEnd;
+
+        if (newEndF < newStartF) {
+            newEndF = newStartF;
+        }
+
+        // まず元の区間をクリア
+        for (int i = startF; i <= endF; ++i) {
+            runtimeKeys_[i][jitter.keyIdx] = '-';
+        }
+        
+        // シフト後の区間をONにする
+        for (int i = newStartF; i <= newEndF; ++i) {
+            if (i >= 0 && i < maxFrame) {
+                runtimeKeys_[i][jitter.keyIdx] = targetKey;
+            }
+        }
+    }
 }
 
 void ReplayManager::RebuildMmlFromFrames(ReplayData& data) {
@@ -405,6 +469,15 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
     ofs << "T4_UpDown=" << data.mmlTracks[4] << std::endl;
     ofs << std::endl;
 
+    // 動的ブレ設定 (Jitters)
+    if (!data.jitters.empty()) {
+        ofs << "[Jitters]" << std::endl;
+        for (const auto& j : data.jitters) {
+            ofs << j.keyIdx << "," << j.startFrame << "," << j.endFrame << "," << j.maxJitter << std::endl;
+        }
+        ofs << std::endl;
+    }
+
     // 1フレームずつの状態データ (STR)
     // フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z
     ofs << "[STR]" << std::endl;
@@ -478,6 +551,17 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                 else if (key == "T2_Dash") outData.mmlTracks[2] = value;
                 else if (key == "T3_Cling") outData.mmlTracks[3] = value;
                 else if (key == "T4_UpDown") outData.mmlTracks[4] = value;
+            }
+        } else if (currentSection == "Jitters") {
+            std::stringstream jss(line);
+            std::string p1, p2, p3, p4;
+            if (std::getline(jss, p1, ',') && std::getline(jss, p2, ',') && std::getline(jss, p3, ',') && std::getline(jss, p4)) {
+                JitterSetting j;
+                j.keyIdx = std::stoi(p1);
+                j.startFrame = std::stoi(p2);
+                j.endFrame = std::stoi(p3);
+                j.maxJitter = std::stoi(p4);
+                outData.jitters.push_back(j);
             }
         } else if (currentSection == "STR") {
             // 新フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z

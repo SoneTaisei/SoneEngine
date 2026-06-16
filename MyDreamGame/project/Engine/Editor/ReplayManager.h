@@ -19,6 +19,16 @@ struct FrameData {
 };
 
 /// <summary>
+/// キーフレーム（ブロック）ごとの動的なブレ設定
+/// </summary>
+struct JitterSetting {
+    int keyIdx;       // どのキーに対する設定か (0~6)
+    int startFrame;   // 記録時のブロック開始フレーム
+    int endFrame;     // 記録時のブロック終了フレーム
+    int maxJitter;    // ブレの強さ（±フレーム）
+};
+
+/// <summary>
 /// 1プレイ全体のリプレイデータ
 /// </summary>
 struct ReplayData {
@@ -32,6 +42,7 @@ struct ReplayData {
     std::vector<FrameData> frames;            // 1フレームずつのデータ (STR)
     std::string mmlTracks[5];                 // MMLに圧縮された5つのキー状態トラック
                                               // T0: 左右移動(L,R,N), T1: ジャンプ(J,N), T2: ダッシュ(D,N), T3: 壁張り付き(C,N), T4: 上下移動(W,S,N)
+    std::vector<JitterSetting> jitters;       // 動的ブレ設定リスト
 };
 
 /// <summary>
@@ -106,6 +117,9 @@ private:
     std::string EncodeTrackToMml(const std::vector<char>& rawTrack);
     std::vector<char> DecodeMmlToTrack(const std::string& mmlStr, int expectedFrames);
 
+    // 再生・ループ時に実行用キーバッファを生成する
+    void GenerateRuntimeKeys();
+
 private:
     bool isRecording_ = false;
     bool isPlaying_ = false;
@@ -124,4 +138,6 @@ private:
     ReplayData currentReplay_;                        // 現在アクティブなリプレイ（再生用・編集用）
     std::vector<ReplayData> history_;                 // 直近3回のプレイ履歴（0: 最新, 1: 1回前, 2: 2回前）
     std::vector<std::string> savedList_;              // json/saved_replays/ 下のファイル名リスト
+    
+    std::vector<std::string> runtimeKeys_;            // 再生時に使用する動的キー配列 (1要素につき7文字の文字列)
 };
