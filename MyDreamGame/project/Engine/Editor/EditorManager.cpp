@@ -30,9 +30,11 @@ static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HA
     SrvManager::GetInstance()->Allocate(out_cpu_handle, out_gpu_handle);
 }
 
+bool EditorManager::isPlaying_ = false;
 bool EditorManager::showObjects_ = true;
 bool EditorManager::showEffects_ = true;
-bool EditorManager::isPlaying_ = false;
+ImVec2 EditorManager::gameViewPos_ = ImVec2(0, 0);
+ImVec2 EditorManager::gameViewSize_ = ImVec2(1280, 720);
 
 // 枠を返すための関数
 static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) {
@@ -348,6 +350,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // 中央寄せ
                 ImVec2 currentPos = ImGui::GetCursorPos();
                 ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+                gameViewPos_ = ImGui::GetCursorScreenPos();
+                gameViewSize_ = imageSize;
                 ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
             }
         }
@@ -1355,7 +1359,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                                 if (isThisSelected) {
                                     drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 0, 255));
-                                    drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 255, 255), 0, 2.0f);
+                                    drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
                                 } else {
                                     // ブレ設定がされているブロックは色を少し変える
                                     if (jitterAmt > 0) {

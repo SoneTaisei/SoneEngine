@@ -385,6 +385,12 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                 auto* playerPrim = player_->GetPrimitiveObject();
                 // エディターの「Show Trail」がONのときだけ残像を描画する
                 if (playerPrim && playerPrim->GetShowTrail()) {
+                    // クリップ矩形を設定して、GameViewの外に線や点がはみ出ないようにする
+                    ImVec2 gameViewPos = EditorManager::GetGameViewPos();
+                    ImVec2 gameViewSize = EditorManager::GetGameViewSize();
+                    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+                    drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
+
                     // 描画前にゴースト用のインデックスをリセット
                     playerPrim->ResetGhostIndex();
 
@@ -424,7 +430,52 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
                         // プレイヤーのPrimitiveを使って残像(ゴースト)を描画
                         playerPrim->DrawGhost(commandList_, ghostTransform, ghostMaterial);
+
+                        // 3D -> NDC Conversion for the current frame's position
+                        Vector3 ndcCurr = TransformFunctions::Transform(frameData.position, viewProjectionMatrix);
+
+                        ImVec2 pCurr;
+                        bool isCurrVisible = false;
+
+                        // Check if the point is in front of the camera
+                        if (ndcCurr.z >= 0.0f && ndcCurr.z <= 1.0f) {
+                            isCurrVisible = true;
+                            float screenWidth = gameViewSize.x;
+                            float screenHeight = gameViewSize.y;
+
+                            pCurr = ImVec2(
+                                gameViewPos.x + (ndcCurr.x + 1.0f) * 0.5f * screenWidth,
+                                gameViewPos.y + (1.0f - ndcCurr.y) * 0.5f * screenHeight
+                            );
+
+                            // Draw a dot at the afterimage position
+                            drawList->AddCircleFilled(pCurr, 4.0f, IM_COL32(255, 50, 50, 255));
+                        }
+
+                        // Draw orbital line between the current and previous afterimage
+                        if (i >= FRAME_STEP) {
+                            int prevIndex = i - FRAME_STEP;
+                            if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
+                                Vector3 ndcPrev = TransformFunctions::Transform(currentReplay.frames[prevIndex].position, viewProjectionMatrix);
+
+                                // Draw only if both current and previous points are visible
+                                if (isCurrVisible && ndcPrev.z >= 0.0f && ndcPrev.z <= 1.0f) {
+                                    float screenWidth = gameViewSize.x;
+                                    float screenHeight = gameViewSize.y;
+
+                                    ImVec2 pPrev(
+                                        gameViewPos.x + (ndcPrev.x + 1.0f) * 0.5f * screenWidth,
+                                        gameViewPos.y + (1.0f - ndcPrev.y) * 0.5f * screenHeight
+                                    );
+
+                                    drawList->AddLine(pPrev, pCurr, IM_COL32(255, 200, 0, 255), 2.0f);
+                                }
+                            }
+                        }
                     }
+
+                    // クリップ矩形を解除
+                    drawList->PopClipRect();
                 }
             }
         }
