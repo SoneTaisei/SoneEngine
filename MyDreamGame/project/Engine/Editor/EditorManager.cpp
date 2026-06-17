@@ -1280,33 +1280,28 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                         ImGui::Spacing();
                         ImGui::Separator();
-                        ImGui::Text("▼ カスタムシークバー (右ドラッグで範囲選択)");
+                        ImGui::Text("▼ カスタムシークバー (右ドラッグで範囲選択 / Ctrl+ホイールでズーム)");
                         
                         // 1. 表示するキーの選択
                         static int selectedKeyToVisualize = 0; // Default to Left
                         const char* keyNames[] = { "Left (L)", "Right (R)", "Jump (J)", "Dash (D)", "Cling (C)", "Up (W)", "Down (S)" };
                         ImGui::Combo("対象キー", &selectedKeyToVisualize, keyNames, IM_ARRAYSIZE(keyNames));
                         
-                        // カスタムシークバー描画
-                        ImVec2 p_min = ImGui::GetCursorScreenPos();
-                        float width = ImGui::GetContentRegionAvail().x;
-                        if (width <= 0) width = 200.0f;
-                        float height = 40.0f;
-                        ImVec2 p_max = ImVec2(p_min.x + width, p_min.y + height);
+                        static float seekbarZoom = 1.0f;
 
-                        ImGui::InvisibleButton("##CustomSeekbar", ImVec2(width, height));
-                        bool isActive = ImGui::IsItemActive(); 
-                        bool isHovered = ImGui::IsItemHovered();
+                        // Ctrl + ホイールでズーム
+                        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl) {
+                            float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f) {
+                                // ズーム倍率の変更
+                                float oldZoom = seekbarZoom;
+                                seekbarZoom += wheel * 0.1f * seekbarZoom; // 倍率に応じたズーム速度
+                                if (seekbarZoom < 0.1f) seekbarZoom = 0.1f;
+                                if (seekbarZoom > 100.0f) seekbarZoom = 100.0f;
+                            }
+                        }
 
-                        ImDrawList* drawList = ImGui::GetWindowDrawList();
-                        
-                        int maxFrame = activeReplay.totalFrames - 1;
-                        if (maxFrame < 1) maxFrame = 1;
-
-                        // (1) 背景
-                        drawList->AddRectFilled(p_min, p_max, IM_COL32(50, 50, 50, 255), 4.0f);
-
-                        // 選択されたブロックの保持用
+                        // 選択されたブロックの保持用（スコープを外に出す）
                         static int selectedBlockStart = -1;
                         static int selectedBlockEnd = -1;
                         static int selectedBlockKey = -1;
@@ -1318,6 +1313,66 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             selectedBlockKey = k;
                         }
 
+                        // (3) 範囲選択ロジック用の状態（スコープを外に出す）
+                        static int rangeStart = -1;
+                        static int rangeEnd = -1;
+                        static bool isSelecting = false;
+
+                        ImGui::BeginChild("SeekbarScrollRegion", ImVec2(0, 60), false, ImGuiWindowFlags_HorizontalScrollbar);
+                        // カスタムシークバー描画
+                        ImVec2 p_min = ImGui::GetCursorScreenPos();
+                        // ImGui::GetWindowWidth() は BeginChild 内だと利用可能な幅（スクロールなし時）
+                        float baseWidth = ImGui::GetWindowWidth(); 
+                        float width = baseWidth * seekbarZoom;
+                        if (width < 200.0f) width = 200.0f;
+                        float height = 40.0f;
+                        ImVec2 p_max = ImVec2(p_min.x + width, p_min.y + height);
+
+                        ImGui::InvisibleButton("##CustomSeekbar", ImVec2(width, height));
+                        bool isActive = ImGui::IsItemActive(); 
+                        bool isHovered = ImGui::IsItemHovered();
+
+                        ImDrawList* drawList = ImGui::GetWindowDrawList();
+                        
+                        int totalFrames = activeReplay.totalFrames;
+                        if (totalFrames < 1) totalFrames = 1;
+                        int maxFrame = totalFrames - 1;
+
+                        // (1) 背景
+                        drawList->AddRectFilled(p_min, p_max, IM_COL32(50, 50, 50, 255), 4.0f);
+
+                        // (1.5) グリッド線の描画
+                        float frameWidth = width / totalFrames;
+                        float scrollX = ImGui::GetScrollX();
+                        float viewWidth = ImGui::GetWindowWidth();
+                        
+                        int startIdx = (int)(scrollX / width * totalFrames);
+                        int endIdx = (int)((scrollX + viewWidth) / width * totalFrames) + 1;
+                        if (startIdx < 0) startIdx = 0;
+                        if (endIdx > totalFrames) endIdx = totalFrames;
+
+                        if (frameWidth > 2.0f) {
+                            // 1フレームの幅が十分あるときは1フレームごとに描画
+                            for (int i = startIdx; i <= endIdx; ++i) {
+                                float x = p_min.x + (width * i / totalFrames);
+                                ImU32 color;
+                                if (i % 60 == 0) color = IM_COL32(150, 150, 150, 150);
+                                else if (i % 10 == 0) color = IM_COL32(100, 100, 100, 100);
+                                else color = IM_COL32(70, 70, 70, 100); // 目立ちすぎない色
+                                drawList->AddLine(ImVec2(x, p_min.y), ImVec2(x, p_max.y), color, 1.0f);
+                            }
+                        } else if (frameWidth > 0.1f) {
+                            // 縮小されているときは10フレームごとに描画
+                            for (int i = startIdx - (startIdx % 10); i <= endIdx; i += 10) {
+                                if (i < 0) continue;
+                                float x = p_min.x + (width * i / totalFrames);
+                                ImU32 color;
+                                if (i % 60 == 0) color = IM_COL32(150, 150, 150, 150);
+                                else color = IM_COL32(100, 100, 100, 100);
+                                drawList->AddLine(ImVec2(x, p_min.y), ImVec2(x, p_max.y), color, 1.0f);
+                            }
+                        }
+
                         // (2) キーONの区間を描画
                         char target = (k==0)?'L':(k==1)?'R':(k==2)?'J':(k==3)?'D':(k==4)?'C':(k==5)?'W':'S';
                         int runStart = -1;
@@ -1326,8 +1381,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             if (on && runStart == -1) runStart = i;
                             else if (!on && runStart != -1) {
                                 int runEnd = i - 1;
-                                float x1 = p_min.x + (width * runStart / maxFrame);
-                                float x2 = p_min.x + (width * i / maxFrame);
+                                float x1 = p_min.x + (width * runStart / totalFrames);
+                                float x2 = p_min.x + (width * i / totalFrames);
                                 
                                 bool isThisSelected = (selectedBlockStart == runStart && selectedBlockEnd == runEnd && selectedBlockKey == k);
                                 
@@ -1352,8 +1407,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                                 // ブレ幅の範囲を青色で描画
                                 if (jitterAmt > 0) {
-                                    float jx1 = p_min.x + (width * (std::max)(0, runStart - jitterAmt) / maxFrame);
-                                    float jx2 = p_min.x + (width * (std::min)(maxFrame, runEnd + jitterAmt) / maxFrame);
+                                    float jx1 = p_min.x + (width * (std::max)(0, runStart - jitterAmt) / totalFrames);
+                                    float jx2 = p_min.x + (width * (std::min)(totalFrames, runEnd + 1 + jitterAmt) / totalFrames);
                                     drawList->AddRectFilled(ImVec2(jx1, p_min.y + 1.0f), ImVec2(jx2, p_max.y - 1.0f), IM_COL32(50, 150, 255, 150));
                                 }
 
@@ -1374,19 +1429,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                         if (runStart != -1) {
                             int runEnd = maxFrame;
-                            float x1 = p_min.x + (width * runStart / maxFrame);
+                            float x1 = p_min.x + (width * runStart / totalFrames);
                             float x2 = p_min.x + width;
                             drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
                         }
 
-                        // (3) 範囲選択ロジック
-                        static int rangeStart = -1;
-                        static int rangeEnd = -1;
-                        static bool isSelecting = false;
-
+                        // 範囲選択ロジックの操作部分
                         float mouseX = ImGui::GetIO().MousePos.x;
                         float t = (std::max)(0.0f, (std::min)(1.0f, (mouseX - p_min.x) / width));
-                        int hoverFrame = (int)(t * maxFrame);
+                        int hoverFrame = (int)(t * totalFrames);
+                        if (hoverFrame >= totalFrames) hoverFrame = totalFrames - 1;
 
                         if (ImGui::IsMouseClicked(1) && isHovered) {
                             isSelecting = true;
@@ -1405,21 +1457,23 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (rangeStart != -1 && rangeEnd != -1) {
                             int r0 = (std::min)(rangeStart, rangeEnd);
                             int r1 = (std::max)(rangeStart, rangeEnd);
-                            float x1 = p_min.x + (width * r0 / maxFrame);
-                            float x2 = p_min.x + (width * r1 / maxFrame);
+                            float x1 = p_min.x + (width * r0 / totalFrames);
+                            float x2 = p_min.x + (width * (r1 + 1) / totalFrames);
                             drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 100));
                             drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 255));
                         }
 
                         // (4) 現在位置ライン
                         int curFrame = replayMgr->GetCurrentFrame();
-                        float curX = p_min.x + (width * curFrame / maxFrame);
+                        float curX = p_min.x + (width * curFrame / totalFrames);
                         drawList->AddLine(ImVec2(curX, p_min.y - 2), ImVec2(curX, p_max.y + 2), IM_COL32(255, 50, 50, 255), 2.0f);
 
                         // 左クリックでシーク
                         if (isActive && ImGui::IsMouseDown(0)) {
                             replayMgr->SetCurrentFrame(hoverFrame);
                         }
+                        
+                        ImGui::EndChild();
 
                         ImGui::Spacing();
                         if (rangeStart != -1 && rangeEnd != -1) {
