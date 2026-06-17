@@ -20,12 +20,32 @@ void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraIni
     isRecording_ = true;
     isPlaying_ = false;
     isPaused_ = false;
-    currentFrame_ = 0;
-
-    playerInitPos_ = initPos;
-    cameraInitPos_ = cameraInitPos;
-    currentMapDataStr_ = mapDataStr;
-    temporaryRecordedFrames_.clear();
+    
+    if (isTakeoverRecording_) {
+        // テイクオーバー時：元のリプレイから初期情報を引き継ぎ、過去のフレームデータをコピーする
+        playerInitPos_ = currentReplay_.playerInitPos;
+        cameraInitPos_ = currentReplay_.cameraInitPos;
+        currentMapDataStr_ = currentReplay_.mapDataStr;
+        currentStageFilename_ = currentReplay_.stageFilename;
+        
+        temporaryRecordedFrames_.clear();
+        int endFrame = (std::min)(takeoverFrame_, currentReplay_.totalFrames - 1);
+        for (int i = 0; i <= endFrame; ++i) {
+            temporaryRecordedFrames_.push_back(currentReplay_.frames[i]);
+        }
+        
+        // フレームカウンタは引き継いだ分だけ進めた状態にする（必要なら）
+        // ただし録画時は currentFrame_ は使わず temporaryRecordedFrames_.size() が参照される
+        currentFrame_ = takeoverFrame_; 
+        isTakeoverRecording_ = false; // フラグをリセット
+    } else {
+        // 通常の録画時
+        currentFrame_ = 0;
+        playerInitPos_ = initPos;
+        cameraInitPos_ = cameraInitPos;
+        currentMapDataStr_ = mapDataStr;
+        temporaryRecordedFrames_.clear();
+    }
     
     // 注入モードがオンになっていればオフにする
     KeyboardInput::GetInstance()->SetReplayMode(false);
@@ -80,12 +100,17 @@ void ReplayManager::StopRecord() {
     std::stringstream ss;
     ss << std::put_time(&timeinfo, "%Y/%m/%d %H:%M:%S");
     data.dateStr = ss.str();
+    
+    // ツリー構造のためのID付与
+    data.id = nextReplayId_++;
+    data.parentId = takeoverSourceId_;
+    takeoverSourceId_ = -1; // 録画が終わったらリセット
 
     // MMLトラックへの圧縮
     RebuildMmlFromFrames(data);
 
-    // 履歴（直近3回分）のリングバッファ更新
-    if (history_.size() >= 3) {
+    // 履歴（直近10回分）のリングバッファ更新
+    if (history_.size() >= 10) {
         history_.pop_back();
     }
     history_.insert(history_.begin(), data);
@@ -149,6 +174,18 @@ void ReplayManager::StopPlayback() {
     currentFrame_ = 0;
 
     // KeyboardInput を通常モードに戻す
+    KeyboardInput::GetInstance()->SetReplayMode(false);
+}
+
+void ReplayManager::TakeoverPlayback() {
+    if (!isPlaying_) return;
+    isPlaying_ = false;
+    isPaused_ = false;
+    isTakeoverRecording_ = true;
+    takeoverFrame_ = currentFrame_;
+    takeoverSourceId_ = currentReplay_.id; // 派生元のIDを記憶
+    
+    // currentFrame_ は0にリセットせず、KeyboardInput を通常モードに戻す
     KeyboardInput::GetInstance()->SetReplayMode(false);
 }
 

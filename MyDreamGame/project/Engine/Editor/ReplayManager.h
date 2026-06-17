@@ -43,6 +43,9 @@ struct ReplayData {
     std::string mmlTracks[5];                 // MMLに圧縮された5つのキー状態トラック
                                               // T0: 左右移動(L,R,N), T1: ジャンプ(J,N), T2: ダッシュ(D,N), T3: 壁張り付き(C,N), T4: 上下移動(W,S,N)
     std::vector<JitterSetting> jitters;       // 動的ブレ設定リスト
+    
+    int id = -1;                              // このリプレイデータの一意なID
+    int parentId = -1;                        // 派生元のリプレイのID（-1ならルート）
 };
 
 /// <summary>
@@ -64,6 +67,9 @@ public:
     void StopPlayback();
     void PausePlayback();
     void ResumePlayback();
+    
+    // 乗っ取り（割り込み）時の特殊な停止処理
+    void TakeoverPlayback();
     
     // 選択のみ（再生はしない、残像表示用）
     void SelectReplay(int historyIndex = -1, const std::string& filepath = "");
@@ -127,6 +133,10 @@ private:
     bool isLoopPlay_ = false;
     bool isSnapEnabled_ = true;
     bool forceSnapNextFrame_ = false; // シーク時に強制スナップするフラグ
+    bool isTakeoverRecording_ = false; // 乗っ取り（割り込み）からの録画フラグ
+    int takeoverFrame_ = 0;           // 乗っ取りが発生したフレーム
+    int takeoverSourceId_ = -1;       // 乗っ取り元のReplayData ID
+    int nextReplayId_ = 1;            // 次に割り当てるReplayData ID
     int currentFrame_ = 0;
 
     Vector3 playerInitPos_ = { 0.0f, 0.0f, 0.0f };

@@ -24,6 +24,7 @@
 #include <fstream>
 #include <numbers>
 #include <string>
+#include <functional>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
@@ -220,7 +221,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.7f, 0.1f, 1.0f));
             if (ImGui::Button("操作切替 (TAKEOVER)")) {
-                replayMgr->StopPlayback();
+                replayMgr->TakeoverPlayback(); // 乗っ取り用の停止処理を呼ぶ
                 takeoverCountdown_ = 1.0f; // 1秒間のカウントダウンを開始
             }
             ImGui::PopStyleColor(3);
@@ -1104,103 +1105,164 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::BeginTabBar("ReplayTabBar")) {
                 // --- タブ1：履歴・保存リスト ---
                 if (ImGui::BeginTabItem("履歴・保存リスト")) {
-                    ImGui::Text("過去のプレイ履歴 (直近3回分)");
-                    ImGui::Separator();
-                    
                     const auto& history = replayMgr->GetHistory();
-                    if (history.empty()) {
-                        ImGui::Text("履歴データはありません。");
-                    } else {
-                        for (size_t i = 0; i < history.size(); ++i) {
-                            ImGui::PushID(static_cast<int>(i));
-                            ImGui::Text("履歴 #%d (%s) - %d F", static_cast<int>(i + 1), history[i].dateStr.c_str(), history[i].totalFrames);
-                            
-                            if (ImGui::Button("再生")) {
-                                replayMgr->StartPlayback(static_cast<int>(i));
-                                useDebugCamera_ = false;
-                                
-                                // リプレイのマップ情報があればロードする
-                                std::string rMapStr = history[i].mapDataStr;
-                                std::string rMap = history[i].stageFilename;
-                                if (!rMapStr.empty()) {
-                                    mapDataStrToLoad_ = rMapStr;
-                                    loadMapDataStrNextFrame_ = true;
-                                    sceneJustReset_ = true;
-                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
-                                } else if (!rMap.empty()) {
-                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
-                                    // シーンリセットフラグを立てて次のフレームでマップを復元させる
-                                    sceneJustReset_ = true;
+                    
+                    // TreeNodeEx で階層化（デフォルト開く）
+                    if (ImGui::TreeNodeEx("一時履歴データ (未保存)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (history.empty()) {
+                            ImGui::Text("履歴データはありません。");
+                        } else {
+                            // 再帰的にツリーを描画するラムダ式
+                            std::function<void(int)> DrawHistoryNode = [&](int parentId) {
+                                for (size_t i = 0; i < history.size(); ++i) {
+                                    bool isRoot = false;
+                                    if (parentId == -1) {
+                                        isRoot = (history[i].parentId == -1);
+                                        if (!isRoot) {
+                                            bool parentExists = false;
+                                            for (const auto& h : history) {
+                                                if (h.id == history[i].parentId) {
+                                                    parentExists = true; break;
+                                                }
+                                            }
+                                            if (!parentExists) isRoot = true; // 親が消えている場合はルート扱い
+                                        }
+                                    }
+
+                                    if ((parentId == -1 && isRoot) || (parentId != -1 && history[i].parentId == parentId)) {
+                                        ImGui::PushID(static_cast<int>(i));
+
+                                        bool hasChild = false;
+                                        for (const auto& h : history) {
+                                            if (h.parentId == history[i].id) { hasChild = true; break; }
+                                        }
+
+                                        bool nodeOpen = true;
+                                        if (isRoot) {
+                                            ImGui::BulletText("履歴 #%d (%s) - %d F", history[i].id, history[i].dateStr.c_str(), history[i].totalFrames);
+                                        } else {
+                                            nodeOpen = ImGui::TreeNodeEx((void*)(intptr_t)history[i].id, ImGuiTreeNodeFlags_DefaultOpen, "履歴 #%d (%s) - %d F", history[i].id, history[i].dateStr.c_str(), history[i].totalFrames);
+                                        }
+
+                                        if (nodeOpen) {
+                                            // インデントしてボタン類を描画（ルートの場合は自動インデントがないので手動）
+                                            if (isRoot) ImGui::Indent();
+                                            
+                                            if (ImGui::Button("再生")) {
+                                                replayMgr->StartPlayback(static_cast<int>(i));
+                                                useDebugCamera_ = false;
+
+                                                // リプレイのマップ情報があればロードする
+                                                std::string rMapStr = history[i].mapDataStr;
+                                                std::string rMap = history[i].stageFilename;
+                                                if (!rMapStr.empty()) {
+                                                    mapDataStrToLoad_ = rMapStr;
+                                                    loadMapDataStrNextFrame_ = true;
+                                                    sceneJustReset_ = true;
+                                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                                } else if (!rMap.empty()) {
+                                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                                    sceneJustReset_ = true;
+                                                }
+                                            }
+
+                                            ImGui::SameLine();
+                                            if (ImGui::Button("選択(残像表示)")) {
+                                                replayMgr->SelectReplay(static_cast<int>(i));
+                                            }
+
+                                            ImGui::SameLine();
+                                            static char fileNameBuf[10][64] = {};
+                                            if (fileNameBuf[i][0] == '\0') {
+                                                sprintf_s(fileNameBuf[i], "replay_history_%d", history[i].id);
+                                            }
+                                            ImGui::SetNextItemWidth(150.0f);
+                                            ImGui::InputText("##Name", fileNameBuf[i], IM_ARRAYSIZE(fileNameBuf[i]));
+
+                                            ImGui::SameLine();
+                                            if (ImGui::Button("★ 永久保存")) {
+                                                std::string fname = fileNameBuf[i];
+                                                if (fname.find(".mml") == std::string::npos) fname += ".mml";
+                                                replayMgr->SaveToFile(history[i], fname);
+                                            }
+                                            
+                                            if (isRoot) ImGui::Unindent();
+
+                                            // 子要素の描画
+                                            bool hasChild = false;
+                                            for (const auto& h : history) {
+                                                if (h.parentId == history[i].id) { hasChild = true; break; }
+                                            }
+
+                                            if (hasChild) {
+                                                if (isRoot) ImGui::Indent();
+                                                DrawHistoryNode(history[i].id);
+                                                if (isRoot) ImGui::Unindent();
+                                            }
+                                            
+                                            if (!isRoot) {
+                                                ImGui::TreePop();
+                                            }
+                                        }
+                                        
+                                        ImGui::PopID();
+                                        if (isRoot) ImGui::Spacing();
+                                    }
                                 }
-                            }
-                            
-                            ImGui::SameLine();
-                            if (ImGui::Button("選択(残像表示)")) {
-                                replayMgr->SelectReplay(static_cast<int>(i));
-                            }
-                            
-                            ImGui::SameLine();
-                            static char fileNameBuf[3][64] = {};
-                            if (fileNameBuf[i][0] == '\0') {
-                                sprintf_s(fileNameBuf[i], "replay_history_%d", static_cast<int>(i + 1));
-                            }
-                            ImGui::SetNextItemWidth(150.0f);
-                            ImGui::InputText("##Name", fileNameBuf[i], IM_ARRAYSIZE(fileNameBuf[i]));
-                            
-                            ImGui::SameLine();
-                            if (ImGui::Button("★ 永久保存")) {
-                                std::string fname = fileNameBuf[i];
-                                if (fname.find(".mml") == std::string::npos) fname += ".mml";
-                                replayMgr->SaveToFile(history[i], fname);
-                            }
-                            ImGui::PopID();
-                            ImGui::Spacing();
+                            };
+
+                            // ルート要素（parentId == -1 に相当するもの）の描画を開始
+                            DrawHistoryNode(-1);
                         }
+                        ImGui::TreePop();
                     }
 
                     ImGui::Spacing();
-                    ImGui::Text("永久保存済みリプレイ一覧");
                     ImGui::Separator();
+                    ImGui::Spacing();
 
                     const auto& saved = replayMgr->GetSavedList();
-                    if (saved.empty()) {
-                        ImGui::Text("保存済みのリプレイはありません。");
-                    } else {
-                        for (size_t i = 0; i < saved.size(); ++i) {
-                            ImGui::PushID(static_cast<int>(i + 100));
-                            ImGui::Text("📁 %s", saved[i].c_str());
-                            
-                            if (ImGui::Button("ロード再生")) {
-                                replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
-                                useDebugCamera_ = false;
+                    if (ImGui::TreeNodeEx("永久保存済みリプレイ一覧", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (saved.empty()) {
+                            ImGui::Text("保存済みのリプレイはありません。");
+                        } else {
+                            for (size_t i = 0; i < saved.size(); ++i) {
+                                ImGui::PushID(static_cast<int>(i + 100));
+                                ImGui::Text("📁 %s", saved[i].c_str());
                                 
-                                // リプレイのマップ情報があればロードする
-                                std::string rMapStr = replayMgr->GetCurrentReplay().mapDataStr;
-                                std::string rMap = replayMgr->GetCurrentReplay().stageFilename;
-                                if (!rMapStr.empty()) {
-                                    mapDataStrToLoad_ = rMapStr;
-                                    loadMapDataStrNextFrame_ = true;
-                                    sceneJustReset_ = true;
-                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
-                                } else if (!rMap.empty()) {
-                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
-                                    // シーンリセットフラグを立てて次のフレームでマップを復元させる
-                                    sceneJustReset_ = true;
+                                if (ImGui::Button("ロード再生")) {
+                                    replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
+                                    useDebugCamera_ = false;
+                                    
+                                    // リプレイのマップ情報があればロードする
+                                    std::string rMapStr = replayMgr->GetCurrentReplay().mapDataStr;
+                                    std::string rMap = replayMgr->GetCurrentReplay().stageFilename;
+                                    if (!rMapStr.empty()) {
+                                        mapDataStrToLoad_ = rMapStr;
+                                        loadMapDataStrNextFrame_ = true;
+                                        sceneJustReset_ = true;
+                                        if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                    } else if (!rMap.empty()) {
+                                        strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                        // シーンリセットフラグを立てて次のフレームでマップを復元させる
+                                        sceneJustReset_ = true;
+                                    }
                                 }
+                                
+                                ImGui::SameLine();
+                                if (ImGui::Button("選択(残像表示)")) {
+                                    replayMgr->SelectReplay(-1, "json/saved_replays/" + saved[i]);
+                                }
+                                
+                                ImGui::SameLine();
+                                if (ImGui::Button("削除")) {
+                                    replayMgr->DeleteSavedFile(saved[i]);
+                                }
+                                ImGui::PopID();
+                                ImGui::Spacing();
                             }
-                            
-                            ImGui::SameLine();
-                            if (ImGui::Button("選択(残像表示)")) {
-                                replayMgr->SelectReplay(-1, "json/saved_replays/" + saved[i]);
-                            }
-                            
-                            ImGui::SameLine();
-                            if (ImGui::Button("削除")) {
-                                replayMgr->DeleteSavedFile(saved[i]);
-                            }
-                            ImGui::PopID();
-                            ImGui::Spacing();
                         }
+                        ImGui::TreePop();
                     }
 
                     ImGui::EndTabItem();
