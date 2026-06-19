@@ -267,6 +267,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                 if (hitEffect_) {
                     Emitter hitEmitter{};
                     hitEmitter.transform.translate = player_->GetPosition();
+                    hitEmitter.transform.scale = { 0.75f, 0.75f, 0.75f };
                     hitEmitter.count = 20;
                     hitEmitter.frequency = 0.05f;
                     hitEmitter.frequencyTime = 0.0f;

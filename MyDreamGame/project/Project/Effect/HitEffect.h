@@ -26,9 +26,9 @@ public:
 
 private:
     // エディターで調整するためのパラメータ群
-    float scaleX_ = 0.05f;
-    float scaleYMin_ = 0.4f;
-    float scaleYMax_ = 1.5f;
+    float scaleX_ = 0.075f;
+    float scaleYMin_ = 0.6f;
+    float scaleYMax_ = 2.25f;
     float lifeTime_ = 1.0f;
     int emitCountHit_ = 8;
     int emitCountSlash_ = 3;

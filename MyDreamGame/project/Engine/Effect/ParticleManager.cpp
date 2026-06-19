@@ -161,7 +161,9 @@ ParticleData ParticleManager::MakeNewParticle() {
 
 void ParticleManager::Emit(const Emitter &emitter) {
     for(uint32_t count = 0; count < emitter.count; ++count) {
-        particles_.push_back(MakeNewParticle(emitter.transform.translate));
+        ParticleData p = MakeNewParticle(emitter.transform.translate);
+        p.transform.scale = emitter.transform.scale;
+        particles_.push_back(p);
     }
 }
 
