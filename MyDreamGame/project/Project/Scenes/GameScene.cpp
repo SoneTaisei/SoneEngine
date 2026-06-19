@@ -33,9 +33,9 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 
-    // HitEffectの作成（コイン取得用）
-    hitEffect_ = std::make_unique<HitEffect>();
-    hitEffect_->Initialize(commandList.Get(), particleCommon_, 1024, "Sprite/School/circle2.png", 112, kBlendModeAdd);
+    // CoinEffectの作成（コイン取得用）
+    coinEffect_ = std::make_unique<CoinEffect>();
+    coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
@@ -55,8 +55,8 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
-    if (hitEffect_) {
-        hitEffect_->Update();
+    if (coinEffect_) {
+        coinEffect_->Update(1.0f / 60.0f);
     }
 
     if (skybox_) {
@@ -204,14 +204,16 @@ void GameScene::Update(SceneManager *sceneManager) {
             // コイン獲得エフェクト
             int currentScore = player_->GetScore();
             if (currentScore > previousScore_) {
-                if (hitEffect_) {
-                    Emitter hitEmitter{};
-                    hitEmitter.transform.translate = player_->GetPosition();
-                    hitEmitter.transform.scale = { 0.75f, 0.75f, 0.75f };
-                    hitEmitter.count = 20;
-                    hitEmitter.frequency = 0.05f;
-                    hitEmitter.frequencyTime = 0.0f;
-                    hitEffect_->Emit(hitEmitter);
+                if (coinEffect_) {
+                    Vector3 playerPos = player_->GetPosition();
+                    float playerWidth = 1.0f; // 実際のプレイヤーサイズに合わせて調整
+                    float playerHeight = 1.0f;
+                    Vector3 hitEmitterPos = {
+                        playerPos.x + playerWidth / 2.0f,
+                        playerPos.y + playerHeight / 2.0f,
+                        0.0f
+                    };
+                    coinEffect_->Emit(hitEmitterPos);
                 }
                 previousScore_ = currentScore;
             }
@@ -300,6 +302,16 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         player_->Draw(commandList_);
     }
 
+    if (coinEffect_) {
+#ifdef USE_IMGUI
+        if (EditorManager::IsShowEffects()) {
+            coinEffect_->Draw(commandList_);
+        }
+#else
+        coinEffect_->Draw(commandList_);
+#endif
+    }
+
 #ifdef USE_IMGUI
     // --- ゴースト残像の描画（マリオメーカー仕様） ---
     // エディタ停止中で、かつリプレイの再生/録画もしていない時に「選択中のリプレイ全体」の軌跡を表示する
@@ -370,9 +382,6 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (EditorManager::IsShowEffects()) {
 #endif
         particleCommon_->DrawAll(viewProjectionMatrix);
-        if (hitEffect_) {
-            hitEffect_->Draw(viewProjectionMatrix);
-        }
 #ifdef USE_IMGUI
     }
 #endif
@@ -380,9 +389,6 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
 std::vector<ParticleManager *> GameScene::GetParticles() {
     std::vector<ParticleManager *> result;
-    if (hitEffect_) {
-        result.push_back(hitEffect_.get());
-    }
     return result;
 }
 
@@ -400,6 +406,11 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
         result.insert(result.end(), mapPrims.begin(), mapPrims.end());
     }
 
+    if (coinEffect_) {
+        auto coinPrims = coinEffect_->GetParticles();
+        result.insert(result.end(), coinPrims.begin(), coinPrims.end());
+    }
+
     return result;
 }
 
@@ -412,11 +423,12 @@ void GameScene::UpdateEditor() {
     if (skybox_) {
         skybox_->Update();
     }
-    if (hitEffect_) {
-        hitEffect_->Update();
+    if (coinEffect_) {
+        // ImGui更新（もしあれば）
+        coinEffect_->Update(1.0f / 60.0f);
     }
+    // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
     if (player_) {
-        // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
         if (map_) {
             player_->FindSpawnPoint(*map_);
         }

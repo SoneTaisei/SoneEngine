@@ -151,7 +151,7 @@
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Effect\HitEffect.cpp">
+    <ClCompile Include="Project\Effect\CoinEffect.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Player2D.cpp">
@@ -176,7 +176,37 @@
       <Filter>Project\Game2D</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
-  </ItemGroup>
+      <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveBox.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveSphere.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCircle.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveRing.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCylinder.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCone.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTorus.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTriangle.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+</ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -315,7 +345,7 @@
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Effect\HitEffect.h">
+    <ClInclude Include="Project\Effect\CoinEffect.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Player2D.h">
@@ -343,7 +373,37 @@
       <Filter>Project\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\ReplayManager.h" />
-  </ItemGroup>
+      <ClInclude Include="Engine\Resource\Primitive\PrimitivePlane.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveBox.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveSphere.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveCircle.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveRing.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveCylinder.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveCone.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveTorus.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveTriangle.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveStar.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+</ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>

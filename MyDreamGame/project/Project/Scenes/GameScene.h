@@ -2,7 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
-#include "Effect/HitEffect.h"
+#include "Effect/CoinEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <d3d12.h>
@@ -39,7 +39,7 @@ private:
     // 3D・パーティクル関連 (develop)
     // ---------------------------------------------------
     // パーティクル管理クラス
-    std::unique_ptr<HitEffect> hitEffect_;
+    std::unique_ptr<CoinEffect> coinEffect_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();

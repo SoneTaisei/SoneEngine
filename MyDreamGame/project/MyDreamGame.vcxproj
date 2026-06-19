@@ -215,7 +215,7 @@
     <ClCompile Include="Engine\Resource\Primitive\Primitive.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
-    <ClCompile Include="Project\Effect\HitEffect.cpp" />
+    <ClCompile Include="Project\Effect\CoinEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player2D.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp" />
@@ -224,7 +224,17 @@
     <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
-  </ItemGroup>
+      <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveBox.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveSphere.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCircle.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveRing.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCylinder.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCone.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTorus.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTriangle.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp" />
+</ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -386,7 +396,7 @@
     <ClInclude Include="Engine\Resource\Primitive\Primitive.h" />
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
-    <ClInclude Include="Project\Effect\HitEffect.h" />
+    <ClInclude Include="Project\Effect\CoinEffect.h" />
     <ClInclude Include="Project\Game2D\Player2D.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />

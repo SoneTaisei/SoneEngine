@@ -19,7 +19,6 @@
 #include "Effect/ParticleCommon.h"
 #include "Effect/RingEffect.h"
 #include "Effect/CylinderEffect.h"
-#include "Effect/HitEffect.h"
 
 class TitleScene : public IScene {
 public:
@@ -74,7 +73,6 @@ private:
 
     std::unique_ptr<RingEffect> ringEffect_;
     std::unique_ptr<CylinderEffect> cylinderEffect_;
-    std::unique_ptr<HitEffect> hitEffect_;
 
     // --- エディター停止中用 ---
     void UpdateEditor() override;
