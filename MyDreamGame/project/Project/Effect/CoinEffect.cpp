@@ -43,7 +43,8 @@ void CoinEffect::Emit(const Vector3& position) {
     std::uniform_real_distribution<float> distVelocityX(-2.0f, 2.0f);
     std::uniform_real_distribution<float> distVelocityY(1.0f, 4.0f);
     std::uniform_real_distribution<float> distRot(-3.0f, 3.0f);
-    std::uniform_real_distribution<float> distScale(0.3f, 0.7f);
+    std::uniform_real_distribution<float> distBaseScale(0.3f, 0.7f);
+    std::uniform_real_distribution<float> distScaleMult(0.7f, 1.3f);
     std::uniform_real_distribution<float> distLife(0.4f, 0.8f);
 
     for (int i = 0; i < 6; ++i) { // 6個の星を飛ばす
@@ -57,7 +58,9 @@ void CoinEffect::Emit(const Vector3& position) {
         p.obj->SetIsBillboard(true); // カメラの方向を向かせる
         p.obj->SetIsDoubleSided(true);
 
-        float s = distScale(randomEngine);
+        float baseScale = distBaseScale(randomEngine);
+        float mult = distScaleMult(randomEngine);
+        float s = baseScale * mult;
         p.scale = {s, s, s};
         p.obj->SetScale(p.scale);
         
