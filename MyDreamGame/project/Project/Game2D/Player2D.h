@@ -64,6 +64,7 @@ public:
             goalTimer_ = 0.0f;
             velocity_ = { 0.0f, 0.0f, 0.0f };
             isDashing_ = false;
+            SpawnConfetti();
         }
     }
     void AddScore(int score) {
@@ -158,6 +159,23 @@ private:
     
     float runDustTimer_ = 0.0f;
     float runDustInterval_ = 0.1f;
+
+    // 紙吹雪エフェクト用パラメータ
+    struct ConfettiParticle {
+        Vector3 position;
+        Vector3 velocity;
+        Vector4 color;
+        Vector3 rotation;
+        Vector3 rotationSpeed;
+        float timer;
+        float duration;
+        float size;
+        bool active;
+    };
+    std::vector<ConfettiParticle> confettiParticles_;
+    
+    // 紙吹雪を発生させる
+    void SpawnConfetti();
 
     // イージング関数
     float EaseInElastic(float t) const;

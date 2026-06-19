@@ -367,8 +367,8 @@ std::vector<char> ReplayManager::DecodeMmlToTrack(const std::string& mmlStr, int
 }
 
 bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filename) {
-    std::filesystem::create_directories("json/saved_replays");
-    std::string filepath = "json/saved_replays/" + filename;
+    std::filesystem::create_directories("resources/json/saved_replays");
+    std::string filepath = "resources/json/saved_replays/" + filename;
     
     // 拡張子の補正
     if (filepath.find(".mml") == std::string::npos) {
@@ -585,8 +585,8 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
 
 void ReplayManager::LoadSavedList() {
     savedList_.clear();
-    std::filesystem::create_directories("json/saved_replays");
-    for (const auto& entry : std::filesystem::directory_iterator("json/saved_replays")) {
+    std::filesystem::create_directories("resources/json/saved_replays");
+    for (const auto& entry : std::filesystem::directory_iterator("resources/json/saved_replays")) {
         if (entry.is_regular_file() && entry.path().extension() == ".mml") {
             savedList_.push_back(entry.path().filename().string());
         }
@@ -594,7 +594,7 @@ void ReplayManager::LoadSavedList() {
 }
 
 void ReplayManager::DeleteSavedFile(const std::string& filepath) {
-    std::string fullpath = "json/saved_replays/" + filepath;
+    std::string fullpath = "resources/json/saved_replays/" + filepath;
     if (std::filesystem::exists(fullpath)) {
         std::filesystem::remove(fullpath);
         LoadSavedList();

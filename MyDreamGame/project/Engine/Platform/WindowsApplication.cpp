@@ -88,7 +88,7 @@ void WindowsApplication::Initialize() {
     PrimitiveManager::GetInstance()->Initialize(device);
 
     // デフォルトの環境マップ（スカイボックス用テクスチャ）をロードして設定
-    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList);
+    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds", commandList);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(defaultSkyboxHandle));
 
     // 1x1ピクセルのデフォルト白テクスチャをロードして PrimitiveObject に設定
@@ -96,7 +96,7 @@ void WindowsApplication::Initialize() {
     PrimitiveObject::SetDefaultTextureHandle(TextureManager::GetInstance()->GetGpuHandle(defaultWhiteHandle));
 
     // ディゾルブ用のマスクテクスチャをロードして設定
-    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("Sprite/School/noise0.png", commandList);
+    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/noise0.png", commandList);
     dxCommon_->SetDissolveMaskTexture(TextureManager::GetInstance()->GetGpuHandle(dissolveMaskHandle));
 
     // SpriteCommon の生成と初期化
@@ -379,7 +379,7 @@ void WindowsApplication::Finalize() {
 }
 
 void WindowsApplication::LoadWindowConfig() {
-    std::ifstream ifs("json/window_config.json");
+    std::ifstream ifs("resources/json/window_config.json");
     if (!ifs.is_open()) {
         return;
     }
@@ -414,7 +414,7 @@ void WindowsApplication::LoadWindowConfig() {
 void WindowsApplication::SaveWindowConfig() {
     std::filesystem::create_directories("json");
 
-    std::ofstream ofs("json/window_config.json");
+    std::ofstream ofs("resources/json/window_config.json");
     if (ofs.is_open()) {
         ofs << "{" << std::endl;
         ofs << "  \"isFullscreen\": " << (window_->IsFullscreen() ? "true" : "false") << "," << std::endl;

@@ -18,7 +18,7 @@ void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
 
     // デフォルトのテクスチャ（白）をロードして設定
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> comPtrCommandList(commandList);
-    uint32_t texHandle = TextureManager::GetInstance()->Load("Object/School/human/white.png", comPtrCommandList);
+    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png", comPtrCommandList);
     primitiveObj_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
 
     // プレイヤーの見た目設定
@@ -47,12 +47,31 @@ void Player2D::Update(MapChip2D& map) {
 
     if (isGoal_) {
         goalTimer_ += deltaTime;
-        // ゴール演出：ゆっくり上に浮かぶ
+        // ゴール演出時のプレイヤーは静止させる
         velocity_.x = 0.0f;
-        velocity_.y = 2.0f;
-        position_.y += velocity_.y * deltaTime;
-        primitiveObj_->SetTranslation(position_);
-        primitiveObj_->Update();
+        velocity_.y = 0.0f;
+        
+        // 紙吹雪パーティクルの更新
+        for (auto& confetti : confettiParticles_) {
+            if (confetti.active) {
+                confetti.timer += deltaTime;
+                if (confetti.timer >= confetti.duration) {
+                    confetti.active = false;
+                } else {
+                    // 重力を少し弱めにかける (ひらひら落ちる感じ)
+                    confetti.velocity.y += (gravity_ * 0.3f) * deltaTime;
+                    // 空気抵抗
+                    confetti.velocity.x *= 0.98f; 
+                    
+                    confetti.position.x += confetti.velocity.x * deltaTime;
+                    confetti.position.y += confetti.velocity.y * deltaTime;
+                    
+                    confetti.rotation.x += confetti.rotationSpeed.x * deltaTime;
+                    confetti.rotation.y += confetti.rotationSpeed.y * deltaTime;
+                    confetti.rotation.z += confetti.rotationSpeed.z * deltaTime;
+                }
+            }
+        }
         return;
     }
 
@@ -257,6 +276,27 @@ void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
             dustMat.dissolveThreshold = 0.0f;
             
             primitiveObj_->DrawGhost(commandList, dustTransform, dustMat);
+        }
+    }
+
+    // 紙吹雪パーティクルの描画
+    for (const auto& confetti : confettiParticles_) {
+        if (confetti.active) {
+            Transform t;
+            t.scale = { confetti.size, confetti.size, 1.0f };
+            t.rotate = confetti.rotation;
+            t.translate = confetti.position;
+            
+            Material mat = primitiveObj_->GetMaterial();
+            mat.color = confetti.color;
+            // フェードアウト (最後の20%の時間で)
+            float fadeStart = confetti.duration * 0.8f;
+            if (confetti.timer > fadeStart) {
+                mat.color.w = 1.0f - ((confetti.timer - fadeStart) / (confetti.duration - fadeStart));
+            }
+            mat.dissolveThreshold = 0.0f;
+            
+            primitiveObj_->DrawGhost(commandList, t, mat);
         }
     }
 }
@@ -594,6 +634,53 @@ void Player2D::SpawnRunDust(const Vector3& basePos, float dirX) {
         }
         if (!reused) {
             dustParticles_.push_back(dust);
+        }
+    }
+}
+
+void Player2D::SpawnConfetti() {
+    static std::mt19937 randEngine(std::random_device{}());
+    // 飛ぶ勢いを半分程度に落とす
+    std::uniform_real_distribution<float> velDistX(-4.0f, 4.0f);
+    std::uniform_real_distribution<float> velDistY(4.0f, 9.0f);
+    std::uniform_real_distribution<float> sizeDist(0.1f, 0.25f);
+    std::uniform_real_distribution<float> durationDist(2.0f, 4.0f);
+    std::uniform_real_distribution<float> rotDist(0.0f, 6.28f);
+    std::uniform_real_distribution<float> rotSpeedDist(-5.0f, 5.0f);
+    
+    std::vector<Vector4> colors = {
+        {1.0f, 0.2f, 0.2f, 1.0f}, // Red
+        {0.2f, 1.0f, 0.2f, 1.0f}, // Green
+        {0.2f, 0.2f, 1.0f, 1.0f}, // Blue
+        {1.0f, 0.8f, 0.0f, 1.0f}, // Yellow
+        {1.0f, 0.2f, 1.0f, 1.0f}, // Magenta
+        {0.0f, 0.8f, 1.0f, 1.0f}  // Cyan
+    };
+    std::uniform_int_distribution<int> colorDist(0, static_cast<int>(colors.size()) - 1);
+
+    // 枚数も少し減らして派手すぎないように調整
+    for (int i = 0; i < 40; ++i) {
+        ConfettiParticle confetti;
+        confetti.position = position_;
+        confetti.velocity = { velDistX(randEngine), velDistY(randEngine), 0.0f };
+        confetti.color = colors[colorDist(randEngine)];
+        confetti.rotation = { rotDist(randEngine), rotDist(randEngine), rotDist(randEngine) };
+        confetti.rotationSpeed = { rotSpeedDist(randEngine), rotSpeedDist(randEngine), rotSpeedDist(randEngine) };
+        confetti.timer = 0.0f;
+        confetti.duration = durationDist(randEngine);
+        confetti.size = sizeDist(randEngine);
+        confetti.active = true;
+        
+        bool reused = false;
+        for (auto& existing : confettiParticles_) {
+            if (!existing.active) {
+                existing = confetti;
+                reused = true;
+                break;
+            }
+        }
+        if (!reused) {
+            confettiParticles_.push_back(confetti);
         }
     }
 }

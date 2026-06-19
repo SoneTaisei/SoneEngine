@@ -72,12 +72,12 @@ void SpriteCommon::CreateGraphicsPipeline() {
     // 1. シェーダーのコンパイル (DirectXCommonと全く同じ方式にする)
     // 戻り値の型が IDxcBlob になることに注意
     Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(
-        L"shaders/Sprite.VS.hlsl", L"vs_6_0",
+        L"resources/shaders/Sprite.VS.hlsl", L"vs_6_0",
         dxcUtils, dxcCompiler, includeHandler);
     assert(vsBlob != nullptr);
 
     Microsoft::WRL::ComPtr<IDxcBlob> psBlob = CompileShader(
-        L"shaders/Sprite.PS.hlsl", L"ps_6_0",
+        L"resources/shaders/Sprite.PS.hlsl", L"ps_6_0",
         dxcUtils, dxcCompiler, includeHandler);
     assert(psBlob != nullptr);
 

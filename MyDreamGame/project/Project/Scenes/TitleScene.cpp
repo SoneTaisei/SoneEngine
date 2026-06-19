@@ -35,14 +35,14 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     particleCommon_->Initialize(device.Get());
 
     // 1. マネージャからモデル（素材）を取得（なければロードされる）
-    Model *planeModel = ModelManager::GetInstance()->GetModel("Object/School/plane", "plane.gltf");
+    Model *planeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.gltf");
 
     // 2. Object3D（実体）を生成して初期化
     auto planeObject = std::make_unique<Object3D>();
     planeObject->Initialize(device.Get(), planeModel);
 
     // 3. 座標やテクスチャの設定（Object3Dに対して行う！）
-    uint32_t planeIndex = TextureManager::GetInstance()->Load("Sprite/School/uvChecker.png", commandList_);
+    uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png", commandList_);
     planeObject->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
     planeObject->SetRotation({0.0f, 0.0f, 0.0f});
     planeObject->SetName("Ground Plane");
@@ -65,13 +65,13 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/yakei/skybox.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/yakei/panoramic-view-beach-sunset.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/School/rostock_laage_airport_4k.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496_direct.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds", commandList_);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/skybox.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/panoramic-view-beach-sunset.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/School/rostock_laage_airport_4k.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_direct.dds", commandList_);
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds", commandList_);
 
     // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
@@ -87,7 +87,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ■ 拡張Ringプリミティブのデモ実装
     PrimitiveManager::GetInstance()->Initialize(device.Get());
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("Sprite/School/gradationLine.png", commandList_);
+    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png", commandList_);
     
     // ■ RingEffectの作成
     ringEffect_ = std::make_unique<RingEffect>();
