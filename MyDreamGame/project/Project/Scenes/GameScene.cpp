@@ -26,8 +26,9 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     // 2. PrimitiveManagerの初期化（まだの場合）
     PrimitiveManager::GetInstance()->Initialize(device.Get());
 
-    // リプレイ保存リストの読み込み
+    // リプレイ保存リストとマクロの読み込み
     ReplayManager::GetInstance()->LoadSavedList();
+    ReplayManager::GetInstance()->LoadMacros();
 
     // ★ Skyboxの初期化処理を追加
     skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList);

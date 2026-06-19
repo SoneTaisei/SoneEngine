@@ -14,6 +14,90 @@ ReplayManager* ReplayManager::GetInstance() {
     return &instance;
 }
 
+void ReplayManager::LoadMacros() {
+    macros_.clear();
+    std::ifstream ifs("json/replay_macros.txt");
+    if (!ifs.is_open()) return;
+
+    std::string line;
+    ReplayMacro* currentMacro = nullptr;
+
+    while (std::getline(ifs, line)) {
+        if (line.empty() || line[0] == '#') continue;
+
+        if (line[0] == '[' && line[line.length() - 1] == ']') {
+            macros_.push_back(ReplayMacro());
+            currentMacro = &macros_.back();
+            currentMacro->name = line.substr(1, line.length() - 2);
+            continue;
+        }
+
+        if (currentMacro) {
+            std::stringstream ss(line);
+            std::string durStr, keysStr;
+            if (std::getline(ss, durStr, ',') && std::getline(ss, keysStr)) {
+                MacroBlock b;
+                b.duration = std::stoi(durStr);
+                strncpy_s(b.keys, keysStr.c_str(), sizeof(b.keys));
+                currentMacro->blocks.push_back(b);
+            }
+        }
+    }
+}
+
+void ReplayManager::SaveMacros() {
+    std::filesystem::create_directories("json");
+    std::ofstream ofs("json/replay_macros.txt");
+    if (!ofs.is_open()) return;
+
+    for (const auto& macro : macros_) {
+        ofs << "[" << macro.name << "]" << std::endl;
+        for (const auto& block : macro.blocks) {
+            ofs << block.duration << "," << block.keys << std::endl;
+        }
+        ofs << std::endl;
+    }
+}
+
+void ReplayManager::AddMacro(const ReplayMacro& macro) {
+    macros_.push_back(macro);
+    SaveMacros();
+}
+
+void ReplayManager::RemoveMacro(int index) {
+    if (index >= 0 && index < static_cast<int>(macros_.size())) {
+        macros_.erase(macros_.begin() + index);
+        SaveMacros();
+    }
+}
+
+void ReplayManager::ApplyMacro(int startFrame, const ReplayMacro& macro) {
+    if (currentReplay_.totalFrames == 0) return;
+
+    int currentFrameIdx = startFrame;
+    for (const auto& block : macro.blocks) {
+        for (int i = 0; i < block.duration; ++i) {
+            if (currentFrameIdx >= currentReplay_.totalFrames) break;
+
+            // マクロのキー状態を適用
+            // "LRJDCWS" 順
+            for (int k = 0; k < 7; ++k) {
+                if (block.keys[k] != '-') {
+                    currentReplay_.frames[currentFrameIdx].keys[k] = block.keys[k];
+                } else if (block.keys[k] == '-') {
+                    // 何もしないか、Nにするか。
+                    // 今回はマクロで指定されたキーに完全に上書きする（'L'などを維持しない）
+                    currentReplay_.frames[currentFrameIdx].keys[k] = '-';
+                }
+            }
+            currentFrameIdx++;
+        }
+    }
+
+    // 変更をMMLに反映
+    RebuildMmlFromFrames(currentReplay_);
+}
+
 void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraInitPos, const std::string& mapDataStr) {
     if (isRecording_) return;
     
@@ -78,6 +162,46 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
 void ReplayManager::StopRecord() {
     if (!isRecording_) return;
     isRecording_ = false;
+
+    // マクロ録画予約されていた場合、録画した入力データをマクロとして抽出
+    if (isRecordingMacro_ && !temporaryRecordedFrames_.empty()) {
+        ReplayMacro rm;
+        rm.name = macroRecordingName_.empty() ? "RecordedMacro" : macroRecordingName_;
+        
+        MacroBlock currentBlock;
+        bool isFirst = true;
+        
+        for (const auto& frame : temporaryRecordedFrames_) {
+            char currentKeys[8];
+            for(int k=0; k<7; ++k) currentKeys[k] = frame.keys[k];
+            currentKeys[7] = '\0';
+            
+            if (isFirst) {
+                currentBlock.duration = 1;
+                strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                isFirst = false;
+            } else {
+                bool same = true;
+                for(int k=0; k<7; ++k) {
+                    if(currentBlock.keys[k] != currentKeys[k]) { same = false; break; }
+                }
+                if (same) {
+                    currentBlock.duration++;
+                } else {
+                    rm.blocks.push_back(currentBlock);
+                    currentBlock.duration = 1;
+                    strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                }
+            }
+        }
+        if (!isFirst) {
+            rm.blocks.push_back(currentBlock);
+        }
+        if (rm.blocks.empty()) rm.blocks.push_back({10, "-------"});
+        
+        AddMacro(rm);
+        isRecordingMacro_ = false;
+    }
 
     // 録画されたフレーム数が極端に短い場合は履歴に登録しない
     if (temporaryRecordedFrames_.size() < 5) {

@@ -1320,6 +1320,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                 // --- タブ3：タイムラインエディタ (TAS) ---
                 if (ImGui::BeginTabItem("タイムラインエディタ")) {
+                    static char saveNameBuf[64] = "edited_replay.mml";
+                    static int rangeStart = -1;
+                    static int rangeEnd = -1;
+                    static bool isSelecting = false;
+                    
                     auto& activeReplay = replayMgr->GetCurrentReplay();
                     if (activeReplay.totalFrames == 0) {
                         ImGui::Text("編集対象のリプレイデータがロードされていません。");
@@ -1329,7 +1334,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Text("総フレーム: %d | 録画日時: %s", activeReplay.totalFrames, activeReplay.dateStr.c_str());
                         ImGui::Spacing();
 
-                        static char saveNameBuf[64] = "edited_replay.mml";
                         ImGui::Text("編集後保存名:");
                         ImGui::SetNextItemWidth(200.0f);
                         ImGui::InputText("##SaveName", saveNameBuf, IM_ARRAYSIZE(saveNameBuf));
@@ -1375,10 +1379,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             selectedBlockKey = k;
                         }
 
-                        // (3) 範囲選択ロジック用の状態（スコープを外に出す）
-                        static int rangeStart = -1;
-                        static int rangeEnd = -1;
-                        static bool isSelecting = false;
+                        // (3) 範囲選択ロジック用の状態
+
 
                         ImGui::BeginChild("SeekbarScrollRegion", ImVec2(0, 60), false, ImGuiWindowFlags_HorizontalScrollbar);
                         // カスタムシークバー描画
@@ -1620,8 +1622,219 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::TextDisabled("※黄色いブロックをクリックすると、動的なブレを設定できます");
                         }
 
+                    } // if (activeReplay.totalFrames > 0) をここで閉じる
 
-                    }
+                    ImGui::Spacing();
+                    ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
+                    ImGui::Spacing();
+                        
+                        if (ImGui::CollapsingHeader("📋 入力マクロ (ワンクリック配置)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            auto& macros = replayMgr->GetMacros();
+                            static int selectedMacroIdx = 0;
+                            
+                            // マクロ一覧
+                            if (!macros.empty()) {
+                                if (selectedMacroIdx >= macros.size()) selectedMacroIdx = 0;
+                                
+                                std::string previewName = macros[selectedMacroIdx].name;
+                                if (ImGui::BeginCombo("マクロ一覧", previewName.c_str())) {
+                                    for (int i = 0; i < macros.size(); ++i) {
+                                        bool is_selected = (selectedMacroIdx == i);
+                                        if (ImGui::Selectable(macros[i].name.c_str(), is_selected)) {
+                                            selectedMacroIdx = i;
+                                        }
+                                        if (is_selected) ImGui::SetItemDefaultFocus();
+                                    }
+                                    ImGui::EndCombo();
+                                }
+                                
+                                ImGui::SameLine();
+                                if (ImGui::Button("削除")) {
+                                    replayMgr->RemoveMacro(selectedMacroIdx);
+                                    if (selectedMacroIdx > 0) selectedMacroIdx--;
+                                }
+                            } else {
+                                ImGui::TextDisabled("登録されたマクロがありません。");
+                            }
+                            
+                            // 新規作成UI
+                            static char newMacroName[64] = "NewMacro";
+                            ImGui::InputText("新規マクロ名", newMacroName, IM_ARRAYSIZE(newMacroName));
+                            ImGui::SameLine();
+                            if (ImGui::Button("空から新規作成")) {
+                                ReplayMacro rm;
+                                rm.name = newMacroName;
+                                rm.blocks.push_back({10, "-------"}); // デフォルトで1ブロック追加
+                                replayMgr->AddMacro(rm);
+                                selectedMacroIdx = (int)macros.size() - 1;
+                            }
+                            
+                            // マクロ録画（実際のプレイを記録する）UI
+                            ImGui::SameLine();
+                            if (replayMgr->IsRecordingMacro()) {
+                                ImGui::TextColored(ImVec4(1, 0, 0, 1), "🔴 マクロ録画待機中...");
+                                ImGui::SameLine();
+                                if (ImGui::Button("キャンセル")) {
+                                    replayMgr->CancelMacroRecording();
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::Button("⏹ 録画を終了して保存")) {
+                                    // 録画を強制停止（停止時に自動的にマクロに抽出・保存される）
+                                    replayMgr->StopRecord();
+                                }
+                            } else {
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
+                                if (ImGui::Button("🔴 実際のプレイをマクロとして録画開始")) {
+                                    replayMgr->ReserveMacroRecording(newMacroName);
+                                    
+                                    // 録画のためにエディタのカメラとポーズを解除し、ゲームをリセットして操作可能にする
+                                    isPlaying_ = true; // ← ここを追加（ゲームを開始させる）
+                                    useDebugCamera_ = false;
+                                    sceneJustReset_ = true;
+                                }
+                                ImGui::PopStyleColor(3);
+                            }
+                            
+                            if (replayMgr->IsRecordingMacro()) {
+                                ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "※ゲームをプレイして録画を完了してください。\n「⏹ 録画を終了して保存」か、ゲーム中のRキーでマクロとして保存されます。");
+                            }
+                            
+                            // 選択範囲から作成するUI (リプレイがある時のみ)
+                            if (activeReplay.totalFrames > 0 && rangeStart != -1 && rangeEnd != -1) {
+                                int r0 = (std::min)(rangeStart, rangeEnd);
+                                int r1 = (std::max)(rangeStart, rangeEnd);
+                                
+                                ImGui::SameLine();
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                                if (ImGui::Button("選択範囲から抽出して作成")) {
+                                    ReplayMacro rm;
+                                    rm.name = std::string(newMacroName);
+                                    
+                                    if (r1 < activeReplay.totalFrames) {
+                                        MacroBlock currentBlock;
+                                        bool isFirst = true;
+                                        
+                                        for (int i = r0; i <= r1; ++i) {
+                                            char currentKeys[8];
+                                            for(int k=0; k<7; ++k) currentKeys[k] = activeReplay.frames[i].keys[k];
+                                            currentKeys[7] = '\0';
+                                            
+                                            if (isFirst) {
+                                                currentBlock.duration = 1;
+                                                strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                                                isFirst = false;
+                                            } else {
+                                                // キーが同じならdurationを増やす
+                                                bool same = true;
+                                                for(int k=0; k<7; ++k) {
+                                                    if(currentBlock.keys[k] != currentKeys[k]) { same = false; break; }
+                                                }
+                                                if (same) {
+                                                    currentBlock.duration++;
+                                                } else {
+                                                    // 変わったら今のブロックを保存して新しいブロックへ
+                                                    rm.blocks.push_back(currentBlock);
+                                                    currentBlock.duration = 1;
+                                                    strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                                                }
+                                            }
+                                        }
+                                        if (!isFirst) {
+                                            rm.blocks.push_back(currentBlock);
+                                        }
+                                    }
+                                    
+                                    // 万が一抽出に失敗して空になった場合はダミーを入れる
+                                    if (rm.blocks.empty()) rm.blocks.push_back({10, "-------"});
+                                    
+                                    replayMgr->AddMacro(rm);
+                                    selectedMacroIdx = (int)macros.size() - 1;
+                                }
+                                ImGui::PopStyleColor();
+                            }
+                            
+                            // 選択中マクロの編集と配置
+                            if (!macros.empty() && selectedMacroIdx < macros.size()) {
+                                ImGui::Separator();
+                                ImGui::Text("【%s】のブロック構成", macros[selectedMacroIdx].name.c_str());
+                                
+                                auto& curMacro = macros[selectedMacroIdx];
+                                
+                                for (int i = 0; i < curMacro.blocks.size(); ++i) {
+                                    auto& b = curMacro.blocks[i];
+                                    ImGui::PushID(i);
+                                    
+                                    ImGui::SetNextItemWidth(100.0f);
+                                    if (ImGui::InputInt("F (フレーム)", &b.duration)) {
+                                        if (b.duration < 1) b.duration = 1;
+                                        replayMgr->SaveMacros();
+                                    }
+                                    
+                                    ImGui::SameLine();
+                                    ImGui::Text(" キー:");
+                                    ImGui::SameLine();
+                                    
+                                    // 7つのキーON/OFFトグル
+                                    const char* keyNames[7] = {"L", "R", "J", "D", "C", "W", "S"};
+                                    const char keyChars[7] = {'L', 'R', 'J', 'D', 'C', 'W', 'S'};
+                                    
+                                    for (int k = 0; k < 7; ++k) {
+                                        bool isOn = (b.keys[k] != '-');
+                                        if (ImGui::Checkbox(keyNames[k], &isOn)) {
+                                            b.keys[k] = isOn ? keyChars[k] : '-';
+                                            replayMgr->SaveMacros(); // 即時保存
+                                        }
+                                        if (k < 6) ImGui::SameLine();
+                                    }
+                                    
+                                    ImGui::SameLine();
+                                    if (ImGui::Button("X")) {
+                                        curMacro.blocks.erase(curMacro.blocks.begin() + i);
+                                        replayMgr->SaveMacros();
+                                        ImGui::PopID();
+                                        break; // ループを抜けて再描画
+                                    }
+                                    
+                                    ImGui::PopID();
+                                }
+                                
+                                if (ImGui::Button("+ ブロック追加")) {
+                                    curMacro.blocks.push_back({10, "-------"});
+                                    replayMgr->SaveMacros();
+                                }
+                                
+                                ImGui::Spacing();
+                                ImGui::Separator();
+                                
+                                // 配置ボタン (リプレイがある時のみ)
+                                if (activeReplay.totalFrames > 0) {
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.4f, 0.7f, 1.0f));
+                                    
+                                    // 配置先は、選択範囲の始点、または現在のフレーム
+                                    int placeStart = (rangeStart != -1) ? (std::min)(rangeStart, rangeEnd) : replayMgr->GetCurrentFrame();
+                                    
+                                    if (ImGui::Button("⇒ タイムラインに配置 (流し込む)")) {
+                                        replayMgr->ApplyMacro(placeStart, curMacro);
+                                        
+                                        // 適用後、現在のアクティブリプレイを保存する
+                                        if (!activeReplay.filename.empty()) {
+                                            replayMgr->SaveToFile(activeReplay, activeReplay.filename);
+                                        } else {
+                                            replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                                        }
+                                    }
+                                    ImGui::PopStyleColor(3);
+                                    ImGui::SameLine();
+                                    ImGui::Text("配置開始フレーム: F%04d", placeStart);
+                                } else {
+                                    ImGui::TextDisabled("※タイムラインに配置するには、履歴からリプレイを選択してください。");
+                                }
+                            }
+                        }
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
