@@ -58,15 +58,15 @@ void Player2D::Update(MapChip2D& map) {
 
     // 死亡演出中の更新処理
     if (isDead_) {
+        // スローモーション中は実時間が遅くなるため、deathTimer_にはdeltaTimeを足していく。
         deathTimer_ += deltaTime;
-        float t = (std::min)(deathTimer_ / deathDuration_, 1.0f);
-        float scaleProgress = EaseInElastic(t);
-        float sizeScale = 1.0f - scaleProgress;
 
-        // イージングによって縮小
-        primitiveObj_->SetScale({ (halfWidth_ * 2.0f) * sizeScale, (halfHeight_ * 2.0f) * sizeScale, 1.0f });
+        // ノックバック物理挙動（演出中ずっと続ける）
+        velocity_.y += gravity_ * deltaTime;
+        position_.x += velocity_.x * deltaTime;
+        position_.y += velocity_.y * deltaTime;
 
-        if (t >= 1.0f) {
+        if (deathTimer_ >= deathDuration_) {
             // スタート地点に復活
             position_ = startPosition_;
             velocity_ = { 0.0f, 0.0f, 0.0f };
@@ -74,14 +74,45 @@ void Player2D::Update(MapChip2D& map) {
             deathTimer_ = 0.0f;
             isDashing_ = false;
             canDash_ = true;
-            // スケールを通常に戻す
-            primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+            // パラメータをリセット
+            primitiveObj_->GetMaterial().dissolveThreshold = 0.0f;
+            TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
+            
+            // リスポーン演出の開始
+            isRespawning_ = true;
+            respawnTimer_ = 0.0f;
+            primitiveObj_->SetScale({ 0.0f, 0.0f, 1.0f });
         }
 
         // PrimitiveObjectの座標を更新
         primitiveObj_->SetTranslation(position_);
         primitiveObj_->Update();
         return;
+    }
+
+    // リスポーン時のスケール拡大演出（この間は操作・物理無効）
+    if (isRespawning_) {
+        respawnTimer_ += deltaTime;
+        float t = (std::min)(respawnTimer_ / respawnDuration_, 1.0f);
+        
+        // EaseOutBackによる弾むようなポップアップ
+        float c1 = 1.70158f;
+        float c3 = c1 + 1.0f;
+        float p = t - 1.0f;
+        float scaleProgress = 1.0f + c3 * (p * p * p) + c1 * (p * p);
+        if (scaleProgress < 0.0f) scaleProgress = 0.0f;
+
+        primitiveObj_->SetScale({ halfWidth_ * 2.0f * scaleProgress, halfHeight_ * 2.0f * scaleProgress, 1.0f });
+
+        if (t >= 1.0f) {
+            isRespawning_ = false;
+            primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+        }
+
+        primitiveObj_->GetMaterial().color = colorNormal_; // リスポーン中は通常色
+        primitiveObj_->SetTranslation(position_);
+        primitiveObj_->Update();
+        return; // ここでリターンして通常のゲームロジックをスキップ
     }
 
     // 壁ジャンプタイマーの更新
@@ -117,14 +148,37 @@ void Player2D::Update(MapChip2D& map) {
 
     // 画面外落下時のリスポーン演出移行
     if (position_.y < -10.0f) {
-        isDead_ = true;
-        deathTimer_ = 0.0f;
-        velocity_ = { 0.0f, 0.0f, 0.0f };
-        isDashing_ = false;
+        Kill();
     }
 
     // 色の更新
     primitiveObj_->GetMaterial().color = canDash_ ? colorNormal_ : colorDashed_;
+
+    // 走りエフェクトの発生
+    if (isOnGround_ && std::abs(velocity_.x) > 0.1f) {
+        runDustTimer_ += deltaTime;
+        if (runDustTimer_ >= runDustInterval_) {
+            runDustTimer_ = 0.0f;
+            float dirX = (velocity_.x > 0.0f) ? 1.0f : -1.0f;
+            // プレイヤーの後ろの足元から砂埃を出す
+            SpawnRunDust({position_.x - dirX * halfWidth_, position_.y - halfHeight_, 0.0f}, dirX);
+        }
+    } else {
+        runDustTimer_ = 0.0f;
+    }
+
+    // 砂埃パーティクルの更新
+    for (auto& dust : dustParticles_) {
+        if (dust.active) {
+            dust.timer += deltaTime;
+            if (dust.timer >= dust.duration) {
+                dust.active = false;
+            } else {
+                dust.position.x += dust.velocity.x * deltaTime;
+                dust.position.y += dust.velocity.y * deltaTime;
+            }
+        }
+    }
 
     // PrimitiveObjectの座標を更新
     primitiveObj_->SetTranslation(position_);
@@ -132,7 +186,79 @@ void Player2D::Update(MapChip2D& map) {
 }
 
 void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
-    primitiveObj_->Draw(commandList);
+    if (isDead_) {
+        // メインオブジェクトを描画せず、6x6のブロックに分割してゴースト描画する
+        primitiveObj_->ResetGhostIndex();
+        float dissolveProgress = deathTimer_ / deathDuration_;
+        
+        for (int y = 0; y < 6; ++y) {
+            for (int x = 0; x < 6; ++x) {
+                float bx = (float)x;
+                float by = (float)(5 - y);
+                // シェーダーと同じ乱数計算をCPUで行う
+                float dot_val = bx * 12.9898f + by * 78.233f;
+                float s = std::sin(dot_val);
+                float n = s * 43758.5453f;
+                n = n - std::floor(n);
+                
+                float cellW = (halfWidth_ * 2.0f) / 6.0f;
+                float cellH = (halfHeight_ * 2.0f) / 6.0f;
+                float offsetX = -halfWidth_ + cellW * 0.5f + cellW * x;
+                float offsetY = -halfHeight_ + cellH * 0.5f + cellH * y;
+                
+                Transform ghostTransform;
+                ghostTransform.scale = { cellW, cellH, 1.0f };
+                ghostTransform.rotate = {0.0f, 0.0f, 0.0f};
+                
+                Vector3 basePos = position_;
+                basePos.x += offsetX;
+                basePos.y += offsetY;
+                
+                Material ghostMat = primitiveObj_->GetMaterial();
+                ghostMat.dissolveThreshold = 0.0f; // ゴースト自体はディゾルブさせない
+                
+                if (dissolveProgress > n) {
+                    // ディゾルブ時間を超えたブロックは上に飛んでいく
+                    float timeSinceDissolve = (dissolveProgress - n) * deathDuration_;
+                    basePos.y += timeSinceDissolve * 10.0f; 
+                    ghostTransform.rotate.z = timeSinceDissolve * 15.0f; // 回転を加える
+                    
+                    // 徐々に小さくする
+                    float shrink = 1.0f - (timeSinceDissolve / 0.1f);
+                    if (shrink < 0.0f) shrink = 0.0f;
+                    ghostTransform.scale.x *= shrink;
+                    ghostTransform.scale.y *= shrink;
+                    ghostMat.color.w *= shrink; // 透明度も下げる
+                }
+                
+                if (ghostTransform.scale.x > 0.0f) {
+                    ghostTransform.translate = basePos;
+                    primitiveObj_->DrawGhost(commandList, ghostTransform, ghostMat);
+                }
+            }
+        }
+    } else {
+        primitiveObj_->Draw(commandList);
+    }
+
+    // 砂埃パーティクルの描画
+    for (const auto& dust : dustParticles_) {
+        if (dust.active) {
+            float progress = dust.timer / dust.duration;
+            float currentSize = dust.startSize * (1.0f - progress); // 徐々に小さく
+            
+            Transform dustTransform;
+            dustTransform.scale = { currentSize, currentSize, 1.0f };
+            dustTransform.rotate = { 0.0f, 0.0f, progress * 10.0f }; // 少し回転
+            dustTransform.translate = dust.position;
+            
+            Material dustMat = primitiveObj_->GetMaterial();
+            dustMat.color = { 0.8f, 0.8f, 0.8f, 1.0f - progress }; // 白っぽいグレーで透明に
+            dustMat.dissolveThreshold = 0.0f;
+            
+            primitiveObj_->DrawGhost(commandList, dustTransform, dustMat);
+        }
+    }
 }
 
 void Player2D::DisplayImGui() {
@@ -205,6 +331,7 @@ void Player2D::HandleInput() {
             if (isOnGround_) {
                 velocity_.y = jumpPower_;
                 isOnGround_ = false;
+                SpawnJumpDust({position_.x, position_.y - halfHeight_, 0.0f}, 0.0f);
             } else if (isTouchingWallRight_) {
                 // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
                 bool isPressingCling = keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL);
@@ -217,6 +344,7 @@ void Player2D::HandleInput() {
                     velocity_.x = -wallJumpPower_.x;
                     velocity_.y = wallJumpPower_.y;
                     wallJumpTimer_ = wallJumpDuration_;
+                    SpawnJumpDust({position_.x + halfWidth_, position_.y, 0.0f}, -1.0f);
                 }
                 isTouchingWallRight_ = false;
                 isWallSliding_ = false;
@@ -233,6 +361,7 @@ void Player2D::HandleInput() {
                     velocity_.x = wallJumpPower_.x;
                     velocity_.y = wallJumpPower_.y;
                     wallJumpTimer_ = wallJumpDuration_;
+                    SpawnJumpDust({position_.x - halfWidth_, position_.y, 0.0f}, 1.0f);
                 }
                 isTouchingWallLeft_ = false;
                 isWallSliding_ = false;
@@ -403,6 +532,68 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
                 isTouchingWallLeft_ = true;
                 break;
             }
+        }
+    }
+}
+
+void Player2D::SpawnJumpDust(const Vector3& basePos, float dirX) {
+    static std::mt19937 randEngine(std::random_device{}());
+    std::uniform_real_distribution<float> velDistX(-3.0f, 3.0f);
+    std::uniform_real_distribution<float> velDistY(1.0f, 4.0f);
+    std::uniform_real_distribution<float> sizeDist(0.1f, 0.3f);
+    std::uniform_real_distribution<float> durationDist(0.15f, 0.35f);
+
+    for (int i = 0; i < 5; ++i) {
+        DustParticle dust;
+        dust.position = basePos;
+        // 壁キック時はdirX方向に少し勢いをつける
+        dust.velocity = { velDistX(randEngine) + dirX * 5.0f, velDistY(randEngine), 0.0f };
+        dust.timer = 0.0f;
+        dust.duration = durationDist(randEngine);
+        dust.startSize = sizeDist(randEngine);
+        dust.active = true;
+        
+        bool reused = false;
+        for (auto& existing : dustParticles_) {
+            if (!existing.active) {
+                existing = dust;
+                reused = true;
+                break;
+            }
+        }
+        if (!reused) {
+            dustParticles_.push_back(dust);
+        }
+    }
+}
+
+void Player2D::SpawnRunDust(const Vector3& basePos, float dirX) {
+    static std::mt19937 randEngine(std::random_device{}());
+    std::uniform_real_distribution<float> velDistX(-1.0f, 1.0f);
+    std::uniform_real_distribution<float> velDistY(0.5f, 2.0f);
+    std::uniform_real_distribution<float> sizeDist(0.1f, 0.2f);
+    std::uniform_real_distribution<float> durationDist(0.1f, 0.25f);
+
+    for (int i = 0; i < 2; ++i) {
+        DustParticle dust;
+        dust.position = basePos;
+        // 走っている方向と逆に飛ぶようにする
+        dust.velocity = { velDistX(randEngine) - dirX * 3.0f, velDistY(randEngine), 0.0f };
+        dust.timer = 0.0f;
+        dust.duration = durationDist(randEngine);
+        dust.startSize = sizeDist(randEngine);
+        dust.active = true;
+        
+        bool reused = false;
+        for (auto& existing : dustParticles_) {
+            if (!existing.active) {
+                existing = dust;
+                reused = true;
+                break;
+            }
+        }
+        if (!reused) {
+            dustParticles_.push_back(dust);
         }
     }
 }
