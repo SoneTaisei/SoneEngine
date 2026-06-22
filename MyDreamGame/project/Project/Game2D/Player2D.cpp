@@ -159,6 +159,11 @@ void Player2D::Update(MapChip2D& map) {
     ResolveCollisionY(map);
 
     // --- X軸（左右）の移動と当たり判定 ---
+    // 足場に乗っている場合は足場の速度を加算
+    if (isOnMovingPlatform_ && isOnGround_) {
+        position_.x += platformVelocity_.x * deltaTime;
+        position_.y += platformVelocity_.y * deltaTime; // 縦リフト対応
+    }
     position_.x += velocity_.x * deltaTime;
     ResolveCollisionX(map);
 
@@ -370,7 +375,13 @@ void Player2D::HandleInput() {
         if (keyboard->IsKeyPressed(DIK_SPACE)) {
             if (isOnGround_) {
                 velocity_.y = jumpPower_;
+                // 足場に乗っている場合は慣性を加算
+                if (isOnMovingPlatform_) {
+                    velocity_.x += platformVelocity_.x;
+                    velocity_.y += platformVelocity_.y;
+                }
                 isOnGround_ = false;
+                isOnMovingPlatform_ = false;
                 SpawnJumpDust({position_.x, position_.y - halfHeight_, 0.0f}, 0.0f);
             } else if (isTouchingWallRight_) {
                 // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
@@ -458,6 +469,8 @@ void Player2D::ApplyGravity(float deltaTime) {
 void Player2D::ResolveCollisionY(const MapChip2D& map) {
     float chipSize = map.GetChipSize();
     isOnGround_ = false;
+    isOnMovingPlatform_ = false;
+    platformVelocity_ = {0.0f, 0.0f, 0.0f};
 
     AABB aabb = GetAABB();
 
@@ -496,6 +509,12 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
                 velocity_.y = 0.0f;
                 isOnGround_ = true;
                 canDash_ = true; // 着地でダッシュ回復
+                
+                if (block->IsMoving()) {
+                    isOnMovingPlatform_ = true;
+                    platformVelocity_ = block->GetVelocity();
+                }
+                
                 break;
             }
         }

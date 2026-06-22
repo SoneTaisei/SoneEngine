@@ -38,6 +38,8 @@ public:
     static void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
+    bool IsMapEditorVisible() const { return isMapEditorVisible_; }
+    bool IsMapEditorHovered() const { return isMapEditorHovered_; }
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }
@@ -84,6 +86,14 @@ private:
     PrimitiveObject *selectedPrimitive_ = nullptr;
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
+    bool isMapEditorVisible_ = false; // マップエディタがアクティブタブとして表示されているか
+    bool wasMapEditorVisible_ = false; // 前フレームの表示状態
+    bool isMapEditorHovered_ = false; // マップエディタがホバーされているか
+    
+    // マップエディタ用のツール状態
+    int mapEditorSelectedTool_ = 1; // 0 = None, 1 = Block, ...
+    int mapEditorInputWidth_ = -1;
+    int mapEditorInputHeight_ = -1;
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;
@@ -95,6 +105,7 @@ private:
     bool showPostEffect_ = true;
     bool showReplayManager_ = true;
     bool showMapEditor_ = true;
+    bool showMapSettings_ = true;
 
     static bool showObjects_;
     static bool showEffects_;

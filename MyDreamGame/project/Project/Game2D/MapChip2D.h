@@ -20,6 +20,8 @@ public:
         kCoin = 4,  // コイン
         kOneWayBlock = 5, // 一方向通行床
         kPlayerSpawn = 6, // プレイヤー初期位置
+        kLift = 7,  // 動く足場（リフト）
+        kRail = 8,  // リフトの移動レール
     };
 
     void Initialize(ID3D12GraphicsCommandList* commandList);

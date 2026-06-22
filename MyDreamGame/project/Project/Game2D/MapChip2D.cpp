@@ -9,6 +9,7 @@
 #include "Blocks/GoalBlock.h"
 #include "Blocks/CoinBlock.h"
 #include "Blocks/OneWayBlock.h"
+#include "Blocks/LiftBlock.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -246,6 +247,7 @@ void MapChip2D::RebuildChipObjects() {
 
             int spanWidth = 1;
             int spanHeight = 1;
+            // リフトとレールはマージさせない（1マス単位）
             bool canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock);
             if (canMerge) {
                 // 水平方向のスパンを探索
@@ -284,7 +286,10 @@ void MapChip2D::RebuildChipObjects() {
                 newBlock = std::make_shared<CoinBlock>(this, x, y);
             } else if (type == ChipType::kOneWayBlock) {
                 newBlock = std::make_shared<OneWayBlock>(this, x, y);
+            } else if (type == ChipType::kLift) {
+                newBlock = std::make_shared<LiftBlock>(this, x, y);
             }
+            // kRail は描画オブジェクト（当たり判定）を持たないためスルー
 
             if (newBlock) {
                 newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, spanWidth * chipSize_, spanHeight * chipSize_);

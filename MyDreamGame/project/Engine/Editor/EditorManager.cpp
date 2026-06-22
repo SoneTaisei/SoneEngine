@@ -152,6 +152,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     }
     wasReplayingLastFrame = isReplayingNow;
 
+    isMapEditorVisible_ = false;
+
     // --- メインメニューバー ---
     if (ImGui::BeginMainMenuBar()) {
         // PLAY / STOP ボタン
@@ -162,6 +164,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::Button("再生 (PLAY)")) {
                 isPlaying_ = true;
                 useDebugCamera_ = false;
+                ImGui::SetWindowFocus("ゲームビュー");
+
+                // --- マップを一時保存（Stop時に復元するため） ---
+                if (sceneManager && sceneManager->GetCurrentScene()) {
+                    MapChip2D* mapChip = sceneManager->GetCurrentScene()->GetMapChip();
+                    if (mapChip) {
+                        mapDataStrToLoad_ = mapChip->GetMapDataAsString();
+                    }
+                }
             }
             ImGui::PopStyleColor(3);
         } else {
@@ -178,6 +189,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (ReplayManager::GetInstance()->IsPlaying()) {
                     ReplayManager::GetInstance()->StopPlayback();
                 }
+                
+                ImGui::SetWindowFocus("マップチップ画面");
+
+                // --- Stop時に一時保存したマップを復元するフラグを立てる ---
+                loadMapDataStrNextFrame_ = true;
+                sceneJustReset_ = true;
             }
             ImGui::PopStyleColor(3);
         }
@@ -261,6 +278,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_);
             ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_);
             ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_);
+            ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_);
             ImGui::MenuItem("リプレイマネージャー", nullptr, &showReplayManager_);
             ImGui::Separator();
             if (ImGui::MenuItem("レイアウトをリセット")) {
@@ -321,7 +339,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
             ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
-            ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
+            ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
             ImGui::DockBuilderDockWindow("リプレイマネージャー", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
             ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
@@ -784,23 +803,138 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Map Editor ウィンドウ ---
     if (showMapEditor_) {
         if (ImGui::Begin("マップチップ画面", &showMapEditor_)) {
+            isMapEditorVisible_ = true;
+
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
                 MapChip2D* mapChip = activeScene->GetMapChip();
                 if (mapChip) {
-                    // 静的変数
-                    static int inputWidth = -1;
-                    static int inputHeight = -1;
-
-                    if (inputWidth == -1) {
-                        inputWidth = mapChip->GetWidth();
+                    // サブ画面描画 (GameViewと同様の処理)
+                    ImVec2 contentSize = ImGui::GetContentRegionAvail();
+                    if (contentSize.x < 100.0f) contentSize.x = 100.0f;
+                    if (contentSize.y < 100.0f) contentSize.y = 100.0f;
+                    
+                    float aspect = 1280.0f / 720.0f;
+                    float windowAspect = contentSize.x / contentSize.y;
+                    ImVec2 imageSize;
+                    if (windowAspect > aspect) {
+                        imageSize.y = contentSize.y;
+                        imageSize.x = contentSize.y * aspect;
+                    } else {
+                        imageSize.x = contentSize.x;
+                        imageSize.y = contentSize.x / aspect;
                     }
-                    if (inputHeight == -1) {
-                        inputHeight = mapChip->GetHeight();
+                    // 中央寄せ
+                    ImVec2 currentPos = ImGui::GetCursorPos();
+                    ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+                    
+                    ImVec2 imageScreenPos = ImGui::GetCursorScreenPos();
+                    
+                    // GameViewの描画と同じテクスチャを表示
+                    ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+
+                    // 1マスのグリッドを描画する
+                    Camera* camera = *activeCamera;
+                    if (camera) {
+                        Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                        
+                        auto WorldToScreen = [&](float wx, float wy) -> ImVec2 {
+                            Vector3 ndc = TransformFunctions::Transform({wx, wy, 0.0f}, viewProj);
+                            float screenX = imageScreenPos.x + (ndc.x + 1.0f) * 0.5f * imageSize.x;
+                            float screenY = imageScreenPos.y + (1.0f - ndc.y) * 0.5f * imageSize.y;
+                            return ImVec2(screenX, screenY);
+                        };
+
+                        ImDrawList* drawList = ImGui::GetWindowDrawList();
+                        int mapWidth = mapChip->GetWidth();
+                        int mapHeight = mapChip->GetHeight();
+                        
+                        // 画像外にはみ出ないようにクリッピング
+                        drawList->PushClipRect(imageScreenPos, ImVec2(imageScreenPos.x + imageSize.x, imageScreenPos.y + imageSize.y), true);
+
+                        // 縦線
+                        for (int x = 0; x <= mapWidth; ++x) {
+                            ImVec2 p1 = WorldToScreen(static_cast<float>(x), 0.0f);
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(x), static_cast<float>(mapHeight));
+                            drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
+                        }
+                        
+                        // 横線
+                        for (int y = 0; y <= mapHeight; ++y) {
+                            ImVec2 p1 = WorldToScreen(0.0f, static_cast<float>(y));
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), static_cast<float>(y));
+                            drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
+                        }
+                        
+                        drawList->PopClipRect();
+                    }
+                    
+                    // クリック判定用の見えないボタン
+                    ImGui::SetCursorScreenPos(imageScreenPos);
+                    ImGui::InvisibleButton("MapCanvasImage", imageSize);
+                    isMapEditorHovered_ = ImGui::IsItemHovered();
+                    
+                    if (isMapEditorHovered_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                        ImVec2 mousePos = ImGui::GetIO().MousePos;
+                        float localX = mousePos.x - imageScreenPos.x;
+                        float localY = mousePos.y - imageScreenPos.y;
+                        
+                        // 画像上のUV座標 (0.0 ~ 1.0)
+                        float u = localX / imageSize.x;
+                        float v = localY / imageSize.y;
+                        
+                        // NDC (-1.0 ~ 1.0)
+                        float ndcX = u * 2.0f - 1.0f;
+                        float ndcY = 1.0f - v * 2.0f;
+                        
+                        // アクティブなカメラ（MapEditorCameraであるはず）から逆行列を計算
+                        Camera* camera = *activeCamera;
+                        if (camera) {
+                            Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                            Matrix4x4 invViewProj = TransformFunctions::Inverse(viewProj);
+                            
+                            // ワールド座標計算 (正射影前提なので Z は 0.0f を渡す)
+                            Vector3 worldPos = TransformFunctions::Transform({ndcX, ndcY, 0.0f}, invViewProj);
+                            
+                            // worldPos からグリッド座標を計算
+                            int mapWidth = mapChip->GetWidth();
+                            int mapHeight = mapChip->GetHeight();
+                            int gridX = mapChip->WorldToChipX(worldPos.x);
+                            int gridY = mapChip->WorldToChipY(worldPos.y);
+                            
+                            if (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight) {
+                                if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
+                                    mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                }
+                            }
+                        }
+                    }
+
+                } else {
+                    ImGui::Text("Active scene does not support 2D map editing.");
+                }
+            } else {
+                ImGui::Text("No active scene.");
+            }
+        }
+        ImGui::End();
+    }
+
+    // --- マップ設定 ウィンドウ ---
+    if (showMapSettings_) {
+        if (ImGui::Begin("マップ設定", &showMapSettings_)) {
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                MapChip2D* mapChip = activeScene->GetMapChip();
+                if (mapChip) {
+                    if (mapEditorInputWidth_ == -1) {
+                        mapEditorInputWidth_ = mapChip->GetWidth();
+                    }
+                    if (mapEditorInputHeight_ == -1) {
+                        mapEditorInputHeight_ = mapChip->GetHeight();
                     }
 
                     // ペイントツール選択
-                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin, 5 = OneWay, 6 = Spawn
                     ImGui::Text("Paint Tool:");
                     ImGui::Spacing();
 
@@ -818,12 +952,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         { 2, "Death", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
                         { 3, "Goal",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
                         { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f }, // コインは実際のモデルが0.5倍なので合わせる
-                        { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f }
+                        { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f },
+                        { 7, "Lift",  ImVec4(0.9f, 0.6f, 0.1f, 1.0f), 1.0f },
+                        { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f }
                     };
 
                     int numTools = sizeof(tools) / sizeof(tools[0]);
                     float itemSize = 64.0f; // アイコン枠のサイズ
-                    float padding = 8.0f;
                     float totalHeight = itemSize + 24.0f; // アイコン＋テキスト
                     float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
                     float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
@@ -833,11 +968,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ToolIcon& tool = tools[i];
 
                         ImVec2 p = ImGui::GetCursorScreenPos();
-                        bool isSelected = (selectedTool == tool.id);
+                        bool isSelected = (mapEditorSelectedTool_ == tool.id);
 
                         // 当たり判定 (InvisibleButton)
                         if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
-                            selectedTool = tool.id;
+                            mapEditorSelectedTool_ = tool.id;
                         }
 
                         bool isHovered = ImGui::IsItemHovered();
@@ -851,7 +986,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         // アイコン (四角形 - スケールを適用)
                         float iconPadding = 4.0f;
                         float actualIconSize = (itemSize - iconPadding * 2) * tool.scale;
-                        // 中央揃えにするためのオフセット計算
                         float offset = (itemSize - actualIconSize) * 0.5f;
 
                         ImVec2 iconMin = ImVec2(p.x + offset, p.y + offset);
@@ -944,18 +1078,18 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     // マップサイズ入力と適用ボタン
                     ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("Width", &inputWidth);
+                    ImGui::InputInt("Width", &mapEditorInputWidth_);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("Height", &inputHeight);
+                    ImGui::InputInt("Height", &mapEditorInputHeight_);
                     ImGui::SameLine();
                     if (ImGui::Button("Apply Size")) {
-                        if (inputWidth < 1) inputWidth = 1;
-                        if (inputHeight < 1) inputHeight = 1;
-                        mapChip->Resize(inputWidth, inputHeight);
+                        if (mapEditorInputWidth_ < 1) mapEditorInputWidth_ = 1;
+                        if (mapEditorInputHeight_ < 1) mapEditorInputHeight_ = 1;
+                        mapChip->Resize(mapEditorInputWidth_, mapEditorInputHeight_);
                     }
 
-                    ImGui::Spacing();
+                    ImGui::Separator();
 
                     // ファイルパス取得用ラムダ（.txtの自動付与）
                     auto GetFullFilePath = [](const char* filename) {
@@ -980,8 +1114,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::SameLine();
                     if (ImGui::Button("Load Map")) {
                         if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
-                            inputWidth = mapChip->GetWidth();
-                            inputHeight = mapChip->GetHeight();
+                            mapEditorInputWidth_ = mapChip->GetWidth();
+                            mapEditorInputHeight_ = mapChip->GetHeight();
                         }
                     }
                     ImGui::SameLine();
@@ -991,86 +1125,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::SameLine();
                     if (ImGui::Button("Reset Default")) {
                         mapChip->ResetMap();
-                        inputWidth = mapChip->GetWidth();
-                        inputHeight = mapChip->GetHeight();
-                    }
-
-                    ImGui::Separator();
-
-                    // 2Dグリッド描画
-                    int mapWidth = mapChip->GetWidth();
-                    int mapHeight = mapChip->GetHeight();
-                    float buttonSize = 18.0f;
-
-                    // ホバー色・アクティブ色を作成するラムダ
-                    auto MakeHoverColor = [](ImVec4 c) {
-                        return ImVec4((std::min)(c.x * 1.2f, 1.0f), (std::min)(c.y * 1.2f, 1.0f), (std::min)(c.z * 1.2f, 1.0f), c.w);
-                    };
-                    auto MakeActiveColor = [](ImVec4 c) {
-                        return ImVec4(c.x * 0.8f, c.y * 0.8f, c.z * 0.8f, c.w);
-                    };
-
-                    // 横スクロールを可能にするために子ウィンドウを開始
-                    if (ImGui::BeginChild("MapGridScroll", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar)) {
-                        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
-
-                        // Y軸は下側が0なので、画面上は上から下に向かって Y を逆順 (Height-1 から 0) で描画
-                        for (int y = mapHeight - 1; y >= 0; --y) {
-                            for (int x = 0; x < mapWidth; ++x) {
-                                MapChip2D::ChipType cellType = mapChip->GetChip(x, y);
-                                std::string btnId = "##cell_" + std::to_string(x) + "_" + std::to_string(y);
-
-                                ImVec4 btnColor;
-                                if (cellType == MapChip2D::ChipType::kDeathBlock) {
-                                    btnColor = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);        // デスブロック: 赤色
-                                } else if (cellType == MapChip2D::ChipType::kGoal) {
-                                    btnColor = ImVec4(0.8f, 0.2f, 0.8f, 1.0f);        // ゴール: 紫色
-                                } else if (cellType == MapChip2D::ChipType::kCoin) {
-                                    btnColor = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);        // コイン: 金色
-                                } else if (cellType == MapChip2D::ChipType::kOneWayBlock) {
-                                    btnColor = ImVec4(0.4f, 0.8f, 0.8f, 1.0f);        // 一方向通行床: 水色
-                                } else if (cellType == MapChip2D::ChipType::kPlayerSpawn) {
-                                    btnColor = ImVec4(0.2f, 0.6f, 1.0f, 1.0f);        // 初期座標: 青色
-                                } else if (cellType == MapChip2D::ChipType::kBlock) {
-                                    if (y <= 1) {
-                                        btnColor = ImVec4(0.55f, 0.35f, 0.17f, 1.0f); // 地面: 茶色
-                                    } else if (x == 0 || x == mapWidth - 1) {
-                                        btnColor = ImVec4(0.5f, 0.5f, 0.55f, 1.0f);   // 壁: 灰色
-                                    } else {
-                                        btnColor = ImVec4(0.3f, 0.7f, 0.3f, 1.0f);    // その他: 緑
-                                    }
-                                } else {
-                                    btnColor = ImVec4(0.15f, 0.15f, 0.15f, 0.5f);     // 空中: 暗い半透明
-                                }
-
-                                ImGui::PushStyleColor(ImGuiCol_Button, btnColor);
-                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, MakeHoverColor(btnColor));
-                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, MakeActiveColor(btnColor));
-
-                                if (x > 0) {
-                                    ImGui::SameLine();
-                                }
-
-                                ImVec2 pos = ImGui::GetCursorScreenPos();
-
-                                if (ImGui::Button(btnId.c_str(), ImVec2(buttonSize, buttonSize))) {
-                                    mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
-                                }
-
-                                ImVec2 mousePos = ImGui::GetIO().MousePos;
-                                if (ImGui::IsMouseDown(0) &&
-                                    mousePos.x >= pos.x && mousePos.x <= pos.x + buttonSize &&
-                                    mousePos.y >= pos.y && mousePos.y <= pos.y + buttonSize) {
-                                    if (mapChip->GetChip(x, y) != static_cast<MapChip2D::ChipType>(selectedTool)) {
-                                        mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
-                                    }
-                                }
-
-                                ImGui::PopStyleColor(3);
-                            }
-                        }
-                        ImGui::PopStyleVar();
-                        ImGui::EndChild();
+                        mapEditorInputWidth_ = mapChip->GetWidth();
+                        mapEditorInputHeight_ = mapChip->GetHeight();
                     }
                 } else {
                     ImGui::Text("Active scene does not support 2D map editing.");

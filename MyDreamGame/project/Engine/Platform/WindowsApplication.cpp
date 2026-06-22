@@ -8,6 +8,9 @@
 #include "Effect/ParticleCommon.h"
 #include "Graphics/DebugCamera.h"
 #include "Graphics/GameCamera.h"
+#ifdef USE_IMGUI
+#include "Graphics/MapEditorCamera.h"
+#endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
@@ -125,6 +128,12 @@ void WindowsApplication::Initialize() {
     // 2. デバッグカメラ生成
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(kWindowWidth_, kWindowHeight_);
+
+#ifdef USE_IMGUI
+    // 3. マップエディタカメラ生成
+    mapEditorCamera_ = std::make_unique<MapEditorCamera>();
+    mapEditorCamera_->Initialize(kWindowWidth_, kWindowHeight_);
+#endif
 
     // GameCameraをSceneManagerにセット（シーンからカメラモードを切り替え可能にする）
     sceneManager_->SetGameCamera(gameCamera_.get());
@@ -264,7 +273,12 @@ void WindowsApplication::Update() {
     gameCamera_->Update();
 
     // カメラの切り替え（チェックボックスの状態を優先）
-    if (editorManager_->UseDebugCamera()) {
+    if (editorManager_->IsMapEditorVisible()) {
+        activeCamera_ = mapEditorCamera_.get();
+        isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
+        bool allowCameraInput = editorManager_->IsMapEditorHovered();
+        mapEditorCamera_->Update(allowCameraInput);
+    } else if (editorManager_->UseDebugCamera()) {
         activeCamera_ = debugCamera_.get();
         isDebugCameraActive_ = true;
         

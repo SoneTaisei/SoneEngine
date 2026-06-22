@@ -91,6 +91,10 @@ private:
     Vector3 position_ = { 2.0f, 5.0f, 0.0f }; // 初期位置
     Vector3 velocity_ = { 0.0f, 0.0f, 0.0f };
 
+    // 足場（リフト）関連
+    bool isOnMovingPlatform_ = false;
+    Vector3 platformVelocity_ = { 0.0f, 0.0f, 0.0f };
+
     float moveSpeed_ = 5.0f;       // 左右移動速度
     float jumpPower_ = 10.0f;      // ジャンプ力
     float gravity_ = -20.0f;       // 重力加速度

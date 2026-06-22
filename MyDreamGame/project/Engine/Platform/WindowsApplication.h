@@ -15,6 +15,7 @@ class ParticleCommon;
 class SceneManager;
 class GameCamera;
 class DebugCamera;
+class MapEditorCamera;
 class Camera;
 class ViewProjection;
 
@@ -62,6 +63,9 @@ private:
     std::unique_ptr<SceneManager> sceneManager_;
     std::unique_ptr<GameCamera> gameCamera_;
     std::unique_ptr<DebugCamera> debugCamera_;
+#ifdef USE_IMGUI
+    std::unique_ptr<MapEditorCamera> mapEditorCamera_;
+#endif
 
     // 「現在アクティブなカメラ」を指すポインタ（借用）
     Camera *activeCamera_ = nullptr;
