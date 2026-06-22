@@ -4,7 +4,9 @@
 #include "Input/KeyboardInput.h"
 #include "Core/TimeManager.h"
 #include "Core/Utility/Structs.h"
+#include <memory>
 #include <vector>
+#include <random>
 
 // 前方宣言
 class MapChip2D;
@@ -47,9 +49,13 @@ public:
     void Kill() {
         if (!isDead_) {
             isDead_ = true;
+            isRespawning_ = false;
             deathTimer_ = 0.0f;
-            velocity_ = { 0.0f, 0.0f, 0.0f };
+            // 後ろによろける演出のための速度設定 (よろけ具合を約半分に低減)
+            velocity_ = { velocity_.x > 0.0f ? -2.5f : (velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f };
             isDashing_ = false;
+            // スローモーション開始
+            TimeManager::GetInstance().SetTimeScale(0.3f);
         }
     }
     void ReachGoal() {
@@ -58,6 +64,7 @@ public:
             goalTimer_ = 0.0f;
             velocity_ = { 0.0f, 0.0f, 0.0f };
             isDashing_ = false;
+            SpawnConfetti();
         }
     }
     void AddScore(int score) {
@@ -121,14 +128,54 @@ private:
     // 死亡演出用パラメータ
     bool isDead_ = false;           // 死亡演出中か
     float deathTimer_ = 0.0f;       // 死亡経過時間
-    float deathDuration_ = 0.5f;    // 死亡演出の時間
+    float deathDuration_ = 0.175f;  // 死亡演出の時間 (ノックバックしながらディゾルブする)
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f }; // スタート地点・リスポーン位置
+
+    // リスポーン演出用パラメータ
+    bool isRespawning_ = false;
+    float respawnTimer_ = 0.0f;
+    float respawnDuration_ = 0.5f;
 
     // ゴール・スコア用パラメータ
     bool isGoal_ = false;
     float goalTimer_ = 0.0f;
     float goalWaitTime_ = 2.0f;
     int score_ = 0;
+    
+    // 砂埃エフェクト用パラメータ
+    struct DustParticle {
+        Vector3 position;
+        Vector3 velocity;
+        float timer;
+        float duration;
+        float startSize;
+        bool active;
+    };
+    std::vector<DustParticle> dustParticles_;
+    
+    // 砂埃を発生させる
+    void SpawnJumpDust(const Vector3& basePos, float dirX);
+    void SpawnRunDust(const Vector3& basePos, float dirX);
+    
+    float runDustTimer_ = 0.0f;
+    float runDustInterval_ = 0.1f;
+
+    // 紙吹雪エフェクト用パラメータ
+    struct ConfettiParticle {
+        Vector3 position;
+        Vector3 velocity;
+        Vector4 color;
+        Vector3 rotation;
+        Vector3 rotationSpeed;
+        float timer;
+        float duration;
+        float size;
+        bool active;
+    };
+    std::vector<ConfettiParticle> confettiParticles_;
+    
+    // 紙吹雪を発生させる
+    void SpawnConfetti();
 
     // イージング関数
     float EaseInElastic(float t) const;

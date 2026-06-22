@@ -126,7 +126,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (ext == ".txt" || ext == ".TXT") hasExt = true;
                     }
                     if (!hasExt) name += ".txt";
-                    std::string filepath = "json/" + name;
+                    std::string filepath = "resources/json/" + name;
                     mapChip->LoadFromFile(filepath);
                 }
             }
@@ -965,7 +965,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (!hasExt) {
                             name += ".txt";
                         }
-                        return std::string("json/") + name;
+                        return std::string("resources/json/") + name;
                     };
 
                     // 操作ボタン
@@ -1167,7 +1167,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::Text("📁 %s", saved[i].c_str());
                             
                             if (ImGui::Button("ロード再生")) {
-                                replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
+                                replayMgr->StartPlayback(-1, "resources/json/saved_replays/" + saved[i]);
                                 useDebugCamera_ = false;
                                 
                                 // リプレイのマップ情報があればロードする
@@ -1187,7 +1187,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             
                             ImGui::SameLine();
                             if (ImGui::Button("選択(残像表示)")) {
-                                replayMgr->SelectReplay(-1, "json/saved_replays/" + saved[i]);
+                                replayMgr->SelectReplay(-1, "resources/json/saved_replays/" + saved[i]);
                             }
                             
                             ImGui::SameLine();
@@ -1423,7 +1423,7 @@ void EditorManager::Finalize() {
 void EditorManager::SaveSceneConfig() {
     std::filesystem::create_directories("json");
 
-    std::ofstream ofs("json/editor_config.json");
+    std::ofstream ofs("resources/json/editor_config.json");
     if (ofs.is_open()) {
         auto dxCommon = DirectXCommon::GetInstance();
         ofs << "{" << std::endl;
@@ -1436,7 +1436,7 @@ void EditorManager::SaveSceneConfig() {
 }
 
 void EditorManager::LoadSceneConfig() {
-    std::ifstream ifs("json/editor_config.json");
+    std::ifstream ifs("resources/json/editor_config.json");
     if (!ifs.is_open()) {
         return;
     }

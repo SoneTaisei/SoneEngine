@@ -19,13 +19,13 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList) {
 
     // デフォルトテクスチャのロード
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> comPtrCommandList(commandList);
-    uint32_t texHandle = TextureManager::GetInstance()->Load("Object/School/human/white.png", comPtrCommandList);
+    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png", comPtrCommandList);
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
 
     // 保存ファイルがあれば読込み、なければ初期構築して保存する
-    if (!LoadFromFile("json/map_data.txt")) {
+    if (!LoadFromFile("resources/json/map_data.txt")) {
         BuildMap();
-        SaveToFile("json/map_data.txt");
+        SaveToFile("resources/json/map_data.txt");
     }
 }
 

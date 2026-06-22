@@ -25,6 +25,19 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         discard;
     }
     
+    // Dissolve discard using procedural blocky noise
+    if (gMaterial.dissolveThreshold > 0.0f) {
+        // Create blocky noise for dissolve (mosaic effect)
+        // A smaller grid size means fewer, larger squares.
+        float2 gridSize = float2(6.0f, 6.0f); 
+        float2 blockUv = floor(input.texcoord * gridSize);
+        float noiseValue = frac(sin(dot(blockUv, float2(12.9898f, 78.233f))) * 43758.5453f);
+        
+        if (noiseValue < gMaterial.dissolveThreshold) {
+            discard;
+        }
+    }
+    
     if (gMaterial.lightingType == 1) {
         float3 normal = normalize(input.normal);
         float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);

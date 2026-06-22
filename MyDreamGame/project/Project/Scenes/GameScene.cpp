@@ -1,6 +1,5 @@
 #include "GameScene.h"
 #include "Scene/SceneManager.h"
-#include "Effect/SnowParticle.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Graphics/GameCamera.h"
@@ -17,7 +16,6 @@
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
-    rotateTimer_ = 0.0f; // 回転タイマーを確実にリセット
 
     // 1. Device取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
@@ -30,51 +28,14 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     ReplayManager::GetInstance()->LoadSavedList();
 
     // ★ Skyboxの初期化処理を追加
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("Sprite/Original/skybox/skybox_highres_build.dds", commandList);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds", commandList);
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 
-    // 3. SnowParticleの生成 (unique_ptrで作る)
-    auto snowParticle = std::make_unique<SnowParticle>();
-    snowParticle->Initialize(commandList.Get(), particleCommon_, 1000, "Sprite/School/circle.png", srvIndex_, BlendMode::kBlendModeAdd);
-    snowParticle->SetName("Snow Particles");
-
-    // Commonに描画登録する (Modelと同じ仕組みにする)
-    particleCommon_->AddParticle(snowParticle.get());
-    snowParticle_ = snowParticle.get();
-    particles_.push_back(std::move(snowParticle));
-
-    // HitEffectの作成（コイン取得用）
-    hitEffect_ = std::make_unique<HitEffect>();
-    hitEffect_->Initialize(commandList.Get(), particleCommon_, 1024, "Sprite/School/circle2.png", 112, kBlendModeAdd);
-
-    // 4. 3Dプリミティブオブジェクトの作成
-    // 橙色の球体（環境マップ・ライティング有効）
-    {
-        auto sphere = std::make_unique<PrimitiveObject>();
-        sphere->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Sphere, 1.0f, 32));
-        sphere->SetTranslation({2.0f, 0.0f, 0.0f});
-        sphere->GetMaterial().color = {1.0f, 0.5f, 0.0f, 1.0f};
-        sphere->GetMaterial().enableEnvironmentMap = 1;
-        sphere->GetMaterial().environmentCoefficient = 0.5f;
-        sphere->GetMaterial().lightingType = 1;
-        sphere->SetName("Game Sphere");
-        primitives_.push_back(std::move(sphere));
-    }
-
-    // 水色の箱（環境マップ・ライティング有効）
-    {
-        auto box = std::make_unique<PrimitiveObject>();
-        box->Initialize(device.Get(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f));
-        box->SetTranslation({-2.0f, 0.0f, 0.0f});
-        box->GetMaterial().color = {0.0f, 0.8f, 1.0f, 1.0f};
-        box->GetMaterial().enableEnvironmentMap = 1;
-        box->GetMaterial().environmentCoefficient = 0.5f;
-        box->GetMaterial().lightingType = 1;
-        box->SetName("Game Box");
-        primitives_.push_back(std::move(box));
-    }
+    // CoinEffectの作成（コイン取得用）
+    coinEffect_ = std::make_unique<CoinEffect>();
+    coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
@@ -94,33 +55,12 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
-    // 1. 雪を発生させる (個別のポインタを使う)
-    if(snowParticle_) {
-        snowParticle_->Emit(snowEmitter_);
-    }
-
-    // 2. 全パーティクルを更新する (リストを使って一括更新)
-    for(auto &particle : particles_) {
-        particle->Update();
-    }
-    if (hitEffect_) {
-        hitEffect_->Update();
+    if (coinEffect_) {
+        coinEffect_->Update(1.0f / 60.0f);
     }
 
     if (skybox_) {
         skybox_->Update();
-    }
-
-    // 3. 3Dプリミティブオブジェクトの回転と更新
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-    rotateTimer_ += deltaTime;
-    if (primitives_.size() >= 2) {
-        primitives_[0]->SetRotation({0.0f, rotateTimer_, 0.0f}); // 球体のY軸回転
-        primitives_[1]->SetRotation({rotateTimer_ * 0.5f, rotateTimer_, 0.0f}); // 箱の多軸回転
-    }
-
-    for (auto &primitive : primitives_) {
-        primitive->Update();
     }
 
     // 4. プレイヤーの更新（入力・物理・当たり判定）
@@ -264,14 +204,16 @@ void GameScene::Update(SceneManager *sceneManager) {
             // コイン獲得エフェクト
             int currentScore = player_->GetScore();
             if (currentScore > previousScore_) {
-                if (hitEffect_) {
-                    Emitter hitEmitter{};
-                    hitEmitter.transform.translate = player_->GetPosition();
-                    hitEmitter.transform.scale = { 0.75f, 0.75f, 0.75f };
-                    hitEmitter.count = 20;
-                    hitEmitter.frequency = 0.05f;
-                    hitEmitter.frequencyTime = 0.0f;
-                    hitEffect_->Emit(hitEmitter);
+                if (coinEffect_) {
+                    Vector3 playerPos = player_->GetPosition();
+                    float playerWidth = 1.0f; // 実際のプレイヤーサイズに合わせて調整
+                    float playerHeight = 1.0f;
+                    Vector3 hitEmitterPos = {
+                        playerPos.x + playerWidth / 2.0f,
+                        playerPos.y + playerHeight / 2.0f,
+                        0.0f
+                    };
+                    coinEffect_->Emit(hitEmitterPos);
                 }
                 previousScore_ = currentScore;
             }
@@ -346,17 +288,6 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         }
     }
 
-    // 1. 3Dプリミティブの描画
-#ifdef USE_IMGUI
-    if (EditorManager::IsShowObjects()) {
-#endif
-        for (auto &primitive : primitives_) {
-            primitive->Draw(commandList_);
-        }
-#ifdef USE_IMGUI
-    }
-#endif
-
     // 2. 2Dオブジェクト（マップ・プレイヤー）の描画
     // ModelCommonの描画前処理
     modelCommon_->PreDraw(commandList_);
@@ -369,6 +300,16 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // プレイヤーの描画
     if (player_) {
         player_->Draw(commandList_);
+    }
+
+    if (coinEffect_) {
+#ifdef USE_IMGUI
+        if (EditorManager::IsShowEffects()) {
+            coinEffect_->Draw(commandList_);
+        }
+#else
+        coinEffect_->Draw(commandList_);
+#endif
     }
 
 #ifdef USE_IMGUI
@@ -436,14 +377,11 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 描画前処理
     particleCommon_->PreDraw(commandList_);
 
-    // 雪の描画
+    // パーティクルの描画
 #ifdef USE_IMGUI
     if (EditorManager::IsShowEffects()) {
 #endif
         particleCommon_->DrawAll(viewProjectionMatrix);
-        if (hitEffect_) {
-            hitEffect_->Draw(viewProjectionMatrix);
-        }
 #ifdef USE_IMGUI
     }
 #endif
@@ -451,22 +389,11 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
 std::vector<ParticleManager *> GameScene::GetParticles() {
     std::vector<ParticleManager *> result;
-    for (auto &p : particles_) {
-        result.push_back(p.get());
-    }
-    if (hitEffect_) {
-        result.push_back(hitEffect_.get());
-    }
     return result;
 }
 
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
-
-    // 1. 3Dプリミティブオブジェクト
-    for (auto &p : primitives_) {
-        result.push_back(p.get());
-    }
 
     // 2. プレイヤー
     if (player_) {
@@ -479,6 +406,11 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
         result.insert(result.end(), mapPrims.begin(), mapPrims.end());
     }
 
+    if (coinEffect_) {
+        auto coinPrims = coinEffect_->GetParticles();
+        result.insert(result.end(), coinPrims.begin(), coinPrims.end());
+    }
+
     return result;
 }
 
@@ -488,17 +420,15 @@ void GameScene::UpdateEditor() {
         ReplayManager::GetInstance()->StopRecord();
     }
 
-    for (auto &primitive : primitives_) {
-        primitive->Update();
-    }
     if (skybox_) {
         skybox_->Update();
     }
-    if (hitEffect_) {
-        hitEffect_->Update();
+    if (coinEffect_) {
+        // ImGui更新（もしあれば）
+        coinEffect_->Update(1.0f / 60.0f);
     }
+    // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
     if (player_) {
-        // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
         if (map_) {
             player_->FindSpawnPoint(*map_);
         }
