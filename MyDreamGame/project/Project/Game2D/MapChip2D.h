@@ -81,6 +81,9 @@ public:
     std::string GetMapDataAsString() const;
     bool LoadFromString(const std::string& data);
 
+    // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
+    const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
+
 private:
     void BuildMap();
     void CreateChipObjects(ID3D12GraphicsCommandList* commandList);

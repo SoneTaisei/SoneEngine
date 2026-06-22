@@ -37,6 +37,9 @@ public:
 
     // プレイヤーと接触した際の処理
     virtual void OnCollision(Player2D* player) {}
+    
+    // プレイヤーが上に乗った際の処理
+    virtual void OnPlayerStand() {}
 
     PrimitiveObject* GetPrimitive() const { return primitiveObj_.get(); }
     

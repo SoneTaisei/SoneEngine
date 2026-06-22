@@ -35,6 +35,20 @@ public:
     };
     AABB GetAABB() const;
 
+    // 将来の拡張用 OBB（Oriented Bounding Box）構造体
+    struct OBB2D {
+        Vector3 center;
+        Vector3 extents; // half-width, half-height, z=0
+        float rotation;  // radian
+    };
+
+    // AABB同士の交差判定ヘルパー
+    static bool CheckAABBCollision(const AABB& a, const AABB& b);
+    
+    // OBBを用いた衝突判定（戻り値はMTV: Minimum Translation Vector）
+    // （今回は不使用ですが将来のリフト回転対応用として実装）
+    static bool CheckCollisionOBB(const OBB2D& obb1, const OBB2D& obb2, Vector3& outMTV);
+
     // ヒエラルキー用
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
 
@@ -94,6 +108,9 @@ private:
     // 足場（リフト）関連
     bool isOnMovingPlatform_ = false;
     Vector3 platformVelocity_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 慣性保存用
+    float platformInertiaTimer_ = 0.0f; // 慣性猶予時間（コヨーテタイム）
+    float externalVelocityX_ = 0.0f; // 慣性用の外部速度
 
     float moveSpeed_ = 5.0f;       // 左右移動速度
     float jumpPower_ = 10.0f;      // ジャンプ力

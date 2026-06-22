@@ -340,11 +340,52 @@ Player2D::AABB Player2D::GetAABB() const {
     };
 }
 
+bool Player2D::CheckAABBCollision(const AABB& a, const AABB& b) {
+    if (a.right < b.left || a.left > b.right) return false;
+    if (a.top < b.bottom || a.bottom > b.top) return false;
+    return true;
+}
+
+bool Player2D::CheckCollisionOBB(const OBB2D& obb1, const OBB2D& obb2, Vector3& outMTV) {
+    // 今回はAABBのみを使用するため、簡易的にAABB判定にフォールバック（将来のためのプレースホルダ）
+    AABB a = { obb1.center.x - obb1.extents.x, obb1.center.y + obb1.extents.y, obb1.center.x + obb1.extents.x, obb1.center.y - obb1.extents.y };
+    AABB b = { obb2.center.x - obb2.extents.x, obb2.center.y + obb2.extents.y, obb2.center.x + obb2.extents.x, obb2.center.y - obb2.extents.y };
+    if (!CheckAABBCollision(a, b)) return false;
+
+    // AABB同士のMTV計算
+    float overlapLeft = a.right - b.left;
+    float overlapRight = b.right - a.left;
+    float overlapTop = a.top - b.bottom;
+    float overlapBottom = b.top - a.bottom;
+
+    float minOverlap = (std::min)({overlapLeft, overlapRight, overlapTop, overlapBottom});
+    
+    if (minOverlap == overlapLeft) outMTV = { -overlapLeft, 0.0f, 0.0f };
+    else if (minOverlap == overlapRight) outMTV = { overlapRight, 0.0f, 0.0f };
+    else if (minOverlap == overlapTop) outMTV = { 0.0f, overlapTop, 0.0f };
+    else outMTV = { 0.0f, -overlapBottom, 0.0f };
+    
+    return true;
+}
+
 void Player2D::HandleInput() {
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
 
     isWallSliding_ = false;
     isWallClinging_ = false;
+
+    // リフトの慣性猶予（コヨーテタイム）の更新
+    float dt = TimeManager::GetInstance().GetDeltaTime();
+    if (isOnMovingPlatform_) {
+        // リフトが動いていれば最新の速度を記録し、猶予時間をリセット
+        if (std::abs(platformVelocity_.x) > 0.01f || std::abs(platformVelocity_.y) > 0.01f) {
+            recentPlatformVelocity_ = platformVelocity_;
+            platformInertiaTimer_ = 0.1f; // コヨーテタイムを0.1秒に変更
+        }
+    }
+    if (platformInertiaTimer_ > 0.0f) {
+        platformInertiaTimer_ -= dt;
+    }
 
     // 通常時の左右移動（ダッシュ中でない場合）
     if (!isDashing_) {
@@ -352,13 +393,31 @@ void Player2D::HandleInput() {
         bool inputRight = keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT);
 
         if (wallJumpTimer_ <= 0.0f) {
-            velocity_.x = 0.0f;
+            float targetVelX = 0.0f;
             if (inputLeft) {
-                velocity_.x = -moveSpeed_;
+                targetVelX = -moveSpeed_;
             }
             if (inputRight) {
-                velocity_.x = moveSpeed_;
+                targetVelX = moveSpeed_;
             }
+
+            // 外部速度(慣性)の加算と減衰
+            if (isOnGround_) {
+                externalVelocityX_ = 0.0f; // 地上にいるときは慣性をリセット
+            } else {
+                // 空中では緩やかに減衰（空気抵抗）
+                float dt = TimeManager::GetInstance().GetDeltaTime();
+                float decayRate = 5.0f * dt;
+                if (externalVelocityX_ > 0.0f) {
+                    externalVelocityX_ -= decayRate;
+                    if (externalVelocityX_ < 0.0f) externalVelocityX_ = 0.0f;
+                } else if (externalVelocityX_ < 0.0f) {
+                    externalVelocityX_ += decayRate;
+                    if (externalVelocityX_ > 0.0f) externalVelocityX_ = 0.0f;
+                }
+            }
+
+            velocity_.x = targetVelX + externalVelocityX_;
         }
 
         // 壁ずり落ち / 壁張り付きの判定 (空中で、落下中か静止中の場合のみ)
@@ -375,10 +434,14 @@ void Player2D::HandleInput() {
         if (keyboard->IsKeyPressed(DIK_SPACE)) {
             if (isOnGround_) {
                 velocity_.y = jumpPower_;
-                // 足場に乗っている場合は慣性を加算
-                if (isOnMovingPlatform_) {
-                    velocity_.x += platformVelocity_.x;
-                    velocity_.y += platformVelocity_.y;
+                // 足場に乗っている（または猶予期間中）場合は慣性を加算
+                if (platformInertiaTimer_ > 0.0f) {
+                    externalVelocityX_ = recentPlatformVelocity_.x;
+                    velocity_.x += externalVelocityX_;
+                    velocity_.y += recentPlatformVelocity_.y;
+                    
+                    // ジャンプしたら猶予期間を終了する
+                    platformInertiaTimer_ = 0.0f;
                 }
                 isOnGround_ = false;
                 isOnMovingPlatform_ = false;
@@ -395,6 +458,7 @@ void Player2D::HandleInput() {
                     velocity_.x = -wallJumpPower_.x;
                     velocity_.y = wallJumpPower_.y;
                     wallJumpTimer_ = wallJumpDuration_;
+                    externalVelocityX_ = 0.0f; // 壁ジャンプ時に慣性をリセット
                     SpawnJumpDust({position_.x + halfWidth_, position_.y, 0.0f}, -1.0f);
                 }
                 isTouchingWallRight_ = false;
@@ -412,6 +476,7 @@ void Player2D::HandleInput() {
                     velocity_.x = wallJumpPower_.x;
                     velocity_.y = wallJumpPower_.y;
                     wallJumpTimer_ = wallJumpDuration_;
+                    externalVelocityX_ = 0.0f; // 壁ジャンプ時に慣性をリセット
                     SpawnJumpDust({position_.x - halfWidth_, position_.y, 0.0f}, 1.0f);
                 }
                 isTouchingWallLeft_ = false;
@@ -510,9 +575,12 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
                 isOnGround_ = true;
                 canDash_ = true; // 着地でダッシュ回復
                 
-                if (block->IsMoving()) {
-                    isOnMovingPlatform_ = true;
-                    platformVelocity_ = block->GetVelocity();
+                if (block) {
+                    block->OnPlayerStand();
+                    if (block->IsMoving()) {
+                        isOnMovingPlatform_ = true;
+                        platformVelocity_ = block->GetVelocity();
+                    }
                 }
                 
                 break;
@@ -535,6 +603,49 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
                 position_.y = blockBottom - halfHeight_;
                 velocity_.y = 0.0f;
                 break;
+            }
+        }
+    }
+
+    // 動的ブロック（リフトなど）の判定
+    aabb = GetAABB(); // 静的ブロックで位置が変わった可能性があるので再取得
+    
+    // 壁との擦れ判定を防ぐため、左右を少しだけ縮める
+    AABB shrunkAABBY = aabb;
+    shrunkAABBY.left += 0.05f;
+    shrunkAABBY.right -= 0.05f;
+
+    const auto& updateBlocks = map.GetUpdateBlocks();
+    for (const auto& block : updateBlocks) {
+        if (!block || !block->IsSolid()) continue;
+        
+        PrimitiveObject* pObj = block->GetPrimitive();
+        if (!pObj) continue;
+        
+        Vector3 pos = pObj->GetTranslation();
+        Vector3 scale = pObj->GetScale();
+        
+        AABB blockAABB = {
+            pos.x - scale.x * 0.5f,
+            pos.y + scale.y * 0.5f,
+            pos.x + scale.x * 0.5f,
+            pos.y - scale.y * 0.5f
+        };
+
+        if (CheckAABBCollision(shrunkAABBY, blockAABB)) {
+            if (velocity_.y <= 0.0f && aabb.bottom >= blockAABB.top - 0.5f) { // 上から乗った
+                position_.y = blockAABB.top + halfHeight_;
+                velocity_.y = 0.0f;
+                isOnGround_ = true;
+                canDash_ = true;
+                block->OnPlayerStand();
+                if (block->IsMoving()) {
+                    isOnMovingPlatform_ = true;
+                    platformVelocity_ = block->GetVelocity();
+                }
+            } else if (velocity_.y > 0.0f && aabb.top <= blockAABB.bottom + 0.5f) { // 下からぶつかった
+                position_.y = blockAABB.bottom - halfHeight_;
+                velocity_.y = 0.0f;
             }
         }
     }
@@ -590,6 +701,46 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
                 velocity_.x = 0.0f;
                 isTouchingWallLeft_ = true;
                 break;
+            }
+        }
+    }
+
+    // 動的ブロック（リフトなど）の判定
+    aabb = GetAABB();
+    
+    // 床や天井との擦れ判定を防ぐため、上下を少しだけ縮める
+    AABB shrunkAABBX = aabb;
+    shrunkAABBX.top -= 0.05f;
+    shrunkAABBX.bottom += 0.05f;
+
+    for (const auto& block : map.GetUpdateBlocks()) {
+        if (!block || !block->IsSolid()) continue;
+        
+        PrimitiveObject* pObj = block->GetPrimitive();
+        if (!pObj) continue;
+        
+        Vector3 pos = pObj->GetTranslation();
+        Vector3 scale = pObj->GetScale();
+        
+        AABB blockAABB = {
+            pos.x - scale.x * 0.5f,
+            pos.y + scale.y * 0.5f,
+            pos.x + scale.x * 0.5f,
+            pos.y - scale.y * 0.5f
+        };
+
+        if (CheckAABBCollision(shrunkAABBX, blockAABB)) {
+            // ブロックの中心とプレイヤーの中心を比較して左右を判定
+            if (position_.x < pos.x) {
+                // ブロックの左側にいる
+                position_.x = blockAABB.left - halfWidth_;
+                velocity_.x = 0.0f;
+                isTouchingWallRight_ = true;
+            } else {
+                // ブロックの右側にいる
+                position_.x = blockAABB.right + halfWidth_;
+                velocity_.x = 0.0f;
+                isTouchingWallLeft_ = true;
             }
         }
     }

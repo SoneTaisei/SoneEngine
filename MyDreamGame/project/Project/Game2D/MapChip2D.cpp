@@ -10,6 +10,7 @@
 #include "Blocks/CoinBlock.h"
 #include "Blocks/OneWayBlock.h"
 #include "Blocks/LiftBlock.h"
+#include "Blocks/RailBlock.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -288,8 +289,9 @@ void MapChip2D::RebuildChipObjects() {
                 newBlock = std::make_shared<OneWayBlock>(this, x, y);
             } else if (type == ChipType::kLift) {
                 newBlock = std::make_shared<LiftBlock>(this, x, y);
+            } else if (type == ChipType::kRail) {
+                newBlock = std::make_shared<RailBlock>(this, x, y);
             }
-            // kRail は描画オブジェクト（当たり判定）を持たないためスルー
 
             if (newBlock) {
                 newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, spanWidth * chipSize_, spanHeight * chipSize_);
