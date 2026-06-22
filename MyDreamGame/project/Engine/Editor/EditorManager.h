@@ -62,7 +62,13 @@ public:
         sceneJustReset_ = true; // シーンリセットのフラグを立てる
     }
 
+    static ImVec2 GetGameViewPos() { return gameViewPos_; }
+    static ImVec2 GetGameViewSize() { return gameViewSize_; }
+
 private:
+    static ImVec2 gameViewPos_;
+    static ImVec2 gameViewSize_;
+
     bool sceneJustReset_ = false;
     bool loadMapDataStrNextFrame_ = false;
     std::string mapDataStrToLoad_ = "";
