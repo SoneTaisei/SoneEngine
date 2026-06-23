@@ -129,7 +129,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (ext == ".txt" || ext == ".TXT") hasExt = true;
                     }
                     if (!hasExt) name += ".txt";
-                    std::string filepath = "resources/json/" + name;
+                    std::string filepath = "resources/json/MapData/" + name;
                     mapChip->LoadFromFile(filepath);
                 }
             }
@@ -1024,8 +1024,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // json ディレクトリ内の .txt ファイルを自動走査
                     std::vector<std::string> stageFiles;
                     try {
-                        if (std::filesystem::exists("json")) {
-                            for (const auto& entry : std::filesystem::directory_iterator("json")) {
+                        if (std::filesystem::exists("resources/json/MapData")) {
+                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/MapData")) {
                                 if (entry.is_regular_file()) {
                                     std::string filename = entry.path().filename().string();
                                     if (filename.length() >= 4) {
@@ -1104,7 +1104,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (!hasExt) {
                             name += ".txt";
                         }
-                        return std::string("resources/json/") + name;
+                        return std::string("resources/json/MapData/") + name;
                     };
 
                     // 操作ボタン

@@ -6,6 +6,14 @@
 #include "Resource/Model/ModelManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Resource/Model/ModelCommon.h"
+#include "Input/KeyboardInput.h"
+#include "Scene/SceneFactory.h"
+#include "GameScene.h"
+#include "Core/TimeManager.h"
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include <filesystem>
 
 StageSelectScene::~StageSelectScene() {
 }
@@ -37,10 +45,13 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
 
     objects_.push_back(std::move(skydomeObject));
 
-    // ★ Skyboxの初期化処理を追加
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds", commandList);
+    // Skyboxの初期化
+    uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds", commandList_.Get());
     skybox_ = std::make_unique<Skybox>();
-    skybox_->Initialize(device.Get(), skyboxTextureHandle_);
+    skybox_->Initialize(device.Get(), skyboxHandle);
+
+    LoadConfig();
+    RefreshAvailableMapFiles();
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 }
 
@@ -62,7 +73,32 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
+    if (inputDelayTimer_ > 0.0f) {
+        inputDelayTimer_ -= TimeManager::GetInstance().GetDeltaTime();
+        return;
+    }
 
+    auto keyboard = KeyboardInput::GetInstance();
+    if (keyboard->IsKeyPressed(DIK_A)) {
+        currentStageIndex_--;
+        if (currentStageIndex_ < 0) {
+            currentStageIndex_ = stageCount_ - 1;
+        }
+    }
+    if (keyboard->IsKeyPressed(DIK_D)) {
+        currentStageIndex_++;
+        if (currentStageIndex_ >= stageCount_) {
+            currentStageIndex_ = 0;
+        }
+    }
+
+    if (keyboard->IsKeyPressed(DIK_SPACE)) {
+        if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
+            GameScene::s_TargetMapFilePath = "resources/json/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
+        }
+        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+        return;
+    }
 }
 
 void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
@@ -95,4 +131,118 @@ std::vector<Object3D *> StageSelectScene::GetObjects() {
         result.push_back(obj.get());
     }
     return result;
+}
+
+void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
+#ifdef USE_IMGUI
+    // プレイヤー向けの現在の選択ステージ表示
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+    const float PAD = 10.0f;
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 workPos = viewport->WorkPos;
+    ImVec2 workSize = viewport->WorkSize;
+    ImVec2 windowPos;
+    windowPos.x = workPos.x + workSize.x * 0.5f;
+    windowPos.y = workPos.y + PAD;
+    ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowBgAlpha(0.35f); 
+    if (ImGui::Begin("StageSelect Overlay", nullptr, windowFlags)) {
+        ImGui::Text("選択中のステージ: %d", currentStageIndex_ + 1);
+        ImGui::Text("A/Dで変更、SPACEで開始");
+    }
+    ImGui::End();
+
+    // エディター向けの設定ウィンドウ
+    ImGui::Begin("ステージセレクトエディター");
+    if (ImGui::InputInt("ステージ数", &stageCount_)) {
+        if (stageCount_ < 1) stageCount_ = 1;
+        stageConfigs_.resize(stageCount_);
+    }
+
+    if (ImGui::Button("マップ一覧更新")) {
+        RefreshAvailableMapFiles();
+    }
+
+    for (int i = 0; i < stageCount_; ++i) {
+        ImGui::PushID(i);
+        ImGui::Text("ステージ %d", i + 1);
+
+        int currentIndex = -1;
+        std::vector<const char*> items;
+        for (size_t j = 0; j < availableMapFiles_.size(); ++j) {
+            items.push_back(availableMapFiles_[j].c_str());
+            if (availableMapFiles_[j] == stageConfigs_[i].jsonPath) {
+                currentIndex = static_cast<int>(j);
+            }
+        }
+        
+        if (currentIndex == -1 && strlen(stageConfigs_[i].jsonPath) > 0) {
+            availableMapFiles_.push_back(stageConfigs_[i].jsonPath);
+            items.push_back(availableMapFiles_.back().c_str());
+            currentIndex = static_cast<int>(items.size() - 1);
+        }
+
+        if (ImGui::Combo("マップファイル", &currentIndex, items.data(), static_cast<int>(items.size()))) {
+            if (currentIndex >= 0 && currentIndex < availableMapFiles_.size()) {
+                strcpy_s(stageConfigs_[i].jsonPath, availableMapFiles_[currentIndex].c_str());
+            }
+        }
+        ImGui::PopID();
+    }
+
+    if (ImGui::Button("設定を保存")) {
+        SaveConfig();
+    }
+    ImGui::End();
+#endif
+}
+
+void StageSelectScene::RefreshAvailableMapFiles() {
+    availableMapFiles_.clear();
+    std::string path = "resources/json/MapData";
+    if (std::filesystem::exists(path) && std::filesystem::is_directory(path)) {
+        for (const auto& entry : std::filesystem::directory_iterator(path)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                if (ext == ".txt" || ext == ".json") {
+                    std::string filePath = entry.path().filename().string();
+                    availableMapFiles_.push_back(filePath);
+                }
+            }
+        }
+    }
+}
+
+void StageSelectScene::SaveConfig() {
+    std::ofstream ofs("resources/json/stage_config.txt");
+    if (!ofs.is_open()) return;
+    ofs << stageCount_ << "\n";
+    for (int i = 0; i < stageCount_; ++i) {
+        std::string path = stageConfigs_[i].jsonPath;
+        if (path.empty()) path = "none";
+        ofs << path << "\n";
+    }
+}
+
+void StageSelectScene::LoadConfig() {
+    std::ifstream ifs("resources/json/stage_config.txt");
+    if (!ifs.is_open()) {
+        stageCount_ = 1;
+        stageConfigs_.resize(1);
+        strcpy_s(stageConfigs_[0].jsonPath, "map_data.txt");
+        return;
+    }
+    
+    if (ifs >> stageCount_) {
+        if (stageCount_ < 1) stageCount_ = 1;
+        stageConfigs_.resize(stageCount_);
+        std::string path;
+        for (int i = 0; i < stageCount_; ++i) {
+            if (ifs >> path) {
+                if (path == "none") path = "";
+                else path = std::filesystem::path(path).filename().string();
+                strcpy_s(stageConfigs_[i].jsonPath, path.c_str());
+            }
+        }
+    }
 }

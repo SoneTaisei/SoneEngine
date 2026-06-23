@@ -105,7 +105,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
         isFirstFrame_ = false;
     } else {
         if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
-            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
             return;
         }
     }

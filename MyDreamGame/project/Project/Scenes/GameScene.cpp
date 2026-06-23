@@ -15,6 +15,8 @@
 #include "Input/KeyboardInput.h"
 #include "Graphics/Skybox.h"
 
+std::string GameScene::s_TargetMapFilePath = "resources/json/MapData/map_data.txt";
+
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
 
@@ -41,7 +43,7 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
-    map_->Initialize(commandList.Get());
+    map_->Initialize(commandList.Get(), s_TargetMapFilePath);
 
     // 6. プレイヤーの生成と初期化
     player_ = std::make_unique<Player2D>();

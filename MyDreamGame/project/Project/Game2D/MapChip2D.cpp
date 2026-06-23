@@ -16,7 +16,7 @@
 #include <string>
 #include "Resource/Primitive/PrimitiveManager.h"
 
-void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList) {
+void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath) {
     commandList->GetDevice(IID_PPV_ARGS(&device_));
 
     // デフォルトテクスチャのロード
@@ -25,9 +25,9 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList) {
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
 
     // 保存ファイルがあれば読込み、なければ初期構築して保存する
-    if (!LoadFromFile("resources/json/map_data.txt")) {
+    if (!LoadFromFile(mapFilePath)) {
         BuildMap();
-        SaveToFile("resources/json/map_data.txt");
+        SaveToFile(mapFilePath);
     }
 }
 

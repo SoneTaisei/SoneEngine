@@ -26,6 +26,8 @@ enum class GameState {
 
 class GameScene : public IScene {
 public:
+    static std::string s_TargetMapFilePath;
+
     void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;

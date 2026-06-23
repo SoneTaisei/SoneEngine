@@ -24,7 +24,7 @@ public:
         kRail = 8,  // リフトの移動レール
     };
 
-    void Initialize(ID3D12GraphicsCommandList* commandList);
+    void Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath);
     void Update();
     void Draw(ID3D12GraphicsCommandList* commandList);
 
