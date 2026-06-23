@@ -1,7 +1,9 @@
 #include "MapEditorCamera.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Input/KeyboardInput.h"
+#ifdef USE_IMGUI
 #include <imgui.h>
+#endif
 #include <algorithm>
 #include "Graphics/CameraManager.h"
 
@@ -18,6 +20,7 @@ void MapEditorCamera::Initialize(int kClientWidth, int kClientHeight) {
 
 void MapEditorCamera::Update(bool allowInput) {
     if (allowInput) {
+#ifdef USE_IMGUI
         ImGuiIO& io = ImGui::GetIO();
         
         // ズーム（マウスホイール）
@@ -39,6 +42,7 @@ void MapEditorCamera::Update(bool allowInput) {
             transform_.translate.x -= delta.x / zoom_;
             transform_.translate.y += delta.y / zoom_; // Yは上が正なので逆
         }
+#endif
     }
 
     UpdateMatrix();

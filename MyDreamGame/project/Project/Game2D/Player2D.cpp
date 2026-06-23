@@ -26,6 +26,18 @@ void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
     primitiveObj_->GetMaterial().color = colorNormal_; // 青色
     primitiveObj_->GetMaterial().color = colorNormal_; // 青色
     primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効（2Dなので）
+
+    // ダッシュ波紋エフェクト用リングの初期化
+    Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);
+    dashRingPrimitive_ = std::make_unique<PrimitiveObject>();
+    dashRingPrimitive_->Initialize(device.Get(), ringPrimitive);
+    dashRingPrimitive_->SetName("DashRing");
+    dashRingPrimitive_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
+    dashRingPrimitive_->GetMaterial().lightingType = 0;
+    dashRingPrimitive_->GetMaterial().enableEnvironmentMap = 0;
+    dashRingPrimitive_->SetIsBillboard(false);
+    dashRingPrimitive_->SetIsDoubleSided(true);
+    dashRingPrimitive_->SetBlendMode(BlendMode::kBlendModeAdd);
 }
 
 void Player2D::FindSpawnPoint(const MapChip2D& map) {
@@ -204,6 +216,16 @@ void Player2D::Update(MapChip2D& map) {
         }
     }
 
+    // ダッシュ波紋パーティクルの更新
+    for (auto& ring : dashRingParticles_) {
+        if (ring.active) {
+            ring.timer += deltaTime;
+            if (ring.timer >= ring.duration) {
+                ring.active = false;
+            }
+        }
+    }
+
     // PrimitiveObjectの座標を更新
     primitiveObj_->SetTranslation(position_);
     primitiveObj_->Update();
@@ -263,6 +285,29 @@ void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
         }
     } else {
         primitiveObj_->Draw(commandList);
+    }
+
+    // ダッシュ波紋エフェクトの描画
+    if (dashRingPrimitive_) {
+        for (const auto& ring : dashRingParticles_) {
+            if (ring.active) {
+                float progress = ring.timer / ring.duration;
+                // イージングで広がる
+                float currentSize = ring.startSize + (ring.endSize - ring.startSize) * (1.0f - std::pow(1.0f - progress, 3.0f));
+                
+                Transform ringTransform;
+                ringTransform.scale = { currentSize, currentSize, currentSize };
+                ringTransform.rotate = ring.rotation;
+                ringTransform.translate = ring.position;
+                
+                Material ringMat = dashRingPrimitive_->GetMaterial();
+                // 色はダッシュ色(白や水色)にして、徐々に透明にする
+                ringMat.color = { 0.5f, 0.8f, 1.0f, 1.0f - progress }; // 薄い水色
+                ringMat.dissolveThreshold = 0.0f;
+                
+                dashRingPrimitive_->DrawGhost(commandList, ringTransform, ringMat);
+            }
+        }
     }
 
     // 砂埃パーティクルの描画
@@ -507,6 +552,9 @@ void Player2D::HandleInput() {
         isDashing_ = true;
         canDash_ = false;
         dashTimer_ = 0.0f;
+        
+        // ダッシュ波紋を発生
+        SpawnDashRing(position_, inputDir);
     }
 }
 
@@ -878,5 +926,47 @@ void Player2D::SimulateCollisions(MapChip2D& map) {
                 block->OnCollision(this);
             }
         }
+    }
+}
+
+void Player2D::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir) {
+    // ダッシュの方向に基づいて角度を計算
+    float angle = std::atan2(dashDir.y, dashDir.x);
+    
+    float currentStartSize = 0.25f;
+    float currentEndSize = 1.5f;
+
+    for (int i = 0; i < 3; ++i) {
+        DashRingParticle ring;
+        // 背景などに埋もれないようにZ座標をわずかに手前(-0.1f)にする
+        // 複数出す場合はZファイティングを防ぐため少しずつZをずらす
+        ring.position = { basePos.x, basePos.y, basePos.z - 0.1f - (i * 0.01f) };
+        
+        // PrimitiveRingはXY平面上に生成されるため、
+        // X軸周りに少し傾けて(1.0f)楕円形(3Dっぽく)にし、
+        // Z軸周りに回転させて楕円の短軸が進行方向を向くようにする。
+        ring.rotation = { 1.0f, 0.0f, angle - 1.5708f }; 
+
+        ring.timer = 0.0f;
+        ring.duration = 0.3f; // 短い時間で消える
+        ring.startSize = currentStartSize;
+        ring.endSize = currentEndSize; // 大きく広がる
+        ring.active = true;
+
+        bool reused = false;
+        for (auto& existing : dashRingParticles_) {
+            if (!existing.active) {
+                existing = ring;
+                reused = true;
+                break;
+            }
+        }
+        if (!reused) {
+            dashRingParticles_.push_back(ring);
+        }
+
+        // 次のリングのサイズを半分にする
+        currentStartSize *= 0.5f;
+        currentEndSize *= 0.5f;
     }
 }

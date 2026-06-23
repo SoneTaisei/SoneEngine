@@ -87,6 +87,10 @@ public:
 
     bool IsGoalComplete() const { return isGoal_ && goalTimer_ >= goalWaitTime_; }
 
+    // ゲーム状態取得用ゲッター追加
+    bool IsDead() const { return isDead_; }
+    bool IsGoal() const { return isGoal_; }
+
 private:
     // 入力処理
     void HandleInput();
@@ -197,6 +201,22 @@ private:
     
     // 紙吹雪を発生させる
     void SpawnConfetti();
+
+    // ダッシュ波紋エフェクト用パラメータ
+    struct DashRingParticle {
+        Vector3 position;
+        Vector3 rotation;
+        float timer;
+        float duration;
+        float startSize;
+        float endSize;
+        bool active;
+    };
+    std::vector<DashRingParticle> dashRingParticles_;
+    std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
+
+    // ダッシュ波紋エフェクトを発生させる
+    void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
 
     // イージング関数
     float EaseInElastic(float t) const;

@@ -13,6 +13,7 @@
 #include "Graphics/TextureManager.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
+#include "Graphics/Skybox.h"
 
 void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
     commandList_ = commandList.Get();
@@ -64,6 +65,28 @@ void GameScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
+    float dt = TimeManager::GetInstance().GetDeltaTime();
+    
+    // フェードイン演出
+    if (transitionAlpha_ > 0.0f) {
+        transitionAlpha_ -= dt * 1.5f;
+        if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
+    }
+
+    if (gameState_ == GameState::StartReady) {
+        stateTimer_ += dt;
+        if (stateTimer_ > 2.0f) {
+            gameState_ = GameState::Playing;
+            stateTimer_ = 0.0f;
+        }
+    } else if (gameState_ == GameState::Clear) {
+        stateTimer_ += dt;
+        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+            return;
+        }
+    }
+
     // 4. プレイヤーの更新（入力・物理・当たり判定）
     if (player_ && map_) {
         bool isCurrentlyPlaying = true;
@@ -71,11 +94,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         isCurrentlyPlaying = EditorManager::IsPlaying();
 #endif
 
-        static bool wasCurrentlyPlaying = false;
-        if (isCurrentlyPlaying && !wasCurrentlyPlaying) {
+        if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
         }
-        wasCurrentlyPlaying = isCurrentlyPlaying;
+        wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
         bool isRewinding = false;
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
@@ -132,9 +154,8 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         } else {
             // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
-            static bool wasPlayingLastFrame = false;
             if (ReplayManager::GetInstance()->IsPlaying()) {
-                bool shouldRebuildState = !wasPlayingLastFrame || ReplayManager::GetInstance()->IsForceSnapNextFrame();
+                bool shouldRebuildState = !wasPlayingLastFrame_ || ReplayManager::GetInstance()->IsForceSnapNextFrame();
                 if (shouldRebuildState) {
                     auto& replayData = ReplayManager::GetInstance()->GetCurrentReplay();
                     int curFrame = ReplayManager::GetInstance()->GetCurrentFrame();
@@ -154,7 +175,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                     }
                 }
 
-                if (!wasPlayingLastFrame) {
+                if (!wasPlayingLastFrame_) {
                     // 再生開始時に初期位置へ自動ワープ
                     player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
                     if (gameCamera_) {
@@ -167,7 +188,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                         }
                         gameCamera_->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
                     }
-                    wasPlayingLastFrame = true;
+                    wasPlayingLastFrame_ = true;
                 }
                 Vector3 pos = player_->GetPosition();
                 Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
@@ -183,13 +204,13 @@ void GameScene::Update(SceneManager *sceneManager) {
                     }
                 }
             } else {
-                if (wasPlayingLastFrame) {
+                if (wasPlayingLastFrame_) {
                     // リプレイが終了した（またはTAKEOVERで停止した）瞬間に、カメラの追従を復元する
                     if (gameCamera_) {
                         gameCamera_->SetFollowTarget(&player_->GetPosition());
                     }
                 }
-                wasPlayingLastFrame = false;
+                wasPlayingLastFrame_ = false;
 
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
@@ -197,9 +218,9 @@ void GameScene::Update(SceneManager *sceneManager) {
             player_->Update(*map_);
 
             // ゴール判定
-            if (player_->IsGoalComplete()) {
-                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
-                return;
+            if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
+                gameState_ = GameState::Clear;
+                stateTimer_ = 0.0f;
             }
 
             // コイン獲得エフェクト
@@ -220,13 +241,12 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
 
-        static bool wasRewindingLastFrame = false;
-        if (!isRewinding && wasRewindingLastFrame) {
+        if (!isRewinding && wasRewindingLastFrame_) {
             if (gameCamera_) {
                 gameCamera_->SetFollowTarget(&player_->GetPosition());
             }
         }
-        wasRewindingLastFrame = isRewinding;
+        wasRewindingLastFrame_ = isRewinding;
 
         // プレイ中の場合、リプレイ録画を行う
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
@@ -260,12 +280,107 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         player_->DisplayImGui();
     }
 
+    // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
+    if (!EditorManager::IsPlaying()) {
+        return;
+    }
+
+    ImVec2 windowPos = ImVec2(0.0f, 0.0f);
+    float windowWidth = 1280.0f;
+    float windowHeight = 720.0f;
+
+    windowPos = EditorManager::GetGameViewPos();
+    windowWidth = EditorManager::GetGameViewSize().x;
+    windowHeight = EditorManager::GetGameViewSize().y;
+
     // スコアの簡易表示
     if (player_) {
-        ImGui::Begin("Game HUD", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetNextWindowPos(ImVec2(windowPos.x + 10.0f, windowPos.y + 10.0f), ImGuiCond_Always);
+        ImGui::Begin("Game HUD", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
         ImGui::SetWindowFontScale(2.0f);
-        ImGui::Text("Score: %d", player_->GetScore());
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Score: %d", player_->GetScore());
         ImGui::SetWindowFontScale(1.0f);
+        ImGui::End();
+
+        // 操作ガイド
+        ImGui::SetNextWindowPos(ImVec2(windowPos.x + 10.0f, windowPos.y + 70.0f), ImGuiCond_Always);
+        ImGui::Begin("Operation Guide", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
+
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SHIFT : Dash");
+        ImGui::End();
+    }
+
+    // Start Ready 演出
+    if (gameState_ == GameState::StartReady) {
+        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::Begin("ReadyUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetWindowFontScale(6.0f);
+        if (stateTimer_ < 1.0f) {
+            const char* text = "READY...";
+            float textW = ImGui::CalcTextSize(text).x;
+            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textW) * 0.5f);
+            ImGui::TextColored(ImVec4(1,0.5f,0,1), "%s", text);
+        } else {
+            const char* text = "GO!";
+            float textW = ImGui::CalcTextSize(text).x;
+            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textW) * 0.5f);
+            ImGui::TextColored(ImVec4(0,1,0,1), "%s", text);
+        }
+        ImGui::End();
+    }
+
+    // Clear 演出
+    if (gameState_ == GameState::Clear) {
+        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::Begin("ClearUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetWindowFontScale(6.0f);
+        const char* clearText = "STAGE CLEAR!";
+        float textWidth = ImGui::CalcTextSize(clearText).x;
+        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textWidth) * 0.5f);
+        ImGui::TextColored(ImVec4(1,0.8f,0,1), "%s", clearText);
+
+        ImGui::SetWindowFontScale(2.0f);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 30.0f);
+        const char* returnText = "Press SPACE to Return Title";
+        float returnWidth = ImGui::CalcTextSize(returnText).x;
+        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - returnWidth) * 0.5f);
+        
+        static float time = 0.0f;
+        time += ImGui::GetIO().DeltaTime;
+        float alpha = (sinf(time * 5.0f) + 1.0f) * 0.5f;
+        ImGui::TextColored(ImVec4(1,1,1,alpha), "%s", returnText);
+        ImGui::End();
+    }
+
+    // Game Over (ミス) 演出
+    if (player_ && player_->IsDead()) {
+        ImGui::SetNextWindowPos(windowPos);
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
+        ImGui::Begin("GameOverOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetWindowPos();
+        drawList->AddRectFilled(p, ImVec2(p.x + windowWidth, p.y + windowHeight), IM_COL32(255, 0, 0, 100)); 
+
+        ImGui::SetCursorPos(ImVec2(windowWidth/2.0f - 150.0f, windowHeight/2.0f - 50.0f));
+        ImGui::SetWindowFontScale(6.0f);
+        const char* text = "MISS!";
+        float textW = ImGui::CalcTextSize(text).x;
+        ImGui::SetCursorPosX((windowWidth - textW) * 0.5f);
+        ImGui::TextColored(ImVec4(1,1,1,1), "%s", text);
+        ImGui::End();
+    }
+
+    // フェードイン/アウト画面遷移演出
+    if (transitionAlpha_ > 0.0f) {
+        ImGui::SetNextWindowPos(windowPos);
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
+        ImGui::Begin("TransitionOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetWindowPos();
+        drawList->AddRectFilled(p, ImVec2(p.x + windowWidth, p.y + windowHeight), IM_COL32(0, 0, 0, static_cast<int>(transitionAlpha_ * 255.0f)));
         ImGui::End();
     }
 #endif
@@ -467,6 +582,13 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 }
 
 void GameScene::UpdateEditor() {
+    float dt = TimeManager::GetInstance().GetDeltaTime();
+    // フェードイン演出 (エディタ停止中もフェードインさせる)
+    if (transitionAlpha_ > 0.0f) {
+        transitionAlpha_ -= dt * 1.5f;
+        if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
+    }
+
     // 録画状態のままエディタが停止した場合、確実に停止させて履歴に保存する
     if (ReplayManager::GetInstance()->IsRecording()) {
         ReplayManager::GetInstance()->StopRecord();

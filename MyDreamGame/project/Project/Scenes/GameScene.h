@@ -16,7 +16,13 @@ class GameCamera;
 
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
-#include "Graphics/Skybox.h"
+class Skybox;
+
+enum class GameState {
+    StartReady,
+    Playing,
+    Clear
+};
 
 class GameScene : public IScene {
 public:
@@ -53,6 +59,11 @@ private:
 
     int previousScore_ = 0; // コインエフェクト発生用
     
+    // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
+    bool wasCurrentlyPlaying_ = false;
+    bool wasPlayingLastFrame_ = false;
+    bool wasRewindingLastFrame_ = false;
+    
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
 
@@ -61,4 +72,8 @@ private:
     // ---------------------------------------------------
     // コマンドリストを覚えておくための変数
     ID3D12GraphicsCommandList *commandList_ = nullptr;
+
+    GameState gameState_ = GameState::StartReady;
+    float stateTimer_ = 0.0f;
+    float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
 };
