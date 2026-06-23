@@ -130,6 +130,7 @@ private:
     float dashDuration_ = 0.15f;   // ダッシュ継続時間
     float dashSpeed_ = 15.0f;      // ダッシュの速さ
     Vector3 dashVelocity_ = {0.0f, 0.0f, 0.0f}; // ダッシュ中の固定速度
+    float dashEndUpwardVelocity_ = 10.0f; // ダッシュ終了時の上向き速度の上限
 
     // プレイヤーの色
     Vector4 colorNormal_ = { 0.2f, 0.6f, 1.0f, 1.0f }; // 通常時（青）

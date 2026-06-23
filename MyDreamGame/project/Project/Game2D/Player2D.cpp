@@ -159,6 +159,11 @@ void Player2D::Update(MapChip2D& map) {
         dashTimer_ += deltaTime;
         if (dashTimer_ >= dashDuration_) {
             isDashing_ = false;
+            // ダッシュ終了時、上向きの速度が残っている場合は設定した上限値にする。
+            // そうしないと、ダッシュの速度がそのままジャンプの初速として働き大きく飛びすぎてしまうため。
+            if (velocity_.y > dashEndUpwardVelocity_) {
+                velocity_.y = dashEndUpwardVelocity_;
+            }
         } else {
             // ダッシュ中は固定速度
             velocity_ = dashVelocity_;
@@ -188,7 +193,7 @@ void Player2D::Update(MapChip2D& map) {
     }
 
     // 色の更新
-    primitiveObj_->GetMaterial().color = canDash_ ? colorNormal_ : colorDashed_;
+    primitiveObj_->GetMaterial().color = (isDashing_ || !canDash_) ? colorDashed_ : colorNormal_;
 
     // 走りエフェクトの発生
     if (isOnGround_ && std::abs(velocity_.x) > 0.1f) {
@@ -356,6 +361,7 @@ void Player2D::DisplayImGui() {
     if (ImGui::TreeNode("Player2D")) {
         ImGui::DragFloat3("Position", &position_.x, 0.1f);
         ImGui::DragFloat3("Velocity", &velocity_.x, 0.1f);
+        ImGui::DragFloat("Dash End Upward Vel", &dashEndUpwardVelocity_, 0.1f, 0.0f, 10.0f);
         ImGui::ColorEdit4("Normal Color", &colorNormal_.x);
         ImGui::ColorEdit4("Dashed Color", &colorDashed_.x);
         
