@@ -27,6 +27,7 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
     // 保存ファイルがあれば読込み、なければ初期構築して保存する
     if (!LoadFromFile(mapFilePath)) {
         BuildMap();
+        GenerateDefaultBoundaries();
         SaveToFile(mapFilePath);
     }
 }
@@ -340,6 +341,17 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
         ofs << "\n";
     }
     ofs.close();
+
+    // 境界線メタデータの保存
+    std::string boundsPath = filepath;
+    size_t lastDot = boundsPath.find_last_of(".");
+    if (lastDot != std::string::npos) {
+        boundsPath = boundsPath.substr(0, lastDot) + "_bounds.txt";
+    } else {
+        boundsPath += "_bounds.txt";
+    }
+    SaveBoundariesToFile(boundsPath);
+
     return true;
 }
 
@@ -349,7 +361,25 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
 
     std::stringstream buffer;
     buffer << ifs.rdbuf();
-    return LoadFromString(buffer.str());
+    bool result = LoadFromString(buffer.str());
+
+    if (result) {
+        // 境界線メタデータの読み込み
+        std::string boundsPath = filepath;
+        size_t lastDot = boundsPath.find_last_of(".");
+        if (lastDot != std::string::npos) {
+            boundsPath = boundsPath.substr(0, lastDot) + "_bounds.txt";
+        } else {
+            boundsPath += "_bounds.txt";
+        }
+        
+        if (!LoadBoundariesFromFile(boundsPath)) {
+            // ファイルがなければ自動生成
+            GenerateDefaultBoundaries();
+        }
+    }
+    
+    return result;
 }
 
 std::string MapChip2D::GetMapDataAsString() const {
@@ -414,4 +444,67 @@ void MapChip2D::Resize(int newWidth, int newHeight) {
     RebuildChipObjects();
 }
 
+void MapChip2D::GenerateDefaultBoundaries() {
+    boundaryX_.clear();
+    boundaryY_.clear();
 
+    float roomWidth = 20.0f;
+    float roomHeight = 11.25f;
+
+    for (float rx = 0.0f; rx <= static_cast<float>(mapWidth_); rx += roomWidth) {
+        boundaryX_.push_back(rx);
+    }
+    for (float ry = 0.0f; ry <= static_cast<float>(mapHeight_); ry += roomHeight) {
+        boundaryY_.push_back(ry);
+    }
+}
+
+bool MapChip2D::SaveBoundariesToFile(const std::string& filepath) {
+    std::filesystem::path path(filepath);
+    if (path.has_parent_path()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
+
+    std::ofstream ofs(filepath);
+    if (!ofs.is_open()) return false;
+
+    ofs << boundaryX_.size() << "\n";
+    for (size_t i = 0; i < boundaryX_.size(); ++i) {
+        ofs << boundaryX_[i] << (i < boundaryX_.size() - 1 ? " " : "");
+    }
+    ofs << "\n";
+
+    ofs << boundaryY_.size() << "\n";
+    for (size_t i = 0; i < boundaryY_.size(); ++i) {
+        ofs << boundaryY_[i] << (i < boundaryY_.size() - 1 ? " " : "");
+    }
+    ofs << "\n";
+
+    ofs.close();
+    return true;
+}
+
+bool MapChip2D::LoadBoundariesFromFile(const std::string& filepath) {
+    std::ifstream ifs(filepath);
+    if (!ifs.is_open()) return false;
+
+    size_t xSize = 0, ySize = 0;
+    if (!(ifs >> xSize)) return false;
+
+    boundaryX_.clear();
+    for (size_t i = 0; i < xSize; ++i) {
+        float val;
+        if (ifs >> val) boundaryX_.push_back(val);
+    }
+
+    if (!(ifs >> ySize)) return false;
+
+    boundaryY_.clear();
+    for (size_t i = 0; i < ySize; ++i) {
+        float val;
+        if (ifs >> val) boundaryY_.push_back(val);
+    }
+
+    ifs.close();
+    return true;
+}

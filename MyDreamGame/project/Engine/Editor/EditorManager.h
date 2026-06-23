@@ -40,6 +40,7 @@ public:
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsMapEditorVisible() const { return isMapEditorVisible_; }
     bool IsMapEditorHovered() const { return isMapEditorHovered_; }
+    bool IsBoundaryDragging() const { return draggingBoundaryIndexX_ != -1 || draggingBoundaryIndexY_ != -1; }
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }
@@ -94,6 +95,12 @@ private:
     int mapEditorSelectedTool_ = 1; // 0 = None, 1 = Block, ...
     int mapEditorInputWidth_ = -1;
     int mapEditorInputHeight_ = -1;
+
+    // 境界線編集用
+    bool isBoundaryEditMode_ = false;
+    int boundaryAddMode_ = 0; // 0: 縦線, 1: 横線, 2: 両方(交点)
+    int draggingBoundaryIndexX_ = -1;
+    int draggingBoundaryIndexY_ = -1;
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;

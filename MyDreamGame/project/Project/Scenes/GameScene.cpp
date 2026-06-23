@@ -217,7 +217,11 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
 
-            player_->Update(*map_);
+            if (gameCamera_ && map_) {
+                gameCamera_->SetBoundaries(map_->GetBoundaryX(), map_->GetBoundaryY());
+            }
+
+            player_->Update(*map_, gameCamera_ && gameCamera_->IsTransitioning());
 
             // ゴール判定
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {

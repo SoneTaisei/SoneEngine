@@ -12,6 +12,7 @@
 #include "Graphics/MapEditorCamera.h"
 #endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "../../Project/Scenes/GameScene.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
@@ -242,6 +243,16 @@ void WindowsApplication::Update() {
     bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
 
     if (isCurrentlyActive && !isTakeoverPausing) {
+        if (!wasActive) {
+            // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する
+            if (sceneManager_->GetCurrentScene()) {
+                auto* map = sceneManager_->GetCurrentScene()->GetMapChip();
+                if (map) {
+                    map->SaveToFile("resources/json/MapData/temp_play_map.txt");
+                }
+            }
+        }
+
         // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
         sceneManager_->Update();
         wasActive = true;
@@ -254,19 +265,31 @@ void WindowsApplication::Update() {
     } else {
         if (wasActive) {
             // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
+            
+            // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
+            std::string originalPath = GameScene::s_TargetMapFilePath;
+            GameScene::s_TargetMapFilePath = "resources/json/MapData/temp_play_map.txt";
+            
             sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
+            
+            // シーン遷移を即時処理してマップをロードさせる
+            sceneManager_->ProcessSceneTransition();
+            
+            // パスを元に戻す（次回の正常なロードやSaveなどのため）
+            GameScene::s_TargetMapFilePath = originalPath;
             
             // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
             editorManager_->ClearSelection();
             
             wasActive = false;
+        } else {
+            // 【停止中】トランスフォーム等の行列再計算のみ実行
+            if (sceneManager_->GetCurrentScene()) {
+                sceneManager_->GetCurrentScene()->UpdateEditor();
+            }
+            // シーン遷移のみ処理する（エディターからのシーン切替に対応）
+            sceneManager_->ProcessSceneTransition();
         }
-        // 【停止中】トランスフォーム等の行列再計算のみ実行
-        if (sceneManager_->GetCurrentScene()) {
-            sceneManager_->GetCurrentScene()->UpdateEditor();
-        }
-        // シーン遷移のみ処理する（エディターからのシーン切替に対応）
-        sceneManager_->ProcessSceneTransition();
     }
     
     // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
@@ -276,7 +299,7 @@ void WindowsApplication::Update() {
     if (editorManager_->IsMapEditorVisible()) {
         activeCamera_ = mapEditorCamera_.get();
         isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
-        bool allowCameraInput = editorManager_->IsMapEditorHovered();
+        bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsBoundaryDragging();
         mapEditorCamera_->Update(allowCameraInput);
     } else if (editorManager_->UseDebugCamera()) {
         activeCamera_ = debugCamera_.get();

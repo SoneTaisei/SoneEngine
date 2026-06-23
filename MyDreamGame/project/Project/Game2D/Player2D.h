@@ -18,7 +18,7 @@ class MapChip2D;
 class Player2D {
 public:
     void Initialize(ID3D12GraphicsCommandList* commandList);
-    void Update(MapChip2D& map);
+    void Update(MapChip2D& map, bool isTransitioning = false);
     void Draw(ID3D12GraphicsCommandList* commandList);
     void DisplayImGui();
 

@@ -81,6 +81,19 @@ public:
     std::string GetMapDataAsString() const;
     bool LoadFromString(const std::string& data);
 
+    // 境界線（ルームトリガー）データの管理
+    std::vector<float>& GetBoundaryX() { return boundaryX_; }
+    std::vector<float>& GetBoundaryY() { return boundaryY_; }
+    const std::vector<float>& GetBoundaryX() const { return boundaryX_; }
+    const std::vector<float>& GetBoundaryY() const { return boundaryY_; }
+    
+    // デフォルト境界線の生成（マップサイズに基づいて自動生成）
+    void GenerateDefaultBoundaries();
+    
+    // 境界線メタデータの保存と読込
+    bool SaveBoundariesToFile(const std::string& filepath);
+    bool LoadBoundariesFromFile(const std::string& filepath);
+
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
 
@@ -94,6 +107,10 @@ private:
     int mapWidth_ = 0;
     int mapHeight_ = 0;
     float chipSize_ = 1.0f; // 1チップのサイズ（ワールド座標）
+
+    // ルーム境界線データ（ワールド座標）
+    std::vector<float> boundaryX_;
+    std::vector<float> boundaryY_;
 
     // 実行時に生成される各種ブロックのインスタンス
     std::vector<std::vector<std::shared_ptr<BaseBlock>>> activeBlocks_;

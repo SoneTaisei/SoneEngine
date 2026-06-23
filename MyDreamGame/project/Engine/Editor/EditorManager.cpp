@@ -865,6 +865,28 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), static_cast<float>(y));
                             drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
                         }
+
+                        // ルーム境界線の描画（フリップスクロールのトリガーライン）
+                        const auto& bx = mapChip->GetBoundaryX();
+                        const auto& by = mapChip->GetBoundaryY();
+
+                        // 縦のルーム境界線
+                        for (size_t i = 0; i < bx.size(); ++i) {
+                            float rx = bx[i];
+                            ImVec2 p1 = WorldToScreen(rx, 0.0f);
+                            ImVec2 p2 = WorldToScreen(rx, static_cast<float>(mapHeight));
+                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexX_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
+                            drawList->AddLine(p1, p2, color, 3.0f);
+                        }
+                        
+                        // 横のルーム境界線
+                        for (size_t i = 0; i < by.size(); ++i) {
+                            float ry = by[i];
+                            ImVec2 p1 = WorldToScreen(0.0f, ry);
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), ry);
+                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexY_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
+                            drawList->AddLine(p1, p2, color, 3.0f);
+                        }
                         
                         drawList->PopClipRect();
                     }
@@ -874,37 +896,134 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::InvisibleButton("MapCanvasImage", imageSize);
                     isMapEditorHovered_ = ImGui::IsItemHovered();
                     
-                    if (isMapEditorHovered_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    if (isMapEditorHovered_) {
                         ImVec2 mousePos = ImGui::GetIO().MousePos;
                         float localX = mousePos.x - imageScreenPos.x;
                         float localY = mousePos.y - imageScreenPos.y;
                         
-                        // 画像上のUV座標 (0.0 ~ 1.0)
                         float u = localX / imageSize.x;
                         float v = localY / imageSize.y;
                         
-                        // NDC (-1.0 ~ 1.0)
                         float ndcX = u * 2.0f - 1.0f;
                         float ndcY = 1.0f - v * 2.0f;
                         
-                        // アクティブなカメラ（MapEditorCameraであるはず）から逆行列を計算
                         Camera* camera = *activeCamera;
+                        Vector3 worldPos = {0,0,0};
                         if (camera) {
                             Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                             Matrix4x4 invViewProj = TransformFunctions::Inverse(viewProj);
+                            worldPos = TransformFunctions::Transform({ndcX, ndcY, 0.0f}, invViewProj);
+                        }
+
+                        if (isBoundaryEditMode_) {
+                            float hitDist = 0.5f; // 当たり判定の距離（ワールド座標基準）
+                            auto& bx = mapChip->GetBoundaryX();
+                            auto& by = mapChip->GetBoundaryY();
+
+                            // ドラッグ開始判定
+                            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                                draggingBoundaryIndexX_ = -1;
+                                draggingBoundaryIndexY_ = -1;
+
+                                // X軸の線の当たり判定
+                                for (size_t i = 0; i < bx.size(); ++i) {
+                                    if (std::abs(worldPos.x - bx[i]) < hitDist) {
+                                        draggingBoundaryIndexX_ = static_cast<int>(i);
+                                        break;
+                                    }
+                                }
+                                // Y軸の線の当たり判定（Xと独立して判定し、両方ヒット＝交点とする）
+                                for (size_t i = 0; i < by.size(); ++i) {
+                                    if (std::abs(worldPos.y - by[i]) < hitDist) {
+                                        draggingBoundaryIndexY_ = static_cast<int>(i);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // 左ドラッグ（マス目スナップ）
+                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                                float snapX = std::round(worldPos.x);
+                                float snapY = std::round(worldPos.y);
+                                if (draggingBoundaryIndexX_ != -1) {
+                                    bx[draggingBoundaryIndexX_] = std::clamp(snapX, 0.0f, static_cast<float>(mapChip->GetWidth()));
+                                }
+                                if (draggingBoundaryIndexY_ != -1) {
+                                    by[draggingBoundaryIndexY_] = std::clamp(snapY, 0.0f, static_cast<float>(mapChip->GetHeight()));
+                                }
+                            }
                             
-                            // ワールド座標計算 (正射影前提なので Z は 0.0f を渡す)
-                            Vector3 worldPos = TransformFunctions::Transform({ndcX, ndcY, 0.0f}, invViewProj);
-                            
-                            // worldPos からグリッド座標を計算
-                            int mapWidth = mapChip->GetWidth();
-                            int mapHeight = mapChip->GetHeight();
-                            int gridX = mapChip->WorldToChipX(worldPos.x);
-                            int gridY = mapChip->WorldToChipY(worldPos.y);
-                            
-                            if (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight) {
-                                if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
-                                    mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                            // 右ドラッグ（自由移動）
+                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+                                if (draggingBoundaryIndexX_ != -1) {
+                                    bx[draggingBoundaryIndexX_] = std::clamp(worldPos.x, 0.0f, static_cast<float>(mapChip->GetWidth()));
+                                }
+                                if (draggingBoundaryIndexY_ != -1) {
+                                    by[draggingBoundaryIndexY_] = std::clamp(worldPos.y, 0.0f, static_cast<float>(mapChip->GetHeight()));
+                                }
+                            }
+
+                            // リリース時の判定（追加または削除、並び替え）
+                            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+                                bool isLeft = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+                                ImGuiMouseButton btn = isLeft ? ImGuiMouseButton_Left : ImGuiMouseButton_Right;
+                                
+                                // ドラッグしていたか？
+                                ImVec2 dragDelta = ImGui::GetMouseDragDelta(btn);
+                                bool wasDragging = (std::abs(dragDelta.x) > 1.0f || std::abs(dragDelta.y) > 1.0f);
+
+                                if (wasDragging) {
+                                    // 移動終了、並び替えのみ
+                                    std::sort(bx.begin(), bx.end());
+                                    std::sort(by.begin(), by.end());
+                                } else {
+                                    // クリック操作
+                                    int hitX = -1, hitY = -1;
+                                    for (size_t i = 0; i < bx.size(); ++i) {
+                                        if (std::abs(worldPos.x - bx[i]) < hitDist) hitX = static_cast<int>(i);
+                                    }
+                                    for (size_t i = 0; i < by.size(); ++i) {
+                                        if (std::abs(worldPos.y - by[i]) < hitDist) hitY = static_cast<int>(i);
+                                    }
+
+                                    if (hitX != -1 || hitY != -1) {
+                                        if (ImGui::GetIO().KeyCtrl) {
+                                            // Ctrl+クリックで削除（交点の場合は両方削除）
+                                            if (hitX != -1) bx.erase(bx.begin() + hitX);
+                                            if (hitY != -1) by.erase(by.begin() + hitY);
+                                        }
+                                    } else {
+                                        // 追加
+                                        float addX = isLeft ? std::round(worldPos.x) : worldPos.x;
+                                        float addY = isLeft ? std::round(worldPos.y) : worldPos.y;
+                                        if (boundaryAddMode_ == 0 || boundaryAddMode_ == 2) {
+                                            bx.push_back(addX);
+                                            std::sort(bx.begin(), bx.end());
+                                        }
+                                        if (boundaryAddMode_ == 1 || boundaryAddMode_ == 2) {
+                                            by.push_back(addY);
+                                            std::sort(by.begin(), by.end());
+                                        }
+                                    }
+                                }
+
+                                draggingBoundaryIndexX_ = -1;
+                                draggingBoundaryIndexY_ = -1;
+                            }
+                        } else {
+                            // 既存のペイントツール処理
+                            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                                if (camera) {
+                                    int mapWidth = mapChip->GetWidth();
+                                    int mapHeight = mapChip->GetHeight();
+                                    int gridX = mapChip->WorldToChipX(worldPos.x);
+                                    int gridY = mapChip->WorldToChipY(worldPos.y);
+                                    
+                                    if (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight) {
+                                        if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
+                                            mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -933,8 +1052,25 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (mapEditorInputHeight_ == -1) {
                         mapEditorInputHeight_ = mapChip->GetHeight();
                     }
+                    // 境界線（ルームトリガー）編集モード
+                    ImGui::Checkbox("境界線（トリガー）編集モード", &isBoundaryEditMode_);
+                    if (isBoundaryEditMode_) {
+                        ImGui::Text("追加モード: ");
+                        ImGui::SameLine();
+                        ImGui::RadioButton("縦線(横画面遷移用)", &boundaryAddMode_, 0); ImGui::SameLine();
+                        ImGui::RadioButton("横線(縦画面遷移用)", &boundaryAddMode_, 1); ImGui::SameLine();
+                        ImGui::RadioButton("両方(交点)", &boundaryAddMode_, 2);
 
-                    // ペイントツール選択
+                        ImGui::TextDisabled("・左クリック(ドラッグ): マス目にスナップして追加・移動\n"
+                                            "・右クリック(ドラッグ): 自由に(スナップなしで)追加・移動\n"
+                                            "・交差している部分をドラッグすると両方同時に移動します\n"
+                                            "・線の上でCtrl + クリック: 線の削除");
+                    }
+                    ImGui::Spacing();
+                    ImGui::Separator();
+
+                    // ペイントツール選択 (境界線編集モード中は操作不可にするかグレーアウトする)
+                    ImGui::BeginDisabled(isBoundaryEditMode_);
                     ImGui::Text("Paint Tool:");
                     ImGui::Spacing();
 
@@ -1018,6 +1154,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
                     ImGui::Spacing();
+                    ImGui::EndDisabled();
 
                     ImGui::Separator();
 
@@ -1076,6 +1213,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // ファイル名入力
                     ImGui::InputText("Filename", stageFilename_, sizeof(stageFilename_));
 
+                    ImGui::Spacing();
+                    ImGui::Text("マップサイズ設定 (1画面＝ 幅:20, 高さ:11)");
+                    ImGui::TextDisabled("※ 画面を増やしたい場合はサイズを広げてください");
+                    
                     // マップサイズ入力と適用ボタン
                     ImGui::SetNextItemWidth(100.0f);
                     ImGui::InputInt("Width", &mapEditorInputWidth_);

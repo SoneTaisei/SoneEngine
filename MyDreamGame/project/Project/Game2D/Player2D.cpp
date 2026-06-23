@@ -54,16 +54,16 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
     }
 }
 
-void Player2D::Update(MapChip2D& map) {
+void Player2D::Update(MapChip2D& map, bool isTransitioning) {
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
 
     if (isGoal_) {
-        goalTimer_ += deltaTime;
         // ゴール演出時のプレイヤーは静止させる
+        goalTimer_ += deltaTime;
         velocity_.x = 0.0f;
         velocity_.y = 0.0f;
         
-        // 紙吹雪パーティクルの更新
+        // 紙吹雪パーティクルの更新はスキップしない
         for (auto& confetti : confettiParticles_) {
             if (confetti.active) {
                 confetti.timer += deltaTime;
@@ -144,6 +144,17 @@ void Player2D::Update(MapChip2D& map) {
         primitiveObj_->SetTranslation(position_);
         primitiveObj_->Update();
         return; // ここでリターンして通常のゲームロジックをスキップ
+    }
+
+    // カメラスライド（ルーム遷移）中の硬直処理
+    if (isTransitioning) {
+        // 遷移中は操作も物理挙動（重力など）も行わず、時間を止める。
+        // ただし、遷移前の速度（velocity_）は保持しておくことで、遷移完了後にジャンプの勢いなどをそのまま引き継ぐ。
+        
+        // アニメーション等の描画だけは更新する
+        primitiveObj_->SetTranslation(position_);
+        primitiveObj_->Update();
+        return;
     }
 
     // 壁ジャンプタイマーの更新

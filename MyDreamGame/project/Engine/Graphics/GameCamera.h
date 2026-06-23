@@ -19,6 +19,21 @@ public:
 
     // 正射影のビューサイズを設定
     void SetOrthoViewSize(float width, float height) { orthoWidth_ = width; orthoHeight_ = height; }
+    float GetOrthoWidth() const { return orthoWidth_; }
+    float GetOrthoHeight() const { return orthoHeight_; }
+
+    // ルーム遷移中かどうか
+    bool IsTransitioning() const { return isTransitioning_; }
+    
+    // 現在のルーム座標を取得
+    int GetCurrentRoomX() const { return currentRoomX_; }
+    int GetCurrentRoomY() const { return currentRoomY_; }
+
+    // カスタム境界線データ（フリップスクロール用）
+    void SetBoundaries(const std::vector<float>& bx, const std::vector<float>& by) {
+        boundaryX_ = bx;
+        boundaryY_ = by;
+    }
 
 private:
     // 正射影行列でUpdateMatrixをオーバーライド的に使う
@@ -30,6 +45,15 @@ private:
     float orthoWidth_ = 20.0f;  // 正射影の横幅（ワールド座標単位）
     float orthoHeight_ = 11.25f; // 正射影の縦幅
 
+    std::vector<float> boundaryX_;
+    std::vector<float> boundaryY_;
+
     // カメラ追従の滑らかさ
     float followLerp_ = 0.1f;
+    float transitionLerp_ = 0.15f; // 画面切り替え時のカメラスピード
+
+    // ルーム管理用
+    int currentRoomX_ = 0;
+    int currentRoomY_ = 0;
+    bool isTransitioning_ = false;
 };
