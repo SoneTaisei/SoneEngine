@@ -4,6 +4,7 @@
 #include "Core/Utility/Structs.h"
 #include <vector>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include "Blocks/BaseBlock.h"
 
 /// <summary>
@@ -98,6 +99,26 @@ public:
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
 
+    struct CustomBlockDef {
+        int id = 100;
+        std::string name = "New Custom Block";
+        std::string type = "JumpBlock";
+        nlohmann::json properties = nlohmann::json::object();
+        Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        Vector3 scale = {1.0f, 1.0f, 1.0f};
+        std::string modelName = "";
+    };
+
+    std::vector<CustomBlockDef>& GetCustomPalette() { return customPalette_; }
+    const std::vector<CustomBlockDef>& GetCustomPalette() const { return customPalette_; }
+
+    std::vector<CustomBlockDef>& GetTemplatePalette() { return templatePalette_; }
+    const std::vector<CustomBlockDef>& GetTemplatePalette() const { return templatePalette_; }
+
+    // テンプレートのグローバル保存/読込
+    bool SaveTemplatesToFile(const std::string& filepath);
+    bool LoadTemplatesFromFile(const std::string& filepath);
+
 private:
     void BuildMap();
     void CreateChipObjects(ID3D12GraphicsCommandList* commandList);
@@ -118,6 +139,12 @@ private:
     
     // 更新・描画用のユニークなブロックリスト
     std::vector<std::shared_ptr<BaseBlock>> updateBlocks_;
+
+    // カスタムパレット（自作ブロック定義リスト）
+    std::vector<CustomBlockDef> customPalette_;
+    
+    // テンプレートパレット（BasicToolsの設定用）
+    std::vector<CustomBlockDef> templatePalette_;
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;

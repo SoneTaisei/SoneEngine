@@ -12,6 +12,8 @@
 #include "Scene/SceneManager.h"
 #include "ReplayManager.h"
 #include "Core/TimeManager.h"
+#include "GameObject/MapObject2D.h"
+#include "Resource/Primitive/PrimitiveManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -43,6 +45,8 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 }
 
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
+    ScanAvailableModels();
+
     // 1. ImGuiコンテキストの作成
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -79,6 +83,20 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         style.WindowRounding = 0.0f;
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+    }
+}
+
+void EditorManager::ScanAvailableModels() {
+    availableModels_.clear();
+    std::filesystem::path basePath("resources/Object");
+    if (!std::filesystem::exists(basePath) || !std::filesystem::is_directory(basePath)) return;
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(basePath)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".obj") {
+            std::string relativePath = std::filesystem::relative(entry.path(), "resources").string();
+            std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
+            availableModels_.push_back(relativePath);
+        }
     }
 }
 
@@ -430,7 +448,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Inspector ウィンドウ ---
     if (showInspector_) {
         if (ImGui::Begin("インスペクター", &showInspector_)) {
-            if (selectedObject_ || selectedParticle_ || selectedPrimitive_) {
+            bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9));
+            if (selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
@@ -438,6 +457,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
+                    mapEditorSelectedTool_ = 0;
                 }
                 ImGui::PopStyleColor(3);
                 ImGui::Spacing();
@@ -452,6 +472,147 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             } else if (selectedPrimitive_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
             } else {
+                IScene *activeScene = sceneManager->GetCurrentScene();
+                bool handled = false;
+                if (activeScene) {
+                    MapChip2D* mapChip = activeScene->GetMapChip();
+                    if (mapChip && (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9))) {
+                        // ブロックの設定を表示
+                        MapChip2D::CustomBlockDef* targetDef = nullptr;
+                        bool isTemplate = false;
+                        bool changed = false;
+
+                        if (mapEditorSelectedTool_ >= 100) {
+                            auto& palette = mapChip->GetCustomPalette();
+                            for (auto& def : palette) {
+                                if (def.id == mapEditorSelectedTool_) {
+                                    targetDef = &def;
+                                    break;
+                                }
+                            }
+                        } else {
+                            auto& templates = mapChip->GetTemplatePalette();
+                            for (auto& def : templates) {
+                                if (def.id == mapEditorSelectedTool_) {
+                                    targetDef = &def;
+                                    isTemplate = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (targetDef) {
+                            handled = true;
+                            if (isTemplate) {
+                                ImGui::Text("Template Settings (ID: %d)", targetDef->id);
+                            } else {
+                                ImGui::Text("Custom Block Settings (ID: %d)", targetDef->id);
+                            }
+                            
+                            char nameBuf[256];
+                            strcpy_s(nameBuf, sizeof(nameBuf), targetDef->name.c_str());
+                            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+                                targetDef->name = nameBuf;
+                                changed = true;
+                            }
+
+                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock" };
+                            int currentType = -1;
+                            for (int i = 0; i < 8; ++i) {
+                                if (targetDef->type == types[i]) {
+                                    currentType = i;
+                                    break;
+                                }
+                            }
+                            if (ImGui::Combo("Type", &currentType, types, 8)) {
+                                targetDef->type = types[currentType];
+                                changed = true;
+                                // デフォルトプロパティを設定
+                                if (targetDef->type == "JumpBlock") {
+                                    targetDef->properties["jumpVelocity"] = 15.0f;
+                                } else if (targetDef->type == "LiftBlock") {
+                                    targetDef->properties["speed"] = 2.0f;
+                                    targetDef->properties["direction"] = "horizontal";
+                                    targetDef->properties["range"] = 10.0f;
+                                } else {
+                                    targetDef->properties = nlohmann::json::object(); // リセット
+                                }
+                            }
+
+                            float col[4] = { targetDef->color.x, targetDef->color.y, targetDef->color.z, targetDef->color.w };
+                            if (ImGui::ColorEdit4("Color", col)) {
+                                targetDef->color = { col[0], col[1], col[2], col[3] };
+                                changed = true;
+                            }
+
+                            float scale[3] = { targetDef->scale.x, targetDef->scale.y, targetDef->scale.z };
+                            if (ImGui::DragFloat3("Scale", scale, 0.01f)) {
+                                targetDef->scale = { scale[0], scale[1], scale[2] };
+                                changed = true;
+                            }
+
+                            if (ImGui::BeginCombo("Model", targetDef->modelName.empty() ? "None" : targetDef->modelName.c_str())) {
+                                bool isNoneSelected = targetDef->modelName.empty();
+                                if (ImGui::Selectable("None", isNoneSelected)) {
+                                    targetDef->modelName = "";
+                                    changed = true;
+                                }
+                                if (isNoneSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                                for (const auto& modelPath : availableModels_) {
+                                    bool isSelected = (targetDef->modelName == modelPath);
+                                    if (ImGui::Selectable(modelPath.c_str(), isSelected)) {
+                                        targetDef->modelName = modelPath;
+                                        changed = true;
+                                    }
+                                    if (isSelected) {
+                                        ImGui::SetItemDefaultFocus();
+                                    }
+                                }
+                                ImGui::EndCombo();
+                            }
+
+                            ImGui::Separator();
+                            ImGui::Text("Properties:");
+                            for (auto& [key, value] : targetDef->properties.items()) {
+                                if (value.is_number_float()) {
+                                    float v = value.get<float>();
+                                    if (ImGui::DragFloat(key.c_str(), &v, 0.1f)) {
+                                        value = v;
+                                        changed = true;
+                                    }
+                                } else if (value.is_string()) {
+                                    std::string v = value.get<std::string>();
+                                    char buf[256];
+                                    strcpy_s(buf, sizeof(buf), v.c_str());
+                                    if (ImGui::InputText(key.c_str(), buf, sizeof(buf))) {
+                                        value = buf;
+                                        changed = true;
+                                    }
+                                } else if (value.is_boolean()) {
+                                    bool v = value.get<bool>();
+                                    if (ImGui::Checkbox(key.c_str(), &v)) {
+                                        value = v;
+                                        changed = true;
+                                    }
+                                }
+                            }
+
+                            static bool autoApply = true;
+                            ImGui::Checkbox("Auto Apply", &autoApply);
+
+                            if (ImGui::Button("変更を適用 (Apply & Rebuild)") || (autoApply && changed)) {
+                                if (isTemplate) {
+                                    mapChip->SaveTemplatesToFile("resources/json/templates_config.json");
+                                }
+                                mapChip->RebuildChipObjects();
+                            }
+                        }
+                    }
+                }
+                
+                if (!handled) {
                 ImGui::Text("グローバル表示設定");
                 ImGui::Separator();
                 ImGui::Checkbox("オブジェクトを表示 (モデル)", &showObjects_);
@@ -533,6 +694,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                 ImGui::Separator();
                 ImGui::Checkbox("フォグエフェクトを有効化", &enableFog);
+                }
             }
 
             // アクティブなシーン特有のImGui描画（独立ウィンドウや追加インスペクターなど）を呼び出す
@@ -1020,8 +1182,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     int gridY = mapChip->WorldToChipY(worldPos.y);
                                     
                                     if (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight) {
-                                        if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
-                                            mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                        // 1〜9(Basic Tools) は設定・テンプレート専用なのでマップには配置できない
+                                        if (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ >= 100) {
+                                            if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
+                                                mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                            }
                                         }
                                     }
                                 }
@@ -1076,84 +1241,193 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     struct ToolIcon {
                         int id;
-                        const char* name;
+                        std::string name;
                         ImVec4 color;
                         float scale; // 実際のモデルに合わせたサイズ比率
                     };
 
-                    ToolIcon tools[] = {
+                    std::vector<ToolIcon> systemTools = {
                         { 6, "Spawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f },
-                        { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f },
+                        { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f }
+                    };
+
+                    std::vector<ToolIcon> templateTools = {
                         { 1, "Block", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
                         { 2, "Death", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
                         { 3, "Goal",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
-                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f }, // コインは実際のモデルが0.5倍なので合わせる
+                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f },
                         { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f },
                         { 7, "Lift",  ImVec4(0.9f, 0.6f, 0.1f, 1.0f), 1.0f },
                         { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f },
                         { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f }
                     };
 
-                    int numTools = sizeof(tools) / sizeof(tools[0]);
+                    std::set<std::string> availableTypes;
+                    for (const auto& def : mapChip->GetCustomPalette()) {
+                        availableTypes.insert(def.type);
+                    }
+
+                    std::vector<ToolIcon> customTools;
+                    for (const auto& def : mapChip->GetCustomPalette()) {
+                        // customToolFilters_ は「非表示」にするタイプを格納するセットとして扱う
+                        if (customToolFilters_.find(def.type) != customToolFilters_.end()) {
+                            continue;
+                        }
+                        customTools.push_back({ def.id, def.name, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f });
+                    }
+
                     float itemSize = 64.0f; // アイコン枠のサイズ
                     float totalHeight = itemSize + 24.0f; // アイコン＋テキスト
                     float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
-                    float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
 
-                    for (int i = 0; i < numTools; i++) {
-                        ImGui::PushID(i);
-                        ToolIcon& tool = tools[i];
+                    // ツール描画用の共通ラムダ
+                    // sectionType: 0=System, 1=Template(Basic), 2=Custom
+                    auto DrawTools = [&](const std::vector<ToolIcon>& tools, int sectionType) {
+                        float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+                        int numTools = static_cast<int>(tools.size());
+                        // カスタムセクションの場合は最後に +追加 ボタンを描画するため +1 する
+                        int maxIter = (sectionType == 2) ? numTools + 1 : numTools;
 
-                        ImVec2 p = ImGui::GetCursorScreenPos();
-                        bool isSelected = (mapEditorSelectedTool_ == tool.id);
+                        for (int i = 0; i < maxIter; i++) {
+                            ImGui::PushID(sectionType * 1000 + i);
+                            
+                            ImVec2 p = ImGui::GetCursorScreenPos();
+                            
+                            if (i < numTools) {
+                                const ToolIcon& tool = tools[i];
+                                bool isSelected = (mapEditorSelectedTool_ == tool.id);
 
-                        // 当たり判定 (InvisibleButton)
-                        if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
-                            mapEditorSelectedTool_ = tool.id;
+                                // 当たり判定 (InvisibleButton)
+                                if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
+                                    mapEditorSelectedTool_ = tool.id;
+                                }
+
+                                bool isHovered = ImGui::IsItemHovered();
+                                ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+                                // 背景 (ホバー時)
+                                if (isHovered) {
+                                    drawList->AddRectFilled(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(80, 80, 80, 255), 4.0f);
+                                }
+
+                                // アイコン (四角形 - スケールを適用)
+                                float iconPadding = 4.0f;
+                                float actualIconSize = (itemSize - iconPadding * 2) * tool.scale;
+                                float offset = (itemSize - actualIconSize) * 0.5f;
+
+                                ImVec2 iconMin = ImVec2(p.x + offset, p.y + offset);
+                                ImVec2 iconMax = ImVec2(p.x + offset + actualIconSize, p.y + offset + actualIconSize);
+                                
+                                // Erase(0) の場合は枠線だけにする、それ以外は塗りつぶし
+                                if (tool.id == 0) {
+                                    drawList->AddRect(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f, 0, 2.0f);
+                                } else {
+                                    drawList->AddRectFilled(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f);
+                                }
+
+                                // テキスト
+                                ImVec2 textSize = ImGui::CalcTextSize(tool.name.c_str());
+                                float textX = p.x + (itemSize - textSize.x) * 0.5f;
+                                drawList->AddText(ImVec2(textX, p.y + itemSize + 2.0f), IM_COL32(255, 255, 255, 255), tool.name.c_str());
+
+                                // 選択中の黄色の枠線
+                                if (isSelected && sectionType != 1) { // テンプレートは選択状態の枠線を表示しない
+                                    drawList->AddRect(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(255, 255, 0, 255), 4.0f, 0, 2.0f);
+                                }
+
+                                // Custom Tools セクションの場合はドラッグ＆ドロップ並べ替えに対応
+                                if (sectionType == 2) {
+                                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                                        ImGui::SetDragDropPayload("DND_CUSTOM_TOOL", &tool.id, sizeof(int));
+                                        ImGui::Text("Move %s", tool.name.c_str());
+                                        ImGui::EndDragDropSource();
+                                    }
+                                    if (ImGui::BeginDragDropTarget()) {
+                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_CUSTOM_TOOL")) {
+                                            IM_ASSERT(payload->DataSize == sizeof(int));
+                                            int payload_id = *(const int*)payload->Data;
+                                            int target_id = tool.id;
+                                            
+                                            auto& palette = mapChip->GetCustomPalette();
+                                            int srcIdx = -1, dstIdx = -1;
+                                            for (size_t k = 0; k < palette.size(); ++k) {
+                                                if (palette[k].id == payload_id) srcIdx = static_cast<int>(k);
+                                                if (palette[k].id == target_id) dstIdx = static_cast<int>(k);
+                                            }
+                                            if (srcIdx != -1 && dstIdx != -1 && srcIdx != dstIdx) {
+                                                auto item = palette[srcIdx];
+                                                palette.erase(palette.begin() + srcIdx);
+                                                if (srcIdx < dstIdx) dstIdx--; // 要素が詰められる分を補正
+                                                palette.insert(palette.begin() + dstIdx, item);
+                                            }
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+                                }
+                            } else if (sectionType == 2) {
+                                // "＋ 追加" ボタン
+                                if (ImGui::Button("＋\n追加", ImVec2(itemSize, totalHeight))) {
+                                    auto& palette = mapChip->GetCustomPalette();
+                                    MapChip2D::CustomBlockDef newDef;
+                                    newDef.id = 100 + static_cast<int>(palette.size());
+                                    newDef.name = "Custom " + std::to_string(palette.size() + 1);
+                                    newDef.type = "JumpBlock";
+                                    newDef.properties["jumpVelocity"] = 15.0f;
+                                    palette.push_back(newDef);
+                                    mapEditorSelectedTool_ = newDef.id; // 新しいものを選択状態にする
+                                }
+                            }
+
+                            ImGui::PopID();
+
+                            // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
+                            float lastButtonX2 = ImGui::GetItemRectMax().x;
+                            float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
+                            if (nextButtonX2 < windowVisibleX && i + 1 < maxIter) {
+                                ImGui::SameLine();
+                            }
                         }
-
-                        bool isHovered = ImGui::IsItemHovered();
-                        ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-                        // 背景 (ホバー時)
-                        if (isHovered) {
-                            drawList->AddRectFilled(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(80, 80, 80, 255), 4.0f);
+                        if (maxIter > 0) {
+                            ImGui::NewLine(); // 最後の項目の後に改行を入れる
                         }
+                    };
 
-                        // アイコン (四角形 - スケールを適用)
-                        float iconPadding = 4.0f;
-                        float actualIconSize = (itemSize - iconPadding * 2) * tool.scale;
-                        float offset = (itemSize - actualIconSize) * 0.5f;
-
-                        ImVec2 iconMin = ImVec2(p.x + offset, p.y + offset);
-                        ImVec2 iconMax = ImVec2(p.x + offset + actualIconSize, p.y + offset + actualIconSize);
-                        
-                        // Erase(0) の場合は枠線だけにする、それ以外は塗りつぶし
-                        if (tool.id == 0) {
-                            drawList->AddRect(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f, 0, 2.0f);
-                        } else {
-                            drawList->AddRectFilled(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f);
-                        }
-
-                        // テキスト
-                        ImVec2 textSize = ImGui::CalcTextSize(tool.name);
-                        ImVec2 textPos = ImVec2(p.x + (itemSize - textSize.x) * 0.5f, p.y + itemSize + 2.0f);
-                        drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), tool.name);
-
-                        // 選択中の黄色の枠線
-                        if (isSelected) {
-                            drawList->AddRect(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(255, 255, 0, 255), 4.0f, 0, 2.0f);
-                        }
-
-                        ImGui::PopID();
-
-                        // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
-                        float lastButtonX2 = ImGui::GetItemRectMax().x;
-                        float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
-                        if (i + 1 < numTools && nextButtonX2 < windowVisibleX) {
-                            ImGui::SameLine();
-                        }
+                    if (ImGui::CollapsingHeader("System Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        DrawTools(systemTools, 0);
                     }
+                    if (ImGui::CollapsingHeader("Basic Tools (Settings)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::TextDisabled("※これらのブロックはマップ設定用のテンプレートです。（直接設置はできません）");
+                        DrawTools(templateTools, 1);
+                    }
+                    if (ImGui::CollapsingHeader("Custom Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (ImGui::Button("フィルター設定...")) {
+                            ImGui::OpenPopup("FilterPopup");
+                        }
+                        
+                        if (ImGui::BeginPopup("FilterPopup")) {
+                            ImGui::Text("表示するブロックの種類:");
+                            ImGui::Separator();
+                            for (const auto& type : availableTypes) {
+                                bool isChecked = (customToolFilters_.find(type) == customToolFilters_.end()); // 見つからなければ表示(true)
+                                if (ImGui::Checkbox(type.c_str(), &isChecked)) {
+                                    if (isChecked) {
+                                        customToolFilters_.erase(type); // チェックされた＝表示する＝非表示リストから削除
+                                    } else {
+                                        customToolFilters_.insert(type); // チェック外れた＝非表示リストに追加
+                                    }
+                                }
+                            }
+                            ImGui::Separator();
+                            if (ImGui::Button("閉じる", ImVec2(120, 0))) {
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::EndPopup();
+                        }
+                        ImGui::Spacing();
+
+                        DrawTools(customTools, 2);
+                    }
+
                     ImGui::Spacing();
                     ImGui::EndDisabled();
 

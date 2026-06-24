@@ -29,10 +29,16 @@ void JumpBlock::OnCollision(Player2D* player) {
     // マップチップサイズが1.0fなので、大体上側にいるか判定
     if (playerPos.y >= blockPos.y + 0.5f) {
         Vector3 vel = player->GetVelocity();
-        vel.y = 12.5f; // 前回(6.25f)の2倍に設定。通常ジャンプ(10.0f)より少し高い。
+        vel.y = jumpVelocity_; // カスタム可能にしたジャンプ威力
         player->SetVelocity(vel);
         
         // 跳ねた演出として少しスケールを揺らす（実装できる範囲で）
         // primitiveObj_->SetScale({ primitiveObj_->GetScale().x * 1.2f, primitiveObj_->GetScale().y * 0.8f, 1.0f });
+    }
+}
+
+void JumpBlock::SetProperties(const nlohmann::json& properties) {
+    if (properties.contains("jumpVelocity")) {
+        jumpVelocity_ = properties["jumpVelocity"].get<float>();
     }
 }

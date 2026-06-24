@@ -410,3 +410,62 @@ Matrix4x4 TransformFunctions::MakeViewMatrix(const Vector3 &rotate, const Vector
     // アフィン行列の逆行列がビュー行列になる
     return Inverse(MakeAffineMatrix({1, 1, 1}, rotate, translate));
 }
+void TransformFunctions::ExtractFrustumPlanes(const Matrix4x4& viewProjection, std::array<Vector4, 6>& planes) {
+    // Left plane
+    planes[0].x = viewProjection.m[0][3] + viewProjection.m[0][0];
+    planes[0].y = viewProjection.m[1][3] + viewProjection.m[1][0];
+    planes[0].z = viewProjection.m[2][3] + viewProjection.m[2][0];
+    planes[0].w = viewProjection.m[3][3] + viewProjection.m[3][0];
+
+    // Right plane
+    planes[1].x = viewProjection.m[0][3] - viewProjection.m[0][0];
+    planes[1].y = viewProjection.m[1][3] - viewProjection.m[1][0];
+    planes[1].z = viewProjection.m[2][3] - viewProjection.m[2][0];
+    planes[1].w = viewProjection.m[3][3] - viewProjection.m[3][0];
+
+    // Bottom plane
+    planes[2].x = viewProjection.m[0][3] + viewProjection.m[0][1];
+    planes[2].y = viewProjection.m[1][3] + viewProjection.m[1][1];
+    planes[2].z = viewProjection.m[2][3] + viewProjection.m[2][1];
+    planes[2].w = viewProjection.m[3][3] + viewProjection.m[3][1];
+
+    // Top plane
+    planes[3].x = viewProjection.m[0][3] - viewProjection.m[0][1];
+    planes[3].y = viewProjection.m[1][3] - viewProjection.m[1][1];
+    planes[3].z = viewProjection.m[2][3] - viewProjection.m[2][1];
+    planes[3].w = viewProjection.m[3][3] - viewProjection.m[3][1];
+
+    // Near plane (DirectX Z range [0, 1])
+    planes[4].x = viewProjection.m[0][2];
+    planes[4].y = viewProjection.m[1][2];
+    planes[4].z = viewProjection.m[2][2];
+    planes[4].w = viewProjection.m[3][2];
+
+    // Far plane
+    planes[5].x = viewProjection.m[0][3] - viewProjection.m[0][2];
+    planes[5].y = viewProjection.m[1][3] - viewProjection.m[1][2];
+    planes[5].z = viewProjection.m[2][3] - viewProjection.m[2][2];
+    planes[5].w = viewProjection.m[3][3] - viewProjection.m[3][2];
+
+    // Normalize planes
+    for (int i = 0; i < 6; ++i) {
+        float length = std::sqrt(planes[i].x * planes[i].x + planes[i].y * planes[i].y + planes[i].z * planes[i].z);
+        if (length > 0.0f) {
+            planes[i].x /= length;
+            planes[i].y /= length;
+            planes[i].z /= length;
+            planes[i].w /= length;
+        }
+    }
+}
+
+bool TransformFunctions::IsSphereInFrustum(const Vector3& center, float radius, const std::array<Vector4, 6>& planes) {
+    for (int i = 0; i < 6; ++i) {
+        float distance = planes[i].x * center.x + planes[i].y * center.y + planes[i].z * center.z + planes[i].w;
+        // 如果球体完全在某个面的外面（距离 < -radius），则不在视锥体内
+        if (distance < -radius) {
+            return false;
+        }
+    }
+    return true;
+}

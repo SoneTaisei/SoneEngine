@@ -1,7 +1,8 @@
 #pragma once
 #include "GameObject/PrimitiveObject.h"
 #include <memory>
-
+#include <nlohmann/json.hpp>
+#include "GameObject/Object3D.h"
 class Player2D;
 class MapChip2D;
 struct ID3D12Device;
@@ -19,10 +20,15 @@ public:
         if (primitiveObj_) {
             primitiveObj_->Update();
         }
+        if (object3D_) {
+            object3D_->Update();
+        }
     }
     
     virtual void Draw(ID3D12GraphicsCommandList* commandList) {
-        if (primitiveObj_) {
+        if (object3D_) {
+            object3D_->Draw(commandList);
+        } else if (primitiveObj_) {
             primitiveObj_->Draw(commandList);
         }
     }
@@ -41,7 +47,12 @@ public:
     // プレイヤーが上に乗った際の処理
     virtual void OnPlayerStand() {}
 
+    // Jsonプロパティの受け取り
+    virtual void SetProperties(const nlohmann::json& properties) {}
+
     PrimitiveObject* GetPrimitive() const { return primitiveObj_.get(); }
+    Object3D* GetObject3D() const { return object3D_.get(); }
+    void SetObject3D(std::unique_ptr<Object3D> obj) { object3D_ = std::move(obj); }
     
     // 消滅フラグ（コイン取得時など）
     bool IsDestroyed() const { return isDestroyed_; }
@@ -52,5 +63,6 @@ protected:
     int chipX_ = 0;
     int chipY_ = 0;
     std::unique_ptr<PrimitiveObject> primitiveObj_;
+    std::unique_ptr<Object3D> object3D_;
     bool isDestroyed_ = false;
 };

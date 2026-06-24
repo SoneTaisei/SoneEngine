@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <d3d12.h>
 #include <cstdint>
+#include <set>
 
 // UIから操作したいクラスのヘッダーをインクルード
 #include "Graphics/DebugCamera.h"
@@ -92,7 +93,7 @@ private:
     bool isMapEditorHovered_ = false; // マップエディタがホバーされているか
     
     // マップエディタ用のツール状態
-    int mapEditorSelectedTool_ = 1; // 0 = None, 1 = Block, ...
+    int mapEditorSelectedTool_ = 100; // 0 = None, 100 = Custom Block 1
     int mapEditorInputWidth_ = -1;
     int mapEditorInputHeight_ = -1;
 
@@ -101,6 +102,10 @@ private:
     int boundaryAddMode_ = 0; // 0: 縦線, 1: 横線, 2: 両方(交点)
     int draggingBoundaryIndexX_ = -1;
     int draggingBoundaryIndexY_ = -1;
+
+    std::set<std::string> customToolFilters_;
+    std::vector<std::string> availableModels_; // "Object/..." のような相対パスを保持
+    void ScanAvailableModels();
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;
