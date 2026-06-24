@@ -11,6 +11,7 @@
 #include "Blocks/OneWayBlock.h"
 #include "Blocks/LiftBlock.h"
 #include "Blocks/RailBlock.h"
+#include "Blocks/JumpBlock.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -292,6 +293,8 @@ void MapChip2D::RebuildChipObjects() {
                 newBlock = std::make_shared<LiftBlock>(this, x, y);
             } else if (type == ChipType::kRail) {
                 newBlock = std::make_shared<RailBlock>(this, x, y);
+            } else if (type == ChipType::kJumpBlock) {
+                newBlock = std::make_shared<JumpBlock>(this, x, y);
             }
 
             if (newBlock) {

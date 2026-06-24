@@ -169,6 +169,9 @@
     <ClCompile Include="Project\Game2D\Blocks\RailBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -373,6 +376,9 @@
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\RailBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h">

@@ -20,6 +20,10 @@ public:
     void Initialize(ID3D12GraphicsCommandList* commandList);
     void Update(MapChip2D& map, bool isTransitioning = false);
     void Draw(ID3D12GraphicsCommandList* commandList);
+
+    // 速度の設定と取得
+    void SetVelocity(const Vector3& velocity) { velocity_ = velocity; }
+    Vector3 GetVelocity() const { return velocity_; }
     void DisplayImGui();
 
     // プレイヤーの位置を取得（カメラ追従用）

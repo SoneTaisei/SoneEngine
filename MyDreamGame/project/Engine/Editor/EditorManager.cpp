@@ -1090,7 +1090,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f }, // コインは実際のモデルが0.5倍なので合わせる
                         { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f },
                         { 7, "Lift",  ImVec4(0.9f, 0.6f, 0.1f, 1.0f), 1.0f },
-                        { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f }
+                        { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f },
+                        { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f }
                     };
 
                     int numTools = sizeof(tools) / sizeof(tools[0]);

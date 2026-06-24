@@ -226,6 +226,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\LiftBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\RailBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
@@ -411,6 +412,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\LiftBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\RailBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />

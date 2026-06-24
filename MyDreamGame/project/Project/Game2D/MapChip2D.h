@@ -22,6 +22,7 @@ public:
         kPlayerSpawn = 6, // プレイヤー初期位置
         kLift = 7,  // 動く足場（リフト）
         kRail = 8,  // リフトの移動レール
+        kJumpBlock = 9, // ジャンプ台
     };
 
     void Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath);
