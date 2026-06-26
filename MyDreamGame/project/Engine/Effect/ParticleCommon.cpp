@@ -175,8 +175,8 @@ void ParticleCommon::CreatePipelineState() {
         return shaderBlob;
     };
 
-    auto vsBlob = CompileShader(L"shaders/Particle.VS.hlsl", L"vs_6_0");
-    auto psBlob = CompileShader(L"shaders/Particle.PS.hlsl", L"ps_6_0");
+    auto vsBlob = CompileShader(L"resources/shaders/Particle.VS.hlsl", L"vs_6_0");
+    auto psBlob = CompileShader(L"resources/shaders/Particle.PS.hlsl", L"ps_6_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
     psoDesc.pRootSignature = rootSignature_.Get();

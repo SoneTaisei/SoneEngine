@@ -3,6 +3,10 @@
 #include <Windows.h>
 #include <d3d12.h>
 #include <cstdint>
+#include <string>
+#include <vector>
+#include <set>
+#include <imgui.h>
 
 // UIから操作したいクラスのヘッダーをインクルード
 #include "Graphics/DebugCamera.h"
@@ -47,6 +51,13 @@ public:
 
     bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
 
+    static ImVec2 GetGameViewPos() { return gameViewPos_; }
+    static ImVec2 GetGameViewSize() { return gameViewSize_; }
+
+    bool IsMapEditorVisible() const { return isMapEditorVisible_; }
+    bool IsMapEditorHovered() const { return isMapEditorHovered_; }
+    bool IsBoundaryDragging() const { return isBoundaryDragging_; }
+
     // シーン設定のJSON保存・読込み
     void SaveSceneConfig();
     void LoadSceneConfig();
@@ -89,8 +100,28 @@ private:
     bool showPostEffect_ = true;
     bool showReplayManager_ = true;
     bool showMapEditor_ = true;
+    bool showMapSettings_ = true;
 
     static bool showObjects_;
     static bool showEffects_;
+
+    static ImVec2 gameViewPos_;
+    static ImVec2 gameViewSize_;
+
+    void ScanAvailableModels();
+    std::vector<std::string> availableModels_;
+
+    bool isMapEditorVisible_ = false;
+    bool isMapEditorHovered_ = false;
+    bool isBoundaryDragging_ = false;
+    int mapEditorSelectedTool_ = 0;
+
+    std::set<std::string> customToolFilters_;
+    bool isBoundaryEditMode_ = false;
+    int boundaryAddMode_ = 0;
+    int draggingBoundaryIndexX_ = -1;
+    int draggingBoundaryIndexY_ = -1;
+    int mapEditorInputWidth_ = -1;
+    int mapEditorInputHeight_ = -1;
 };
 #endif

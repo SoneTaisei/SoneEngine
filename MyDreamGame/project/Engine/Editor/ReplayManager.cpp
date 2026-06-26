@@ -7,10 +7,95 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 ReplayManager* ReplayManager::GetInstance() {
     static ReplayManager instance;
     return &instance;
+}
+
+void ReplayManager::LoadMacros() {
+    macros_.clear();
+    std::ifstream ifs("json/replay_macros.txt");
+    if (!ifs.is_open()) return;
+
+    std::string line;
+    ReplayMacro* currentMacro = nullptr;
+
+    while (std::getline(ifs, line)) {
+        if (line.empty() || line[0] == '#') continue;
+
+        if (line[0] == '[' && line[line.length() - 1] == ']') {
+            macros_.push_back(ReplayMacro());
+            currentMacro = &macros_.back();
+            currentMacro->name = line.substr(1, line.length() - 2);
+            continue;
+        }
+
+        if (currentMacro) {
+            std::stringstream ss(line);
+            std::string durStr, keysStr;
+            if (std::getline(ss, durStr, ',') && std::getline(ss, keysStr)) {
+                MacroBlock b;
+                b.duration = std::stoi(durStr);
+                strncpy_s(b.keys, keysStr.c_str(), sizeof(b.keys));
+                currentMacro->blocks.push_back(b);
+            }
+        }
+    }
+}
+
+void ReplayManager::SaveMacros() {
+    std::filesystem::create_directories("json");
+    std::ofstream ofs("json/replay_macros.txt");
+    if (!ofs.is_open()) return;
+
+    for (const auto& macro : macros_) {
+        ofs << "[" << macro.name << "]" << std::endl;
+        for (const auto& block : macro.blocks) {
+            ofs << block.duration << "," << block.keys << std::endl;
+        }
+        ofs << std::endl;
+    }
+}
+
+void ReplayManager::AddMacro(const ReplayMacro& macro) {
+    macros_.push_back(macro);
+    SaveMacros();
+}
+
+void ReplayManager::RemoveMacro(int index) {
+    if (index >= 0 && index < static_cast<int>(macros_.size())) {
+        macros_.erase(macros_.begin() + index);
+        SaveMacros();
+    }
+}
+
+void ReplayManager::ApplyMacro(int startFrame, const ReplayMacro& macro) {
+    if (currentReplay_.totalFrames == 0) return;
+
+    int currentFrameIdx = startFrame;
+    for (const auto& block : macro.blocks) {
+        for (int i = 0; i < block.duration; ++i) {
+            if (currentFrameIdx >= currentReplay_.totalFrames) break;
+
+            // マクロのキー状態を適用
+            // "LRJDCWS" 順
+            for (int k = 0; k < 7; ++k) {
+                if (block.keys[k] != '-') {
+                    currentReplay_.frames[currentFrameIdx].keys[k] = block.keys[k];
+                } else if (block.keys[k] == '-') {
+                    // 何もしないか、Nにするか。
+                    // 今回はマクロで指定されたキーに完全に上書きする（'L'などを維持しない）
+                    currentReplay_.frames[currentFrameIdx].keys[k] = '-';
+                }
+            }
+            currentFrameIdx++;
+        }
+    }
+
+    // 変更をMMLに反映
+    RebuildMmlFromFrames(currentReplay_);
 }
 
 void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraInitPos, const std::string& mapDataStr) {
@@ -19,12 +104,32 @@ void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraIni
     isRecording_ = true;
     isPlaying_ = false;
     isPaused_ = false;
-    currentFrame_ = 0;
-
-    playerInitPos_ = initPos;
-    cameraInitPos_ = cameraInitPos;
-    currentMapDataStr_ = mapDataStr;
-    temporaryRecordedFrames_.clear();
+    
+    if (isTakeoverRecording_) {
+        // テイクオーバー時：元のリプレイから初期情報を引き継ぎ、過去のフレームデータをコピーする
+        playerInitPos_ = currentReplay_.playerInitPos;
+        cameraInitPos_ = currentReplay_.cameraInitPos;
+        currentMapDataStr_ = currentReplay_.mapDataStr;
+        currentStageFilename_ = currentReplay_.stageFilename;
+        
+        temporaryRecordedFrames_.clear();
+        int endFrame = (std::min)(takeoverFrame_, currentReplay_.totalFrames - 1);
+        for (int i = 0; i <= endFrame; ++i) {
+            temporaryRecordedFrames_.push_back(currentReplay_.frames[i]);
+        }
+        
+        // フレームカウンタは引き継いだ分だけ進めた状態にする（必要なら）
+        // ただし録画時は currentFrame_ は使わず temporaryRecordedFrames_.size() が参照される
+        currentFrame_ = takeoverFrame_; 
+        isTakeoverRecording_ = false; // フラグをリセット
+    } else {
+        // 通常の録画時
+        currentFrame_ = 0;
+        playerInitPos_ = initPos;
+        cameraInitPos_ = cameraInitPos;
+        currentMapDataStr_ = mapDataStr;
+        temporaryRecordedFrames_.clear();
+    }
     
     // 注入モードがオンになっていればオフにする
     KeyboardInput::GetInstance()->SetReplayMode(false);
@@ -58,6 +163,46 @@ void ReplayManager::StopRecord() {
     if (!isRecording_) return;
     isRecording_ = false;
 
+    // マクロ録画予約されていた場合、録画した入力データをマクロとして抽出
+    if (isRecordingMacro_ && !temporaryRecordedFrames_.empty()) {
+        ReplayMacro rm;
+        rm.name = macroRecordingName_.empty() ? "RecordedMacro" : macroRecordingName_;
+        
+        MacroBlock currentBlock;
+        bool isFirst = true;
+        
+        for (const auto& frame : temporaryRecordedFrames_) {
+            char currentKeys[8];
+            for(int k=0; k<7; ++k) currentKeys[k] = frame.keys[k];
+            currentKeys[7] = '\0';
+            
+            if (isFirst) {
+                currentBlock.duration = 1;
+                strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                isFirst = false;
+            } else {
+                bool same = true;
+                for(int k=0; k<7; ++k) {
+                    if(currentBlock.keys[k] != currentKeys[k]) { same = false; break; }
+                }
+                if (same) {
+                    currentBlock.duration++;
+                } else {
+                    rm.blocks.push_back(currentBlock);
+                    currentBlock.duration = 1;
+                    strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                }
+            }
+        }
+        if (!isFirst) {
+            rm.blocks.push_back(currentBlock);
+        }
+        if (rm.blocks.empty()) rm.blocks.push_back({10, "-------"});
+        
+        AddMacro(rm);
+        isRecordingMacro_ = false;
+    }
+
     // 録画されたフレーム数が極端に短い場合は履歴に登録しない
     if (temporaryRecordedFrames_.size() < 5) {
         temporaryRecordedFrames_.clear();
@@ -79,12 +224,17 @@ void ReplayManager::StopRecord() {
     std::stringstream ss;
     ss << std::put_time(&timeinfo, "%Y/%m/%d %H:%M:%S");
     data.dateStr = ss.str();
+    
+    // ツリー構造のためのID付与
+    data.id = nextReplayId_++;
+    data.parentId = takeoverSourceId_;
+    takeoverSourceId_ = -1; // 録画が終わったらリセット
 
     // MMLトラックへの圧縮
     RebuildMmlFromFrames(data);
 
-    // 履歴（直近3回分）のリングバッファ更新
-    if (history_.size() >= 3) {
+    // 履歴（直近10回分）のリングバッファ更新
+    if (history_.size() >= 10) {
         history_.pop_back();
     }
     history_.insert(history_.begin(), data);
@@ -158,6 +308,9 @@ void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath)
 
     // KeyboardInput をリプレイモードに切り替える
     KeyboardInput::GetInstance()->SetReplayMode(true);
+    
+    // 実行用キーバッファを生成（ランダムブレの適用）
+    GenerateRuntimeKeys();
 }
 
 void ReplayManager::SelectReplay(int historyIndex, const std::string& filepath) {
@@ -187,6 +340,18 @@ void ReplayManager::StopPlayback() {
     KeyboardInput::GetInstance()->SetReplayMode(false);
 }
 
+void ReplayManager::TakeoverPlayback() {
+    if (!isPlaying_) return;
+    isPlaying_ = false;
+    isPaused_ = false;
+    isTakeoverRecording_ = true;
+    takeoverFrame_ = currentFrame_;
+    takeoverSourceId_ = currentReplay_.id; // 派生元のIDを記憶
+    
+    // currentFrame_ は0にリセットせず、KeyboardInput を通常モードに戻す
+    KeyboardInput::GetInstance()->SetReplayMode(false);
+}
+
 void ReplayManager::PausePlayback() {
     if (isPlaying_) {
         isPaused_ = true;
@@ -204,6 +369,17 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
     
     // totalFramesを超えている場合の安全チェック
     if (currentFrame_ >= currentReplay_.totalFrames) {
+        if (isLoopPlay_) {
+            currentFrame_ = 0; // ループ再生：最初に戻す
+            playerPos = currentReplay_.playerInitPos; // 座標も初期位置に戻す
+            cameraPos = currentReplay_.cameraInitPos; // カメラ座標も初期位置に戻す
+            
+            // ループのたびに実行用キーバッファを再生成（毎回違うブレ）
+            GenerateRuntimeKeys();
+        } else {
+            StopPlayback(); // ループOFF：完全に停止
+            return;
+        }
         StopPlayback();
         return;
     }
@@ -215,25 +391,27 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         BYTE keys[256] = {};
         BYTE preKeys[256] = {};
 
+        const char* currentKeys = runtimeKeys_[currentFrame_].c_str();
+
         // 現在のキー状態の構築
-        if (currentFrame.keys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
-        if (currentFrame.keys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
-        if (currentFrame.keys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
-        if (currentFrame.keys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
-        if (currentFrame.keys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
-        if (currentFrame.keys[5] == 'W') { keys[DIK_W] = 0x80; keys[DIK_UP] = 0x80; }
-        if (currentFrame.keys[6] == 'S') { keys[DIK_S] = 0x80; keys[DIK_DOWN] = 0x80; }
+        if (currentKeys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
+        if (currentKeys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
+        if (currentKeys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
+        if (currentKeys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
+        if (currentKeys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
+        if (currentKeys[5] == 'W') { keys[DIK_W] = 0x80; keys[DIK_UP] = 0x80; }
+        if (currentKeys[6] == 'S') { keys[DIK_S] = 0x80; keys[DIK_DOWN] = 0x80; }
 
         // 1フレーム前のキー状態の構築
         if (currentFrame_ > 0) {
-            const FrameData& prevFrame = currentReplay_.frames[currentFrame_ - 1];
-            if (prevFrame.keys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
-            if (prevFrame.keys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
-            if (prevFrame.keys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
-            if (prevFrame.keys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
-            if (prevFrame.keys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
-            if (prevFrame.keys[5] == 'W') { preKeys[DIK_W] = 0x80; preKeys[DIK_UP] = 0x80; }
-            if (prevFrame.keys[6] == 'S') { preKeys[DIK_S] = 0x80; preKeys[DIK_DOWN] = 0x80; }
+            const char* prevKeys = runtimeKeys_[currentFrame_ - 1].c_str();
+            if (prevKeys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
+            if (prevKeys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
+            if (prevKeys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
+            if (prevKeys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
+            if (prevKeys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
+            if (prevKeys[5] == 'W') { preKeys[DIK_W] = 0x80; preKeys[DIK_UP] = 0x80; }
+            if (prevKeys[6] == 'S') { preKeys[DIK_S] = 0x80; preKeys[DIK_DOWN] = 0x80; }
         }
 
         KeyboardInput::GetInstance()->SetReplayKeyStates(keys, preKeys);
@@ -308,8 +486,63 @@ void ReplayManager::ApplyTimelineEdit(int frameIdx, int keyIdx, bool active) {
     char keyChars[8] = "LRJDCWS";
     currentReplay_.frames[frameIdx].keys[keyIdx] = active ? keyChars[keyIdx] : '-';
 
+    // 編集時はブロックが壊れる可能性があるため、重複するJitter設定をリセットする
+    auto it = std::remove_if(currentReplay_.jitters.begin(), currentReplay_.jitters.end(),
+        [frameIdx, keyIdx](const JitterSetting& j) {
+            return (j.keyIdx == keyIdx && frameIdx >= j.startFrame && frameIdx <= j.endFrame);
+        });
+    currentReplay_.jitters.erase(it, currentReplay_.jitters.end());
+
     // キーが変更されたため、MMLトラックを再計算する
     RebuildMmlFromFrames(currentReplay_);
+}
+
+void ReplayManager::GenerateRuntimeKeys() {
+    int maxFrame = currentReplay_.totalFrames;
+    if (maxFrame <= 0) return;
+
+    runtimeKeys_.resize(maxFrame);
+    
+    // ベースとして元のキー状態をコピー
+    for (int i = 0; i < maxFrame; ++i) {
+        runtimeKeys_[i] = currentReplay_.frames[i].keys;
+    }
+
+    // Jitter設定を適用
+    for (const auto& jitter : currentReplay_.jitters) {
+        if (jitter.maxJitter <= 0) continue;
+        
+        int startF = jitter.startFrame;
+        int endF = jitter.endFrame;
+        if (startF < 0) startF = 0;
+        if (endF >= maxFrame) endF = maxFrame - 1;
+        if (startF > endF) continue;
+
+        char keyChars[8] = "LRJDCWS";
+        char targetKey = keyChars[jitter.keyIdx];
+
+        int shiftStart = (std::rand() % (jitter.maxJitter * 2 + 1)) - jitter.maxJitter;
+        int shiftEnd = (std::rand() % (jitter.maxJitter * 2 + 1)) - jitter.maxJitter;
+
+        int newStartF = startF + shiftStart;
+        int newEndF = endF + shiftEnd;
+
+        if (newEndF < newStartF) {
+            newEndF = newStartF;
+        }
+
+        // まず元の区間をクリア
+        for (int i = startF; i <= endF; ++i) {
+            runtimeKeys_[i][jitter.keyIdx] = '-';
+        }
+        
+        // シフト後の区間をONにする
+        for (int i = newStartF; i <= newEndF; ++i) {
+            if (i >= 0 && i < maxFrame) {
+                runtimeKeys_[i][jitter.keyIdx] = targetKey;
+            }
+        }
+    }
 }
 
 void ReplayManager::RebuildMmlFromFrames(ReplayData& data) {
@@ -425,8 +658,8 @@ std::vector<char> ReplayManager::DecodeMmlToTrack(const std::string& mmlStr, int
 }
 
 bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filename) {
-    std::filesystem::create_directories("json/saved_replays");
-    std::string filepath = "json/saved_replays/" + filename;
+    std::filesystem::create_directories("resources/json/saved_replays");
+    std::string filepath = "resources/json/saved_replays/" + filename;
     
     // 拡張子の補正
     if (filepath.find(".mml") == std::string::npos) {
@@ -462,6 +695,15 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
     ofs << "T3_Cling=" << data.mmlTracks[3] << std::endl;
     ofs << "T4_UpDown=" << data.mmlTracks[4] << std::endl;
     ofs << std::endl;
+
+    // 動的ブレ設定 (Jitters)
+    if (!data.jitters.empty()) {
+        ofs << "[Jitters]" << std::endl;
+        for (const auto& j : data.jitters) {
+            ofs << j.keyIdx << "," << j.startFrame << "," << j.endFrame << "," << j.maxJitter << std::endl;
+        }
+        ofs << std::endl;
+    }
 
     // 1フレームずつの状態データ (STR)
     // フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z
@@ -536,6 +778,17 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                 else if (key == "T2_Dash") outData.mmlTracks[2] = value;
                 else if (key == "T3_Cling") outData.mmlTracks[3] = value;
                 else if (key == "T4_UpDown") outData.mmlTracks[4] = value;
+            }
+        } else if (currentSection == "Jitters") {
+            std::stringstream jss(line);
+            std::string p1, p2, p3, p4;
+            if (std::getline(jss, p1, ',') && std::getline(jss, p2, ',') && std::getline(jss, p3, ',') && std::getline(jss, p4)) {
+                JitterSetting j;
+                j.keyIdx = std::stoi(p1);
+                j.startFrame = std::stoi(p2);
+                j.endFrame = std::stoi(p3);
+                j.maxJitter = std::stoi(p4);
+                outData.jitters.push_back(j);
             }
         } else if (currentSection == "STR") {
             // 新フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z
@@ -643,8 +896,8 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
 
 void ReplayManager::LoadSavedList() {
     savedList_.clear();
-    std::filesystem::create_directories("json/saved_replays");
-    for (const auto& entry : std::filesystem::directory_iterator("json/saved_replays")) {
+    std::filesystem::create_directories("resources/json/saved_replays");
+    for (const auto& entry : std::filesystem::directory_iterator("resources/json/saved_replays")) {
         if (entry.is_regular_file() && entry.path().extension() == ".mml") {
             savedList_.push_back(entry.path().filename().string());
         }
@@ -652,7 +905,7 @@ void ReplayManager::LoadSavedList() {
 }
 
 void ReplayManager::DeleteSavedFile(const std::string& filepath) {
-    std::string fullpath = "json/saved_replays/" + filepath;
+    std::string fullpath = "resources/json/saved_replays/" + filepath;
     if (std::filesystem::exists(fullpath)) {
         std::filesystem::remove(fullpath);
         LoadSavedList();

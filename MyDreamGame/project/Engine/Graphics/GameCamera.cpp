@@ -37,21 +37,80 @@ void GameCamera::InitializeOrthographic(int kClientWidth, int kClientHeight, flo
 }
 
 void GameCamera::UpdateMatrixOrthographic() {
-    // ターゲットへの追従
+    // ターゲットへの追従（ルームベース遷移）
     if (followTarget_) {
-        // X座標のみ追従（横スクロール）
+        // ターゲットの現在の座標
         float targetX = followTarget_->x;
         float targetY = followTarget_->y;
 
-        // 緩やかに追従（Lerp）
-        transform_.translate.x += (targetX - transform_.translate.x) * followLerp_;
-        // Y方向もある程度追従
-        float desiredY = targetY; // プレイヤーを画面中心付近に配置
-        transform_.translate.y += (desiredY - transform_.translate.y) * followLerp_;
+        // カスタム境界線リストを用いたルーム計算
+        int newRoomX = currentRoomX_;
+        int newRoomY = currentRoomY_;
+        float cameraTargetX = transform_.translate.x;
+        float cameraTargetY = transform_.translate.y;
 
-        // Y座標の下限（地面より下にカメラが行かないように）
-        if (transform_.translate.y < orthoHeight_ * 0.5f) {
-            transform_.translate.y = orthoHeight_ * 0.5f;
+        if (!boundaryX_.empty() && !boundaryY_.empty()) {
+            // X軸の区間検索
+            auto itX = std::lower_bound(boundaryX_.begin(), boundaryX_.end(), targetX);
+            if (itX != boundaryX_.end() && itX != boundaryX_.begin()) {
+                newRoomX = static_cast<int>(std::distance(boundaryX_.begin(), itX)) - 1;
+                float minX = *(itX - 1);
+                float maxX = *itX;
+                // 区間がカメラサイズより大きい場合は、ターゲットを中心にクランプする
+                if (maxX - minX > orthoWidth_) {
+                    float halfW = orthoWidth_ * 0.5f;
+                    cameraTargetX = std::clamp(targetX, minX + halfW, maxX - halfW);
+                } else {
+                    // カメラサイズより小さい場合は区間の中心
+                    cameraTargetX = (minX + maxX) * 0.5f;
+                }
+            } else if (itX == boundaryX_.begin()) {
+                newRoomX = -1; // 範囲外左
+                cameraTargetX = boundaryX_.front() - orthoWidth_ * 0.5f;
+            } else {
+                newRoomX = static_cast<int>(boundaryX_.size()); // 範囲外右
+                cameraTargetX = boundaryX_.back() + orthoWidth_ * 0.5f;
+            }
+
+            // Y軸の区間検索
+            auto itY = std::lower_bound(boundaryY_.begin(), boundaryY_.end(), targetY);
+            if (itY != boundaryY_.end() && itY != boundaryY_.begin()) {
+                newRoomY = static_cast<int>(std::distance(boundaryY_.begin(), itY)) - 1;
+                float minY = *(itY - 1);
+                float maxY = *itY;
+                if (maxY - minY > orthoHeight_) {
+                    float halfH = orthoHeight_ * 0.5f;
+                    cameraTargetY = std::clamp(targetY, minY + halfH, maxY - halfH);
+                } else {
+                    cameraTargetY = (minY + maxY) * 0.5f;
+                }
+            } else if (itY == boundaryY_.begin()) {
+                newRoomY = -1; // 範囲外下
+                cameraTargetY = boundaryY_.front() - orthoHeight_ * 0.5f;
+            } else {
+                newRoomY = static_cast<int>(boundaryY_.size()); // 範囲外上
+                cameraTargetY = boundaryY_.back() + orthoHeight_ * 0.5f;
+            }
+        }
+
+        if (newRoomX != currentRoomX_ || newRoomY != currentRoomY_) {
+            currentRoomX_ = newRoomX;
+            currentRoomY_ = newRoomY;
+            isTransitioning_ = true;
+        }
+
+        // カメラが目標位置へスライド移動する
+        // Lerpでの追従
+        transform_.translate.x += (cameraTargetX - transform_.translate.x) * transitionLerp_;
+        transform_.translate.y += (cameraTargetY - transform_.translate.y) * transitionLerp_;
+
+        // 目標位置に十分近づいたら遷移終了
+        float distX = std::abs(transform_.translate.x - cameraTargetX);
+        float distY = std::abs(transform_.translate.y - cameraTargetY);
+        if (isTransitioning_ && distX < 0.05f && distY < 0.05f) {
+            transform_.translate.x = cameraTargetX;
+            transform_.translate.y = cameraTargetY;
+            isTransitioning_ = false;
         }
     }
 

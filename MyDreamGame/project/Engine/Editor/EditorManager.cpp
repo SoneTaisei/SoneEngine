@@ -14,6 +14,8 @@
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
+#include "GameObject/MapObject2D.h"
+#include "Resource/Primitive/PrimitiveManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -26,15 +28,18 @@
 #include <fstream>
 #include <numbers>
 #include <string>
+#include <functional>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
     SrvManager::GetInstance()->Allocate(out_cpu_handle, out_gpu_handle);
 }
 
+bool EditorManager::isPlaying_ = false;
 bool EditorManager::showObjects_ = true;
 bool EditorManager::showEffects_ = true;
-bool EditorManager::isPlaying_ = false;
+ImVec2 EditorManager::gameViewPos_ = ImVec2(0, 0);
+ImVec2 EditorManager::gameViewSize_ = ImVec2(1280, 720);
 
 // 枠を返すための関数
 static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) {
@@ -42,6 +47,8 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 }
 
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
+    ScanAvailableModels();
+
     // 1. ImGuiコンテキストの作成
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -65,7 +72,7 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     init_info.Device = device;
     init_info.CommandQueue = commandQueue;
     init_info.NumFramesInFlight = 2;
-    init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     init_info.SrvDescriptorHeap = SrvManager::GetInstance()->GetSrvDescriptorHeap();
     init_info.SrvDescriptorAllocFn = ImGuiSrvAlloc;
@@ -78,6 +85,20 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         style.WindowRounding = 0.0f;
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+    }
+}
+
+void EditorManager::ScanAvailableModels() {
+    availableModels_.clear();
+    std::filesystem::path basePath("resources/Object");
+    if (!std::filesystem::exists(basePath) || !std::filesystem::is_directory(basePath)) return;
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(basePath)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".obj") {
+            std::string relativePath = std::filesystem::relative(entry.path(), "resources").string();
+            std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
+            availableModels_.push_back(relativePath);
+        }
     }
 }
 
@@ -128,7 +149,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (ext == ".txt" || ext == ".TXT") hasExt = true;
                     }
                     if (!hasExt) name += ".txt";
-                    std::string filepath = "json/" + name;
+                    std::string filepath = "resources/json/MapData/" + name;
                     mapChip->LoadFromFile(filepath);
                 }
             }
@@ -151,6 +172,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     }
     wasReplayingLastFrame = isReplayingNow;
 
+    isMapEditorVisible_ = false;
+
     // --- メインメニューバー ---
     if (ImGui::BeginMainMenuBar()) {
         // PLAY / STOP ボタン
@@ -161,6 +184,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::Button("再生 (PLAY)")) {
                 isPlaying_ = true;
                 useDebugCamera_ = false;
+                ImGui::SetWindowFocus("ゲームビュー");
+
+                // --- マップを一時保存（Stop時に復元するため） ---
+                if (sceneManager && sceneManager->GetCurrentScene()) {
+                    MapChip2D* mapChip = sceneManager->GetCurrentScene()->GetMapChip();
+                    if (mapChip) {
+                        mapDataStrToLoad_ = mapChip->GetMapDataAsString();
+                    }
+                }
             }
             ImGui::PopStyleColor(3);
         } else {
@@ -177,6 +209,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (ReplayManager::GetInstance()->IsPlaying()) {
                     ReplayManager::GetInstance()->StopPlayback();
                 }
+                
+                ImGui::SetWindowFocus("マップチップ画面");
+
+                // --- Stop時に一時保存したマップを復元するフラグを立てる ---
+                loadMapDataStrNextFrame_ = true;
+                sceneJustReset_ = true;
             }
             ImGui::PopStyleColor(3);
         }
@@ -220,7 +258,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.7f, 0.1f, 1.0f));
             if (ImGui::Button("操作切替 (TAKEOVER)")) {
-                replayMgr->StopPlayback();
+                replayMgr->TakeoverPlayback(); // 乗っ取り用の停止処理を呼ぶ
                 takeoverCountdown_ = 1.0f; // 1秒間のカウントダウンを開始
             }
             ImGui::PopStyleColor(3);
@@ -260,6 +298,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_);
             ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_);
             ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_);
+            ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_);
             ImGui::MenuItem("リプレイマネージャー", nullptr, &showReplayManager_);
             ImGui::Separator();
             if (ImGui::MenuItem("レイアウトをリセット")) {
@@ -320,7 +359,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             // 各ウィンドウを各ノードに割り当てる（※ウィンドウのタイトル文字列と完全一致させる必要があります）
             ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
-            ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
+            ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
             ImGui::DockBuilderDockWindow("リプレイマネージャー", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
             ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
@@ -350,6 +390,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // 中央寄せ
                 ImVec2 currentPos = ImGui::GetCursorPos();
                 ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+                gameViewPos_ = ImGui::GetCursorScreenPos();
+                gameViewSize_ = imageSize;
                 ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
             }
         }
@@ -408,7 +450,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Inspector ウィンドウ ---
     if (showInspector_) {
         if (ImGui::Begin("インスペクター", &showInspector_)) {
-            if (selectedObject_ || selectedParticle_ || selectedPrimitive_) {
+            bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9));
+            if (selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
@@ -416,6 +459,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
+                    mapEditorSelectedTool_ = 0;
                 }
                 ImGui::PopStyleColor(3);
                 ImGui::Spacing();
@@ -430,6 +474,147 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             } else if (selectedPrimitive_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
             } else {
+                IScene *activeScene = sceneManager->GetCurrentScene();
+                bool handled = false;
+                if (activeScene) {
+                    MapChip2D* mapChip = activeScene->GetMapChip();
+                    if (mapChip && (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9))) {
+                        // ブロックの設定を表示
+                        MapChip2D::CustomBlockDef* targetDef = nullptr;
+                        bool isTemplate = false;
+                        bool changed = false;
+
+                        if (mapEditorSelectedTool_ >= 100) {
+                            auto& palette = mapChip->GetCustomPalette();
+                            for (auto& def : palette) {
+                                if (def.id == mapEditorSelectedTool_) {
+                                    targetDef = &def;
+                                    break;
+                                }
+                            }
+                        } else {
+                            auto& templates = mapChip->GetTemplatePalette();
+                            for (auto& def : templates) {
+                                if (def.id == mapEditorSelectedTool_) {
+                                    targetDef = &def;
+                                    isTemplate = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (targetDef) {
+                            handled = true;
+                            if (isTemplate) {
+                                ImGui::Text("Template Settings (ID: %d)", targetDef->id);
+                            } else {
+                                ImGui::Text("Custom Block Settings (ID: %d)", targetDef->id);
+                            }
+                            
+                            char nameBuf[256];
+                            strcpy_s(nameBuf, sizeof(nameBuf), targetDef->name.c_str());
+                            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+                                targetDef->name = nameBuf;
+                                changed = true;
+                            }
+
+                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock" };
+                            int currentType = -1;
+                            for (int i = 0; i < 8; ++i) {
+                                if (targetDef->type == types[i]) {
+                                    currentType = i;
+                                    break;
+                                }
+                            }
+                            if (ImGui::Combo("Type", &currentType, types, 8)) {
+                                targetDef->type = types[currentType];
+                                changed = true;
+                                // デフォルトプロパティを設定
+                                if (targetDef->type == "JumpBlock") {
+                                    targetDef->properties["jumpVelocity"] = 15.0f;
+                                } else if (targetDef->type == "LiftBlock") {
+                                    targetDef->properties["speed"] = 2.0f;
+                                    targetDef->properties["direction"] = "horizontal";
+                                    targetDef->properties["range"] = 10.0f;
+                                } else {
+                                    targetDef->properties = nlohmann::json::object(); // リセット
+                                }
+                            }
+
+                            float col[4] = { targetDef->color.x, targetDef->color.y, targetDef->color.z, targetDef->color.w };
+                            if (ImGui::ColorEdit4("Color", col)) {
+                                targetDef->color = { col[0], col[1], col[2], col[3] };
+                                changed = true;
+                            }
+
+                            float scale[3] = { targetDef->scale.x, targetDef->scale.y, targetDef->scale.z };
+                            if (ImGui::DragFloat3("Scale", scale, 0.01f)) {
+                                targetDef->scale = { scale[0], scale[1], scale[2] };
+                                changed = true;
+                            }
+
+                            if (ImGui::BeginCombo("Model", targetDef->modelName.empty() ? "None" : targetDef->modelName.c_str())) {
+                                bool isNoneSelected = targetDef->modelName.empty();
+                                if (ImGui::Selectable("None", isNoneSelected)) {
+                                    targetDef->modelName = "";
+                                    changed = true;
+                                }
+                                if (isNoneSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                                for (const auto& modelPath : availableModels_) {
+                                    bool isSelected = (targetDef->modelName == modelPath);
+                                    if (ImGui::Selectable(modelPath.c_str(), isSelected)) {
+                                        targetDef->modelName = modelPath;
+                                        changed = true;
+                                    }
+                                    if (isSelected) {
+                                        ImGui::SetItemDefaultFocus();
+                                    }
+                                }
+                                ImGui::EndCombo();
+                            }
+
+                            ImGui::Separator();
+                            ImGui::Text("Properties:");
+                            for (auto& [key, value] : targetDef->properties.items()) {
+                                if (value.is_number_float()) {
+                                    float v = value.get<float>();
+                                    if (ImGui::DragFloat(key.c_str(), &v, 0.1f)) {
+                                        value = v;
+                                        changed = true;
+                                    }
+                                } else if (value.is_string()) {
+                                    std::string v = value.get<std::string>();
+                                    char buf[256];
+                                    strcpy_s(buf, sizeof(buf), v.c_str());
+                                    if (ImGui::InputText(key.c_str(), buf, sizeof(buf))) {
+                                        value = buf;
+                                        changed = true;
+                                    }
+                                } else if (value.is_boolean()) {
+                                    bool v = value.get<bool>();
+                                    if (ImGui::Checkbox(key.c_str(), &v)) {
+                                        value = v;
+                                        changed = true;
+                                    }
+                                }
+                            }
+
+                            static bool autoApply = true;
+                            ImGui::Checkbox("Auto Apply", &autoApply);
+
+                            if (ImGui::Button("変更を適用 (Apply & Rebuild)") || (autoApply && changed)) {
+                                if (isTemplate) {
+                                    mapChip->SaveTemplatesToFile("resources/json/templates_config.json");
+                                }
+                                mapChip->RebuildChipObjects();
+                            }
+                        }
+                    }
+                }
+                
+                if (!handled) {
                 ImGui::Text("グローバル表示設定");
                 ImGui::Separator();
                 ImGui::Checkbox("オブジェクトを表示 (モデル)", &showObjects_);
@@ -511,6 +696,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                 ImGui::Separator();
                 ImGui::Checkbox("フォグエフェクトを有効化", &enableFog);
+                }
             }
 
             // アクティブなシーン特有のImGui描画（独立ウィンドウや追加インスペクターなど）を呼び出す
@@ -781,112 +967,267 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Map Editor ウィンドウ ---
     if (showMapEditor_) {
         if (ImGui::Begin("マップチップ画面", &showMapEditor_)) {
+            isMapEditorVisible_ = true;
+
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
                 MapChip2D* mapChip = activeScene->GetMapChip();
                 if (mapChip) {
-                    // 静的変数
-                    static int inputWidth = -1;
-                    static int inputHeight = -1;
-
-                    if (inputWidth == -1) {
-                        inputWidth = mapChip->GetWidth();
+                    // サブ画面描画 (GameViewと同様の処理)
+                    ImVec2 contentSize = ImGui::GetContentRegionAvail();
+                    if (contentSize.x < 100.0f) contentSize.x = 100.0f;
+                    if (contentSize.y < 100.0f) contentSize.y = 100.0f;
+                    
+                    float aspect = 1280.0f / 720.0f;
+                    float windowAspect = contentSize.x / contentSize.y;
+                    ImVec2 imageSize;
+                    if (windowAspect > aspect) {
+                        imageSize.y = contentSize.y;
+                        imageSize.x = contentSize.y * aspect;
+                    } else {
+                        imageSize.x = contentSize.x;
+                        imageSize.y = contentSize.x / aspect;
                     }
-                    if (inputHeight == -1) {
-                        inputHeight = mapChip->GetHeight();
-                    }
+                    // 中央寄せ
+                    ImVec2 currentPos = ImGui::GetCursorPos();
+                    ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+                    
+                    ImVec2 imageScreenPos = ImGui::GetCursorScreenPos();
+                    
+                    // GameViewの描画と同じテクスチャを表示
+                    ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
 
-                    // ペイントツール選択
-                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
-                    ImGui::Text("ペイントツール:");
-                    ImGui::Spacing();
-
-                    struct ToolIcon {
-                        int id;
-                        const char* name;
-                        ImVec4 color;
-                        float scale; // 実際のモデルに合わせたサイズ比率
-                    };
-
-                    ToolIcon tools[] = {
-                        { 0, "消去", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f },
-                        { 1, "ブロック", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
-                        { 2, "デス", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
-                        { 3, "ゴール",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
-                        { 4, "コイン",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f } // コインは実際のモデルが0.5倍なので合わせる
-                    };
-
-                    int numTools = sizeof(tools) / sizeof(tools[0]);
-                    float itemSize = 64.0f; // アイコン枠のサイズ
-                    float padding = 8.0f;
-                    float totalHeight = itemSize + 24.0f; // アイコン＋テキスト
-                    float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
-                    float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-
-                    for (int i = 0; i < numTools; i++) {
-                        ImGui::PushID(i);
-                        ToolIcon& tool = tools[i];
-
-                        ImVec2 p = ImGui::GetCursorScreenPos();
-                        bool isSelected = (selectedTool == tool.id);
-
-                        // 当たり判定 (InvisibleButton)
-                        if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
-                            selectedTool = tool.id;
-                        }
-
-                        bool isHovered = ImGui::IsItemHovered();
-                        ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-                        // 背景 (ホバー時)
-                        if (isHovered) {
-                            drawList->AddRectFilled(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(80, 80, 80, 255), 4.0f);
-                        }
-
-                        // アイコン (四角形 - スケールを適用)
-                        float iconPadding = 4.0f;
-                        float actualIconSize = (itemSize - iconPadding * 2) * tool.scale;
-                        // 中央揃えにするためのオフセット計算
-                        float offset = (itemSize - actualIconSize) * 0.5f;
-
-                        ImVec2 iconMin = ImVec2(p.x + offset, p.y + offset);
-                        ImVec2 iconMax = ImVec2(p.x + offset + actualIconSize, p.y + offset + actualIconSize);
+                    // 1マスのグリッドを描画する
+                    Camera* camera = *activeCamera;
+                    if (camera) {
+                        Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                         
-                        // Erase(0) の場合は枠線だけにする、それ以外は塗りつぶし
-                        if (tool.id == 0) {
-                            drawList->AddRect(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f, 0, 2.0f);
+                        auto WorldToScreen = [&](float wx, float wy) -> ImVec2 {
+                            Vector3 ndc = TransformFunctions::Transform({wx, wy, 0.0f}, viewProj);
+                            float screenX = imageScreenPos.x + (ndc.x + 1.0f) * 0.5f * imageSize.x;
+                            float screenY = imageScreenPos.y + (1.0f - ndc.y) * 0.5f * imageSize.y;
+                            return ImVec2(screenX, screenY);
+                        };
+
+                        ImDrawList* drawList = ImGui::GetWindowDrawList();
+                        int mapWidth = mapChip->GetWidth();
+                        int mapHeight = mapChip->GetHeight();
+                        
+                        // 画像外にはみ出ないようにクリッピング
+                        drawList->PushClipRect(imageScreenPos, ImVec2(imageScreenPos.x + imageSize.x, imageScreenPos.y + imageSize.y), true);
+
+                        // 縦線
+                        for (int x = 0; x <= mapWidth; ++x) {
+                            ImVec2 p1 = WorldToScreen(static_cast<float>(x), 0.0f);
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(x), static_cast<float>(mapHeight));
+                            drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
+                        }
+                        
+                        // 横線
+                        for (int y = 0; y <= mapHeight; ++y) {
+                            ImVec2 p1 = WorldToScreen(0.0f, static_cast<float>(y));
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), static_cast<float>(y));
+                            drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
+                        }
+
+                        // ルーム境界線の描画（フリップスクロールのトリガーライン）
+                        const auto& bx = mapChip->GetBoundaryX();
+                        const auto& by = mapChip->GetBoundaryY();
+
+                        // 縦のルーム境界線
+                        for (size_t i = 0; i < bx.size(); ++i) {
+                            float rx = bx[i];
+                            ImVec2 p1 = WorldToScreen(rx, 0.0f);
+                            ImVec2 p2 = WorldToScreen(rx, static_cast<float>(mapHeight));
+                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexX_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
+                            drawList->AddLine(p1, p2, color, 3.0f);
+                        }
+                        
+                        // 横のルーム境界線
+                        for (size_t i = 0; i < by.size(); ++i) {
+                            float ry = by[i];
+                            ImVec2 p1 = WorldToScreen(0.0f, ry);
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), ry);
+                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexY_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
+                            drawList->AddLine(p1, p2, color, 3.0f);
+                        }
+                        
+                        drawList->PopClipRect();
+                    }
+                    
+                    // クリック判定用の見えないボタン
+                    ImGui::SetCursorScreenPos(imageScreenPos);
+                    ImGui::InvisibleButton("MapCanvasImage", imageSize);
+                    isMapEditorHovered_ = ImGui::IsItemHovered();
+                    
+                    if (isMapEditorHovered_) {
+                        ImVec2 mousePos = ImGui::GetIO().MousePos;
+                        float localX = mousePos.x - imageScreenPos.x;
+                        float localY = mousePos.y - imageScreenPos.y;
+                        
+                        float u = localX / imageSize.x;
+                        float v = localY / imageSize.y;
+                        
+                        float ndcX = u * 2.0f - 1.0f;
+                        float ndcY = 1.0f - v * 2.0f;
+                        
+                        Camera* camera = *activeCamera;
+                        Vector3 worldPos = {0,0,0};
+                        if (camera) {
+                            Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                            Matrix4x4 invViewProj = TransformFunctions::Inverse(viewProj);
+                            worldPos = TransformFunctions::Transform({ndcX, ndcY, 0.0f}, invViewProj);
+                        }
+
+                        if (isBoundaryEditMode_) {
+                            float hitDist = 0.5f; // 当たり判定の距離（ワールド座標基準）
+                            auto& bx = mapChip->GetBoundaryX();
+                            auto& by = mapChip->GetBoundaryY();
+
+                            // ドラッグ開始判定
+                            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                                draggingBoundaryIndexX_ = -1;
+                                draggingBoundaryIndexY_ = -1;
+
+                                // X軸の線の当たり判定
+                                for (size_t i = 0; i < bx.size(); ++i) {
+                                    if (std::abs(worldPos.x - bx[i]) < hitDist) {
+                                        draggingBoundaryIndexX_ = static_cast<int>(i);
+                                        break;
+                                    }
+                                }
+                                // Y軸の線の当たり判定（Xと独立して判定し、両方ヒット＝交点とする）
+                                for (size_t i = 0; i < by.size(); ++i) {
+                                    if (std::abs(worldPos.y - by[i]) < hitDist) {
+                                        draggingBoundaryIndexY_ = static_cast<int>(i);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // 左ドラッグ（マス目スナップ）
+                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                                float snapX = std::round(worldPos.x);
+                                float snapY = std::round(worldPos.y);
+                                if (draggingBoundaryIndexX_ != -1) {
+                                    bx[draggingBoundaryIndexX_] = std::clamp(snapX, 0.0f, static_cast<float>(mapChip->GetWidth()));
+                                }
+                                if (draggingBoundaryIndexY_ != -1) {
+                                    by[draggingBoundaryIndexY_] = std::clamp(snapY, 0.0f, static_cast<float>(mapChip->GetHeight()));
+                                }
+                            }
+                            
+                            // 右ドラッグ（自由移動）
+                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+                                if (draggingBoundaryIndexX_ != -1) {
+                                    bx[draggingBoundaryIndexX_] = std::clamp(worldPos.x, 0.0f, static_cast<float>(mapChip->GetWidth()));
+                                }
+                                if (draggingBoundaryIndexY_ != -1) {
+                                    by[draggingBoundaryIndexY_] = std::clamp(worldPos.y, 0.0f, static_cast<float>(mapChip->GetHeight()));
+                                }
+                            }
+
+                            // リリース時の判定（追加または削除、並び替え）
+                            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+                                bool isLeft = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+                                ImGuiMouseButton btn = isLeft ? ImGuiMouseButton_Left : ImGuiMouseButton_Right;
+                                
+                                // ドラッグしていたか？
+                                ImVec2 dragDelta = ImGui::GetMouseDragDelta(btn);
+                                bool wasDragging = (std::abs(dragDelta.x) > 1.0f || std::abs(dragDelta.y) > 1.0f);
+
+                                if (wasDragging) {
+                                    // 移動終了、並び替えのみ
+                                    std::sort(bx.begin(), bx.end());
+                                    std::sort(by.begin(), by.end());
+                                } else {
+                                    // クリック操作
+                                    int hitX = -1, hitY = -1;
+                                    for (size_t i = 0; i < bx.size(); ++i) {
+                                        if (std::abs(worldPos.x - bx[i]) < hitDist) hitX = static_cast<int>(i);
+                                    }
+                                    for (size_t i = 0; i < by.size(); ++i) {
+                                        if (std::abs(worldPos.y - by[i]) < hitDist) hitY = static_cast<int>(i);
+                                    }
+
+                                    if (hitX != -1 || hitY != -1) {
+                                        if (ImGui::GetIO().KeyCtrl) {
+                                            // Ctrl+クリックで削除（交点の場合は両方削除）
+                                            if (hitX != -1) bx.erase(bx.begin() + hitX);
+                                            if (hitY != -1) by.erase(by.begin() + hitY);
+                                        }
+                                    } else {
+                                        // 追加
+                                        float addX = isLeft ? std::round(worldPos.x) : worldPos.x;
+                                        float addY = isLeft ? std::round(worldPos.y) : worldPos.y;
+                                        if (boundaryAddMode_ == 0 || boundaryAddMode_ == 2) {
+                                            bx.push_back(addX);
+                                            std::sort(bx.begin(), bx.end());
+                                        }
+                                        if (boundaryAddMode_ == 1 || boundaryAddMode_ == 2) {
+                                            by.push_back(addY);
+                                            std::sort(by.begin(), by.end());
+                                        }
+                                    }
+                                }
+
+                                draggingBoundaryIndexX_ = -1;
+                                draggingBoundaryIndexY_ = -1;
+                            }
                         } else {
-                            drawList->AddRectFilled(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f);
-                        }
-
-                        // テキスト
-                        ImVec2 textSize = ImGui::CalcTextSize(tool.name);
-                        ImVec2 textPos = ImVec2(p.x + (itemSize - textSize.x) * 0.5f, p.y + itemSize + 2.0f);
-                        drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), tool.name);
-
-                        // 選択中の黄色の枠線
-                        if (isSelected) {
-                            drawList->AddRect(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(255, 255, 0, 255), 4.0f, 0, 2.0f);
-                        }
-
-                        ImGui::PopID();
-
-                        // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
-                        float lastButtonX2 = ImGui::GetItemRectMax().x;
-                        float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
-                        if (i + 1 < numTools && nextButtonX2 < windowVisibleX) {
-                            ImGui::SameLine();
+                            // 既存のペイントツール処理
+                            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                                if (camera) {
+                                    int mapWidth = mapChip->GetWidth();
+                                    int mapHeight = mapChip->GetHeight();
+                                    int gridX = mapChip->WorldToChipX(worldPos.x);
+                                    int gridY = mapChip->WorldToChipY(worldPos.y);
+                                    
+                                    if (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight) {
+                                        // 1〜9(Basic Tools) は設定・テンプレート専用なのでマップには配置できない
+                                        if (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ >= 100) {
+                                            if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
+                                                mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                    ImGui::Spacing();
 
-                    ImGui::Separator();
+                } else {
+                    ImGui::Text("Active scene does not support 2D map editing.");
+                }
+            } else {
+                ImGui::Text("No active scene.");
+            }
+        }
+        ImGui::End();
+    }
 
+    // --- マップ設定 ウィンドウ ---
+    if (showMapSettings_) {
+        if (ImGui::Begin("マップ設定", &showMapSettings_)) {
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                MapChip2D* mapChip = activeScene->GetMapChip();
+                if (mapChip) {
+                    if (mapEditorInputWidth_ == -1) {
+                        mapEditorInputWidth_ = mapChip->GetWidth();
+                    }
+                    if (mapEditorInputHeight_ == -1) {
+                        mapEditorInputHeight_ = mapChip->GetHeight();
+                    }
+
+                    // ==========================================
+                    // ここから移動してきたマップ設定（ファイル・サイズ）
+                    // ==========================================
                     // json ディレクトリ内の .txt ファイルを自動走査
                     std::vector<std::string> stageFiles;
                     try {
-                        if (std::filesystem::exists("json")) {
-                            for (const auto& entry : std::filesystem::directory_iterator("json")) {
+                        if (std::filesystem::exists("resources/json/MapData")) {
+                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/MapData")) {
                                 if (entry.is_regular_file()) {
                                     std::string filename = entry.path().filename().string();
                                     if (filename.length() >= 4) {
@@ -937,20 +1278,24 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // ファイル名入力
                     ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_));
 
+                    ImGui::Spacing();
+                    ImGui::Text("マップサイズ設定 (1画面＝ 幅:20, 高さ:11)");
+                    ImGui::TextDisabled("※ 画面を増やしたい場合はサイズを広げてください");
+                    
                     // マップサイズ入力と適用ボタン
                     ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("幅", &inputWidth);
+                    ImGui::InputInt("Width", &mapEditorInputWidth_);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("高さ", &inputHeight);
+                    ImGui::InputInt("Height", &mapEditorInputHeight_);
                     ImGui::SameLine();
-                    if (ImGui::Button("サイズを適用")) {
-                        if (inputWidth < 1) inputWidth = 1;
-                        if (inputHeight < 1) inputHeight = 1;
-                        mapChip->Resize(inputWidth, inputHeight);
+                    if (ImGui::Button("Apply Size")) {
+                        if (mapEditorInputWidth_ < 1) mapEditorInputWidth_ = 1;
+                        if (mapEditorInputHeight_ < 1) mapEditorInputHeight_ = 1;
+                        mapChip->Resize(mapEditorInputWidth_, mapEditorInputHeight_);
                     }
 
-                    ImGui::Spacing();
+                    ImGui::Separator();
 
                     // ファイルパス取得用ラムダ（.txtの自動付与）
                     auto GetFullFilePath = [](const char* filename) {
@@ -965,7 +1310,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (!hasExt) {
                             name += ".txt";
                         }
-                        return std::string("json/") + name;
+                        return std::string("resources/json/MapData/") + name;
                     };
 
                     // 操作ボタン
@@ -975,8 +1320,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::SameLine();
                     if (ImGui::Button("読み込み")) {
                         if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
-                            inputWidth = mapChip->GetWidth();
-                            inputHeight = mapChip->GetHeight();
+                            mapEditorInputWidth_ = mapChip->GetWidth();
+                            mapEditorInputHeight_ = mapChip->GetHeight();
                         }
                     }
                     ImGui::SameLine();
@@ -986,83 +1331,270 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::SameLine();
                     if (ImGui::Button("初期化")) {
                         mapChip->ResetMap();
-                        inputWidth = mapChip->GetWidth();
-                        inputHeight = mapChip->GetHeight();
+                        mapEditorInputWidth_ = mapChip->GetWidth();
+                        mapEditorInputHeight_ = mapChip->GetHeight();
                     }
 
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    // ==========================================
+
+                    // 境界線（ルームトリガー）編集モード
+                    ImGui::Checkbox("境界線（トリガー）編集モード", &isBoundaryEditMode_);
+                    if (isBoundaryEditMode_) {
+                        ImGui::Text("追加モード: ");
+                        ImGui::SameLine();
+                        ImGui::RadioButton("縦線(横画面遷移用)", &boundaryAddMode_, 0); ImGui::SameLine();
+                        ImGui::RadioButton("横線(縦画面遷移用)", &boundaryAddMode_, 1); ImGui::SameLine();
+                        ImGui::RadioButton("両方(交点)", &boundaryAddMode_, 2);
+
+                        ImGui::TextDisabled("・左クリック(ドラッグ): マス目にスナップして追加・移動\n"
+                                            "・右クリック(ドラッグ): 自由に(スナップなしで)追加・移動\n"
+                                            "・交差している部分をドラッグすると両方同時に移動します\n"
+                                            "・線の上でCtrl + クリック: 線の削除");
+                    }
+                    ImGui::Spacing();
                     ImGui::Separator();
 
-                    // 2Dグリッド描画
-                    int mapWidth = mapChip->GetWidth();
-                    int mapHeight = mapChip->GetHeight();
-                    float buttonSize = 18.0f;
+                    // ペイントツール選択
+                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
+                    // ペイントツール選択 (境界線編集モード中は操作不可にするかグレーアウトする)
+                    ImGui::BeginDisabled(isBoundaryEditMode_);
+                    ImGui::Text("Paint Tool:");
+                    ImGui::Spacing();
 
-                    // ホバー色・アクティブ色を作成するラムダ
-                    auto MakeHoverColor = [](ImVec4 c) {
-                        return ImVec4((std::min)(c.x * 1.2f, 1.0f), (std::min)(c.y * 1.2f, 1.0f), (std::min)(c.z * 1.2f, 1.0f), c.w);
+                    struct ToolIcon {
+                        int id;
+                        std::string name;
+                        ImVec4 color;
+                        float scale; // 実際のモデルに合わせたサイズ比率
                     };
-                    auto MakeActiveColor = [](ImVec4 c) {
-                        return ImVec4(c.x * 0.8f, c.y * 0.8f, c.z * 0.8f, c.w);
+
+                    std::vector<ToolIcon> systemTools = {
+                        { 6, "Spawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f },
+                        { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f }
                     };
 
-                    // 横スクロールを可能にするために子ウィンドウを開始
-                    if (ImGui::BeginChild("MapGridScroll", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar)) {
-                        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
+                    std::vector<ToolIcon> templateTools = {
+                        { 1, "Block", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
+                        { 2, "Death", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
+                        { 3, "Goal",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
+                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f },
+                        { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f },
+                        { 7, "Lift",  ImVec4(0.9f, 0.6f, 0.1f, 1.0f), 1.0f },
+                        { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f },
+                        { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f }
+                    };
 
-                        // Y軸は下側が0なので、画面上は上から下に向かって Y を逆順 (Height-1 から 0) で描画
-                        for (int y = mapHeight - 1; y >= 0; --y) {
-                            for (int x = 0; x < mapWidth; ++x) {
-                                MapChip2D::ChipType cellType = mapChip->GetChip(x, y);
-                                std::string btnId = "##cell_" + std::to_string(x) + "_" + std::to_string(y);
+                    std::set<std::string> availableTypes;
+                    for (const auto& def : mapChip->GetCustomPalette()) {
+                        availableTypes.insert(def.type);
+                    }
 
-                                ImVec4 btnColor;
-                                if (cellType == MapChip2D::ChipType::kDeathBlock) {
-                                    btnColor = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);        // デスブロック: 赤色
-                                } else if (cellType == MapChip2D::ChipType::kGoal) {
-                                    btnColor = ImVec4(0.8f, 0.2f, 0.8f, 1.0f);        // ゴール: 紫色
-                                } else if (cellType == MapChip2D::ChipType::kCoin) {
-                                    btnColor = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);        // コイン: 金色
-                                } else if (cellType == MapChip2D::ChipType::kBlock) {
-                                    if (y <= 1) {
-                                        btnColor = ImVec4(0.55f, 0.35f, 0.17f, 1.0f); // 地面: 茶色
-                                    } else if (x == 0 || x == mapWidth - 1) {
-                                        btnColor = ImVec4(0.5f, 0.5f, 0.55f, 1.0f);   // 壁: 灰色
-                                    } else {
-                                        btnColor = ImVec4(0.3f, 0.7f, 0.3f, 1.0f);    // その他: 緑
-                                    }
+                    std::vector<ToolIcon> customTools;
+                    for (const auto& def : mapChip->GetCustomPalette()) {
+                        // customToolFilters_ は「非表示」にするタイプを格納するセットとして扱う
+                        if (customToolFilters_.find(def.type) != customToolFilters_.end()) {
+                            continue;
+                        }
+                        customTools.push_back({ def.id, def.name, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f });
+                    }
+
+                    float itemSize = 64.0f; // アイコン枠のサイズ
+                    float totalHeight = itemSize + 24.0f; // アイコン＋テキスト
+                    float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
+
+                    static int toolToDelete = -1;
+                    static bool openDeletePopup = false;
+
+                    // ツール描画用の共通ラムダ
+                    // sectionType: 0=System, 1=Template(Basic), 2=Custom
+                    auto DrawTools = [&](const std::vector<ToolIcon>& tools, int sectionType) {
+                        float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+                        int numTools = static_cast<int>(tools.size());
+                        // カスタムセクションの場合は最後に +追加 ボタンを描画するため +1 する
+                        int maxIter = (sectionType == 2) ? numTools + 1 : numTools;
+
+                        for (int i = 0; i < maxIter; i++) {
+                            ImGui::PushID(sectionType * 1000 + i);
+                            
+                            ImVec2 p = ImGui::GetCursorScreenPos();
+                            
+                            if (i < numTools) {
+                                const ToolIcon& tool = tools[i];
+                                bool isSelected = (mapEditorSelectedTool_ == tool.id);
+
+                                // 当たり判定 (InvisibleButton)
+                                ImGui::SetNextItemAllowOverlap();
+                                if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
+                                    mapEditorSelectedTool_ = tool.id;
+                                }
+
+                                bool isHovered = ImGui::IsItemHovered();
+                                ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+                                // 背景 (ホバー時)
+                                if (isHovered) {
+                                    drawList->AddRectFilled(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(80, 80, 80, 255), 4.0f);
+                                }
+
+                                // アイコン (四角形 - スケールを適用)
+                                float iconPadding = 4.0f;
+                                float actualIconSize = (itemSize - iconPadding * 2) * tool.scale;
+                                float offset = (itemSize - actualIconSize) * 0.5f;
+
+                                ImVec2 iconMin = ImVec2(p.x + offset, p.y + offset);
+                                ImVec2 iconMax = ImVec2(p.x + offset + actualIconSize, p.y + offset + actualIconSize);
+                                
+                                // Erase(0) の場合は枠線だけにする、それ以外は塗りつぶし
+                                if (tool.id == 0) {
+                                    drawList->AddRect(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f, 0, 2.0f);
                                 } else {
-                                    btnColor = ImVec4(0.15f, 0.15f, 0.15f, 0.5f);     // 空中: 暗い半透明
+                                    drawList->AddRectFilled(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f);
                                 }
 
-                                ImGui::PushStyleColor(ImGuiCol_Button, btnColor);
-                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, MakeHoverColor(btnColor));
-                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, MakeActiveColor(btnColor));
+                                // テキスト
+                                ImVec2 textSize = ImGui::CalcTextSize(tool.name.c_str());
+                                float textX = p.x + (itemSize - textSize.x) * 0.5f;
+                                drawList->AddText(ImVec2(textX, p.y + itemSize + 2.0f), IM_COL32(255, 255, 255, 255), tool.name.c_str());
 
-                                if (x > 0) {
-                                    ImGui::SameLine();
+                                // 選択中の黄色の枠線
+                                if (isSelected && sectionType != 1) { // テンプレートは選択状態の枠線を表示しない
+                                    drawList->AddRect(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(255, 255, 0, 255), 4.0f, 0, 2.0f);
                                 }
 
-                                ImVec2 pos = ImGui::GetCursorScreenPos();
-
-                                if (ImGui::Button(btnId.c_str(), ImVec2(buttonSize, buttonSize))) {
-                                    mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
-                                }
-
-                                ImVec2 mousePos = ImGui::GetIO().MousePos;
-                                if (ImGui::IsMouseDown(0) &&
-                                    mousePos.x >= pos.x && mousePos.x <= pos.x + buttonSize &&
-                                    mousePos.y >= pos.y && mousePos.y <= pos.y + buttonSize) {
-                                    if (mapChip->GetChip(x, y) != static_cast<MapChip2D::ChipType>(selectedTool)) {
-                                        mapChip->SetChip(x, y, static_cast<MapChip2D::ChipType>(selectedTool));
+                                // Custom Tools セクションの場合はドラッグ＆ドロップ並べ替えに対応
+                                if (sectionType == 2) {
+                                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                                        ImGui::SetDragDropPayload("DND_CUSTOM_TOOL", &tool.id, sizeof(int));
+                                        ImGui::Text("Move %s", tool.name.c_str());
+                                        ImGui::EndDragDropSource();
                                     }
+                                    if (ImGui::BeginDragDropTarget()) {
+                                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_CUSTOM_TOOL")) {
+                                            IM_ASSERT(payload->DataSize == sizeof(int));
+                                            int payload_id = *(const int*)payload->Data;
+                                            int target_id = tool.id;
+                                            
+                                            auto& palette = mapChip->GetCustomPalette();
+                                            int srcIdx = -1, dstIdx = -1;
+                                            for (size_t k = 0; k < palette.size(); ++k) {
+                                                if (palette[k].id == payload_id) srcIdx = static_cast<int>(k);
+                                                if (palette[k].id == target_id) dstIdx = static_cast<int>(k);
+                                            }
+                                            if (srcIdx != -1 && dstIdx != -1 && srcIdx != dstIdx) {
+                                                auto item = palette[srcIdx];
+                                                palette.erase(palette.begin() + srcIdx);
+                                                if (srcIdx < dstIdx) dstIdx--; // 要素が詰められる分を補正
+                                                palette.insert(palette.begin() + dstIdx, item);
+                                            }
+                                        }
+                                        ImGui::EndDragDropTarget();
+                                    }
+                                    
+                                    ImGui::SetCursorScreenPos(ImVec2(p.x + itemSize - 16.0f, p.y));
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+                                    if (ImGui::Button(("X##del_" + std::to_string(tool.id)).c_str(), ImVec2(16, 16))) {
+                                        toolToDelete = tool.id;
+                                        openDeletePopup = true;
+                                    }
+                                    ImGui::PopStyleVar();
+                                    ImGui::PopStyleColor();
                                 }
+                            } else if (sectionType == 2) {
+                                // "＋ 追加" ボタン
+                                if (ImGui::Button("＋\n追加", ImVec2(itemSize, totalHeight))) {
+                                    auto& palette = mapChip->GetCustomPalette();
+                                    MapChip2D::CustomBlockDef newDef;
+                                    newDef.id = 100 + static_cast<int>(palette.size());
+                                    newDef.name = "Custom " + std::to_string(palette.size() + 1);
+                                    newDef.type = "JumpBlock";
+                                    newDef.properties["jumpVelocity"] = 15.0f;
+                                    palette.push_back(newDef);
+                                    mapEditorSelectedTool_ = newDef.id; // 新しいものを選択状態にする
+                                    mapChip->SaveToFile(GetFullFilePath(stageFilename_));
+                                }
+                            }
 
-                                ImGui::PopStyleColor(3);
+                            ImGui::PopID();
+
+                            // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
+                            float lastButtonX2 = ImGui::GetItemRectMax().x;
+                            float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
+                            if (nextButtonX2 < windowVisibleX && i + 1 < maxIter) {
+                                ImGui::SameLine();
                             }
                         }
-                        ImGui::PopStyleVar();
-                        ImGui::EndChild();
+                        if (maxIter > 0) {
+                            ImGui::NewLine(); // 最後の項目の後に改行を入れる
+                        }
+                    };
+
+                    if (ImGui::CollapsingHeader("System Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        DrawTools(systemTools, 0);
                     }
+                    if (ImGui::CollapsingHeader("Basic Tools (Settings)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        ImGui::TextDisabled("※これらのブロックはマップ設定用のテンプレートです。（直接設置はできません）");
+                        DrawTools(templateTools, 1);
+                    }
+                    if (ImGui::CollapsingHeader("Custom Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (ImGui::Button("フィルター設定...")) {
+                            ImGui::OpenPopup("FilterPopup");
+                        }
+                        
+                        if (ImGui::BeginPopup("FilterPopup")) {
+                            ImGui::Text("表示するブロックの種類:");
+                            ImGui::Separator();
+                            for (const auto& type : availableTypes) {
+                                bool isChecked = (customToolFilters_.find(type) == customToolFilters_.end()); // 見つからなければ表示(true)
+                                if (ImGui::Checkbox(type.c_str(), &isChecked)) {
+                                    if (isChecked) {
+                                        customToolFilters_.erase(type); // チェックされた＝表示する＝非表示リストから削除
+                                    } else {
+                                        customToolFilters_.insert(type); // チェック外れた＝非表示リストに追加
+                                    }
+                                }
+                            }
+                            ImGui::Separator();
+                            if (ImGui::Button("閉じる", ImVec2(120, 0))) {
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::EndPopup();
+                        }
+                        ImGui::Spacing();
+
+                        DrawTools(customTools, 2);
+
+                        if (openDeletePopup) {
+                            ImGui::OpenPopup("DeleteConfirmPopup");
+                            openDeletePopup = false;
+                        }
+                        if (ImGui::BeginPopupModal("DeleteConfirmPopup", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                            ImGui::Text("本当に削除しますか？\n(マップ上で使用されている場合はエラーになる可能性があります)");
+                            ImGui::Separator();
+                            if (ImGui::Button("はい", ImVec2(120, 0))) {
+                                auto& palette = mapChip->GetCustomPalette();
+                                auto it = std::remove_if(palette.begin(), palette.end(), [&](const MapChip2D::CustomBlockDef& d) { return d.id == toolToDelete; });
+                                palette.erase(it, palette.end());
+                                mapChip->SaveToFile(GetFullFilePath(stageFilename_));
+                                toolToDelete = -1;
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::SetItemDefaultFocus();
+                            ImGui::SameLine();
+                            if (ImGui::Button("いいえ", ImVec2(120, 0))) {
+                                toolToDelete = -1;
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::EndPopup();
+                        }
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::EndDisabled();
+
+                    // 2Dグリッド描画のUIは削除されました
                 } else {
                     ImGui::Text("現在のアクティブシーンは2Dマップ編集をサポートしていません。");
                 }
@@ -1096,63 +1628,121 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::BeginTabBar("ReplayTabBar")) {
                 // --- タブ1：履歴・保存リスト ---
                 if (ImGui::BeginTabItem("履歴・保存リスト")) {
-                    ImGui::Text("過去のプレイ履歴 (直近3回分)");
-                    ImGui::Separator();
-                    
                     const auto& history = replayMgr->GetHistory();
-                    if (history.empty()) {
-                        ImGui::Text("履歴データはありません。");
-                    } else {
-                        for (size_t i = 0; i < history.size(); ++i) {
-                            ImGui::PushID(static_cast<int>(i));
-                            ImGui::Text("履歴 #%d (%s) - %d F", static_cast<int>(i + 1), history[i].dateStr.c_str(), history[i].totalFrames);
-                            
-                            if (ImGui::Button("再生")) {
-                                replayMgr->StartPlayback(static_cast<int>(i));
-                                useDebugCamera_ = false;
-                                
-                                // リプレイのマップ情報があればロードする
-                                std::string rMapStr = history[i].mapDataStr;
-                                std::string rMap = history[i].stageFilename;
-                                if (!rMapStr.empty()) {
-                                    mapDataStrToLoad_ = rMapStr;
-                                    loadMapDataStrNextFrame_ = true;
-                                    sceneJustReset_ = true;
-                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
-                                } else if (!rMap.empty()) {
-                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
-                                    // シーンリセットフラグを立てて次のフレームでマップを復元させる
-                                    sceneJustReset_ = true;
+                    
+                    // TreeNodeEx で階層化（デフォルト開く）
+                    if (ImGui::TreeNodeEx("一時履歴データ (未保存)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (history.empty()) {
+                            ImGui::Text("履歴データはありません。");
+                        } else {
+                            // 再帰的にツリーを描画するラムダ式
+                            std::function<void(int)> DrawHistoryNode = [&](int parentId) {
+                                for (size_t i = 0; i < history.size(); ++i) {
+                                    bool isRoot = false;
+                                    if (parentId == -1) {
+                                        isRoot = (history[i].parentId == -1);
+                                        if (!isRoot) {
+                                            bool parentExists = false;
+                                            for (const auto& h : history) {
+                                                if (h.id == history[i].parentId) {
+                                                    parentExists = true; break;
+                                                }
+                                            }
+                                            if (!parentExists) isRoot = true; // 親が消えている場合はルート扱い
+                                        }
+                                    }
+
+                                    if ((parentId == -1 && isRoot) || (parentId != -1 && history[i].parentId == parentId)) {
+                                        ImGui::PushID(static_cast<int>(i));
+
+                                        bool hasChild = false;
+                                        for (const auto& h : history) {
+                                            if (h.parentId == history[i].id) { hasChild = true; break; }
+                                        }
+
+                                        bool nodeOpen = true;
+                                        if (isRoot) {
+                                            ImGui::BulletText("履歴 #%d (%s) - %d F", history[i].id, history[i].dateStr.c_str(), history[i].totalFrames);
+                                        } else {
+                                            nodeOpen = ImGui::TreeNodeEx((void*)(intptr_t)history[i].id, ImGuiTreeNodeFlags_DefaultOpen, "履歴 #%d (%s) - %d F", history[i].id, history[i].dateStr.c_str(), history[i].totalFrames);
+                                        }
+
+                                        if (nodeOpen) {
+                                            // インデントしてボタン類を描画（ルートの場合は自動インデントがないので手動）
+                                            if (isRoot) ImGui::Indent();
+                                            
+                                            if (ImGui::Button("再生")) {
+                                                replayMgr->StartPlayback(static_cast<int>(i));
+                                                useDebugCamera_ = false;
+
+                                                // リプレイのマップ情報があればロードする
+                                                std::string rMapStr = history[i].mapDataStr;
+                                                std::string rMap = history[i].stageFilename;
+                                                if (!rMapStr.empty()) {
+                                                    mapDataStrToLoad_ = rMapStr;
+                                                    loadMapDataStrNextFrame_ = true;
+                                                    sceneJustReset_ = true;
+                                                    if (!rMap.empty()) strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                                } else if (!rMap.empty()) {
+                                                    strcpy_s(stageFilename_, sizeof(stageFilename_), rMap.c_str());
+                                                    sceneJustReset_ = true;
+                                                }
+                                            }
+
+                                            ImGui::SameLine();
+                                            if (ImGui::Button("選択(残像表示)")) {
+                                                replayMgr->SelectReplay(static_cast<int>(i));
+                                            }
+
+                                            ImGui::SameLine();
+                                            static char fileNameBuf[10][64] = {};
+                                            if (fileNameBuf[i][0] == '\0') {
+                                                sprintf_s(fileNameBuf[i], "replay_history_%d", history[i].id);
+                                            }
+                                            ImGui::SetNextItemWidth(150.0f);
+                                            ImGui::InputText("##Name", fileNameBuf[i], IM_ARRAYSIZE(fileNameBuf[i]));
+
+                                            ImGui::SameLine();
+                                            if (ImGui::Button("★ 永久保存")) {
+                                                std::string fname = fileNameBuf[i];
+                                                if (fname.find(".mml") == std::string::npos) fname += ".mml";
+                                                replayMgr->SaveToFile(history[i], fname);
+                                            }
+                                            
+                                            if (isRoot) ImGui::Unindent();
+
+                                            // 子要素の描画
+                                            bool hasChild = false;
+                                            for (const auto& h : history) {
+                                                if (h.parentId == history[i].id) { hasChild = true; break; }
+                                            }
+
+                                            if (hasChild) {
+                                                if (isRoot) ImGui::Indent();
+                                                DrawHistoryNode(history[i].id);
+                                                if (isRoot) ImGui::Unindent();
+                                            }
+                                            
+                                            if (!isRoot) {
+                                                ImGui::TreePop();
+                                            }
+                                        }
+                                        
+                                        ImGui::PopID();
+                                        if (isRoot) ImGui::Spacing();
+                                    }
                                 }
-                            }
-                            
-                            ImGui::SameLine();
-                            if (ImGui::Button("選択(残像表示)")) {
-                                replayMgr->SelectReplay(static_cast<int>(i));
-                            }
-                            
-                            ImGui::SameLine();
-                            static char fileNameBuf[3][64] = {};
-                            if (fileNameBuf[i][0] == '\0') {
-                                sprintf_s(fileNameBuf[i], "replay_history_%d", static_cast<int>(i + 1));
-                            }
-                            ImGui::SetNextItemWidth(150.0f);
-                            ImGui::InputText("##Name", fileNameBuf[i], IM_ARRAYSIZE(fileNameBuf[i]));
-                            
-                            ImGui::SameLine();
-                            if (ImGui::Button("★ 永久保存")) {
-                                std::string fname = fileNameBuf[i];
-                                if (fname.find(".mml") == std::string::npos) fname += ".mml";
-                                replayMgr->SaveToFile(history[i], fname);
-                            }
-                            ImGui::PopID();
-                            ImGui::Spacing();
+                            };
+
+                            // ルート要素（parentId == -1 に相当するもの）の描画を開始
+                            DrawHistoryNode(-1);
                         }
+                        ImGui::TreePop();
                     }
 
                     ImGui::Spacing();
-                    ImGui::Text("永久保存済みリプレイ一覧");
                     ImGui::Separator();
+                    ImGui::Spacing();
 
                     const auto& saved = replayMgr->GetSavedList();
                     if (saved.empty()) {
@@ -1163,7 +1753,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::Text("📁 %s", saved[i].c_str());
                             
                             if (ImGui::Button("ロード再生")) {
-                                replayMgr->StartPlayback(-1, "json/saved_replays/" + saved[i]);
+                                replayMgr->StartPlayback(-1, "resources/json/saved_replays/" + saved[i]);
                                 useDebugCamera_ = false;
                                 
                                 // リプレイのマップ情報があればロードする
@@ -1183,7 +1773,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             
                             ImGui::SameLine();
                             if (ImGui::Button("選択(残像表示)")) {
-                                replayMgr->SelectReplay(-1, "json/saved_replays/" + saved[i]);
+                                replayMgr->SelectReplay(-1, "resources/json/saved_replays/" + saved[i]);
                             }
                             
                             ImGui::SameLine();
@@ -1250,6 +1840,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                 // --- タブ3：タイムラインエディタ (TAS) ---
                 if (ImGui::BeginTabItem("タイムラインエディタ")) {
+                    static char saveNameBuf[64] = "edited_replay.mml";
+                    static int rangeStart = -1;
+                    static int rangeEnd = -1;
+                    static bool isSelecting = false;
+                    
                     auto& activeReplay = replayMgr->GetCurrentReplay();
                     if (activeReplay.totalFrames == 0) {
                         ImGui::Text("編集対象のリプレイデータがロードされていません。");
@@ -1259,7 +1854,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Text("総フレーム: %d | 録画日時: %s", activeReplay.totalFrames, activeReplay.dateStr.c_str());
                         ImGui::Spacing();
 
-                        static char saveNameBuf[64] = "edited_replay.mml";
                         ImGui::Text("編集後保存名:");
                         ImGui::SetNextItemWidth(200.0f);
                         ImGui::InputText("##SaveName", saveNameBuf, IM_ARRAYSIZE(saveNameBuf));
@@ -1272,17 +1866,49 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                         ImGui::Spacing();
                         ImGui::Separator();
-                        ImGui::Text("▼ カスタムシークバー (右ドラッグで範囲選択)");
+                        ImGui::Text("▼ カスタムシークバー (右ドラッグで範囲選択 / Ctrl+ホイールでズーム)");
                         
                         // 1. 表示するキーの選択
                         static int selectedKeyToVisualize = 0; // Default to Left
                         const char* keyNames[] = { "Left (L)", "Right (R)", "Jump (J)", "Dash (D)", "Cling (C)", "Up (W)", "Down (S)" };
                         ImGui::Combo("対象キー", &selectedKeyToVisualize, keyNames, IM_ARRAYSIZE(keyNames));
                         
+                        static float seekbarZoom = 1.0f;
+
+                        // Ctrl + ホイールでズーム
+                        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl) {
+                            float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f) {
+                                // ズーム倍率の変更
+                                float oldZoom = seekbarZoom;
+                                seekbarZoom += wheel * 0.1f * seekbarZoom; // 倍率に応じたズーム速度
+                                if (seekbarZoom < 0.1f) seekbarZoom = 0.1f;
+                                if (seekbarZoom > 100.0f) seekbarZoom = 100.0f;
+                            }
+                        }
+
+                        // 選択されたブロックの保持用（スコープを外に出す）
+                        static int selectedBlockStart = -1;
+                        static int selectedBlockEnd = -1;
+                        static int selectedBlockKey = -1;
+
+                        int k = selectedKeyToVisualize;
+                        if (selectedBlockKey != k) {
+                            selectedBlockStart = -1;
+                            selectedBlockEnd = -1;
+                            selectedBlockKey = k;
+                        }
+
+                        // (3) 範囲選択ロジック用の状態
+
+
+                        ImGui::BeginChild("SeekbarScrollRegion", ImVec2(0, 60), false, ImGuiWindowFlags_HorizontalScrollbar);
                         // カスタムシークバー描画
                         ImVec2 p_min = ImGui::GetCursorScreenPos();
-                        float width = ImGui::GetContentRegionAvail().x;
-                        if (width <= 0) width = 200.0f;
+                        // ImGui::GetWindowWidth() は BeginChild 内だと利用可能な幅（スクロールなし時）
+                        float baseWidth = ImGui::GetWindowWidth(); 
+                        float width = baseWidth * seekbarZoom;
+                        if (width < 200.0f) width = 200.0f;
                         float height = 40.0f;
                         ImVec2 p_max = ImVec2(p_min.x + width, p_min.y + height);
 
@@ -1292,40 +1918,111 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                         ImDrawList* drawList = ImGui::GetWindowDrawList();
                         
-                        int maxFrame = activeReplay.totalFrames - 1;
-                        if (maxFrame < 1) maxFrame = 1;
+                        int totalFrames = activeReplay.totalFrames;
+                        if (totalFrames < 1) totalFrames = 1;
+                        int maxFrame = totalFrames - 1;
 
                         // (1) 背景
                         drawList->AddRectFilled(p_min, p_max, IM_COL32(50, 50, 50, 255), 4.0f);
 
+                        // (1.5) グリッド線の描画
+                        float frameWidth = width / totalFrames;
+                        float scrollX = ImGui::GetScrollX();
+                        float viewWidth = ImGui::GetWindowWidth();
+                        
+                        int startIdx = (int)(scrollX / width * totalFrames);
+                        int endIdx = (int)((scrollX + viewWidth) / width * totalFrames) + 1;
+                        if (startIdx < 0) startIdx = 0;
+                        if (endIdx > totalFrames) endIdx = totalFrames;
+
+                        if (frameWidth > 2.0f) {
+                            // 1フレームの幅が十分あるときは1フレームごとに描画
+                            for (int i = startIdx; i <= endIdx; ++i) {
+                                float x = p_min.x + (width * i / totalFrames);
+                                ImU32 color;
+                                if (i % 60 == 0) color = IM_COL32(150, 150, 150, 150);
+                                else if (i % 10 == 0) color = IM_COL32(100, 100, 100, 100);
+                                else color = IM_COL32(70, 70, 70, 100); // 目立ちすぎない色
+                                drawList->AddLine(ImVec2(x, p_min.y), ImVec2(x, p_max.y), color, 1.0f);
+                            }
+                        } else if (frameWidth > 0.1f) {
+                            // 縮小されているときは10フレームごとに描画
+                            for (int i = startIdx - (startIdx % 10); i <= endIdx; i += 10) {
+                                if (i < 0) continue;
+                                float x = p_min.x + (width * i / totalFrames);
+                                ImU32 color;
+                                if (i % 60 == 0) color = IM_COL32(150, 150, 150, 150);
+                                else color = IM_COL32(100, 100, 100, 100);
+                                drawList->AddLine(ImVec2(x, p_min.y), ImVec2(x, p_max.y), color, 1.0f);
+                            }
+                        }
+
                         // (2) キーONの区間を描画
-                        int k = selectedKeyToVisualize;
                         char target = (k==0)?'L':(k==1)?'R':(k==2)?'J':(k==3)?'D':(k==4)?'C':(k==5)?'W':'S';
                         int runStart = -1;
                         for (int i = 0; i <= maxFrame; ++i) {
                             bool on = (activeReplay.frames[i].keys[k] == target);
                             if (on && runStart == -1) runStart = i;
                             else if (!on && runStart != -1) {
-                                float x1 = p_min.x + (width * runStart / maxFrame);
-                                float x2 = p_min.x + (width * i / maxFrame);
-                                drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
+                                int runEnd = i - 1;
+                                float x1 = p_min.x + (width * runStart / totalFrames);
+                                float x2 = p_min.x + (width * i / totalFrames);
+                                
+                                bool isThisSelected = (selectedBlockStart == runStart && selectedBlockEnd == runEnd && selectedBlockKey == k);
+                                
+                                // ブロックのクリック判定 (左クリックで選択)
+                                if (isHovered && ImGui::IsMouseClicked(0)) {
+                                    float mouseX = ImGui::GetIO().MousePos.x;
+                                    float mouseY = ImGui::GetIO().MousePos.y;
+                                    if (mouseX >= x1 && mouseX <= x2 && mouseY >= p_min.y && mouseY <= p_max.y) {
+                                        selectedBlockStart = runStart;
+                                        selectedBlockEnd = runEnd;
+                                        isThisSelected = true;
+                                    }
+                                }
+
+                                int jitterAmt = 0;
+                                for (const auto& j : activeReplay.jitters) {
+                                    if (j.keyIdx == k && j.startFrame == runStart && j.endFrame == runEnd && j.maxJitter > 0) {
+                                        jitterAmt = j.maxJitter;
+                                        break;
+                                    }
+                                }
+
+                                // ブレ幅の範囲を青色で描画
+                                if (jitterAmt > 0) {
+                                    float jx1 = p_min.x + (width * (std::max)(0, runStart - jitterAmt) / totalFrames);
+                                    float jx2 = p_min.x + (width * (std::min)(totalFrames, runEnd + 1 + jitterAmt) / totalFrames);
+                                    drawList->AddRectFilled(ImVec2(jx1, p_min.y + 1.0f), ImVec2(jx2, p_max.y - 1.0f), IM_COL32(50, 150, 255, 150));
+                                }
+
+                                if (isThisSelected) {
+                                    drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 0, 255));
+                                    drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
+                                } else {
+                                    // ブレ設定がされているブロックは色を少し変える
+                                    if (jitterAmt > 0) {
+                                        drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 180, 0, 200));
+                                    } else {
+                                        drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
+                                    }
+                                }
+
                                 runStart = -1;
                             }
                         }
                         if (runStart != -1) {
-                            float x1 = p_min.x + (width * runStart / maxFrame);
+                            int runEnd = maxFrame;
+                            float x1 = p_min.x + (width * runStart / totalFrames);
                             float x2 = p_min.x + width;
                             drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
                         }
 
-                        // (3) 範囲選択ロジック
-                        static int rangeStart = -1;
-                        static int rangeEnd = -1;
-                        static bool isSelecting = false;
-
+                        // 範囲選択ロジックの操作部分
                         float mouseX = ImGui::GetIO().MousePos.x;
                         float t = (std::max)(0.0f, (std::min)(1.0f, (mouseX - p_min.x) / width));
-                        int hoverFrame = (int)(t * maxFrame);
+                        int hoverFrame = (int)(t * totalFrames);
+                        if (hoverFrame >= totalFrames) hoverFrame = totalFrames - 1;
 
                         if (ImGui::IsMouseClicked(1) && isHovered) {
                             isSelecting = true;
@@ -1344,21 +2041,23 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (rangeStart != -1 && rangeEnd != -1) {
                             int r0 = (std::min)(rangeStart, rangeEnd);
                             int r1 = (std::max)(rangeStart, rangeEnd);
-                            float x1 = p_min.x + (width * r0 / maxFrame);
-                            float x2 = p_min.x + (width * r1 / maxFrame);
+                            float x1 = p_min.x + (width * r0 / totalFrames);
+                            float x2 = p_min.x + (width * (r1 + 1) / totalFrames);
                             drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 100));
                             drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 255));
                         }
 
                         // (4) 現在位置ライン
                         int curFrame = replayMgr->GetCurrentFrame();
-                        float curX = p_min.x + (width * curFrame / maxFrame);
+                        float curX = p_min.x + (width * curFrame / totalFrames);
                         drawList->AddLine(ImVec2(curX, p_min.y - 2), ImVec2(curX, p_max.y + 2), IM_COL32(255, 50, 50, 255), 2.0f);
 
                         // 左クリックでシーク
                         if (isActive && ImGui::IsMouseDown(0)) {
                             replayMgr->SetCurrentFrame(hoverFrame);
                         }
+                        
+                        ImGui::EndChild();
 
                         ImGui::Spacing();
                         if (rangeStart != -1 && rangeEnd != -1) {
@@ -1391,11 +2090,271 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                             ImGui::PopStyleColor();
                         } else {
-                            ImGui::Text("※右クリック+ドラッグで範囲を選択できます");
+                            ImGui::Text("※右クリック+ドラッグで範囲を選択し、手動でON/OFFを書き換えできます");
                         }
 
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        if (selectedBlockStart != -1 && selectedBlockEnd != -1) {
+                            ImGui::Text("選択中のブロック: F%04d ～ F%04d", selectedBlockStart, selectedBlockEnd);
+                            
+                            // 既存のJitterSettingを探す
+                            JitterSetting* currentJitter = nullptr;
+                            for (auto& j : activeReplay.jitters) {
+                                if (j.keyIdx == k && j.startFrame == selectedBlockStart && j.endFrame == selectedBlockEnd) {
+                                    currentJitter = &j;
+                                    break;
+                                }
+                            }
+                            
+                            int jitterVal = currentJitter ? currentJitter->maxJitter : 0;
+                            
+                            ImGui::Text("動的なブレ (Jitter) 設定");
+                            if (ImGui::SliderInt("ブレの強さ (±フレーム)##Jitter", &jitterVal, 0, 15)) {
+                                if (currentJitter) {
+                                    currentJitter->maxJitter = jitterVal;
+                                } else if (jitterVal > 0) {
+                                    JitterSetting j;
+                                    j.keyIdx = k;
+                                    j.startFrame = selectedBlockStart;
+                                    j.endFrame = selectedBlockEnd;
+                                    j.maxJitter = jitterVal;
+                                    activeReplay.jitters.push_back(j);
+                                }
+                                
+                                // Jitterが0になったら削除する
+                                if (jitterVal == 0 && currentJitter) {
+                                    auto it = std::remove_if(activeReplay.jitters.begin(), activeReplay.jitters.end(),
+                                        [&](const JitterSetting& js) {
+                                            return js.keyIdx == k && js.startFrame == selectedBlockStart && js.endFrame == selectedBlockEnd;
+                                        });
+                                    activeReplay.jitters.erase(it, activeReplay.jitters.end());
+                                }
 
-                    }
+                                if (!activeReplay.filename.empty()) {
+                                    replayMgr->SaveToFile(activeReplay, activeReplay.filename);
+                                } else {
+                                    replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                                }
+                            }
+                            ImGui::TextDisabled("※再生・ループのたびに、このブロックのタイミングがランダムに変化します");
+                        } else {
+                            ImGui::TextDisabled("※黄色いブロックをクリックすると、動的なブレを設定できます");
+                        }
+
+                    } // if (activeReplay.totalFrames > 0) をここで閉じる
+
+                    ImGui::Spacing();
+                    ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
+                    ImGui::Spacing();
+                        
+                        if (ImGui::CollapsingHeader("📋 入力マクロ (ワンクリック配置)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            auto& macros = replayMgr->GetMacros();
+                            static int selectedMacroIdx = 0;
+                            
+                            // マクロ一覧
+                            if (!macros.empty()) {
+                                if (selectedMacroIdx >= macros.size()) selectedMacroIdx = 0;
+                                
+                                std::string previewName = macros[selectedMacroIdx].name;
+                                if (ImGui::BeginCombo("マクロ一覧", previewName.c_str())) {
+                                    for (int i = 0; i < macros.size(); ++i) {
+                                        bool is_selected = (selectedMacroIdx == i);
+                                        if (ImGui::Selectable(macros[i].name.c_str(), is_selected)) {
+                                            selectedMacroIdx = i;
+                                        }
+                                        if (is_selected) ImGui::SetItemDefaultFocus();
+                                    }
+                                    ImGui::EndCombo();
+                                }
+                                
+                                ImGui::SameLine();
+                                if (ImGui::Button("削除")) {
+                                    replayMgr->RemoveMacro(selectedMacroIdx);
+                                    if (selectedMacroIdx > 0) selectedMacroIdx--;
+                                }
+                            } else {
+                                ImGui::TextDisabled("登録されたマクロがありません。");
+                            }
+                            
+                            // 新規作成UI
+                            static char newMacroName[64] = "NewMacro";
+                            ImGui::InputText("新規マクロ名", newMacroName, IM_ARRAYSIZE(newMacroName));
+                            ImGui::SameLine();
+                            if (ImGui::Button("空から新規作成")) {
+                                ReplayMacro rm;
+                                rm.name = newMacroName;
+                                rm.blocks.push_back({10, "-------"}); // デフォルトで1ブロック追加
+                                replayMgr->AddMacro(rm);
+                                selectedMacroIdx = (int)macros.size() - 1;
+                            }
+                            
+                            // マクロ録画（実際のプレイを記録する）UI
+                            ImGui::SameLine();
+                            if (replayMgr->IsRecordingMacro()) {
+                                ImGui::TextColored(ImVec4(1, 0, 0, 1), "🔴 マクロ録画待機中...");
+                                ImGui::SameLine();
+                                if (ImGui::Button("キャンセル")) {
+                                    replayMgr->CancelMacroRecording();
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::Button("⏹ 録画を終了して保存")) {
+                                    // 録画を強制停止（停止時に自動的にマクロに抽出・保存される）
+                                    replayMgr->StopRecord();
+                                }
+                            } else {
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
+                                if (ImGui::Button("🔴 実際のプレイをマクロとして録画開始")) {
+                                    replayMgr->ReserveMacroRecording(newMacroName);
+                                    
+                                    // 録画のためにエディタのカメラとポーズを解除し、ゲームをリセットして操作可能にする
+                                    isPlaying_ = true; // ← ここを追加（ゲームを開始させる）
+                                    useDebugCamera_ = false;
+                                    sceneJustReset_ = true;
+                                }
+                                ImGui::PopStyleColor(3);
+                            }
+                            
+                            if (replayMgr->IsRecordingMacro()) {
+                                ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "※ゲームをプレイして録画を完了してください。\n「⏹ 録画を終了して保存」か、ゲーム中のRキーでマクロとして保存されます。");
+                            }
+                            
+                            // 選択範囲から作成するUI (リプレイがある時のみ)
+                            if (activeReplay.totalFrames > 0 && rangeStart != -1 && rangeEnd != -1) {
+                                int r0 = (std::min)(rangeStart, rangeEnd);
+                                int r1 = (std::max)(rangeStart, rangeEnd);
+                                
+                                ImGui::SameLine();
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
+                                if (ImGui::Button("選択範囲から抽出して作成")) {
+                                    ReplayMacro rm;
+                                    rm.name = std::string(newMacroName);
+                                    
+                                    if (r1 < activeReplay.totalFrames) {
+                                        MacroBlock currentBlock;
+                                        bool isFirst = true;
+                                        
+                                        for (int i = r0; i <= r1; ++i) {
+                                            char currentKeys[8];
+                                            for(int k=0; k<7; ++k) currentKeys[k] = activeReplay.frames[i].keys[k];
+                                            currentKeys[7] = '\0';
+                                            
+                                            if (isFirst) {
+                                                currentBlock.duration = 1;
+                                                strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                                                isFirst = false;
+                                            } else {
+                                                // キーが同じならdurationを増やす
+                                                bool same = true;
+                                                for(int k=0; k<7; ++k) {
+                                                    if(currentBlock.keys[k] != currentKeys[k]) { same = false; break; }
+                                                }
+                                                if (same) {
+                                                    currentBlock.duration++;
+                                                } else {
+                                                    // 変わったら今のブロックを保存して新しいブロックへ
+                                                    rm.blocks.push_back(currentBlock);
+                                                    currentBlock.duration = 1;
+                                                    strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
+                                                }
+                                            }
+                                        }
+                                        if (!isFirst) {
+                                            rm.blocks.push_back(currentBlock);
+                                        }
+                                    }
+                                    
+                                    // 万が一抽出に失敗して空になった場合はダミーを入れる
+                                    if (rm.blocks.empty()) rm.blocks.push_back({10, "-------"});
+                                    
+                                    replayMgr->AddMacro(rm);
+                                    selectedMacroIdx = (int)macros.size() - 1;
+                                }
+                                ImGui::PopStyleColor();
+                            }
+                            
+                            // 選択中マクロの編集と配置
+                            if (!macros.empty() && selectedMacroIdx < macros.size()) {
+                                ImGui::Separator();
+                                ImGui::Text("【%s】のブロック構成", macros[selectedMacroIdx].name.c_str());
+                                
+                                auto& curMacro = macros[selectedMacroIdx];
+                                
+                                for (int i = 0; i < curMacro.blocks.size(); ++i) {
+                                    auto& b = curMacro.blocks[i];
+                                    ImGui::PushID(i);
+                                    
+                                    ImGui::SetNextItemWidth(100.0f);
+                                    if (ImGui::InputInt("F (フレーム)", &b.duration)) {
+                                        if (b.duration < 1) b.duration = 1;
+                                        replayMgr->SaveMacros();
+                                    }
+                                    
+                                    ImGui::SameLine();
+                                    ImGui::Text(" キー:");
+                                    ImGui::SameLine();
+                                    
+                                    // 7つのキーON/OFFトグル
+                                    const char* keyNames[7] = {"L", "R", "J", "D", "C", "W", "S"};
+                                    const char keyChars[7] = {'L', 'R', 'J', 'D', 'C', 'W', 'S'};
+                                    
+                                    for (int k = 0; k < 7; ++k) {
+                                        bool isOn = (b.keys[k] != '-');
+                                        if (ImGui::Checkbox(keyNames[k], &isOn)) {
+                                            b.keys[k] = isOn ? keyChars[k] : '-';
+                                            replayMgr->SaveMacros(); // 即時保存
+                                        }
+                                        if (k < 6) ImGui::SameLine();
+                                    }
+                                    
+                                    ImGui::SameLine();
+                                    if (ImGui::Button("X")) {
+                                        curMacro.blocks.erase(curMacro.blocks.begin() + i);
+                                        replayMgr->SaveMacros();
+                                        ImGui::PopID();
+                                        break; // ループを抜けて再描画
+                                    }
+                                    
+                                    ImGui::PopID();
+                                }
+                                
+                                if (ImGui::Button("+ ブロック追加")) {
+                                    curMacro.blocks.push_back({10, "-------"});
+                                    replayMgr->SaveMacros();
+                                }
+                                
+                                ImGui::Spacing();
+                                ImGui::Separator();
+                                
+                                // 配置ボタン (リプレイがある時のみ)
+                                if (activeReplay.totalFrames > 0) {
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
+                                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.4f, 0.7f, 1.0f));
+                                    
+                                    // 配置先は、選択範囲の始点、または現在のフレーム
+                                    int placeStart = (rangeStart != -1) ? (std::min)(rangeStart, rangeEnd) : replayMgr->GetCurrentFrame();
+                                    
+                                    if (ImGui::Button("⇒ タイムラインに配置 (流し込む)")) {
+                                        replayMgr->ApplyMacro(placeStart, curMacro);
+                                        
+                                        // 適用後、現在のアクティブリプレイを保存する
+                                        if (!activeReplay.filename.empty()) {
+                                            replayMgr->SaveToFile(activeReplay, activeReplay.filename);
+                                        } else {
+                                            replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                                        }
+                                    }
+                                    ImGui::PopStyleColor(3);
+                                    ImGui::SameLine();
+                                    ImGui::Text("配置開始フレーム: F%04d", placeStart);
+                                } else {
+                                    ImGui::TextDisabled("※タイムラインに配置するには、履歴からリプレイを選択してください。");
+                                }
+                            }
+                        }
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
@@ -1421,7 +2380,7 @@ void EditorManager::Finalize() {
 void EditorManager::SaveSceneConfig() {
     std::filesystem::create_directories("json");
 
-    std::ofstream ofs("json/editor_config.json");
+    std::ofstream ofs("resources/json/editor_config.json");
     if (ofs.is_open()) {
         auto dxCommon = DirectXCommon::GetInstance();
         ofs << "{" << std::endl;
@@ -1434,7 +2393,7 @@ void EditorManager::SaveSceneConfig() {
 }
 
 void EditorManager::LoadSceneConfig() {
-    std::ifstream ifs("json/editor_config.json");
+    std::ifstream ifs("resources/json/editor_config.json");
     if (!ifs.is_open()) {
         return;
     }

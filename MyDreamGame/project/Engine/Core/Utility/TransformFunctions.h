@@ -2,6 +2,8 @@
 #include "Vector3.h"
 #include "Matrix4x4.h"
 #include "Matrix3x3.h"
+#include "Vector4.h"
+#include <array>
 
 inline Vector3 operator*(const Matrix4x4& mat, const Vector3& vec) {
 	Vector3 result;
@@ -57,5 +59,8 @@ public:
 	static Vector3 Normalize(Vector3 v);
 	static Matrix4x4 MakeViewMatrix(const Vector3& rotate, const Vector3& translate);
 
+	// Frustum Culling utilities
+	static void ExtractFrustumPlanes(const Matrix4x4& viewProjection, std::array<Vector4, 6>& planes);
+	static bool IsSphereInFrustum(const Vector3& center, float radius, const std::array<Vector4, 6>& planes);
 
 };

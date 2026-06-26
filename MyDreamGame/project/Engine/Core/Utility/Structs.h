@@ -105,7 +105,8 @@ struct Material {
     Matrix4x4 uvTransform;
     float shininess;
     float environmentCoefficient; // 環境マップ反射係数
-    float padding2[2];            // パディング
+    float dissolveThreshold;      // ディゾルブのしきい値
+    float padding2;               // パディング
 };
 
 struct DirectionalLight {

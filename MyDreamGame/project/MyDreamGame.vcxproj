@@ -60,14 +60,17 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -80,7 +83,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)externals;$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -91,7 +94,9 @@
       <AdditionalDependencies>assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
+set OUT_DIR=$(TargetDir)
+xcopy "$(ProjectDir)resources" "%OUT_DIR%resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -106,7 +111,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)externals;$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -117,7 +122,9 @@
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
+set OUT_DIR=$(TargetDir)
+xcopy "$(ProjectDir)resources" "%OUT_DIR%resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
@@ -134,7 +141,7 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)externals;$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -146,7 +153,8 @@
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
+xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -194,6 +202,7 @@
     <ClCompile Include="Engine\Input\GamepadInput.cpp" />
     <ClCompile Include="Engine\Input\KeyboardInput.cpp" />
     <ClCompile Include="Engine\Graphics\DebugCamera.cpp" />
+    <ClCompile Include="Engine\Graphics\MapEditorCamera.cpp" />
     <ClCompile Include="Engine\Input\InputManager.cpp" />
     <ClCompile Include="Project\Core\main.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
@@ -216,11 +225,29 @@
     <ClCompile Include="Engine\Resource\Primitive\Primitive.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
-    <ClCompile Include="Project\Effect\HitEffect.cpp" />
+    <ClCompile Include="Project\Effect\CoinEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player2D.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\LiftBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\RailBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
-  </ItemGroup>
+      <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveBox.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveSphere.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCircle.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveRing.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCylinder.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCone.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTorus.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTriangle.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp" />
+</ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -363,6 +390,7 @@
     <ClInclude Include="Engine\Input\KeyboardInput.h" />
     <ClInclude Include="Engine\Core\Utility\BlendMode.h" />
     <ClInclude Include="Engine\Graphics\DebugCamera.h" />
+    <ClInclude Include="Engine\Graphics\MapEditorCamera.h" />
     <ClInclude Include="Engine\Input\InputManager.h" />
     <ClInclude Include="Engine\GameObject\Object3D.h" />
     <ClInclude Include="Engine\GameObject\ResourceObject.h" />
@@ -383,9 +411,18 @@
     <ClInclude Include="Engine\Resource\Primitive\Primitive.h" />
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
-    <ClInclude Include="Project\Effect\HitEffect.h" />
+    <ClInclude Include="Project\Effect\CoinEffect.h" />
     <ClInclude Include="Project\Game2D\Player2D.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\LiftBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\RailBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\CoinBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />
     <ClInclude Include="Engine\Editor\ReplayManager.h" />
   </ItemGroup>
   <ItemGroup>

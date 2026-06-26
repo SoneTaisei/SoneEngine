@@ -16,9 +16,9 @@
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Visual Studioの初期設定(カレントディレクトリがProjectDir)の場合でも動作するよう、
     // resourcesフォルダがあればカレントディレクトリを移動する
-    if (std::filesystem::exists("resources") && std::filesystem::is_directory("resources")) {
-        std::filesystem::current_path("resources");
-    }
+    // if (std::filesystem::exists("resources") && std::filesystem::is_directory("resources")) {
+    //     std::filesystem::current_path("resources");
+    // }
 	// メモリリークチェック
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 
