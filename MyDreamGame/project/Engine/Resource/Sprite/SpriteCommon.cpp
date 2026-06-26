@@ -72,12 +72,12 @@ void SpriteCommon::CreateGraphicsPipeline() {
     // 1. シェーダーのコンパイル (DirectXCommonと全く同じ方式にする)
     // 戻り値の型が IDxcBlob になることに注意
     Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(
-        L"shaders/Sprite.VS.hlsl", L"vs_6_0",
+        L"resources/shaders/Sprite.VS.hlsl", L"vs_6_0",
         dxcUtils, dxcCompiler, includeHandler);
     assert(vsBlob != nullptr);
 
     Microsoft::WRL::ComPtr<IDxcBlob> psBlob = CompileShader(
-        L"shaders/Sprite.PS.hlsl", L"ps_6_0",
+        L"resources/shaders/Sprite.PS.hlsl", L"ps_6_0",
         dxcUtils, dxcCompiler, includeHandler);
     assert(psBlob != nullptr);
 
@@ -164,7 +164,7 @@ void SpriteCommon::CreateGraphicsPipeline() {
 
     // レンダーターゲット設定 (DirectXCommonの設定に合わせる)
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = UINT_MAX;
 

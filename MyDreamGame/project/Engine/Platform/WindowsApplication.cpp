@@ -8,7 +8,11 @@
 #include "Effect/ParticleCommon.h"
 #include "Graphics/DebugCamera.h"
 #include "Graphics/GameCamera.h"
+#ifdef USE_IMGUI
+#include "Graphics/MapEditorCamera.h"
+#endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "../../Project/Scenes/GameScene.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
@@ -88,7 +92,7 @@ void WindowsApplication::Initialize() {
     PrimitiveManager::GetInstance()->Initialize(device);
 
     // デフォルトの環境マップ（スカイボックス用テクスチャ）をロードして設定
-    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("Sprite/school/rostock_laage_airport_4k.dds", commandList);
+    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds", commandList);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(defaultSkyboxHandle));
 
     // 1x1ピクセルのデフォルト白テクスチャをロードして PrimitiveObject に設定
@@ -96,7 +100,7 @@ void WindowsApplication::Initialize() {
     PrimitiveObject::SetDefaultTextureHandle(TextureManager::GetInstance()->GetGpuHandle(defaultWhiteHandle));
 
     // ディゾルブ用のマスクテクスチャをロードして設定
-    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("Sprite/School/noise0.png", commandList);
+    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/noise0.png", commandList);
     dxCommon_->SetDissolveMaskTexture(TextureManager::GetInstance()->GetGpuHandle(dissolveMaskHandle));
 
     // SpriteCommon の生成と初期化
@@ -125,6 +129,12 @@ void WindowsApplication::Initialize() {
     // 2. デバッグカメラ生成
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(kWindowWidth_, kWindowHeight_);
+
+#ifdef USE_IMGUI
+    // 3. マップエディタカメラ生成
+    mapEditorCamera_ = std::make_unique<MapEditorCamera>();
+    mapEditorCamera_->Initialize(kWindowWidth_, kWindowHeight_);
+#endif
 
     // GameCameraをSceneManagerにセット（シーンからカメラモードを切り替え可能にする）
     sceneManager_->SetGameCamera(gameCamera_.get());
@@ -233,6 +243,16 @@ void WindowsApplication::Update() {
     bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
 
     if (isCurrentlyActive && !isTakeoverPausing) {
+        if (!wasActive) {
+            // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する
+            if (sceneManager_->GetCurrentScene()) {
+                auto* map = sceneManager_->GetCurrentScene()->GetMapChip();
+                if (map) {
+                    map->SaveToFile("resources/json/MapData/temp_play_map.txt");
+                }
+            }
+        }
+
         // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
         sceneManager_->Update();
         wasActive = true;
@@ -245,26 +265,43 @@ void WindowsApplication::Update() {
     } else {
         if (wasActive) {
             // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
+            
+            // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
+            std::string originalPath = GameScene::s_TargetMapFilePath;
+            GameScene::s_TargetMapFilePath = "resources/json/MapData/temp_play_map.txt";
+            
             sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
+            
+            // シーン遷移を即時処理してマップをロードさせる
+            sceneManager_->ProcessSceneTransition();
+            
+            // パスを元に戻す（次回の正常なロードやSaveなどのため）
+            GameScene::s_TargetMapFilePath = originalPath;
             
             // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
             editorManager_->ClearSelection();
             
             wasActive = false;
+        } else {
+            // 【停止中】トランスフォーム等の行列再計算のみ実行
+            if (sceneManager_->GetCurrentScene()) {
+                sceneManager_->GetCurrentScene()->UpdateEditor();
+            }
+            // シーン遷移のみ処理する（エディターからのシーン切替に対応）
+            sceneManager_->ProcessSceneTransition();
         }
-        // 【停止中】トランスフォーム等の行列再計算のみ実行
-        if (sceneManager_->GetCurrentScene()) {
-            sceneManager_->GetCurrentScene()->UpdateEditor();
-        }
-        // シーン遷移のみ処理する（エディターからのシーン切替に対応）
-        sceneManager_->ProcessSceneTransition();
     }
     
     // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
     gameCamera_->Update();
 
     // カメラの切り替え（チェックボックスの状態を優先）
-    if (editorManager_->UseDebugCamera()) {
+    if (editorManager_->IsMapEditorVisible()) {
+        activeCamera_ = mapEditorCamera_.get();
+        isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
+        bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsBoundaryDragging();
+        mapEditorCamera_->Update(allowCameraInput);
+    } else if (editorManager_->UseDebugCamera()) {
         activeCamera_ = debugCamera_.get();
         isDebugCameraActive_ = true;
         
@@ -379,7 +416,7 @@ void WindowsApplication::Finalize() {
 }
 
 void WindowsApplication::LoadWindowConfig() {
-    std::ifstream ifs("json/window_config.json");
+    std::ifstream ifs("resources/json/window_config.json");
     if (!ifs.is_open()) {
         return;
     }
@@ -414,7 +451,7 @@ void WindowsApplication::LoadWindowConfig() {
 void WindowsApplication::SaveWindowConfig() {
     std::filesystem::create_directories("json");
 
-    std::ofstream ofs("json/window_config.json");
+    std::ofstream ofs("resources/json/window_config.json");
     if (ofs.is_open()) {
         ofs << "{" << std::endl;
         ofs << "  \"isFullscreen\": " << (window_->IsFullscreen() ? "true" : "false") << "," << std::endl;

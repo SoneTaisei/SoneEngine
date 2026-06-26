@@ -19,7 +19,6 @@
 #include "Effect/ParticleCommon.h"
 #include "Effect/RingEffect.h"
 #include "Effect/CylinderEffect.h"
-#include "Effect/HitEffect.h"
 
 class TitleScene : public IScene {
 public:
@@ -27,6 +26,7 @@ public:
     void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
+    void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
 
     // ヒエラルキー用
     std::vector<Object3D *> GetObjects() override;
@@ -74,11 +74,9 @@ private:
 
     std::unique_ptr<RingEffect> ringEffect_;
     std::unique_ptr<CylinderEffect> cylinderEffect_;
-    std::unique_ptr<HitEffect> hitEffect_;
 
     // --- エディター停止中用 ---
     void UpdateEditor() override;
 
-
-
+    bool isFirstFrame_ = true;
 };

@@ -19,6 +19,16 @@ struct FrameData {
 };
 
 /// <summary>
+/// キーフレーム（ブロック）ごとの動的なブレ設定
+/// </summary>
+struct JitterSetting {
+    int keyIdx;       // どのキーに対する設定か (0~6)
+    int startFrame;   // 記録時のブロック開始フレーム
+    int endFrame;     // 記録時のブロック終了フレーム
+    int maxJitter;    // ブレの強さ（±フレーム）
+};
+
+/// <summary>
 /// 1プレイ全体のリプレイデータ
 /// </summary>
 struct ReplayData {
@@ -32,6 +42,26 @@ struct ReplayData {
     std::vector<FrameData> frames;            // 1フレームずつのデータ (STR)
     std::string mmlTracks[5];                 // MMLに圧縮された5つのキー状態トラック
                                               // T0: 左右移動(L,R,N), T1: ジャンプ(J,N), T2: ダッシュ(D,N), T3: 壁張り付き(C,N), T4: 上下移動(W,S,N)
+    std::vector<JitterSetting> jitters;       // 動的ブレ設定リスト
+    
+    int id = -1;                              // このリプレイデータの一意なID
+    int parentId = -1;                        // 派生元のリプレイのID（-1ならルート）
+};
+
+/// <summary>
+/// マクロを構成する1つのブロック（一定フレーム続く入力状態）
+/// </summary>
+struct MacroBlock {
+    int duration = 10;     // 何フレーム続くか
+    char keys[8] = "-------"; // その間押されているキー "LRJDCWS" など
+};
+
+/// <summary>
+/// 登録された入力マクロ
+/// </summary>
+struct ReplayMacro {
+    std::string name;
+    std::vector<MacroBlock> blocks;
 };
 
 /// <summary>
@@ -46,6 +76,9 @@ public:
     void RecordFrame(const Vector3& pos, const Vector3& cameraPos, const Vector4& color = {1.0f, 1.0f, 1.0f, 1.0f}, const Vector3& scale = {1.0f, 1.0f, 1.0f}, const Vector3& rotation = {0.0f, 0.0f, 0.0f});
     void StopRecord();
     bool PopRecordedFrame(FrameData& outFrame);
+    
+    // バグ検知時のレポートと自動保存
+    void TriggerBugReport(const std::string& reason);
 
 
     // 再生制御
@@ -53,6 +86,9 @@ public:
     void StopPlayback();
     void PausePlayback();
     void ResumePlayback();
+    
+    // 乗っ取り（割り込み）時の特殊な停止処理
+    void TakeoverPlayback();
     
     // 選択のみ（再生はしない、残像表示用）
     void SelectReplay(int historyIndex = -1, const std::string& filepath = "");
@@ -62,6 +98,7 @@ public:
 
     // タイムライン編集時のユーティリティ (編集したSTRからMMLと座標を再生成)
     void ApplyTimelineEdit(int frameIdx, int keyIdx, bool active);
+    void ApplyMacro(int startFrame, const ReplayMacro& macro); // マクロを流し込む
     void RebuildMmlFromFrames(ReplayData& data);
     void RebuildFramesFromMml(ReplayData& data);
 
@@ -72,6 +109,18 @@ public:
     // 保存済みファイルリスト管理
     void LoadSavedList();
     void DeleteSavedFile(const std::string& filepath);
+
+    // マクロ管理
+    void LoadMacros();
+    void SaveMacros();
+    std::vector<ReplayMacro>& GetMacros() { return macros_; }
+    void AddMacro(const ReplayMacro& macro);
+    void RemoveMacro(int index);
+
+    // マクロ録画用
+    void ReserveMacroRecording(const std::string& name) { isRecordingMacro_ = true; macroRecordingName_ = name; }
+    void CancelMacroRecording() { isRecordingMacro_ = false; macroRecordingName_ = ""; }
+    bool IsRecordingMacro() const { return isRecordingMacro_; }
 
     // ゲッター・セッター
     bool IsRecording() const { return isRecording_; }
@@ -106,6 +155,9 @@ private:
     std::string EncodeTrackToMml(const std::vector<char>& rawTrack);
     std::vector<char> DecodeMmlToTrack(const std::string& mmlStr, int expectedFrames);
 
+    // 再生・ループ時に実行用キーバッファを生成する
+    void GenerateRuntimeKeys();
+
 private:
     bool isRecording_ = false;
     bool isPlaying_ = false;
@@ -113,6 +165,13 @@ private:
     bool isLoopPlay_ = false;
     bool isSnapEnabled_ = true;
     bool forceSnapNextFrame_ = false; // シーク時に強制スナップするフラグ
+    bool hasLoggedDesync_ = false;    // 再生中にズレをすでにログ出力したかどうか
+    bool isTakeoverRecording_ = false; // 乗っ取り（割り込み）からの録画フラグ
+    bool isRecordingMacro_ = false; // マクロを録画するかどうかのフラグ
+    std::string macroRecordingName_ = ""; // マクロ録画時の保存名
+    int takeoverFrame_ = 0;           // 乗っ取りが発生したフレーム
+    int takeoverSourceId_ = -1;       // 乗っ取り元のReplayData ID
+    int nextReplayId_ = 1;            // 次に割り当てるReplayData ID
     int currentFrame_ = 0;
 
     Vector3 playerInitPos_ = { 0.0f, 0.0f, 0.0f };
@@ -124,4 +183,7 @@ private:
     ReplayData currentReplay_;                        // 現在アクティブなリプレイ（再生用・編集用）
     std::vector<ReplayData> history_;                 // 直近3回のプレイ履歴（0: 最新, 1: 1回前, 2: 2回前）
     std::vector<std::string> savedList_;              // json/saved_replays/ 下のファイル名リスト
+    std::vector<ReplayMacro> macros_;                 // 登録されたマクロリスト
+    
+    std::vector<std::string> runtimeKeys_;            // 再生時に使用する動的キー配列 (1要素につき7文字の文字列)
 };

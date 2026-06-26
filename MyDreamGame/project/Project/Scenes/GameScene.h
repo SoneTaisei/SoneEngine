@@ -2,8 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
-#include "Effect/SnowParticle.h"
-#include "Effect/HitEffect.h"
+#include "Effect/CoinEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <d3d12.h>
@@ -14,14 +13,21 @@
 #include "Game2D/MapChip2D.h"
 
 class GameCamera;
-class SnowParticle;
 
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
-#include "Graphics/Skybox.h"
+class Skybox;
+
+enum class GameState {
+    StartReady,
+    Playing,
+    Clear
+};
 
 class GameScene : public IScene {
 public:
+    static std::string s_TargetMapFilePath;
+
     void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
@@ -41,16 +47,7 @@ private:
     // 3D・パーティクル関連 (develop)
     // ---------------------------------------------------
     // パーティクル管理クラス
-    SnowParticle *snowParticle_ = nullptr;
-    std::unique_ptr<HitEffect> hitEffect_;
-    std::vector<std::unique_ptr<ParticleManager>> particles_;
-    std::vector<std::unique_ptr<PrimitiveObject>> primitives_;
-
-    // エミッタ（発生装置）
-    Emitter snowEmitter_;
-
-    // SRVのインデックス (定数またはメンバ変数として管理)
-    const int srvIndex_ = 100; // テクスチャ等と被らない場所を指定
+    std::unique_ptr<CoinEffect> coinEffect_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();
@@ -62,9 +59,12 @@ private:
     std::unique_ptr<Player2D> player_;
     std::unique_ptr<MapChip2D> map_;
 
-    float rotateTimer_ = 0.0f; // プリミティブ回転用タイマー
-
     int previousScore_ = 0; // コインエフェクト発生用
+    
+    // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
+    bool wasCurrentlyPlaying_ = false;
+    bool wasPlayingLastFrame_ = false;
+    bool wasRewindingLastFrame_ = false;
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
@@ -74,4 +74,8 @@ private:
     // ---------------------------------------------------
     // コマンドリストを覚えておくための変数
     ID3D12GraphicsCommandList *commandList_ = nullptr;
+
+    GameState gameState_ = GameState::StartReady;
+    float stateTimer_ = 0.0f;
+    float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
 };

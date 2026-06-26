@@ -90,6 +90,9 @@
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\LogManager.cpp">
+      <Filter>Engine\Utility</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
@@ -103,7 +106,10 @@
       <Filter>Engine\Graphics\Camera</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\DebugCamera.cpp">
-      <Filter>Engine\Graphics\Camera</Filter>
+      <Filter>Engine\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\MapEditorCamera.cpp">
+      <Filter>Engine\Graphics</Filter>
     </ClCompile>
     <ClCompile Include="Engine\GameObject\Object3D.cpp">
       <Filter>Engine\Graphics\Object</Filter>
@@ -151,17 +157,71 @@
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Effect\HitEffect.cpp">
+    <ClCompile Include="Project\Effect\CoinEffect.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Player2D.cpp">
       <Filter>Application\Game2D</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
-      <Filter>Application\Game2D</Filter>
+      <Filter>Project\Game2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\LiftBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\RailBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp">
+      <Filter>Project\Game2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp">
+      <Filter>Project\Game2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
-  </ItemGroup>
+      <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveBox.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveSphere.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCircle.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveRing.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCylinder.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveCone.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTorus.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveTriangle.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+</ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -236,6 +296,9 @@
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\LogManager.h">
+      <Filter>Engine\Utility</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Platform\WindowsApplication.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
@@ -249,7 +312,10 @@
       <Filter>Engine\Graphics\Camera</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\DebugCamera.h">
-      <Filter>Engine\Graphics\Camera</Filter>
+      <Filter>Engine\Graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\MapEditorCamera.h">
+      <Filter>Engine\Graphics</Filter>
     </ClInclude>
     <ClInclude Include="Engine\GameObject\Object3D.h">
       <Filter>Engine\Graphics\Object</Filter>
@@ -300,17 +366,74 @@
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Effect\HitEffect.h">
+    <ClInclude Include="Project\Effect\CoinEffect.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Player2D.h">
       <Filter>Application\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\MapChip2D.h">
-      <Filter>Application\Game2D</Filter>
+      <Filter>Project\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h">
+      <Filter>Project\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\LiftBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\RailBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h">
+      <Filter>Project\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h">
+      <Filter>Project\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\CoinBlock.h">
+      <Filter>Project\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h">
+      <Filter>Project\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\ReplayManager.h" />
-  </ItemGroup>
+      <ClInclude Include="Engine\Resource\Primitive\PrimitivePlane.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveBox.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveSphere.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveCircle.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveRing.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveCylinder.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveCone.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveTorus.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveTriangle.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\PrimitiveStar.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+</ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>

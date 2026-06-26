@@ -424,9 +424,9 @@ void DirectXCommon::CreatePipelines() {
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID; // 中身を塗りつぶす
     rasterizerDesc.FrontCounterClockwise = FALSE;
 
-    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"resources/shaders/Object3d.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(vertexShaderBlob != nullptr);
-    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"resources/shaders/Object3d.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(pixelShaderBlob != nullptr);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
@@ -487,9 +487,9 @@ void DirectXCommon::CreatePipelines() {
     assert(SUCCEEDED(hr));
 
     // --- Outline Pipeline State ---
-    Microsoft::WRL::ComPtr<IDxcBlob> outlineVSBlob = CompileShader(L"shaders/Outline.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> outlineVSBlob = CompileShader(L"resources/shaders/Outline.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(outlineVSBlob != nullptr);
-    Microsoft::WRL::ComPtr<IDxcBlob> outlinePSBlob = CompileShader(L"shaders/Outline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> outlinePSBlob = CompileShader(L"resources/shaders/Outline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(outlinePSBlob != nullptr);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC outlinePipelineStateDesc = graphicsPipelineStateDesc;
@@ -570,7 +570,7 @@ void DirectXCommon::UpdateFixFPS() {
 
 void DirectXCommon::InitializeRenderTexture() {
     // 1. RenderTexture本体の作成 (UtilityFunctionsで作った関数を呼ぶ)
-    const Vector4 kRenderTargetClearValue{1.0f, 0.0f, 0.0f, 1.0f}; // 一旦分かりやすいように赤
+    const Vector4 kRenderTargetClearValue{0.1f, 0.25f, 0.5f, 1.0f}; // PreDrawでのクリア色と合わせる
     renderTextureResource_ = CreateRenderTextureResource(
         device_.Get(), windowWidth_, windowHeight_,
         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kRenderTargetClearValue);
@@ -599,9 +599,10 @@ void DirectXCommon::InitializeRenderTexture() {
     device_->CreateShaderResourceView(renderTextureResource_.Get(), &srvDesc, renderTextureSrvHandleCPU_);
 
     // --- ポストプロセス用テクスチャの作成 ---
+    const Vector4 kPostProcessClearValue{0.0f, 0.0f, 0.0f, 1.0f};
     postProcessResource_ = CreateRenderTextureResource(
         device_.Get(), windowWidth_, windowHeight_,
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kRenderTargetClearValue);
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kPostProcessClearValue, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     // RTVの作成 (4番目: インデックス3)
     postProcessRtvHandle_ = GetCPUDescriptorHandle(
@@ -704,15 +705,15 @@ void DirectXCommon::CreatePostEffectPipelines() {
     device_->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&copyImageRootSignature_));
 
     // 2. シェーダーのコンパイル
-    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"shaders/Fullscreen.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psCopyBlob = CompileShader(L"shaders/CopyImage.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psGrayscaleBlob = CompileShader(L"shaders/Grayscale.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = CompileShader(L"shaders/Sepia.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psVignetteBlob = CompileShader(L"shaders/Vignette.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psSmoothingBlob = CompileShader(L"shaders/Smoothing.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = CompileShader(L"shaders/GaussianFilter.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psCompositeBlob = CompileShader(L"shaders/CompositePostProcess.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psDepthBasedOutlineBlob = CompileShader(L"shaders/DepthBasedOutline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"resources/shaders/Fullscreen.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psCopyBlob = CompileShader(L"resources/shaders/CopyImage.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psGrayscaleBlob = CompileShader(L"resources/shaders/Grayscale.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psSepiaBlob = CompileShader(L"resources/shaders/Sepia.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psVignetteBlob = CompileShader(L"resources/shaders/Vignette.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psSmoothingBlob = CompileShader(L"resources/shaders/Smoothing.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = CompileShader(L"resources/shaders/GaussianFilter.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psCompositeBlob = CompileShader(L"resources/shaders/CompositePostProcess.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psDepthBasedOutlineBlob = CompileShader(L"resources/shaders/DepthBasedOutline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
 
     // 3. PipelineState (PSO) の作成
@@ -1092,8 +1093,8 @@ void DirectXCommon::CreateSkyboxPipeline() {
     inputLayoutDesc.NumElements = _countof(inputElementDescs);
 
     // 3. シェーダーコンパイル
-    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"shaders/Skybox.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
-    Microsoft::WRL::ComPtr<IDxcBlob> psBlob = CompileShader(L"shaders/Skybox.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"resources/shaders/Skybox.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psBlob = CompileShader(L"resources/shaders/Skybox.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
     // 4. PSO作成
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};

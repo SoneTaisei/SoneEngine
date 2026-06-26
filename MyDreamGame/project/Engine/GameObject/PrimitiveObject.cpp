@@ -20,6 +20,7 @@ void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     material_.enableEnvironmentMap = 1;
     material_.environmentCoefficient = 0.1f;
     material_.alphaReference = 0.0f;
+    material_.dissolveThreshold = 0.0f;
 
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTransform_));

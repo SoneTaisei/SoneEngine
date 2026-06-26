@@ -85,7 +85,8 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     uint32_t width,
     uint32_t height,
     DXGI_FORMAT format,
-    const Vector4 &clearColor);
+    const Vector4 &clearColor,
+    D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t> &indices);
 

@@ -4,7 +4,9 @@
 #include "Input/KeyboardInput.h"
 #include "Core/TimeManager.h"
 #include "Core/Utility/Structs.h"
+#include <memory>
 #include <vector>
+#include <random>
 
 // 前方宣言
 class MapChip2D;
@@ -16,19 +18,40 @@ class MapChip2D;
 class Player2D {
 public:
     void Initialize(ID3D12GraphicsCommandList* commandList);
-    void Update(MapChip2D& map);
+    void Update(MapChip2D& map, bool isTransitioning = false);
     void Draw(ID3D12GraphicsCommandList* commandList);
+
+    // 速度の設定と取得
+    void SetVelocity(const Vector3& velocity) { velocity_ = velocity; }
+    Vector3 GetVelocity() const { return velocity_; }
     void DisplayImGui();
 
     // プレイヤーの位置を取得（カメラ追従用）
     const Vector3& GetPosition() const { return position_; }
     void SetPosition(const Vector3& pos) { position_ = pos; }
 
+    // マップからプレイヤー初期位置を検索して設定する
+    void FindSpawnPoint(const MapChip2D& map);
+
     // AABBの取得（当たり判定用）
     struct AABB {
         float left, top, right, bottom;
     };
     AABB GetAABB() const;
+
+    // 将来の拡張用 OBB（Oriented Bounding Box）構造体
+    struct OBB2D {
+        Vector3 center;
+        Vector3 extents; // half-width, half-height, z=0
+        float rotation;  // radian
+    };
+
+    // AABB同士の交差判定ヘルパー
+    static bool CheckAABBCollision(const AABB& a, const AABB& b);
+    
+    // OBBを用いた衝突判定（戻り値はMTV: Minimum Translation Vector）
+    // （今回は不使用ですが将来のリフト回転対応用として実装）
+    static bool CheckCollisionOBB(const OBB2D& obb1, const OBB2D& obb2, Vector3& outMTV);
 
     // ヒエラルキー用
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
@@ -38,9 +61,42 @@ public:
     void SetScore(int score) { score_ = score; }
 
     // リプレイ巻き戻し用の状態復元メソッド
-    void CollectCoins(MapChip2D& map);
+    void SimulateCollisions(MapChip2D& map);
+
+    // ブロックのOnCollisionから呼ばれるコールバック群
+    void Kill() {
+        if (!isDead_) {
+            isDead_ = true;
+            isRespawning_ = false;
+            deathTimer_ = 0.0f;
+            // 後ろによろける演出のための速度設定 (よろけ具合を約半分に低減)
+            velocity_ = { velocity_.x > 0.0f ? -2.5f : (velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f };
+            isDashing_ = false;
+            // スローモーション開始
+            TimeManager::GetInstance().SetTimeScale(0.3f);
+        }
+    }
+    void ReachGoal() {
+        if (!isGoal_) {
+            isGoal_ = true;
+            goalTimer_ = 0.0f;
+            velocity_ = { 0.0f, 0.0f, 0.0f };
+            isDashing_ = false;
+            SpawnConfetti();
+        }
+    }
+    void AddScore(int score) {
+        score_ += score;
+    }
 
     bool IsGoalComplete() const { return isGoal_ && goalTimer_ >= goalWaitTime_; }
+
+    // リプレイのループやシーク時に物理状態（速度や各種フラグ）をリセットする
+    void ResetState(const Vector3& initPos);
+
+    // ゲーム状態取得用ゲッター追加
+    bool IsDead() const { return isDead_; }
+    bool IsGoal() const { return isGoal_; }
 
 private:
     // 入力処理
@@ -60,6 +116,13 @@ private:
     Vector3 position_ = { 2.0f, 5.0f, 0.0f }; // 初期位置
     Vector3 velocity_ = { 0.0f, 0.0f, 0.0f };
 
+    // 足場（リフト）関連
+    bool isOnMovingPlatform_ = false;
+    Vector3 platformVelocity_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 慣性保存用
+    float platformInertiaTimer_ = 0.0f; // 慣性猶予時間（コヨーテタイム）
+    float externalVelocityX_ = 0.0f; // 慣性用の外部速度
+
     float moveSpeed_ = 5.0f;       // 左右移動速度
     float jumpPower_ = 10.0f;      // ジャンプ力
     float gravity_ = -20.0f;       // 重力加速度
@@ -74,6 +137,7 @@ private:
     float dashDuration_ = 0.15f;   // ダッシュ継続時間
     float dashSpeed_ = 15.0f;      // ダッシュの速さ
     Vector3 dashVelocity_ = {0.0f, 0.0f, 0.0f}; // ダッシュ中の固定速度
+    float dashEndUpwardVelocity_ = 10.0f; // ダッシュ終了時の上向き速度の上限
 
     // プレイヤーの色
     Vector4 colorNormal_ = { 0.2f, 0.6f, 1.0f, 1.0f }; // 通常時（青）
@@ -97,15 +161,76 @@ private:
     // 死亡演出用パラメータ
     bool isDead_ = false;           // 死亡演出中か
     float deathTimer_ = 0.0f;       // 死亡経過時間
-    float deathDuration_ = 0.5f;    // 死亡演出の時間
+    float deathDuration_ = 0.175f;  // 死亡演出の時間 (ノックバックしながらディゾルブする)
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f }; // スタート地点・リスポーン位置
+
+    // リスポーン演出用パラメータ
+    bool isRespawning_ = false;
+    float respawnTimer_ = 0.0f;
+    float respawnDuration_ = 0.5f;
 
     // ゴール・スコア用パラメータ
     bool isGoal_ = false;
     float goalTimer_ = 0.0f;
     float goalWaitTime_ = 2.0f;
     int score_ = 0;
+    
+    // 砂埃エフェクト用パラメータ
+    struct DustParticle {
+        Vector3 position;
+        Vector3 velocity;
+        float timer;
+        float duration;
+        float startSize;
+        bool active;
+    };
+    std::vector<DustParticle> dustParticles_;
+    
+    // 砂埃を発生させる
+    void SpawnJumpDust(const Vector3& basePos, float dirX);
+    void SpawnRunDust(const Vector3& basePos, float dirX);
+    
+    float runDustTimer_ = 0.0f;
+    float runDustInterval_ = 0.1f;
+
+    // 紙吹雪エフェクト用パラメータ
+    struct ConfettiParticle {
+        Vector3 position;
+        Vector3 velocity;
+        Vector4 color;
+        Vector3 rotation;
+        Vector3 rotationSpeed;
+        float timer;
+        float duration;
+        float size;
+        bool active;
+    };
+    std::vector<ConfettiParticle> confettiParticles_;
+    
+    // 紙吹雪を発生させる
+    void SpawnConfetti();
+
+    // ダッシュ波紋エフェクト用パラメータ
+    struct DashRingParticle {
+        Vector3 position;
+        Vector3 rotation;
+        float timer;
+        float duration;
+        float startSize;
+        float endSize;
+        bool active;
+    };
+    std::vector<DashRingParticle> dashRingParticles_;
+    std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
+
+    // ダッシュ波紋エフェクトを発生させる
+    void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
 
     // イージング関数
     float EaseInElastic(float t) const;
+    
+    // バグ検知用パラメータ
+    float stuckTimer_ = 0.0f;
+    Vector3 prevPositionForBugCheck_ = { 0.0f, 0.0f, 0.0f };
+    float inWallTimer_ = 0.0f;
 };
