@@ -2,6 +2,11 @@
 #include "MapChip2D.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
+#include "Core/TimeManager.h"
+#include "Input/KeyboardInput.h"
+#include "Editor/ReplayManager.h"
+#include <cmath>
+#include <algorithm>
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
 #endif
@@ -130,13 +135,41 @@ void Player2D::Update(MapChip2D& map) {
         CollectCoins(map);
     }
 
-    // 画面外落下時のリスポーン演出移行
-    if (position_.y < -10.0f) {
+    // 画面外の落下判定（本来のデスマッチライン）
+    if (position_.y < -10.0f && position_.y >= -50.0f) {
         isDead_ = true;
         deathTimer_ = 0.0f;
         velocity_ = { 0.0f, 0.0f, 0.0f };
         isDashing_ = false;
     }
+    
+    // --- バグ検知処理 ---
+    // 1. 亜空間への落下、または座標の破綻
+    if (position_.y < -50.0f || std::isnan(position_.x) || std::isnan(position_.y)) {
+        ReplayManager::GetInstance()->TriggerBugReport("プレイヤーの座標が破綻、またはマップ外に落下しました。");
+        // 安全処理
+        position_ = startPosition_;
+        velocity_ = { 0.0f, 0.0f, 0.0f };
+        isDead_ = true;
+    }
+    
+    // 2. スタック検知（入力があるのに動いていない）
+    if ((std::abs(velocity_.x) > 0.1f || std::abs(velocity_.y) > 0.1f) && 
+        std::abs(position_.x - prevPositionForBugCheck_.x) < 0.001f && 
+        std::abs(position_.y - prevPositionForBugCheck_.y) < 0.001f) {
+        
+        stuckTimer_ += deltaTime;
+        if (stuckTimer_ > 2.0f) { // 2秒間スタック
+            ReplayManager::GetInstance()->TriggerBugReport("2秒間移動が反映されないスタック状態を検知しました。");
+            stuckTimer_ = 0.0f;
+            isDead_ = true; // スタック脱出のために死亡扱いにする
+        }
+    } else {
+        stuckTimer_ = 0.0f;
+    }
+    
+    prevPositionForBugCheck_ = position_;
+    // --------------------
 
     // 色の更新
     primitiveObj_->GetMaterial().color = canDash_ ? colorNormal_ : colorDashed_;
@@ -402,5 +435,34 @@ void Player2D::CollectCoins(MapChip2D& map) {
                 score_ += 100;
             }
         }
+    }
+}
+
+void Player2D::ResetState(const Vector3& initPos) {
+    position_ = initPos;
+    velocity_ = { 0.0f, 0.0f, 0.0f };
+    isOnGround_ = false;
+    canDash_ = true;
+    isDashing_ = false;
+    dashTimer_ = 0.0f;
+    isTouchingWallRight_ = false;
+    isTouchingWallLeft_ = false;
+    wallJumpTimer_ = 0.0f;
+    isWallSliding_ = false;
+    isWallClinging_ = false;
+    isDead_ = false;
+    deathTimer_ = 0.0f;
+    isGoal_ = false;
+    goalTimer_ = 0.0f;
+    score_ = 0;
+    stuckTimer_ = 0.0f;
+    inWallTimer_ = 0.0f;
+    
+    if (primitiveObj_) {
+        primitiveObj_->SetTranslation(position_);
+        primitiveObj_->GetMaterial().color = colorNormal_;
+        primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+        primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
+        primitiveObj_->Update();
     }
 }

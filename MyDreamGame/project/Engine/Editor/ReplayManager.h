@@ -46,6 +46,9 @@ public:
     void RecordFrame(const Vector3& pos, const Vector3& cameraPos, const Vector4& color = {1.0f, 1.0f, 1.0f, 1.0f}, const Vector3& scale = {1.0f, 1.0f, 1.0f}, const Vector3& rotation = {0.0f, 0.0f, 0.0f});
     void StopRecord();
     bool PopRecordedFrame(FrameData& outFrame);
+    
+    // バグ検知時のレポートと自動保存
+    void TriggerBugReport(const std::string& reason);
 
 
     // 再生制御
@@ -113,6 +116,7 @@ private:
     bool isLoopPlay_ = false;
     bool isSnapEnabled_ = true;
     bool forceSnapNextFrame_ = false; // シーク時に強制スナップするフラグ
+    bool hasLoggedDesync_ = false;    // 再生中にズレをすでにログ出力したかどうか
     int currentFrame_ = 0;
 
     Vector3 playerInitPos_ = { 0.0f, 0.0f, 0.0f };
