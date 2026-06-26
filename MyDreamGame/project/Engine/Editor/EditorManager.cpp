@@ -12,6 +12,8 @@
 #include "Scene/SceneManager.h"
 #include "ReplayManager.h"
 #include "Core/TimeManager.h"
+#include "Graphics/TextureManager.h"
+#include "Core/Utility/LogManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -796,7 +798,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     // ペイントツール選択
                     static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
-                    ImGui::Text("Paint Tool:");
+                    ImGui::Text("ペイントツール:");
                     ImGui::Spacing();
 
                     struct ToolIcon {
@@ -807,11 +809,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     };
 
                     ToolIcon tools[] = {
-                        { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f },
-                        { 1, "Block", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
-                        { 2, "Death", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
-                        { 3, "Goal",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
-                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f } // コインは実際のモデルが0.5倍なので合わせる
+                        { 0, "消去", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f },
+                        { 1, "ブロック", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
+                        { 2, "デス", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
+                        { 3, "ゴール",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
+                        { 4, "コイン",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f } // コインは実際のモデルが0.5倍なので合わせる
                     };
 
                     int numTools = sizeof(tools) / sizeof(tools[0]);
@@ -916,8 +918,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                         }
 
-                        std::string comboPreview = (selectedFileIndex != -1) ? stageFiles[selectedFileIndex] : "Select existing map...";
-                        if (ImGui::BeginCombo("Select Map File", comboPreview.c_str())) {
+                        std::string comboPreview = (selectedFileIndex != -1) ? stageFiles[selectedFileIndex] : "既存のマップを選択...";
+                        if (ImGui::BeginCombo("マップファイルを選択", comboPreview.c_str())) {
                             for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
                                 bool isSelected = (selectedFileIndex == i);
                                 if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
@@ -933,16 +935,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
 
                     // ファイル名入力
-                    ImGui::InputText("Filename", stageFilename_, sizeof(stageFilename_));
+                    ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_));
 
                     // マップサイズ入力と適用ボタン
                     ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("Width", &inputWidth);
+                    ImGui::InputInt("幅", &inputWidth);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("Height", &inputHeight);
+                    ImGui::InputInt("高さ", &inputHeight);
                     ImGui::SameLine();
-                    if (ImGui::Button("Apply Size")) {
+                    if (ImGui::Button("サイズを適用")) {
                         if (inputWidth < 1) inputWidth = 1;
                         if (inputHeight < 1) inputHeight = 1;
                         mapChip->Resize(inputWidth, inputHeight);
@@ -967,22 +969,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     };
 
                     // 操作ボタン
-                    if (ImGui::Button("Save Map")) {
+                    if (ImGui::Button("保存")) {
                         mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button("Load Map")) {
+                    if (ImGui::Button("読み込み")) {
                         if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
                             inputWidth = mapChip->GetWidth();
                             inputHeight = mapChip->GetHeight();
                         }
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button("Clear Map")) {
+                    if (ImGui::Button("クリア")) {
                         mapChip->ClearMap();
                     }
                     ImGui::SameLine();
-                    if (ImGui::Button("Reset Default")) {
+                    if (ImGui::Button("初期化")) {
                         mapChip->ResetMap();
                         inputWidth = mapChip->GetWidth();
                         inputHeight = mapChip->GetHeight();
@@ -1062,10 +1064,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::EndChild();
                     }
                 } else {
-                    ImGui::Text("Active scene does not support 2D map editing.");
+                    ImGui::Text("現在のアクティブシーンは2Dマップ編集をサポートしていません。");
                 }
             } else {
-                ImGui::Text("No active scene.");
+                ImGui::Text("アクティブなシーンがありません。");
             }
         }
         ImGui::End();
@@ -1401,6 +1403,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         ImGui::End();
     }
+    
+    LogManager::GetInstance()->Draw();
 }
 
 void EditorManager::Draw(ID3D12GraphicsCommandList *commandList) {

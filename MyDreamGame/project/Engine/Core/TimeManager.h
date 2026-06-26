@@ -26,7 +26,12 @@ public:
         referenceTime_ = currentTime;
 
         // タイムスケールを適用したデルタタイムを計算
-        deltaTime_ = rawDeltaTime * timeScale_;
+        if (useFixedTimeStep_) {
+            // TASやリプレイの完全な再現性を保つため、固定フレームレート(60FPS)で更新する
+            deltaTime_ = (1.0f / 60.0f) * timeScale_;
+        } else {
+            deltaTime_ = rawDeltaTime * timeScale_;
+        }
     }
 
     // タイムスケール適用済みのデルタタイムを取得
@@ -44,6 +49,14 @@ public:
         return timeScale_;
     }
 
+    // 固定フレームレートモードのON/OFF
+    void SetUseFixedTimeStep(bool enable) {
+        useFixedTimeStep_ = enable;
+    }
+    bool IsFixedTimeStep() const {
+        return useFixedTimeStep_;
+    }
+
 private:
     TimeManager() = default;
     ~TimeManager() = default;
@@ -51,4 +64,5 @@ private:
     std::chrono::steady_clock::time_point referenceTime_;
     float deltaTime_ = 0.0f;
     float timeScale_ = 1.0f; // 時間の倍率
+    bool useFixedTimeStep_ = true; // デフォルトでON (リプレイ完全同期のため)
 };

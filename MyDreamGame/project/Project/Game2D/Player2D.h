@@ -42,6 +42,9 @@ public:
 
     bool IsGoalComplete() const { return isGoal_ && goalTimer_ >= goalWaitTime_; }
 
+    // リプレイのループやシーク時に物理状態（速度や各種フラグ）をリセットする
+    void ResetState(const Vector3& initPos);
+
 private:
     // 入力処理
     void HandleInput();
@@ -108,4 +111,9 @@ private:
 
     // イージング関数
     float EaseInElastic(float t) const;
+    
+    // バグ検知用パラメータ
+    float stuckTimer_ = 0.0f;
+    Vector3 prevPositionForBugCheck_ = { 0.0f, 0.0f, 0.0f };
+    float inWallTimer_ = 0.0f;
 };

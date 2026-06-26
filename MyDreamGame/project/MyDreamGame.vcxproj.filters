@@ -90,6 +90,9 @@
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\LogManager.cpp">
+      <Filter>Engine\Utility</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
@@ -234,6 +237,9 @@
       <Filter>Engine\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h">
+      <Filter>Engine\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\LogManager.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Platform\WindowsApplication.h">
