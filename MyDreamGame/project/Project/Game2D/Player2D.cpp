@@ -110,6 +110,8 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
             deathTimer_ = 0.0f;
             isDashing_ = false;
             canDash_ = true;
+            wallJumpDirLockTimer_ = 0.0f;
+            lockedDirectionX_ = 0.0f;
             // パラメータをリセット
             primitiveObj_->GetMaterial().dissolveThreshold = 0.0f;
             TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
@@ -412,18 +414,25 @@ void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
 
 void Player2D::DisplayImGui() {
 #ifdef USE_IMGUI
-    if (ImGui::TreeNode("Player2D")) {
-        ImGui::DragFloat3("Position", &position_.x, 0.1f);
-        ImGui::DragFloat3("Velocity", &velocity_.x, 0.1f);
-        ImGui::DragFloat("Dash End Upward Vel", &dashEndUpwardVelocity_, 0.1f, 0.0f, 10.0f);
-        ImGui::ColorEdit4("Normal Color", &colorNormal_.x);
-        ImGui::ColorEdit4("Dashed Color", &colorDashed_.x);
+    if (ImGui::TreeNode("プレイヤー2D (Player2D)")) {
+        ImGui::DragFloat3("座標", &position_.x, 0.1f);
+        ImGui::DragFloat3("速度", &velocity_.x, 0.1f);
+        ImGui::DragFloat("ジャンプ力", &jumpPower_, 0.1f, 0.0f, 30.0f);
+        ImGui::DragFloat("ダッシュ終了時の上向き速度", &dashEndUpwardVelocity_, 0.1f, 0.0f, 10.0f);
+        ImGui::DragFloat2("壁ジャンプの力 (X,Y)", &wallJumpPower_.x, 0.1f, 0.0f, 30.0f);
+        ImGui::DragFloat("壁ジャンプ後の速度補間時間", &wallJumpDuration_, 0.01f, 0.0f, 1.0f);
+        ImGui::DragFloat("壁ジャンプ後の壁方向入力制限時間", &wallJumpDirLockDuration_, 0.01f, 0.0f, 2.0f);
+        ImGui::DragFloat("壁ずり落ち時の落下速度", &wallSlideSpeed_, 0.1f, -30.0f, 0.0f);
+        ImGui::DragFloat("重力", &gravity_, 0.1f, -50.0f, 0.0f);
+        ImGui::DragFloat("最大落下速度", &maxFallSpeed_, 0.1f, -50.0f, 0.0f);
+        ImGui::ColorEdit4("通常カラー", &colorNormal_.x);
+        ImGui::ColorEdit4("ダッシュカラー", &colorDashed_.x);
         
         bool sizeChanged = false;
-        if (ImGui::DragFloat("Half Width", &halfWidth_, 0.01f, 0.05f, 5.0f)) {
+        if (ImGui::DragFloat("当たり判定の半幅", &halfWidth_, 0.01f, 0.05f, 5.0f)) {
             sizeChanged = true;
         }
-        if (ImGui::DragFloat("Half Height", &halfHeight_, 0.01f, 0.05f, 5.0f)) {
+        if (ImGui::DragFloat("当たり判定の半高", &halfHeight_, 0.01f, 0.05f, 5.0f)) {
             sizeChanged = true;
         }
         if (sizeChanged && primitiveObj_) {
@@ -492,37 +501,63 @@ void Player2D::HandleInput() {
         platformInertiaTimer_ -= dt;
     }
 
+    if (wallJumpDirLockTimer_ > 0.0f) {
+        wallJumpDirLockTimer_ -= dt;
+        if (wallJumpDirLockTimer_ <= 0.0f) {
+            lockedDirectionX_ = 0.0f;
+        }
+    }
+
     // 通常時の左右移動（ダッシュ中でない場合）
     if (!isDashing_) {
         bool inputLeft = keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT);
         bool inputRight = keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT);
 
+        float targetVelX = 0.0f;
+        
+        bool allowLeft = true;
+        bool allowRight = true;
+        if (wallJumpDirLockTimer_ > 0.0f) {
+            if (lockedDirectionX_ == -1.0f) allowLeft = false;
+            if (lockedDirectionX_ == 1.0f) allowRight = false;
+        }
+
+        if (inputLeft && allowLeft) {
+            targetVelX = -moveSpeed_;
+        }
+        if (inputRight && allowRight) {
+            targetVelX = moveSpeed_;
+        }
+
+        // 外部速度(慣性)の加算と減衰
+        if (isOnGround_) {
+            externalVelocityX_ = 0.0f; // 地上にいるときは慣性をリセット
+        } else {
+            // 空中では緩やかに減衰（空気抵抗）
+            float dt = TimeManager::GetInstance().GetDeltaTime();
+            float decayRate = 5.0f * dt;
+            if (externalVelocityX_ > 0.0f) {
+                externalVelocityX_ -= decayRate;
+                if (externalVelocityX_ < 0.0f) externalVelocityX_ = 0.0f;
+            } else if (externalVelocityX_ < 0.0f) {
+                externalVelocityX_ += decayRate;
+                if (externalVelocityX_ > 0.0f) externalVelocityX_ = 0.0f;
+            }
+        }
+
         if (wallJumpTimer_ <= 0.0f) {
-            float targetVelX = 0.0f;
-            if (inputLeft) {
-                targetVelX = -moveSpeed_;
-            }
-            if (inputRight) {
-                targetVelX = moveSpeed_;
-            }
-
-            // 外部速度(慣性)の加算と減衰
-            if (isOnGround_) {
-                externalVelocityX_ = 0.0f; // 地上にいるときは慣性をリセット
-            } else {
-                // 空中では緩やかに減衰（空気抵抗）
-                float dt = TimeManager::GetInstance().GetDeltaTime();
-                float decayRate = 5.0f * dt;
-                if (externalVelocityX_ > 0.0f) {
-                    externalVelocityX_ -= decayRate;
-                    if (externalVelocityX_ < 0.0f) externalVelocityX_ = 0.0f;
-                } else if (externalVelocityX_ < 0.0f) {
-                    externalVelocityX_ += decayRate;
-                    if (externalVelocityX_ > 0.0f) externalVelocityX_ = 0.0f;
-                }
-            }
-
             velocity_.x = targetVelX + externalVelocityX_;
+        } else {
+            // 壁キック直後の操作不能時間中の速度補間
+            // 初速から「現在のキー入力に基づく目標速度」へ滑らかに減速・加速させる
+            float t = 1.0f - (wallJumpTimer_ / wallJumpDuration_); // 0.0 (キック直後) -> 1.0 (タイマー終了時)
+            
+            // lockedDirectionX_ を元にキックした壁の方向を判定し、初速を決定
+            float startVelX = (lockedDirectionX_ == 1.0f) ? -wallJumpPower_.x : wallJumpPower_.x;
+            float endVelX = targetVelX + externalVelocityX_;
+            
+            // 線形補間で速度を徐々に落とす
+            velocity_.x = startVelX + (endVelX - startVelX) * t;
         }
 
         // 壁ずり落ち / 壁張り付きの判定 (空中で、落下中か静止中の場合のみ)
@@ -565,6 +600,9 @@ void Player2D::HandleInput() {
                     wallJumpTimer_ = wallJumpDuration_;
                     externalVelocityX_ = 0.0f; // 壁ジャンプ時に慣性をリセット
                     SpawnJumpDust({position_.x + halfWidth_, position_.y, 0.0f}, -1.0f);
+                    
+                    wallJumpDirLockTimer_ = wallJumpDirLockDuration_;
+                    lockedDirectionX_ = 1.0f; // 右方向への入力をロック
                 }
                 isTouchingWallRight_ = false;
                 isWallSliding_ = false;
@@ -583,6 +621,9 @@ void Player2D::HandleInput() {
                     wallJumpTimer_ = wallJumpDuration_;
                     externalVelocityX_ = 0.0f; // 壁ジャンプ時に慣性をリセット
                     SpawnJumpDust({position_.x - halfWidth_, position_.y, 0.0f}, 1.0f);
+                    
+                    wallJumpDirLockTimer_ = wallJumpDirLockDuration_;
+                    lockedDirectionX_ = -1.0f; // 左方向への入力をロック
                 }
                 isTouchingWallLeft_ = false;
                 isWallSliding_ = false;
@@ -682,6 +723,8 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
                 velocity_.y = 0.0f;
                 isOnGround_ = true;
                 canDash_ = true; // 着地でダッシュ回復
+                wallJumpDirLockTimer_ = 0.0f;
+                lockedDirectionX_ = 0.0f;
                 
                 if (block) {
                     block->OnPlayerStand();
@@ -746,6 +789,8 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
                 velocity_.y = 0.0f;
                 isOnGround_ = true;
                 canDash_ = true;
+                wallJumpDirLockTimer_ = 0.0f;
+                lockedDirectionX_ = 0.0f;
                 block->OnPlayerStand();
                 if (block->IsMoving()) {
                     isOnMovingPlatform_ = true;
@@ -1040,6 +1085,8 @@ void Player2D::ResetState(const Vector3& initPos) {
     dashTimer_ = 0.0f;
     isTouchingWallRight_ = false;
     isTouchingWallLeft_ = false;
+    wallJumpDirLockTimer_ = 0.0f;
+    lockedDirectionX_ = 0.0f;
     wallJumpTimer_ = 0.0f;
     isWallSliding_ = false;
     isWallClinging_ = false;

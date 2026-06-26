@@ -124,8 +124,8 @@ private:
     float externalVelocityX_ = 0.0f; // 慣性用の外部速度
 
     float moveSpeed_ = 5.0f;       // 左右移動速度
-    float jumpPower_ = 10.0f;      // ジャンプ力
-    float gravity_ = -20.0f;       // 重力加速度
+    float jumpPower_ = 15.0f;      // ジャンプ力
+    float gravity_ = -40.0f;       // 重力加速度
     float maxFallSpeed_ = -15.0f;  // 最大落下速度
 
     bool isOnGround_ = false;      // 地面にいるか
@@ -147,8 +147,13 @@ private:
     bool isTouchingWallRight_ = false;
     bool isTouchingWallLeft_ = false;
     float wallJumpTimer_ = 0.0f;       // 壁ジャンプ後の入力制限時間
-    float wallJumpDuration_ = 0.2f;    // 制限時間の長さ
-    Vector2 wallJumpPower_ = { 8.0f, 10.0f }; // 壁ジャンプ時の X, Y 速度
+    float wallJumpDuration_ = 0.5f;    // 制限時間の長さ
+    Vector2 wallJumpPower_ = { 8.0f, 12.0f }; // 壁ジャンプ時の X, Y 速度
+    
+    // 壁キック方向への入力制限
+    float wallJumpDirLockTimer_ = 0.0f;
+    float wallJumpDirLockDuration_ = 0.4f;
+    float lockedDirectionX_ = 0.0f; // 1.0f(右入力を無視), -1.0f(左入力を無視)
     
     // 壁ずり落ち・張り付き用パラメータ
     float wallSlideSpeed_ = -2.0f;     // 壁ずり落ち時の最大落下速度
