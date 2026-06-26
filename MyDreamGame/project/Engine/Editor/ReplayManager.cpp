@@ -251,6 +251,41 @@ bool ReplayManager::PopRecordedFrame(FrameData& outFrame) {
     return true;
 }
 
+#include "Core/Utility/LogManager.h"
+#include <chrono>
+#include <format>
+#include <ctime>
+
+void ReplayManager::TriggerBugReport(const std::string& reason) {
+    LogManager::GetInstance()->AddLog(LogLevel::Error, "[Bug Report] " + reason);
+    
+    // 現在のリプレイ状態を自動保存
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+    localtime_s(&tm, &time);
+    std::string filename = std::format("bug_report_{:04}{:02}{:02}_{:02}{:02}{:02}.json", 
+                                        tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, 
+                                        tm.tm_hour, tm.tm_min, tm.tm_sec);
+                                        
+    // 録画中なら履歴に残すために一旦StopRecordを呼んで保存するか、現在の履歴を保存する
+    if (isRecording_) {
+        StopRecord();
+    }
+    
+    if (history_.size() > 0) {
+        // 直前のプレイ（もしくは現在のバグったプレイ）を保存
+        SaveToFile(history_[0], filename);
+    } else {
+        SaveToFile(currentReplay_, filename);
+    }
+    
+    LogManager::GetInstance()->AddLog(LogLevel::Info, "Bug report replay saved to: " + filename);
+    
+    // 安全に停止
+    StopPlayback();
+}
+
 void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath) {
     if (historyIndex >= 0 && historyIndex < static_cast<int>(history_.size())) {
         currentReplay_ = history_[historyIndex];
@@ -268,6 +303,8 @@ void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath)
     isPaused_ = false;
     isRecording_ = false;
     currentFrame_ = 0;
+    hasLoggedDesync_ = false;
+    forceSnapNextFrame_ = true; // 再生開始時に強制的に状態を再構築させる
 
     // KeyboardInput をリプレイモードに切り替える
     KeyboardInput::GetInstance()->SetReplayMode(true);
@@ -289,6 +326,7 @@ void ReplayManager::SelectReplay(int historyIndex, const std::string& filepath) 
     
     // 再生は開始せず、フレームを0にしておく
     currentFrame_ = 0;
+    hasLoggedDesync_ = false;
 }
 
 void ReplayManager::StopPlayback() {
@@ -296,6 +334,7 @@ void ReplayManager::StopPlayback() {
     isPlaying_ = false;
     isPaused_ = false;
     currentFrame_ = 0;
+    hasLoggedDesync_ = false;
 
     // KeyboardInput を通常モードに戻す
     KeyboardInput::GetInstance()->SetReplayMode(false);
@@ -327,7 +366,8 @@ void ReplayManager::ResumePlayback() {
 
 void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
     if (!isPlaying_) return;
-
+    
+    // totalFramesを超えている場合の安全チェック
     if (currentFrame_ >= currentReplay_.totalFrames) {
         if (isLoopPlay_) {
             currentFrame_ = 0; // ループ再生：最初に戻す
@@ -340,6 +380,8 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
             StopPlayback(); // ループOFF：完全に停止
             return;
         }
+        StopPlayback();
+        return;
     }
 
     const FrameData& currentFrame = currentReplay_.frames[currentFrame_];
@@ -376,11 +418,34 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
 
         // 2. 二重発動防止：現在の物理位置と記録されている位置を比較し、
         // ズレが 0.05f 以上の一定の閾値を超えた場合のみ、正しい座標に吸着（補正）させます。
-        const Vector3& recordedPos = currentFrame.position;
+        // ※ UpdatePlayback は player_->Update() の前に呼ばれるため、現在位置は「1つ前のフレームの計算結果」です。
+        Vector3 recordedPos;
+        if (currentFrame_ == 0) {
+            recordedPos = currentReplay_.playerInitPos;
+        } else {
+            recordedPos = currentReplay_.frames[currentFrame_ - 1].position;
+        }
+
         float dx = playerPos.x - recordedPos.x;
         float dy = playerPos.y - recordedPos.y;
         float dz = playerPos.z - recordedPos.z;
         float distSq = dx * dx + dy * dy + dz * dz;
+
+        // isSnapEnabled_ (TASモードの補正) がOFFでも、ズレ検知のログは出す
+        if (distSq > 0.0025f && !forceSnapNextFrame_ && !hasLoggedDesync_) {
+            std::string errorMsg = std::format(
+                "リプレイのズレ検知 (フレーム: {}, ズレ量: {:.3f})\n"
+                "  [現在座標] X:{:.3f}, Y:{:.3f}, Z:{:.3f}\n"
+                "  [録画座標] X:{:.3f}, Y:{:.3f}, Z:{:.3f}\n"
+                "  [原因] 録画時と再生時で物理演算の結果に誤差が蓄積しています。\n"
+                "  [対策] TAS編集メニューの「位置補正」をONにするか、物理演算を固定時間で行うよう変更してください。",
+                currentFrame_, std::sqrt(distSq),
+                playerPos.x, playerPos.y, playerPos.z,
+                recordedPos.x, recordedPos.y, recordedPos.z
+            );
+            LogManager::GetInstance()->AddLog(LogLevel::Error, errorMsg);
+            hasLoggedDesync_ = true; // スパム防止のため1再生につき1回まで
+        }
 
         if (isSnapEnabled_ || forceSnapNextFrame_) {
             if (distSq > 0.0025f || forceSnapNextFrame_) {
@@ -411,6 +476,7 @@ void ReplayManager::SetCurrentFrame(int frame) {
     currentFrame_ = (std::max)(0, (std::min)(frame, currentReplay_.totalFrames - 1));
     if (prevFrame != currentFrame_) {
         forceSnapNextFrame_ = true;
+        hasLoggedDesync_ = false;
     }
 }
 

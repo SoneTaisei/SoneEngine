@@ -164,7 +164,7 @@ void SpriteCommon::CreateGraphicsPipeline() {
 
     // レンダーターゲット設定 (DirectXCommonの設定に合わせる)
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = UINT_MAX;
 

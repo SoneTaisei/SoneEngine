@@ -60,14 +60,17 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IntDir>$(SolutionDir)..\generated\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -208,6 +211,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClCompile Include="Engine\GameObject\Object3D.cpp" />
     <ClCompile Include="Engine\GameObject\ResourceObject.cpp" />
     <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp" />
+    <ClCompile Include="Engine\Core\Utility\LogManager.cpp" />
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp" />
     <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
@@ -393,6 +397,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Core\Utility\ImGuiHelper.h" />
     <ClInclude Include="Engine\Core\Utility\Structs.h" />
     <ClInclude Include="Engine\Core\Utility\TransformFunctions.h" />
+    <ClInclude Include="Engine\Core\Utility\LogManager.h" />
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h" />
     <ClInclude Include="Engine\Graphics\TextureManager.h" />
     <ClInclude Include="Project\Scenes\TitleScene.h" />

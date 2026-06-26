@@ -424,9 +424,9 @@ void DirectXCommon::CreatePipelines() {
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID; // 中身を塗りつぶす
     rasterizerDesc.FrontCounterClockwise = FALSE;
 
-    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"resources/shaders/Object3D.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> vertexShaderBlob = CompileShader(L"resources/shaders/Object3d.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(vertexShaderBlob != nullptr);
-    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"resources/shaders/Object3D.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> pixelShaderBlob = CompileShader(L"resources/shaders/Object3d.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     assert(pixelShaderBlob != nullptr);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
@@ -570,7 +570,7 @@ void DirectXCommon::UpdateFixFPS() {
 
 void DirectXCommon::InitializeRenderTexture() {
     // 1. RenderTexture本体の作成 (UtilityFunctionsで作った関数を呼ぶ)
-    const Vector4 kRenderTargetClearValue{1.0f, 0.0f, 0.0f, 1.0f}; // 一旦分かりやすいように赤
+    const Vector4 kRenderTargetClearValue{0.1f, 0.25f, 0.5f, 1.0f}; // PreDrawでのクリア色と合わせる
     renderTextureResource_ = CreateRenderTextureResource(
         device_.Get(), windowWidth_, windowHeight_,
         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kRenderTargetClearValue);
@@ -599,9 +599,10 @@ void DirectXCommon::InitializeRenderTexture() {
     device_->CreateShaderResourceView(renderTextureResource_.Get(), &srvDesc, renderTextureSrvHandleCPU_);
 
     // --- ポストプロセス用テクスチャの作成 ---
+    const Vector4 kPostProcessClearValue{0.0f, 0.0f, 0.0f, 1.0f};
     postProcessResource_ = CreateRenderTextureResource(
         device_.Get(), windowWidth_, windowHeight_,
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kRenderTargetClearValue);
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kPostProcessClearValue, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     // RTVの作成 (4番目: インデックス3)
     postProcessRtvHandle_ = GetCPUDescriptorHandle(

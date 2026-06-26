@@ -157,7 +157,17 @@ void GameScene::Update(SceneManager *sceneManager) {
         } else {
             // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
             if (ReplayManager::GetInstance()->IsPlaying()) {
-                bool shouldRebuildState = !wasPlayingLastFrame_ || ReplayManager::GetInstance()->IsForceSnapNextFrame();
+                // ループ判定を再生処理の一番最初で行う
+                if (ReplayManager::GetInstance()->GetCurrentFrame() >= ReplayManager::GetInstance()->GetCurrentReplay().totalFrames) {
+                    if (ReplayManager::GetInstance()->IsLoopPlay()) {
+                        ReplayManager::GetInstance()->SetCurrentFrame(0); // これにより forceSnapNextFrame_ = true がセットされる
+                    } else {
+                        ReplayManager::GetInstance()->StopPlayback();
+                    }
+                }
+
+                if (ReplayManager::GetInstance()->IsPlaying()) {
+                    bool shouldRebuildState = !wasPlayingLastFrame_ || ReplayManager::GetInstance()->IsForceSnapNextFrame();
                 if (shouldRebuildState) {
                     auto& replayData = ReplayManager::GetInstance()->GetCurrentReplay();
                     int curFrame = ReplayManager::GetInstance()->GetCurrentFrame();
@@ -167,13 +177,20 @@ void GameScene::Update(SceneManager *sceneManager) {
                         map_->LoadFromString(replayData.mapDataStr);
                     }
                     
-                    // 2. プレイヤースコアをリセット
-                    player_->SetScore(0);
+                    // 2. プレイヤー状態(速度含む)とスコアをリセット
+                    player_->ResetState(replayData.playerInitPos);
                     
                     // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
                     for (int i = 0; i <= curFrame; ++i) {
                         player_->SetPosition(replayData.frames[i].position);
                         player_->SimulateCollisions(*map_);
+                    }
+
+                    // 4. コイン回収用に座標を動かしたので、シミュレーション再開用の正しい座標に戻す
+                    if (curFrame == 0) {
+                        player_->SetPosition(replayData.playerInitPos);
+                    } else {
+                        player_->SetPosition(replayData.frames[curFrame - 1].position);
                     }
                 }
 
@@ -204,6 +221,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                         gameCamera_->SetFollowTarget(&player_->GetPosition());
                         // 追従モードのため、SetTranslation(camPos) は実行しない
                     }
+                }
                 }
             } else {
                 if (wasPlayingLastFrame_) {

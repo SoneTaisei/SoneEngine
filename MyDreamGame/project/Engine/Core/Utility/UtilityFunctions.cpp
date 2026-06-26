@@ -187,6 +187,11 @@ IDxcBlob *CompileShader(
 	// hlslファイルを読む
 	IDxcBlobEncoding *shaderSource = nullptr;
 	HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
+	if (FAILED(hr)) {
+		wchar_t buf[MAX_PATH];
+		GetCurrentDirectoryW(MAX_PATH, buf);
+		Log(ConvertString(std::format(L"Failed to load shader file: {}. hr: {:08X}, CWD: {}\n", filePath, hr, buf)));
+	}
 	// あきらめなかったら止める
 	assert(SUCCEEDED(hr));
 	// 読み込んだファイルの内容を設定する
@@ -790,7 +795,8 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     uint32_t width,
     uint32_t height,
     DXGI_FORMAT format,
-    const Vector4 &clearColor) {
+    const Vector4 &clearColor,
+    D3D12_RESOURCE_STATES initialState) {
 
     assert(device != nullptr);
 
@@ -825,7 +831,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
         &heapProperties,
         D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
-        D3D12_RESOURCE_STATE_RENDER_TARGET, // 初期状態は書き込み可能(レンダーターゲット)にしておく
+        initialState,
         &clearValue,
         IID_PPV_ARGS(&resource));
     assert(SUCCEEDED(hr));

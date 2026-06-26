@@ -12,6 +12,8 @@
 #include "Scene/SceneManager.h"
 #include "ReplayManager.h"
 #include "Core/TimeManager.h"
+#include "Graphics/TextureManager.h"
+#include "Core/Utility/LogManager.h"
 #include "GameObject/MapObject2D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 
@@ -70,7 +72,7 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     init_info.Device = device;
     init_info.CommandQueue = commandQueue;
     init_info.NumFramesInFlight = 2;
-    init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    init_info.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     init_info.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     init_info.SrvDescriptorHeap = SrvManager::GetInstance()->GetSrvDescriptorHeap();
     init_info.SrvDescriptorAllocFn = ImGuiSrvAlloc;
@@ -1217,6 +1219,126 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (mapEditorInputHeight_ == -1) {
                         mapEditorInputHeight_ = mapChip->GetHeight();
                     }
+
+                    // ==========================================
+                    // ここから移動してきたマップ設定（ファイル・サイズ）
+                    // ==========================================
+                    // json ディレクトリ内の .txt ファイルを自動走査
+                    std::vector<std::string> stageFiles;
+                    try {
+                        if (std::filesystem::exists("resources/json/MapData")) {
+                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/MapData")) {
+                                if (entry.is_regular_file()) {
+                                    std::string filename = entry.path().filename().string();
+                                    if (filename.length() >= 4) {
+                                        std::string ext = filename.substr(filename.length() - 4);
+                                        if (ext == ".txt" || ext == ".TXT") {
+                                            stageFiles.push_back(filename);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (...) {
+                        // エラー時は無視
+                    }
+
+                    // 既存のマップファイルを選択するコンボボックス
+                    if (!stageFiles.empty()) {
+                        static int selectedFileIndex = -1;
+                        std::string currentFile = stageFilename_;
+                        if (currentFile.length() < 4 || (currentFile.compare(currentFile.length() - 4, 4, ".txt") != 0 && currentFile.compare(currentFile.length() - 4, 4, ".TXT") != 0)) {
+                            currentFile += ".txt";
+                        }
+                        
+                        selectedFileIndex = -1;
+                        for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
+                            if (stageFiles[i] == currentFile) {
+                                selectedFileIndex = i;
+                                break;
+                            }
+                        }
+
+                        std::string comboPreview = (selectedFileIndex != -1) ? stageFiles[selectedFileIndex] : "既存のマップを選択...";
+                        if (ImGui::BeginCombo("マップファイルを選択", comboPreview.c_str())) {
+                            for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
+                                bool isSelected = (selectedFileIndex == i);
+                                if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
+                                    strcpy_s(stageFilename_, sizeof(stageFilename_), stageFiles[i].c_str());
+                                    selectedFileIndex = i;
+                                }
+                                if (isSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+
+                    // ファイル名入力
+                    ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_));
+
+                    ImGui::Spacing();
+                    ImGui::Text("マップサイズ設定 (1画面＝ 幅:20, 高さ:11)");
+                    ImGui::TextDisabled("※ 画面を増やしたい場合はサイズを広げてください");
+                    
+                    // マップサイズ入力と適用ボタン
+                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::InputInt("Width", &mapEditorInputWidth_);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(100.0f);
+                    ImGui::InputInt("Height", &mapEditorInputHeight_);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Apply Size")) {
+                        if (mapEditorInputWidth_ < 1) mapEditorInputWidth_ = 1;
+                        if (mapEditorInputHeight_ < 1) mapEditorInputHeight_ = 1;
+                        mapChip->Resize(mapEditorInputWidth_, mapEditorInputHeight_);
+                    }
+
+                    ImGui::Separator();
+
+                    // ファイルパス取得用ラムダ（.txtの自動付与）
+                    auto GetFullFilePath = [](const char* filename) {
+                        std::string name = filename;
+                        bool hasExt = false;
+                        if (name.length() >= 4) {
+                            std::string ext = name.substr(name.length() - 4);
+                            if (ext == ".txt" || ext == ".TXT") {
+                                hasExt = true;
+                            }
+                        }
+                        if (!hasExt) {
+                            name += ".txt";
+                        }
+                        return std::string("resources/json/MapData/") + name;
+                    };
+
+                    // 操作ボタン
+                    if (ImGui::Button("保存")) {
+                        mapChip->SaveToFile(GetFullFilePath(stageFilename_));
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("読み込み")) {
+                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
+                            mapEditorInputWidth_ = mapChip->GetWidth();
+                            mapEditorInputHeight_ = mapChip->GetHeight();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("クリア")) {
+                        mapChip->ClearMap();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("初期化")) {
+                        mapChip->ResetMap();
+                        mapEditorInputWidth_ = mapChip->GetWidth();
+                        mapEditorInputHeight_ = mapChip->GetHeight();
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    // ==========================================
+
                     // 境界線（ルームトリガー）編集モード
                     ImGui::Checkbox("境界線（トリガー）編集モード", &isBoundaryEditMode_);
                     if (isBoundaryEditMode_) {
@@ -1234,6 +1356,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::Spacing();
                     ImGui::Separator();
 
+                    // ペイントツール選択
+                    static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
                     // ペイントツール選択 (境界線編集モード中は操作不可にするかグレーアウトする)
                     ImGui::BeginDisabled(isBoundaryEditMode_);
                     ImGui::Text("Paint Tool:");
@@ -1280,6 +1404,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     float totalHeight = itemSize + 24.0f; // アイコン＋テキスト
                     float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
 
+                    static int toolToDelete = -1;
+                    static bool openDeletePopup = false;
+
                     // ツール描画用の共通ラムダ
                     // sectionType: 0=System, 1=Template(Basic), 2=Custom
                     auto DrawTools = [&](const std::vector<ToolIcon>& tools, int sectionType) {
@@ -1298,6 +1425,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 bool isSelected = (mapEditorSelectedTool_ == tool.id);
 
                                 // 当たり判定 (InvisibleButton)
+                                ImGui::SetNextItemAllowOverlap();
                                 if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
                                     mapEditorSelectedTool_ = tool.id;
                                 }
@@ -1363,6 +1491,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                         }
                                         ImGui::EndDragDropTarget();
                                     }
+                                    
+                                    ImGui::SetCursorScreenPos(ImVec2(p.x + itemSize - 16.0f, p.y));
+                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+                                    if (ImGui::Button(("X##del_" + std::to_string(tool.id)).c_str(), ImVec2(16, 16))) {
+                                        toolToDelete = tool.id;
+                                        openDeletePopup = true;
+                                    }
+                                    ImGui::PopStyleVar();
+                                    ImGui::PopStyleColor();
                                 }
                             } else if (sectionType == 2) {
                                 // "＋ 追加" ボタン
@@ -1375,6 +1513,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     newDef.properties["jumpVelocity"] = 15.0f;
                                     palette.push_back(newDef);
                                     mapEditorSelectedTool_ = newDef.id; // 新しいものを選択状態にする
+                                    mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                                 }
                             }
 
@@ -1426,129 +1565,41 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Spacing();
 
                         DrawTools(customTools, 2);
+
+                        if (openDeletePopup) {
+                            ImGui::OpenPopup("DeleteConfirmPopup");
+                            openDeletePopup = false;
+                        }
+                        if (ImGui::BeginPopupModal("DeleteConfirmPopup", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                            ImGui::Text("本当に削除しますか？\n(マップ上で使用されている場合はエラーになる可能性があります)");
+                            ImGui::Separator();
+                            if (ImGui::Button("はい", ImVec2(120, 0))) {
+                                auto& palette = mapChip->GetCustomPalette();
+                                auto it = std::remove_if(palette.begin(), palette.end(), [&](const MapChip2D::CustomBlockDef& d) { return d.id == toolToDelete; });
+                                palette.erase(it, palette.end());
+                                mapChip->SaveToFile(GetFullFilePath(stageFilename_));
+                                toolToDelete = -1;
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::SetItemDefaultFocus();
+                            ImGui::SameLine();
+                            if (ImGui::Button("いいえ", ImVec2(120, 0))) {
+                                toolToDelete = -1;
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::EndPopup();
+                        }
                     }
 
                     ImGui::Spacing();
                     ImGui::EndDisabled();
 
-                    ImGui::Separator();
-
-                    // json ディレクトリ内の .txt ファイルを自動走査
-                    std::vector<std::string> stageFiles;
-                    try {
-                        if (std::filesystem::exists("resources/json/MapData")) {
-                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/MapData")) {
-                                if (entry.is_regular_file()) {
-                                    std::string filename = entry.path().filename().string();
-                                    if (filename.length() >= 4) {
-                                        std::string ext = filename.substr(filename.length() - 4);
-                                        if (ext == ".txt" || ext == ".TXT") {
-                                            stageFiles.push_back(filename);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (...) {
-                        // エラー時は無視
-                    }
-
-                    // 既存のマップファイルを選択するコンボボックス
-                    if (!stageFiles.empty()) {
-                        static int selectedFileIndex = -1;
-                        std::string currentFile = stageFilename_;
-                        if (currentFile.length() < 4 || (currentFile.compare(currentFile.length() - 4, 4, ".txt") != 0 && currentFile.compare(currentFile.length() - 4, 4, ".TXT") != 0)) {
-                            currentFile += ".txt";
-                        }
-                        
-                        selectedFileIndex = -1;
-                        for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
-                            if (stageFiles[i] == currentFile) {
-                                selectedFileIndex = i;
-                                break;
-                            }
-                        }
-
-                        std::string comboPreview = (selectedFileIndex != -1) ? stageFiles[selectedFileIndex] : "Select existing map...";
-                        if (ImGui::BeginCombo("Select Map File", comboPreview.c_str())) {
-                            for (int i = 0; i < static_cast<int>(stageFiles.size()); ++i) {
-                                bool isSelected = (selectedFileIndex == i);
-                                if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
-                                    strcpy_s(stageFilename_, sizeof(stageFilename_), stageFiles[i].c_str());
-                                    selectedFileIndex = i;
-                                }
-                                if (isSelected) {
-                                    ImGui::SetItemDefaultFocus();
-                                }
-                            }
-                            ImGui::EndCombo();
-                        }
-                    }
-
-                    // ファイル名入力
-                    ImGui::InputText("Filename", stageFilename_, sizeof(stageFilename_));
-
-                    ImGui::Spacing();
-                    ImGui::Text("マップサイズ設定 (1画面＝ 幅:20, 高さ:11)");
-                    ImGui::TextDisabled("※ 画面を増やしたい場合はサイズを広げてください");
-                    
-                    // マップサイズ入力と適用ボタン
-                    ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("Width", &mapEditorInputWidth_);
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(100.0f);
-                    ImGui::InputInt("Height", &mapEditorInputHeight_);
-                    ImGui::SameLine();
-                    if (ImGui::Button("Apply Size")) {
-                        if (mapEditorInputWidth_ < 1) mapEditorInputWidth_ = 1;
-                        if (mapEditorInputHeight_ < 1) mapEditorInputHeight_ = 1;
-                        mapChip->Resize(mapEditorInputWidth_, mapEditorInputHeight_);
-                    }
-
-                    ImGui::Separator();
-
-                    // ファイルパス取得用ラムダ（.txtの自動付与）
-                    auto GetFullFilePath = [](const char* filename) {
-                        std::string name = filename;
-                        bool hasExt = false;
-                        if (name.length() >= 4) {
-                            std::string ext = name.substr(name.length() - 4);
-                            if (ext == ".txt" || ext == ".TXT") {
-                                hasExt = true;
-                            }
-                        }
-                        if (!hasExt) {
-                            name += ".txt";
-                        }
-                        return std::string("resources/json/MapData/") + name;
-                    };
-
-                    // 操作ボタン
-                    if (ImGui::Button("Save Map")) {
-                        mapChip->SaveToFile(GetFullFilePath(stageFilename_));
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Load Map")) {
-                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
-                            mapEditorInputWidth_ = mapChip->GetWidth();
-                            mapEditorInputHeight_ = mapChip->GetHeight();
-                        }
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Clear Map")) {
-                        mapChip->ClearMap();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Reset Default")) {
-                        mapChip->ResetMap();
-                        mapEditorInputWidth_ = mapChip->GetWidth();
-                        mapEditorInputHeight_ = mapChip->GetHeight();
-                    }
+                    // 2Dグリッド描画のUIは削除されました
                 } else {
-                    ImGui::Text("Active scene does not support 2D map editing.");
+                    ImGui::Text("現在のアクティブシーンは2Dマップ編集をサポートしていません。");
                 }
             } else {
-                ImGui::Text("No active scene.");
+                ImGui::Text("アクティブなシーンがありません。");
             }
         }
         ImGui::End();
@@ -2311,6 +2362,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         ImGui::End();
     }
+    
+    LogManager::GetInstance()->Draw();
 }
 
 void EditorManager::Draw(ID3D12GraphicsCommandList *commandList) {
