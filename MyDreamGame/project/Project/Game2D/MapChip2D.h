@@ -151,4 +151,5 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_{};
 
     bool isRebuildEnabled_ = true;
+    bool isDirty_ = false;
 };

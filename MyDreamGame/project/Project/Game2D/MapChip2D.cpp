@@ -79,6 +79,11 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
 }
 
 void MapChip2D::Update() {
+    if (isDirty_) {
+        RebuildChipObjects();
+        isDirty_ = false;
+    }
+
     for (auto it = updateBlocks_.begin(); it != updateBlocks_.end();) {
         if (*it) {
             (*it)->Update();
@@ -276,7 +281,7 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
 
     if (mapData_[y][x] != type) {
         mapData_[y][x] = type;
-        RebuildChipObjects();
+        isDirty_ = true;
     }
 }
 

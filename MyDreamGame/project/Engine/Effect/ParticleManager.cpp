@@ -2,6 +2,7 @@
 #include "Graphics/TextureManager.h"
 #include "Renderer/SrvManager.h"
 #include "Core/Utility/TransformFunctions.h"
+#include "Core/TimeManager.h"
 #include <cassert>
 #include <random>
 //#include "imgui.h"
@@ -197,14 +198,15 @@ void ParticleManager::EmitCustom(const Vector3& position, const ParticleProperty
 }
 
 void ParticleManager::Update() {
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
     for (auto it = particles_.begin(); it != particles_.end(); ) {
-        it->currentTime += 1.0f / 60.0f; // 簡易的に60FPS固定
+        it->currentTime += deltaTime;
         if (it->currentTime >= it->lifeTime) {
             it = particles_.erase(it);
         } else {
-            it->transform.translate.x += it->velocity.x * (1.0f / 60.0f);
-            it->transform.translate.y += it->velocity.y * (1.0f / 60.0f);
-            it->transform.translate.z += it->velocity.z * (1.0f / 60.0f);
+            it->transform.translate.x += it->velocity.x * deltaTime;
+            it->transform.translate.y += it->velocity.y * deltaTime;
+            it->transform.translate.z += it->velocity.z * deltaTime;
             ++it;
         }
     }
