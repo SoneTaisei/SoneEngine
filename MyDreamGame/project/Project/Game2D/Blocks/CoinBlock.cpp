@@ -9,7 +9,7 @@ void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     primitiveObj_->SetScale({ width * 0.5f, height * 0.5f, 0.5f });
     position_ = { worldX, worldY, 0.0f };
     primitiveObj_->SetTranslation(position_);
-    primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効化
+    primitiveObj_->GetMaterial().lightingType = 1; // ライティング無効化
 }
 
 void CoinBlock::Update() {

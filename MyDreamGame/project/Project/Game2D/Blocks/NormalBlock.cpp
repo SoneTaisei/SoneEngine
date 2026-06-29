@@ -12,5 +12,5 @@ void NormalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, floa
     }
     primitiveObj_->SetScale({ width, height, 1.0f });
     primitiveObj_->SetTranslation({ worldX, worldY, 0.0f });
-    primitiveObj_->GetMaterial().lightingType = 0; // ライティング（鏡面反射など）を無効化
+    primitiveObj_->GetMaterial().lightingType = 1; // ライティング（鏡面反射など）を無効化
 }

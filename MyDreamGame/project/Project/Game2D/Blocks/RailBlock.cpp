@@ -13,5 +13,5 @@ void RailBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     // レールとしての見た目を作るために少し細くする
     primitiveObj_->SetScale({ width * 0.2f, height * 0.2f, 1.0f });
     
-    primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効化
+    primitiveObj_->GetMaterial().lightingType = 1; // ライティング無効化
 }

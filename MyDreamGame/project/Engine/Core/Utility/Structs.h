@@ -120,6 +120,8 @@ struct DirectionalLight {
 	Vector4 color;//!< ライトの色
 	Vector3 direction;//!< ライトの向き
 	float intensity;//!< 輝度
+	int32_t enableFlatShading; //!< フラットシェーディング
+	float padding[3];
 };
 
 struct PointLight {

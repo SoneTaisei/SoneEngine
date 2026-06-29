@@ -73,6 +73,11 @@ private:
     // 今デバッグモードかどうか
     bool isDebugCameraActive_ = false;
 
+#ifdef USE_IMGUI
+    // ImGuiの表示/非表示
+    bool showImGui_ = true;
+#endif
+
     // --- ウィンドウ状態復元用 ---
     int frameCount_ = 0;
     bool pendingMaximized_ = false;

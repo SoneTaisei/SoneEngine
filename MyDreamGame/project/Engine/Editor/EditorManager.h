@@ -55,6 +55,10 @@ public:
     void SaveSceneConfig();
     void LoadSceneConfig();
 
+    // ライティング設定のJSON保存・読込み
+    void SaveLightingConfig(ModelCommon* modelCommon);
+    void LoadLightingConfig(ModelCommon* modelCommon);
+
     // 現在選択中のシーンタイプを取得
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
 
@@ -109,6 +113,16 @@ private:
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;
+
+    // グローバルライティング設定状態
+    int activeLightType_ = 2;
+    bool enableFog_ = false;
+    float dIntensity_ = 1.0f;
+    float pIntensity_ = 1.0f;
+    float sIntensity_ = 4.0f;
+    float spotAngleDeg_ = 30.0f;
+    float spotFalloffDeg_ = 20.0f;
+    bool enableFlatShading_ = false;
 
     // 各ウィンドウの表示状態フラグ
     bool showInspector_ = true;

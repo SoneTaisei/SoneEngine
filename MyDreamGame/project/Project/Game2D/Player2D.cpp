@@ -30,7 +30,7 @@ void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
     primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
     primitiveObj_->GetMaterial().color = colorNormal_; // 青色
     primitiveObj_->GetMaterial().color = colorNormal_; // 青色
-    primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効（2Dなので）
+    primitiveObj_->GetMaterial().lightingType = 1; // ライティング有効
 
     // ダッシュ波紋エフェクト用リングの初期化
     Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);

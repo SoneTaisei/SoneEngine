@@ -40,6 +40,15 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
     
     if (gMaterial.lightingType == 1) {
         float3 normal = normalize(input.normal);
+        if (gDirectionalLight.enableFlatShading != 0) {
+            float3 dpdx = ddx(input.worldPosition);
+            float3 dpdy = ddy(input.worldPosition);
+            float3 flatNormal = normalize(cross(dpdx, dpdy));
+            if (dot(flatNormal, normal) < 0.0f) {
+                flatNormal = -flatNormal;
+            }
+            normal = flatNormal;
+        }
         float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
         
         float3 directionalLightDir = normalize(-gDirectionalLight.direction);

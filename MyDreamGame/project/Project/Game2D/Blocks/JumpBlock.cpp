@@ -10,7 +10,7 @@ void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     
     primitiveObj_->SetScale({ width, height, 1.0f });
     primitiveObj_->SetTranslation({ worldX, worldY, 0.0f });
-    primitiveObj_->GetMaterial().lightingType = 0; // ライティング無効化
+    primitiveObj_->GetMaterial().lightingType = 1; // ライティング無効化
 }
 
 void JumpBlock::OnPlayerStand() {

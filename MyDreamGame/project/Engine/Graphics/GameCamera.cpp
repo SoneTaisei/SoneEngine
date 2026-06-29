@@ -1,6 +1,9 @@
 #include "GameCamera.h"
 #include "CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <filesystem>
 
 void GameCamera::Initialize(int kClientWidth, int kClientHeight) {
     Camera::Initialize(kClientWidth, kClientHeight);
@@ -32,6 +35,9 @@ void GameCamera::InitializeOrthographic(int kClientWidth, int kClientHeight, flo
     // 2Dモード：カメラはZ軸上から見下ろす（Z=-10の位置からZ=0を見る）
     transform_.translate = { 0.0f, 5.0f, -10.0f };
     transform_.rotate = { 0.0f, 0.0f, 0.0f };
+
+    // 設定ファイルがあれば読み込む
+    LoadConfig();
 
     UpdateMatrixOrthographic();
 }
@@ -114,11 +120,22 @@ void GameCamera::UpdateMatrixOrthographic() {
         }
     }
 
-    // ビュー行列：カメラ位置から見るだけ（回転なし）
-    // 2Dなので単純な平行移動のみ
-    viewMatrix_ = TransformFunctions::MakeTranslateMatrix(
+    // ビュー行列：カメラ位置と3D回転（X, Y, Z）を反映
+    Matrix4x4 rotationMatrix = TransformFunctions::Multiply(
+        TransformFunctions::Multiply(
+            TransformFunctions::MakeRoteZMatrix(transform_.rotate.z),
+            TransformFunctions::MakeRoteXMatrix(transform_.rotate.x)
+        ),
+        TransformFunctions::MakeRoteYMatrix(transform_.rotate.y)
+    );
+
+    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(
         { -transform_.translate.x, -transform_.translate.y, -transform_.translate.z }
     );
+
+    Matrix4x4 rotateMatrixInv = TransformFunctions::Transpose(rotationMatrix);
+
+    viewMatrix_ = TransformFunctions::Multiply(translateMatrix, rotateMatrixInv);
 
     // 正射影行列
     float halfW = orthoWidth_ * 0.5f;
@@ -129,4 +146,60 @@ void GameCamera::UpdateMatrixOrthographic() {
 
     // CameraManagerにも反映
     CameraManager::GetInstance()->SetCameraInfo(transform_.translate, viewMatrix_, projectionMatrix_);
+}
+
+void GameCamera::LoadConfig(const std::string& filepath) {
+    if (!std::filesystem::exists(filepath)) {
+        return;
+    }
+    std::ifstream ifs(filepath);
+    if (!ifs.is_open()) {
+        return;
+    }
+    try {
+        nlohmann::json j;
+        ifs >> j;
+        if (j.contains("scale")) {
+            SetScale(j["scale"].get<float>());
+        } else {
+            if (j.contains("orthoWidth")) orthoWidth_ = j["orthoWidth"].get<float>();
+            if (j.contains("orthoHeight")) orthoHeight_ = j["orthoHeight"].get<float>();
+        }
+        if (j.contains("followLerp")) followLerp_ = j["followLerp"].get<float>();
+        if (j.contains("transitionLerp")) transitionLerp_ = j["transitionLerp"].get<float>();
+        
+        if (j.contains("rotate")) {
+            transform_.rotate.x = j["rotate"]["x"].get<float>();
+            transform_.rotate.y = j["rotate"]["y"].get<float>();
+            transform_.rotate.z = j["rotate"]["z"].get<float>();
+        }
+    } catch (...) {
+        // エラー時はデフォルト値のままにする
+    }
+    ifs.close();
+}
+
+void GameCamera::SaveConfig(const std::string& filepath) {
+    std::filesystem::path path(filepath);
+    if (path.has_parent_path()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
+
+    std::ofstream ofs(filepath);
+    if (!ofs.is_open()) {
+        return;
+    }
+    nlohmann::json j;
+    j["scale"] = scale_;
+    j["orthoWidth"] = orthoWidth_;
+    j["orthoHeight"] = orthoHeight_;
+    j["followLerp"] = followLerp_;
+    j["transitionLerp"] = transitionLerp_;
+
+    j["rotate"]["x"] = transform_.rotate.x;
+    j["rotate"]["y"] = transform_.rotate.y;
+    j["rotate"]["z"] = transform_.rotate.z;
+
+    ofs << j.dump(4);
+    ofs.close();
 }

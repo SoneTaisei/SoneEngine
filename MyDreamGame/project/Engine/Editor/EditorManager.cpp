@@ -636,66 +636,130 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Text("グローバル設定 (ライティング)");
                 ImGui::Separator();
 
-                static int activeLightType = 2;
-                static bool enableFog = false;
-                static float dIntensity = 1.0f;
-                static float pIntensity = 1.0f;
-                static float sIntensity = 4.0f;
-                static float spotAngleDeg = 30.0f;
-                static float spotFalloffDeg = 20.0f;
+                bool lightingChanged = false;
 
                 ImGui::Text("アクティブな光源");
-                ImGui::RadioButton("平行光源 (Directional)", &activeLightType, 0);
+                lightingChanged |= ImGui::RadioButton("平行光源 (Directional)", &activeLightType_, 0);
                 ImGui::SameLine();
-                ImGui::RadioButton("点光源 (Point)", &activeLightType, 1);
+                lightingChanged |= ImGui::RadioButton("点光源 (Point)", &activeLightType_, 1);
                 ImGui::SameLine();
-                ImGui::RadioButton("スポットライト (Spot)", &activeLightType, 2);
+                lightingChanged |= ImGui::RadioButton("スポットライト (Spot)", &activeLightType_, 2);
                 ImGui::Separator();
 
                 DirectionalLight *dLight = modelCommon->GetDirectionalLight();
                 PointLight *pLight = modelCommon->GetPointLight();
                 SpotLight *sLight = modelCommon->GetSpotLight();
 
-                if (activeLightType == 0) {
-                    dLight->intensity = dIntensity;
+                bool isFlatShading = (dLight->enableFlatShading != 0);
+                if (ImGui::Checkbox("フラットシェーディング", &isFlatShading)) {
+                    dLight->enableFlatShading = isFlatShading ? 1 : 0;
+                }
+                ImGui::Separator();
+
+                if (activeLightType_ == 0) {
+                    dLight->intensity = dIntensity_;
                     pLight->intensity = 0.0f;
                     sLight->intensity = 0.0f;
                     ImGui::Text("平行光源設定");
-                    ImGui::ColorEdit4("色", &dLight->color.x);
-                    ImGui::DragFloat("輝度 (Intensity)", &dIntensity, 0.01f, 0.0f, 10.0f);
-                    ImGui::DragFloat3("方向", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
-                    dLight->direction = TransformFunctions::Normalize(dLight->direction);
-                } else if (activeLightType == 1) {
-                    pLight->intensity = pIntensity;
+                    lightingChanged |= ImGui::ColorEdit4("色", &dLight->color.x);
+                    if (ImGui::DragFloat("輝度 (Intensity)", &dIntensity_, 0.01f, 0.0f, 10.0f)) {
+                        dLight->intensity = dIntensity_;
+                        lightingChanged = true;
+                    }
+                    if (ImGui::DragFloat3("方向", &dLight->direction.x, 0.01f, -1.0f, 1.0f)) {
+                        dLight->direction = TransformFunctions::Normalize(dLight->direction);
+                        lightingChanged = true;
+                    }
+                } else if (activeLightType_ == 1) {
+                    pLight->intensity = pIntensity_;
                     dLight->intensity = 0.0f;
                     sLight->intensity = 0.0f;
                     ImGui::Text("点光源設定");
-                    ImGui::ColorEdit4("色", &pLight->color.x);
-                    ImGui::DragFloat("輝度 (Intensity)", &pIntensity, 0.01f, 0.0f, 10.0f);
-                    ImGui::DragFloat3("位置", &pLight->position.x, 0.1f);
-                    ImGui::DragFloat("半径 (Radius)", &pLight->radius, 0.1f, 0.0f, 100.0f);
-                    ImGui::DragFloat("減衰 (Decay)", &pLight->decay, 0.01f, 0.0f, 10.0f);
-                } else if (activeLightType == 2) {
-                    sLight->intensity = sIntensity;
+                    lightingChanged |= ImGui::ColorEdit4("色", &pLight->color.x);
+                    if (ImGui::DragFloat("輝度 (Intensity)", &pIntensity_, 0.01f, 0.0f, 10.0f)) {
+                        pLight->intensity = pIntensity_;
+                        lightingChanged = true;
+                    }
+                    lightingChanged |= ImGui::DragFloat3("位置", &pLight->position.x, 0.1f);
+                    lightingChanged |= ImGui::DragFloat("半径 (Radius)", &pLight->radius, 0.1f, 0.0f, 100.0f);
+                    lightingChanged |= ImGui::DragFloat("減衰 (Decay)", &pLight->decay, 0.01f, 0.0f, 10.0f);
+                } else if (activeLightType_ == 2) {
+                    sLight->intensity = sIntensity_;
                     dLight->intensity = 0.0f;
                     pLight->intensity = 0.0f;
                     ImGui::Text("スポットライト設定");
-                    ImGui::ColorEdit4("色", &sLight->color.x);
-                    ImGui::DragFloat("輝度 (Intensity)", &sIntensity, 0.01f, 0.0f, 20.0f);
-                    ImGui::DragFloat3("位置", &sLight->position.x, 0.1f);
+                    lightingChanged |= ImGui::ColorEdit4("色", &sLight->color.x);
+                    if (ImGui::DragFloat("輝度 (Intensity)", &sIntensity_, 0.01f, 0.0f, 20.0f)) {
+                        sLight->intensity = sIntensity_;
+                        lightingChanged = true;
+                    }
+                    lightingChanged |= ImGui::DragFloat3("位置", &sLight->position.x, 0.1f);
                     if (ImGui::DragFloat3("方向", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
                         sLight->direction = TransformFunctions::Normalize(sLight->direction);
+                        lightingChanged = true;
                     }
-                    ImGui::DragFloat("距離", &sLight->distance, 0.1f, 0.0f, 100.0f);
-                    ImGui::DragFloat("減衰 (Decay)", &sLight->decay, 0.01f, 0.0f, 10.0f);
-                    ImGui::SliderFloat("全角 (Total Angle)", &spotAngleDeg, 0.0f, 90.0f);
-                    ImGui::SliderFloat("フォールオフ開始角", &spotFalloffDeg, 0.0f, spotAngleDeg);
-                    sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
-                    sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
+                    lightingChanged |= ImGui::DragFloat("距離", &sLight->distance, 0.1f, 0.0f, 100.0f);
+                    lightingChanged |= ImGui::DragFloat("減衰 (Decay)", &sLight->decay, 0.01f, 0.0f, 10.0f);
+                    
+                    if (ImGui::SliderFloat("全角 (Total Angle)", &spotAngleDeg_, 0.0f, 90.0f)) {
+                        sLight->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f);
+                        lightingChanged = true;
+                    }
+                    if (ImGui::SliderFloat("フォールオフ開始角", &spotFalloffDeg_, 0.0f, spotAngleDeg_)) {
+                        sLight->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f);
+                        lightingChanged = true;
+                    }
+                }
+
+                if (lightingChanged) {
+                    SaveLightingConfig(modelCommon);
                 }
 
                 ImGui::Separator();
-                ImGui::Checkbox("フォグエフェクトを有効化", &enableFog);
+                if (ImGui::Checkbox("フォグエフェクトを有効化", &enableFog_)) {
+                    SaveLightingConfig(modelCommon);
+                }
+
+                ImGui::Spacing();
+                ImGui::Text("グローバル設定 (ゲームカメラ)");
+                ImGui::Separator();
+                if (gameCamera) {
+                    float scale = gameCamera->GetScale();
+                    Vector3 rot = gameCamera->GetRotation();
+                    float follow = gameCamera->GetFollowLerp();
+                    float trans = gameCamera->GetTransitionLerp();
+
+                    // カメラスケール (Zoom)
+                    if (ImGui::DragFloat("カメラスケール (Zoom)", &scale, 0.01f, 0.1f, 10.0f, "%.2f")) {
+                        gameCamera->SetScale(scale);
+                    }
+
+                    // カメラ角度 (Rotation) - ラジアンを度数法で表示・編集
+                    float rotDeg[3] = { rot.x * 180.0f / 3.14159265f, rot.y * 180.0f / 3.14159265f, rot.z * 180.0f / 3.14159265f };
+                    if (ImGui::DragFloat3("カメラ角度 (Rotation)", rotDeg, 0.5f, -180.0f, 180.0f, "%.1f")) {
+                        rot.x = rotDeg[0] * 3.14159265f / 180.0f;
+                        rot.y = rotDeg[1] * 3.14159265f / 180.0f;
+                        rot.z = rotDeg[2] * 3.14159265f / 180.0f;
+                        gameCamera->SetRotation(rot);
+                    }
+
+                    if (ImGui::DragFloat("追従速度 (FollowLerp)", &follow, 0.005f, 0.0f, 1.0f, "%.3f")) {
+                        gameCamera->SetFollowLerp(follow);
+                    }
+                    if (ImGui::DragFloat("遷移速度 (TransitionLerp)", &trans, 0.005f, 0.0f, 1.0f, "%.3f")) {
+                        gameCamera->SetTransitionLerp(trans);
+                    }
+
+                    ImGui::Spacing();
+                    if (ImGui::Button("カメラ設定をJSON保存 (Save)", ImVec2(-1, 0))) {
+                        gameCamera->SaveConfig();
+                    }
+                    if (ImGui::Button("カメラ設定をJSON読込 (Load)", ImVec2(-1, 0))) {
+                        gameCamera->LoadConfig();
+                    }
+                } else {
+                    ImGui::TextDisabled("※ゲームカメラが有効ではありません。");
+                }
                 }
             }
 
@@ -2463,5 +2527,108 @@ void EditorManager::LoadSceneConfig() {
             }
         }
     }
+}
+
+void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
+    std::filesystem::create_directories("resources/json");
+    std::ofstream ofs("resources/json/lighting_config.json");
+    if (ofs.is_open()) {
+        nlohmann::json j;
+        j["activeLightType"] = activeLightType_;
+        j["enableFog"] = enableFog_;
+        j["enableFlatShading"] = enableFlatShading_;
+        j["dIntensity"] = dIntensity_;
+        j["pIntensity"] = pIntensity_;
+        j["sIntensity"] = sIntensity_;
+        j["spotAngleDeg"] = spotAngleDeg_;
+        j["spotFalloffDeg"] = spotFalloffDeg_;
+
+        if (modelCommon) {
+            auto d = modelCommon->GetDirectionalLight();
+            j["dLight"]["color"] = {d->color.x, d->color.y, d->color.z, d->color.w};
+            j["dLight"]["direction"] = {d->direction.x, d->direction.y, d->direction.z};
+            
+            auto p = modelCommon->GetPointLight();
+            j["pLight"]["color"] = {p->color.x, p->color.y, p->color.z, p->color.w};
+            j["pLight"]["position"] = {p->position.x, p->position.y, p->position.z};
+            j["pLight"]["radius"] = p->radius;
+            j["pLight"]["decay"] = p->decay;
+
+            auto s = modelCommon->GetSpotLight();
+            j["sLight"]["color"] = {s->color.x, s->color.y, s->color.z, s->color.w};
+            j["sLight"]["position"] = {s->position.x, s->position.y, s->position.z};
+            j["sLight"]["direction"] = {s->direction.x, s->direction.y, s->direction.z};
+            j["sLight"]["distance"] = s->distance;
+            j["sLight"]["decay"] = s->decay;
+        }
+
+        ofs << j.dump(4);
+        ofs.close();
+    }
+}
+
+void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
+    std::ifstream ifs("resources/json/lighting_config.json");
+    if (!ifs.is_open()) return;
+
+    try {
+        nlohmann::json j;
+        ifs >> j;
+        if (j.contains("activeLightType")) activeLightType_ = j["activeLightType"];
+        if (j.contains("enableFog")) enableFog_ = j["enableFog"];
+        if (j.contains("enableFlatShading")) enableFlatShading_ = j["enableFlatShading"];
+        if (j.contains("dIntensity")) dIntensity_ = j["dIntensity"];
+        if (j.contains("pIntensity")) pIntensity_ = j["pIntensity"];
+        if (j.contains("sIntensity")) sIntensity_ = j["sIntensity"];
+        if (j.contains("spotAngleDeg")) spotAngleDeg_ = j["spotAngleDeg"];
+        if (j.contains("spotFalloffDeg")) spotFalloffDeg_ = j["spotFalloffDeg"];
+
+        if (modelCommon) {
+            auto d = modelCommon->GetDirectionalLight();
+            if (j.contains("dLight")) {
+                if (j["dLight"].contains("color")) {
+                    d->color = {j["dLight"]["color"][0], j["dLight"]["color"][1], j["dLight"]["color"][2], j["dLight"]["color"][3]};
+                }
+                if (j["dLight"].contains("direction")) {
+                    d->direction = {j["dLight"]["direction"][0], j["dLight"]["direction"][1], j["dLight"]["direction"][2]};
+                }
+            }
+            d->enableFlatShading = enableFlatShading_ ? 1 : 0;
+            
+            auto p = modelCommon->GetPointLight();
+            if (j.contains("pLight")) {
+                if (j["pLight"].contains("color")) p->color = {j["pLight"]["color"][0], j["pLight"]["color"][1], j["pLight"]["color"][2], j["pLight"]["color"][3]};
+                if (j["pLight"].contains("position")) p->position = {j["pLight"]["position"][0], j["pLight"]["position"][1], j["pLight"]["position"][2]};
+                if (j["pLight"].contains("radius")) p->radius = j["pLight"]["radius"];
+                if (j["pLight"].contains("decay")) p->decay = j["pLight"]["decay"];
+            }
+
+            auto s = modelCommon->GetSpotLight();
+            if (j.contains("sLight")) {
+                if (j["sLight"].contains("color")) s->color = {j["sLight"]["color"][0], j["sLight"]["color"][1], j["sLight"]["color"][2], j["sLight"]["color"][3]};
+                if (j["sLight"].contains("position")) s->position = {j["sLight"]["position"][0], j["sLight"]["position"][1], j["sLight"]["position"][2]};
+                if (j["sLight"].contains("direction")) s->direction = {j["sLight"]["direction"][0], j["sLight"]["direction"][1], j["sLight"]["direction"][2]};
+                if (j["sLight"].contains("distance")) s->distance = j["sLight"]["distance"];
+                if (j["sLight"].contains("decay")) s->decay = j["sLight"]["decay"];
+            }
+            
+            // intensity の反映
+            if (activeLightType_ == 0) {
+                d->intensity = dIntensity_;
+                p->intensity = 0.0f;
+                s->intensity = 0.0f;
+            } else if (activeLightType_ == 1) {
+                d->intensity = 0.0f;
+                p->intensity = pIntensity_;
+                s->intensity = 0.0f;
+            } else if (activeLightType_ == 2) {
+                d->intensity = 0.0f;
+                p->intensity = 0.0f;
+                s->intensity = sIntensity_;
+                s->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f);
+                s->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f);
+            }
+        }
+    } catch (...) {}
 }
 #endif

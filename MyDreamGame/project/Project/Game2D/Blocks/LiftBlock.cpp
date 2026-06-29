@@ -9,7 +9,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     primitiveObj_->GetMaterial().color = { 0.9f, 0.6f, 0.1f, 1.0f };
     primitiveObj_->SetScale({ width, height, 1.0f });
     primitiveObj_->SetTranslation({ worldX, worldY, 0.0f });
-    primitiveObj_->GetMaterial().lightingType = 0;
+    primitiveObj_->GetMaterial().lightingType = 1;
 
     // レールの範囲を探索して移動範囲を決定する
     int minX = chipX_, maxX = chipX_;
