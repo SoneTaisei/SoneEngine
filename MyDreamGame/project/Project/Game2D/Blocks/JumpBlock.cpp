@@ -21,13 +21,13 @@ void JumpBlock::OnPlayerStand() {
 void JumpBlock::OnCollision(Player2D* player) {
     if (!player) return;
 
-    // プレイヤーとジャンプ台の位置関係を取得
-    Vector3 playerPos = player->GetPosition();
-    Vector3 blockPos = primitiveObj_->GetTranslation();
+    // ジャンプ台の AABB を取得
+    AABB2D blockAABB = GetAABB();
+    // プレイヤーの AABB を取得
+    AABB2D playerAABB = player->GetAABB();
     
-    // プレイヤーの足元がジャンプ台より上にある場合のみ跳ねる（上から乗った判定）
-    // マップチップサイズが1.0fなので、大体上側にいるか判定
-    if (playerPos.y >= blockPos.y + 0.5f) {
+    // プレイヤーの足元（底面）が、ジャンプ台の上面近辺かそれ以上にある場合のみ跳ねる
+    if (playerAABB.bottom >= blockAABB.top - 0.1f) {
         Vector3 vel = player->GetVelocity();
         vel.y = jumpVelocity_; // カスタム可能にしたジャンプ威力
         player->SetVelocity(vel);

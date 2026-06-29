@@ -60,6 +60,16 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
 }
 
 void Player2D::Update(MapChip2D& map, bool isTransitioning) {
+    // 外部（エディターのインスペクター等）で PrimitiveObject のスケールが変更された場合、プレイヤーのサイズに反映する
+    if (!isRespawning_ && primitiveObj_) {
+        Vector3 currentScale = primitiveObj_->GetScale();
+        if (std::abs(currentScale.x - halfWidth_ * 2.0f) > 0.001f ||
+            std::abs(currentScale.y - halfHeight_ * 2.0f) > 0.001f) {
+            halfWidth_ = currentScale.x * 0.5f;
+            halfHeight_ = currentScale.y * 0.5f;
+        }
+    }
+
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
 
     if (isGoal_) {
@@ -445,7 +455,7 @@ void Player2D::DisplayImGui() {
 }
 
 
-Player2D::AABB Player2D::GetAABB() const {
+AABB2D Player2D::GetAABB() const {
     return {
         position_.x - halfWidth_,   // left
         position_.y + halfHeight_,  // top
@@ -454,7 +464,7 @@ Player2D::AABB Player2D::GetAABB() const {
     };
 }
 
-bool Player2D::CheckAABBCollision(const AABB& a, const AABB& b) {
+bool Player2D::CheckAABBCollision(const AABB2D& a, const AABB2D& b) {
     if (a.right < b.left || a.left > b.right) return false;
     if (a.top < b.bottom || a.bottom > b.top) return false;
     return true;
@@ -462,8 +472,8 @@ bool Player2D::CheckAABBCollision(const AABB& a, const AABB& b) {
 
 bool Player2D::CheckCollisionOBB(const OBB2D& obb1, const OBB2D& obb2, Vector3& outMTV) {
     // 今回はAABBのみを使用するため、簡易的にAABB判定にフォールバック（将来のためのプレースホルダ）
-    AABB a = { obb1.center.x - obb1.extents.x, obb1.center.y + obb1.extents.y, obb1.center.x + obb1.extents.x, obb1.center.y - obb1.extents.y };
-    AABB b = { obb2.center.x - obb2.extents.x, obb2.center.y + obb2.extents.y, obb2.center.x + obb2.extents.x, obb2.center.y - obb2.extents.y };
+    AABB2D a = { obb1.center.x - obb1.extents.x, obb1.center.y + obb1.extents.y, obb1.center.x + obb1.extents.x, obb1.center.y - obb1.extents.y };
+    AABB2D b = { obb2.center.x - obb2.extents.x, obb2.center.y + obb2.extents.y, obb2.center.x + obb2.extents.x, obb2.center.y - obb2.extents.y };
     if (!CheckAABBCollision(a, b)) return false;
 
     // AABB同士のMTV計算
@@ -686,7 +696,7 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
     isOnMovingPlatform_ = false;
     platformVelocity_ = {0.0f, 0.0f, 0.0f};
 
-    AABB aabb = GetAABB();
+    AABB2D aabb = GetAABB();
 
     // 足元・頭上のチップ範囲を調べる (少し内側を調べて壁滑りをよくする)
     int leftChip = map.WorldToChipX(aabb.left + 0.05f);
@@ -707,34 +717,44 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
             }
             
             if (isBlock || isOneWay) {
-                float blockTop = map.ChipToWorldY(bottomChip) + chipSize;
-                
-                if (isOneWay) {
-                    // 移動前の足元座標を計算
-                    float previousBottom = position_.y - velocity_.y * TimeManager::GetInstance().GetDeltaTime() - halfHeight_;
-                    // もし前のフレームでブロックの上面より下にいた場合はすり抜ける (少しマージンを持たせる)
-                    if (previousBottom < blockTop - 0.05f) {
-                        continue;
-                    }
+                AABB2D blockAABB;
+                if (block) {
+                    blockAABB = block->GetAABB();
+                } else {
+                    float bx = map.ChipToWorldX(cx);
+                    float by = map.ChipToWorldY(bottomChip);
+                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
                 }
 
-                // 地面の上に押し戻す
-                position_.y = blockTop + halfHeight_;
-                velocity_.y = 0.0f;
-                isOnGround_ = true;
-                canDash_ = true; // 着地でダッシュ回復
-                wallJumpDirLockTimer_ = 0.0f;
-                lockedDirectionX_ = 0.0f;
-                
-                if (block) {
-                    block->OnPlayerStand();
-                    if (block->IsMoving()) {
-                        isOnMovingPlatform_ = true;
-                        platformVelocity_ = block->GetVelocity();
+                // プレイヤーの AABB との交差判定を行う
+                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+                    
+                    if (isOneWay) {
+                        float previousBottom = position_.y - velocity_.y * TimeManager::GetInstance().GetDeltaTime() - halfHeight_;
+                        if (previousBottom < blockAABB.top - 0.05f) {
+                            continue;
+                        }
                     }
+
+                    // 地面の上に押し戻す
+                    position_.y = blockAABB.top + halfHeight_;
+                    velocity_.y = 0.0f;
+                    isOnGround_ = true;
+                    canDash_ = true; // 着地でダッシュ回復
+                    wallJumpDirLockTimer_ = 0.0f;
+                    lockedDirectionX_ = 0.0f;
+                    
+                    if (block) {
+                        block->OnPlayerStand();
+                        if (block->IsMoving()) {
+                            isOnMovingPlatform_ = true;
+                            platformVelocity_ = block->GetVelocity();
+                        }
+                    }
+                    
+                    break;
                 }
-                
-                break;
             }
         }
     } else {
@@ -748,12 +768,23 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
             } else if (cx < 0 || cx >= map.GetWidth()) {
                 isBlock = true;
             }
-            // 上方向への範囲外は空気扱いとする
+            
             if (isBlock) {
-                float blockBottom = map.ChipToWorldY(topChip);
-                position_.y = blockBottom - halfHeight_;
-                velocity_.y = 0.0f;
-                break;
+                AABB2D blockAABB;
+                if (block) {
+                    blockAABB = block->GetAABB();
+                } else {
+                    float bx = map.ChipToWorldX(cx);
+                    float by = map.ChipToWorldY(topChip);
+                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
+                }
+
+                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+                    position_.y = blockAABB.bottom - halfHeight_;
+                    velocity_.y = 0.0f;
+                    break;
+                }
             }
         }
     }
@@ -762,26 +793,16 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
     aabb = GetAABB(); // 静的ブロックで位置が変わった可能性があるので再取得
     
     // 壁との擦れ判定を防ぐため、左右を少しだけ縮める
-    AABB shrunkAABBY = aabb;
+    AABB2D shrunkAABBY = aabb;
     shrunkAABBY.left += 0.05f;
     shrunkAABBY.right -= 0.05f;
 
     const auto& updateBlocks = map.GetUpdateBlocks();
     for (const auto& block : updateBlocks) {
-        if (!block || !block->IsSolid()) continue;
+        // 移動中のSolidブロックのみ判定
+        if (!block || !block->IsSolid() || !block->IsMoving()) continue;
         
-        PrimitiveObject* pObj = block->GetPrimitive();
-        if (!pObj) continue;
-        
-        Vector3 pos = pObj->GetTranslation();
-        Vector3 scale = pObj->GetScale();
-        
-        AABB blockAABB = {
-            pos.x - scale.x * 0.5f,
-            pos.y + scale.y * 0.5f,
-            pos.x + scale.x * 0.5f,
-            pos.y - scale.y * 0.5f
-        };
+        AABB2D blockAABB = block->GetAABB();
 
         if (CheckAABBCollision(shrunkAABBY, blockAABB)) {
             if (velocity_.y <= 0.0f && aabb.bottom >= blockAABB.top - 0.5f) { // 上から乗った
@@ -810,7 +831,7 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
     isTouchingWallLeft_ = false;
     isTouchingWallRight_ = false;
 
-    AABB aabb = GetAABB();
+    AABB2D aabb = GetAABB();
 
     // 左右のチップ範囲を調べる (少し内側を調べて段差に引っかかりにくくする)
     int topChip = map.WorldToChipY(aabb.top - 0.05f);
@@ -829,11 +850,22 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
             }
 
             if (isBlock) {
-                float blockLeft = map.ChipToWorldX(rightChip);
-                position_.x = blockLeft - halfWidth_;
-                velocity_.x = 0.0f;
-                isTouchingWallRight_ = true;
-                break;
+                AABB2D blockAABB;
+                if (block) {
+                    blockAABB = block->GetAABB();
+                } else {
+                    float bx = map.ChipToWorldX(rightChip);
+                    float by = map.ChipToWorldY(cy);
+                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
+                }
+
+                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+                    position_.x = blockAABB.left - halfWidth_;
+                    velocity_.x = 0.0f;
+                    isTouchingWallRight_ = true;
+                    break;
+                }
             }
         }
     } else if (velocity_.x < 0.0f) {
@@ -849,11 +881,22 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
             }
 
             if (isBlock) {
-                float blockRight = map.ChipToWorldX(leftChip) + chipSize;
-                position_.x = blockRight + halfWidth_;
-                velocity_.x = 0.0f;
-                isTouchingWallLeft_ = true;
-                break;
+                AABB2D blockAABB;
+                if (block) {
+                    blockAABB = block->GetAABB();
+                } else {
+                    float bx = map.ChipToWorldX(leftChip);
+                    float by = map.ChipToWorldY(cy);
+                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
+                }
+
+                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+                    position_.x = blockAABB.right + halfWidth_;
+                    velocity_.x = 0.0f;
+                    isTouchingWallLeft_ = true;
+                    break;
+                }
             }
         }
     }
@@ -862,29 +905,20 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
     aabb = GetAABB();
     
     // 床や天井との擦れ判定を防ぐため、上下を少しだけ縮める
-    AABB shrunkAABBX = aabb;
+    AABB2D shrunkAABBX = aabb;
     shrunkAABBX.top -= 0.05f;
     shrunkAABBX.bottom += 0.05f;
 
     for (const auto& block : map.GetUpdateBlocks()) {
-        if (!block || !block->IsSolid()) continue;
+        // 移動中のSolidブロックのみ判定
+        if (!block || !block->IsSolid() || !block->IsMoving()) continue;
         
-        PrimitiveObject* pObj = block->GetPrimitive();
-        if (!pObj) continue;
-        
-        Vector3 pos = pObj->GetTranslation();
-        Vector3 scale = pObj->GetScale();
-        
-        AABB blockAABB = {
-            pos.x - scale.x * 0.5f,
-            pos.y + scale.y * 0.5f,
-            pos.x + scale.x * 0.5f,
-            pos.y - scale.y * 0.5f
-        };
+        AABB2D blockAABB = block->GetAABB();
 
         if (CheckAABBCollision(shrunkAABBX, blockAABB)) {
             // ブロックの中心とプレイヤーの中心を比較して左右を判定
-            if (position_.x < pos.x) {
+            float blockCenterX = (blockAABB.left + blockAABB.right) * 0.5f;
+            if (position_.x < blockCenterX) {
                 // ブロックの左側にいる
                 position_.x = blockAABB.left - halfWidth_;
                 velocity_.x = 0.0f;
@@ -1016,20 +1050,24 @@ float Player2D::EaseInElastic(float t) const {
 }
 
 void Player2D::SimulateCollisions(MapChip2D& map) {
-    AABB aabb = GetAABB();
+    AABB2D aabb = GetAABB();
     // 押し戻しによって境界線上に位置した際も検知できるよう、わずかなマージンを持たせる
     const float margin = 0.02f;
-    int leftChip = map.WorldToChipX(aabb.left - margin);
-    int rightChip = map.WorldToChipX(aabb.right + margin);
-    int bottomChip = map.WorldToChipY(aabb.bottom - margin);
-    int topChip = map.WorldToChipY(aabb.top + margin);
+    AABB2D playerAABB = {
+        aabb.left - margin,
+        aabb.top + margin,
+        aabb.right + margin,
+        aabb.bottom - margin
+    };
 
-    for (int cy = bottomChip; cy <= topChip; ++cy) {
-        for (int cx = leftChip; cx <= rightChip; ++cx) {
-            BaseBlock* block = map.GetBlock(cx, cy);
-            if (block) {
-                block->OnCollision(this);
-            }
+    for (const auto& block : map.GetUpdateBlocks()) {
+        if (!block || block->IsDestroyed()) continue;
+
+        AABB2D blockAABB = block->GetAABB();
+
+        if (playerAABB.right > blockAABB.left && playerAABB.left < blockAABB.right &&
+            playerAABB.top > blockAABB.bottom && playerAABB.bottom < blockAABB.top) {
+            block->OnCollision(this);
         }
     }
 }

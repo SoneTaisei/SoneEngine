@@ -34,10 +34,7 @@ public:
     void FindSpawnPoint(const MapChip2D& map);
 
     // AABBの取得（当たり判定用）
-    struct AABB {
-        float left, top, right, bottom;
-    };
-    AABB GetAABB() const;
+    AABB2D GetAABB() const;
 
     // 将来の拡張用 OBB（Oriented Bounding Box）構造体
     struct OBB2D {
@@ -47,7 +44,7 @@ public:
     };
 
     // AABB同士の交差判定ヘルパー
-    static bool CheckAABBCollision(const AABB& a, const AABB& b);
+    static bool CheckAABBCollision(const AABB2D& a, const AABB2D& b);
     
     // OBBを用いた衝突判定（戻り値はMTV: Minimum Translation Vector）
     // （今回は不使用ですが将来のリフト回転対応用として実装）
@@ -161,7 +158,7 @@ private:
     bool isWallClinging_ = false;      // 壁張り付き中か
 
     float halfWidth_ = 0.4f;
-    float halfHeight_ = 0.4f;
+    float halfHeight_ = 0.8f;
 
     // 死亡演出用パラメータ
     bool isDead_ = false;           // 死亡演出中か

@@ -77,6 +77,13 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 *********************************************************/
 
 
+struct AABB2D {
+    float left;
+    float top;
+    float right;
+    float bottom;
+};
+
 struct  Transform {
 	Vector3 scale;
 	Vector3 rotate;

@@ -3,6 +3,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include "GameObject/Object3D.h"
+#include "Core/Utility/Structs.h"
 class Player2D;
 class MapChip2D;
 struct ID3D12Device;
@@ -57,6 +58,24 @@ public:
     // 消滅フラグ（コイン取得時など）
     bool IsDestroyed() const { return isDestroyed_; }
     void Destroy() { isDestroyed_ = true; }
+
+    AABB2D GetAABB() const {
+        Vector3 pos = {0.0f, 0.0f, 0.0f};
+        Vector3 scale = {1.0f, 1.0f, 1.0f};
+        if (object3D_) {
+            pos = object3D_->GetTranslation();
+            scale = object3D_->GetScale();
+        } else if (primitiveObj_) {
+            pos = primitiveObj_->GetTranslation();
+            scale = primitiveObj_->GetScale();
+        }
+        return {
+            pos.x - scale.x * 0.5f,
+            pos.y + scale.y * 0.5f,
+            pos.x + scale.x * 0.5f,
+            pos.y - scale.y * 0.5f
+        };
+    }
 
 protected:
     MapChip2D* map_ = nullptr;
