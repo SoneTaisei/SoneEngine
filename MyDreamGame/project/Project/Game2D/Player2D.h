@@ -121,7 +121,7 @@ private:
     float externalVelocityX_ = 0.0f; // 慣性用の外部速度
 
     float moveSpeed_ = 5.0f;       // 左右移動速度
-    float jumpPower_ = 15.0f;      // ジャンプ力
+    float jumpPower_ = 17.0f;      // ジャンプ力
     float gravity_ = -40.0f;       // 重力加速度
     float maxFallSpeed_ = -15.0f;  // 最大落下速度
 

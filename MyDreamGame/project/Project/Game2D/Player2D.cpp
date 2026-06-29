@@ -640,6 +640,13 @@ void Player2D::HandleInput() {
                 isWallClinging_ = false;
             }
         }
+
+        // ジャンプキーを離したら下降が始まるようにする
+        if (!isOnGround_ && velocity_.y > 0.0f) {
+            if (keyboard->IsKeyReleased(DIK_SPACE)) {
+                velocity_.y = 0.0f;
+            }
+        }
     }
 
     // ダッシュの入力検知（SHIFTキー）
