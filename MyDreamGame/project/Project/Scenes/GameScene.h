@@ -3,6 +3,8 @@
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
 #include "Effect/CoinEffect.h"
+#include "Effect/CylinderEffect.h"
+#include "Effect/RingEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <d3d12.h>
@@ -48,6 +50,8 @@ private:
     // ---------------------------------------------------
     // パーティクル管理クラス
     std::unique_ptr<CoinEffect> coinEffect_;
+    std::unique_ptr<CylinderEffect> cylinderEffect_;
+    std::unique_ptr<RingEffect> ringEffect_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();

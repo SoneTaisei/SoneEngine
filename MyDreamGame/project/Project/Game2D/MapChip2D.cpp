@@ -520,6 +520,18 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
     return true;
 }
 
+bool MapChip2D::LoadFromStageName(const std::string& stageName) {
+    std::string name = stageName;
+    bool hasExt = false;
+    if (name.length() >= 4) {
+        std::string ext = name.substr(name.length() - 4);
+        if (ext == ".txt" || ext == ".TXT") hasExt = true;
+    }
+    if (!hasExt) name += ".txt";
+    std::string filepath = "resources/json/MapData/" + name;
+    return LoadFromFile(filepath);
+}
+
 bool MapChip2D::LoadFromFile(const std::string& filepath) {
     std::ifstream ifs(filepath);
     if (!ifs.is_open()) return false;

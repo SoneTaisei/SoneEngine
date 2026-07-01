@@ -142,15 +142,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     mapChip->LoadFromString(mapDataStrToLoad_);
                     loadMapDataStrNextFrame_ = false;
                 } else {
-                    std::string name = stageFilename_;
-                    bool hasExt = false;
-                    if (name.length() >= 4) {
-                        std::string ext = name.substr(name.length() - 4);
-                        if (ext == ".txt" || ext == ".TXT") hasExt = true;
-                    }
-                    if (!hasExt) name += ".txt";
-                    std::string filepath = "resources/json/MapData/" + name;
-                    mapChip->LoadFromFile(filepath);
+                    mapChip->LoadFromStageName(stageFilename_);
                 }
             }
         }

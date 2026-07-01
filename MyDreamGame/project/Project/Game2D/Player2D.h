@@ -104,7 +104,11 @@ private:
 
     // マップとの当たり判定
     void ResolveCollisionY(const MapChip2D& map);
+    void ResolveStaticCollisionY(const MapChip2D& map, AABB2D& aabb);
+    void ResolveDynamicCollisionY(const MapChip2D& map, AABB2D& aabb);
     void ResolveCollisionX(const MapChip2D& map);
+    void ResolveStaticCollisionX(const MapChip2D& map, AABB2D& aabb);
+    void ResolveDynamicCollisionX(const MapChip2D& map, AABB2D& aabb);
 
 private:
     std::unique_ptr<PrimitiveObject> primitiveObj_;

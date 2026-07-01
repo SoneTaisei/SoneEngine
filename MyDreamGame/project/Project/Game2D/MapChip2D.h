@@ -78,6 +78,7 @@ public:
 
     bool SaveToFile(const std::string& filepath);
     bool LoadFromFile(const std::string& filepath);
+    bool LoadFromStageName(const std::string& stageName);
 
     // 文字列ベースのマップデータ取得＆設定（リプレイ用）
     std::string GetMapDataAsString() const;

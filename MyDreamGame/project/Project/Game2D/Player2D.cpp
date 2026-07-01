@@ -698,14 +698,22 @@ void Player2D::ApplyGravity(float deltaTime) {
 }
 
 void Player2D::ResolveCollisionY(const MapChip2D& map) {
-    float chipSize = map.GetChipSize();
     isOnGround_ = false;
     isOnMovingPlatform_ = false;
     platformVelocity_ = {0.0f, 0.0f, 0.0f};
 
     AABB2D aabb = GetAABB();
 
-    // 足元・頭上のチップ範囲を調べる (少し内側を調べて壁滑りをよくする)
+    // 静的ブロック判定
+    ResolveStaticCollisionY(map, aabb);
+
+    // 動的ブロック判定
+    aabb = GetAABB(); // 静的ブロックで位置が変わった可能性があるので再取得
+    ResolveDynamicCollisionY(map, aabb);
+}
+
+void Player2D::ResolveStaticCollisionY(const MapChip2D& map, AABB2D& aabb) {
+    float chipSize = map.GetChipSize();
     int leftChip = map.WorldToChipX(aabb.left + 0.05f);
     int rightChip = map.WorldToChipX(aabb.right - 0.05f);
 
@@ -795,10 +803,9 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
             }
         }
     }
+}
 
-    // 動的ブロック（リフトなど）の判定
-    aabb = GetAABB(); // 静的ブロックで位置が変わった可能性があるので再取得
-    
+void Player2D::ResolveDynamicCollisionY(const MapChip2D& map, AABB2D& aabb) {
     // 壁との擦れ判定を防ぐため、左右を少しだけ縮める
     AABB2D shrunkAABBY = aabb;
     shrunkAABBY.left += 0.05f;
@@ -833,13 +840,21 @@ void Player2D::ResolveCollisionY(const MapChip2D& map) {
 }
 
 void Player2D::ResolveCollisionX(const MapChip2D& map) {
-    float chipSize = map.GetChipSize();
-
     isTouchingWallLeft_ = false;
     isTouchingWallRight_ = false;
 
     AABB2D aabb = GetAABB();
 
+    // 静的ブロック判定
+    ResolveStaticCollisionX(map, aabb);
+
+    // 動的ブロック判定
+    aabb = GetAABB(); // 静的ブロックで位置が変わった可能性があるので再取得
+    ResolveDynamicCollisionX(map, aabb);
+}
+
+void Player2D::ResolveStaticCollisionX(const MapChip2D& map, AABB2D& aabb) {
+    float chipSize = map.GetChipSize();
     // 左右のチップ範囲を調べる (少し内側を調べて段差に引っかかりにくくする)
     int topChip = map.WorldToChipY(aabb.top - 0.05f);
     int bottomChip = map.WorldToChipY(aabb.bottom + 0.05f);
@@ -907,10 +922,9 @@ void Player2D::ResolveCollisionX(const MapChip2D& map) {
             }
         }
     }
+}
 
-    // 動的ブロック（リフトなど）の判定
-    aabb = GetAABB();
-    
+void Player2D::ResolveDynamicCollisionX(const MapChip2D& map, AABB2D& aabb) {
     // 床や天井との擦れ判定を防ぐため、上下を少しだけ縮める
     AABB2D shrunkAABBX = aabb;
     shrunkAABBX.top -= 0.05f;

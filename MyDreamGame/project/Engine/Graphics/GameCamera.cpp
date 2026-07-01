@@ -57,45 +57,55 @@ void GameCamera::UpdateMatrixOrthographic() {
 
         if (!boundaryX_.empty() && !boundaryY_.empty()) {
             // X軸の区間検索
+            float minX = -100000.0f;
+            float maxX = 100000.0f;
             auto itX = std::lower_bound(boundaryX_.begin(), boundaryX_.end(), targetX);
-            if (itX != boundaryX_.end() && itX != boundaryX_.begin()) {
-                newRoomX = static_cast<int>(std::distance(boundaryX_.begin(), itX)) - 1;
-                float minX = *(itX - 1);
-                float maxX = *itX;
-                // 区間がカメラサイズより大きい場合は、ターゲットを中心にクランプする
-                if (maxX - minX > orthoWidth_) {
-                    float halfW = orthoWidth_ * 0.5f;
-                    cameraTargetX = std::clamp(targetX, minX + halfW, maxX - halfW);
-                } else {
-                    // カメラサイズより小さい場合は区間の中心
-                    cameraTargetX = (minX + maxX) * 0.5f;
-                }
-            } else if (itX == boundaryX_.begin()) {
-                newRoomX = -1; // 範囲外左
-                cameraTargetX = boundaryX_.front() - orthoWidth_ * 0.5f;
+            if (itX == boundaryX_.begin()) {
+                newRoomX = -1;
+                maxX = *itX;
+            } else if (itX == boundaryX_.end()) {
+                newRoomX = static_cast<int>(boundaryX_.size());
+                minX = *(itX - 1);
             } else {
-                newRoomX = static_cast<int>(boundaryX_.size()); // 範囲外右
-                cameraTargetX = boundaryX_.back() + orthoWidth_ * 0.5f;
+                newRoomX = static_cast<int>(std::distance(boundaryX_.begin(), itX)) - 1;
+                minX = *(itX - 1);
+                maxX = *itX;
+            }
+
+            float halfW = orthoWidth_ * 0.5f;
+            float minClampX = minX + halfW;
+            float maxClampX = maxX - halfW;
+            if (minClampX > maxClampX) {
+                cameraTargetX = (minX + maxX) * 0.5f;
+            } else {
+                cameraTargetX = std::clamp(targetX, minClampX, maxClampX);
             }
 
             // Y軸の区間検索
+            float minY = -100000.0f;
+            float maxY = 100000.0f;
             auto itY = std::lower_bound(boundaryY_.begin(), boundaryY_.end(), targetY);
-            if (itY != boundaryY_.end() && itY != boundaryY_.begin()) {
-                newRoomY = static_cast<int>(std::distance(boundaryY_.begin(), itY)) - 1;
-                float minY = *(itY - 1);
-                float maxY = *itY;
-                if (maxY - minY > orthoHeight_) {
-                    float halfH = orthoHeight_ * 0.5f;
-                    cameraTargetY = std::clamp(targetY, minY + halfH, maxY - halfH);
-                } else {
-                    cameraTargetY = (minY + maxY) * 0.5f;
-                }
-            } else if (itY == boundaryY_.begin()) {
-                newRoomY = -1; // 範囲外下
-                cameraTargetY = boundaryY_.front() - orthoHeight_ * 0.5f;
+            if (itY == boundaryY_.begin()) {
+                newRoomY = -1;
+                maxY = *itY;
+            } else if (itY == boundaryY_.end()) {
+                newRoomY = static_cast<int>(boundaryY_.size());
+                minY = *(itY - 1);
             } else {
-                newRoomY = static_cast<int>(boundaryY_.size()); // 範囲外上
-                cameraTargetY = boundaryY_.back() + orthoHeight_ * 0.5f;
+                newRoomY = static_cast<int>(std::distance(boundaryY_.begin(), itY)) - 1;
+                minY = *(itY - 1);
+                maxY = *itY;
+            }
+
+            float halfH = orthoHeight_ * 0.5f;
+            float minClampY = minY + halfH;
+            float maxClampY = maxY - halfH;
+            if (minClampY > maxClampY) {
+                // Y軸は下がプラス（値が大きい）ため、下限の境界は maxY となる。
+                // 画面より区間が狭い場合、下限に画面の下端をピッタリ合わせるために maxClampY を優先する。
+                cameraTargetY = maxClampY;
+            } else {
+                cameraTargetY = std::clamp(targetY, minClampY, maxClampY);
             }
         }
 

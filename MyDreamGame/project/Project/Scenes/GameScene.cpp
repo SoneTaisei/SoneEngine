@@ -41,6 +41,12 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     coinEffect_ = std::make_unique<CoinEffect>();
     coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
 
+    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png", commandList.Get());
+    ringEffect_ = std::make_unique<RingEffect>();
+    ringEffect_->Initialize(device.Get(), gradationHandle);
+    cylinderEffect_ = std::make_unique<CylinderEffect>();
+    cylinderEffect_->Initialize(device.Get(), gradationHandle);
+
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
     map_->Initialize(commandList.Get(), s_TargetMapFilePath);
@@ -61,6 +67,12 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 void GameScene::Update(SceneManager *sceneManager) {
     if (coinEffect_) {
         coinEffect_->Update(1.0f / 60.0f);
+    }
+    if (ringEffect_) {
+        ringEffect_->Update(1.0f / 60.0f);
+    }
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(1.0f / 60.0f);
     }
 
     if (skybox_) {
@@ -586,6 +598,14 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
 
+    // 1. 背景エフェクト
+    if (cylinderEffect_) {
+        result.push_back(cylinderEffect_->GetRoot());
+    }
+    if (ringEffect_) {
+        result.push_back(ringEffect_->GetRoot());
+    }
+
     // 2. プレイヤー
     if (player_) {
         result.push_back(player_->GetPrimitiveObject());
@@ -624,6 +644,12 @@ void GameScene::UpdateEditor() {
     if (coinEffect_) {
         // ImGui更新（もしあれば）
         coinEffect_->Update(1.0f / 60.0f);
+    }
+    if (ringEffect_) {
+        ringEffect_->Update(1.0f / 60.0f);
+    }
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(1.0f / 60.0f);
     }
     // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
     if (player_) {
