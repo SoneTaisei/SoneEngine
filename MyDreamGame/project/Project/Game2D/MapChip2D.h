@@ -123,7 +123,10 @@ public:
     bool SaveTemplatesToFile(const std::string& filepath);
     bool LoadTemplatesFromFile(const std::string& filepath);
 
+public:
+    void SetDirty() { isDirty_ = true; }
 private:
+    std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void BuildMap();
     void CreateChipObjects(ID3D12GraphicsCommandList* commandList);
 

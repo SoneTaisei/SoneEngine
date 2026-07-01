@@ -182,6 +182,11 @@ private:
     int mapEditorInputWidth_ = -1;
     int mapEditorInputHeight_ = -1;
     
+    // Normalモード用補間
+    int prevGridX_ = -1;
+    int prevGridY_ = -1;
+    std::vector<std::pair<int, int>> pendingBlocks_;
+
     // 拡張マップエディタ状態
     MapEditMode mapEditMode_ = MapEditMode::Normal;
     int selectStartX_ = -1;
@@ -189,6 +194,16 @@ private:
     int selectEndX_ = -1;
     int selectEndY_ = -1;
     std::vector<std::vector<int>> clipboardMapData_;
+
+    // 範囲移動用
+    bool isDraggingSelection_ = false;
+    int dragStartGridX_ = -1;
+    int dragStartGridY_ = -1;
+    int originalSelectStartX_ = -1;
+    int originalSelectStartY_ = -1;
+    int originalSelectEndX_ = -1;
+    int originalSelectEndY_ = -1;
+    std::vector<std::vector<int>> dragSelectionData_;
 
     // 境界線編集用
     bool isBoundaryEditMode_ = false;

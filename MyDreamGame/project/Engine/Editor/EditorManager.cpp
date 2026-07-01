@@ -1239,6 +1239,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             drawList->AddRect(pTL, pBR, IM_COL32(0, 255, 255, 255), 0.0f, 0, 2.0f);
                         }
                         
+                        // プレビュー描画
+                        if (mapEditMode_ == MapEditMode::Normal && !pendingBlocks_.empty()) {
+                            for (const auto& pos : pendingBlocks_) {
+                                ImVec2 pTL = WorldToScreen(static_cast<float>(pos.first), static_cast<float>(pos.second + 1));
+                                ImVec2 pBR = WorldToScreen(static_cast<float>(pos.first + 1), static_cast<float>(pos.second));
+                                drawList->AddRectFilled(pTL, pBR, IM_COL32(255, 100, 100, 150));
+                                drawList->AddRect(pTL, pBR, IM_COL32(255, 100, 100, 255), 0.0f, 0, 2.0f);
+                            }
+                        }
+
                         drawList->PopClipRect();
                     }
                     
@@ -1365,7 +1375,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                         } else {
                             // モード切り替えショートカット
-                            if ((ImGui::GetIO().KeyCtrl || ImGui::IsMouseDown(ImGuiMouseButton_Middle)) && ImGui::GetIO().MouseWheel != 0.0f) {
+                            if (ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0.0f) {
                                 int m = static_cast<int>(mapEditMode_);
                                 if (ImGui::GetIO().MouseWheel < 0.0f) m = (m + 1) % 5;
                                 else m = (m + 4) % 5;
@@ -1390,27 +1400,140 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 bool isSelectableTool = (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ >= 100);
                                 
                                 if (mapEditMode_ == MapEditMode::Normal) {
-                                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && inBounds && isSelectableTool) {
-                                        BeginMapHistoryCapture(mapChip);
-                                    }
-                                    if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && inBounds && isSelectableTool) {
-                                        if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
-                                            mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && isSelectableTool) {
+                                        if (inBounds) {
+                                            if (std::find(pendingBlocks_.begin(), pendingBlocks_.end(), std::make_pair(gridX, gridY)) == pendingBlocks_.end()) {
+                                                pendingBlocks_.push_back({gridX, gridY});
+                                            }
                                         }
+                                        prevGridX_ = gridX;
+                                        prevGridY_ = gridY;
+                                    }
+                                    else if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && isSelectableTool) {
+                                        if (prevGridX_ != -1 && prevGridY_ != -1 && (prevGridX_ != gridX || prevGridY_ != gridY)) {
+                                            int x0 = prevGridX_;
+                                            int y0 = prevGridY_;
+                                            int x1 = gridX;
+                                            int y1 = gridY;
+                                            int dx = std::abs(x1 - x0);
+                                            int dy = std::abs(y1 - y0);
+                                            int sx = x0 < x1 ? 1 : -1;
+                                            int sy = y0 < y1 ? 1 : -1;
+                                            int err = (dx > dy ? dx : -dy) / 2;
+                                            int e2;
+
+                                            while (true) {
+                                                if (x0 >= 0 && x0 < mapWidth && y0 >= 0 && y0 < mapHeight) {
+                                                    if (std::find(pendingBlocks_.begin(), pendingBlocks_.end(), std::make_pair(x0, y0)) == pendingBlocks_.end()) {
+                                                        pendingBlocks_.push_back({x0, y0});
+                                                    }
+                                                }
+                                                if (x0 == x1 && y0 == y1) break;
+                                                e2 = err;
+                                                if (e2 > -dx) { err -= dy; x0 += sx; }
+                                                if (e2 < dy) { err += dx; y0 += sy; }
+                                            }
+                                        }
+                                        prevGridX_ = gridX;
+                                        prevGridY_ = gridY;
                                     }
                                     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-                                        EndMapHistoryCapture(mapChip);
+                                        if (!pendingBlocks_.empty()) {
+                                            BeginMapHistoryCapture(mapChip);
+                                            for (const auto& pos : pendingBlocks_) {
+                                                if (mapChip->GetChip(pos.first, pos.second) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
+                                                    mapChip->SetChip(pos.first, pos.second, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                                }
+                                            }
+                                            EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty(); // Greedy Meshingの再計算
+                                            pendingBlocks_.clear();
+                                        }
+                                        prevGridX_ = -1;
+                                        prevGridY_ = -1;
                                     }
                                 }
                                 else if (mapEditMode_ == MapEditMode::Select) {
+                                    bool isInsideSelection = false;
+                                    if (selectStartX_ != -1 && selectStartY_ != -1 && selectEndX_ != -1 && selectEndY_ != -1) {
+                                        int minX = (std::min)(selectStartX_, selectEndX_);
+                                        int maxX = (std::max)(selectStartX_, selectEndX_);
+                                        int minY = (std::min)(selectStartY_, selectEndY_);
+                                        int maxY = (std::max)(selectStartY_, selectEndY_);
+                                        if (gridX >= minX && gridX <= maxX && gridY >= minY && gridY <= maxY) {
+                                            isInsideSelection = true;
+                                        }
+                                    }
+
                                     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                                        selectStartX_ = gridX;
-                                        selectStartY_ = gridY;
-                                        selectEndX_ = gridX;
-                                        selectEndY_ = gridY;
+                                        if (isInsideSelection) {
+                                            isDraggingSelection_ = true;
+                                            dragStartGridX_ = gridX;
+                                            dragStartGridY_ = gridY;
+                                            
+                                            // Copy the selection
+                                            int minX = (std::min)(selectStartX_, selectEndX_);
+                                            int maxX = (std::max)(selectStartX_, selectEndX_);
+                                            int minY = (std::min)(selectStartY_, selectEndY_);
+                                            int maxY = (std::max)(selectStartY_, selectEndY_);
+                                            
+                                            clipboardMapData_.clear();
+                                            for (int y = minY; y <= maxY; ++y) {
+                                                std::vector<int> row;
+                                                for (int x = minX; x <= maxX; ++x) {
+                                                    row.push_back(static_cast<int>(mapChip->GetChip(x, y)));
+                                                }
+                                                clipboardMapData_.push_back(row);
+                                            }
+                                            BeginMapHistoryCapture(mapChip);
+                                            // Clear original area
+                                            for (int y = minY; y <= maxY; ++y) {
+                                                for (int x = minX; x <= maxX; ++x) {
+                                                    mapChip->SetChip(x, y, MapChip2D::ChipType::kNone);
+                                                }
+                                            }
+                                        } else {
+                                            selectStartX_ = gridX;
+                                            selectStartY_ = gridY;
+                                            selectEndX_ = gridX;
+                                            selectEndY_ = gridY;
+                                        }
                                     } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-                                        selectEndX_ = gridX;
-                                        selectEndY_ = gridY;
+                                        if (!isDraggingSelection_) {
+                                            selectEndX_ = gridX;
+                                            selectEndY_ = gridY;
+                                        }
+                                    } else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                                        if (isDraggingSelection_) {
+                                            int deltaX = gridX - dragStartGridX_;
+                                            int deltaY = gridY - dragStartGridY_;
+                                            
+                                            int minX = (std::min)(selectStartX_, selectEndX_);
+                                            int minY = (std::min)(selectStartY_, selectEndY_);
+                                            
+                                            // Paste to new location
+                                            for (size_t r = 0; r < clipboardMapData_.size(); ++r) {
+                                                for (size_t c = 0; c < clipboardMapData_[r].size(); ++c) {
+                                                    int tx = minX + deltaX + static_cast<int>(c);
+                                                    int ty = minY + deltaY + static_cast<int>(r);
+                                                    if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
+                                                        if (clipboardMapData_[r][c] != static_cast<int>(MapChip2D::ChipType::kNone)) {
+                                                            mapChip->SetChip(tx, ty, static_cast<MapChip2D::ChipType>(clipboardMapData_[r][c]));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty();
+                                            
+                                            // Update selection rect
+                                            selectStartX_ += deltaX;
+                                            selectEndX_ += deltaX;
+                                            selectStartY_ += deltaY;
+                                            selectEndY_ += deltaY;
+                                            
+                                            isDraggingSelection_ = false;
+                                        }
                                     }
                                 }
                                 else if (mapEditMode_ == MapEditMode::Copy) {
@@ -1446,6 +1569,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                                 }
                                             }
                                             EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty();
                                         }
                                     }
                                 }
@@ -1457,6 +1581,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                             BeginMapHistoryCapture(mapChip);
                                             mapChip->BucketFill(gridX, gridY, targetType, replacementType);
                                             EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty();
                                         }
                                     }
                                 }
