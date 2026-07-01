@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 #include <random>
+#include <string>
+#include <nlohmann/json.hpp>
 
 // 前方宣言
 class MapChip2D;
@@ -25,6 +27,10 @@ public:
     void SetVelocity(const Vector3& velocity) { velocity_ = velocity; }
     Vector3 GetVelocity() const { return velocity_; }
     void DisplayImGui();
+    
+    // JSON Parameters
+    void SaveParameters(const std::string& filepath = "resources/json/Player/player_parameters.json");
+    void LoadParameters(const std::string& filepath = "resources/json/Player/player_parameters.json");
 
     // プレイヤーの位置を取得（カメラ追従用）
     const Vector3& GetPosition() const { return position_; }

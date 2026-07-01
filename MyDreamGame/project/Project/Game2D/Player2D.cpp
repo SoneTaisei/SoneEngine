@@ -7,6 +7,9 @@
 #include "Editor/ReplayManager.h"
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <filesystem>
+#include <iostream>
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
 #endif
@@ -425,28 +428,65 @@ void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
 void Player2D::DisplayImGui() {
 #ifdef USE_IMGUI
     if (ImGui::TreeNode("プレイヤー2D (Player2D)")) {
+        if (ImGui::Button("パラメータ保存 (Save)")) {
+            SaveParameters();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("パラメータ読込 (Load)")) {
+            LoadParameters();
+        }
+
         ImGui::DragFloat3("座標", &position_.x, 0.1f);
         ImGui::DragFloat3("速度", &velocity_.x, 0.1f);
-        ImGui::DragFloat("ジャンプ力", &jumpPower_, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat("ダッシュ終了時の上向き速度", &dashEndUpwardVelocity_, 0.1f, 0.0f, 10.0f);
-        ImGui::DragFloat2("壁ジャンプの力 (X,Y)", &wallJumpPower_.x, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat("壁ジャンプ後の速度補間時間", &wallJumpDuration_, 0.01f, 0.0f, 1.0f);
-        ImGui::DragFloat("壁ジャンプ後の壁方向入力制限時間", &wallJumpDirLockDuration_, 0.01f, 0.0f, 2.0f);
-        ImGui::DragFloat("壁ずり落ち時の落下速度", &wallSlideSpeed_, 0.1f, -30.0f, 0.0f);
-        ImGui::DragFloat("重力", &gravity_, 0.1f, -50.0f, 0.0f);
-        ImGui::DragFloat("最大落下速度", &maxFallSpeed_, 0.1f, -50.0f, 0.0f);
-        ImGui::ColorEdit4("通常カラー", &colorNormal_.x);
-        ImGui::ColorEdit4("ダッシュカラー", &colorDashed_.x);
+
+        if (ImGui::TreeNode("基本移動")) {
+            ImGui::DragFloat("移動速度", &moveSpeed_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("ジャンプ力", &jumpPower_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("重力", &gravity_, 0.1f, -100.0f, 0.0f);
+            ImGui::DragFloat("最大落下速度", &maxFallSpeed_, 0.1f, -100.0f, 0.0f);
+            ImGui::TreePop();
+        }
         
-        bool sizeChanged = false;
-        if (ImGui::DragFloat("当たり判定の半幅", &halfWidth_, 0.01f, 0.05f, 5.0f)) {
-            sizeChanged = true;
+        if (ImGui::TreeNode("ダッシュ")) {
+            ImGui::DragFloat("ダッシュ継続時間", &dashDuration_, 0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("ダッシュ速度", &dashSpeed_, 0.1f, 0.0f, 50.0f);
+            ImGui::DragFloat("ダッシュ終了時の上向き速度", &dashEndUpwardVelocity_, 0.1f, 0.0f, 30.0f);
+            ImGui::TreePop();
         }
-        if (ImGui::DragFloat("当たり判定の半高", &halfHeight_, 0.01f, 0.05f, 5.0f)) {
-            sizeChanged = true;
+
+        if (ImGui::TreeNode("壁アクション")) {
+            ImGui::DragFloat("壁ジャンプ後の速度補間時間", &wallJumpDuration_, 0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat2("壁ジャンプの力 (X,Y)", &wallJumpPower_.x, 0.1f, 0.0f, 50.0f);
+            ImGui::DragFloat("壁ジャンプ後の壁方向入力制限時間", &wallJumpDirLockDuration_, 0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("壁ずり落ち時の落下速度", &wallSlideSpeed_, 0.1f, -50.0f, 0.0f);
+            ImGui::TreePop();
         }
-        if (sizeChanged && primitiveObj_) {
-            primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+
+        if (ImGui::TreeNode("演出・ゲームルール")) {
+            ImGui::DragFloat("死亡演出時間", &deathDuration_, 0.01f, 0.0f, 5.0f);
+            ImGui::DragFloat("リスポーン時間", &respawnDuration_, 0.01f, 0.0f, 5.0f);
+            ImGui::DragFloat("ゴール待機時間", &goalWaitTime_, 0.01f, 0.0f, 10.0f);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("色")) {
+            ImGui::ColorEdit4("通常カラー", &colorNormal_.x);
+            ImGui::ColorEdit4("ダッシュカラー", &colorDashed_.x);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("サイズ")) {
+            bool sizeChanged = false;
+            if (ImGui::DragFloat("当たり判定の半幅", &halfWidth_, 0.01f, 0.05f, 5.0f)) {
+                sizeChanged = true;
+            }
+            if (ImGui::DragFloat("当たり判定の半高", &halfHeight_, 0.01f, 0.05f, 5.0f)) {
+                sizeChanged = true;
+            }
+            if (sizeChanged && primitiveObj_) {
+                primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+            }
+            ImGui::TreePop();
         }
 
         ImGui::TreePop();
@@ -1165,3 +1205,105 @@ void Player2D::ResetState(const Vector3& initPos) {
         primitiveObj_->Update();
     }
 }
+
+void Player2D::SaveParameters(const std::string& filepath) {
+    try {
+        std::filesystem::path path(filepath);
+        if (path.has_parent_path() && !std::filesystem::exists(path.parent_path())) {
+            std::filesystem::create_directories(path.parent_path());
+        }
+        
+        nlohmann::json j;
+        j["moveSpeed_"] = moveSpeed_;
+        j["jumpPower_"] = jumpPower_;
+        j["gravity_"] = gravity_;
+        j["maxFallSpeed_"] = maxFallSpeed_;
+        
+        j["dashDuration_"] = dashDuration_;
+        j["dashSpeed_"] = dashSpeed_;
+        j["dashEndUpwardVelocity_"] = dashEndUpwardVelocity_;
+        
+        j["wallJumpDuration_"] = wallJumpDuration_;
+        j["wallJumpPower_"] = { wallJumpPower_.x, wallJumpPower_.y };
+        j["wallJumpDirLockDuration_"] = wallJumpDirLockDuration_;
+        j["wallSlideSpeed_"] = wallSlideSpeed_;
+        
+        j["halfWidth_"] = halfWidth_;
+        j["halfHeight_"] = halfHeight_;
+        
+        j["colorNormal_"] = { colorNormal_.x, colorNormal_.y, colorNormal_.z, colorNormal_.w };
+        j["colorDashed_"] = { colorDashed_.x, colorDashed_.y, colorDashed_.z, colorDashed_.w };
+        
+        j["deathDuration_"] = deathDuration_;
+        j["respawnDuration_"] = respawnDuration_;
+        j["goalWaitTime_"] = goalWaitTime_;
+        
+        std::ofstream file(filepath);
+        if (file.is_open()) {
+            file << j.dump(4);
+            file.close();
+            std::cout << "Player parameters saved to " << filepath << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to save player parameters: " << e.what() << std::endl;
+    }
+}
+
+void Player2D::LoadParameters(const std::string& filepath) {
+    try {
+        if (!std::filesystem::exists(filepath)) return;
+        
+        std::ifstream file(filepath);
+        if (!file.is_open()) return;
+        
+        nlohmann::json j;
+        file >> j;
+        file.close();
+        
+        if (j.contains("moveSpeed_")) moveSpeed_ = j["moveSpeed_"];
+        if (j.contains("jumpPower_")) jumpPower_ = j["jumpPower_"];
+        if (j.contains("gravity_")) gravity_ = j["gravity_"];
+        if (j.contains("maxFallSpeed_")) maxFallSpeed_ = j["maxFallSpeed_"];
+        
+        if (j.contains("dashDuration_")) dashDuration_ = j["dashDuration_"];
+        if (j.contains("dashSpeed_")) dashSpeed_ = j["dashSpeed_"];
+        if (j.contains("dashEndUpwardVelocity_")) dashEndUpwardVelocity_ = j["dashEndUpwardVelocity_"];
+        
+        if (j.contains("wallJumpDuration_")) wallJumpDuration_ = j["wallJumpDuration_"];
+        if (j.contains("wallJumpPower_")) {
+            wallJumpPower_.x = j["wallJumpPower_"][0];
+            wallJumpPower_.y = j["wallJumpPower_"][1];
+        }
+        if (j.contains("wallJumpDirLockDuration_")) wallJumpDirLockDuration_ = j["wallJumpDirLockDuration_"];
+        if (j.contains("wallSlideSpeed_")) wallSlideSpeed_ = j["wallSlideSpeed_"];
+        
+        if (j.contains("halfWidth_")) halfWidth_ = j["halfWidth_"];
+        if (j.contains("halfHeight_")) halfHeight_ = j["halfHeight_"];
+        
+        if (j.contains("colorNormal_")) {
+            colorNormal_.x = j["colorNormal_"][0];
+            colorNormal_.y = j["colorNormal_"][1];
+            colorNormal_.z = j["colorNormal_"][2];
+            colorNormal_.w = j["colorNormal_"][3];
+        }
+        if (j.contains("colorDashed_")) {
+            colorDashed_.x = j["colorDashed_"][0];
+            colorDashed_.y = j["colorDashed_"][1];
+            colorDashed_.z = j["colorDashed_"][2];
+            colorDashed_.w = j["colorDashed_"][3];
+        }
+        
+        if (j.contains("deathDuration_")) deathDuration_ = j["deathDuration_"];
+        if (j.contains("respawnDuration_")) respawnDuration_ = j["respawnDuration_"];
+        if (j.contains("goalWaitTime_")) goalWaitTime_ = j["goalWaitTime_"];
+        
+        if (primitiveObj_) {
+            primitiveObj_->SetScale({ halfWidth_ * 2.0f, halfHeight_ * 2.0f, 1.0f });
+        }
+        
+        std::cout << "Player parameters loaded from " << filepath << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to load player parameters: " << e.what() << std::endl;
+    }
+}
+
