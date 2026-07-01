@@ -610,7 +610,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
             }
         }
         
-        customPalette_.clear();
+        // customPalette_.clear(); // クリアせず統合する
         if (j.contains("customPalette")) {
             auto paletteArray = j["customPalette"];
             for (const auto& p : paletteArray) {
@@ -631,7 +631,18 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("properties")) def.properties = p["properties"];
-                customPalette_.push_back(def);
+                
+                bool found = false;
+                for (auto& existing : customPalette_) {
+                    if (existing.id == def.id) {
+                        existing = def;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    customPalette_.push_back(def);
+                }
             }
         }
         
@@ -656,7 +667,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 }
             }
         }
-        customPalette_.clear();
+        // customPalette_.clear(); // 古い形式のテキスト読み込みでもクリアしない
         RebuildChipObjects();
         return true;
     }

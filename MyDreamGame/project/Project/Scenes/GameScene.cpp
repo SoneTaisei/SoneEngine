@@ -663,6 +663,7 @@ void GameScene::UpdateEditor() {
         }
     }
     if (map_) {
+        map_->Update();
         for (auto* mapPrim : map_->GetPrimitiveObjects()) {
             if (mapPrim) {
                 mapPrim->Update();

@@ -595,6 +595,37 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                             static bool autoApply = true;
                             ImGui::Checkbox("Auto Apply", &autoApply);
+                            ImGui::SameLine();
+                            if (ImGui::Button("デフォルトに戻す (Reset to Default)")) {
+                                bool found = false;
+                                auto& templates = mapChip->GetTemplatePalette();
+                                for (const auto& t : templates) {
+                                    if (t.type == targetDef->type) {
+                                        targetDef->color = t.color;
+                                        targetDef->scale = t.scale;
+                                        targetDef->modelName = t.modelName;
+                                        targetDef->properties = t.properties;
+                                        changed = true;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    targetDef->color = {1.0f, 1.0f, 1.0f, 1.0f};
+                                    targetDef->scale = {1.0f, 1.0f, 1.0f};
+                                    targetDef->modelName = "";
+                                    if (targetDef->type == "JumpBlock") {
+                                        targetDef->properties["jumpVelocity"] = 15.0f;
+                                    } else if (targetDef->type == "LiftBlock") {
+                                        targetDef->properties["speed"] = 2.0f;
+                                        targetDef->properties["direction"] = "horizontal";
+                                        targetDef->properties["range"] = 10.0f;
+                                    } else {
+                                        targetDef->properties = nlohmann::json::object();
+                                    }
+                                    changed = true;
+                                }
+                            }
 
                             if (ImGui::Button("変更を適用 (Apply & Rebuild)") || (autoApply && changed)) {
                                 if (isTemplate) {
