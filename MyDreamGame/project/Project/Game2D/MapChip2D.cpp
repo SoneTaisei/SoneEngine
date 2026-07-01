@@ -290,6 +290,29 @@ MapChip2D::ChipType MapChip2D::GetChip(int x, int y) const {
     return mapData_[y][x];
 }
 
+void MapChip2D::BucketFill(int startX, int startY, ChipType targetType, ChipType replacementType) {
+    if (startX < 0 || startX >= mapWidth_ || startY < 0 || startY >= mapHeight_) return;
+    if (targetType == replacementType) return;
+    if (mapData_[startY][startX] != targetType) return;
+
+    std::vector<std::pair<int, int>> queue;
+    queue.push_back({startX, startY});
+
+    while (!queue.empty()) {
+        auto [x, y] = queue.back();
+        queue.pop_back();
+
+        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) continue;
+        if (mapData_[y][x] == targetType) {
+            SetChip(x, y, replacementType);
+            queue.push_back({x + 1, y});
+            queue.push_back({x - 1, y});
+            queue.push_back({x, y + 1});
+            queue.push_back({x, y - 1});
+        }
+    }
+}
+
 void MapChip2D::ClearMap() {
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {

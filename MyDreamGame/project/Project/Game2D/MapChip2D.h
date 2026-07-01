@@ -61,6 +61,9 @@ public:
     // チップを取得
     ChipType GetChip(int x, int y) const;
 
+    // バケツ塗り（フラッドフィル）
+    void BucketFill(int startX, int startY, ChipType targetType, ChipType replacementType);
+
     // マップをすべてクリア
     void ClearMap();
 

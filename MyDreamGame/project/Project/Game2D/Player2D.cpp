@@ -15,6 +15,8 @@
 #endif
 
 void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
+    LoadParameters(); // 初期化時にJSONからパラメータをロード
+
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     commandList->GetDevice(IID_PPV_ARGS(&device));
 
@@ -427,7 +429,16 @@ void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
 
 void Player2D::DisplayImGui() {
 #ifdef USE_IMGUI
-    if (ImGui::TreeNode("プレイヤー2D (Player2D)")) {
+    bool isTreeNodeOpen = ImGui::TreeNode("プレイヤー2D (Player2D)");
+    static bool wasTreeNodeOpen = false;
+
+    // ツリーノードが開かれた瞬間にJSONをロードする
+    if (isTreeNodeOpen && !wasTreeNodeOpen) {
+        LoadParameters();
+    }
+    wasTreeNodeOpen = isTreeNodeOpen;
+
+    if (isTreeNodeOpen) {
         if (ImGui::Button("パラメータ保存 (Save)")) {
             SaveParameters();
         }

@@ -4,6 +4,8 @@
 #include <d3d12.h>
 #include <cstdint>
 #include <set>
+#include <memory>
+#include <functional>
 
 // UIから操作したいクラスのヘッダーをインクルード
 #include "Graphics/DebugCamera.h"
@@ -18,6 +20,14 @@ class PrimitiveObject;
 
 class EditorManager {
 public:
+    enum class MapEditMode {
+        Normal,
+        Select,
+        Copy,
+        Paste,
+        BucketFill
+    };
+
     // 初期化 (ImGuiのセットアップ)
     void Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue);
 
@@ -68,7 +78,78 @@ public:
         selectedParticle_ = nullptr;
         selectedPrimitive_ = nullptr;
         sceneJustReset_ = true; // シーンリセットのフラグを立てる
+        ClearHistory();
     }
+
+    class IEditorCommand {
+    public:
+        virtual ~IEditorCommand() = default;
+        virtual void Undo() = 0;
+        virtual void Redo() = 0;
+    };
+
+    template <typename T>
+    class ValueEditCommand : public IEditorCommand {
+        T* target_;
+        T oldValue_;
+        T newValue_;
+        std::function<void()> onUpdate_;
+    public:
+        ValueEditCommand(T* target, const T& oldVal, const T& newVal, std::function<void()> onUpdate = nullptr)
+            : target_(target), oldValue_(oldVal), newValue_(newVal), onUpdate_(onUpdate) {}
+        void Undo() override { *target_ = oldValue_; if (onUpdate_) onUpdate_(); }
+        void Redo() override { *target_ = newValue_; if (onUpdate_) onUpdate_(); }
+    };
+    
+    template <typename T>
+    void PushCommand(T* target, const T& oldVal, const T& newVal, std::function<void()> onUpdate = nullptr) {
+        undoStack_.push_back(std::make_shared<ValueEditCommand<T>>(target, oldVal, newVal, onUpdate));
+        if (undoStack_.size() > 100) {
+            undoStack_.erase(undoStack_.begin());
+        }
+        redoStack_.clear();
+    }
+
+    class ActionCommand : public IEditorCommand {
+        std::function<void()> undoAction_;
+        std::function<void()> redoAction_;
+    public:
+        ActionCommand(std::function<void()> undo, std::function<void()> redo)
+            : undoAction_(undo), redoAction_(redo) {}
+        void Undo() override { if(undoAction_) undoAction_(); }
+        void Redo() override { if(redoAction_) redoAction_(); }
+    };
+
+    void PushActionCommand(std::function<void()> undo, std::function<void()> redo) {
+        undoStack_.push_back(std::make_shared<ActionCommand>(undo, redo));
+        if (undoStack_.size() > 100) {
+            undoStack_.erase(undoStack_.begin());
+        }
+        redoStack_.clear();
+    }
+
+    void PushCommand(std::shared_ptr<IEditorCommand> cmd) {
+        undoStack_.push_back(cmd);
+        if (undoStack_.size() > 100) {
+            undoStack_.erase(undoStack_.begin());
+        }
+        redoStack_.clear();
+    }
+
+    void Undo();
+    void Redo();
+    void ClearHistory() {
+        undoStack_.clear();
+        redoStack_.clear();
+    }
+
+    // マップ用の履歴保存ヘルパー
+    void BeginMapHistoryCapture(class MapChip2D* mapChip);
+    void EndMapHistoryCapture(class MapChip2D* mapChip);
+    
+    // バウンダリ用の履歴保存ヘルパー
+    void BeginBoundaryHistoryCapture(class MapChip2D* mapChip);
+    void EndBoundaryHistoryCapture(class MapChip2D* mapChip);
 
     static ImVec2 GetGameViewPos() { return gameViewPos_; }
     static ImVec2 GetGameViewSize() { return gameViewSize_; }
@@ -100,12 +181,36 @@ private:
     int mapEditorSelectedTool_ = 100; // 0 = None, 100 = Custom Block 1
     int mapEditorInputWidth_ = -1;
     int mapEditorInputHeight_ = -1;
+    
+    // 拡張マップエディタ状態
+    MapEditMode mapEditMode_ = MapEditMode::Normal;
+    int selectStartX_ = -1;
+    int selectStartY_ = -1;
+    int selectEndX_ = -1;
+    int selectEndY_ = -1;
+    std::vector<std::vector<int>> clipboardMapData_;
 
     // 境界線編集用
     bool isBoundaryEditMode_ = false;
     int boundaryAddMode_ = 0; // 0: 縦線, 1: 横線, 2: 両方(交点)
     int draggingBoundaryIndexX_ = -1;
     int draggingBoundaryIndexY_ = -1;
+
+    std::vector<std::shared_ptr<IEditorCommand>> undoStack_;
+    std::vector<std::shared_ptr<IEditorCommand>> redoStack_;
+    
+    public:
+    struct MapState {
+        int width, height;
+        std::vector<std::vector<int>> data;
+    };
+    
+    struct BoundaryState {
+        std::vector<float> bx, by;
+    };
+    private:
+    MapState oldMapState_;
+    BoundaryState oldBoundaryState_;
 
     std::set<std::string> customToolFilters_;
     std::vector<std::string> availableModels_; // "Object/..." のような相対パスを保持

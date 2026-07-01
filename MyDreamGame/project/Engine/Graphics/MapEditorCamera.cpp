@@ -24,7 +24,7 @@ void MapEditorCamera::Update(bool allowInput) {
         ImGuiIO& io = ImGui::GetIO();
         
         // ズーム（マウスホイール）
-        if (io.MouseWheel != 0.0f) {
+        if (io.MouseWheel != 0.0f && !io.KeyCtrl && !ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
             float oldZoom = zoom_;
             zoom_ += io.MouseWheel * 4.0f;
             if (zoom_ < 8.0f) zoom_ = 8.0f;

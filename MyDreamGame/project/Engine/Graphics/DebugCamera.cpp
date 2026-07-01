@@ -38,7 +38,7 @@ void DebugCamera::Update(bool allowInput) {
 
         // --- 移動 ---
         // ズーム (ホイール)
-        if (io.MouseWheel != 0.0f) {
+        if (io.MouseWheel != 0.0f && !io.KeyCtrl && !io.MouseDown[2]) {
             transform_.translate = TransformFunctions::AddV(transform_.translate, TransformFunctions::MultiplyV(io.MouseWheel * zoomSpeed, forward));
         }
         // 平行移動 (中クリック)
