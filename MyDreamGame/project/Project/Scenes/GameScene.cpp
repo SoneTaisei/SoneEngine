@@ -248,7 +248,7 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
 
             if (gameCamera_ && map_) {
-                gameCamera_->SetBoundaries(map_->GetBoundaryX(), map_->GetBoundaryY());
+                gameCamera_->SetRooms(map_->GetRooms());
             }
 
             player_->Update(*map_, gameCamera_ && gameCamera_->IsTransitioning());

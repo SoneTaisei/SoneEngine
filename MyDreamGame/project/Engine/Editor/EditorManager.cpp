@@ -140,6 +140,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (mapChip) {
                 if (loadMapDataStrNextFrame_) {
                     mapChip->LoadFromString(mapDataStrToLoad_);
+                    mapChip->GetRooms() = savedRoomsForPlay_;
                     loadMapDataStrNextFrame_ = false;
                 } else {
                     mapChip->LoadFromStageName(stageFilename_);
@@ -242,6 +243,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     MapChip2D* mapChip = sceneManager->GetCurrentScene()->GetMapChip();
                     if (mapChip) {
                         mapDataStrToLoad_ = mapChip->GetMapDataAsString();
+                        savedRoomsForPlay_ = mapChip->GetRooms();
                     }
                 }
             }
@@ -1205,26 +1207,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
                         }
 
-                        // ルーム境界線の描画（フリップスクロールのトリガーライン）
-                        const auto& bx = mapChip->GetBoundaryX();
-                        const auto& by = mapChip->GetBoundaryY();
-
-                        // 縦のルーム境界線
-                        for (size_t i = 0; i < bx.size(); ++i) {
-                            float rx = bx[i];
-                            ImVec2 p1 = WorldToScreen(rx, 0.0f);
-                            ImVec2 p2 = WorldToScreen(rx, static_cast<float>(mapHeight));
-                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexX_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
-                            drawList->AddLine(p1, p2, color, 3.0f);
-                        }
-                        
-                        // 横のルーム境界線
-                        for (size_t i = 0; i < by.size(); ++i) {
-                            float ry = by[i];
-                            ImVec2 p1 = WorldToScreen(0.0f, ry);
-                            ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), ry);
-                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexY_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
-                            drawList->AddLine(p1, p2, color, 3.0f);
+                        // ルームの描画
+                        const auto& rooms = mapChip->GetRooms();
+                        for (size_t i = 0; i < rooms.size(); ++i) {
+                            const auto& r = rooms[i];
+                            ImVec2 pTL = WorldToScreen(r.x, r.y + r.height);
+                            ImVec2 pBR = WorldToScreen(r.x + r.width, r.y);
+                            ImU32 color = (isRoomEditMode_ && draggingRoomIndex_ == static_cast<int>(i)) ? IM_COL32(255, 255, 0, 100) : IM_COL32(50, 50, 255, 50);
+                            ImU32 borderColor = (isRoomEditMode_ && draggingRoomIndex_ == static_cast<int>(i)) ? IM_COL32(255, 255, 0, 255) : IM_COL32(50, 50, 255, 255);
+                            drawList->AddRectFilled(pTL, pBR, color);
+                            drawList->AddRect(pTL, pBR, borderColor, 0.0f, 0, 2.0f);
                         }
 
                         // 範囲選択の描画
@@ -1276,120 +1268,122 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             worldPos = TransformFunctions::Transform({ndcX, ndcY, 0.0f}, invViewProj);
                         }
 
-                        if (isBoundaryEditMode_) {
-                            float hitDist = 0.5f; // 当たり判定の距離（ワールド座標基準）
-                            auto& bx = mapChip->GetBoundaryX();
-                            auto& by = mapChip->GetBoundaryY();
+                        // モード切り替えショートカット
+                        if (ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0.0f) {
+                            int m = static_cast<int>(mapEditMode_);
+                            if (ImGui::GetIO().MouseWheel < 0.0f) m = (m + 1) % 5;
+                            else m = (m + 4) % 5;
+                            mapEditMode_ = static_cast<MapEditMode>(m);
+                        }
+
+                        // Undo / Redo
+                        if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                            Undo();
+                        }
+                        if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+                            Redo();
+                        }
+
+                        if (isRoomEditMode_) {
+                            float hitDist = 0.5f;
+                            auto& rooms = mapChip->GetRooms();
 
                             // ドラッグ開始判定
                             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                                BeginBoundaryHistoryCapture(mapChip);
-                                draggingBoundaryIndexX_ = -1;
-                                draggingBoundaryIndexY_ = -1;
+                                BeginRoomHistoryCapture(mapChip);
+                                draggingRoomIndex_ = -1;
+                                roomDragHandle_ = 0;
 
-                                // X軸の線の当たり判定
-                                for (size_t i = 0; i < bx.size(); ++i) {
-                                    if (std::abs(worldPos.x - bx[i]) < hitDist) {
-                                        draggingBoundaryIndexX_ = static_cast<int>(i);
+                                for (int i = static_cast<int>(rooms.size()) - 1; i >= 0; --i) {
+                                    const auto& r = rooms[i];
+                                    bool inX = (worldPos.x >= r.x && worldPos.x <= r.x + r.width);
+                                    bool inY = (worldPos.y >= r.y && worldPos.y <= r.y + r.height);
+                                    
+                                    bool onLeft = std::abs(worldPos.x - r.x) < hitDist;
+                                    bool onRight = std::abs(worldPos.x - (r.x + r.width)) < hitDist;
+                                    bool onBottom = std::abs(worldPos.y - r.y) < hitDist;
+                                    bool onTop = std::abs(worldPos.y - (r.y + r.height)) < hitDist;
+                                    
+                                    if ((inX && inY) || ((onLeft || onRight) && inY) || ((onTop || onBottom) && inX)) {
+                                        draggingRoomIndex_ = i;
+                                        if (onLeft && onTop) roomDragHandle_ = 2;
+                                        else if (onRight && onTop) roomDragHandle_ = 3;
+                                        else if (onLeft && onBottom) roomDragHandle_ = 4;
+                                        else if (onRight && onBottom) roomDragHandle_ = 5;
+                                        else if (onLeft) roomDragHandle_ = 6;
+                                        else if (onRight) roomDragHandle_ = 7;
+                                        else if (onTop) roomDragHandle_ = 8;
+                                        else if (onBottom) roomDragHandle_ = 9;
+                                        else {
+                                            roomDragHandle_ = 1; // Move
+                                            roomDragOffsetX_ = worldPos.x - r.x;
+                                            roomDragOffsetY_ = worldPos.y - r.y;
+                                        }
                                         break;
                                     }
                                 }
-                                // Y軸の線の当たり判定（Xと独立して判定し、両方ヒット＝交点とする）
-                                for (size_t i = 0; i < by.size(); ++i) {
-                                    if (std::abs(worldPos.y - by[i]) < hitDist) {
-                                        draggingBoundaryIndexY_ = static_cast<int>(i);
-                                        break;
-                                    }
+
+                                if (draggingRoomIndex_ != -1 && ImGui::GetIO().KeyCtrl) {
+                                    rooms.erase(rooms.begin() + draggingRoomIndex_);
+                                    draggingRoomIndex_ = -1;
+                                    roomDragHandle_ = 0;
+                                } else if (draggingRoomIndex_ == -1 && !ImGui::GetIO().KeyCtrl) {
+                                    bool snap = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+                                    StageRoom newRoom;
+                                    newRoom.x = snap ? std::floor(worldPos.x) : worldPos.x;
+                                    newRoom.y = snap ? std::floor(worldPos.y) : worldPos.y;
+                                    newRoom.width = 1.0f;
+                                    newRoom.height = 1.0f;
+                                    rooms.push_back(newRoom);
+                                    draggingRoomIndex_ = static_cast<int>(rooms.size()) - 1;
+                                    roomDragHandle_ = 5; // BottomRight drag
                                 }
                             }
 
-                            // 左ドラッグ（マス目スナップ）
-                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-                                float snapX = std::round(worldPos.x);
-                                float snapY = std::round(worldPos.y);
-                                if (draggingBoundaryIndexX_ != -1) {
-                                    bx[draggingBoundaryIndexX_] = std::clamp(snapX, 0.0f, static_cast<float>(mapChip->GetWidth()));
-                                }
-                                if (draggingBoundaryIndexY_ != -1) {
-                                    by[draggingBoundaryIndexY_] = std::clamp(snapY, 0.0f, static_cast<float>(mapChip->GetHeight()));
-                                }
-                            }
-                            
-                            // 右ドラッグ（自由移動）
-                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-                                if (draggingBoundaryIndexX_ != -1) {
-                                    bx[draggingBoundaryIndexX_] = std::clamp(worldPos.x, 0.0f, static_cast<float>(mapChip->GetWidth()));
-                                }
-                                if (draggingBoundaryIndexY_ != -1) {
-                                    by[draggingBoundaryIndexY_] = std::clamp(worldPos.y, 0.0f, static_cast<float>(mapChip->GetHeight()));
-                                }
-                            }
-
-                            // リリース時の判定（追加または削除、並び替え）
-                            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
-                                bool isLeft = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-                                ImGuiMouseButton btn = isLeft ? ImGuiMouseButton_Left : ImGuiMouseButton_Right;
+                            if ((ImGui::IsMouseDragging(ImGuiMouseButton_Left) || ImGui::IsMouseDragging(ImGuiMouseButton_Right)) && draggingRoomIndex_ != -1) {
+                                auto& r = rooms[draggingRoomIndex_];
+                                bool snap = ImGui::IsMouseDragging(ImGuiMouseButton_Left);
+                                float snapX_left = snap ? std::floor(worldPos.x) : worldPos.x;
+                                float snapY_bottom = snap ? std::floor(worldPos.y) : worldPos.y;
+                                float snapX_right = snap ? std::floor(worldPos.x) + 1.0f : worldPos.x;
+                                float snapY_top = snap ? std::floor(worldPos.y) + 1.0f : worldPos.y;
+                                float minSize = snap ? 1.0f : 0.1f;
                                 
-                                // ドラッグしていたか？
-                                ImVec2 dragDelta = ImGui::GetMouseDragDelta(btn);
-                                bool wasDragging = (std::abs(dragDelta.x) > 1.0f || std::abs(dragDelta.y) > 1.0f);
-
-                                if (wasDragging) {
-                                    // 移動終了、並び替えのみ
-                                    std::sort(bx.begin(), bx.end());
-                                    std::sort(by.begin(), by.end());
+                                if (roomDragHandle_ == 1) { // Move
+                                    float targetX = snap ? std::floor(worldPos.x) : worldPos.x;
+                                    float targetY = snap ? std::floor(worldPos.y) : worldPos.y;
+                                    r.x = targetX - roomDragOffsetX_;
+                                    r.y = targetY - roomDragOffsetY_;
+                                    if (snap) {
+                                        r.x = std::round(r.x);
+                                        r.y = std::round(r.y);
+                                    }
                                 } else {
-                                    // クリック操作
-                                    int hitX = -1, hitY = -1;
-                                    for (size_t i = 0; i < bx.size(); ++i) {
-                                        if (std::abs(worldPos.x - bx[i]) < hitDist) hitX = static_cast<int>(i);
+                                    if (roomDragHandle_ == 2 || roomDragHandle_ == 6 || roomDragHandle_ == 4) {
+                                        float right = r.x + r.width;
+                                        r.x = std::fmin(snapX_left, right - minSize);
+                                        r.width = right - r.x;
                                     }
-                                    for (size_t i = 0; i < by.size(); ++i) {
-                                        if (std::abs(worldPos.y - by[i]) < hitDist) hitY = static_cast<int>(i);
+                                    if (roomDragHandle_ == 3 || roomDragHandle_ == 7 || roomDragHandle_ == 5) {
+                                        r.width = std::fmax(minSize, snapX_right - r.x);
                                     }
-
-                                    if (hitX != -1 || hitY != -1) {
-                                        if (ImGui::GetIO().KeyCtrl) {
-                                            // Ctrl+クリックで削除（交点の場合は両方削除）
-                                            if (hitX != -1) bx.erase(bx.begin() + hitX);
-                                            if (hitY != -1) by.erase(by.begin() + hitY);
-                                        }
-                                    } else {
-                                        // 追加
-                                        float addX = isLeft ? std::round(worldPos.x) : worldPos.x;
-                                        float addY = isLeft ? std::round(worldPos.y) : worldPos.y;
-                                        if (boundaryAddMode_ == 0 || boundaryAddMode_ == 2) {
-                                            bx.push_back(addX);
-                                            std::sort(bx.begin(), bx.end());
-                                        }
-                                        if (boundaryAddMode_ == 1 || boundaryAddMode_ == 2) {
-                                            by.push_back(addY);
-                                            std::sort(by.begin(), by.end());
-                                        }
+                                    if (roomDragHandle_ == 4 || roomDragHandle_ == 9 || roomDragHandle_ == 5) {
+                                        float top = r.y + r.height;
+                                        r.y = std::fmin(snapY_bottom, top - minSize);
+                                        r.height = top - r.y;
                                     }
-
+                                    if (roomDragHandle_ == 2 || roomDragHandle_ == 8 || roomDragHandle_ == 3) {
+                                        r.height = std::fmax(minSize, snapY_top - r.y);
+                                    }
                                 }
-                                EndBoundaryHistoryCapture(mapChip);
-                                draggingBoundaryIndexX_ = -1;
-                                draggingBoundaryIndexY_ = -1;
+                            }
+
+                            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+                                EndRoomHistoryCapture(mapChip);
+                                draggingRoomIndex_ = -1;
+                                roomDragHandle_ = 0;
                             }
                         } else {
-                            // モード切り替えショートカット
-                            if (ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0.0f) {
-                                int m = static_cast<int>(mapEditMode_);
-                                if (ImGui::GetIO().MouseWheel < 0.0f) m = (m + 1) % 5;
-                                else m = (m + 4) % 5;
-                                mapEditMode_ = static_cast<MapEditMode>(m);
-                            }
-
-                            // Undo / Redo
-                            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
-                                Undo();
-                            }
-                            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-                                Redo();
-                            }
-
                             if (camera) {
                                 int mapWidth = mapChip->GetWidth();
                                 int mapHeight = mapChip->GetHeight();
@@ -1672,6 +1666,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_));
 
                     ImGui::Spacing();
+                    
+                    // ルーム編集モード
+                    ImGui::Checkbox("ルーム編集モード", &isRoomEditMode_);
+                    if (isRoomEditMode_) {
+                        ImGui::Text("左ドラッグ: マス目にスナップして作成・移動・リサイズ");
+                        ImGui::Text("右ドラッグ: スナップなしで作成・移動・リサイズ");
+                        ImGui::Text("Ctrl + クリック: ルームの削除");
+                    }
+
+                    ImGui::Separator();
+                    
                     ImGui::Text("マップサイズ設定 (1画面＝ 幅:20, 高さ:11)");
                     ImGui::TextDisabled("※ 画面を増やしたい場合はサイズを広げてください");
                     
@@ -1734,27 +1739,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::Separator();
                     // ==========================================
 
-                    // 境界線（ルームトリガー）編集モード
-                    ImGui::Checkbox("境界線（トリガー）編集モード", &isBoundaryEditMode_);
-                    if (isBoundaryEditMode_) {
-                        ImGui::Text("追加モード: ");
-                        ImGui::SameLine();
-                        ImGui::RadioButton("縦線(横画面遷移用)", &boundaryAddMode_, 0); ImGui::SameLine();
-                        ImGui::RadioButton("横線(縦画面遷移用)", &boundaryAddMode_, 1); ImGui::SameLine();
-                        ImGui::RadioButton("両方(交点)", &boundaryAddMode_, 2);
-
-                        ImGui::TextDisabled("・左クリック(ドラッグ): マス目にスナップして追加・移動\n"
-                                            "・右クリック(ドラッグ): 自由に(スナップなしで)追加・移動\n"
-                                            "・交差している部分をドラッグすると両方同時に移動します\n"
-                                            "・線の上でCtrl + クリック: 線の削除");
-                    }
-                    ImGui::Spacing();
-                    ImGui::Separator();
-
                     // ペイントツール選択
                     static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
-                    // ペイントツール選択 (境界線編集モード中は操作不可にするかグレーアウトする)
-                    ImGui::BeginDisabled(isBoundaryEditMode_);
+                    // ペイントツール選択 (ルーム編集モード中は操作不可にするかグレーアウトする)
+                    ImGui::BeginDisabled(isRoomEditMode_);
                     ImGui::Text("Paint Tool:");
                     ImGui::Spacing();
 
@@ -3004,20 +2992,18 @@ public:
     }
 };
 
-class BoundaryEditCommand : public EditorManager::IEditorCommand {
+class RoomEditCommand : public EditorManager::IEditorCommand {
     MapChip2D* mapChip_;
-    EditorManager::BoundaryState oldState_;
-    EditorManager::BoundaryState newState_;
+    EditorManager::RoomState oldState_;
+    EditorManager::RoomState newState_;
 public:
-    BoundaryEditCommand(MapChip2D* chip, const EditorManager::BoundaryState& oldS, const EditorManager::BoundaryState& newS)
+    RoomEditCommand(MapChip2D* chip, const EditorManager::RoomState& oldS, const EditorManager::RoomState& newS)
         : mapChip_(chip), oldState_(oldS), newState_(newS) {}
     void Undo() override {
-        mapChip_->GetBoundaryX() = oldState_.bx;
-        mapChip_->GetBoundaryY() = oldState_.by;
+        mapChip_->GetRooms() = oldState_.rooms;
     }
     void Redo() override {
-        mapChip_->GetBoundaryX() = newState_.bx;
-        mapChip_->GetBoundaryY() = newState_.by;
+        mapChip_->GetRooms() = newState_.rooms;
     }
 };
 
@@ -3049,19 +3035,31 @@ void EditorManager::EndMapHistoryCapture(MapChip2D* mapChip) {
     }
 }
 
-void EditorManager::BeginBoundaryHistoryCapture(MapChip2D* mapChip) {
+void EditorManager::BeginRoomHistoryCapture(MapChip2D* mapChip) {
     if (!mapChip) return;
-    oldBoundaryState_.bx = mapChip->GetBoundaryX();
-    oldBoundaryState_.by = mapChip->GetBoundaryY();
+    oldRoomState_.rooms = mapChip->GetRooms();
 }
 
-void EditorManager::EndBoundaryHistoryCapture(MapChip2D* mapChip) {
+void EditorManager::EndRoomHistoryCapture(MapChip2D* mapChip) {
     if (!mapChip) return;
-    BoundaryState newState;
-    newState.bx = mapChip->GetBoundaryX();
-    newState.by = mapChip->GetBoundaryY();
-    if (oldBoundaryState_.bx != newState.bx || oldBoundaryState_.by != newState.by) {
-        PushCommand(std::make_shared<BoundaryEditCommand>(mapChip, oldBoundaryState_, newState));
+    RoomState newState;
+    newState.rooms = mapChip->GetRooms();
+    bool changed = false;
+    if (oldRoomState_.rooms.size() != newState.rooms.size()) {
+        changed = true;
+    } else {
+        for (size_t i = 0; i < newState.rooms.size(); ++i) {
+            if (oldRoomState_.rooms[i].x != newState.rooms[i].x ||
+                oldRoomState_.rooms[i].y != newState.rooms[i].y ||
+                oldRoomState_.rooms[i].width != newState.rooms[i].width ||
+                oldRoomState_.rooms[i].height != newState.rooms[i].height) {
+                changed = true;
+                break;
+            }
+        }
+    }
+    if (changed) {
+        PushCommand(std::make_shared<RoomEditCommand>(mapChip, oldRoomState_, newState));
     }
 }
 #endif

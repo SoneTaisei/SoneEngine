@@ -30,9 +30,8 @@ public:
     int GetCurrentRoomY() const { return currentRoomY_; }
 
     // カスタム境界線データ（フリップスクロール用）
-    void SetBoundaries(const std::vector<float>& bx, const std::vector<float>& by) {
-        boundaryX_ = bx;
-        boundaryY_ = by;
+    void SetRooms(const std::vector<StageRoom>& rooms) {
+        rooms_ = rooms;
     }
 
     float GetFollowLerp() const { return followLerp_; }
@@ -62,8 +61,7 @@ private:
     float orthoHeight_ = 11.25f; // 正射影の縦幅
     float scale_ = 1.0f;         // 正射影のスケール（拡大率）
 
-    std::vector<float> boundaryX_;
-    std::vector<float> boundaryY_;
+    std::vector<StageRoom> rooms_;
 
     // カメラ追従の滑らかさ
     float followLerp_ = 0.1f;

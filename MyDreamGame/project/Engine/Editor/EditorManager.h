@@ -12,6 +12,7 @@
 #include "Graphics/GameCamera.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneFactory.h"
+#include "Core/Utility/Structs.h"
 
 class SceneManager;
 class ParticleManager;
@@ -51,7 +52,7 @@ public:
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsMapEditorVisible() const { return isMapEditorVisible_; }
     bool IsMapEditorHovered() const { return isMapEditorHovered_; }
-    bool IsBoundaryDragging() const { return draggingBoundaryIndexX_ != -1 || draggingBoundaryIndexY_ != -1; }
+    bool IsRoomDragging() const { return draggingRoomIndex_ != -1; }
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }
@@ -148,8 +149,8 @@ public:
     void EndMapHistoryCapture(class MapChip2D* mapChip);
     
     // バウンダリ用の履歴保存ヘルパー
-    void BeginBoundaryHistoryCapture(class MapChip2D* mapChip);
-    void EndBoundaryHistoryCapture(class MapChip2D* mapChip);
+    void BeginRoomHistoryCapture(class MapChip2D* mapChip);
+    void EndRoomHistoryCapture(class MapChip2D* mapChip);
 
     static ImVec2 GetGameViewPos() { return gameViewPos_; }
     static ImVec2 GetGameViewSize() { return gameViewSize_; }
@@ -161,6 +162,7 @@ private:
     bool sceneJustReset_ = false;
     bool loadMapDataStrNextFrame_ = false;
     std::string mapDataStrToLoad_ = "";
+    std::vector<StageRoom> savedRoomsForPlay_;
     char stageFilename_[128] = "map_data.txt";
 
     static bool isPlaying_; // ゲーム再生中かどうか
@@ -206,10 +208,11 @@ private:
     std::vector<std::vector<int>> dragSelectionData_;
 
     // 境界線編集用
-    bool isBoundaryEditMode_ = false;
-    int boundaryAddMode_ = 0; // 0: 縦線, 1: 横線, 2: 両方(交点)
-    int draggingBoundaryIndexX_ = -1;
-    int draggingBoundaryIndexY_ = -1;
+    bool isRoomEditMode_ = false;
+    int draggingRoomIndex_ = -1;
+    int roomDragHandle_ = 0; // 0: None, 1: Move, 2: TopLeft, 3: TopRight, 4: BottomLeft, 5: BottomRight, 6: Left, 7: Right, 8: Top, 9: Bottom
+    float roomDragOffsetX_ = 0.0f;
+    float roomDragOffsetY_ = 0.0f;
 
     std::vector<std::shared_ptr<IEditorCommand>> undoStack_;
     std::vector<std::shared_ptr<IEditorCommand>> redoStack_;
@@ -220,12 +223,12 @@ private:
         std::vector<std::vector<int>> data;
     };
     
-    struct BoundaryState {
-        std::vector<float> bx, by;
+    struct RoomState {
+        std::vector<struct StageRoom> rooms;
     };
     private:
     MapState oldMapState_;
-    BoundaryState oldBoundaryState_;
+    RoomState oldRoomState_;
 
     std::set<std::string> customToolFilters_;
     std::vector<std::string> availableModels_; // "Object/..." のような相対パスを保持

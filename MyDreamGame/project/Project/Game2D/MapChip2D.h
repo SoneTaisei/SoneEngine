@@ -11,6 +11,7 @@
 /// 2Dスクロールゲーム用マップクラス
 /// 2D配列でマップチップを管理し、PrimitiveObject(Box)で描画する
 /// </summary>
+
 class MapChip2D {
 public:
     enum class ChipType : int {
@@ -87,18 +88,16 @@ public:
     std::string GetMapDataAsString() const;
     bool LoadFromString(const std::string& data);
 
-    // 境界線（ルームトリガー）データの管理
-    std::vector<float>& GetBoundaryX() { return boundaryX_; }
-    std::vector<float>& GetBoundaryY() { return boundaryY_; }
-    const std::vector<float>& GetBoundaryX() const { return boundaryX_; }
-    const std::vector<float>& GetBoundaryY() const { return boundaryY_; }
+    // 境界線（ルームトリガー）データの管理 -> Roomに変更
+    std::vector<StageRoom>& GetRooms() { return rooms_; }
+    const std::vector<StageRoom>& GetRooms() const { return rooms_; }
     
-    // デフォルト境界線の生成（マップサイズに基づいて自動生成）
-    void GenerateDefaultBoundaries();
+    // デフォルトルームの生成（マップサイズに基づいて自動生成）
+    void GenerateDefaultRooms();
     
-    // 境界線メタデータの保存と読込
-    bool SaveBoundariesToFile(const std::string& filepath);
-    bool LoadBoundariesFromFile(const std::string& filepath);
+    // ルームデータの保存と読込
+    bool SaveRoomsToFile(const std::string& filepath);
+    bool LoadRoomsFromFile(const std::string& filepath);
 
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
@@ -137,9 +136,8 @@ private:
     int mapHeight_ = 0;
     float chipSize_ = 1.0f; // 1チップのサイズ（ワールド座標）
 
-    // ルーム境界線データ（ワールド座標）
-    std::vector<float> boundaryX_;
-    std::vector<float> boundaryY_;
+    // ルームデータ（ワールド座標）
+    std::vector<StageRoom> rooms_;
 
     // 実行時に生成される各種ブロックのインスタンス
     std::vector<std::vector<std::shared_ptr<BaseBlock>>> activeBlocks_;

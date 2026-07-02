@@ -84,6 +84,13 @@ struct AABB2D {
     float bottom;
 };
 
+struct StageRoom {
+    float x;
+    float y;
+    float width;
+    float height;
+};
+
 struct  Transform {
 	Vector3 scale;
 	Vector3 rotate;

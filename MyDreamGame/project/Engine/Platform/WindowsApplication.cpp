@@ -304,7 +304,7 @@ void WindowsApplication::Update() {
         if (editorManager_->IsMapEditorVisible()) {
             activeCamera_ = mapEditorCamera_.get();
             isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
-            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsBoundaryDragging();
+            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
             mapEditorCamera_->Update(allowCameraInput);
         } else if (editorManager_->UseDebugCamera()) {
             activeCamera_ = debugCamera_.get();

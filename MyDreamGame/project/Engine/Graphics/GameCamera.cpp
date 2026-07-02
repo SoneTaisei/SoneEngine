@@ -55,57 +55,65 @@ void GameCamera::UpdateMatrixOrthographic() {
         float cameraTargetX = transform_.translate.x;
         float cameraTargetY = transform_.translate.y;
 
-        if (!boundaryX_.empty() && !boundaryY_.empty()) {
-            // X軸の区間検索
-            float minX = -100000.0f;
-            float maxX = 100000.0f;
-            auto itX = std::lower_bound(boundaryX_.begin(), boundaryX_.end(), targetX);
-            if (itX == boundaryX_.begin()) {
-                newRoomX = -1;
-                maxX = *itX;
-            } else if (itX == boundaryX_.end()) {
-                newRoomX = static_cast<int>(boundaryX_.size());
-                minX = *(itX - 1);
-            } else {
-                newRoomX = static_cast<int>(std::distance(boundaryX_.begin(), itX)) - 1;
-                minX = *(itX - 1);
-                maxX = *itX;
+        if (!rooms_.empty()) {
+            int currentRoomIndex = -1;
+            // まずは現在ターゲットがいるルームを探す
+            for (int i = 0; i < rooms_.size(); ++i) {
+                const auto& r = rooms_[i];
+                if (targetX >= r.x && targetX <= r.x + r.width &&
+                    targetY >= r.y && targetY <= r.y + r.height) {
+                    
+                    // 以前と同じルームならそれを優先
+                    if (currentRoomX_ == i) {
+                        currentRoomIndex = i;
+                        break;
+                    }
+                    if (currentRoomIndex == -1) {
+                        currentRoomIndex = i;
+                    }
+                }
             }
 
-            float halfW = orthoWidth_ * 0.5f;
-            float minClampX = minX + halfW;
-            float maxClampX = maxX - halfW;
-            if (minClampX > maxClampX) {
-                cameraTargetX = (minX + maxX) * 0.5f;
-            } else {
-                cameraTargetX = std::clamp(targetX, minClampX, maxClampX);
+            // どのルームにも属していない場合は、一番近いルームを探す
+            if (currentRoomIndex == -1) {
+                float minDistSq = 1e10f;
+                for (int i = 0; i < rooms_.size(); ++i) {
+                    const auto& r = rooms_[i];
+                    float centerX = r.x + r.width * 0.5f;
+                    float centerY = r.y + r.height * 0.5f;
+                    float dx = targetX - centerX;
+                    float dy = targetY - centerY;
+                    float distSq = dx * dx + dy * dy;
+                    if (distSq < minDistSq) {
+                        minDistSq = distSq;
+                        currentRoomIndex = i;
+                    }
+                }
             }
 
-            // Y軸の区間検索
-            float minY = -100000.0f;
-            float maxY = 100000.0f;
-            auto itY = std::lower_bound(boundaryY_.begin(), boundaryY_.end(), targetY);
-            if (itY == boundaryY_.begin()) {
-                newRoomY = -1;
-                maxY = *itY;
-            } else if (itY == boundaryY_.end()) {
-                newRoomY = static_cast<int>(boundaryY_.size());
-                minY = *(itY - 1);
-            } else {
-                newRoomY = static_cast<int>(std::distance(boundaryY_.begin(), itY)) - 1;
-                minY = *(itY - 1);
-                maxY = *itY;
-            }
+            if (currentRoomIndex != -1) {
+                newRoomX = currentRoomIndex; // currentRoomX_ にルームのインデックスを入れる
+                newRoomY = 0; // 使わないが0にしておく
 
-            float halfH = orthoHeight_ * 0.5f;
-            float minClampY = minY + halfH;
-            float maxClampY = maxY - halfH;
-            if (minClampY > maxClampY) {
-                // Y軸は下がプラス（値が大きい）ため、下限の境界は maxY となる。
-                // 画面より区間が狭い場合、下限に画面の下端をピッタリ合わせるために maxClampY を優先する。
-                cameraTargetY = maxClampY;
-            } else {
-                cameraTargetY = std::clamp(targetY, minClampY, maxClampY);
+                const auto& activeRoom = rooms_[currentRoomIndex];
+                float halfW = orthoWidth_ * 0.5f;
+                float halfH = orthoHeight_ * 0.5f;
+                float minClampX = activeRoom.x + halfW;
+                float maxClampX = activeRoom.x + activeRoom.width - halfW;
+                float minClampY = activeRoom.y + halfH;
+                float maxClampY = activeRoom.y + activeRoom.height - halfH;
+
+                if (minClampX > maxClampX) {
+                    cameraTargetX = activeRoom.x + activeRoom.width * 0.5f;
+                } else {
+                    cameraTargetX = std::clamp(targetX, minClampX, maxClampX);
+                }
+
+                if (minClampY > maxClampY) {
+                    cameraTargetY = activeRoom.y + activeRoom.height * 0.5f;
+                } else {
+                    cameraTargetY = std::clamp(targetY, minClampY, maxClampY);
+                }
             }
         }
 
