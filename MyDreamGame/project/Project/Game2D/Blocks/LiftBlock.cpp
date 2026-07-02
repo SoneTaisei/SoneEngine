@@ -1,5 +1,63 @@
 #include "LiftBlock.h"
 #include "../MapChip2D.h"
+#include <cmath>
+
+namespace {
+    bool IsRailOrLift(MapChip2D* map, int x, int y) {
+        auto type = map->GetChipType(x, y);
+        if (type == MapChip2D::ChipType::kRail || type == MapChip2D::ChipType::kLift) return true;
+        
+        int typeId = static_cast<int>(type);
+        if (typeId >= 100) {
+            for (const auto& def : map->GetCustomPalette()) {
+                if (def.id == typeId && (def.type == "RailBlock" || def.type == "LiftBlock")) return true;
+            }
+        } else if (typeId >= 1 && typeId <= 9) {
+            for (const auto& def : map->GetTemplatePalette()) {
+                if (def.id == typeId && (def.type == "RailBlock" || def.type == "LiftBlock")) return true;
+            }
+        }
+        return false;
+    }
+}
+
+void LiftBlock::SetProperties(const nlohmann::json& properties) {
+    bool hasProp = false;
+    if (properties.contains("direction")) {
+        propDirection_ = properties["direction"].get<std::string>();
+        hasProp = true;
+    }
+    if (properties.contains("range")) {
+        propRange_ = properties["range"].get<float>();
+        hasProp = true;
+    }
+    if (properties.contains("speed")) {
+        propSpeed_ = properties["speed"].get<float>();
+        hasProp = true;
+    }
+
+    if (hasProp) {
+        useProperties_ = true;
+        speedForward_ = propSpeed_;
+        speedBackward_ = propSpeed_ * 0.5f;
+        
+        // レールが配置されておらず、移動距離が0になっている場合のみプロパティのrangeを適用
+        if (std::abs(endPos_.x - startPos_.x) < 0.01f && std::abs(endPos_.y - startPos_.y) < 0.01f) {
+            float rangeWorld = propRange_ * map_->GetChipSize();
+            
+            if (propDirection_ == "horizontal") {
+                direction_ = { 1.0f, 0.0f, 0.0f };
+                endPos_ = { startPos_.x + rangeWorld, startPos_.y, startPos_.z };
+            } else if (propDirection_ == "vertical") {
+                direction_ = { 0.0f, 1.0f, 0.0f };
+                endPos_ = { startPos_.x, startPos_.y + rangeWorld, startPos_.z };
+            } else {
+                direction_ = { 0.0f, 0.0f, 0.0f };
+                endPos_ = startPos_;
+            }
+        }
+    }
+}
 
 void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();
@@ -13,18 +71,18 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
     // レールの範囲を探索して移動範囲を決定する
     int minX = chipX_, maxX = chipX_;
-    while (minX - 1 >= 0 && (map_->GetChipType(minX - 1, chipY_) == MapChip2D::ChipType::kRail || map_->GetChipType(minX - 1, chipY_) == MapChip2D::ChipType::kLift)) {
+    while (minX - 1 >= 0 && IsRailOrLift(map_, minX - 1, chipY_)) {
         minX--;
     }
-    while (maxX + 1 < map_->GetWidth() && (map_->GetChipType(maxX + 1, chipY_) == MapChip2D::ChipType::kRail || map_->GetChipType(maxX + 1, chipY_) == MapChip2D::ChipType::kLift)) {
+    while (maxX + 1 < map_->GetWidth() && IsRailOrLift(map_, maxX + 1, chipY_)) {
         maxX++;
     }
 
     int minY = chipY_, maxY = chipY_;
-    while (minY - 1 >= 0 && (map_->GetChipType(chipX_, minY - 1) == MapChip2D::ChipType::kRail || map_->GetChipType(chipX_, minY - 1) == MapChip2D::ChipType::kLift)) {
+    while (minY - 1 >= 0 && IsRailOrLift(map_, chipX_, minY - 1)) {
         minY--;
     }
-    while (maxY + 1 < map_->GetHeight() && (map_->GetChipType(chipX_, maxY + 1) == MapChip2D::ChipType::kRail || map_->GetChipType(chipX_, maxY + 1) == MapChip2D::ChipType::kLift)) {
+    while (maxY + 1 < map_->GetHeight() && IsRailOrLift(map_, chipX_, maxY + 1)) {
         maxY++;
     }
 
@@ -58,6 +116,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
         endPos_ = { worldX, worldY, 0.0f };
     }
 
+
     primitiveObj_->SetTranslation(startPos_);
 
     velocity_ = { 0.0f, 0.0f, 0.0f };
@@ -76,9 +135,9 @@ void LiftBlock::Update() {
     // 距離を計算
     float distance = 0.0f;
     if (direction_.x != 0.0f) {
-        distance = maxRailWorldX_ - minRailWorldX_;
+        distance = std::abs(endPos_.x - startPos_.x);
     } else if (direction_.y != 0.0f) {
-        distance = maxRailWorldY_ - minRailWorldY_;
+        distance = std::abs(endPos_.y - startPos_.y);
     }
 
     if (distance <= 0.0f) return;

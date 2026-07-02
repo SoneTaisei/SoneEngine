@@ -13,6 +13,8 @@ public:
     bool IsSolid() const override { return true; }
     void OnPlayerStand() override { isPlayerStandingThisFrame_ = true; }
 
+    void SetProperties(const nlohmann::json& properties) override;
+
     Vector3 GetVelocity() const override { return velocity_; }
     bool IsMoving() const override { return state_ == LiftState::MovingForward || state_ == LiftState::MovingBackward; }
 
@@ -21,6 +23,11 @@ private:
     Vector3 direction_ = { 0.0f, 0.0f, 0.0f };
     float speedForward_ = 6.0f;
     float speedBackward_ = 3.0f;
+
+    bool useProperties_ = false;
+    std::string propDirection_ = "horizontal";
+    float propRange_ = 10.0f;
+    float propSpeed_ = 2.0f;
     
     float minRailWorldX_ = 0.0f;
     float maxRailWorldX_ = 0.0f;
