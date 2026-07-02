@@ -579,7 +579,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     break;
                                 }
                             }
-                            if (ImGui::Combo("Type", &currentType, types, 8)) {
+                            if (ImGui::Combo("種類 (Type)", &currentType, types, 8)) {
                                 targetDef->type = types[currentType];
                                 changed = true;
                                 // デフォルトプロパティを設定
@@ -595,20 +595,20 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
 
                             float col[4] = { targetDef->color.x, targetDef->color.y, targetDef->color.z, targetDef->color.w };
-                            if (ImGui::ColorEdit4("Color", col)) {
+                            if (ImGui::ColorEdit4("色 (Color)", col)) {
                                 targetDef->color = { col[0], col[1], col[2], col[3] };
                                 changed = true;
                             }
 
                             float scale[3] = { targetDef->scale.x, targetDef->scale.y, targetDef->scale.z };
-                            if (ImGui::DragFloat3("Scale", scale, 0.01f)) {
+                            if (ImGui::DragFloat3("スケール (Scale)", scale, 0.01f)) {
                                 targetDef->scale = { scale[0], scale[1], scale[2] };
                                 changed = true;
                             }
 
-                            if (ImGui::BeginCombo("Model", targetDef->modelName.empty() ? "None" : targetDef->modelName.c_str())) {
+                            if (ImGui::BeginCombo("モデル (Model)", targetDef->modelName.empty() ? "なし (None)" : targetDef->modelName.c_str())) {
                                 bool isNoneSelected = targetDef->modelName.empty();
-                                if (ImGui::Selectable("None", isNoneSelected)) {
+                                if (ImGui::Selectable("なし (None)", isNoneSelected)) {
                                     targetDef->modelName = "";
                                     changed = true;
                                 }
@@ -629,11 +629,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
 
                             ImGui::Separator();
-                            ImGui::Text("Properties:");
+                            ImGui::Text("プロパティ:");
+                            auto getJpKey = [](const std::string& k) {
+                                if (k == "speed") return std::string("スピード (speed)");
+                                if (k == "direction") return std::string("方向 (direction)");
+                                if (k == "range") return std::string("移動距離 (range)");
+                                if (k == "jumpVelocity") return std::string("ジャンプ力 (jumpVelocity)");
+                                return k;
+                            };
                             for (auto& [key, value] : targetDef->properties.items()) {
-                                if (value.is_number_float()) {
+                                std::string jpKey = getJpKey(key);
+                                if (value.is_number()) {
                                     float v = value.get<float>();
-                                    if (ImGui::DragFloat(key.c_str(), &v, 0.1f)) {
+                                    if (ImGui::DragFloat(jpKey.c_str(), &v, 0.1f)) {
                                         value = v;
                                         changed = true;
                                     }
@@ -641,13 +649,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     std::string v = value.get<std::string>();
                                     char buf[256];
                                     strcpy_s(buf, sizeof(buf), v.c_str());
-                                    if (ImGui::InputText(key.c_str(), buf, sizeof(buf))) {
+                                    if (ImGui::InputText(jpKey.c_str(), buf, sizeof(buf))) {
                                         value = buf;
                                         changed = true;
                                     }
                                 } else if (value.is_boolean()) {
                                     bool v = value.get<bool>();
-                                    if (ImGui::Checkbox(key.c_str(), &v)) {
+                                    if (ImGui::Checkbox(jpKey.c_str(), &v)) {
                                         value = v;
                                         changed = true;
                                     }
@@ -655,7 +663,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
 
                             static bool autoApply = true;
-                            ImGui::Checkbox("Auto Apply", &autoApply);
+                            ImGui::Checkbox("自動適用 (Auto Apply)", &autoApply);
                             ImGui::SameLine();
                             if (ImGui::Button("デフォルトに戻す (Reset to Default)")) {
                                 bool found = false;
@@ -691,6 +699,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             if (ImGui::Button("変更を適用 (Apply & Rebuild)") || (autoApply && changed)) {
                                 if (isTemplate) {
                                     mapChip->SaveTemplatesToFile("resources/json/templates_config.json");
+                                } else {
+                                    std::string name = stageFilename_;
+                                    if (name.length() < 4 || name.substr(name.length() - 4) != ".txt") name += ".txt";
+                                    mapChip->SaveToFile("resources/json/MapData/" + name);
                                 }
                                 mapChip->RebuildChipObjects();
                             }

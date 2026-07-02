@@ -127,6 +127,7 @@ private:
     bool isOnMovingPlatform_ = false;
     Vector3 platformVelocity_ = { 0.0f, 0.0f, 0.0f };
     Vector3 recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 慣性保存用
+    Vector3 wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 壁張り付き時の足場速度
     float platformInertiaTimer_ = 0.0f; // 慣性猶予時間（コヨーテタイム）
     float externalVelocityX_ = 0.0f; // 慣性用の外部速度
 
@@ -164,6 +165,7 @@ private:
     
     // 壁ずり落ち・張り付き用パラメータ
     float wallSlideSpeed_ = -2.0f;     // 壁ずり落ち時の最大落下速度
+    float wallClimbSpeed_ = 5.0f;      // 壁張り付き中の昇降速度
     bool isWallSliding_ = false;       // 壁ずり落ち中か
     bool isWallClinging_ = false;      // 壁張り付き中か
 

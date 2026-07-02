@@ -345,7 +345,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SHIFT : Dash");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
         ImGui::End();
     }
 

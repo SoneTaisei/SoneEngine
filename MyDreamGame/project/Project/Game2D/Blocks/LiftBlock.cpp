@@ -70,26 +70,47 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     primitiveObj_->GetMaterial().lightingType = 1;
 
     // レールの範囲を探索して移動範囲を決定する
-    int minX = chipX_, maxX = chipX_;
-    while (minX - 1 >= 0 && IsRailOrLift(map_, minX - 1, chipY_)) {
-        minX--;
-    }
-    while (maxX + 1 < map_->GetWidth() && IsRailOrLift(map_, maxX + 1, chipY_)) {
-        maxX++;
+    int spanWidth = static_cast<int>(std::round(width / map_->GetChipSize()));
+    int spanHeight = static_cast<int>(std::round(height / map_->GetChipSize()));
+
+    int minX = chipX_, maxX = chipX_ + spanWidth - 1;
+    for (int cy = chipY_; cy < chipY_ + spanHeight; ++cy) {
+        int tempMinX = chipX_;
+        while (tempMinX - 1 >= 0 && IsRailOrLift(map_, tempMinX - 1, cy)) {
+            tempMinX--;
+        }
+        if (tempMinX < minX) minX = tempMinX;
+
+        int tempMaxX = chipX_ + spanWidth - 1;
+        while (tempMaxX + 1 < map_->GetWidth() && IsRailOrLift(map_, tempMaxX + 1, cy)) {
+            tempMaxX++;
+        }
+        if (tempMaxX > maxX) maxX = tempMaxX;
     }
 
-    int minY = chipY_, maxY = chipY_;
-    while (minY - 1 >= 0 && IsRailOrLift(map_, chipX_, minY - 1)) {
-        minY--;
-    }
-    while (maxY + 1 < map_->GetHeight() && IsRailOrLift(map_, chipX_, maxY + 1)) {
-        maxY++;
+    int minY = chipY_, maxY = chipY_ + spanHeight - 1;
+    for (int cx = chipX_; cx < chipX_ + spanWidth; ++cx) {
+        int tempMinY = chipY_;
+        while (tempMinY - 1 >= 0 && IsRailOrLift(map_, cx, tempMinY - 1)) {
+            tempMinY--;
+        }
+        if (tempMinY < minY) minY = tempMinY;
+
+        int tempMaxY = chipY_ + spanHeight - 1;
+        while (tempMaxY + 1 < map_->GetHeight() && IsRailOrLift(map_, cx, tempMaxY + 1)) {
+            tempMaxY++;
+        }
+        if (tempMaxY > maxY) maxY = tempMaxY;
     }
 
-    if (maxX > minX) {
+    bool hasHorizontalRail = (minX < chipX_) || (maxX > chipX_ + spanWidth - 1);
+    bool hasVerticalRail = (minY < chipY_) || (maxY > chipY_ + spanHeight - 1);
+
+    if (hasHorizontalRail) {
         direction_ = { 1.0f, 0.0f, 0.0f }; // 水平移動
-        minRailWorldX_ = map_->ChipToWorldX(minX) + map_->GetChipSize() * 0.5f;
-        maxRailWorldX_ = map_->ChipToWorldX(maxX) + map_->GetChipSize() * 0.5f;
+        // 実際の移動は中心位置からなので調整
+        minRailWorldX_ = map_->ChipToWorldX(minX) + width * 0.5f;
+        maxRailWorldX_ = map_->ChipToWorldX(maxX - spanWidth + 1) + width * 0.5f;
 
         if (std::abs(worldX - minRailWorldX_) <= std::abs(worldX - maxRailWorldX_)) {
             startPos_ = { minRailWorldX_, worldY, 0.0f };
@@ -98,10 +119,10 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
             startPos_ = { maxRailWorldX_, worldY, 0.0f };
             endPos_ = { minRailWorldX_, worldY, 0.0f };
         }
-    } else if (maxY > minY) {
+    } else if (hasVerticalRail) {
         direction_ = { 0.0f, 1.0f, 0.0f }; // 垂直移動
-        minRailWorldY_ = map_->ChipToWorldY(minY) + map_->GetChipSize() * 0.5f;
-        maxRailWorldY_ = map_->ChipToWorldY(maxY) + map_->GetChipSize() * 0.5f;
+        minRailWorldY_ = map_->ChipToWorldY(minY) + height * 0.5f;
+        maxRailWorldY_ = map_->ChipToWorldY(maxY - spanHeight + 1) + height * 0.5f;
 
         if (std::abs(worldY - minRailWorldY_) <= std::abs(worldY - maxRailWorldY_)) {
             startPos_ = { worldX, minRailWorldY_, 0.0f };

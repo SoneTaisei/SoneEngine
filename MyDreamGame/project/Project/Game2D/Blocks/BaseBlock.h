@@ -45,8 +45,10 @@ public:
     // プレイヤーと接触した際の処理
     virtual void OnCollision(Player2D* player) {}
     
-    // プレイヤーが上に乗った際の処理
     virtual void OnPlayerStand() {}
+    
+    // プレイヤーが横などから接触した際の処理
+    virtual void OnPlayerTouch() {}
 
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}

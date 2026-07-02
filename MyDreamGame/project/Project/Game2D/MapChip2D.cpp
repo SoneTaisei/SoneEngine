@@ -354,7 +354,7 @@ void MapChip2D::RebuildChipObjects() {
             
             bool canMerge = false;
             if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock);
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kLift);
             } else {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 const CustomBlockDef* def = nullptr;
@@ -362,7 +362,7 @@ void MapChip2D::RebuildChipObjects() {
                     if (d.id == typeId) { def = &d; break; }
                 }
                 if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock");
+                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock");
                     // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
                     if (!def->modelName.empty()) {
                         canMerge = false;

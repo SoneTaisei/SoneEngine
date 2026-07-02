@@ -214,6 +214,17 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
         position_.x += platformVelocity_.x * deltaTime;
         position_.y += platformVelocity_.y * deltaTime; // 縦リフト対応
     }
+    // 壁に張り付いている/ずり落ちている場合も、その壁の速度を加算
+    if (isWallClinging_ || isWallSliding_) {
+        position_.x += wallPlatformVelocity_.x * deltaTime;
+        position_.y += wallPlatformVelocity_.y * deltaTime;
+        
+        // 慣性ジャンプのために recentPlatformVelocity_ も更新しておく
+        if (std::abs(wallPlatformVelocity_.x) > 0.01f || std::abs(wallPlatformVelocity_.y) > 0.01f) {
+            recentPlatformVelocity_ = wallPlatformVelocity_;
+            platformInertiaTimer_ = 0.1f;
+        }
+    }
     position_.x += velocity_.x * deltaTime;
     ResolveCollisionX(map);
 
@@ -574,6 +585,13 @@ void Player2D::HandleInput() {
         bool inputLeft = keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT);
         bool inputRight = keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT);
 
+        // 壁掴み（Kキー）を押している場合、前フレームで壁に接触していれば、その方向への仮想入力を維持する
+        // これにより方向キーを離しても張り付き続ける
+        if (!isOnGround_ && keyboard->IsKeyDown(DIK_K)) {
+            if (isTouchingWallRight_ && !inputLeft) inputRight = true;
+            if (isTouchingWallLeft_ && !inputRight) inputLeft = true;
+        }
+
         float targetVelX = 0.0f;
         
         bool allowLeft = true;
@@ -625,7 +643,7 @@ void Player2D::HandleInput() {
         if (!isOnGround_ && velocity_.y <= 0.0f) {
             if ((isTouchingWallRight_ && inputRight) || (isTouchingWallLeft_ && inputLeft)) {
                 isWallSliding_ = true;
-                if (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) {
+                if (keyboard->IsKeyDown(DIK_K)) {
                     isWallClinging_ = true;
                 }
             }
@@ -635,11 +653,14 @@ void Player2D::HandleInput() {
         if (keyboard->IsKeyPressed(DIK_SPACE)) {
             if (isOnGround_) {
                 velocity_.y = jumpPower_;
-                // 足場に乗っている（または猶予期間中）場合は慣性を加算
+                // 足場に乗っている（または猶予期間中）場合は慣性を加算 (セレステ風)
                 if (platformInertiaTimer_ > 0.0f) {
                     externalVelocityX_ = recentPlatformVelocity_.x;
                     velocity_.x += externalVelocityX_;
-                    velocity_.y += recentPlatformVelocity_.y;
+                    // 上方向（ジャンプ補助）の慣性のみ加算し、下方向へはジャンプ力を殺さないようにする
+                    if (recentPlatformVelocity_.y > 0.0f) {
+                        velocity_.y += recentPlatformVelocity_.y;
+                    }
                     
                     // ジャンプしたら猶予期間を終了する
                     platformInertiaTimer_ = 0.0f;
@@ -649,11 +670,21 @@ void Player2D::HandleInput() {
                 SpawnJumpDust({position_.x, position_.y - halfHeight_, 0.0f}, 0.0f);
             } else if (isTouchingWallRight_) {
                 // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
-                bool isPressingCling = keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL);
+                bool isPressingCling = keyboard->IsKeyDown(DIK_K);
                 if (isWallClinging_ || isPressingCling) {
                     // 壁張り付き中は真上ジャンプ
                     velocity_.x = 0.0f;
                     velocity_.y = jumpPower_;
+                    
+                    // 慣性を加算
+                    if (platformInertiaTimer_ > 0.0f) {
+                        externalVelocityX_ = recentPlatformVelocity_.x;
+                        velocity_.x += externalVelocityX_;
+                        if (recentPlatformVelocity_.y > 0.0f) {
+                            velocity_.y += recentPlatformVelocity_.y;
+                        }
+                        platformInertiaTimer_ = 0.0f;
+                    }
                 } else {
                     // 右壁キック（左へ跳ね返る）
                     velocity_.x = -wallJumpPower_.x;
@@ -670,11 +701,21 @@ void Player2D::HandleInput() {
                 isWallClinging_ = false;
             } else if (isTouchingWallLeft_) {
                 // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
-                bool isPressingCling = keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL);
+                bool isPressingCling = keyboard->IsKeyDown(DIK_K);
                 if (isWallClinging_ || isPressingCling) {
                     // 壁張り付き中は真上ジャンプ
                     velocity_.x = 0.0f;
                     velocity_.y = jumpPower_;
+                    
+                    // 慣性を加算
+                    if (platformInertiaTimer_ > 0.0f) {
+                        externalVelocityX_ = recentPlatformVelocity_.x;
+                        velocity_.x += externalVelocityX_;
+                        if (recentPlatformVelocity_.y > 0.0f) {
+                            velocity_.y += recentPlatformVelocity_.y;
+                        }
+                        platformInertiaTimer_ = 0.0f;
+                    }
                 } else {
                     // 左壁キック（右へ跳ね返る）
                     velocity_.x = wallJumpPower_.x;
@@ -700,8 +741,8 @@ void Player2D::HandleInput() {
         }
     }
 
-    // ダッシュの入力検知（SHIFTキー）
-    if (canDash_ && !isDashing_ && (keyboard->IsKeyPressed(DIK_LSHIFT) || keyboard->IsKeyPressed(DIK_RSHIFT))) {
+    // ダッシュの入力検知（Jキー）
+    if (canDash_ && !isDashing_ && keyboard->IsKeyPressed(DIK_J)) {
         // 入力方向の取得
         Vector3 inputDir = {0.0f, 0.0f, 0.0f};
         if (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) inputDir.x -= 1.0f;
@@ -731,7 +772,11 @@ void Player2D::ApplyGravity(float deltaTime) {
     if (isDashing_) return; // ダッシュ中は重力を無視
 
     if (isWallClinging_) {
-        velocity_.y = 0.0f; // 張り付き中は落下しない
+        KeyboardInput* keyboard = KeyboardInput::GetInstance();
+        float moveY = 0.0f;
+        if (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) moveY += 1.0f;
+        if (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) moveY -= 1.0f;
+        velocity_.y = moveY * wallClimbSpeed_; // Wで上、Sで下へ移動
         return;
     }
 
@@ -976,6 +1021,8 @@ void Player2D::ResolveStaticCollisionX(const MapChip2D& map, AABB2D& aabb) {
 }
 
 void Player2D::ResolveDynamicCollisionX(const MapChip2D& map, AABB2D& aabb) {
+    wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 毎フレームリセット
+    
     // 床や天井との擦れ判定を防ぐため、上下を少しだけ縮める
     AABB2D shrunkAABBX = aabb;
     shrunkAABBX.top -= 0.05f;
@@ -995,12 +1042,15 @@ void Player2D::ResolveDynamicCollisionX(const MapChip2D& map, AABB2D& aabb) {
                 position_.x = blockAABB.left - halfWidth_;
                 velocity_.x = 0.0f;
                 isTouchingWallRight_ = true;
+                wallPlatformVelocity_ = block->GetVelocity();
             } else {
                 // ブロックの右側にいる
                 position_.x = blockAABB.right + halfWidth_;
                 velocity_.x = 0.0f;
                 isTouchingWallLeft_ = true;
+                wallPlatformVelocity_ = block->GetVelocity();
             }
+            block->OnPlayerTouch();
         }
     }
 }
