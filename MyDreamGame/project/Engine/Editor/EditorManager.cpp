@@ -632,6 +632,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::Text("プロパティ:");
                             auto getJpKey = [](const std::string& k) {
                                 if (k == "speed") return std::string("スピード (speed)");
+                                if (k == "speedForward") return std::string("往路の速さ (speedForward)");
+                                if (k == "speedBackward") return std::string("復路の速さ (speedBackward)");
+                                if (k == "waitTime") return std::string("待機時間 (waitTime)");
+                                if (k == "acceleration") return std::string("加速度 (acceleration)");
                                 if (k == "direction") return std::string("方向 (direction)");
                                 if (k == "range") return std::string("移動距離 (range)");
                                 if (k == "jumpVelocity") return std::string("ジャンプ力 (jumpVelocity)");
@@ -1642,6 +1646,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         // エラー時は無視
                     }
 
+                    // ファイルパス取得用ラムダ（.txtの自動付与）
+                    auto GetFullFilePath = [](const char* filename) {
+                        std::string name = filename;
+                        bool hasExt = false;
+                        if (name.length() >= 4) {
+                            std::string ext = name.substr(name.length() - 4);
+                            if (ext == ".txt" || ext == ".TXT") {
+                                hasExt = true;
+                            }
+                        }
+                        if (!hasExt) {
+                            name += ".txt";
+                        }
+                        return std::string("resources/json/MapData/") + name;
+                    };
+
                     // 既存のマップファイルを選択するコンボボックス
                     if (!stageFiles.empty()) {
                         static int selectedFileIndex = -1;
@@ -1665,6 +1685,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
                                     strcpy_s(stageFilename_, sizeof(stageFilename_), stageFiles[i].c_str());
                                     selectedFileIndex = i;
+                                    
+                                    // 選択時に自動でロードする
+                                    if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
+                                        mapEditorInputWidth_ = mapChip->GetWidth();
+                                        mapEditorInputHeight_ = mapChip->GetHeight();
+                                    }
                                 }
                                 if (isSelected) {
                                     ImGui::SetItemDefaultFocus();
@@ -1674,8 +1700,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
 
-                    // ファイル名入力
-                    ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_));
+                    // ファイル名入力 (Enterキーでロード)
+                    if (ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
+                            mapEditorInputWidth_ = mapChip->GetWidth();
+                            mapEditorInputHeight_ = mapChip->GetHeight();
+                        }
+                    }
 
                     ImGui::Spacing();
                     
@@ -1709,32 +1740,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     ImGui::Separator();
 
-                    // ファイルパス取得用ラムダ（.txtの自動付与）
-                    auto GetFullFilePath = [](const char* filename) {
-                        std::string name = filename;
-                        bool hasExt = false;
-                        if (name.length() >= 4) {
-                            std::string ext = name.substr(name.length() - 4);
-                            if (ext == ".txt" || ext == ".TXT") {
-                                hasExt = true;
-                            }
-                        }
-                        if (!hasExt) {
-                            name += ".txt";
-                        }
-                        return std::string("resources/json/MapData/") + name;
-                    };
-
                     // 操作ボタン
                     if (ImGui::Button("保存")) {
                         mapChip->SaveToFile(GetFullFilePath(stageFilename_));
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("読み込み")) {
-                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
-                            mapEditorInputWidth_ = mapChip->GetWidth();
-                            mapEditorInputHeight_ = mapChip->GetHeight();
-                        }
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("クリア")) {

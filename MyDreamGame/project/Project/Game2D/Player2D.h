@@ -154,6 +154,8 @@ private:
     // 壁ジャンプ用パラメータ
     bool isTouchingWallRight_ = false;
     bool isTouchingWallLeft_ = false;
+    bool wasTouchingWallRight_ = false;
+    bool wasTouchingWallLeft_ = false;
     float wallJumpTimer_ = 0.0f;       // 壁ジャンプ後の入力制限時間
     float wallJumpDuration_ = 0.5f;    // 制限時間の長さ
     Vector2 wallJumpPower_ = { 8.0f, 12.0f }; // 壁ジャンプ時の X, Y 速度

@@ -251,6 +251,11 @@ void GameScene::Update(SceneManager *sceneManager) {
                 gameCamera_->SetRooms(map_->GetRooms());
             }
 
+            // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
+            if (map_) {
+                map_->Update();
+            }
+
             player_->Update(*map_, gameCamera_ && gameCamera_->IsTransitioning());
 
             // ゴール判定
@@ -302,11 +307,6 @@ void GameScene::Update(SceneManager *sceneManager) {
                 ReplayManager::GetInstance()->StopRecord();
             }
         }
-    }
-
-    // 5. マップの更新
-    if (map_) {
-        map_->Update();
     }
 }
 

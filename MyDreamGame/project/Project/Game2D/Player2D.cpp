@@ -127,6 +127,17 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
             canDash_ = true;
             wallJumpDirLockTimer_ = 0.0f;
             lockedDirectionX_ = 0.0f;
+            
+            // 慣性をリセット
+            isOnMovingPlatform_ = false;
+            platformVelocity_ = { 0.0f, 0.0f, 0.0f };
+            recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
+            wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
+            platformInertiaTimer_ = 0.0f;
+            externalVelocityX_ = 0.0f;
+            isWallClinging_ = false;
+            isWallSliding_ = false;
+
             // パラメータをリセット
             primitiveObj_->GetMaterial().dissolveThreshold = 0.0f;
             TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
@@ -203,13 +214,8 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
         }
     }
 
-    // --- Y軸（上下）の移動と当たり判定 ---
-    ApplyGravity(deltaTime);
-    position_.y += velocity_.y * deltaTime;
-    ResolveCollisionY(map);
-
-    // --- X軸（左右）の移動と当たり判定 ---
-    // 足場に乗っている場合は足場の速度を加算
+    // --- 足場による移動（予測） ---
+    // 足場に乗っている場合はあらかじめ足場の速度を加算
     if (isOnMovingPlatform_ && isOnGround_) {
         position_.x += platformVelocity_.x * deltaTime;
         position_.y += platformVelocity_.y * deltaTime; // 縦リフト対応
@@ -225,6 +231,13 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
             platformInertiaTimer_ = 0.1f;
         }
     }
+
+    // --- Y軸（上下）の移動と当たり判定 ---
+    ApplyGravity(deltaTime);
+    position_.y += velocity_.y * deltaTime;
+    ResolveCollisionY(map);
+
+    // --- X軸（左右）の移動と当たり判定 ---
     position_.x += velocity_.x * deltaTime;
     ResolveCollisionX(map);
 
@@ -907,6 +920,12 @@ void Player2D::ResolveDynamicCollisionY(const MapChip2D& map, AABB2D& aabb) {
     shrunkAABBY.left += 0.05f;
     shrunkAABBY.right -= 0.05f;
 
+    // 壁に張り付いている場合は、その壁に対するY軸の誤判定（頭をぶつける/足が乗る）を防ぐためさらに縮める
+    if (isWallClinging_ || isWallSliding_) {
+        if (isTouchingWallRight_) shrunkAABBY.right -= 0.15f;
+        if (isTouchingWallLeft_) shrunkAABBY.left += 0.15f;
+    }
+
     const auto& updateBlocks = map.GetUpdateBlocks();
     for (const auto& block : updateBlocks) {
         // 移動中のSolidブロックのみ判定
@@ -936,6 +955,8 @@ void Player2D::ResolveDynamicCollisionY(const MapChip2D& map, AABB2D& aabb) {
 }
 
 void Player2D::ResolveCollisionX(const MapChip2D& map) {
+    wasTouchingWallLeft_ = isTouchingWallLeft_;
+    wasTouchingWallRight_ = isTouchingWallRight_;
     isTouchingWallLeft_ = false;
     isTouchingWallRight_ = false;
 
@@ -1027,6 +1048,12 @@ void Player2D::ResolveDynamicCollisionX(const MapChip2D& map, AABB2D& aabb) {
     AABB2D shrunkAABBX = aabb;
     shrunkAABBX.top -= 0.05f;
     shrunkAABBX.bottom += 0.05f;
+
+    // 壁に張り付いている場合は、その方向へ少し当たり判定を伸ばして、リフトの加速等で振り落とされるのを防ぐ（慣性による剥がれ防止）
+    if (isWallClinging_ || isWallSliding_) {
+        if (isTouchingWallRight_ || wasTouchingWallRight_) shrunkAABBX.right += 0.2f;
+        if (isTouchingWallLeft_ || wasTouchingWallLeft_) shrunkAABBX.left -= 0.2f;
+    }
 
     for (const auto& block : map.GetUpdateBlocks()) {
         // 移動中のSolidブロックのみ判定

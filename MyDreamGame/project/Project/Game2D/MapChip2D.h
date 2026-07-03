@@ -157,4 +157,5 @@ private:
 
     bool isRebuildEnabled_ = true;
     bool isDirty_ = false;
+    std::string currentFilePath_ = "";
 };

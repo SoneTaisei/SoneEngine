@@ -21,6 +21,7 @@
 
 void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath) {
     commandList->GetDevice(IID_PPV_ARGS(&device_));
+    currentFilePath_ = mapFilePath;
 
     // デフォルトテクスチャのロード
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> comPtrCommandList(commandList);
@@ -53,9 +54,10 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
         addTemplate(5, "OneWay", "OneWayBlock", {0.4f, 0.8f, 0.8f, 1.0f}, nlohmann::json::object());
         
         nlohmann::json liftProps;
-        liftProps["speed"] = 2.0f;
-        liftProps["direction"] = "horizontal";
-        liftProps["range"] = 10.0f;
+        liftProps["speedForward"] = 6.0f;
+        liftProps["speedBackward"] = 3.0f;
+        liftProps["waitTime"] = 1.0f;
+        liftProps["acceleration"] = 2.0f;
         addTemplate(7, "Lift", "LiftBlock", {0.9f, 0.6f, 0.1f, 1.0f}, liftProps);
         
         addTemplate(8, "Rail", "RailBlock", {0.7f, 0.7f, 0.7f, 1.0f}, nlohmann::json::object());
@@ -323,8 +325,12 @@ void MapChip2D::ClearMap() {
 }
 
 void MapChip2D::ResetMap() {
-    BuildMap();
-    RebuildChipObjects();
+    if (!currentFilePath_.empty()) {
+        LoadFromFile(currentFilePath_);
+    } else {
+        BuildMap();
+        RebuildChipObjects();
+    }
 }
 
 void MapChip2D::RebuildChipObjects() {

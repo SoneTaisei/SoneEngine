@@ -22,40 +22,17 @@ namespace {
 }
 
 void LiftBlock::SetProperties(const nlohmann::json& properties) {
-    bool hasProp = false;
-    if (properties.contains("direction")) {
-        propDirection_ = properties["direction"].get<std::string>();
-        hasProp = true;
+    if (properties.contains("speedForward")) {
+        speedForward_ = properties["speedForward"].get<float>();
     }
-    if (properties.contains("range")) {
-        propRange_ = properties["range"].get<float>();
-        hasProp = true;
+    if (properties.contains("speedBackward")) {
+        speedBackward_ = properties["speedBackward"].get<float>();
     }
-    if (properties.contains("speed")) {
-        propSpeed_ = properties["speed"].get<float>();
-        hasProp = true;
+    if (properties.contains("waitTime")) {
+        waitTime_ = properties["waitTime"].get<float>();
     }
-
-    if (hasProp) {
-        useProperties_ = true;
-        speedForward_ = propSpeed_;
-        speedBackward_ = propSpeed_ * 0.5f;
-        
-        // レールが配置されておらず、移動距離が0になっている場合のみプロパティのrangeを適用
-        if (std::abs(endPos_.x - startPos_.x) < 0.01f && std::abs(endPos_.y - startPos_.y) < 0.01f) {
-            float rangeWorld = propRange_ * map_->GetChipSize();
-            
-            if (propDirection_ == "horizontal") {
-                direction_ = { 1.0f, 0.0f, 0.0f };
-                endPos_ = { startPos_.x + rangeWorld, startPos_.y, startPos_.z };
-            } else if (propDirection_ == "vertical") {
-                direction_ = { 0.0f, 1.0f, 0.0f };
-                endPos_ = { startPos_.x, startPos_.y + rangeWorld, startPos_.z };
-            } else {
-                direction_ = { 0.0f, 0.0f, 0.0f };
-                endPos_ = startPos_;
-            }
-        }
+    if (properties.contains("acceleration")) {
+        acceleration_ = properties["acceleration"].get<float>();
     }
 }
 
@@ -186,7 +163,7 @@ void LiftBlock::Update() {
         case LiftState::WaitingAtEnd:
             currentT_ = 1.0f;
             waitTimer_ += deltaTime;
-            if (waitTimer_ >= 1.0f) { // 1秒待機
+            if (waitTimer_ >= waitTime_) { // waitTime_待機
                 state_ = LiftState::MovingBackward;
             }
             break;
@@ -204,8 +181,8 @@ void LiftBlock::Update() {
 
     float progress = 0.0f;
     if (state_ == LiftState::MovingForward) {
-        // 往路はEaseInSine
-        progress = 1.0f - std::cos((currentT_ * 3.14159265359f) / 2.0f);
+        // 加速度パラメータを使用したイージング (Power Ease In)
+        progress = std::pow(currentT_, acceleration_);
     } else {
         // 復路および待機時はLinear
         progress = currentT_;

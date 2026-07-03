@@ -25,10 +25,8 @@ private:
     float speedForward_ = 6.0f;
     float speedBackward_ = 3.0f;
 
-    bool useProperties_ = false;
-    std::string propDirection_ = "horizontal";
-    float propRange_ = 10.0f;
-    float propSpeed_ = 2.0f;
+    float waitTime_ = 1.0f;
+    float acceleration_ = 2.0f;
     
     float minRailWorldX_ = 0.0f;
     float maxRailWorldX_ = 0.0f;
