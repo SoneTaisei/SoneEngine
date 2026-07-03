@@ -63,7 +63,8 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
         addTemplate(8, "Rail", "RailBlock", {0.7f, 0.7f, 0.7f, 1.0f}, nlohmann::json::object());
         
         nlohmann::json jumpProps;
-        jumpProps["jumpVelocity"] = 15.0f;
+        jumpProps["jumpVelocityVertical"] = 15.0f;
+        jumpProps["jumpVelocityHorizontal"] = 15.0f;
         addTemplate(9, "Jump", "JumpBlock", {1.0f, 0.5f, 0.0f, 1.0f}, jumpProps);
 
         SaveTemplatesToFile("resources/json/templates_config.json");
@@ -280,7 +281,6 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
             }
         }
     }
-
     if (mapData_[y][x] != type) {
         mapData_[y][x] = type;
         isDirty_ = true;
@@ -349,7 +349,7 @@ void MapChip2D::RebuildChipObjects() {
             if (visited[y][x]) continue;
 
             ChipType type = mapData_[y][x];
-            if (type == ChipType::kNone || type == ChipType::kPlayerSpawn) {
+            if (type == ChipType::kNone || type == ChipType::kPlayerSpawn || type == ChipType::kRoomRespawn) {
                 visited[y][x] = true;
                 continue;
             }

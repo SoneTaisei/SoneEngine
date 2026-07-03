@@ -656,6 +656,7 @@ void Player2D::HandleInput() {
         if (!isOnGround_ && velocity_.y <= 0.0f) {
             if ((isTouchingWallRight_ && inputRight) || (isTouchingWallLeft_ && inputLeft)) {
                 isWallSliding_ = true;
+                externalVelocityX_ = 0.0f;
                 if (keyboard->IsKeyDown(DIK_K)) {
                     isWallClinging_ = true;
                 }

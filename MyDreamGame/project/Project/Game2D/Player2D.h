@@ -26,6 +26,8 @@ public:
     // 速度の設定と取得
     void SetVelocity(const Vector3& velocity) { velocity_ = velocity; }
     Vector3 GetVelocity() const { return velocity_; }
+    void SetExternalVelocityX(float velX) { externalVelocityX_ = velX; }
+    void SetIsOnGround(bool state) { isOnGround_ = state; }
     void DisplayImGui();
     
     // JSON Parameters
@@ -170,6 +172,9 @@ private:
     float wallClimbSpeed_ = 5.0f;      // 壁張り付き中の昇降速度
     bool isWallSliding_ = false;       // 壁ずり落ち中か
     bool isWallClinging_ = false;      // 壁張り付き中か
+    
+    float wallClingReleaseDuration_ = 0.5f; // 壁つかまり解除までの猶予時間
+    float wallClingReleaseTimer_ = 0.0f;    // 解除タイマー
 
     float halfWidth_ = 0.4f;
     float halfHeight_ = 0.8f;
@@ -179,6 +184,7 @@ private:
     float deathTimer_ = 0.0f;       // 死亡経過時間
     float deathDuration_ = 0.175f;  // 死亡演出の時間 (ノックバックしながらディゾルブする)
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f }; // スタート地点・リスポーン位置
+    int currentRoomIndex_ = -1; // 現在の部屋インデックス
 
     // リスポーン演出用パラメータ
     bool isRespawning_ = false;

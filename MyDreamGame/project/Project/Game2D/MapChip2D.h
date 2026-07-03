@@ -25,6 +25,7 @@ public:
         kLift = 7,  // 動く足場（リフト）
         kRail = 8,  // リフトの移動レール
         kJumpBlock = 9, // ジャンプ台
+        kRoomRespawn = 10, // 部屋用リスポーン地点
     };
 
     void Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath);

@@ -584,11 +584,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 changed = true;
                                 // デフォルトプロパティを設定
                                 if (targetDef->type == "JumpBlock") {
-                                    targetDef->properties["jumpVelocity"] = 15.0f;
+                                    targetDef->properties["jumpVelocityVertical"] = 15.0f;
+                                    targetDef->properties["jumpVelocityHorizontal"] = 15.0f;
                                 } else if (targetDef->type == "LiftBlock") {
-                                    targetDef->properties["speed"] = 2.0f;
-                                    targetDef->properties["direction"] = "horizontal";
-                                    targetDef->properties["range"] = 10.0f;
+                                    targetDef->properties["speedForward"] = 6.0f;
+                                    targetDef->properties["speedBackward"] = 3.0f;
+                                    targetDef->properties["waitTime"] = 1.0f;
+                                    targetDef->properties["acceleration"] = 2.0f;
                                 } else {
                                     targetDef->properties = nlohmann::json::object(); // リセット
                                 }
@@ -638,7 +640,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 if (k == "acceleration") return std::string("加速度 (acceleration)");
                                 if (k == "direction") return std::string("方向 (direction)");
                                 if (k == "range") return std::string("移動距離 (range)");
-                                if (k == "jumpVelocity") return std::string("ジャンプ力 (jumpVelocity)");
+                                if (k == "jumpVelocityVertical") return std::string("縦ジャンプ力 (jumpVelocityVertical)");
+                                if (k == "jumpVelocityHorizontal") return std::string("横ジャンプ力 (jumpVelocityHorizontal)");
                                 return k;
                             };
                             for (auto& [key, value] : targetDef->properties.items()) {
@@ -688,11 +691,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     targetDef->scale = {1.0f, 1.0f, 1.0f};
                                     targetDef->modelName = "";
                                     if (targetDef->type == "JumpBlock") {
-                                        targetDef->properties["jumpVelocity"] = 15.0f;
+                                        targetDef->properties["jumpVelocityVertical"] = 15.0f;
+                                        targetDef->properties["jumpVelocityHorizontal"] = 15.0f;
                                     } else if (targetDef->type == "LiftBlock") {
-                                        targetDef->properties["speed"] = 2.0f;
-                                        targetDef->properties["direction"] = "horizontal";
-                                        targetDef->properties["range"] = 10.0f;
+                                        targetDef->properties["speedForward"] = 6.0f;
+                                        targetDef->properties["speedBackward"] = 3.0f;
+                                        targetDef->properties["waitTime"] = 1.0f;
+                                        targetDef->properties["acceleration"] = 2.0f;
                                     } else {
                                         targetDef->properties = nlohmann::json::object();
                                     }
@@ -1257,6 +1262,24 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                         }
 
+                        // スポーン地点とルームリスポーン地点の描画（ゲーム上では非表示のためここでオーバーレイ描画）
+                        for (int y = 0; y < mapHeight; ++y) {
+                            for (int x = 0; x < mapWidth; ++x) {
+                                MapChip2D::ChipType type = mapChip->GetChip(x, y);
+                                if (type == MapChip2D::ChipType::kPlayerSpawn || type == MapChip2D::ChipType::kRoomRespawn) {
+                                    ImVec2 pTL = WorldToScreen(static_cast<float>(x), static_cast<float>(y + 1));
+                                    ImVec2 pBR = WorldToScreen(static_cast<float>(x + 1), static_cast<float>(y));
+                                    if (type == MapChip2D::ChipType::kPlayerSpawn) {
+                                        drawList->AddRectFilled(pTL, pBR, IM_COL32(51, 153, 255, 180));
+                                        drawList->AddRect(pTL, pBR, IM_COL32(51, 153, 255, 255), 0.0f, 0, 2.0f);
+                                    } else {
+                                        drawList->AddRectFilled(pTL, pBR, IM_COL32(51, 204, 255, 180));
+                                        drawList->AddRect(pTL, pBR, IM_COL32(51, 204, 255, 255), 0.0f, 0, 2.0f);
+                                    }
+                                }
+                            }
+                        }
+
                         drawList->PopClipRect();
                     }
                     
@@ -1407,7 +1430,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 int gridY = mapChip->WorldToChipY(worldPos.y);
 
                                 bool inBounds = (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight);
-                                bool isSelectableTool = (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ >= 100);
+                                bool isSelectableTool = (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ == 10 || mapEditorSelectedTool_ >= 100);
                                 
                                 if (mapEditMode_ == MapEditMode::Normal) {
                                     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && isSelectableTool) {
@@ -1775,6 +1798,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     std::vector<ToolIcon> systemTools = {
                         { 6, "Spawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f },
+                        { 10, "RoomSpawn", ImVec4(0.2f, 0.8f, 1.0f, 1.0f), 1.0f },
                         { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f }
                     };
 
@@ -1913,7 +1937,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     newDef.id = 100 + static_cast<int>(palette.size());
                                     newDef.name = "Custom " + std::to_string(palette.size() + 1);
                                     newDef.type = "JumpBlock";
-                                    newDef.properties["jumpVelocity"] = 15.0f;
+                                    newDef.properties["jumpVelocityVertical"] = 15.0f;
+                                    newDef.properties["jumpVelocityHorizontal"] = 15.0f;
                                     palette.push_back(newDef);
                                     mapEditorSelectedTool_ = newDef.id; // 新しいものを選択状態にする
                                     mapChip->SaveToFile(GetFullFilePath(stageFilename_));

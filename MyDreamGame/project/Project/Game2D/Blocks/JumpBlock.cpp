@@ -1,5 +1,6 @@
 #include "JumpBlock.h"
 #include "../Player2D.h"
+#include "../MapChip2D.h"
 
 void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();
@@ -26,19 +27,60 @@ void JumpBlock::OnCollision(Player2D* player) {
     // プレイヤーの AABB を取得
     AABB2D playerAABB = player->GetAABB();
     
-    // プレイヤーの足元（底面）が、ジャンプ台の上面近辺かそれ以上にある場合のみ跳ねる
-    if (playerAABB.bottom >= blockAABB.top - 0.1f) {
-        Vector3 vel = player->GetVelocity();
-        vel.y = jumpVelocity_; // カスタム可能にしたジャンプ威力
+    // 周囲のブロック状況を取得
+    bool hasRight  = map_->GetBlock(chipX_ + 1, chipY_) != nullptr;
+    bool hasLeft   = map_->GetBlock(chipX_ - 1, chipY_) != nullptr;
+    bool hasTop    = map_->GetBlock(chipX_, chipY_ + 1) != nullptr;
+    bool hasBottom = map_->GetBlock(chipX_, chipY_ - 1) != nullptr;
+
+    bool isFloating = (!hasRight && !hasLeft && !hasTop && !hasBottom);
+
+    // 有効な面（バウンドする面）を決定
+    bool activeTop    = hasBottom || isFloating; // 下にブロックがある、または完全に浮いているなら上面で跳ねる
+    bool activeBottom = hasTop;                  // 上にブロックがあるなら下面で跳ねる
+    bool activeLeft   = hasRight;                // 右にブロックがあるなら左面で跳ねる（左向きのバネ）
+    bool activeRight  = hasLeft;                 // 左にブロックがあるなら右面で跳ねる（右向きのバネ）
+
+    // 各面との距離を計算（Player2D側でめり込みが押し戻されているため、接触面は距離がほぼ0になる）
+    float distTop = std::abs(playerAABB.bottom - blockAABB.top);
+    float distBottom = std::abs(playerAABB.top - blockAABB.bottom);
+    float distLeft = std::abs(playerAABB.right - blockAABB.left);
+    float distRight = std::abs(playerAABB.left - blockAABB.right);
+
+    float minDist = (std::min)({ distTop, distBottom, distLeft, distRight });
+
+    Vector3 vel = player->GetVelocity();
+    const float threshold = 0.15f; // 接触判定の余裕
+
+    if (minDist == distTop && distTop < threshold && activeTop) {
+        vel.y = jumpVelocityVertical_;
         player->SetVelocity(vel);
-        
-        // 跳ねた演出として少しスケールを揺らす（実装できる範囲で）
-        // primitiveObj_->SetScale({ primitiveObj_->GetScale().x * 1.2f, primitiveObj_->GetScale().y * 0.8f, 1.0f });
+    } else if (minDist == distBottom && distBottom < threshold && activeBottom) {
+        vel.y = -jumpVelocityVertical_;
+        player->SetVelocity(vel);
+    } else if (minDist == distLeft && distLeft < threshold && activeLeft) {
+        player->SetExternalVelocityX(-jumpVelocityHorizontal_);
+        vel.y = 5.0f; // 少し上に浮かせることで接地判定を解除し、慣性がすぐに消されるのを防ぐ
+        player->SetVelocity(vel);
+        player->SetIsOnGround(false);
+    } else if (minDist == distRight && distRight < threshold && activeRight) {
+        player->SetExternalVelocityX(jumpVelocityHorizontal_);
+        vel.y = 5.0f; // 少し上に浮かせる
+        player->SetVelocity(vel);
+        player->SetIsOnGround(false);
     }
 }
 
 void JumpBlock::SetProperties(const nlohmann::json& properties) {
+    if (properties.contains("jumpVelocityVertical")) {
+        jumpVelocityVertical_ = properties["jumpVelocityVertical"].get<float>();
+    }
+    if (properties.contains("jumpVelocityHorizontal")) {
+        jumpVelocityHorizontal_ = properties["jumpVelocityHorizontal"].get<float>();
+    }
+    // 古い形式の互換性維持
     if (properties.contains("jumpVelocity")) {
-        jumpVelocity_ = properties["jumpVelocity"].get<float>();
+        jumpVelocityVertical_ = properties["jumpVelocity"].get<float>();
+        jumpVelocityHorizontal_ = properties["jumpVelocity"].get<float>();
     }
 }
