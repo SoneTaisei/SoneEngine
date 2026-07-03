@@ -44,8 +44,8 @@ void CylinderEffect::Update(float deltaTime) {
     }
 }
 
-void CylinderEffect::Draw(ID3D12GraphicsCommandList* commandList) {
+void CylinderEffect::Draw() {
     if (cylinderObject_) {
-        cylinderObject_->Draw(commandList);
+        cylinderObject_->Draw();
     }
 }

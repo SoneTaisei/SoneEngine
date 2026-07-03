@@ -37,16 +37,19 @@ void LiftBlock::SetProperties(const nlohmann::json& properties) {
 }
 
 void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
-    primitiveObj_ = std::make_unique<PrimitiveObject>();
-    primitiveObj_->Initialize(device, boxPrimitive);
-    
-    // リフトの色（例：明るい黄色やオレンジ）
-    primitiveObj_->GetMaterial().color = { 0.9f, 0.6f, 0.1f, 1.0f };
-    primitiveObj_->SetScale({ width, height, 1.0f });
-    primitiveObj_->SetTranslation({ worldX, worldY, 0.0f });
-    primitiveObj_->GetMaterial().lightingType = 1;
+    gameObject_ = std::make_unique<GameObject>("LiftBlock");
+    auto* tc = gameObject_->AddComponent<TransformComponent>();
+    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();
 
-    // レールの範囲を探索して移動範囲を決定する
+    prc->Initialize(device, boxPrimitive);
+    
+    // リフトの色�E�例：�Eるい黁E��めE��レンジ�E�E
+    prc->GetMaterial().color = { 0.9f, 0.6f, 0.1f, 1.0f };
+    tc->SetScale({ width, height, 1.0f });
+    tc->SetPosition({ worldX, worldY, 0.0f });
+    prc->GetMaterial().lightingType = 1;
+
+    // レールの篁E��を探索して移動篁E��を決定すめE
     int spanWidth = static_cast<int>(std::round(width / map_->GetChipSize()));
     int spanHeight = static_cast<int>(std::round(height / map_->GetChipSize()));
 
@@ -84,8 +87,8 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     bool hasVerticalRail = (minY < chipY_) || (maxY > chipY_ + spanHeight - 1);
 
     if (hasHorizontalRail) {
-        direction_ = { 1.0f, 0.0f, 0.0f }; // 水平移動
-        // 実際の移動は中心位置からなので調整
+        direction_ = { 1.0f, 0.0f, 0.0f }; // 水平移勁E
+        // 実際の移動�E中忁E��置からなので調整
         minRailWorldX_ = map_->ChipToWorldX(minX) + width * 0.5f;
         maxRailWorldX_ = map_->ChipToWorldX(maxX - spanWidth + 1) + width * 0.5f;
 
@@ -97,7 +100,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
             endPos_ = { minRailWorldX_, worldY, 0.0f };
         }
     } else if (hasVerticalRail) {
-        direction_ = { 0.0f, 1.0f, 0.0f }; // 垂直移動
+        direction_ = { 0.0f, 1.0f, 0.0f }; // 垂直移勁E
         minRailWorldY_ = map_->ChipToWorldY(minY) + height * 0.5f;
         maxRailWorldY_ = map_->ChipToWorldY(maxY - spanHeight + 1) + height * 0.5f;
 
@@ -109,28 +112,33 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
             endPos_ = { worldX, minRailWorldY_, 0.0f };
         }
     } else {
-        direction_ = { 0.0f, 0.0f, 0.0f }; // レールがない場合は動かない
+        direction_ = { 0.0f, 0.0f, 0.0f }; // レールがなぁE��合�E動かなぁE
         startPos_ = { worldX, worldY, 0.0f };
         endPos_ = { worldX, worldY, 0.0f };
     }
 
-
-    primitiveObj_->SetTranslation(startPos_);
+    if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        tc->SetPosition(startPos_);
+    }
 
     velocity_ = { 0.0f, 0.0f, 0.0f };
     currentT_ = 0.0f;
     state_ = LiftState::IdleAtStart;
     waitTimer_ = 0.0f;
     isPlayerStandingThisFrame_ = false;
+    SetupCollider();
 }
 
 void LiftBlock::Update() {
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
     if (deltaTime <= 0.0f) return;
 
-    Vector3 prevPos = primitiveObj_->GetTranslation();
+    Vector3 prevPos = {0.0f, 0.0f, 0.0f};
+    if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        prevPos = tc->GetPosition();
+    }
 
-    // 距離を計算
+    // 距離を計箁E
     float distance = 0.0f;
     if (direction_.x != 0.0f) {
         distance = std::abs(endPos_.x - startPos_.x);
@@ -163,7 +171,7 @@ void LiftBlock::Update() {
         case LiftState::WaitingAtEnd:
             currentT_ = 1.0f;
             waitTimer_ += deltaTime;
-            if (waitTimer_ >= waitTime_) { // waitTime_待機
+            if (waitTimer_ >= waitTime_) { // waitTime_征E��E
                 state_ = LiftState::MovingBackward;
             }
             break;
@@ -184,7 +192,7 @@ void LiftBlock::Update() {
         // 加速度パラメータを使用したイージング (Power Ease In)
         progress = std::pow(currentT_, acceleration_);
     } else {
-        // 復路および待機時はLinear
+        // 復路および征E��時はLinear
         progress = currentT_;
     }
 
@@ -198,9 +206,13 @@ void LiftBlock::Update() {
     velocity_.x = (newPos.x - prevPos.x) / deltaTime;
     velocity_.y = (newPos.y - prevPos.y) / deltaTime;
 
-    primitiveObj_->SetTranslation(newPos);
-    primitiveObj_->Update();
+    if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        tc->SetPosition(newPos);
+    }
+    if (gameObject_) {
+        gameObject_->Update();
+    }
 
-    // 1フレームのフラグをリセット
+    // 1フレームのフラグをリセチE��
     isPlayerStandingThisFrame_ = false;
 }

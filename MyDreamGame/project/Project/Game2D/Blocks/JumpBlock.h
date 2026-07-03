@@ -19,5 +19,6 @@ public:
     void SetProperties(const nlohmann::json& properties) override;
 
 private:
-    float jumpVelocity_ = 15.0f; // ジャンプの威力
+    float jumpVelocityVertical_ = 15.0f; // 縦ジャンプの威力
+    float jumpVelocityHorizontal_ = 15.0f; // 横ジャンプの威力
 };

@@ -40,7 +40,7 @@ public:
     void UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, SceneManager *sceneManager);
 
     // 描画処理 (コマンドリストへImGuiの描画命令を積む)
-    void Draw(ID3D12GraphicsCommandList *commandList);
+    void Draw();
 
     // 終了処理 (ImGuiの解放)
     void Finalize();

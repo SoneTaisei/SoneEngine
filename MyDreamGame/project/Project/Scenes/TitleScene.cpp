@@ -14,14 +14,24 @@
 #endif
 #include "Scene/SceneFactory.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Component/TransformComponent.h"
+#include "GameObject/Object3D.h"
 
 TitleScene::~TitleScene() {
 }
 
-void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
-    commandList_ = commandList;
+void TitleScene::OnEnter(SceneManager* sceneManager) {
+    // シーン遷移時の開始処理
+}
+
+void TitleScene::OnExit(SceneManager* sceneManager) {
+    // シーン遷移時の終了処理
+}
+
+void TitleScene::Initialize() {
+    
     Microsoft::WRL::ComPtr<ID3D12Device> device;
-    commandList->GetDevice(IID_PPV_ARGS(&device));
+    device = DirectXCommon::GetInstance()->GetDevice();
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
@@ -38,17 +48,18 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
     // 1. マネージャからモデル（素材）を取得（なければロードされる）
     Model *planeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.gltf");
 
-    // 2. Object3D（実体）を生成して初期化
-    auto planeObject = std::make_unique<Object3D>();
-    planeObject->Initialize(device.Get(), planeModel);
+    // 2. GameObject（実体）を生成
+    auto planeObject = std::make_shared<GameObject>("Ground Plane");
+    auto transform = planeObject->AddComponent<TransformComponent>();
+    transform->SetRotation({0.0f, 0.0f, 0.0f});
 
-    // 3. 座標やテクスチャの設定（Object3Dに対して行う！）
-    uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png", commandList_);
-    planeObject->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
-    planeObject->SetRotation({0.0f, 0.0f, 0.0f});
-    planeObject->SetName("Ground Plane");
+    // 3. 描画コンポーネントのアタッチとテクスチャの設定
+    auto planeRenderer = planeObject->AddComponent<MeshRendererComponent>();
+    planeRenderer->Initialize(device.Get(), planeModel);
+    uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png");
+    planeRenderer->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
 
-    objects_.push_back(std::move(planeObject));
+    gameObjects_.push_back(planeObject);
 
     // ② Spriteのインスタンスを生成
     auto sprite = std::make_unique<Sprite>();
@@ -66,13 +77,13 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/skybox.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/panoramic-view-beach-sunset.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/School/rostock_laage_airport_4k.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_direct.dds", commandList_);
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds", commandList_);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds");
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/skybox.dds");
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/panoramic-view-beach-sunset.dds");
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/School/rostock_laage_airport_4k.dds");
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496.dds");
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_direct.dds");
+    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds");
 
     // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
@@ -88,7 +99,7 @@ void TitleScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> co
 
     // ■ 拡張Ringプリミティブのデモ実装
     PrimitiveManager::GetInstance()->Initialize(device.Get());
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png", commandList_);
+    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
     
     // ■ RingEffectの作成
     ringEffect_ = std::make_unique<RingEffect>();
@@ -117,7 +128,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
     }
 
     // 全オブジェクトの更新（座標変換行列の計算など）
-    for (auto &object : objects_) {
+    for (auto &object : gameObjects_) {
         object->Update();
     }
 
@@ -143,20 +154,20 @@ void TitleScene::Update(SceneManager *sceneManager) {
 void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // ★ モデル描画の前準備
     if (modelCommon_) {
-        modelCommon_->PreDraw(commandList_.Get());
+        modelCommon_->PreDraw();
     }
 
     // ★ 3Dオブジェクトの直後にSkyboxを描画！
     if (skybox_) {
-        skybox_->Draw(commandList_.Get());
+        skybox_->Draw();
         
         // ★ Skyboxの描画後はPSOが切り替わってしまうため、再度モデル用の設定を呼び出す
         auto dxCommon = DirectXCommon::GetInstance();
-        commandList_.Get()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-        commandList_.Get()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+        DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
         if (modelCommon_) {
-            modelCommon_->PreDraw(commandList_.Get());
+            modelCommon_->PreDraw();
         }
     }
 
@@ -164,8 +175,8 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     if (EditorManager::IsShowObjects()) {
 #endif
-        for (auto &object : objects_) {
-            object->Draw(commandList_.Get());
+        for (auto &object : gameObjects_) {
+            object->Draw();
         }
 #ifdef USE_IMGUI
     }
@@ -178,33 +189,29 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (EditorManager::IsShowEffects()) {
 #endif
         if (particleCommon_) {
-            particleCommon_->PreDraw(commandList_.Get());
+            particleCommon_->PreDraw();
             particleCommon_->DrawAll(viewProjectionMatrix);
         }
 
         // ■ プリミティブパーティクルの描画
         if (ringEffect_) {
-            ringEffect_->Draw(commandList_.Get());
+            ringEffect_->Draw();
         }
         if (cylinderEffect_) {
-            cylinderEffect_->Draw(commandList_.Get());
+            cylinderEffect_->Draw();
         }
 #ifdef USE_IMGUI
     }
 #endif
 
     if (spriteCommon_) {
-        spriteCommon_->PreDraw(commandList_.Get());
+        spriteCommon_->PreDraw();
         spriteCommon_->DrawAll();
     }
 }
 
 std::vector<Object3D *> TitleScene::GetObjects() {
-    std::vector<Object3D *> result;
-    for (auto &obj : objects_) {
-        result.push_back(obj.get());
-    }
-    return result;
+    return {};
 }
 
 std::vector<ParticleManager *> TitleScene::GetParticles() {
@@ -228,7 +235,7 @@ std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
 }
 
 void TitleScene::UpdateEditor() {
-    for (auto &object : objects_) {
+    for (auto &object : gameObjects_) {
         object->Update();
     }
     for (auto &sprite : sprites_) {

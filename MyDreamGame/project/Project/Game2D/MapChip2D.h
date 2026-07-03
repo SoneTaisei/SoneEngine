@@ -25,11 +25,12 @@ public:
         kLift = 7,  // 動く足場（リフト）
         kRail = 8,  // リフトの移動レール
         kJumpBlock = 9, // ジャンプ台
+        kRoomRespawn = 10, // 部屋用リスポーン地点
     };
 
-    void Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath);
+    void Initialize(const std::string& mapFilePath);
     void Update();
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw();
 
     // 指定座標のブロックを取得する
     BaseBlock* GetBlock(int chipX, int chipY) const;
@@ -127,7 +128,7 @@ public:
 private:
     std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void BuildMap();
-    void CreateChipObjects(ID3D12GraphicsCommandList* commandList);
+    void CreateChipObjects();
 
 private:
     // マップデータ（左下が(0,0)）
@@ -138,6 +139,9 @@ private:
 
     // ルームデータ（ワールド座標）
     std::vector<StageRoom> rooms_;
+
+    std::unique_ptr<GameObject> boundaries_[4];
+    void CreateBoundaries();
 
     // 実行時に生成される各種ブロックのインスタンス
     std::vector<std::vector<std::shared_ptr<BaseBlock>>> activeBlocks_;

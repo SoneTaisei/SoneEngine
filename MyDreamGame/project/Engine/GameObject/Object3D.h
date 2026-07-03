@@ -6,10 +6,11 @@
 #include <deque>
 
 class Object3D {
+    friend class Renderer;
 public:
     void Initialize(ID3D12Device *device, Model *model);
     void Update();
-    void Draw(ID3D12GraphicsCommandList *commandList);
+    void Draw();
     void DisplayImGui(const std::string &label);
 
     static void SetEnvironmentMapHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {

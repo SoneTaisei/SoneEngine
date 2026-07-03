@@ -1,4 +1,5 @@
 #include "MapChip2D.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
 #include <fstream>
@@ -18,22 +19,17 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"
+#include "Component/ColliderComponent.h"
+#include "Collision/CollisionManager.h"
 
-void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath) {
-    commandList->GetDevice(IID_PPV_ARGS(&device_));
+void MapChip2D::Initialize(const std::string& mapFilePath) {
+    device_ = DirectXCommon::GetInstance()->GetDevice();
     currentFilePath_ = mapFilePath;
 
     // デフォルトテクスチャのロード
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> comPtrCommandList(commandList);
-    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png", comPtrCommandList);
+    
+    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
-
-    // 保存ファイルがあれば読込み、なければ初期構築して保存する
-    if (!LoadFromFile(mapFilePath)) {
-        BuildMap();
-        GenerateDefaultRooms();
-        SaveToFile(mapFilePath);
-    }
 
     // テンプレートの読み込み（なければデフォルト生成して保存）
     if (!LoadTemplatesFromFile("resources/json/templates_config.json") || templatePalette_.empty()) {
@@ -49,7 +45,7 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
         };
         addTemplate(1, "Block", "NormalBlock", {0.3f, 0.7f, 0.3f, 1.0f}, nlohmann::json::object());
         addTemplate(2, "Death", "DeathBlock", {1.0f, 0.2f, 0.2f, 1.0f}, nlohmann::json::object());
-        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object());
+        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object()); // 紫色に変更
         addTemplate(4, "Coin", "CoinBlock", {1.0f, 0.8f, 0.0f, 1.0f}, nlohmann::json::object());
         addTemplate(5, "OneWay", "OneWayBlock", {0.4f, 0.8f, 0.8f, 1.0f}, nlohmann::json::object());
         
@@ -63,10 +59,18 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
         addTemplate(8, "Rail", "RailBlock", {0.7f, 0.7f, 0.7f, 1.0f}, nlohmann::json::object());
         
         nlohmann::json jumpProps;
-        jumpProps["jumpVelocity"] = 15.0f;
+        jumpProps["jumpVelocityVertical"] = 15.0f;
+        jumpProps["jumpVelocityHorizontal"] = 15.0f;
         addTemplate(9, "Jump", "JumpBlock", {1.0f, 0.5f, 0.0f, 1.0f}, jumpProps);
 
         SaveTemplatesToFile("resources/json/templates_config.json");
+    }
+
+    // 保存ファイルがあれば読込み、なければ初期構築して保存する
+    if (!LoadFromFile(mapFilePath)) {
+        BuildMap();
+        GenerateDefaultRooms();
+        SaveToFile(mapFilePath);
     }
 
     // 古いファイル等で CustomPalette が空の場合、テンプレートのブロックを CustomBlocks として登録する
@@ -109,7 +113,7 @@ void MapChip2D::Update() {
     }
 }
 
-void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
+void MapChip2D::Draw() {
     auto cameraMgr = CameraManager::GetInstance();
     Matrix4x4 vp = TransformFunctions::Multiply(cameraMgr->GetViewMatrix(), cameraMgr->GetProjectionMatrix());
     std::array<Vector4, 6> planes;
@@ -121,16 +125,13 @@ void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
             float radius = 0.0f;
             bool shouldCheck = false;
 
-            if (block->GetObject3D()) {
-                center = block->GetObject3D()->GetTranslation();
-                Vector3 scale = block->GetObject3D()->GetScale();
-                radius = (std::max)({scale.x, scale.y, scale.z}) * 2.5f; // Safe radius
-                shouldCheck = true;
-            } else if (block->GetPrimitive()) {
-                center = block->GetPrimitive()->GetTransform().translate;
-                Vector3 scale = block->GetPrimitive()->GetTransform().scale;
-                radius = (std::max)({scale.x, scale.y, scale.z}) * 2.0f; // Safe radius
-                shouldCheck = true;
+            if (block->GetGameObject()) {
+                if (auto* tc = block->GetGameObject()->GetComponent<TransformComponent>()) {
+                    center = tc->GetPosition();
+                    Vector3 scale = tc->GetScale();
+                    radius = (std::max)({scale.x, scale.y, scale.z}) * 2.0f; // Safe radius
+                    shouldCheck = true;
+                }
             }
 
             if (shouldCheck) {
@@ -139,7 +140,7 @@ void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
                 }
             }
 
-            block->Draw(commandList);
+            block->Draw();
         }
     }
 }
@@ -172,16 +173,9 @@ float MapChip2D::ChipToWorldY(int chipY) const {
 }
 
 std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
-    std::vector<PrimitiveObject*> result;
-    for (const auto& block : updateBlocks_) {
-        if (block) {
-            auto* prim = block->GetPrimitive();
-            if (prim) {
-                result.push_back(prim);
-            }
-        }
-    }
-    return result;
+    // 互換性のため空を返すか、必要な場合は GameObject から収集する
+    std::vector<PrimitiveObject*> list;
+    return list;
 }
 
 void MapChip2D::BuildMap() {
@@ -263,7 +257,7 @@ void MapChip2D::BuildMap() {
     mapData_[4][27] = ChipType::kCoin;
 }
 
-void MapChip2D::CreateChipObjects(ID3D12GraphicsCommandList* commandList) {
+void MapChip2D::CreateChipObjects() {
     RebuildChipObjects();
 }
 
@@ -280,7 +274,6 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
             }
         }
     }
-
     if (mapData_[y][x] != type) {
         mapData_[y][x] = type;
         isDirty_ = true;
@@ -349,7 +342,7 @@ void MapChip2D::RebuildChipObjects() {
             if (visited[y][x]) continue;
 
             ChipType type = mapData_[y][x];
-            if (type == ChipType::kNone || type == ChipType::kPlayerSpawn) {
+            if (type == ChipType::kNone || type == ChipType::kPlayerSpawn || type == ChipType::kRoomRespawn) {
                 visited[y][x] = true;
                 continue;
             }
@@ -415,6 +408,47 @@ void MapChip2D::RebuildChipObjects() {
             x += spanWidth - 1;
         }
     }
+    CreateBoundaries();
+}
+
+void MapChip2D::CreateBoundaries() {
+    for (int i = 0; i < 4; ++i) {
+        if (!boundaries_[i]) {
+            boundaries_[i] = std::make_unique<GameObject>("Boundary" + std::to_string(i));
+            boundaries_[i]->AddComponent<TransformComponent>();
+            auto* cc = boundaries_[i]->AddComponent<ColliderComponent>();
+            cc->SetLayerMask(kLayerBlock);
+            cc->SetIsSolid(true);
+        }
+    }
+    
+    float w = mapWidth_ * chipSize_;
+    float h = mapHeight_ * chipSize_;
+    float thickness = 100.0f; // トンネル防止用
+
+    // Bottom
+    auto* tc0 = boundaries_[0]->GetComponent<TransformComponent>();
+    tc0->SetPosition({w * 0.5f, -thickness * 0.5f, 0.0f});
+    tc0->SetScale({w + thickness * 2, thickness, 1.0f});
+    boundaries_[0]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+
+    // Top
+    auto* tc1 = boundaries_[1]->GetComponent<TransformComponent>();
+    tc1->SetPosition({w * 0.5f, h + thickness * 0.5f, 0.0f});
+    tc1->SetScale({w + thickness * 2, thickness, 1.0f});
+    boundaries_[1]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+
+    // Left
+    auto* tc2 = boundaries_[2]->GetComponent<TransformComponent>();
+    tc2->SetPosition({-thickness * 0.5f, h * 0.5f, 0.0f});
+    tc2->SetScale({thickness, h, 1.0f});
+    boundaries_[2]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+
+    // Right
+    auto* tc3 = boundaries_[3]->GetComponent<TransformComponent>();
+    tc3->SetPosition({w + thickness * 0.5f, h * 0.5f, 0.0f});
+    tc3->SetScale({thickness, h, 1.0f});
+    boundaries_[3]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 }
 
 bool MapChip2D::SaveToFile(const std::string& filepath) {
@@ -786,15 +820,18 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         
         if (def) {
             newBlock->SetProperties(def->properties);
-            if (newBlock->GetPrimitive()) {
-                newBlock->GetPrimitive()->GetMaterial().color = def->color;
-                
-                const Transform& t = newBlock->GetPrimitive()->GetTransform();
-                newBlock->GetPrimitive()->SetScale({ 
-                    t.scale.x * def->scale.x, 
-                    t.scale.y * def->scale.y, 
-                    t.scale.z * def->scale.z 
-                });
+            if (newBlock->GetGameObject()) {
+                if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                    prc->GetMaterial().color = def->color;
+                    
+                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        tc->SetScale({ 
+                            tc->GetScale().x * def->scale.x, 
+                            tc->GetScale().y * def->scale.y, 
+                            tc->GetScale().z * def->scale.z 
+                        });
+                    }
+                }
             }
             
             if (!def->modelName.empty()) {
@@ -813,23 +850,33 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     }
                 }
                 
-                if (model) {
-                    auto obj = std::make_unique<Object3D>();
-                    obj->Initialize(device_.Get(), model);
-                    obj->SetTranslation({ worldX, worldY, 0.0f });
-                    obj->SetScale(def->scale);
-                    obj->SetTextureHandle(gpuHandle_);
-                    obj->GetMaterial().color = def->color;
-                    newBlock->SetObject3D(std::move(obj));
+                if (model && newBlock->GetGameObject()) {
+                    // PrimitiveRendererComponent を無効化する代わりに、MeshRendererComponent を追加
+                    auto* mrc = newBlock->GetGameObject()->AddComponent<MeshRendererComponent>();
+                    mrc->Initialize(device_.Get(), model);
+                    mrc->SetTextureHandle(gpuHandle_);
+                    mrc->GetMaterial().color = def->color;
+
+                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        tc->SetPosition({ worldX, worldY, 0.0f });
+                        tc->SetScale(def->scale);
+                    }
+                    
+                    // モデルがある場合はプリミティブを非表示または削除（コンポーネントを取り除く機能がない場合はアルファ0にする等）
+                    if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                        prc->GetMaterial().color.w = 0.0f; // 透明にして見えなくする
+                    }
                 }
             }
         }
 
-        if (newBlock->GetPrimitive()) {
-            newBlock->GetPrimitive()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
+        if (newBlock->GetGameObject()) {
+            newBlock->GetGameObject()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
             if (spanWidth > 1 || spanHeight > 1) {
-                Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({(float)spanWidth, (float)spanHeight, 1.0f});
-                newBlock->GetPrimitive()->GetMaterial().uvTransform = uvTrans;
+                if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                    Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({(float)spanWidth, (float)spanHeight, 1.0f});
+                    prc->GetMaterial().uvTransform = uvTrans;
+                }
             }
         }
     }

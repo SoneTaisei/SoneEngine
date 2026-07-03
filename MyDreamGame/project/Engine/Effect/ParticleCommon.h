@@ -19,7 +19,7 @@ struct ParticleVertexData {
 class ParticleCommon {
 public:
     void Initialize(ID3D12Device *device);
-    void PreDraw(ID3D12GraphicsCommandList *commandList);
+    void PreDraw();
 
     void SetViewProjection(const Matrix4x4 &viewProjection) {
         viewProjection_ = viewProjection;

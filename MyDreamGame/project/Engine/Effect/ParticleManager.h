@@ -52,8 +52,8 @@ struct ParticleProperty {
 };
 
 class ParticleManager {
+    friend class Renderer;
 public:
-
     ParticleManager() = default;
     virtual~ParticleManager();
     // 初期化

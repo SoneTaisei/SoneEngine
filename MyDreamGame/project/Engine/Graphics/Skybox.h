@@ -13,7 +13,7 @@ public:
     void Update();
 
     // 描画（ルールは内部でDirectXCommonから取得するため引数はスッキリ！）
-    void Draw(ID3D12GraphicsCommandList *commandList);
+    void Draw();
 
 private:
     uint32_t textureHandle_ = 0;
