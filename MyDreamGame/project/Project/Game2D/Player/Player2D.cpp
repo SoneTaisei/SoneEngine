@@ -66,13 +66,19 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
 
     // 死亡演出中の更新処理
     if (state_.isDead_) {
-        // スローモーション中は実時間が遅くなるため、deathTimer_にはdeltaTimeを足していく。
+        // スローモーション中は実時間が異なるため、deathTimer_にはdeltaTimeを足していく
         state_.deathTimer_ += deltaTime;
 
         // ノックバック物理挙動（演出中ずっと続ける）
         state_.velocity_.y += params_.gravity_ * deltaTime;
         state_.position_.x += state_.velocity_.x * deltaTime;
         state_.position_.y += state_.velocity_.y * deltaTime;
+
+        // ディゾルブ演出の進行
+        float t = (std::min)(state_.deathTimer_ / params_.deathDuration_, 1.0f);
+        if (visuals_.GetPrimitiveObject()) {
+            visuals_.GetPrimitiveObject()->GetMaterial().dissolveThreshold = t;
+        }
 
         if (state_.deathTimer_ >= params_.deathDuration_) {
             // リスポーン地点の決定
