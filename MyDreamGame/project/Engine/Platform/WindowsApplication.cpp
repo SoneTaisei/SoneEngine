@@ -155,6 +155,9 @@ void WindowsApplication::Initialize() {
     editorManager_->Initialize(hwnd, device, dxCommon_->GetCommandQueue());
     editorManager_->LoadSceneConfig();
     editorManager_->LoadLightingConfig(modelCommon_.get());
+#else
+    // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
+    modelCommon_->LoadLightingConfig();
 #endif
 
     // 音声の初期化

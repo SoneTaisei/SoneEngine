@@ -39,6 +39,8 @@ public:
     SpotLight *GetSpotLight() { return mappedSpotLight_; }
     CameraForGPU *GetCamera() { return mappedCamera_; }
 
+    // 設定ファイルからの読み込み
+    void LoadLightingConfig();
 
 private:
     ID3D12Device *device_ = nullptr;
