@@ -1,5 +1,5 @@
 #include "CoinBlock.h"
-#include "Game2D/Player2D.h"
+#include "Game2D/Player/Player2D.h"
 #include "Core/TimeManager.h"
 
 void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {

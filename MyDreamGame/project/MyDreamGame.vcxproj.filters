@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version='1.0' encoding='utf-8'?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
       <Filter>Shader\Object</Filter>
@@ -160,8 +160,14 @@
     <ClCompile Include="Project\Effect\CoinEffect.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Game2D\Player2D.cpp">
+    <ClCompile Include="Project\Game2D\Player\Player2D.cpp">
       <Filter>Application\Game2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp">
+      <Filter>Application\2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp">
+      <Filter>Application\2D</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Project\Game2D</Filter>
@@ -221,7 +227,7 @@
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-</ItemGroup>
+<ClCompile Include="Project\Game2D\Player\PlayerInput.cpp"><Filter>Project\Game2D</Filter></ClCompile><ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp"><Filter>Project\Game2D</Filter></ClCompile></ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -369,8 +375,17 @@
     <ClInclude Include="Project\Effect\CoinEffect.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Game2D\Player2D.h">
+    <ClInclude Include="Project\Game2D\Player\Player2D.h">
       <Filter>Application\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\PlayerState.h">
+      <Filter>Application\2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\PlayerConfig.h">
+      <Filter>Application\2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h">
+      <Filter>Application\2D</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Project\Game2D</Filter>
@@ -433,7 +448,7 @@
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveStar.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-</ItemGroup>
+<ClInclude Include="Project\Game2D\Player\PlayerInput.h"><Filter>Project\Game2D</Filter></ClInclude><ClInclude Include="Project\Game2D\Player\PlayerPhysics.h"><Filter>Project\Game2D</Filter></ClInclude></ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>

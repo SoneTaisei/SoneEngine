@@ -1,5 +1,5 @@
 #include "GoalBlock.h"
-#include "Game2D/Player2D.h"
+#include "Game2D/Player/Player2D.h"
 
 void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();

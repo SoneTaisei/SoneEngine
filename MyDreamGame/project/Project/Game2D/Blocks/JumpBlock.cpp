@@ -1,5 +1,5 @@
 #include "JumpBlock.h"
-#include "../Player2D.h"
+#include "../Player/Player2D.h"
 #include "../MapChip2D.h"
 
 void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {

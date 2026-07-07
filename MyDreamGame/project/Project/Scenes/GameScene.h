@@ -11,7 +11,7 @@
 #include <memory>
 
 // 2Dゲーム用クラス
-#include "Game2D/Player2D.h"
+#include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 
 class GameCamera;
