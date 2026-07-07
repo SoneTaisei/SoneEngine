@@ -1,4 +1,5 @@
 #include "Player2D.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
@@ -14,14 +15,14 @@
 #include "../../externals/imgui/imgui.h"
 #endif
 
-void Player2D::Initialize(ID3D12GraphicsCommandList* commandList) {
+void Player2D::Initialize() {
     PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
-    commandList->GetDevice(IID_PPV_ARGS(&device));
+    device = DirectXCommon::GetInstance()->GetDevice();
 
     Primitive* boxPrimitive = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f);
-    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png", commandList);
+    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
     Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);
     
     visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle);
@@ -43,14 +44,9 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
 
 void Player2D::Update(MapChip2D& map, bool isTransitioning) {
     input_.Update(currentInput_);
-    // 外部（エディターのインスペクター等）で PrimitiveObject のスケールが変更された場合、プレイヤーのサイズに反映する
+    // パラメータに基づいてPrimitiveObjectのスケールを常に反映させる（JSONロード時のバグ対策）
     if (!state_.isRespawning_ && visuals_.GetPrimitiveObject()) {
-        Vector3 currentScale = visuals_.GetPrimitiveObject()->GetScale();
-        if (std::abs(currentScale.x - params_.halfWidth_ * 2.0f) > 0.001f ||
-            std::abs(currentScale.y - params_.halfHeight_ * 2.0f) > 0.001f) {
-            params_.halfWidth_ = currentScale.x * 0.5f;
-            params_.halfHeight_ = currentScale.y * 0.5f;
-        }
+        visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
     }
 
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
@@ -79,8 +75,35 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
         state_.position_.y += state_.velocity_.y * deltaTime;
 
         if (state_.deathTimer_ >= params_.deathDuration_) {
-            // スタート地点に復活
-            state_.position_ = state_.startPosition_;
+            // リスポーン地点の決定
+            Vector3 respawnPos = state_.startPosition_;
+            const auto& rooms = map.GetRooms();
+            if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < rooms.size()) {
+                const auto& room = rooms[state_.currentRoomIndex_];
+                
+                // ルーム内の kRoomRespawn を探す
+                bool foundRespawn = false;
+                for (int y = 0; y < map.GetHeight(); ++y) {
+                    for (int x = 0; x < map.GetWidth(); ++x) {
+                        if (map.GetChipType(x, y) == MapChip2D::ChipType::kRoomRespawn) {
+                            float wx = map.ChipToWorldX(x) + map.GetChipSize() * 0.5f;
+                            float wy = map.ChipToWorldY(y) + map.GetChipSize() * 0.5f;
+                            
+                            // このチップが現在のルーム内にあるか？
+                            if (wx >= room.x && wx <= room.x + room.width &&
+                                wy >= room.y && wy <= room.y + room.height) {
+                                respawnPos = { wx, wy, 0.0f };
+                                foundRespawn = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (foundRespawn) break;
+                }
+            }
+
+            // 指定地点に復活
+            state_.position_ = respawnPos;
             state_.velocity_ = { 0.0f, 0.0f, 0.0f };
             state_.isDead_ = false;
             state_.deathTimer_ = 0.0f;
@@ -159,8 +182,24 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
     // 入力処理
     physics_.Update(state_, params_, currentInput_, map, visuals_, deltaTime);
 
+    // 現在のルームを特定する
+    const auto& rooms = map.GetRooms();
+    for (int i = 0; i < rooms.size(); ++i) {
+        if (state_.position_.x >= rooms[i].x && state_.position_.x <= rooms[i].x + rooms[i].width &&
+            state_.position_.y >= rooms[i].y && state_.position_.y <= rooms[i].y + rooms[i].height) {
+            state_.currentRoomIndex_ = i;
+            break;
+        }
+    }
+
+    float deathY = -10.0f;
+    if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < rooms.size()) {
+        // ルームの下端から少し余裕をもたせた高さをデスマッチラインとする
+        deathY = rooms[state_.currentRoomIndex_].y - 2.0f;
+    }
+
     // 画面外落下時のリスポーン演出移行
-    if (state_.position_.y < -10.0f) {
+    if (state_.position_.y < deathY) {
         Kill();
     }
 
@@ -182,18 +221,9 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
 
     // 砂埃パーティクルの更新
 
-
-    // 画面外の落下判定（本来のデスマッチライン）
-    if (state_.position_.y < -10.0f && state_.position_.y >= -50.0f) {
-        state_.isDead_ = true;
-        state_.deathTimer_ = 0.0f;
-        state_.velocity_ = { 0.0f, 0.0f, 0.0f };
-        state_.isDashing_ = false;
-    }
-    
     // --- バグ検知処理 ---
     // 1. 亜空間への落下、または座標の破綻
-    if (state_.position_.y < -50.0f || std::isnan(state_.position_.x) || std::isnan(state_.position_.y)) {
+    if (state_.position_.y < (deathY - 50.0f) || std::isnan(state_.position_.x) || std::isnan(state_.position_.y)) {
         ReplayManager::GetInstance()->TriggerBugReport("プレイヤーの座標が破綻、またはマップ外に落下しました。");
         // 安全処理
         state_.position_ = state_.startPosition_;
@@ -225,10 +255,13 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
     // PrimitiveObjectの座標を更新
     visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
     visuals_.GetPrimitiveObject()->Update();
+    
+    // アイテム（コインなど）との当たり判定を処理
+    SimulateCollisions(map);
 }
 
-void Player2D::Draw(ID3D12GraphicsCommandList* commandList) {
-    visuals_.Draw(commandList, state_, params_);
+void Player2D::Draw() {
+    visuals_.Draw(state_, params_);
 }
 
 void Player2D::DisplayImGui() {
