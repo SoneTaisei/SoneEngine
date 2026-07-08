@@ -1,4 +1,5 @@
 #include "Primitive.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include <cassert>
 #include "Core/Utility/UtilityFunctions.h"
 
@@ -10,7 +11,8 @@ void Primitive::Initialize(ID3D12Device* device) {
     CreateBuffers(device);
 }
 
-void Primitive::Draw(ID3D12GraphicsCommandList* commandList) {
+void Primitive::Draw() {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
     commandList->IASetIndexBuffer(&indexBufferView_);
     commandList->DrawIndexedInstanced(static_cast<UINT>(modelData_.indices.size()), 1, 0, 0, 0);

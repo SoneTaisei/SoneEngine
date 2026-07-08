@@ -20,7 +20,7 @@ public:
     void Finalize();
 
     // テクスチャ読み込み
-    uint32_t Load(const std::string &filePath, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList);
+    uint32_t Load(const std::string &filePath);
 
     // 指定したハンドルのGPUディスクリプタハンドルを取得
     D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(uint32_t textureHandle) const;

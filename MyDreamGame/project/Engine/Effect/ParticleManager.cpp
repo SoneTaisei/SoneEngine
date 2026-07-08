@@ -1,4 +1,5 @@
 #include "ParticleManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Graphics/TextureManager.h"
 #include "Renderer/SrvManager.h"
 #include "Core/Utility/TransformFunctions.h"
@@ -91,7 +92,7 @@ void ParticleManager::Initialize(ID3D12GraphicsCommandList *commandList,Particle
     // ここでは初期化時にコマンドリストを渡していないため、事前にロード済みであることを前提とするか、
     // InitializeにCommandListを渡すように変更するのが良い。
     // 今回は簡易的にロード処理を呼ぶ (内部でロード済みならハンドルだけ返ってくる)
-    textureIndex_ = TextureManager::GetInstance()->Load(textureFilePath, commandList);
+    textureIndex_ = TextureManager::GetInstance()->Load(textureFilePath);
 
     // +x方向に15m/s、範囲は原点中心に -1 ~ 1
     accelerationField_.acceleration = { 15.0f, 0.0f, 0.0f };

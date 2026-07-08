@@ -12,7 +12,7 @@
 class StageSelectScene : public IScene {
 public:
     ~StageSelectScene() override;
-    void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
+    void Initialize() override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
@@ -32,7 +32,7 @@ private:
     int stageCount_ = 1;
     std::vector<StageConfig> stageConfigs_;
 
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
+    
 
     std::vector<std::unique_ptr<Object3D>> objects_;
 

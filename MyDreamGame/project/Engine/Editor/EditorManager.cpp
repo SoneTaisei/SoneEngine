@@ -2794,9 +2794,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     LogManager::GetInstance()->Draw();
 }
 
-void EditorManager::Draw(ID3D12GraphicsCommandList *commandList) {
+void EditorManager::Draw() {
     ImGui::Render();
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), DirectXCommon::GetInstance()->GetCommandList());
 }
 
 void EditorManager::Finalize() {

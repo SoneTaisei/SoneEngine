@@ -1,4 +1,5 @@
 #include "Skybox.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Graphics/TextureManager.h"
@@ -68,7 +69,8 @@ void Skybox::Update() {
     mappedTransform_->World = worldMatrix;
 }
 
-void Skybox::Draw(ID3D12GraphicsCommandList *commandList) {
+void Skybox::Draw() {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // 1. DirectXCommonから専用のルール（PSO・RootSignature）を取得してセット
     DirectXCommon *dxCommon = DirectXCommon::GetInstance();
     commandList->SetGraphicsRootSignature(dxCommon->GetSkyboxRootSignature());

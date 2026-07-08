@@ -17,12 +17,12 @@
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/MapData/map_data.txt";
 
-void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
-    commandList_ = commandList.Get();
+void GameScene::Initialize() {
+    
 
     // 1. Device取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
-    commandList->GetDevice(IID_PPV_ARGS(&device));
+    device = DirectXCommon::GetInstance()->GetDevice();
 
     // 2. PrimitiveManagerの初期化（まだの場合）
     PrimitiveManager::GetInstance()->Initialize(device.Get());
@@ -32,7 +32,7 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     ReplayManager::GetInstance()->LoadMacros();
 
     // ★ Skyboxの初期化処理を追加
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds", commandList);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
@@ -41,7 +41,7 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
     coinEffect_ = std::make_unique<CoinEffect>();
     coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
 
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png", commandList.Get());
+    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
     ringEffect_ = std::make_unique<RingEffect>();
     ringEffect_->Initialize(device.Get(), gradationHandle);
     cylinderEffect_ = std::make_unique<CylinderEffect>();
@@ -49,11 +49,11 @@ void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> com
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
-    map_->Initialize(commandList.Get(), s_TargetMapFilePath);
+    map_->Initialize( s_TargetMapFilePath);
 
     // 6. プレイヤーの生成と初期化
     player_ = std::make_unique<Player2D>();
-    player_->Initialize(commandList.Get());
+    player_->Initialize();
     player_->FindSpawnPoint(*map_);
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
@@ -426,42 +426,42 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
     if (modelCommon_) {
-        modelCommon_->PreDraw(commandList_);
+        modelCommon_->PreDraw();
     }
 
     if (skybox_) {
-        skybox_->Draw(commandList_);
+        skybox_->Draw();
         
         auto dxCommon = DirectXCommon::GetInstance();
-        commandList_->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-        commandList_->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+        DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
         if (modelCommon_) {
-            modelCommon_->PreDraw(commandList_);
+            modelCommon_->PreDraw();
         }
     }
 
     // 2. 2Dオブジェクト（マップ・プレイヤー）の描画
     // ModelCommonの描画前処理
-    modelCommon_->PreDraw(commandList_);
+    modelCommon_->PreDraw();
 
     // マップの描画
     if (map_) {
-        map_->Draw(commandList_);
+        map_->Draw();
     }
 
     // プレイヤーの描画
     if (player_) {
-        player_->Draw(commandList_);
+        player_->Draw();
     }
 
     if (coinEffect_) {
 #ifdef USE_IMGUI
         if (EditorManager::IsShowEffects()) {
-            coinEffect_->Draw(commandList_);
+            coinEffect_->Draw();
         }
 #else
-        coinEffect_->Draw(commandList_);
+        coinEffect_->Draw();
 #endif
     }
 
@@ -524,7 +524,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                         ghostMaterial.color = ghostColor;
 
                         // プレイヤーのPrimitiveを使って残像(ゴースト)を描画
-                        playerPrim->DrawGhost(commandList_, ghostTransform, ghostMaterial);
+                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
 
                         // 3D -> NDC Conversion for the current frame's position
                         Vector3 ndcCurr = TransformFunctions::Transform(frameData.position, viewProjectionMatrix);
@@ -579,7 +579,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     // 3. パーティクルの描画
     // 描画前処理
-    particleCommon_->PreDraw(commandList_);
+    particleCommon_->PreDraw();
 
     // パーティクルの描画
 #ifdef USE_IMGUI

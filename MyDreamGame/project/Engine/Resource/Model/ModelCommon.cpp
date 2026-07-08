@@ -1,4 +1,5 @@
 #include "ModelCommon.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Model.h"
 #include <cassert>
 #include "Graphics/TextureManager.h"
@@ -77,7 +78,8 @@ void ModelCommon::Initialize(ID3D12Device *device) {
     mappedSpotLight_->cosAngle = std::cos(std::numbers::pi_v<float> / 3.0f);
 }
 
-void ModelCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
+void ModelCommon::PreDraw() {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     assert(commandList);
     commandList_ = commandList;
 

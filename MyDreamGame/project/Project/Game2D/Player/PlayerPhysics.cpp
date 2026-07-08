@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, MapChip2D& map, PlayerVisuals& visuals_, float deltaTime) {
+void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, MapChip2D& map, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
     if (state_.isDead_ || state_.isGoal_) return;
 
     HandleInputLogic(state_, params_, input_, visuals_, deltaTime);
@@ -49,6 +49,8 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     state_.position_.x += state_.velocity_.x * deltaTime;
     ResolveCollisionX(state_, params_, map);
 
+    // 非Solidブロック（コインなど）や全ブロックのOnCollision処理
+    SimulateCollisions(state_, params_, map, player);
 }
 
 void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime) {

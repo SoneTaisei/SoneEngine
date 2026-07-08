@@ -12,7 +12,7 @@ public:
     SceneManager();
     ~SceneManager();
 
-    void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList);
+    void Initialize();
     void Update();
     void Draw(const Matrix4x4 &viewProjectionMatrix);
 
@@ -41,7 +41,7 @@ public:
 
 private:
     std::unique_ptr<IScene> currentScene_ = nullptr;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
+    
     SpriteCommon *spriteCommon_ = nullptr;
     ModelCommon *modelCommon_ = nullptr;
     ParticleCommon* particleCommon_ = nullptr;

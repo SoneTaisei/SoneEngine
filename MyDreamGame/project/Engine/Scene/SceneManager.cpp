@@ -8,10 +8,10 @@ SceneManager::SceneManager() {}
 
 SceneManager::~SceneManager() {}
 
-void SceneManager::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
+void SceneManager::Initialize() {
     // シーンの生成はアプリ層で行う（StatePattern + 層分離）
     // ここではコマンドリストを保存するのみとする
-    commandList_ = commandList;
+    
 }
 
 void SceneManager::Update() {
@@ -46,7 +46,7 @@ void SceneManager::ProcessSceneTransition() {
             currentScene_->SetGameCamera(gameCamera_);
 
         // 新しいシーンの初期化
-        currentScene_->Initialize(commandList_);
+        currentScene_->Initialize();
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);
@@ -75,7 +75,7 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
         if (gameCamera_)
             currentScene_->SetGameCamera(gameCamera_);
 
-        currentScene_->Initialize(commandList_);
+        currentScene_->Initialize();
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);

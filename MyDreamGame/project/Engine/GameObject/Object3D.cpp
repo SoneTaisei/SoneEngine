@@ -1,4 +1,5 @@
 #include "Object3D.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Graphics/CameraManager.h"
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
@@ -74,7 +75,8 @@ void Object3D::Update() {
     }
 }
 
-void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
+void Object3D::Draw() {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // --- 追加: エディタでの変更を即時反映させるため、Draw直前にもマテリアルとワールド行列を更新 ---
     *mappedMaterial_ = material_;
 

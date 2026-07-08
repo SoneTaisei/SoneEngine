@@ -9,7 +9,7 @@ class PrimitiveObject {
 public:
     void Initialize(ID3D12Device* device, Primitive* primitive);
     void Update();
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw();
     void DisplayImGui(const std::string& label);
 
     // --- Transformのゲッター/セッター ---
@@ -80,5 +80,5 @@ public:
     const Transform& GetTransform() const { return transform_; }
 
     void ResetGhostIndex() { currentGhostIndex_ = 0; }
-    void DrawGhost(ID3D12GraphicsCommandList* commandList, const Transform& transform, const Material& material);
+    void DrawGhost(const Transform& transform, const Material& material);
 };

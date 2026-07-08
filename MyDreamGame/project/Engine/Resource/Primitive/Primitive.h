@@ -25,7 +25,7 @@ public:
 
     virtual void GenerateModelData() = 0;
     virtual void Initialize(ID3D12Device* device);
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw();
 
     const ModelData& GetModelData() const { return modelData_; }
 

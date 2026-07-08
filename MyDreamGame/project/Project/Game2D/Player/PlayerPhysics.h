@@ -13,7 +13,7 @@ public:
     PlayerPhysics() = default;
     ~PlayerPhysics() = default;
 
-    void Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, MapChip2D& map, PlayerVisuals& visuals_, float deltaTime);
+    void Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, MapChip2D& map, PlayerVisuals& visuals_, float deltaTime, Player2D* player);
 
     AABB2D GetAABB(const PlayerState& state_, const PlayerParams& params_) const;
     bool CheckAABBCollision(const AABB2D& a, const AABB2D& b) const;

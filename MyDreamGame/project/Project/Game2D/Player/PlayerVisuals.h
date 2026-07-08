@@ -42,7 +42,7 @@ class PlayerVisuals {
 public:
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle);
     void Update(const PlayerState& state, const PlayerParams& params, float deltaTime);
-    void Draw(ID3D12GraphicsCommandList* commandList, const PlayerState& state, const PlayerParams& params);
+    void Draw(const PlayerState& state, const PlayerParams& params);
 
     void SpawnJumpDust(const Vector3& basePos, float dirX);
     void SpawnRunDust(const Vector3& basePos, float dirX);

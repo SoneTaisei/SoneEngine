@@ -30,7 +30,7 @@ class GameScene : public IScene {
 public:
     static std::string s_TargetMapFilePath;
 
-    void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
+    void Initialize() override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
@@ -77,7 +77,7 @@ private:
     // 共通システム
     // ---------------------------------------------------
     // コマンドリストを覚えておくための変数
-    ID3D12GraphicsCommandList *commandList_ = nullptr;
+    
 
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;

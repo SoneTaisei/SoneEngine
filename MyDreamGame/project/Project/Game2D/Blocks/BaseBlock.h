@@ -26,11 +26,11 @@ public:
         }
     }
     
-    virtual void Draw(ID3D12GraphicsCommandList* commandList) {
+    virtual void Draw() {
         if (object3D_) {
-            object3D_->Draw(commandList);
+            object3D_->Draw();
         } else if (primitiveObj_) {
-            primitiveObj_->Draw(commandList);
+            primitiveObj_->Draw();
         }
     }
 

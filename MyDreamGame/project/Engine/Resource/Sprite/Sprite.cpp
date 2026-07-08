@@ -1,4 +1,5 @@
 #include "Sprite.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "SpriteCommon.h"
 #include "Graphics/TextureManager.h"
 
@@ -88,7 +89,7 @@ void Sprite::Draw() {
     }
 
 	// コマンドリストへの設定
-	ID3D12GraphicsCommandList *commandList = spriteCommon_->GetCommandList();
+	auto commandList = DirectXCommon::GetInstance()->GetCommandList();
 
 	// マテリアル (RootParameter 0番)
 	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());

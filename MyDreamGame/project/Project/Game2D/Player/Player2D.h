@@ -25,9 +25,9 @@ class MapChip2D;
 /// </summary>
 class Player2D {
 public:
-    void Initialize(ID3D12GraphicsCommandList* commandList);
+    void Initialize();
     void Update(MapChip2D& map, bool isTransitioning = false);
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw();
 
     // 速度の設定と取得
     void SetVelocity(const Vector3& velocity) { state_.velocity_ = velocity; }

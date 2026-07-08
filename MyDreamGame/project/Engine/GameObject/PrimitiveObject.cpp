@@ -1,4 +1,5 @@
 #include "PrimitiveObject.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "GameObject/Object3D.h"
@@ -95,7 +96,8 @@ void PrimitiveObject::Update() {
     mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix_));
 }
 
-void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
+void PrimitiveObject::Draw() {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // 描画直前に最新のパラメータでマテリアルを更新
     *mappedMaterial_ = material_;
 
@@ -184,7 +186,7 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
     }
 
     if (primitive_) {
-        primitive_->Draw(commandList);
+        primitive_->Draw();
     }
 
     // ==============================================================
@@ -197,12 +199,13 @@ void PrimitiveObject::Draw(ID3D12GraphicsCommandList* commandList) {
         // ※ルートパラメータ（行列やマテリアル、テクスチャ）は本体描画時にセット済みなのでそのまま使えます
         
         if (primitive_) {
-            primitive_->Draw(commandList);
+            primitive_->Draw();
         }
     }
 }
 
-void PrimitiveObject::DrawGhost(ID3D12GraphicsCommandList* commandList, const Transform& transform, const Material& material) {
+void PrimitiveObject::DrawGhost(const Transform& transform, const Material& material) {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     if (currentGhostIndex_ >= kMaxGhosts || !primitive_) return;
 
     CameraManager* cameraMgr = CameraManager::GetInstance();
@@ -278,7 +281,7 @@ void PrimitiveObject::DrawGhost(ID3D12GraphicsCommandList* commandList, const Tr
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
     }
 
-    primitive_->Draw(commandList);
+    primitive_->Draw();
 
     currentGhostIndex_++;
 }

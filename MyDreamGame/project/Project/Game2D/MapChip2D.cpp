@@ -1,4 +1,5 @@
 #include "MapChip2D.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
 #include <fstream>
@@ -19,13 +20,13 @@
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"
 
-void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath) {
-    commandList->GetDevice(IID_PPV_ARGS(&device_));
+void MapChip2D::Initialize(const std::string& mapFilePath) {
+    device_ = DirectXCommon::GetInstance()->GetDevice();
     currentFilePath_ = mapFilePath;
 
     // デフォルトテクスチャのロード
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> comPtrCommandList(commandList);
-    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png", comPtrCommandList);
+    
+    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
 
     // 保存ファイルがあれば読込み、なければ初期構築して保存する
@@ -110,7 +111,7 @@ void MapChip2D::Update() {
     }
 }
 
-void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
+void MapChip2D::Draw() {
     auto cameraMgr = CameraManager::GetInstance();
     Matrix4x4 vp = TransformFunctions::Multiply(cameraMgr->GetViewMatrix(), cameraMgr->GetProjectionMatrix());
     std::array<Vector4, 6> planes;
@@ -140,7 +141,7 @@ void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
                 }
             }
 
-            block->Draw(commandList);
+            block->Draw();
         }
     }
 }
@@ -264,7 +265,7 @@ void MapChip2D::BuildMap() {
     mapData_[4][27] = ChipType::kCoin;
 }
 
-void MapChip2D::CreateChipObjects(ID3D12GraphicsCommandList* commandList) {
+void MapChip2D::CreateChipObjects() {
     RebuildChipObjects();
 }
 

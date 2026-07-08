@@ -186,7 +186,7 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
     }
 
     // 入力処理
-    physics_.Update(state_, params_, currentInput_, map, visuals_, deltaTime);
+    physics_.Update(state_, params_, currentInput_, map, visuals_, deltaTime, this);
 
     // 現在のルームを特定する
     const auto& rooms = map.GetRooms();

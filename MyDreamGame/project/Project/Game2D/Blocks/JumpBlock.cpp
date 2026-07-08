@@ -35,11 +35,23 @@ void JumpBlock::OnCollision(Player2D* player) {
 
     bool isFloating = (!hasRight && !hasLeft && !hasTop && !hasBottom);
 
-    // 有効な面（バウンドする面）を決定
-    bool activeTop    = hasBottom || isFloating; // 下にブロックがある、または完全に浮いているなら上面で跳ねる
-    bool activeBottom = hasTop;                  // 上にブロックがあるなら下面で跳ねる
-    bool activeLeft   = hasRight;                // 右にブロックがあるなら左面で跳ねる（左向きのバネ）
-    bool activeRight  = hasLeft;                 // 左にブロックがあるなら右面で跳ねる（右向きのバネ）
+    // 接地面（ブロックがくっついている面）を優先度順に判定し、ばねの方向を一つに絞る
+    bool activeTop = false;
+    bool activeBottom = false;
+    bool activeLeft = false;
+    bool activeRight = false;
+
+    if (hasBottom) {
+        activeTop = true; // 下にブロックがあるなら上面で跳ねる
+    } else if (hasLeft) {
+        activeRight = true; // 左にブロックがあるなら右面で跳ねる
+    } else if (hasRight) {
+        activeLeft = true; // 右にブロックがあるなら左面で跳ねる
+    } else if (hasTop) {
+        activeBottom = true; // 上にブロックがあるなら下面で跳ねる
+    } else {
+        activeTop = true; // 完全に浮いている場合はデフォルトで上面で跳ねる
+    }
 
     // 各面との距離を計算（Player2D側でめり込みが押し戻されているため、接触面は距離がほぼ0になる）
     float distTop = std::abs(playerAABB.bottom - blockAABB.top);

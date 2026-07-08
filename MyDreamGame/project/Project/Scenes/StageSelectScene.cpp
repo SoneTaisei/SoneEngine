@@ -18,17 +18,17 @@
 StageSelectScene::~StageSelectScene() {
 }
 
-void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
+void StageSelectScene::Initialize() {
 
-    commandList_ = commandList;
+    
 
     // Deviceの取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
-    commandList->GetDevice(IID_PPV_ARGS(&device));
+    device = DirectXCommon::GetInstance()->GetDevice();
 
     // 1. マネージャから素材を借りる（頂点バッファを重複させない！）
     Model *skydomeModelResource = ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.gltf");
-    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/monsterBall.png", commandList_);
+    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/monsterBall.png");
     D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH = TextureManager::GetInstance()->GetGpuHandle(skydomeIndex);
 
     // 2. 実体(Object3D)を作る
@@ -46,7 +46,7 @@ void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandLi
     objects_.push_back(std::move(skydomeObject));
 
     // Skyboxの初期化
-    uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds", commandList_.Get());
+    uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxHandle);
 
@@ -104,24 +104,24 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
     if (modelCommon_) {
-        modelCommon_->PreDraw(commandList_.Get());
+        modelCommon_->PreDraw();
     }
 
     if (skybox_) {
-        skybox_->Draw(commandList_.Get());
+        skybox_->Draw();
         
         auto dxCommon = DirectXCommon::GetInstance();
-        commandList_.Get()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-        commandList_.Get()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+        DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
         if (modelCommon_) {
-            modelCommon_->PreDraw(commandList_.Get());
+            modelCommon_->PreDraw();
         }
     }
 
     // 各オブジェクトに「自分の行列で描画して！」と頼む
     for (auto &object : objects_) {
-        object->Draw(commandList_.Get());
+        object->Draw();
     }
 }
 

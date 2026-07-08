@@ -25,6 +25,8 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["wallJumpPower_"] = { params.wallJumpPower_.x, params.wallJumpPower_.y };
         j["wallJumpDirLockDuration_"] = params.wallJumpDirLockDuration_;
         j["wallSlideSpeed_"] = params.wallSlideSpeed_;
+        j["wallClimbSpeed_"] = params.wallClimbSpeed_;
+        j["wallClingReleaseDuration_"] = params.wallClingReleaseDuration_;
         
         j["halfWidth_"] = params.halfWidth_;
         j["halfHeight_"] = params.halfHeight_;
@@ -35,6 +37,7 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["deathDuration_"] = params.deathDuration_;
         j["respawnDuration_"] = params.respawnDuration_;
         j["goalWaitTime_"] = params.goalWaitTime_;
+        j["runDustInterval_"] = params.runDustInterval_;
         
         std::ofstream file(filepath);
         if (file.is_open()) {
@@ -74,6 +77,8 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         }
         if (j.contains("wallJumpDirLockDuration_")) params.wallJumpDirLockDuration_ = j["wallJumpDirLockDuration_"];
         if (j.contains("wallSlideSpeed_")) params.wallSlideSpeed_ = j["wallSlideSpeed_"];
+        if (j.contains("wallClimbSpeed_")) params.wallClimbSpeed_ = j["wallClimbSpeed_"];
+        if (j.contains("wallClingReleaseDuration_")) params.wallClingReleaseDuration_ = j["wallClingReleaseDuration_"];
         
         if (j.contains("halfWidth_")) params.halfWidth_ = j["halfWidth_"];
         if (j.contains("halfHeight_")) params.halfHeight_ = j["halfHeight_"];
@@ -94,6 +99,7 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         if (j.contains("deathDuration_")) params.deathDuration_ = j["deathDuration_"];
         if (j.contains("respawnDuration_")) params.respawnDuration_ = j["respawnDuration_"];
         if (j.contains("goalWaitTime_")) params.goalWaitTime_ = j["goalWaitTime_"];
+        if (j.contains("runDustInterval_")) params.runDustInterval_ = j["runDustInterval_"];
         
         std::cout << "Player parameters loaded from " << filepath << std::endl;
     } catch (const std::exception& e) {

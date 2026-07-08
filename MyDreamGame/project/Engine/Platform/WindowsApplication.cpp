@@ -92,15 +92,15 @@ void WindowsApplication::Initialize() {
     PrimitiveManager::GetInstance()->Initialize(device);
 
     // デフォルトの環境マップ（スカイボックス用テクスチャ）をロードして設定
-    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds", commandList);
+    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds");
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(defaultSkyboxHandle));
 
     // 1x1ピクセルのデフォルト白テクスチャをロードして PrimitiveObject に設定
-    uint32_t defaultWhiteHandle = TextureManager::GetInstance()->Load("white", commandList);
+    uint32_t defaultWhiteHandle = TextureManager::GetInstance()->Load("white");
     PrimitiveObject::SetDefaultTextureHandle(TextureManager::GetInstance()->GetGpuHandle(defaultWhiteHandle));
 
     // ディゾルブ用のマスクテクスチャをロードして設定
-    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/noise0.png", commandList);
+    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/noise0.png");
     dxCommon_->SetDissolveMaskTexture(TextureManager::GetInstance()->GetGpuHandle(dissolveMaskHandle));
 
     // SpriteCommon の生成と初期化
@@ -111,7 +111,7 @@ void WindowsApplication::Initialize() {
     sceneManager_->SetSpriteCommon(spriteCommon_.get());
 
     // SceneManager初期化
-    sceneManager_->Initialize(commandList);
+    sceneManager_->Initialize();
 
     // ParticleCommon の生成と初期化
     particleCommon_ = std::make_unique<ParticleCommon>();
@@ -350,11 +350,11 @@ void WindowsApplication::Draw() {
     ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
-    modelCommon_->PreDraw(commandList);
+    modelCommon_->PreDraw();
     sceneManager_->Draw(viewProjection_->GetMatrix());
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
-    particleCommon_->PreDraw(commandList);
+    particleCommon_->PreDraw();
     // ------------------------------------
 
     // ★ ポストエフェクトを実行 (RenderTexture -> PostProcessTexture)
@@ -368,7 +368,7 @@ void WindowsApplication::Draw() {
 #ifdef USE_IMGUI
     if (showImGui_) {
         // メインウィンドウのImGuiを描画
-        editorManager_->Draw(commandList);
+        editorManager_->Draw();
     } else {
         // ImGui非表示時はゲーム画面を直接描画する
         dxCommon_->DrawRenderTexture();

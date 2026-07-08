@@ -20,7 +20,7 @@ public:
     virtual ~IScene() = default;
 
     // 初期化
-    virtual void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) = 0;
+    virtual void Initialize() = 0;
 
     // 更新
     virtual void Update(SceneManager *sceneManager) = 0;
