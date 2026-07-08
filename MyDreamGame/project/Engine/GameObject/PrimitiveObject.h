@@ -6,6 +6,7 @@
 #include <deque>
 
 class PrimitiveObject {
+    friend class Renderer;
 public:
     void Initialize(ID3D12Device* device, Primitive* primitive);
     void Update();

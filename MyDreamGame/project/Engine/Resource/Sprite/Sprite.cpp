@@ -1,12 +1,12 @@
-#include "Sprite.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h"
+﻿#include "Sprite.h"
+#include "Renderer/Renderer.h"
 #include "SpriteCommon.h"
 #include "Graphics/TextureManager.h"
 
 Sprite::Sprite() {}
 
 Sprite::~Sprite() {
-	// 破棄されるときにリストから自分を削除
+	// 遐ｴ譽・＆繧後ｋ縺ｨ縺阪↓繝ｪ繧ｹ繝医°繧芽・蛻・ｒ蜑企勁
 	if(spriteCommon_) {
 		spriteCommon_->RemoveSprite(this);
 	}
@@ -16,30 +16,30 @@ void Sprite::Initialize(SpriteCommon *spriteCommon, uint32_t textureIndex) {
 	spriteCommon_ = spriteCommon;
 	textureIndex_ = textureIndex;
 
-	// ★ここでCommonに自分を登録！
+	// 笘・％縺薙〒Common縺ｫ閾ｪ蛻・ｒ逋ｻ骭ｲ・・
 	spriteCommon_->AddSprite(this);
 
-	// マテリアルリソース作成
+	// 繝槭ユ繝ｪ繧｢繝ｫ繝ｪ繧ｽ繝ｼ繧ｹ菴懈・
 	ID3D12Device *device = spriteCommon_->GetDevice();
 	materialResource_ = CreateBufferResource(device, sizeof(Material));
 	materialResource_->Map(0, nullptr, reinterpret_cast<void **>(&materialData_));
 
 	size_t sizeAligned = (sizeof(TransformMatrix) + 0xff) & ~0xff;
 
-	// 行列用のバッファリソースを作成
+	// 陦悟・逕ｨ縺ｮ繝舌ャ繝輔ぃ繝ｪ繧ｽ繝ｼ繧ｹ繧剃ｽ懈・
     transformResource_ = CreateBufferResource(device,sizeAligned);
-    // 書き込み用のポインタを紐付ける
+    // 譖ｸ縺崎ｾｼ縺ｿ逕ｨ縺ｮ繝昴う繝ｳ繧ｿ繧堤ｴ蝉ｻ倥￠繧・
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
 
-	// 初期値設定
+	// 蛻晄悄蛟､險ｭ螳・
 	materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	materialData_->lightingType = false;
 	materialData_->uvTransform = TransformFunctions::MakeIdentity4x4();
 
-	// テクスチャサイズを取得（切り抜き計算用）
+	// 繝・け繧ｹ繝√Ε繧ｵ繧､繧ｺ繧貞叙蠕暦ｼ亥・繧頑栢縺崎ｨ育ｮ礼畑・・
 	const D3D12_RESOURCE_DESC resDesc = TextureManager::GetInstance()->GetResourceDesc(textureIndex);
 	texBaseSize_ = { (float)resDesc.Width, (float)resDesc.Height };
-	texSize_ = texBaseSize_; // デフォルトは全範囲
+	texSize_ = texBaseSize_; // 繝・ヵ繧ｩ繝ｫ繝医・蜈ｨ遽・峇
 
 	if (mappedTransform_) {
         mappedTransform_->WVP = TransformFunctions::MakeIdentity4x4();
@@ -48,7 +48,7 @@ void Sprite::Initialize(SpriteCommon *spriteCommon, uint32_t textureIndex) {
 }
 
 void Sprite::Update() {
-	// 必要ならここでUVアニメーション処理など
+	// 蠢・ｦ√↑繧峨％縺薙〒UV繧｢繝九Γ繝ｼ繧ｷ繝ｧ繝ｳ蜃ｦ逅・↑縺ｩ
 }
 
 void Sprite::SetTextureRect(float x, float y, float w, float h) {
@@ -58,51 +58,5 @@ void Sprite::SetTextureRect(float x, float y, float w, float h) {
 }
 
 void Sprite::Draw() {
-	if(!spriteCommon_) return;
-
-	// UVトランスフォームの計算 (切り抜き対応)
-	Matrix4x4 uvTransform = TransformFunctions::MakeIdentity4x4();
-	if(isCutMode_) {
-		uvTransform = TransformFunctions::MakeAffineMatrix(
-			{ texSize_.x / texBaseSize_.x, texSize_.y / texBaseSize_.y, 1.0f },
-			{ 0.0f, 0.0f, 0.0f },
-			{ texPos_.x / texBaseSize_.x, texPos_.y / texBaseSize_.y, 0.0f }
-		);
-	}
-	materialData_->uvTransform = uvTransform;
-
-	// WorldViewProjection行列の計算
-	Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(
-		transform_.scale, transform_.rotate, transform_.translate
-	);
-    Matrix4x4 viewMatrix = spriteCommon_->GetViewMatrix();
-    Matrix4x4 projectionMatrix = spriteCommon_->GetProjectionMatrix();
-
-    // TransformMatrix構造体をGPUに送る
-    TransformMatrix transformMatrixData;
-    transformMatrixData.WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(viewMatrix, projectionMatrix));
-    transformMatrixData.World = worldMatrix;
-
-	// 計算結果をGPU上のメモリにコピー！
-    if (mappedTransform_) {
-        *mappedTransform_ = transformMatrixData;
-    }
-
-	// コマンドリストへの設定
-	auto commandList = DirectXCommon::GetInstance()->GetCommandList();
-
-	// マテリアル (RootParameter 0番)
-	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-
-	// 行列データ (RootParameter 1番: 32BitConstantsを使用していた場合の例)
-	// ※元のSprite.cppに合わせ、直接値をセットしています
-	//commandList->SetGraphicsRoot32BitConstants(1, sizeof(TransformMatrix) / 4, &transformMatrixData, 0);
-    commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress());
-
-	// テクスチャ (RootParameter 2番)
-	D3D12_GPU_DESCRIPTOR_HANDLE textureHandle = TextureManager::GetInstance()->GetGpuHandle(textureIndex_);
-	commandList->SetGraphicsRootDescriptorTable(2, textureHandle);
-
-	// 描画実行 (頂点・インデックスはCommonでセット済み)
-    commandList->DrawIndexedInstanced(spriteCommon_->GetIndexCount(), 1, 0, 0, 0);
+    Renderer::GetInstance()->DrawSprite(this);
 }

@@ -12,6 +12,7 @@
 #include "Graphics/MapEditorCamera.h"
 #endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Renderer/Renderer.h"
 #include "../../Project/Scenes/GameScene.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
@@ -58,6 +59,9 @@ void WindowsApplication::Initialize() {
     // DirectXCommonクラスのインスタンスを作成し、初期化
     dxCommon_ = std::make_unique<DirectXCommon>();
     dxCommon_->Initialize(window_->GetHwnd(), kWindowWidth_, kWindowHeight_);
+
+    // Rendererの初期化
+    Renderer::GetInstance()->Initialize(dxCommon_.get());
 
     // dxCommon_から必要なポインタを取得
     ID3D12Device *device = dxCommon_->GetDevice();

@@ -7,6 +7,7 @@
 class SpriteCommon;
 
 class Sprite {
+    friend class Renderer;
 public:
     // コンストラクタ・デストラクタ
     Sprite();

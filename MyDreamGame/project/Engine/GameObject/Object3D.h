@@ -6,6 +6,7 @@
 #include <deque>
 
 class Object3D {
+    friend class Renderer;
 public:
     void Initialize(ID3D12Device *device, Model *model);
     void Update();

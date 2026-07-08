@@ -54,6 +54,8 @@ public:
 private:
     std::unique_ptr<PrimitiveObject> primitiveObj_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
+    std::unique_ptr<PrimitiveObject> dustPrimitive_;
+    std::unique_ptr<PrimitiveObject> confettiPrimitive_;
 
     std::vector<DustParticle> dustParticles_;
     std::vector<ConfettiParticle> confettiParticles_;

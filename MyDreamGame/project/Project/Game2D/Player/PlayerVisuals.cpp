@@ -19,6 +19,17 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     dashRingPrimitive_->SetIsBillboard(false);
     dashRingPrimitive_->SetIsDoubleSided(true);
     dashRingPrimitive_->SetBlendMode(BlendMode::kBlendModeAdd);
+
+    dustPrimitive_ = std::make_unique<PrimitiveObject>();
+    dustPrimitive_->Initialize(device, boxPrimitive);
+    dustPrimitive_->SetName("Dust");
+    dustPrimitive_->GetMaterial().lightingType = 0;
+    dustPrimitive_->GetMaterial().color = { 0.8f, 0.8f, 0.8f, 0.8f }; // 白っぽい砂ぼこり
+
+    confettiPrimitive_ = std::make_unique<PrimitiveObject>();
+    confettiPrimitive_->Initialize(device, boxPrimitive);
+    confettiPrimitive_->SetName("Confetti");
+    confettiPrimitive_->GetMaterial().lightingType = 0;
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
@@ -151,19 +162,62 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
     }
     
     if (dashRingPrimitive_) {
+        dashRingPrimitive_->ResetGhostIndex();
         for (const auto& ring : dashRingParticles_) {
             if (ring.active) {
                 float t = ring.timer / ring.duration;
-                float easedT = EaseInElastic(t);
+                // 最初速く広がり、だんだんゆっくりになる自然なイーズアウトに変更
+                float easedT = 1.0f - (1.0f - t) * (1.0f - t); 
                 float currentSize = ring.startSize + (ring.endSize - ring.startSize) * easedT;
                 float alpha = 1.0f - (ring.timer / ring.duration);
                 alpha = alpha * alpha; 
-                dashRingPrimitive_->SetTranslation(ring.position);
-                dashRingPrimitive_->SetScale({ currentSize, currentSize, currentSize });
-                dashRingPrimitive_->SetRotation(ring.rotation);
-                dashRingPrimitive_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, alpha };
-                dashRingPrimitive_->Update();
-                dashRingPrimitive_->Draw();
+                
+                Transform tr;
+                tr.translate = ring.position;
+                tr.scale = { currentSize, currentSize, currentSize };
+                tr.rotate = ring.rotation;
+                
+                Material m = dashRingPrimitive_->GetMaterial();
+                m.color = { 1.0f, 1.0f, 1.0f, alpha };
+                
+                dashRingPrimitive_->DrawGhost(tr, m);
+            }
+        }
+    }
+
+    if (dustPrimitive_) {
+        dustPrimitive_->ResetGhostIndex();
+        for (const auto& dust : dustParticles_) {
+            if (dust.active) {
+                float alpha = 1.0f - (dust.timer / dust.duration);
+                float currentSize = dust.startSize * alpha;
+                Transform t;
+                t.translate = dust.position;
+                t.scale = { currentSize, currentSize, currentSize };
+                t.rotate = { 0.0f, 0.0f, 0.0f };
+                
+                Material m = dustPrimitive_->GetMaterial();
+                m.color.w = alpha;
+                
+                dustPrimitive_->DrawGhost(t, m);
+            }
+        }
+    }
+
+    if (confettiPrimitive_) {
+        confettiPrimitive_->ResetGhostIndex();
+        for (const auto& confetti : confettiParticles_) {
+            if (confetti.active) {
+                float currentSize = confetti.size;
+                Transform t;
+                t.translate = confetti.position;
+                t.scale = { currentSize, currentSize, currentSize };
+                t.rotate = confetti.rotation;
+                
+                Material m = confettiPrimitive_->GetMaterial();
+                m.color = confetti.color;
+                
+                confettiPrimitive_->DrawGhost(t, m);
             }
         }
     }
@@ -171,16 +225,17 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
 
 void PlayerVisuals::SpawnJumpDust(const Vector3& basePos, float dirX) {
     static std::mt19937 randEngine(std::random_device{}());
-    std::uniform_real_distribution<float> velDistX(-3.0f, 3.0f);
-    std::uniform_real_distribution<float> velDistY(1.0f, 4.0f);
-    std::uniform_real_distribution<float> sizeDist(0.1f, 0.3f);
-    std::uniform_real_distribution<float> durationDist(0.15f, 0.35f);
+    std::uniform_real_distribution<float> velDistX(-4.0f, 4.0f);
+    std::uniform_real_distribution<float> velDistY(2.0f, 6.0f);
+    // サイズを半分に
+    std::uniform_real_distribution<float> sizeDist(0.15f, 0.3f);
+    std::uniform_real_distribution<float> durationDist(0.2f, 0.4f);
 
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 8; ++i) {
         DustParticle dust;
         dust.position = basePos;
         // 壁キック時はdirX方向に少し勢いをつける
-        dust.velocity = { velDistX(randEngine) + dirX * 5.0f, velDistY(randEngine), 0.0f };
+        dust.velocity = { velDistX(randEngine) + dirX * 6.0f, velDistY(randEngine), 0.0f };
         dust.timer = 0.0f;
         dust.duration = durationDist(randEngine);
         dust.startSize = sizeDist(randEngine);
@@ -201,16 +256,17 @@ void PlayerVisuals::SpawnJumpDust(const Vector3& basePos, float dirX) {
 }
 void PlayerVisuals::SpawnRunDust(const Vector3& basePos, float dirX) {
     static std::mt19937 randEngine(std::random_device{}());
-    std::uniform_real_distribution<float> velDistX(-1.0f, 1.0f);
-    std::uniform_real_distribution<float> velDistY(0.5f, 2.0f);
-    std::uniform_real_distribution<float> sizeDist(0.1f, 0.2f);
-    std::uniform_real_distribution<float> durationDist(0.1f, 0.25f);
+    std::uniform_real_distribution<float> velDistX(-2.0f, 2.0f);
+    std::uniform_real_distribution<float> velDistY(1.0f, 3.0f);
+    // サイズを半分に
+    std::uniform_real_distribution<float> sizeDist(0.125f, 0.25f);
+    std::uniform_real_distribution<float> durationDist(0.15f, 0.35f);
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 4; ++i) {
         DustParticle dust;
         dust.position = basePos;
         // 走っている方向と逆に飛ぶようにする
-        dust.velocity = { velDistX(randEngine) - dirX * 3.0f, velDistY(randEngine), 0.0f };
+        dust.velocity = { velDistX(randEngine) - dirX * 4.0f, velDistY(randEngine), 0.0f };
         dust.timer = 0.0f;
         dust.duration = durationDist(randEngine);
         dust.startSize = sizeDist(randEngine);
@@ -231,13 +287,14 @@ void PlayerVisuals::SpawnRunDust(const Vector3& basePos, float dirX) {
 }
 void PlayerVisuals::SpawnConfetti(const Vector3& pos) {
     static std::mt19937 randEngine(std::random_device{}());
-    // 飛ぶ勢いを半分程度に落とす
-    std::uniform_real_distribution<float> velDistX(-4.0f, 4.0f);
-    std::uniform_real_distribution<float> velDistY(4.0f, 9.0f);
-    std::uniform_real_distribution<float> sizeDist(0.1f, 0.25f);
-    std::uniform_real_distribution<float> durationDist(2.0f, 4.0f);
+    // もっと派手にするため勢いを上げる
+    std::uniform_real_distribution<float> velDistX(-8.0f, 8.0f);
+    std::uniform_real_distribution<float> velDistY(8.0f, 15.0f);
+    // サイズを半分に
+    std::uniform_real_distribution<float> sizeDist(0.125f, 0.3f);
+    std::uniform_real_distribution<float> durationDist(2.0f, 5.0f);
     std::uniform_real_distribution<float> rotDist(0.0f, 6.28f);
-    std::uniform_real_distribution<float> rotSpeedDist(-5.0f, 5.0f);
+    std::uniform_real_distribution<float> rotSpeedDist(-10.0f, 10.0f);
     
     std::vector<Vector4> colors = {
         {1.0f, 0.2f, 0.2f, 1.0f}, // Red
@@ -249,8 +306,8 @@ void PlayerVisuals::SpawnConfetti(const Vector3& pos) {
     };
     std::uniform_int_distribution<int> colorDist(0, static_cast<int>(colors.size()) - 1);
 
-    // 枚数も少し減らして派手すぎないように調整
-    for (int i = 0; i < 40; ++i) {
+    // 枚数を増やして派手にする
+    for (int i = 0; i < 100; ++i) {
         ConfettiParticle confetti;
         confetti.position = pos;
         confetti.velocity = { velDistX(randEngine), velDistY(randEngine), 0.0f };
@@ -285,8 +342,9 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
     // ダッシュの方向に基づいて角度を計算
     float angle = std::atan2(dashDir.y, dashDir.x);
     
-    float currentStartSize = 0.25f;
-    float currentEndSize = 1.5f;
+    // リングを半分の大きさに調整
+    float currentStartSize = 0.5f;
+    float currentEndSize = 3.0f;
 
     for (int i = 0; i < 3; ++i) {
         DashRingParticle ring;
@@ -300,7 +358,7 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
         ring.rotation = { 1.0f, 0.0f, angle - 1.5708f }; 
 
         ring.timer = 0.0f;
-        ring.duration = 0.3f; // 短い時間で消える
+        ring.duration = 0.4f; // 少しだけ長持ちさせる
         ring.startSize = currentStartSize;
         ring.endSize = currentEndSize; // 大きく広がる
         ring.active = true;
@@ -317,7 +375,7 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
             dashRingParticles_.push_back(ring);
         }
 
-        // 次のリングのサイズを半分にする
+        // 3つのリングがそれぞれはっきり異なる大きさ（半分ずつ）になるように戻す
         currentStartSize *= 0.5f;
         currentEndSize *= 0.5f;
     }
