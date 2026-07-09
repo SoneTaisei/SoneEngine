@@ -15,7 +15,17 @@
 #include <algorithm>
 #include <filesystem>
 
-StageSelectScene::~StageSelectScene() {
+StageSelectScene::~StageSelectScene() {}
+
+void StageSelectScene::OnEnter(SceneManager* sceneManager) {
+    // シーン開始時に、可能なら前回の選択ステージなどを復元する
+}
+
+void StageSelectScene::OnExit(SceneManager* sceneManager) {
+    // 次のシーンへ渡すデータをセットする（選択したステージのパスなど）
+    if (!stageConfigs_.empty() && currentStageIndex_ < stageConfigs_.size()) {
+        sceneManager->SetData("SelectedStagePath", std::string(stageConfigs_[currentStageIndex_].jsonPath));
+    }
 }
 
 void StageSelectScene::Initialize() {

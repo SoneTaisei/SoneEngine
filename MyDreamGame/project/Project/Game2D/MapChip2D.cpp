@@ -123,16 +123,13 @@ void MapChip2D::Draw() {
             float radius = 0.0f;
             bool shouldCheck = false;
 
-            if (block->GetObject3D()) {
-                center = block->GetObject3D()->GetTranslation();
-                Vector3 scale = block->GetObject3D()->GetScale();
-                radius = (std::max)({scale.x, scale.y, scale.z}) * 2.5f; // Safe radius
-                shouldCheck = true;
-            } else if (block->GetPrimitive()) {
-                center = block->GetPrimitive()->GetTransform().translate;
-                Vector3 scale = block->GetPrimitive()->GetTransform().scale;
-                radius = (std::max)({scale.x, scale.y, scale.z}) * 2.0f; // Safe radius
-                shouldCheck = true;
+            if (block->GetGameObject()) {
+                if (auto* tc = block->GetGameObject()->GetComponent<TransformComponent>()) {
+                    center = tc->GetPosition();
+                    Vector3 scale = tc->GetScale();
+                    radius = (std::max)({scale.x, scale.y, scale.z}) * 2.0f; // Safe radius
+                    shouldCheck = true;
+                }
             }
 
             if (shouldCheck) {
@@ -174,16 +171,9 @@ float MapChip2D::ChipToWorldY(int chipY) const {
 }
 
 std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
-    std::vector<PrimitiveObject*> result;
-    for (const auto& block : updateBlocks_) {
-        if (block) {
-            auto* prim = block->GetPrimitive();
-            if (prim) {
-                result.push_back(prim);
-            }
-        }
-    }
-    return result;
+    // 互換性のため空を返すか、必要な場合は GameObject から収集する
+    std::vector<PrimitiveObject*> list;
+    return list;
 }
 
 void MapChip2D::BuildMap() {
@@ -787,15 +777,18 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         
         if (def) {
             newBlock->SetProperties(def->properties);
-            if (newBlock->GetPrimitive()) {
-                newBlock->GetPrimitive()->GetMaterial().color = def->color;
-                
-                const Transform& t = newBlock->GetPrimitive()->GetTransform();
-                newBlock->GetPrimitive()->SetScale({ 
-                    t.scale.x * def->scale.x, 
-                    t.scale.y * def->scale.y, 
-                    t.scale.z * def->scale.z 
-                });
+            if (newBlock->GetGameObject()) {
+                if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                    prc->GetMaterial().color = def->color;
+                    
+                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        tc->SetScale({ 
+                            tc->GetScale().x * def->scale.x, 
+                            tc->GetScale().y * def->scale.y, 
+                            tc->GetScale().z * def->scale.z 
+                        });
+                    }
+                }
             }
             
             if (!def->modelName.empty()) {
@@ -814,23 +807,33 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     }
                 }
                 
-                if (model) {
-                    auto obj = std::make_unique<Object3D>();
-                    obj->Initialize(device_.Get(), model);
-                    obj->SetTranslation({ worldX, worldY, 0.0f });
-                    obj->SetScale(def->scale);
-                    obj->SetTextureHandle(gpuHandle_);
-                    obj->GetMaterial().color = def->color;
-                    newBlock->SetObject3D(std::move(obj));
+                if (model && newBlock->GetGameObject()) {
+                    // PrimitiveRendererComponent を無効化する代わりに、MeshRendererComponent を追加
+                    auto* mrc = newBlock->GetGameObject()->AddComponent<MeshRendererComponent>();
+                    mrc->Initialize(device_.Get(), model);
+                    mrc->SetTextureHandle(gpuHandle_);
+                    mrc->GetMaterial().color = def->color;
+
+                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        tc->SetPosition({ worldX, worldY, 0.0f });
+                        tc->SetScale(def->scale);
+                    }
+                    
+                    // モデルがある場合はプリミティブを非表示または削除（コンポーネントを取り除く機能がない場合はアルファ0にする等）
+                    if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                        prc->GetMaterial().color.w = 0.0f; // 透明にして見えなくする
+                    }
                 }
             }
         }
 
-        if (newBlock->GetPrimitive()) {
-            newBlock->GetPrimitive()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
+        if (newBlock->GetGameObject()) {
+            newBlock->GetGameObject()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
             if (spanWidth > 1 || spanHeight > 1) {
-                Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({(float)spanWidth, (float)spanHeight, 1.0f});
-                newBlock->GetPrimitive()->GetMaterial().uvTransform = uvTrans;
+                if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                    Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({(float)spanWidth, (float)spanHeight, 1.0f});
+                    prc->GetMaterial().uvTransform = uvTrans;
+                }
             }
         }
     }

@@ -27,6 +27,11 @@ void SceneManager::Update() {
 void SceneManager::ProcessSceneTransition() {
     // 「次のシーン」の予約があるかチェック
     if (nextScene_) {
+        // 現在のシーンの終了処理を呼ぶ
+        if (currentScene_) {
+            currentScene_->OnExit(this);
+        }
+
         // 現在のシーンを削除する前に、Commonに登録されている描画オブジェクトの参照をクリアする
         if (spriteCommon_) spriteCommon_->ClearAll();
         if (modelCommon_) modelCommon_->ClearAll();
@@ -47,6 +52,9 @@ void SceneManager::ProcessSceneTransition() {
 
         // 新しいシーンの初期化
         currentScene_->Initialize();
+        
+        // 新しいシーンの開始処理を呼ぶ
+        currentScene_->OnEnter(this);
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);
@@ -76,6 +84,7 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
             currentScene_->SetGameCamera(gameCamera_);
 
         currentScene_->Initialize();
+        currentScene_->OnEnter(this);
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);

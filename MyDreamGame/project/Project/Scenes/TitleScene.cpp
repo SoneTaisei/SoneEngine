@@ -18,6 +18,14 @@
 TitleScene::~TitleScene() {
 }
 
+void TitleScene::OnEnter(SceneManager* sceneManager) {
+    // シーン遷移時の開始処理
+}
+
+void TitleScene::OnExit(SceneManager* sceneManager) {
+    // シーン遷移時の終了処理
+}
+
 void TitleScene::Initialize() {
     
     Microsoft::WRL::ComPtr<ID3D12Device> device;

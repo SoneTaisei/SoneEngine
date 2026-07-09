@@ -9,59 +9,95 @@
 #include "Editor/EditorManager.h"
 #endif
 #include "Editor/ReplayManager.h"
+#include "Renderer/Renderer.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
 #include "Graphics/Skybox.h"
+#include "Core/Utility/ParameterManager.h"
 
-std::string GameScene::s_TargetMapFilePath = "resources/json/MapData/map_data.txt";
+std::string GameScene::s_TargetMapFilePath = "resources/json/Map/map_data.json";
+
+void GameScene::OnEnter(SceneManager* sceneManager) {
+    // StageSelectSceneから選択されたステージのパスを受け取る
+    if (sceneManager->HasData("SelectedStagePath")) {
+        std::string selectedPath = sceneManager->GetData<std::string>("SelectedStagePath");
+        if (!selectedPath.empty()) {
+            s_TargetMapFilePath = selectedPath;
+            // TODO: マップの再読み込みなどをここで行うか、Initializeのタイミングと調整する
+        }
+    }
+}
+
+void GameScene::OnExit(SceneManager* sceneManager) {
+    // スコアなどを保存してTitleやStageSelectに渡す
+    if (player_) {
+        sceneManager->SetData("LastScore", player_->GetScore());
+    }
+}
 
 void GameScene::Initialize() {
-    
+    Log("GameScene::Initialize: Start\n");
 
     // 1. Device取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     device = DirectXCommon::GetInstance()->GetDevice();
+    Log("GameScene::Initialize: Device got\n");
 
     // 2. PrimitiveManagerの初期化（まだの場合）
     PrimitiveManager::GetInstance()->Initialize(device.Get());
+    Log("GameScene::Initialize: PrimitiveManager Initialized\n");
 
     // リプレイ保存リストとマクロの読み込み
     ReplayManager::GetInstance()->LoadSavedList();
     ReplayManager::GetInstance()->LoadMacros();
+    Log("GameScene::Initialize: ReplayManager loaded\n");
 
     // ★ Skyboxの初期化処理を追加
     skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
+    Log("GameScene::Initialize: Skybox loaded\n");
 
     // CoinEffectの作成（コイン取得用）
     coinEffect_ = std::make_unique<CoinEffect>();
     coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
+    Log("GameScene::Initialize: CoinEffect Initialized\n");
 
     uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
     ringEffect_ = std::make_unique<RingEffect>();
     ringEffect_->Initialize(device.Get(), gradationHandle);
     cylinderEffect_ = std::make_unique<CylinderEffect>();
     cylinderEffect_->Initialize(device.Get(), gradationHandle);
+    Log("GameScene::Initialize: Effects Initialized\n");
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
     map_->Initialize( s_TargetMapFilePath);
+    Log("GameScene::Initialize: Map Initialized\n");
 
     // 6. プレイヤーの生成と初期化
-    player_ = std::make_unique<Player2D>();
-    player_->Initialize();
+    playerObj_ = std::make_unique<GameObject>("Player");
+    playerObj_->AddComponent<TransformComponent>();
+    player_ = playerObj_->AddComponent<Player2D>();
+    Log("GameScene::Initialize: Player Initialized\n");
+    
     player_->FindSpawnPoint(*map_);
+    Log("GameScene::Initialize: Player SpawnPoint found\n");
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
-        gameCamera_->InitializeOrthographic(1280, 720, 20.0f, 11.25f);
+        Log("GameScene::Initialize: Camera config...\n");
+        float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
+        float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
+        gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
         // プレイヤーの位置をカメラ追従ターゲットに設定
         gameCamera_->SetFollowTarget(&player_->GetPosition());
+        Log("GameScene::Initialize: Camera configured\n");
     }
+    Log("GameScene::Initialize: Finish\n");
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
@@ -82,14 +118,16 @@ void GameScene::Update(SceneManager *sceneManager) {
     float dt = TimeManager::GetInstance().GetDeltaTime();
     
     // フェードイン演出
+    float transitionSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "transitionSpeed", 1.5f);
     if (transitionAlpha_ > 0.0f) {
-        transitionAlpha_ -= dt * 1.5f;
+        transitionAlpha_ -= dt * transitionSpeed;
         if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
     }
 
     if (gameState_ == GameState::StartReady) {
         stateTimer_ += dt;
-        if (stateTimer_ > 2.0f) {
+        float startReadyTime = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyTime", 2.0f);
+        if (stateTimer_ > startReadyTime) {
             gameState_ = GameState::Playing;
             stateTimer_ = 0.0f;
         }
@@ -256,7 +294,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                 map_->Update();
             }
 
-            player_->Update(*map_, gameCamera_ && gameCamera_->IsTransitioning());
+            player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
 
             // ゴール判定
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
@@ -454,6 +492,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (player_) {
         player_->Draw();
     }
+
+    // コンポーネントの描画を実行
+    Renderer::GetInstance()->RenderComponents();
 
     if (coinEffect_) {
 #ifdef USE_IMGUI

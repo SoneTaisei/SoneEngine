@@ -16,16 +16,23 @@
 #endif
 
 void Player2D::Initialize() {
+    Log("Player2D::Initialize: Start\n");
     PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
+    Log("Player2D::Initialize: Config loaded\n");
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     device = DirectXCommon::GetInstance()->GetDevice();
 
+    Log("Player2D::Initialize: Getting Primitive\n");
     Primitive* boxPrimitive = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f);
+    Log("Player2D::Initialize: Loading Texture\n");
     uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
+    Log("Player2D::Initialize: Getting Ring Primitive\n");
     Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);
     
+    Log("Player2D::Initialize: Init Visuals\n");
     visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle);
+    Log("Player2D::Initialize: Finish\n");
 }
 
 void Player2D::FindSpawnPoint(const MapChip2D& map) {
@@ -36,13 +43,18 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
                 state_.startPosition_.x = map.ChipToWorldX(x) + map.GetChipSize() * 0.5f;
                 state_.startPosition_.y = map.ChipToWorldY(y) + map.GetChipSize() * 0.5f;
                 state_.position_ = state_.startPosition_;
+                if (gameObject_) {
+                    if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+                        tc->SetPosition(state_.position_);
+                    }
+                }
                 return;
             }
         }
     }
 }
 
-void Player2D::Update(MapChip2D& map, bool isTransitioning) {
+void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
     input_.Update(currentInput_);
     // パラメータに基づいてPrimitiveObjectのスケールを常に反映させる（JSONロード時のバグ対策）
     if (!state_.isRespawning_ && visuals_.GetPrimitiveObject()) {
@@ -264,6 +276,12 @@ void Player2D::Update(MapChip2D& map, bool isTransitioning) {
     
     // アイテム（コインなど）との当たり判定を処理
     SimulateCollisions(map);
+
+    if (gameObject_) {
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            tc->SetPosition(state_.position_);
+        }
+    }
 }
 
 void Player2D::Draw() {
@@ -422,6 +440,10 @@ void Player2D::ResetState(const Vector3& initPos) {
 AABB2D Player2D::GetAABB() const {
     return physics_.GetAABB(state_, params_);
 }
+void Player2D::Update() {
+    // IComponentとしてのUpdateは現在使用せず、UpdateWithMapを使用する
+}
+
 void Player2D::SimulateCollisions(MapChip2D& map) {
     physics_.SimulateCollisions(state_, params_, map, this);
 }

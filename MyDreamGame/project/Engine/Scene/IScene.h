@@ -19,8 +19,14 @@ class IScene {
 public:
     virtual ~IScene() = default;
 
-    // 初期化
+    // 初期化 (シーン生成時に一度だけ呼ばれる)
     virtual void Initialize() = 0;
+
+    // シーンがアクティブになった時に呼ばれる (遷移後)
+    virtual void OnEnter(SceneManager* sceneManager) {}
+
+    // シーンから他のシーンへ遷移する直前に呼ばれる
+    virtual void OnExit(SceneManager* sceneManager) {}
 
     // 更新
     virtual void Update(SceneManager *sceneManager) = 0;

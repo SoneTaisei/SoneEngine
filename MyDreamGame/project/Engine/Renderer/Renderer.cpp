@@ -1,11 +1,19 @@
 #include "Renderer.h"
 #include "DirectXCommon/DirectXCommon.h"
 #include "Resource/Primitive/Primitive.h"
+#include "Renderer.h"
+#include "DirectXCommon/DirectXCommon.h"
+#include "Resource/Primitive/Primitive.h"
 #include "Resource/Sprite/Sprite.h"
 #include "Resource/Model/Model.h"
 #include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
+#include "GameObject/Object3D.h"
+#include "Component/MeshRendererComponent.h"
+#include "Component/PrimitiveRendererComponent.h"
+#include "Component/TransformComponent.h"
+#include "GameObject/GameObject.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include <algorithm>
@@ -378,3 +386,172 @@ void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const Transform& transfo
     obj->currentGhostIndex_++;
 }
 
+void Renderer::AddMeshComponent(MeshRendererComponent* comp) {
+    if (comp) meshComponents_.push_back(comp);
+}
+
+void Renderer::AddPrimitiveComponent(PrimitiveRendererComponent* comp) {
+    if (comp) primitiveComponents_.push_back(comp);
+}
+
+void Renderer::RenderComponents() {
+    for (auto* comp : meshComponents_) {
+        DrawMeshRendererComponent(comp);
+    }
+    meshComponents_.clear();
+
+    for (auto* comp : primitiveComponents_) {
+        DrawPrimitiveRendererComponent(comp);
+    }
+    primitiveComponents_.clear();
+}
+
+void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
+    if (!comp || !dxCommon_ || !comp->GetModel()) return;
+    
+    auto commandList = dxCommon_->GetCommandList();
+    TransformComponent* tc = comp->GetGameObject()->GetComponent<TransformComponent>();
+    if (!tc) return;
+
+    CameraManager* cameraMgr = CameraManager::GetInstance();
+    Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
+    Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
+
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(tc->GetScale());
+    Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(tc->GetRotation().x);
+    Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(tc->GetRotation().y);
+    Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(tc->GetRotation().z);
+    Matrix4x4 rotateMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(rotateXMatrix, rotateYMatrix), rotateZMatrix);
+    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(tc->GetPosition());
+
+    Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, rotateMatrix), translateMatrix);
+    // TODO: Parent logic if needed
+
+    TransformMatrix* mappedTransform = comp->GetMappedTransform();
+    mappedTransform->World = worldMatrix;
+    mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+    mappedTransform->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
+
+    commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
+
+    if (comp->GetBlendMode() == BlendMode::kBlendModeAdd) {
+        if (comp->IsDoubleSided()) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
+        } else {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
+        }
+    } else {
+        if (comp->GetMaterial().color.w < 1.0f) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
+        } else {
+            if (comp->IsDoubleSided()) {
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+            } else {
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
+            }
+        }
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+
+    if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+    }
+
+    comp->GetModel()->Draw();
+
+    if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
+        commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
+        commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
+        comp->GetModel()->Draw();
+    }
+}
+
+void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) {
+    if (!comp || !dxCommon_ || !comp->GetPrimitive()) return;
+
+    auto commandList = dxCommon_->GetCommandList();
+    TransformComponent* tc = comp->GetGameObject()->GetComponent<TransformComponent>();
+    if (!tc) return;
+
+    CameraManager* cameraMgr = CameraManager::GetInstance();
+    Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
+    Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
+
+    Matrix4x4 billboardMatrix = TransformFunctions::MakeIdentity4x4();
+    if (comp->IsBillboard()) {
+        Matrix4x4 cameraMatrix = TransformFunctions::Inverse(viewMatrix);
+        billboardMatrix = cameraMatrix;
+        billboardMatrix.m[3][0] = 0.0f;
+        billboardMatrix.m[3][1] = 0.0f;
+        billboardMatrix.m[3][2] = 0.0f;
+    }
+
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(tc->GetScale());
+    Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(tc->GetRotation().x);
+    Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(tc->GetRotation().y);
+    Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(tc->GetRotation().z);
+    Matrix4x4 rotateMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(rotateXMatrix, rotateYMatrix), rotateZMatrix);
+    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(tc->GetPosition());
+
+    Matrix4x4 localMatrix;
+    if (comp->IsBillboard()) {
+        localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
+    } else {
+        localMatrix = rotateMatrix;
+    }
+    
+    Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
+    
+    TransformMatrix* mappedTransform = comp->GetMappedTransform();
+    mappedTransform->World = worldMatrix;
+    mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+    mappedTransform->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
+
+    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = comp->GetTextureHandle();
+    if (activeTexture.ptr == 0) {
+        activeTexture = PrimitiveObject::sDefaultTextureHandle_;
+    }
+
+    commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
+
+    if (comp->GetBlendMode() == BlendMode::kBlendModeAdd) {
+        if (comp->IsDoubleSided()) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
+        } else {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
+        }
+    } else {
+        if (comp->GetMaterial().color.w < 1.0f) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
+        } else {
+            if (comp->IsDoubleSided()) {
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+            } else {
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
+            }
+        }
+    }
+
+    commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+    
+    if (activeTexture.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
+    }
+
+    if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+    }
+
+    comp->GetPrimitive()->Draw();
+
+    if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
+        commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
+        commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
+        comp->GetPrimitive()->Draw();
+    }
+}

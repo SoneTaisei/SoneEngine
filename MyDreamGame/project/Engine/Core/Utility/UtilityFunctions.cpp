@@ -281,7 +281,9 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComP
 		nullptr,
 		IID_PPV_ARGS(&resource)
 	);
-	assert(SUCCEEDED(hr)); // 成功してるか確認
+	if (FAILED(hr)) {
+		throw std::runtime_error("CreateBufferResource failed! VRAM might be full or arguments invalid.");
+	}
 
 	return resource; // 作ったバッファを返す！
 }
@@ -317,7 +319,9 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
         // それ以外は従来通りWIC（PNGやJPGなど）として読み込む
         hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr)) {
+        throw std::runtime_error("LoadTexture failed to load file: " + filePath);
+    }
 
     // ★資料の指示2：圧縮フォーマットか判定してミップマップ生成を分ける
     DirectX::ScratchImage mipImages{};
@@ -361,7 +365,9 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::Com
 		nullptr,//Clear最適値。今回は使わない
 		IID_PPV_ARGS(&resource)
 	);
-	assert(SUCCEEDED(hr));
+	if (FAILED(hr)) {
+		throw std::runtime_error("CreateTextureResource failed to create committed resource.");
+	}
 	return resource;
 }
 

@@ -13,6 +13,8 @@ class StageSelectScene : public IScene {
 public:
     ~StageSelectScene() override;
     void Initialize() override;
+    void OnEnter(SceneManager *sceneManager) override;
+    void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;

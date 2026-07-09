@@ -9,6 +9,8 @@ class Model;
 class ParticleManager;
 class Object3D;
 class PrimitiveObject;
+class MeshRendererComponent;
+class PrimitiveRendererComponent;
 
 class Renderer {
 public:
@@ -30,6 +32,20 @@ public:
     void DrawObject3D(Object3D* obj);
     void DrawPrimitiveObject(PrimitiveObject* obj);
     void DrawPrimitiveGhost(PrimitiveObject* obj, const Transform& transform, const Material& material);
+
+    void AddMeshComponent(MeshRendererComponent* comp);
+    void AddPrimitiveComponent(PrimitiveRendererComponent* comp);
+    
+    // 描画実行（登録されたコンポーネントを描画し、リストをクリアする）
+    void RenderComponents();
+
+private:
+    void DrawMeshRendererComponent(MeshRendererComponent* comp);
+    void DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp);
+
+private:
+    std::vector<MeshRendererComponent*> meshComponents_;
+    std::vector<PrimitiveRendererComponent*> primitiveComponents_;
 
 private:
     Renderer() = default;

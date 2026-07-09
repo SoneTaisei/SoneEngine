@@ -31,6 +31,8 @@ public:
     static std::string s_TargetMapFilePath;
 
     void Initialize() override;
+    void OnEnter(SceneManager *sceneManager) override;
+    void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
@@ -59,8 +61,8 @@ private:
 
     // ---------------------------------------------------
     // 2Dゲーム用オブジェクト (Game_develop)
-    // ---------------------------------------------------
-    std::unique_ptr<Player2D> player_;
+    std::unique_ptr<GameObject> playerObj_;
+    Player2D* player_ = nullptr;
     std::unique_ptr<MapChip2D> map_;
 
     int previousScore_ = 0; // コインエフェクト発生用

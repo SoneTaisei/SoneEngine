@@ -9,33 +9,38 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Input/KeyboardInput.h"
 #include "Core/TimeManager.h"
-#include "Core/Utility/Structs.h"
 #include <memory>
 #include <vector>
 #include <random>
 #include <string>
 #include <nlohmann/json.hpp>
+#include "Component/IComponent.h"
 
 // 前方宣言
 class MapChip2D;
 
 /// <summary>
 /// 2Dスクロールゲーム用プレイヤークラス
-/// PrimitiveObject(Box)を内部に持ち、重力・移動・ジャンプを処理する
+/// Componentシステムに対応
 /// </summary>
-class Player2D {
+class Player2D : public IComponent {
 public:
-    void Initialize();
-    void Update(MapChip2D& map, bool isTransitioning = false);
-    void Draw();
+    Player2D() = default;
+    ~Player2D() override = default;
+
+    void Initialize() override;
+    void Update() override;
+    void Draw() override;
+    void DisplayImGui() override;
+
+    // TODO: Mapは別途シーンかServiceLocator等から取得するように変更するまでの暫定
+    void UpdateWithMap(MapChip2D& map, bool isTransitioning = false);
 
     // 速度の設定と取得
     void SetVelocity(const Vector3& velocity) { state_.velocity_ = velocity; }
     Vector3 GetVelocity() const { return state_.velocity_; }
     void SetExternalVelocityX(float velX) { state_.externalVelocityX_ = velX; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
-    void DisplayImGui();
-    
     // JSON Parameters
 
     // プレイヤーの位置を取得（カメラ追従用）
