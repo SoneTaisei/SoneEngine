@@ -8,6 +8,7 @@
 #include "Component/TransformComponent.h"
 #include "Component/PrimitiveRendererComponent.h"
 #include "Component/MeshRendererComponent.h"
+#include "Component/ColliderComponent.h"
 class Player2D;
 class MapChip2D;
 struct ID3D12Device;
@@ -58,6 +59,21 @@ public:
     // 消滅フラグ（コイン取得時など）
     bool IsDestroyed() const { return isDestroyed_; }
     void Destroy() { isDestroyed_ = true; }
+
+    void SetupCollider() {
+        if (!gameObject_) return;
+        auto* cc = gameObject_->AddComponent<ColliderComponent>();
+        cc->SetLayerMask(kLayerBlock);
+        cc->SetIsSolid(IsSolid());
+        cc->SetIsOneWay(IsOneWay());
+        cc->SetIsMoving(IsMoving());
+        cc->SetVelocity(GetVelocity());
+        cc->SetUserData(this);
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            cc->SetBoxSize({tc->GetScale().x, tc->GetScale().y, tc->GetScale().z});
+            cc->SetBoxSize({1.0f, 1.0f, 1.0f}); // TransformComponentのスケールが反映されるので1.0でOK
+        }
+    }
 
     AABB2D GetAABB() const {
         Vector3 pos = {0.0f, 0.0f, 0.0f};

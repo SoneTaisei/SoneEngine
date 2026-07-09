@@ -1,31 +1,54 @@
 #include "ColliderComponent.h"
-#include "GameObject.h"
-#include "TransformComponent.h"
+#include "Collision/CollisionManager.h"
+#include "GameObject/GameObject.h"
+#include "Component/TransformComponent.h"
 #ifdef USE_IMGUI
-#include "externals/imgui/imgui.h"
+#include "../externals/imgui/imgui.h"
 #endif
 
+ColliderComponent::ColliderComponent() {
+}
+
+ColliderComponent::~ColliderComponent() {
+    CollisionManager::GetInstance()->UnregisterCollider(this);
+}
+
+void ColliderComponent::Initialize() {
+    CollisionManager::GetInstance()->RegisterCollider(this);
+}
+
 void ColliderComponent::Update() {
-    // Collision detection is usually handled by a PhysicsSystem iterating over all colliders.
-    // For now, this is just a data container.
 }
 
 void ColliderComponent::DisplayImGui() {
 #ifdef USE_IMGUI
-    if (ImGui::TreeNode("Collider Component")) {
-        int typeInt = static_cast<int>(type_);
-        if (ImGui::Combo("Type", &typeInt, "Box\0Sphere\0")) {
-            type_ = static_cast<ColliderType>(typeInt);
-        }
-
-        if (type_ == ColliderType::kBox) {
-            ImGui::DragFloat3("Box Size", &boxSize_.x, 0.1f);
-            ImGui::DragFloat3("Box Offset", &boxOffset_.x, 0.1f);
-        } else {
-            ImGui::DragFloat("Sphere Radius", &sphereRadius_, 0.1f);
-            ImGui::DragFloat3("Sphere Offset", &sphereOffset_.x, 0.1f);
-        }
-        ImGui::TreePop();
-    }
+    ImGui::Text("Collider Component");
+    bool solid = isSolid_;
+    if (ImGui::Checkbox("Is Solid", &solid)) isSolid_ = solid;
+    bool oneway = isOneWay_;
+    if (ImGui::Checkbox("Is OneWay", &oneway)) isOneWay_ = oneway;
 #endif
+}
+
+AABB2D ColliderComponent::GetAABB() const {
+    Vector3 pos = {0.0f, 0.0f, 0.0f};
+    Vector3 scale = boxSize_;
+
+    if (gameObject_) {
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            pos = tc->GetPosition();
+            scale.x *= tc->GetScale().x;
+            scale.y *= tc->GetScale().y;
+        }
+    }
+    
+    pos.x += boxOffset_.x;
+    pos.y += boxOffset_.y;
+
+    return {
+        pos.x - scale.x * 0.5f,
+        pos.y + scale.y * 0.5f,
+        pos.x + scale.x * 0.5f,
+        pos.y - scale.y * 0.5f
+    };
 }

@@ -1,4 +1,4 @@
-﻿#include "LiftBlock.h"
+#include "LiftBlock.h"
 #include "../MapChip2D.h"
 #include <cmath>
 
@@ -126,6 +126,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     state_ = LiftState::IdleAtStart;
     waitTimer_ = 0.0f;
     isPlayerStandingThisFrame_ = false;
+    SetupCollider();
 }
 
 void LiftBlock::Update() {

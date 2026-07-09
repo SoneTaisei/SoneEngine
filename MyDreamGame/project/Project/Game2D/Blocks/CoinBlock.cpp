@@ -1,4 +1,4 @@
-﻿#include "CoinBlock.h"
+#include "CoinBlock.h"
 #include "Game2D/Player/Player2D.h"
 #include "Core/TimeManager.h"
 
@@ -12,7 +12,8 @@ void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     tc->SetScale({ width * 0.5f, height * 0.5f, 0.5f });
     position_ = { worldX, worldY, 0.0f };
     tc->SetPosition(position_);
-    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
+    prc->GetMaterial().lightingType = 1; // ライチEング無効匁E
+    SetupCollider();
 }
 
 void CoinBlock::Update() {

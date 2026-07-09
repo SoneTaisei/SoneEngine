@@ -1,4 +1,4 @@
-﻿#include "JumpBlock.h"
+#include "JumpBlock.h"
 #include "../Player/Player2D.h"
 #include "../MapChip2D.h"
 
@@ -9,17 +9,18 @@ void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
     prc->Initialize(device, boxPrimitive);
     
-    // ジャンプ台の色�E�オレンジ色
+    // ジャンプ台の色Eオレンジ色
     prc->GetMaterial().color = { 1.0f, 0.5f, 0.0f, 1.0f };
     
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
+    prc->GetMaterial().lightingType = 1; // ライチEング無効匁E
+    SetupCollider();
 }
 
 void JumpBlock::OnPlayerStand() {
-    // プレイヤーが乗った時に処琁E��れる可能性があるが、E
-    // 確実に処琁E��るために OnCollision でも判定を行うのが安�E、E
+    // プレイヤーが乗った時に処琁Eれる可能性があるが、E
+    // 確実に処琁Eるために OnCollision でも判定を行うのが安E、E
 }
 
 void JumpBlock::OnCollision(Player2D* player) {

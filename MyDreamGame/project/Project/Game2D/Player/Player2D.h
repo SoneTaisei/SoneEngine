@@ -108,7 +108,6 @@ public:
 
     // ゲーム状態取得用ゲッター追加
     AABB2D GetAABB() const;
-    void SimulateCollisions(MapChip2D& map);
     bool IsDead() const { return state_.isDead_; }
     bool IsGoal() const { return state_.isGoal_; }
 

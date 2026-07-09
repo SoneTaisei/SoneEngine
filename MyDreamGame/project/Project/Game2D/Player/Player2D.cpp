@@ -198,7 +198,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
     }
 
     // 入力処理
-    physics_.Update(state_, params_, currentInput_, map, visuals_, deltaTime, this);
+    physics_.Update(state_, params_, currentInput_, visuals_, deltaTime, this);
 
     // 現在のルームを特定する
     const auto& rooms = map.GetRooms();
@@ -274,8 +274,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
     visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
     visuals_.GetPrimitiveObject()->Update();
     
-    // アイテム（コインなど）との当たり判定を処理
-    SimulateCollisions(map);
+    // アイテム（コインなど）との当たり判定は physics_.Update() 内で行われるため削除
 
     if (gameObject_) {
         if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
@@ -442,8 +441,4 @@ AABB2D Player2D::GetAABB() const {
 }
 void Player2D::Update() {
     // IComponentとしてのUpdateは現在使用せず、UpdateWithMapを使用する
-}
-
-void Player2D::SimulateCollisions(MapChip2D& map) {
-    physics_.SimulateCollisions(state_, params_, map, this);
 }

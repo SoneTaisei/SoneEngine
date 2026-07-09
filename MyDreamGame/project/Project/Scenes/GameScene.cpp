@@ -190,12 +190,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                     const auto& frames = ReplayManager::GetInstance()->GetTemporaryRecordedFrames();
                     for (const auto& frame : frames) {
                         player_->SetPosition(frame.position);
-                        player_->SimulateCollisions(*map_);
                     }
                     
                     // 今ポップしたフレームの座標でも判定しておく
                     player_->SetPosition(poppedFrame.position);
-                    player_->SimulateCollisions(*map_);
                     
                     // 再構築を再開（ここで一括構築される）
                     map_->SetRebuildEnabled(true);
@@ -233,8 +231,8 @@ void GameScene::Update(SceneManager *sceneManager) {
                     // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
                     for (int i = 0; i <= curFrame; ++i) {
                         player_->SetPosition(replayData.frames[i].position);
-                        player_->SimulateCollisions(*map_);
                     }
+                    map_->SetRebuildEnabled(true);
 
                     // 4. コイン回収用に座標を動かしたので、シミュレーション再開用の正しい座標に戻す
                     if (curFrame == 0) {

@@ -140,6 +140,9 @@ private:
     // ルームデータ（ワールド座標）
     std::vector<StageRoom> rooms_;
 
+    std::unique_ptr<GameObject> boundaries_[4];
+    void CreateBoundaries();
+
     // 実行時に生成される各種ブロックのインスタンス
     std::vector<std::vector<std::shared_ptr<BaseBlock>>> activeBlocks_;
     

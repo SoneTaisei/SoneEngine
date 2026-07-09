@@ -2,10 +2,13 @@
 #include "Player2D.h"
 #include "Core/TimeManager.h"
 #include "Core/Utility/TransformFunctions.h"
+#include "../Blocks/BaseBlock.h"
 #include <algorithm>
 #include <cmath>
 
-void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, MapChip2D& map, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
+#include "Collision/CollisionManager.h"
+
+void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
     if (state_.isDead_ || state_.isGoal_) return;
 
     HandleInputLogic(state_, params_, input_, visuals_, deltaTime);
@@ -43,14 +46,14 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
 
     // --- Y軸（上下）の移動と当たり判定 ---
     state_.position_.y += state_.velocity_.y * deltaTime;
-    ResolveCollisionY(state_, params_, map);
+    ResolveCollisionY(state_, params_);
 
     // --- X軸（左右）の移動と当たり判定 ---
     state_.position_.x += state_.velocity_.x * deltaTime;
-    ResolveCollisionX(state_, params_, map);
+    ResolveCollisionX(state_, params_);
 
     // 非Solidブロック（コインなど）や全ブロックのOnCollision処理
-    SimulateCollisions(state_, params_, map, player);
+    SimulateCollisions(state_, params_, player);
 }
 
 void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime) {
@@ -292,7 +295,7 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
     }
 }
 
-void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, const MapChip2D& map) {
+void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_) {
     state_.isOnGround_ = false;
     state_.isOnMovingPlatform_ = false;
     state_.platformVelocity_ = {0.0f, 0.0f, 0.0f};
@@ -300,124 +303,83 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     AABB2D aabb = GetAABB(state_, params_);
 
     // 静的ブロック判定
-    ResolveStaticCollisionY(state_, params_, map, aabb);
+    ResolveStaticCollisionY(state_, params_, aabb);
 
     // 動的ブロック判定
     aabb = GetAABB(state_, params_); // 静的ブロックで位置が変わった可能性があるので再取得
-    ResolveDynamicCollisionY(state_, params_, map, aabb);
+    ResolveDynamicCollisionY(state_, params_, aabb);
 }
 
-void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, const MapChip2D& map, AABB2D& aabb) {
-    float chipSize = map.GetChipSize();
-    int leftChip = map.WorldToChipX(aabb.left + 0.05f);
-    int rightChip = map.WorldToChipX(aabb.right - 0.05f);
-
+void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
+    AABB2D queryAABB = aabb;
     if (state_.velocity_.y <= 0.0f) {
         // 下方向：足元チェック
-        int bottomChip = map.WorldToChipY(aabb.bottom);
-        for (int cx = leftChip; cx <= rightChip; ++cx) {
-            bool isBlock = false;
-            bool isOneWay = false;
-            BaseBlock* block = map.GetBlock(cx, bottomChip);
-            if (block) {
-                isBlock = block->IsSolid();
-                isOneWay = block->IsOneWay();
-            } else if (cx < 0 || cx >= map.GetWidth() || bottomChip < 0) {
-                isBlock = true; // 範囲外（左右下）は壁・床扱い
-            }
+        queryAABB.bottom -= 0.1f;
+        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
+        for (auto* collider : colliders) {
+            if (collider->IsMoving()) continue; // Staticのみ
+            if (!collider->IsSolid() && !collider->IsOneWay()) continue;
+
+            AABB2D blockAABB = collider->GetAABB();
             
-            if (isBlock || isOneWay) {
-                AABB2D blockAABB;
-                if (block) {
-                    blockAABB = block->GetAABB();
-                } else {
-                    float bx = map.ChipToWorldX(cx);
-                    float by = map.ChipToWorldY(bottomChip);
-                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
+            if (collider->IsOneWay()) {
+                float previousBottom = state_.position_.y - state_.velocity_.y * TimeManager::GetInstance().GetDeltaTime() - params_.halfHeight_;
+                if (previousBottom < blockAABB.top - 0.05f) {
+                    continue;
                 }
+            }
 
-                // プレイヤーの AABB との交差判定を行う
-                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
-                    
-                    if (isOneWay) {
-                        float previousBottom = state_.position_.y - state_.velocity_.y * TimeManager::GetInstance().GetDeltaTime() - params_.halfHeight_;
-                        if (previousBottom < blockAABB.top - 0.05f) {
-                            continue;
-                        }
-                    }
-
-                    // 地面の上に押し戻す
-                    state_.position_.y = blockAABB.top + params_.halfHeight_;
-                    state_.velocity_.y = 0.0f;
-                    state_.isOnGround_ = true;
-                    state_.canDash_ = true; // 着地でダッシュ回復
-                    state_.wallJumpDirLockTimer_ = 0.0f;
-                    state_.lockedDirectionX_ = 0.0f;
-                    
-                    if (block) {
-                        block->OnPlayerStand();
-                        if (block->IsMoving()) {
-                            state_.isOnMovingPlatform_ = true;
-                            state_.platformVelocity_ = block->GetVelocity();
-                        }
-                    }
-                    
-                    break;
+            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+                
+                state_.position_.y = blockAABB.top + params_.halfHeight_;
+                state_.velocity_.y = 0.0f;
+                state_.isOnGround_ = true;
+                state_.canDash_ = true;
+                state_.wallJumpDirLockTimer_ = 0.0f;
+                state_.lockedDirectionX_ = 0.0f;
+                
+                if (collider->GetUserData()) {
+                    BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                    block->OnPlayerStand();
                 }
+                break;
             }
         }
     } else {
         // 上方向：頭上チェック
-        int topChip = map.WorldToChipY(aabb.top);
-        for (int cx = leftChip; cx <= rightChip; ++cx) {
-            bool isBlock = false;
-            BaseBlock* block = map.GetBlock(cx, topChip);
-            if (block) {
-                isBlock = block->IsSolid();
-            } else if (cx < 0 || cx >= map.GetWidth()) {
-                isBlock = true;
-            }
-            
-            if (isBlock) {
-                AABB2D blockAABB;
-                if (block) {
-                    blockAABB = block->GetAABB();
-                } else {
-                    float bx = map.ChipToWorldX(cx);
-                    float by = map.ChipToWorldY(topChip);
-                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
-                }
+        queryAABB.top += 0.1f;
+        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
+        for (auto* collider : colliders) {
+            if (collider->IsMoving()) continue;
+            if (!collider->IsSolid()) continue;
 
-                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
-                    state_.position_.y = blockAABB.bottom - params_.halfHeight_;
-                    state_.velocity_.y = 0.0f;
-                    break;
-                }
+            AABB2D blockAABB = collider->GetAABB();
+            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+                state_.position_.y = blockAABB.bottom - params_.halfHeight_;
+                state_.velocity_.y = 0.0f;
+                break;
             }
         }
     }
 }
 
-void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, const MapChip2D& map, AABB2D& aabb) {
-    // 壁との擦れ判定を防ぐため、左右を少しだけ縮める
+void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
     AABB2D shrunkAABBY = aabb;
     shrunkAABBY.left += 0.05f;
     shrunkAABBY.right -= 0.05f;
 
-    // 壁に張り付いている場合は、その壁に対するY軸の誤判定（頭をぶつける/足が乗る）を防ぐためさらに縮める
     if (state_.isWallClinging_ || state_.isWallSliding_) {
         if (state_.isTouchingWallRight_) shrunkAABBY.right -= 0.15f;
         if (state_.isTouchingWallLeft_) shrunkAABBY.left += 0.15f;
     }
 
-    const auto& updateBlocks = map.GetUpdateBlocks();
-    for (const auto& block : updateBlocks) {
-        // 移動中のSolidブロックのみ判定
-        if (!block || !block->IsSolid() || !block->IsMoving()) continue;
+    auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(shrunkAABBY, kLayerBlock);
+    for (auto* collider : colliders) {
+        if (!collider->IsSolid() || !collider->IsMoving()) continue;
         
-        AABB2D blockAABB = block->GetAABB();
+        AABB2D blockAABB = collider->GetAABB();
 
         if (CheckAABBCollision(shrunkAABBY, blockAABB)) {
             if (state_.velocity_.y <= 0.0f && aabb.bottom >= blockAABB.top - 0.5f) { // 上から乗った
@@ -427,11 +389,12 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                 state_.canDash_ = true;
                 state_.wallJumpDirLockTimer_ = 0.0f;
                 state_.lockedDirectionX_ = 0.0f;
-                block->OnPlayerStand();
-                if (block->IsMoving()) {
-                    state_.isOnMovingPlatform_ = true;
-                    state_.platformVelocity_ = block->GetVelocity();
+                if (collider->GetUserData()) {
+                    BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                    block->OnPlayerStand();
                 }
+                state_.isOnMovingPlatform_ = true;
+                state_.platformVelocity_ = collider->GetVelocity();
             } else if (state_.velocity_.y > 0.0f && aabb.top <= blockAABB.bottom + 0.5f) { // 下からぶつかった
                 state_.position_.y = blockAABB.bottom - params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
@@ -440,7 +403,7 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
     }
 }
 
-void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, const MapChip2D& map) {
+void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& params_) {
     state_.wasTouchingWallLeft_ = state_.isTouchingWallLeft_;
     state_.wasTouchingWallRight_ = state_.isTouchingWallRight_;
     state_.isTouchingWallLeft_ = false;
@@ -449,128 +412,93 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
     AABB2D aabb = GetAABB(state_, params_);
 
     // 静的ブロック判定
-    ResolveStaticCollisionX(state_, params_, map, aabb);
+    ResolveStaticCollisionX(state_, params_, aabb);
 
     // 動的ブロック判定
     aabb = GetAABB(state_, params_); // 静的ブロックで位置が変わった可能性があるので再取得
-    ResolveDynamicCollisionX(state_, params_, map, aabb);
+    ResolveDynamicCollisionX(state_, params_, aabb);
 }
 
-void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerParams& params_, const MapChip2D& map, AABB2D& aabb) {
-    float chipSize = map.GetChipSize();
-    // 左右のチップ範囲を調べる (少し内側を調べて段差に引っかかりにくくする)
-    int topChip = map.WorldToChipY(aabb.top - 0.05f);
-    int bottomChip = map.WorldToChipY(aabb.bottom + 0.05f);
-
+void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
+    AABB2D queryAABB = aabb;
+    // 上下を少し削る
+    queryAABB.top -= 0.05f;
+    queryAABB.bottom += 0.05f;
+    
     if (state_.velocity_.x > 0.0f) {
-        // 右方向
-        int rightChip = map.WorldToChipX(aabb.right);
-        for (int cy = bottomChip; cy <= topChip; ++cy) {
-            bool isBlock = false;
-            BaseBlock* block = map.GetBlock(rightChip, cy);
-            if (block) {
-                isBlock = block->IsSolid();
-            } else if (rightChip >= map.GetWidth() || cy < 0) {
-                isBlock = true;
-            }
-
-            if (isBlock) {
-                AABB2D blockAABB;
-                if (block) {
-                    blockAABB = block->GetAABB();
-                } else {
-                    float bx = map.ChipToWorldX(rightChip);
-                    float by = map.ChipToWorldY(cy);
-                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
-                }
-
-                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
-                    state_.position_.x = blockAABB.left - params_.halfWidth_;
-                    state_.velocity_.x = 0.0f;
-                    state_.isTouchingWallRight_ = true;
-                    break;
-                }
+        queryAABB.right += 0.1f;
+        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
+        for (auto* collider : colliders) {
+            if (collider->IsMoving() || !collider->IsSolid()) continue;
+            
+            AABB2D blockAABB = collider->GetAABB();
+            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                queryAABB.top > blockAABB.bottom && queryAABB.bottom < blockAABB.top) {
+                state_.position_.x = blockAABB.left - params_.halfWidth_;
+                state_.velocity_.x = 0.0f;
+                state_.isTouchingWallRight_ = true;
+                break;
             }
         }
     } else if (state_.velocity_.x < 0.0f) {
-        // 左方向
-        int leftChip = map.WorldToChipX(aabb.left);
-        for (int cy = bottomChip; cy <= topChip; ++cy) {
-            bool isBlock = false;
-            BaseBlock* block = map.GetBlock(leftChip, cy);
-            if (block) {
-                isBlock = block->IsSolid();
-            } else if (leftChip < 0 || cy < 0) {
-                isBlock = true;
-            }
-
-            if (isBlock) {
-                AABB2D blockAABB;
-                if (block) {
-                    blockAABB = block->GetAABB();
-                } else {
-                    float bx = map.ChipToWorldX(leftChip);
-                    float by = map.ChipToWorldY(cy);
-                    blockAABB = { bx, by + chipSize, bx + chipSize, by };
-                }
-
-                if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                    aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
-                    state_.position_.x = blockAABB.right + params_.halfWidth_;
-                    state_.velocity_.x = 0.0f;
-                    state_.isTouchingWallLeft_ = true;
-                    break;
-                }
+        queryAABB.left -= 0.1f;
+        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
+        for (auto* collider : colliders) {
+            if (collider->IsMoving() || !collider->IsSolid()) continue;
+            
+            AABB2D blockAABB = collider->GetAABB();
+            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+                queryAABB.top > blockAABB.bottom && queryAABB.bottom < blockAABB.top) {
+                state_.position_.x = blockAABB.right + params_.halfWidth_;
+                state_.velocity_.x = 0.0f;
+                state_.isTouchingWallLeft_ = true;
+                break;
             }
         }
     }
 }
 
-void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerParams& params_, const MapChip2D& map, AABB2D& aabb) {
+void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
     state_.wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 毎フレームリセット
     
-    // 床や天井との擦れ判定を防ぐため、上下を少しだけ縮める
     AABB2D shrunkAABBX = aabb;
     shrunkAABBX.top -= 0.05f;
     shrunkAABBX.bottom += 0.05f;
 
-    // 壁に張り付いている場合は、その方向へ少し当たり判定を伸ばして、リフトの加速等で振り落とされるのを防ぐ（慣性による剥がれ防止）
     if (state_.isWallClinging_ || state_.isWallSliding_) {
         if (state_.isTouchingWallRight_ || state_.wasTouchingWallRight_) shrunkAABBX.right += 0.2f;
         if (state_.isTouchingWallLeft_ || state_.wasTouchingWallLeft_) shrunkAABBX.left -= 0.2f;
     }
 
-    for (const auto& block : map.GetUpdateBlocks()) {
-        // 移動中のSolidブロックのみ判定
-        if (!block || !block->IsSolid() || !block->IsMoving()) continue;
+    auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(shrunkAABBX, kLayerBlock);
+    for (auto* collider : colliders) {
+        if (!collider->IsSolid() || !collider->IsMoving()) continue;
         
-        AABB2D blockAABB = block->GetAABB();
+        AABB2D blockAABB = collider->GetAABB();
 
         if (CheckAABBCollision(shrunkAABBX, blockAABB)) {
-            // ブロックの中心とプレイヤーの中心を比較して左右を判定
             float blockCenterX = (blockAABB.left + blockAABB.right) * 0.5f;
             if (state_.position_.x < blockCenterX) {
-                // ブロックの左側にいる
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.isTouchingWallRight_ = true;
-                state_.wallPlatformVelocity_ = block->GetVelocity();
+                state_.wallPlatformVelocity_ = collider->GetVelocity();
             } else {
-                // ブロックの右側にいる
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.isTouchingWallLeft_ = true;
-                state_.wallPlatformVelocity_ = block->GetVelocity();
+                state_.wallPlatformVelocity_ = collider->GetVelocity();
             }
-            block->OnPlayerTouch();
+            if (collider->GetUserData()) {
+                BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                block->OnPlayerTouch();
+            }
         }
     }
 }
 
-void PlayerPhysics::SimulateCollisions(PlayerState& state_, const PlayerParams& params_, MapChip2D& map, Player2D* player) {
+void PlayerPhysics::SimulateCollisions(PlayerState& state_, const PlayerParams& params_, Player2D* player) {
     AABB2D aabb = GetAABB(state_, params_);
-    // 押し戻しによって境界線上に位置した際も検知できるよう、わずかなマージンを持たせる
     const float margin = 0.02f;
     AABB2D playerAABB = {
         aabb.left - margin,
@@ -579,14 +507,17 @@ void PlayerPhysics::SimulateCollisions(PlayerState& state_, const PlayerParams& 
         aabb.bottom - margin
     };
 
-    for (const auto& block : map.GetUpdateBlocks()) {
-        if (!block || block->IsDestroyed()) continue;
-
-        AABB2D blockAABB = block->GetAABB();
+    auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(playerAABB, kLayerBlock);
+    for (auto* collider : colliders) {
+        AABB2D blockAABB = collider->GetAABB();
 
         if (playerAABB.right > blockAABB.left && playerAABB.left < blockAABB.right &&
             playerAABB.top > blockAABB.bottom && playerAABB.bottom < blockAABB.top) {
-            block->OnCollision(player);
+            
+            if (collider->GetUserData()) {
+                BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                block->OnCollision(player);
+            }
         }
     }
 }

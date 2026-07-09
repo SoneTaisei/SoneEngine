@@ -120,6 +120,12 @@
     <ClCompile Include="Engine\Component\TransformComponent.cpp">
       <Filter>Engine\Component</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Component\ColliderComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Collision\CollisionManager.cpp">
+      <Filter>Engine\Collision</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Component\MeshRendererComponent.cpp">
       <Filter>Engine\Component</Filter>
     </ClCompile>
@@ -349,6 +355,12 @@
     </ClInclude>
     <ClInclude Include="Engine\Component\TransformComponent.h">
       <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\ColliderComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Collision\CollisionManager.h">
+      <Filter>Engine\Collision</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Component\MeshRendererComponent.h">
       <Filter>Engine\Component</Filter>
