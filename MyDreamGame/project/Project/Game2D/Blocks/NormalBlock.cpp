@@ -1,4 +1,4 @@
-#include "NormalBlock.h"
+﻿#include "NormalBlock.h"
 
 void NormalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     gameObject_ = std::make_unique<GameObject>("NormalBlock");

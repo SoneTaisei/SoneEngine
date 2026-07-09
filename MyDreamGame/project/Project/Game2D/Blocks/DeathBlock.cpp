@@ -1,4 +1,4 @@
-#include "DeathBlock.h"
+﻿#include "DeathBlock.h"
 #include "Game2D/Player/Player2D.h"
 
 void DeathBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
@@ -10,7 +10,7 @@ void DeathBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float
     prc->GetMaterial().color = { 1.0f, 0.2f, 0.2f, 1.0f };
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
+    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
 }
 
 void DeathBlock::OnCollision(Player2D* player) {

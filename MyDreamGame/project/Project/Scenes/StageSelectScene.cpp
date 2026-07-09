@@ -14,6 +14,8 @@
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
+#include "Component/TransformComponent.h"
+#include "GameObject/Object3D.h"
 
 StageSelectScene::~StageSelectScene() {}
 
@@ -41,19 +43,19 @@ void StageSelectScene::Initialize() {
     uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/monsterBall.png");
     D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH = TextureManager::GetInstance()->GetGpuHandle(skydomeIndex);
 
-    // 2. 実体(Object3D)を作る
-    auto skydomeObject = std::make_unique<Object3D>();
-    skydomeObject->Initialize(device.Get(), skydomeModelResource);
+    // 2. GameObjectを作る
+    auto skydomeObject = std::make_shared<GameObject>("Skydome");
+    auto transform = skydomeObject->AddComponent<TransformComponent>();
+    transform->SetRotation({0.0f, 0.0f, 0.0f});
 
-    // 3. 個別の設定をする
-    skydomeObject->SetTextureHandle(skydomeTH);
-    skydomeObject->SetRotation({0.0f, 0.0f, 0.0f});
+    // 3. 描画コンポーネントのアタッチとテクスチャの設定
+    auto skydomeRenderer = skydomeObject->AddComponent<MeshRendererComponent>();
+    skydomeRenderer->Initialize(device.Get(), skydomeModelResource);
+    skydomeRenderer->SetTextureHandle(skydomeTH);
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
-    skydomeObject->SetName("Skydome");
-
-    objects_.push_back(std::move(skydomeObject));
+    gameObjects_.push_back(skydomeObject);
 
     // Skyboxの初期化
     uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds");
@@ -75,7 +77,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
     Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
 
     // 全オブジェクトの更新（座標変換行列の計算など）
-    for (auto &object : objects_) {
+    for (auto &object : gameObjects_) {
         object->Update();
     }
 
@@ -130,17 +132,13 @@ void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     }
 
     // 各オブジェクトに「自分の行列で描画して！」と頼む
-    for (auto &object : objects_) {
+    for (auto &object : gameObjects_) {
         object->Draw();
     }
 }
 
 std::vector<Object3D *> StageSelectScene::GetObjects() {
-    std::vector<Object3D *> result;
-    for (auto &obj : objects_) {
-        result.push_back(obj.get());
-    }
-    return result;
+    return {};
 }
 
 void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {

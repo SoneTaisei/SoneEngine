@@ -1,4 +1,4 @@
-#include "GoalBlock.h"
+﻿#include "GoalBlock.h"
 #include "Game2D/Player/Player2D.h"
 
 void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
@@ -10,7 +10,7 @@ void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     prc->GetMaterial().color = { 1.0f, 0.8f, 0.0f, 1.0f }; // ゴールは金色
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
+    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
 }
 
 void GoalBlock::OnCollision(Player2D* player) {

@@ -1,4 +1,4 @@
-#include "CoinBlock.h"
+﻿#include "CoinBlock.h"
 #include "Game2D/Player/Player2D.h"
 #include "Core/TimeManager.h"
 
@@ -12,7 +12,7 @@ void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     tc->SetScale({ width * 0.5f, height * 0.5f, 0.5f });
     position_ = { worldX, worldY, 0.0f };
     tc->SetPosition(position_);
-    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
+    prc->GetMaterial().lightingType = 1; // ライチE��ング無効匁E
 }
 
 void CoinBlock::Update() {
@@ -25,7 +25,7 @@ void CoinBlock::Update() {
             Destroy();
             return;
         }
-        // 上に上がる演�E
+        // 上に上がる演�E
         position_.y += 5.0f * deltaTime;
         
         // 回転を早める

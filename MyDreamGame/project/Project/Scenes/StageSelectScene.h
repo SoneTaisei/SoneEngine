@@ -3,7 +3,8 @@
 #include "Resource/Model/Model.h"
 #include <d3d12.h>
 #include <memory>
-#include "GameObject/Object3D.h"
+#include "GameObject/GameObject.h"
+#include "Component/MeshRendererComponent.h"
 #include "Graphics/Skybox.h"
 
 #include <string>
@@ -36,7 +37,7 @@ private:
 
     
 
-    std::vector<std::unique_ptr<Object3D>> objects_;
+    std::vector<std::shared_ptr<GameObject>> gameObjects_;
 
     Transform cameraTransform_; // カメラの座標・回転
     Matrix4x4 viewProjection_;  // 描画に使う行列

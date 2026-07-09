@@ -1,4 +1,4 @@
-#include "LiftBlock.h"
+﻿#include "LiftBlock.h"
 #include "../MapChip2D.h"
 #include <cmath>
 
@@ -43,13 +43,13 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
     prc->Initialize(device, boxPrimitive);
     
-    // リフトの色�E�例：�Eるい黁E��めE��レンジ�E�E
+    // リフトの色�E�例：�Eるい黁E��めE��レンジ�E�E
     prc->GetMaterial().color = { 0.9f, 0.6f, 0.1f, 1.0f };
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
     prc->GetMaterial().lightingType = 1;
 
-    // レールの篁E��を探索して移動篁E��を決定すめE
+    // レールの篁E��を探索して移動篁E��を決定すめE
     int spanWidth = static_cast<int>(std::round(width / map_->GetChipSize()));
     int spanHeight = static_cast<int>(std::round(height / map_->GetChipSize()));
 
@@ -88,7 +88,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
     if (hasHorizontalRail) {
         direction_ = { 1.0f, 0.0f, 0.0f }; // 水平移勁E
-        // 実際の移動�E中忁E��置からなので調整
+        // 実際の移動�E中忁E��置からなので調整
         minRailWorldX_ = map_->ChipToWorldX(minX) + width * 0.5f;
         maxRailWorldX_ = map_->ChipToWorldX(maxX - spanWidth + 1) + width * 0.5f;
 
@@ -112,7 +112,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
             endPos_ = { worldX, minRailWorldY_, 0.0f };
         }
     } else {
-        direction_ = { 0.0f, 0.0f, 0.0f }; // レールがなぁE��合�E動かなぁE
+        direction_ = { 0.0f, 0.0f, 0.0f }; // レールがなぁE��合�E動かなぁE
         startPos_ = { worldX, worldY, 0.0f };
         endPos_ = { worldX, worldY, 0.0f };
     }
@@ -170,7 +170,7 @@ void LiftBlock::Update() {
         case LiftState::WaitingAtEnd:
             currentT_ = 1.0f;
             waitTimer_ += deltaTime;
-            if (waitTimer_ >= waitTime_) { // waitTime_征E��E
+            if (waitTimer_ >= waitTime_) { // waitTime_征E��E
                 state_ = LiftState::MovingBackward;
             }
             break;
@@ -191,7 +191,7 @@ void LiftBlock::Update() {
         // 加速度パラメータを使用したイージング (Power Ease In)
         progress = std::pow(currentT_, acceleration_);
     } else {
-        // 復路および征E��時はLinear
+        // 復路および征E��時はLinear
         progress = currentT_;
     }
 
@@ -212,6 +212,6 @@ void LiftBlock::Update() {
         gameObject_->Update();
     }
 
-    // 1フレームのフラグをリセチE��
+    // 1フレームのフラグをリセチE��
     isPlayerStandingThisFrame_ = false;
 }

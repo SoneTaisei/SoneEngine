@@ -8,7 +8,8 @@
 #include <memory>
 #include "Effect/ParticleCommon.h"
 #include "Effect/windowParticle.h"
-#include "GameObject/Object3D.h"
+#include "GameObject/GameObject.h"
+#include "Component/MeshRendererComponent.h"
 #include "Graphics/Skybox.h"
 #include "Graphics/DebugCamera.h"
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -43,7 +44,7 @@ private:
 
     Model *playerModel_ = nullptr;
 
-    std::vector<std::unique_ptr<Object3D>> objects_{};
+    std::vector<std::shared_ptr<GameObject>> gameObjects_{};
     std::vector<std::unique_ptr<Sprite>> sprites_{};
 
     // ■ 追加: パーティクル管理用変数

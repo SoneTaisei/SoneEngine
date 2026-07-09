@@ -14,6 +14,8 @@
 #endif
 #include "Scene/SceneFactory.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Component/TransformComponent.h"
+#include "GameObject/Object3D.h"
 
 TitleScene::~TitleScene() {
 }
@@ -46,17 +48,18 @@ void TitleScene::Initialize() {
     // 1. マネージャからモデル（素材）を取得（なければロードされる）
     Model *planeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.gltf");
 
-    // 2. Object3D（実体）を生成して初期化
-    auto planeObject = std::make_unique<Object3D>();
-    planeObject->Initialize(device.Get(), planeModel);
+    // 2. GameObject（実体）を生成
+    auto planeObject = std::make_shared<GameObject>("Ground Plane");
+    auto transform = planeObject->AddComponent<TransformComponent>();
+    transform->SetRotation({0.0f, 0.0f, 0.0f});
 
-    // 3. 座標やテクスチャの設定（Object3Dに対して行う！）
+    // 3. 描画コンポーネントのアタッチとテクスチャの設定
+    auto planeRenderer = planeObject->AddComponent<MeshRendererComponent>();
+    planeRenderer->Initialize(device.Get(), planeModel);
     uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png");
-    planeObject->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
-    planeObject->SetRotation({0.0f, 0.0f, 0.0f});
-    planeObject->SetName("Ground Plane");
+    planeRenderer->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
 
-    objects_.push_back(std::move(planeObject));
+    gameObjects_.push_back(planeObject);
 
     // ② Spriteのインスタンスを生成
     auto sprite = std::make_unique<Sprite>();
@@ -125,7 +128,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
     }
 
     // 全オブジェクトの更新（座標変換行列の計算など）
-    for (auto &object : objects_) {
+    for (auto &object : gameObjects_) {
         object->Update();
     }
 
@@ -172,7 +175,7 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     if (EditorManager::IsShowObjects()) {
 #endif
-        for (auto &object : objects_) {
+        for (auto &object : gameObjects_) {
             object->Draw();
         }
 #ifdef USE_IMGUI
@@ -208,11 +211,7 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 }
 
 std::vector<Object3D *> TitleScene::GetObjects() {
-    std::vector<Object3D *> result;
-    for (auto &obj : objects_) {
-        result.push_back(obj.get());
-    }
-    return result;
+    return {};
 }
 
 std::vector<ParticleManager *> TitleScene::GetParticles() {
@@ -236,7 +235,7 @@ std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
 }
 
 void TitleScene::UpdateEditor() {
-    for (auto &object : objects_) {
+    for (auto &object : gameObjects_) {
         object->Update();
     }
     for (auto &sprite : sprites_) {
