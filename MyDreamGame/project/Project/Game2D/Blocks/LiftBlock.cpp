@@ -209,6 +209,9 @@ void LiftBlock::Update() {
     if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
         tc->SetPosition(newPos);
     }
+    if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+        cc->SetVelocity(velocity_);
+    }
     if (gameObject_) {
         gameObject_->Update();
     }

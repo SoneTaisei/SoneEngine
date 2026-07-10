@@ -582,16 +582,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             if (ImGui::Combo("種類 (Type)", &currentType, types, 8)) {
                                 targetDef->type = types[currentType];
                                 changed = true;
-                                // デフォルトプロパティを設定
-                                if (targetDef->type == "JumpBlock") {
-                                    targetDef->properties["jumpVelocityVertical"] = 15.0f;
-                                    targetDef->properties["jumpVelocityHorizontal"] = 15.0f;
-                                } else if (targetDef->type == "LiftBlock") {
-                                    targetDef->properties["speedForward"] = 6.0f;
-                                    targetDef->properties["speedBackward"] = 3.0f;
-                                    targetDef->properties["waitTime"] = 1.0f;
-                                    targetDef->properties["acceleration"] = 2.0f;
-                                } else {
+                                // デフォルトプロパティを設定 (BasicToolsのテンプレートに合わせる)
+                                bool foundTemplate = false;
+                                for (const auto& t : mapChip->GetTemplatePalette()) {
+                                    if (t.type == targetDef->type) {
+                                        targetDef->properties = t.properties;
+                                        foundTemplate = true;
+                                        break;
+                                    }
+                                }
+                                if (!foundTemplate) {
                                     targetDef->properties = nlohmann::json::object(); // リセット
                                 }
                             }
@@ -690,15 +690,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     targetDef->color = {1.0f, 1.0f, 1.0f, 1.0f};
                                     targetDef->scale = {1.0f, 1.0f, 1.0f};
                                     targetDef->modelName = "";
-                                    if (targetDef->type == "JumpBlock") {
-                                        targetDef->properties["jumpVelocityVertical"] = 15.0f;
-                                        targetDef->properties["jumpVelocityHorizontal"] = 15.0f;
-                                    } else if (targetDef->type == "LiftBlock") {
-                                        targetDef->properties["speedForward"] = 6.0f;
-                                        targetDef->properties["speedBackward"] = 3.0f;
-                                        targetDef->properties["waitTime"] = 1.0f;
-                                        targetDef->properties["acceleration"] = 2.0f;
-                                    } else {
+                                    bool foundTemplate = false;
+                                    for (const auto& t : mapChip->GetTemplatePalette()) {
+                                        if (t.type == targetDef->type) {
+                                            targetDef->properties = t.properties;
+                                            foundTemplate = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!foundTemplate) {
                                         targetDef->properties = nlohmann::json::object();
                                     }
                                     changed = true;

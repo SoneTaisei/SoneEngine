@@ -600,6 +600,32 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                     customPalette_.push_back(def);
                 }
             }
+            
+            // 読み込んだ Custom Block のプロパティ構造をテンプレート（Basic）に合わせる
+            for (auto& def : customPalette_) {
+                for (const auto& t : templatePalette_) {
+                    if (t.type == def.type) {
+                        // テンプレートに存在しない古いプロパティは削除する
+                        std::vector<std::string> keysToRemove;
+                        for (auto& [key, val] : def.properties.items()) {
+                            if (!t.properties.contains(key)) {
+                                keysToRemove.push_back(key);
+                            }
+                        }
+                        for (const auto& key : keysToRemove) {
+                            def.properties.erase(key);
+                        }
+                        
+                        // テンプレートに存在するが Custom Block に無いプロパティは追加する
+                        for (auto& [key, val] : t.properties.items()) {
+                            if (!def.properties.contains(key)) {
+                                def.properties[key] = val;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
         }
         
         RebuildChipObjects();

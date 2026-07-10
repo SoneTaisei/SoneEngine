@@ -30,11 +30,17 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     }
 
     // --- 足場による移動（予測） ---
+    if (state_.isOnMovingPlatform_ && state_.standingPlatformCollider_) {
+        state_.platformVelocity_ = state_.standingPlatformCollider_->GetVelocity();
+    }
     if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
         state_.position_.x += state_.platformVelocity_.x * deltaTime;
         state_.position_.y += state_.platformVelocity_.y * deltaTime;
     }
     if (state_.isWallClinging_ || state_.isWallSliding_) {
+        if (state_.wallPlatformCollider_) {
+            state_.wallPlatformVelocity_ = state_.wallPlatformCollider_->GetVelocity();
+        }
         state_.position_.x += state_.wallPlatformVelocity_.x * deltaTime;
         state_.position_.y += state_.wallPlatformVelocity_.y * deltaTime;
         
@@ -89,8 +95,14 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         // 壁掴み（Kキー）を押している場合、前フレームで壁に接触していれば、その方向への仮想入力を維持する
         // これにより方向キーを離しても張り付き続ける
         if (!state_.isOnGround_ && input_.isClingHeld) {
-            if (state_.isTouchingWallRight_ && !inputLeft) inputRight = true;
-            if (state_.isTouchingWallLeft_ && !inputRight) inputLeft = true;
+            if (state_.isTouchingWallRight_) {
+                inputRight = true;
+                inputLeft = false; // 逆方向への入力を無視して壁から降りないようにする
+            }
+            if (state_.isTouchingWallLeft_) {
+                inputLeft = true;
+                inputRight = false; // 逆方向への入力を無視して壁から降りないようにする
+            }
         }
 
         float targetVelX = 0.0f;
@@ -132,8 +144,8 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             // 初速から「現在のキー入力に基づく目標速度」へ滑らかに減速・加速させる
             float t = 1.0f - (state_.wallJumpTimer_ / params_.wallJumpDuration_); // 0.0 (キック直後) -> 1.0 (タイマー終了時)
             
-            // state_.lockedDirectionX_ を元にキックした壁の方向を判定し、初速を決定
-            float startVelX = (state_.lockedDirectionX_ == 1.0f) ? -params_.wallJumpPower_.x : params_.wallJumpPower_.x;
+            // state_.lockedDirectionX_ を元にキックした壁の方向を判定し、初速を決定（動くブロックの慣性も乗せる）
+            float startVelX = ((state_.lockedDirectionX_ == 1.0f) ? -params_.wallJumpPower_.x : params_.wallJumpPower_.x) + state_.externalVelocityX_;
             float endVelX = targetVelX + state_.externalVelocityX_;
             
             // 線形補間で速度を徐々に落とす
@@ -171,63 +183,69 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isOnMovingPlatform_ = false;
                 visuals_.SpawnJumpDust({state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f}, 0.0f);
             } else if (state_.isTouchingWallRight_) {
-                // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
+                // 壁張り付き状態（Control入力がある場合）
                 bool isPressingCling = input_.isClingHeld;
-                if (state_.isWallClinging_ || isPressingCling) {
+                // 壁掴み中で逆方向(左)に入力がある場合は壁キック。それ以外は真上ジャンプ
+                bool wantWallKick = (isPressingCling && input_.moveX < 0.0f) || !isPressingCling;
+
+                if (!wantWallKick) {
                     // 壁張り付き中は真上ジャンプ
                     state_.velocity_.x = 0.0f;
                     state_.velocity_.y = params_.jumpPower_;
-                    
-                    // 慣性を加算
-                    if (state_.platformInertiaTimer_ > 0.0f) {
-                        state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
-                        state_.velocity_.x += state_.externalVelocityX_;
-                        if (state_.recentPlatformVelocity_.y > 0.0f) {
-                            state_.velocity_.y += state_.recentPlatformVelocity_.y;
-                        }
-                        state_.platformInertiaTimer_ = 0.0f;
-                    }
                 } else {
                     // 右壁キック（左へ跳ね返る）
                     state_.velocity_.x = -params_.wallJumpPower_.x;
                     state_.velocity_.y = params_.wallJumpPower_.y;
                     state_.wallJumpTimer_ = params_.wallJumpDuration_;
-                    state_.externalVelocityX_ = 0.0f; // 壁ジャンプ時に慣性をリセット
+                    state_.externalVelocityX_ = 0.0f; // デフォルトでリセット（動くブロックからの場合は後で上書きされる）
                     visuals_.SpawnJumpDust({state_.position_.x + params_.halfWidth_, state_.position_.y, 0.0f}, -1.0f);
                     
                     state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
                     state_.lockedDirectionX_ = 1.0f; // 右方向への入力をロック
                 }
+                
+                // 慣性を加算 (真上ジャンプ・壁キック共通)
+                if (state_.platformInertiaTimer_ > 0.0f) {
+                    state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.velocity_.x += state_.externalVelocityX_;
+                    if (state_.recentPlatformVelocity_.y > 0.0f) {
+                        state_.velocity_.y += state_.recentPlatformVelocity_.y;
+                    }
+                    state_.platformInertiaTimer_ = 0.0f;
+                }
                 state_.isTouchingWallRight_ = false;
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
             } else if (state_.isTouchingWallLeft_) {
-                // 壁張り付き状態（Control入力がある場合）は真上ジャンプを優先
+                // 壁張り付き状態（Control入力がある場合）
                 bool isPressingCling = input_.isClingHeld;
-                if (state_.isWallClinging_ || isPressingCling) {
+                // 壁掴み中で逆方向(右)に入力がある場合は壁キック。それ以外は真上ジャンプ
+                bool wantWallKick = (isPressingCling && input_.moveX > 0.0f) || !isPressingCling;
+
+                if (!wantWallKick) {
                     // 壁張り付き中は真上ジャンプ
                     state_.velocity_.x = 0.0f;
                     state_.velocity_.y = params_.jumpPower_;
-                    
-                    // 慣性を加算
-                    if (state_.platformInertiaTimer_ > 0.0f) {
-                        state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
-                        state_.velocity_.x += state_.externalVelocityX_;
-                        if (state_.recentPlatformVelocity_.y > 0.0f) {
-                            state_.velocity_.y += state_.recentPlatformVelocity_.y;
-                        }
-                        state_.platformInertiaTimer_ = 0.0f;
-                    }
                 } else {
                     // 左壁キック（右へ跳ね返る）
                     state_.velocity_.x = params_.wallJumpPower_.x;
                     state_.velocity_.y = params_.wallJumpPower_.y;
                     state_.wallJumpTimer_ = params_.wallJumpDuration_;
-                    state_.externalVelocityX_ = 0.0f; // 壁ジャンプ時に慣性をリセット
+                    state_.externalVelocityX_ = 0.0f; // デフォルトでリセット（動くブロックからの場合は後で上書きされる）
                     visuals_.SpawnJumpDust({state_.position_.x - params_.halfWidth_, state_.position_.y, 0.0f}, 1.0f);
                     
                     state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
                     state_.lockedDirectionX_ = -1.0f; // 左方向への入力をロック
+                }
+                
+                // 慣性を加算 (真上ジャンプ・壁キック共通)
+                if (state_.platformInertiaTimer_ > 0.0f) {
+                    state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.velocity_.x += state_.externalVelocityX_;
+                    if (state_.recentPlatformVelocity_.y > 0.0f) {
+                        state_.velocity_.y += state_.recentPlatformVelocity_.y;
+                    }
+                    state_.platformInertiaTimer_ = 0.0f;
                 }
                 state_.isTouchingWallLeft_ = false;
                 state_.isWallSliding_ = false;
@@ -298,6 +316,7 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
 void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_) {
     state_.isOnGround_ = false;
     state_.isOnMovingPlatform_ = false;
+    state_.standingPlatformCollider_ = nullptr;
     state_.platformVelocity_ = {0.0f, 0.0f, 0.0f};
 
     AABB2D aabb = GetAABB(state_, params_);
@@ -394,6 +413,7 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                     block->OnPlayerStand();
                 }
                 state_.isOnMovingPlatform_ = true;
+                state_.standingPlatformCollider_ = collider;
                 state_.platformVelocity_ = collider->GetVelocity();
             } else if (state_.velocity_.y > 0.0f && aabb.top <= blockAABB.bottom + 0.5f) { // 下からぶつかった
                 state_.position_.y = blockAABB.bottom - params_.halfHeight_;
@@ -460,6 +480,7 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
 
 void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
     state_.wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 毎フレームリセット
+    state_.wallPlatformCollider_ = nullptr;
     
     AABB2D shrunkAABBX = aabb;
     shrunkAABBX.top -= 0.05f;
@@ -482,11 +503,13 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.isTouchingWallRight_ = true;
+                state_.wallPlatformCollider_ = collider;
                 state_.wallPlatformVelocity_ = collider->GetVelocity();
             } else {
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.isTouchingWallLeft_ = true;
+                state_.wallPlatformCollider_ = collider;
                 state_.wallPlatformVelocity_ = collider->GetVelocity();
             }
             if (collider->GetUserData()) {
