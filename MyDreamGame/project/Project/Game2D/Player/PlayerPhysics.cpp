@@ -29,20 +29,14 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         }
     }
 
-    // --- 足場による移動（予測） ---
+    // --- 足場速度の取得 ---
     if (state_.isOnMovingPlatform_ && state_.standingPlatformCollider_) {
         state_.platformVelocity_ = state_.standingPlatformCollider_->GetVelocity();
-    }
-    if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
-        state_.position_.x += state_.platformVelocity_.x * deltaTime;
-        state_.position_.y += state_.platformVelocity_.y * deltaTime;
     }
     if (state_.isWallClinging_ || state_.isWallSliding_) {
         if (state_.wallPlatformCollider_) {
             state_.wallPlatformVelocity_ = state_.wallPlatformCollider_->GetVelocity();
         }
-        state_.position_.x += state_.wallPlatformVelocity_.x * deltaTime;
-        state_.position_.y += state_.wallPlatformVelocity_.y * deltaTime;
         
         if (std::abs(state_.wallPlatformVelocity_.x) > 0.01f || std::abs(state_.wallPlatformVelocity_.y) > 0.01f) {
             state_.recentPlatformVelocity_ = state_.wallPlatformVelocity_;
@@ -51,10 +45,22 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     }
 
     // --- Y軸（上下）の移動と当たり判定 ---
+    if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
+        state_.position_.y += state_.platformVelocity_.y * deltaTime;
+    }
+    if (state_.isWallClinging_ || state_.isWallSliding_) {
+        state_.position_.y += state_.wallPlatformVelocity_.y * deltaTime;
+    }
     state_.position_.y += state_.velocity_.y * deltaTime;
     ResolveCollisionY(state_, params_);
 
     // --- X軸（左右）の移動と当たり判定 ---
+    if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
+        state_.position_.x += state_.platformVelocity_.x * deltaTime;
+    }
+    if (state_.isWallClinging_ || state_.isWallSliding_) {
+        state_.position_.x += state_.wallPlatformVelocity_.x * deltaTime;
+    }
     state_.position_.x += state_.velocity_.x * deltaTime;
     ResolveCollisionX(state_, params_);
 
@@ -331,26 +337,39 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
 
 void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
     AABB2D queryAABB = aabb;
-    if (state_.velocity_.y <= 0.0f) {
-        // 下方向：足元チェック
-        queryAABB.bottom -= 0.1f;
-        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
-        for (auto* collider : colliders) {
-            if (collider->IsMoving()) continue; // Staticのみ
-            if (!collider->IsSolid() && !collider->IsOneWay()) continue;
+    
+    // 左右を少し削る（壁との引っかかり防止）
+    queryAABB.left += 0.05f;
+    queryAABB.right -= 0.05f;
 
-            AABB2D blockAABB = collider->GetAABB();
-            
-            if (collider->IsOneWay()) {
-                float previousBottom = state_.position_.y - state_.velocity_.y * TimeManager::GetInstance().GetDeltaTime() - params_.halfHeight_;
-                if (previousBottom < blockAABB.top - 0.05f) {
-                    continue;
-                }
+    // 上下に拡張（速度ゼロでもめり込みを検知するため）
+    queryAABB.top += 0.1f;
+    queryAABB.bottom -= 0.1f;
+
+    auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
+    for (auto* collider : colliders) {
+        if (collider->IsMoving()) continue; // Staticのみ
+        if (!collider->IsSolid() && !collider->IsOneWay()) continue;
+
+        AABB2D blockAABB = collider->GetAABB();
+        
+        if (collider->IsOneWay()) {
+            float previousBottom = state_.position_.y - state_.velocity_.y * TimeManager::GetInstance().GetDeltaTime() - params_.halfHeight_;
+            if (previousBottom < blockAABB.top - 0.05f) {
+                continue;
             }
+        }
 
-            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
-                
+        if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+            aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+            
+            float overlapX = (std::min)(aabb.right, blockAABB.right) - (std::max)(aabb.left, blockAABB.left);
+            float overlapY = (std::min)(aabb.top, blockAABB.top) - (std::max)(aabb.bottom, blockAABB.bottom);
+            if (overlapY > overlapX) continue; // 壁への横からのめり込みの場合はY軸判定をスキップ
+            
+            float blockCenterY = (blockAABB.top + blockAABB.bottom) * 0.5f;
+            if (state_.position_.y > blockCenterY) {
+                // 上に乗った
                 state_.position_.y = blockAABB.top + params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
                 state_.isOnGround_ = true;
@@ -362,23 +381,11 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
                     BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
                     block->OnPlayerStand();
                 }
-                break;
-            }
-        }
-    } else {
-        // 上方向：頭上チェック
-        queryAABB.top += 0.1f;
-        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
-        for (auto* collider : colliders) {
-            if (collider->IsMoving()) continue;
-            if (!collider->IsSolid()) continue;
-
-            AABB2D blockAABB = collider->GetAABB();
-            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
+            } else {
+                // 下からぶつかった
+                if (collider->IsOneWay()) continue; // OneWayは下からぶつかってもすり抜ける
                 state_.position_.y = blockAABB.bottom - params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
-                break;
             }
         }
     }
@@ -401,7 +408,12 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
         AABB2D blockAABB = collider->GetAABB();
 
         if (CheckAABBCollision(shrunkAABBY, blockAABB)) {
-            if (state_.velocity_.y <= 0.0f && aabb.bottom >= blockAABB.top - 0.5f) { // 上から乗った
+            float overlapX = (std::min)(shrunkAABBY.right, blockAABB.right) - (std::max)(shrunkAABBY.left, blockAABB.left);
+            float overlapY = (std::min)(shrunkAABBY.top, blockAABB.top) - (std::max)(shrunkAABBY.bottom, blockAABB.bottom);
+            if (overlapY > overlapX) continue; // 壁への横からのめり込みの場合はY軸判定をスキップ
+            
+            float blockCenterY = (blockAABB.top + blockAABB.bottom) * 0.5f;
+            if (state_.position_.y > blockCenterY) { // 上から乗った
                 state_.position_.y = blockAABB.top + params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
                 state_.isOnGround_ = true;
@@ -415,7 +427,7 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                 state_.isOnMovingPlatform_ = true;
                 state_.standingPlatformCollider_ = collider;
                 state_.platformVelocity_ = collider->GetVelocity();
-            } else if (state_.velocity_.y > 0.0f && aabb.top <= blockAABB.bottom + 0.5f) { // 下からぶつかった
+            } else { // 下からぶつかった
                 state_.position_.y = blockAABB.bottom - params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
             }
@@ -445,34 +457,31 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
     queryAABB.top -= 0.05f;
     queryAABB.bottom += 0.05f;
     
-    if (state_.velocity_.x > 0.0f) {
-        queryAABB.right += 0.1f;
-        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
-        for (auto* collider : colliders) {
-            if (collider->IsMoving() || !collider->IsSolid()) continue;
+    // 左右に拡張（速度ゼロでもめり込みを検知するため）
+    queryAABB.left -= 0.1f;
+    queryAABB.right += 0.1f;
+
+    auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
+    for (auto* collider : colliders) {
+        if (collider->IsMoving() || !collider->IsSolid()) continue;
+        
+        AABB2D blockAABB = collider->GetAABB();
+        if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
+            queryAABB.top > blockAABB.bottom && queryAABB.bottom < blockAABB.top) {
             
-            AABB2D blockAABB = collider->GetAABB();
-            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                queryAABB.top > blockAABB.bottom && queryAABB.bottom < blockAABB.top) {
+            float overlapX = (std::min)(aabb.right, blockAABB.right) - (std::max)(aabb.left, blockAABB.left);
+            float overlapY = (std::min)(queryAABB.top, blockAABB.top) - (std::max)(queryAABB.bottom, blockAABB.bottom);
+            if (overlapX > overlapY) continue; // 上下へのめり込みの場合はX軸判定をスキップ
+            
+            float blockCenterX = (blockAABB.left + blockAABB.right) * 0.5f;
+            if (state_.position_.x < blockCenterX) {
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.isTouchingWallRight_ = true;
-                break;
-            }
-        }
-    } else if (state_.velocity_.x < 0.0f) {
-        queryAABB.left -= 0.1f;
-        auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
-        for (auto* collider : colliders) {
-            if (collider->IsMoving() || !collider->IsSolid()) continue;
-            
-            AABB2D blockAABB = collider->GetAABB();
-            if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
-                queryAABB.top > blockAABB.bottom && queryAABB.bottom < blockAABB.top) {
+            } else {
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.isTouchingWallLeft_ = true;
-                break;
             }
         }
     }
@@ -498,6 +507,10 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
         AABB2D blockAABB = collider->GetAABB();
 
         if (CheckAABBCollision(shrunkAABBX, blockAABB)) {
+            float overlapX = (std::min)(shrunkAABBX.right, blockAABB.right) - (std::max)(shrunkAABBX.left, blockAABB.left);
+            float overlapY = (std::min)(shrunkAABBX.top, blockAABB.top) - (std::max)(shrunkAABBX.bottom, blockAABB.bottom);
+            if (overlapX > overlapY) continue; // 上下へのめり込みの場合はX軸判定をスキップ
+            
             float blockCenterX = (blockAABB.left + blockAABB.right) * 0.5f;
             if (state_.position_.x < blockCenterX) {
                 state_.position_.x = blockAABB.left - params_.halfWidth_;

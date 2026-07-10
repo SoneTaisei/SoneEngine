@@ -27,6 +27,11 @@ private:
 
     float waitTime_ = 1.0f;
     float acceleration_ = 2.0f;
+    float maxSpeedForward_ = 10.0f;
+    float maxSpeedBackward_ = 5.0f;
+    
+    float currentSpeed_ = 0.0f;
+    float shakeTimer_ = 0.0f;
     
     float minRailWorldX_ = 0.0f;
     float maxRailWorldX_ = 0.0f;

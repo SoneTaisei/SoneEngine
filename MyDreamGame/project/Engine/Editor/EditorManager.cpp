@@ -638,6 +638,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 if (k == "speedBackward") return std::string("復路の速さ (speedBackward)");
                                 if (k == "waitTime") return std::string("待機時間 (waitTime)");
                                 if (k == "acceleration") return std::string("加速度 (acceleration)");
+                                if (k == "maxSpeedForward") return std::string("往路の最高速度 (maxSpeedForward)");
+                                if (k == "maxSpeedBackward") return std::string("復路の最高速度 (maxSpeedBackward)");
+                                if (k == "maxSpeed") return std::string("最高速度 (maxSpeed)");
                                 if (k == "direction") return std::string("方向 (direction)");
                                 if (k == "range") return std::string("移動距離 (range)");
                                 if (k == "jumpVelocityVertical") return std::string("縦ジャンプ力 (jumpVelocityVertical)");

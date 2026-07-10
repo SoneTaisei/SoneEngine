@@ -34,6 +34,16 @@ void LiftBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("acceleration")) {
         acceleration_ = properties["acceleration"].get<float>();
     }
+    if (properties.contains("maxSpeed")) {
+        maxSpeedForward_ = properties["maxSpeed"].get<float>();
+        maxSpeedBackward_ = properties["maxSpeed"].get<float>();
+    }
+    if (properties.contains("maxSpeedForward")) {
+        maxSpeedForward_ = properties["maxSpeedForward"].get<float>();
+    }
+    if (properties.contains("maxSpeedBackward")) {
+        maxSpeedBackward_ = properties["maxSpeedBackward"].get<float>();
+    }
 }
 
 void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
@@ -126,6 +136,8 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     state_ = LiftState::IdleAtStart;
     waitTimer_ = 0.0f;
     isPlayerStandingThisFrame_ = false;
+    currentSpeed_ = 0.0f;
+    shakeTimer_ = 0.0f;
     SetupCollider();
 }
 
@@ -133,10 +145,7 @@ void LiftBlock::Update() {
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
     if (deltaTime <= 0.0f) return;
 
-    Vector3 prevPos = {0.0f, 0.0f, 0.0f};
-    if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
-        prevPos = tc->GetPosition();
-    }
+    float prevT = currentT_; // 前フレームの進行度を保存
 
     // 距離を計箁E
     float distance = 0.0f;
@@ -152,65 +161,91 @@ void LiftBlock::Update() {
         case LiftState::IdleAtStart:
             currentT_ = 0.0f;
             waitTimer_ = 0.0f;
+            currentSpeed_ = 0.0f;
             if (isPlayerStandingThisFrame_) {
                 state_ = LiftState::MovingForward;
             }
             break;
             
         case LiftState::MovingForward: {
-            float tRate = speedForward_ / distance;
+            currentSpeed_ += acceleration_ * deltaTime;
+            if (currentSpeed_ > maxSpeedForward_) currentSpeed_ = maxSpeedForward_;
+            
+            float tRate = currentSpeed_ / distance;
             currentT_ += tRate * deltaTime;
             if (currentT_ >= 1.0f) {
                 currentT_ = 1.0f;
                 state_ = LiftState::WaitingAtEnd;
                 waitTimer_ = 0.0f;
+                shakeTimer_ = 0.15f; // Shake for 0.15 seconds
             }
             break;
         }
             
         case LiftState::WaitingAtEnd:
             currentT_ = 1.0f;
+            currentSpeed_ = 0.0f;
             waitTimer_ += deltaTime;
-            if (waitTimer_ >= waitTime_) { // waitTime_征E��E
+            if (waitTimer_ >= waitTime_) { // waitTime_経過
                 state_ = LiftState::MovingBackward;
             }
             break;
             
         case LiftState::MovingBackward: {
-            float tRate = speedBackward_ / distance;
+            currentSpeed_ += acceleration_ * deltaTime;
+            if (currentSpeed_ > maxSpeedBackward_) currentSpeed_ = maxSpeedBackward_;
+            
+            float tRate = currentSpeed_ / distance;
             currentT_ -= tRate * deltaTime;
             if (currentT_ <= 0.0f) {
                 currentT_ = 0.0f;
                 state_ = LiftState::IdleAtStart;
+                shakeTimer_ = 0.15f;
             }
             break;
         }
     }
 
-    float progress = 0.0f;
-    if (state_ == LiftState::MovingForward) {
-        // 加速度パラメータを使用したイージング (Power Ease In)
-        progress = std::pow(currentT_, acceleration_);
-    } else {
-        // 復路および征E��時はLinear
-        progress = currentT_;
-    }
-
-    Vector3 newPos = {
+    float progress = currentT_;
+    
+    Vector3 basePos = {
         startPos_.x + (endPos_.x - startPos_.x) * progress,
         startPos_.y + (endPos_.y - startPos_.y) * progress,
         startPos_.z + (endPos_.z - startPos_.z) * progress
     };
 
-    // プレイヤーに渡す用の速度を更新
-    velocity_.x = (newPos.x - prevPos.x) / deltaTime;
-    velocity_.y = (newPos.y - prevPos.y) / deltaTime;
+    Vector3 newPos = basePos;
+    Vector3 shakeVec = {0.0f, 0.0f, 0.0f};
+
+    if (shakeTimer_ > 0.0f) {
+        shakeTimer_ -= deltaTime;
+        if (shakeTimer_ < 0.0f) shakeTimer_ = 0.0f;
+        
+        float shakeIntensity = 0.2f * (shakeTimer_ / 0.15f);
+        float shakeOffset = std::sin(shakeTimer_ * 100.0f) * shakeIntensity;
+        
+        if (direction_.x != 0.0f) {
+            shakeVec.x = shakeOffset;
+        } else if (direction_.y != 0.0f) {
+            shakeVec.y = shakeOffset;
+        }
+    }
+    
+    newPos.x += shakeVec.x;
+    newPos.y += shakeVec.y;
+
+    // プレイヤーに渡す用の速度を更新 (シェイクの影響を除外するため純粋な進行度(T)の変化量から計算)
+    velocity_.x = (endPos_.x - startPos_.x) * (currentT_ - prevT) / deltaTime;
+    velocity_.y = (endPos_.y - startPos_.y) * (currentT_ - prevT) / deltaTime;
+    velocity_.z = 0.0f;
 
     if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
         tc->SetPosition(newPos);
     }
     if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
         cc->SetVelocity(velocity_);
+        // 物理コライダーの位置がシェイクで揺れないように、Transformのシェイク分をオフセットで打ち消す
+        cc->SetBoxOffset({ -shakeVec.x, -shakeVec.y, 0.0f });
     }
     if (gameObject_) {
         gameObject_->Update();
