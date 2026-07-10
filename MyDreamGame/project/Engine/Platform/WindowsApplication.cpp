@@ -96,7 +96,7 @@ void WindowsApplication::Initialize() {
     PrimitiveManager::GetInstance()->Initialize(device);
 
     // デフォルトの環境マップ（スカイボックス用テクスチャ）をロードして設定
-    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds");
+    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(defaultSkyboxHandle));
 
     // 1x1ピクセルのデフォルト白テクスチャをロードして PrimitiveObject に設定

@@ -77,7 +77,7 @@ void TitleScene::Initialize() {
 
     // ★ Skyboxの初期化処理を追加
     // 1. テクスチャをロード
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds");
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/skybox.dds");
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/panoramic-view-beach-sunset.dds");
     //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/School/rostock_laage_airport_4k.dds");

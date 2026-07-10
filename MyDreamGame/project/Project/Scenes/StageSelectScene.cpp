@@ -58,7 +58,7 @@ void StageSelectScene::Initialize() {
     gameObjects_.push_back(skydomeObject);
 
     // Skyboxの初期化
-    uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds");
+    uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxHandle);
 
