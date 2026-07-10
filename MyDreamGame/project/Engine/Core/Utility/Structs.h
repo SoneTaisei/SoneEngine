@@ -120,7 +120,7 @@ struct Material {
     float shininess;
     float environmentCoefficient; // 環境マップ反射係数
     float dissolveThreshold;      // ディゾルブのしきい値
-    float padding2;               // パディング
+    float enableBoxMapping;       // ボックスマッピング有効フラグ
 };
 
 struct DirectionalLight {

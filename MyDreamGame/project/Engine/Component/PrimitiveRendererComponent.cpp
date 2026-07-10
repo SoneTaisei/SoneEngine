@@ -30,7 +30,7 @@ void PrimitiveRendererComponent::Initialize(ID3D12Device* device, Primitive* pri
     material_.shininess = 50.0f;
     material_.environmentCoefficient = 1.0f;
     material_.dissolveThreshold = 0.0f;
-    material_.padding2 = 0.0f;
+    material_.enableBoxMapping = 0.0f;
     *mappedMaterial_ = material_;
 
     // Transform用バッファ生成

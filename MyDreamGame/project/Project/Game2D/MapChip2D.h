@@ -111,6 +111,7 @@ public:
         Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         Vector3 scale = {1.0f, 1.0f, 1.0f};
         std::string modelName = "";
+        std::string textureName = "";
     };
 
     std::vector<CustomBlockDef>& GetCustomPalette() { return customPalette_; }

@@ -17,7 +17,31 @@ struct PixelShaderOutput {
 float4 main(VertexShaderOutput input) : SV_TARGET {
     float4 outputColor;
     
-    float4 transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+    float4 transformedUV;
+    
+    if (gMaterial.enableBoxMapping > 0.5f) {
+        float3 absNormal = abs(input.normal);
+        float2 finalUV = float2(0.0f, 0.0f);
+        // The object scale is embedded in the uvTransform's first two diagonal elements
+        // (Since MapChip2D sets uvTransform = Scale(spanWidth, spanHeight, 1.0f))
+        float spanWidth = gMaterial.uvTransform._11;
+        float spanHeight = gMaterial.uvTransform._22;
+        float spanDepth = gMaterial.uvTransform._33;
+        
+        float3 scaledPos = input.localPosition * float3(spanWidth, spanHeight, spanDepth);
+        
+        if (absNormal.z > 0.5f) { // Front/Back
+            finalUV = float2(scaledPos.x + 0.5f * spanWidth, -scaledPos.y + 0.5f * spanHeight); 
+        } else if (absNormal.x > 0.5f) { // Left/Right
+            finalUV = float2(-scaledPos.z + 0.5f * spanDepth, -scaledPos.y + 0.5f * spanHeight);
+        } else { // Top/Bottom
+            finalUV = float2(scaledPos.x + 0.5f * spanWidth, scaledPos.z + 0.5f * spanDepth);
+        }
+        transformedUV = float4(finalUV, 0.0f, 1.0f);
+    } else {
+        transformedUV = mul(float4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
+    }
+    
     float4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
     // Perform alpha discard using threshold from material

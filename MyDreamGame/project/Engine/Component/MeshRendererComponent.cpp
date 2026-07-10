@@ -26,6 +26,7 @@ void MeshRendererComponent::Initialize(ID3D12Device* device, Model* model) {
     material_.environmentCoefficient = 1.0f;
     material_.enableEnvironmentMap = 0;
     material_.uvTransform = TransformFunctions::MakeIdentity4x4();
+    material_.enableBoxMapping = 0.0f;
     *mappedMaterial_ = material_;
 
     // Transform用バッファ生成

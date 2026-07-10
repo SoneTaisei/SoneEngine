@@ -233,6 +233,9 @@ private:
     std::set<std::string> customToolFilters_;
     std::vector<std::string> availableModels_; // "Object/..." のような相対パスを保持
     void ScanAvailableModels();
+    
+    std::vector<std::string> availableTextures_;
+    void ScanAvailableTextures();
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;

@@ -115,7 +115,8 @@ void MapChip2D::Update() {
 
 void MapChip2D::Draw() {
     auto cameraMgr = CameraManager::GetInstance();
-    Matrix4x4 vp = TransformFunctions::Multiply(cameraMgr->GetViewMatrix(), cameraMgr->GetProjectionMatrix());
+    Matrix4x4 vp = TransformFunctions::Multiply(cameraMgr->GetCullingViewMatrix(), cameraMgr->GetCullingProjectionMatrix());
+    
     std::array<Vector4, 6> planes;
     TransformFunctions::ExtractFrustumPlanes(vp, planes);
 
@@ -537,6 +538,7 @@ std::string MapChip2D::GetMapDataAsString() const {
         p["color"] = {{"r", def.color.x}, {"g", def.color.y}, {"b", def.color.z}, {"a", def.color.w}};
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
+        p["textureName"] = def.textureName;
         p["properties"] = def.properties;
         paletteArray.push_back(p);
     }
@@ -586,6 +588,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                     def.scale.z = p["scale"]["z"];
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
+                if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
                 
                 bool found = false;
@@ -739,6 +742,7 @@ bool MapChip2D::SaveTemplatesToFile(const std::string& filepath) {
         p["color"] = {{"r", def.color.x}, {"g", def.color.y}, {"b", def.color.z}, {"a", def.color.w}};
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
+        p["textureName"] = def.textureName;
         p["properties"] = def.properties;
         templatesArray.push_back(p);
     }
@@ -779,6 +783,7 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                     def.scale.z = p["scale"]["z"];
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
+                if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
                 templatePalette_.push_back(def);
             }
@@ -850,6 +855,12 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                 if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                     prc->GetMaterial().color = def->color;
                     
+                    if (!def->textureName.empty()) {
+                        uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
+                        prc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+                    }
+                    
+
                     if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
                         tc->SetScale({ 
                             tc->GetScale().x * def->scale.x, 
@@ -880,7 +891,13 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     // PrimitiveRendererComponent を無効化する代わりに、MeshRendererComponent を追加
                     auto* mrc = newBlock->GetGameObject()->AddComponent<MeshRendererComponent>();
                     mrc->Initialize(device_.Get(), model);
-                    mrc->SetTextureHandle(gpuHandle_);
+                    
+                    if (!def->textureName.empty()) {
+                        uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
+                        mrc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+                    } else {
+                        mrc->SetTextureHandle(gpuHandle_);
+                    }
                     mrc->GetMaterial().color = def->color;
 
                     if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
@@ -898,10 +915,14 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
 
         if (newBlock->GetGameObject()) {
             newBlock->GetGameObject()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
-            if (spanWidth > 1 || spanHeight > 1) {
-                if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                    Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({(float)spanWidth, (float)spanHeight, 1.0f});
+            if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                    float tileX = tc->GetScale().x / chipSize_;
+                    float tileY = tc->GetScale().y / chipSize_;
+                    float tileZ = tc->GetScale().z / chipSize_;
+                    Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
                     prc->GetMaterial().uvTransform = uvTrans;
+                    prc->GetMaterial().enableBoxMapping = 1.0f;
                 }
             }
         }

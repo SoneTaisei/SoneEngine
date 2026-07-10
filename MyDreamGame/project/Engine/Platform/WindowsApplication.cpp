@@ -18,6 +18,7 @@
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
 #include "Scene/SceneFactory.h"
+#include "Graphics/CameraManager.h"
 #include "Window.h"
 #include "Core/TimeManager.h"
 // (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
@@ -311,17 +312,25 @@ void WindowsApplication::Update() {
         if (editorManager_->IsMapEditorVisible()) {
             activeCamera_ = mapEditorCamera_.get();
             isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
             bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
             mapEditorCamera_->Update(allowCameraInput);
         } else if (editorManager_->UseDebugCamera()) {
             activeCamera_ = debugCamera_.get();
             isDebugCameraActive_ = true;
             
+            if (EditorManager::IsPlaying()) {
+                CameraManager::GetInstance()->SetCullingCameraInfo(gameCamera_->GetViewMatrix(), gameCamera_->GetProjectionMatrix());
+            } else {
+                CameraManager::GetInstance()->ClearCullingCameraInfo();
+            }
+            
             bool allowCameraInput = editorManager_->IsGameViewHovered() || !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {
             activeCamera_ = gameCamera_.get();
             isDebugCameraActive_ = false;
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
         }
     } else {
         // ImGui 非表示時は通常通りシーンとカメラを更新し、アクティブカメラをゲームカメラに強制する
@@ -329,11 +338,13 @@ void WindowsApplication::Update() {
         gameCamera_->Update();
         activeCamera_ = gameCamera_.get();
         isDebugCameraActive_ = false;
+        CameraManager::GetInstance()->ClearCullingCameraInfo();
     }
 #else
     // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
     gameCamera_->Update();
+    CameraManager::GetInstance()->ClearCullingCameraInfo();
 #endif
 
     // 現在のアクティブカメラの行列をViewProjectionに反映

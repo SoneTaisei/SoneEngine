@@ -48,6 +48,7 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
     ScanAvailableModels();
+    ScanAvailableTextures();
 
     // 1. ImGuiコンテキストの作成
     IMGUI_CHECKVERSION();
@@ -98,6 +99,27 @@ void EditorManager::ScanAvailableModels() {
             std::string relativePath = std::filesystem::relative(entry.path(), "resources").string();
             std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
             availableModels_.push_back(relativePath);
+        }
+    }
+}
+
+void EditorManager::ScanAvailableTextures() {
+    availableTextures_.clear();
+    std::vector<std::string> pathsToScan = { "resources/Sprite", "resources/Object" };
+    for (const auto& pathStr : pathsToScan) {
+        std::filesystem::path basePath(pathStr);
+        if (!std::filesystem::exists(basePath) || !std::filesystem::is_directory(basePath)) continue;
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(basePath)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".png" || ext == ".jpg" || ext == ".dds" || ext == ".jpeg") {
+                    std::string relativePath = std::filesystem::relative(entry.path(), "resources").string();
+                    std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
+                    availableTextures_.push_back(relativePath);
+                }
+            }
         }
     }
 }
@@ -630,6 +652,28 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 ImGui::EndCombo();
                             }
 
+                            if (ImGui::BeginCombo("テクスチャ (Texture)", targetDef->textureName.empty() ? "なし (None)" : targetDef->textureName.c_str())) {
+                                bool isTexNoneSelected = targetDef->textureName.empty();
+                                if (ImGui::Selectable("なし (None)", isTexNoneSelected)) {
+                                    targetDef->textureName = "";
+                                    changed = true;
+                                }
+                                if (isTexNoneSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                                for (const auto& texPath : availableTextures_) {
+                                    bool isSelected = (targetDef->textureName == texPath);
+                                    if (ImGui::Selectable(texPath.c_str(), isSelected)) {
+                                        targetDef->textureName = texPath;
+                                        changed = true;
+                                    }
+                                    if (isSelected) {
+                                        ImGui::SetItemDefaultFocus();
+                                    }
+                                }
+                                ImGui::EndCombo();
+                            }
+
                             ImGui::Separator();
                             ImGui::Text("プロパティ:");
                             auto getJpKey = [](const std::string& k) {
@@ -683,6 +727,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                         targetDef->color = t.color;
                                         targetDef->scale = t.scale;
                                         targetDef->modelName = t.modelName;
+                                        targetDef->textureName = t.textureName;
                                         targetDef->properties = t.properties;
                                         changed = true;
                                         found = true;
@@ -693,6 +738,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     targetDef->color = {1.0f, 1.0f, 1.0f, 1.0f};
                                     targetDef->scale = {1.0f, 1.0f, 1.0f};
                                     targetDef->modelName = "";
+                                    targetDef->textureName = "";
                                     bool foundTemplate = false;
                                     for (const auto& t : mapChip->GetTemplatePalette()) {
                                         if (t.type == targetDef->type) {
