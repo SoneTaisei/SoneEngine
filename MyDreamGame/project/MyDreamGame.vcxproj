@@ -73,7 +73,7 @@
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile>
+    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -100,7 +100,7 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile>
+    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -128,7 +128,7 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <ClCompile>
+    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -211,6 +211,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     </ClCompile>
     <ClCompile Include="Engine\GameObject\GameObject.cpp" />
     <ClCompile Include="Engine\Component\TransformComponent.cpp" />
+    <ClCompile Include="Engine\Component\AnimatorComponent.cpp" />
     <ClCompile Include="Engine\Component\ColliderComponent.cpp" />
     <ClCompile Include="Engine\Collision\CollisionManager.cpp" />
     <ClCompile Include="Engine\Component\MeshRendererComponent.cpp" />
@@ -220,6 +221,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp" />
     <ClCompile Include="Engine\Core\Utility\LogManager.cpp" />
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp" />
+    <ClCompile Include="Engine\Core\Utility\Quaternion.cpp" />
+    <ClCompile Include="Engine\Core\Utility\Animation.cpp" />
     <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp" />
     <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
@@ -408,6 +411,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\GameObject\GameObject.h" />
     <ClInclude Include="Engine\Component\IComponent.h" />
     <ClInclude Include="Engine\Component\TransformComponent.h" />
+    <ClInclude Include="Engine\Component\AnimatorComponent.h" />
     <ClInclude Include="Engine\Component\ColliderComponent.h" />
     <ClInclude Include="Engine\Collision\CollisionManager.h" />
     <ClInclude Include="Engine\Component\MeshRendererComponent.h" />
@@ -419,6 +423,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Core\Utility\TransformFunctions.h" />
     <ClInclude Include="Engine\Core\Utility\LogManager.h" />
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h" />
+    <ClInclude Include="Engine\Core\Utility\Quaternion.h" />
+    <ClInclude Include="Engine\Core\Utility\Animation.h" />
     <ClInclude Include="Engine\Core\Utility\ParameterManager.h" />
     <ClInclude Include="Engine\Graphics\TextureManager.h" />
     <ClInclude Include="Project\Scenes\TitleScene.h" />

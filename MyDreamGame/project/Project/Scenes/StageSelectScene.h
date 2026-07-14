@@ -5,6 +5,7 @@
 #include <memory>
 #include "GameObject/GameObject.h"
 #include "Component/MeshRendererComponent.h"
+#include "Component/AnimatorComponent.h"
 #include "Graphics/Skybox.h"
 
 #include <string>
@@ -22,6 +23,7 @@ public:
 
     // ヒエラルキー用
     std::vector<Object3D *> GetObjects() override;
+    std::vector<std::shared_ptr<GameObject>> GetGameObjects() override { return gameObjects_; }
 
 private:
     void SaveConfig();

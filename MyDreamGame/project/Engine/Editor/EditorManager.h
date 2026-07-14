@@ -76,6 +76,7 @@ public:
     // 選択状態のクリア (シーン再生成時にワイルドポインタになるのを防ぐ)
     void ClearSelection() {
         selectedObject_ = nullptr;
+        selectedGameObject_ = nullptr;
         selectedParticle_ = nullptr;
         selectedPrimitive_ = nullptr;
         sceneJustReset_ = true; // シーンリセットのフラグを立てる
@@ -171,6 +172,7 @@ private:
 
     // 選択中のオブジェクト
     Object3D *selectedObject_ = nullptr;
+    std::shared_ptr<GameObject> selectedGameObject_ = nullptr;
     ParticleManager *selectedParticle_ = nullptr;
     PrimitiveObject *selectedPrimitive_ = nullptr;
 

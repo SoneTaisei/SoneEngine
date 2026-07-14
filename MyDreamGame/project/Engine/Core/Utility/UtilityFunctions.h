@@ -1,5 +1,6 @@
 #pragma once
 #include"Core/Utility/Structs.h"
+#include "Animation.h"
 #include"GameObject/ResourceObject.h"
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -56,6 +57,7 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 /// <param name="filename"></param>
 /// <returns></returns>
 ModelData LoadModelFile(const std::string &directoryPath, const std::string &filename);
+Animation LoadAnimationFile(const std::string &directoryPath, const std::string &filename);
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename);
 

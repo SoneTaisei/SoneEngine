@@ -479,6 +479,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
                 if (ImGui::CollapsingHeader("オブジェクト (Objects)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::CollapsingHeader("GameObjects", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (auto &obj : activeScene->GetGameObjects()) {
+                        bool isSelected = (selectedGameObject_ == obj);
+                        if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = obj;
+                            selectedObject_ = nullptr;
+                            selectedParticle_ = nullptr;
+                            selectedPrimitive_ = nullptr;
+                        }
+                    }
+                }
                     for (auto *obj : activeScene->GetObjects()) {
                         bool isSelected = (selectedObject_ == obj);
                         if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
@@ -526,7 +537,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     if (showInspector_) {
         if (ImGui::Begin("インスペクター", &showInspector_)) {
             bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9));
-            if (selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected) {
+            if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
@@ -542,7 +553,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Spacing();
             }
 
-            if (selectedObject_) {
+            if (selectedGameObject_) {
+                selectedGameObject_->DisplayImGui();
+            } else if (selectedObject_) {
                 selectedObject_->DisplayImGui("Object Properties");
             } else if (selectedParticle_) {
                 selectedParticle_->DrawImGui();

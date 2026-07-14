@@ -3,6 +3,7 @@
 #include <wrl.h>
 #include <d3d12.h>
 #include"Core/Utility/UtilityFunctions.h"
+#include "GameObject/GameObject.h"
 
 // 前方宣言
 class SceneManager;
@@ -42,6 +43,7 @@ public:
 
     // ヒエラルキー用: オブジェクトリストの取得 (デフォルトは空)
     virtual std::vector<Object3D *> GetObjects() { return {}; }
+    virtual std::vector<std::shared_ptr<GameObject>> GetGameObjects() { return {}; }
     virtual std::vector<ParticleManager *> GetParticles() { return {}; }
     virtual std::vector<PrimitiveObject *> GetPrimitives() { return {}; }
 

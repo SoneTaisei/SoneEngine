@@ -90,6 +90,12 @@
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\Quaternion.cpp">
+      <Filter>Engine\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\Animation.cpp">
+      <Filter>Engine\Utility</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
@@ -118,6 +124,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Component\TransformComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Component\AnimatorComponent.cpp">
       <Filter>Engine\Component</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Component\ColliderComponent.cpp">
@@ -323,6 +332,12 @@
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\Quaternion.h">
+      <Filter>Engine\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\Animation.h">
+      <Filter>Engine\Utility</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Core\Utility\ParameterManager.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
@@ -354,6 +369,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Component\TransformComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\AnimatorComponent.h">
       <Filter>Engine\Component</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Component\ColliderComponent.h">

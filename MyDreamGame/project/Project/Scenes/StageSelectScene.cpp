@@ -10,6 +10,8 @@
 #include "Scene/SceneFactory.h"
 #include "GameScene.h"
 #include "Core/TimeManager.h"
+#include "Graphics/CameraManager.h"
+#include "Renderer/Renderer.h"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -52,10 +54,35 @@ void StageSelectScene::Initialize() {
     auto skydomeRenderer = skydomeObject->AddComponent<MeshRendererComponent>();
     skydomeRenderer->Initialize(device.Get(), skydomeModelResource);
     skydomeRenderer->SetTextureHandle(skydomeTH);
+    skydomeModelResource->SetTextureHandle(skydomeTH);
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
     gameObjects_.push_back(skydomeObject);
+
+    // AnimatedCubeの追加
+    Model* animatedCubeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/AnimatedCube", "AnimatedCube.gltf");
+    Animation cubeAnimation = LoadAnimationFile("resources/Object/School/AnimatedCube", "AnimatedCube.gltf");
+    
+    auto animatedCubeObject = std::make_shared<GameObject>("AnimatedCube");
+    auto cubeTransform = animatedCubeObject->AddComponent<TransformComponent>();
+    cubeTransform->SetPosition({0.0f, 0.0f, 0.0f}); // 中央に配置
+    
+    uint32_t cubeTexIndex = TextureManager::GetInstance()->Load("resources/Object/School/AnimatedCube/AnimatedCube_BaseColor.png");
+    D3D12_GPU_DESCRIPTOR_HANDLE cubeTH = TextureManager::GetInstance()->GetGpuHandle(cubeTexIndex);
+    
+    auto cubeRenderer = animatedCubeObject->AddComponent<MeshRendererComponent>();
+    cubeRenderer->Initialize(device.Get(), animatedCubeModel);
+    cubeRenderer->SetTextureHandle(cubeTH);
+    animatedCubeModel->SetTextureHandle(cubeTH); // Modelの内部テクスチャハンドルを上書き
+    
+    auto cubeAnimator = animatedCubeObject->AddComponent<AnimatorComponent>();
+    cubeAnimator->Initialize();
+    cubeAnimator->SetAnimation(cubeAnimation);
+    cubeAnimator->SetTargetNodeName("AnimatedCube");
+    cubeAnimator->Play();
+    
+    gameObjects_.push_back(animatedCubeObject);
 
     // Skyboxの初期化
     uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
@@ -75,6 +102,8 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
     // 2. プロジェクション行列（透視投影行列）を作成
     // 一般的な設定：視野角0.45rad, アスペクト比16:9, 近平面0.1, 遠平面1000.0
     Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
+
+    CameraManager::GetInstance()->SetCameraInfo(cameraTransform_.translate, viewMatrix, projectionMatrix);
 
     // 全オブジェクトの更新（座標変換行列の計算など）
     for (auto &object : gameObjects_) {
@@ -135,6 +164,8 @@ void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     for (auto &object : gameObjects_) {
         object->Draw();
     }
+
+    Renderer::GetInstance()->RenderComponents();
 }
 
 std::vector<Object3D *> StageSelectScene::GetObjects() {

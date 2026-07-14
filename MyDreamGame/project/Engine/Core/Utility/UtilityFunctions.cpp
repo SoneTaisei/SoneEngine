@@ -1,3 +1,4 @@
+#pragma warning(disable: 4828)
 #include "UtilityFunctions.h"
 #include <map>
 #include <fstream>
@@ -15,46 +16,46 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 #endif // USE_IMGUI
 
-	// メッセージに応じてゲーム固有の処理を行う
+	// メチE��ージに応じてゲーム固有�E処琁E��行う
 	switch(msg) {
 		// ウィンドウが破壊された
 	case WM_DESTROY:
-		// OSに応じて、アプリ固有の終了を伝える
+		// OSに応じて、アプリ固有�E終亁E��伝えめE
 		PostQuitMessage(0);
 		return 0;
 	}
 
-	// 標準のメッセージ処理を行う
+	// 標準�EメチE��ージ処琁E��行う
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 void Log(const std::string &message) {
-	// デバッグ出力（従来の動作）
+	// チE��チE��出力（従来の動作！E
 	OutputDebugStringA(message.c_str());
 
-	// ログファイルを一度だけ作成して使い回す（スレッドセーフ）
+	// ログファイルを一度だけ作�Eして使ぁE��す（スレチE��セーフ！E
 	static std::once_flag s_logInitFlag;
 	static std::ofstream s_logStream;
 	static std::mutex s_logMutex;
 
 	std::call_once(s_logInitFlag, []() {
 		try {
-			// logs ディレクトリを作成
+			// logs チE��レクトリを作�E
 			std::filesystem::create_directories("logs");
 
 			// 現在の時刻を秒単位に丸める
 			auto now = std::chrono::system_clock::now();
 			auto nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
 
-			// ローカルタイムゾーンに変換してフォーマット（元コードと同じ書式を使用）
+			// ローカルタイムゾーンに変換してフォーマット（�Eコードと同じ書式を使用�E�E
 			std::chrono::zoned_time localTime{ std::chrono::current_zone(), nowSeconds };
 			std::string dateString = std::format("{:%Y%d_%H%M%S}", localTime);
 
-			// ファイルパスを作成して open（追記モード）
+			// ファイルパスを作�Eして open�E�追記モード！E
 			std::string logFilePath = std::string("logs/") + dateString + ".log";
 			s_logStream.open(logFilePath, std::ios::app | std::ios::binary);
 		} catch(...) {
-			// 例外は無視してデバッグ出力のみ行う（ログ失敗してもアプリが止まらないようにする）
+			// 例外�E無視してチE��チE��出力�Eみ行う�E�ログ失敗してもアプリが止まらなぁE��ぁE��する�E�E
 		}
 				   });
 
@@ -99,12 +100,12 @@ std::string str0{ "STRING" };
 std::string str1{ std::to_string(10) };
 
 LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
-	// 時刻を取得して、時刻を名前に入れたファイルを作成。Dumpsディレクトリ以下に出力
+	// 時刻を取得して、時刻を名前に入れたファイルを作�E、EumpsチE��レクトリ以下に出劁E
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	wchar_t filePath[MAX_PATH] = { 0 };
 
-	// ディレクトリ作成（失敗しても続行）
+	// チE��レクトリ作�E�E�失敗しても続行！E
 	if(!CreateDirectoryW(L"./Dumps", nullptr)) {
 		DWORD err = GetLastError();
 		if(err != ERROR_ALREADY_EXISTS) {
@@ -112,14 +113,14 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
 		}
 	}
 
-	// ファイル名（秒単位）
+	// ファイル名（秒単位！E
 	StringCchPrintfW(filePath, MAX_PATH, L"./Dumps/%04d-%02d-%02d_%02d%02d%02d.dmp",
 					 time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond);
 
-				 // ログにパスを出力
+				 // ログにパスを�E劁E
 	Log(std::format("ExportDump: target path: {}\n", ConvertString(filePath)));
 
-	// ファイル作成
+	// ファイル作�E
 	HANDLE dumpFileHandle = CreateFileW(
 		filePath,
 		GENERIC_READ | GENERIC_WRITE,
@@ -135,17 +136,17 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
 		return EXCEPTION_EXECUTE_HANDLER;
 	}
 
-	// processId(exeID)とクラッシュ(例外)の発生したthreadIDを取得
+	// processId(exeID)とクラチE��ュ(例夁Eの発生したthreadIDを取征E
 	DWORD processId = GetCurrentProcessId();
 	DWORD threadId = GetCurrentThreadId();
 
-	// 設定情報を入力
+	// 設定情報を�E劁E
 	MINIDUMP_EXCEPTION_INFORMATION minidumpInformation{};
 	minidumpInformation.ThreadId = threadId;
 	minidumpInformation.ExceptionPointers = exception;
 	minidumpInformation.ClientPointers = TRUE;
 
-	// Dumpを出力。結果をログに残す
+	// Dumpを�E力。結果をログに残す
 	BOOL writeResult = MiniDumpWriteDump(
 		GetCurrentProcess(),
 		processId,
@@ -164,7 +165,7 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
 
 	CloseHandle(dumpFileHandle);
 
-	// ほかに関連付けられているSEH例外ハンドラがあれば実行。通常プロセスを終了する。
+	// ほかに関連付けられてぁE��SEH例外ハンドラがあれ�E実行。通常プロセスを終亁E��る、E
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -173,7 +174,7 @@ IDxcBlob *CompileShader(
 	const std::wstring &filePath,
 	// Compilerに使用するProfile
 	const wchar_t *profile,
-	// 初期化で生成したものを3つ
+	// 初期化で生�Eしたも�EめEつ
 	IDxcUtils *dxcUtils,
 	IDxcCompiler3 *dxcCompiler,
 	IDxcIncludeHandler *includeHandler) {
@@ -182,7 +183,7 @@ IDxcBlob *CompileShader(
 	*1. hlslファイルを読む
 	*********************************************************/
 
-	// これからシェーダーをコンパイルする旨をログに出す
+	// これからシェーダーをコンパイルする旨をログに出ぁE
 	Log(ConvertString(std::format(L"Begin CompileShader, path:{},profile:{}\n", filePath, profile)));
 	// hlslファイルを読む
 	IDxcBlobEncoding *shaderSource = nullptr;
@@ -194,24 +195,24 @@ IDxcBlob *CompileShader(
 	}
 	// あきらめなかったら止める
 	assert(SUCCEEDED(hr));
-	// 読み込んだファイルの内容を設定する
+	// 読み込んだファイルの冁E��を設定すめE
 	DxcBuffer shaderSourceBuffer;
 	shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
 	shaderSourceBuffer.Size = shaderSource->GetBufferSize();
-	shaderSourceBuffer.Encoding = DXC_CP_UTF8;// UTF8の文字コードであることを通知
+	shaderSourceBuffer.Encoding = DXC_CP_UTF8;// UTF8の斁E��コードであることを通知
 
 	/*********************************************************
 	*2.Compileする
 	*********************************************************/
 
 	LPCWSTR arguments[] = {
-        filePath.c_str(),         // コンパイル対象のhlslファイル名
-        L"-E", L"main",           // エントリーポイントの指定。基本的にmain以外にはしない
-        L"-T", profile,           // ShaderProfileの設定
-        L"-Zi", L"-Qembed_debug", // デバッグ用の情報を埋め込む
+        filePath.c_str(),         // コンパイル対象のhlslファイル吁E
+        L"-E", L"main",           // エントリーポイント�E持E��。基本皁E��main以外にはしなぁE
+        L"-T", profile,           // ShaderProfileの設宁E
+        L"-Zi", L"-Qembed_debug", // チE��チE��用の惁E��を埋め込む
         L"-Od",                   // 最適化を外しておく
-        L"-Zpr",                  // メモリレイアウトは行優先
-        L"-HV", L"2021",          // ★ これを追加！ HLSL2021ルールを適用してC++と同じ型名を使えるようにする
+        L"-Zpr",                  // メモリレイアウト�E行優允E
+        L"-HV", L"2021",          // ☁Eこれを追加�E�EHLSL2021ルールを適用してC++と同じ型名を使えるようにする
     };
 	// 実際にShaderをコンパイルする
 	IDxcResult *shaderResult = nullptr;
@@ -222,32 +223,32 @@ IDxcBlob *CompileShader(
 		includeHandler,
 		IID_PPV_ARGS(&shaderResult)
 	);
-	// コンパイラエラーではなくdxcが起動できないなどの致命的なエラー
+	// コンパイラエラーではなくdxcが起動できなぁE��どの致命皁E��エラー
 	assert(SUCCEEDED(hr));
 /*********************************************************
-	*3.警告・エラーが出ていないか確認
+	*3.警告�Eエラーが�EてぁE��ぁE��確誁E
 	*********************************************************/
 
 	IDxcBlobUtf8 *shaderError = nullptr;
 	shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
 
-	// shaderErrorが作られていて、かつ中身の文字列の長さが0ではない場合だけエラーとみなす
+	// shaderErrorが作られてぁE��、かつ中身の斁E���Eの長さが0ではなぁE��合だけエラーとみなぁE
 	if(shaderError != nullptr && shaderError->GetStringLength() != 0) {
 		Log(shaderError->GetStringPointer());
-		// 警告・エラー絶対ダメ
+		// 警告�Eエラー絶対ダメ
 		assert(false);
 	}
 	/*********************************************************
 	*4.Compile結果を受け取って返す
 	*********************************************************/
 
-	// コンパイル結果から実行用のバイナリ部分を取得
+	// コンパイル結果から実行用のバイナリ部刁E��取征E
 	IDxcBlob *shaderBlob = nullptr;
 	hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
 	assert(SUCCEEDED(hr));
-	// 成功押したログを出す
+	// 成功押したログを�EぁE
 	Log(ConvertString(std::format(L"Compile Succeeded, path:{},profile:{}\n", filePath, profile)));
-	// もう使わないリソースを開放
+	// もう使わなぁE��ソースを開放
 	shaderSource->Release();
 	shaderResult->Release();
 	// 実行用のバイナリを返却
@@ -255,13 +256,13 @@ IDxcBlob *CompileShader(
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComPtr<ID3D12Device> device, size_t sizeInBytes) {
-	assert(device != nullptr); // 安全チェック
+	assert(device != nullptr); // 安�EチェチE��
 
-	// アップロード用のヒープの設定（CPUからGPUにデータを送る用）
+	// アチE�Eロード用のヒ�Eプ�E設定！EPUからGPUにチE�Eタを送る用�E�E
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
 
-	// バッファリソースの設定
+	// バッファリソースの設宁E
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	resourceDesc.Width = sizeInBytes;
@@ -271,13 +272,13 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComP
 	resourceDesc.SampleDesc.Count = 1;
 	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-	// 実際にリソース（バッファ）を作成
+	// 実際にリソース�E�バチE��ァ�E�を作�E
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
 	HRESULT hr = device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
-		D3D12_RESOURCE_STATE_COMMON, // 初期状態（読み取り用）
+		D3D12_RESOURCE_STATE_COMMON, // 初期状態（読み取り用�E�E
 		nullptr,
 		IID_PPV_ARGS(&resource)
 	);
@@ -285,10 +286,10 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComP
 		throw std::runtime_error("CreateBufferResource failed! VRAM might be full or arguments invalid.");
 	}
 
-	return resource; // 作ったバッファを返す！
+	return resource; // 作ったバチE��ァを返す�E�E
 }
 
-// DescriptorHeapの作成関数
+// DescriptorHeapの作�E関数
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
 	Microsoft::WRL::ComPtr<ID3D12Device> device, D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors, bool shaderVisible) {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -302,7 +303,7 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
 	return heap;
 }
 
-// Textureデータを読む
+// TextureチE�Eタを読む
 DirectX::ScratchImage LoadTexture(const std::string &filePath) {
     // ファイルパス確認用のログ
     OutputDebugStringA(("LoadTexture: " + filePath + "\n").c_str());
@@ -311,28 +312,28 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
     std::wstring filePathW = ConvertString(filePath);
     HRESULT hr;
 
-    // ★資料の指示1：DDSファイルに対応する
+    // ☁E��E��の持E��1�E�DDSファイルに対応すめE
     if (filePathW.ends_with(L".dds")) {
-        // .ddsで終わっていたらDDSとして読み込む。sRGB情報が含まれているのでフラグはNONE
+        // .ddsで終わってぁE��らDDSとして読み込む。sRGB惁E��が含まれてぁE��のでフラグはNONE
         hr = DirectX::LoadFromDDSFile(filePathW.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image);
     } else {
-        // それ以外は従来通りWIC（PNGやJPGなど）として読み込む
+        // それ以外�E従来通りWIC�E�ENGやJPGなど�E�として読み込む
         hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
     if (FAILED(hr)) {
         throw std::runtime_error("LoadTexture failed to load file: " + filePath);
     }
 
-    // ★資料の指示2：圧縮フォーマットか判定してミップマップ生成を分ける
+    // ☁E��E��の持E��2�E�圧縮フォーマットか判定してミップ�EチE�E生�Eを�Eける
     DirectX::ScratchImage mipImages{};
     if (DirectX::IsCompressed(image.GetMetadata().format)) {
-        // 圧縮フォーマットならそのまま使う（DirectXTexが直接のミップマップ生成に非対応なため）
+        // 圧縮フォーマットならそのまま使ぁE��EirectXTexが直接のミップ�EチE�E生�Eに非対応なため�E�E
         mipImages = std::move(image);
     } else {
-        // 非圧縮ならミップマップを作成する
+        // 非圧縮ならミチE�Eマップを作�Eする
         hr = DirectX::GenerateMipMaps(
             image.GetImages(), image.GetImageCount(), image.GetMetadata(),
-            DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) を 4 など任意に変更可能
+            DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) めE4 など任意に変更可能
         assert(SUCCEEDED(hr));
     }
 
@@ -341,28 +342,28 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
 
 // DirectX12のTextureResourceを作る
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device, const DirectX::TexMetadata &metadata) {
-	// metadataをもとにResourceの設定
+	// metadataをもとにResourceの設宁E
 	D3D12_RESOURCE_DESC resourceDesc{};
-	resourceDesc.Width = UINT(metadata.width);// 横幅
+	resourceDesc.Width = UINT(metadata.width);// 横幁E
 	resourceDesc.Height = UINT(metadata.height);// 高さ
 	resourceDesc.MipLevels = UINT(metadata.mipLevels);// mipmapの数
-	resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 奥行き ro 配列Textureの配列数
+	resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 奥行き ro 配�ETextureの配�E数
 	resourceDesc.Format = metadata.format;// TextureのFormat
-	resourceDesc.SampleDesc.Count = 1;// サンプリングカウント
-	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);// Textureの次元数。2次元
+	resourceDesc.SampleDesc.Count = 1;// サンプリングカウンチE
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);// Textureの次允E��、E次允E
 
-	// 利用するHeapの設定
+	// 利用するHeapの設宁E
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;// 細かい設定を行う
 
-	// Resourceの生成
+	// Resourceの生�E
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
 	HRESULT hr = device->CreateCommittedResource(
-		&heapProperties,// Heapの設定
-		D3D12_HEAP_FLAG_NONE,// Heapの特殊な設定。今回はなし
-		&resourceDesc,// Resourceの設定
-		D3D12_RESOURCE_STATE_COPY_DEST,// 初回のResourceState。
-		nullptr,//Clear最適値。今回は使わない
+		&heapProperties,// Heapの設宁E
+		D3D12_HEAP_FLAG_NONE,// Heapの特殊な設定。今回はなぁE
+		&resourceDesc,// Resourceの設宁E
+		D3D12_RESOURCE_STATE_COPY_DEST,// 初回のResourceState、E
+		nullptr,//Clear最適値。今回は使わなぁE
 		IID_PPV_ARGS(&resource)
 	);
 	if (FAILED(hr)) {
@@ -371,20 +372,20 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::Com
 	return resource;
 }
 
-// 戻り値を破損してはならないのでこれを付ける
+// 戻り値を破損してはならなぁE�Eでこれを付けめE
 [[nodiscard]]
-// TextureResouorceにデータを転送する
+// TextureResouorceにチE�Eタを転送すめE
 Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(Microsoft::WRL::ComPtr<ID3D12Resource> texture, const DirectX::ScratchImage &mipImages, Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
 	std::vector<D3D12_SUBRESOURCE_DATA>subresources;
-	// 読み込んだデータからDirectX12用のSubresourceの配列を作成
+	// 読み込んだチE�EタからDirectX12用のSubresourceの配�Eを作�E
 	DirectX::PrepareUpload(device.Get(), mipImages.GetImages(), mipImages.GetImageCount(), mipImages.GetMetadata(), subresources);
-	// IntermediateResourceに必要なサイズを計算する
+	// IntermediateResourceに忁E��なサイズを計算すめE
 	uint64_t intermediateSize = GetRequiredIntermediateSize(texture.Get(), 0, UINT(subresources.size()));
 	// 計算したサイズでIntermediateResourceを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = CreateBufferResource(device, intermediateSize);
-	// データ転送をコマンドに積む
+	// チE�Eタ転送をコマンドに積�E
 	UpdateSubresources(commandList.Get(), texture.Get(), intermediateResource.Get(), 0, 0, UINT(subresources.size()), subresources.data());
-	// Tetureへの転送後は利用できるよう、D3D12_RESOURCE_STATE_COPY_DESTからD3D12_RESOURCE_STATE_GENERIC_READへResourceStateを変更する
+	// Tetureへの転送後�E利用できるよう、D3D12_RESOURCE_STATE_COPY_DESTからD3D12_RESOURCE_STATE_GENERIC_READへResourceStateを変更する
 	D3D12_RESOURCE_BARRIER barrier{};
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -397,7 +398,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(Microsoft::WRL::ComPtr<
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device, int32_t width, int32_t height) {
-	// 生成するResourceの設定
+	// 生�EするResourceの設宁E
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = width;
 	resourceDesc.Height = height;
@@ -405,19 +406,19 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 	resourceDesc.DepthOrArraySize = 1;// 奥行き
 	resourceDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	resourceDesc.SampleDesc.Count = 1;
-	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;// 2次元
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;// 2次允E
 	resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-	// 利用するHeapの設定
+	// 利用するHeapの設宁E
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	// 深層値のクリア設定
+	// 深層値のクリア設宁E
 	D3D12_CLEAR_VALUE depthClearValue{};
 	depthClearValue.DepthStencil.Depth = 1.0f;
 	depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;// フォーマットをResourceと合わせる
 
-	// Resourceの設定
+	// Resourceの設宁E
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
 	HRESULT hr = device->CreateCommittedResource(
 		&heapProperties,
@@ -432,14 +433,14 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 	return resource;
 }
 
-// DescriptorHandleを取得する(CPU)
+// DescriptorHandleを取得すめECPU)
 D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap, uint32_t descriptorSize, uint32_t index) {
 	D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	handleCPU.ptr += (descriptorSize * index);
 	return handleCPU;
 }
 
-// DescriptorHandleを取得する(GPU)
+// DescriptorHandleを取得すめEGPU)
 D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap, uint32_t descriptorSize, uint32_t index) {
 	D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	handleGPU.ptr += (descriptorSize * index);
@@ -449,50 +450,50 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12
 
 
 void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &indices, float radius, int latDiv, int lonDiv) {
-	// 緯度の分割数: 上から下へ何段に分けるか
-	// 経度の分割数: 横に何分割するか（赤道の輪切りみたいなイメージ）
+	// 緯度の刁E��数: 上から下へ何段に刁E��るか
+	// 経度の刁E��数: 横に何�E割するか（赤道�E輪刁E��みたいなイメージ�E�E
 
-	// 頂点の生成（緯度方向にループ）
+	// 頂点の生�E�E�緯度方向にループ！E
 	for(int lat = 0; lat <= latDiv; ++lat) {
-		float theta = lat * float(M_PI) / float(latDiv); // 緯度の角度（0 ~ π）
+		float theta = lat * float(M_PI) / float(latDiv); // 緯度の角度�E�E ~ π�E�E
 		float sinTheta = sinf(theta);
 		float cosTheta = cosf(theta);
 
-		// 経度方向にループ
+		// 経度方向にルーチE
 		for(int lon = 0; lon <= lonDiv; ++lon) {
-			float phi = lon * 2.0f * float(M_PI) / float(lonDiv); // 経度の角度（0 ~ 2π）
+			float phi = lon * 2.0f * float(M_PI) / float(lonDiv); // 経度の角度�E�E ~ 2π�E�E
 			float sinPhi = sinf(phi);
 			float cosPhi = cosf(phi);
 
-			// 球のx, y, z座標を求める
+			// 琁E�Ex, y, z座標を求めめE
 			float x = cosPhi * sinTheta;
 			float y = cosTheta;
 			float z = sinPhi * sinTheta;
 
-			// 頂点データを作成
+			// 頂点チE�Eタを作�E
 			VertexData v{};
-			v.position = { radius * x, radius * y, radius * z, 1.0f }; // 球の表面上の点
+			v.position = { radius * x, radius * y, radius * z, 1.0f }; // 琁E�E表面上�E点
 			v.normal = {v.position.x / radius, v.position.y / radius, v.position.z / radius};
             v.texcoord = { (float)lon / lonDiv, (float)lat / latDiv };
             v.color = {1.0f, 1.0f, 1.0f, 1.0f};
             vertices.push_back(v); // 頂点リストに追加
 		}
 	}
-	// 三角形インデックスの生成（頂点をつなぐ）
+	// 三角形インチE��クスの生�E�E�頂点をつなぐ！E
 	for(int lat = 0; lat < latDiv; ++lat) {
 		for(int lon = 0; lon < lonDiv; ++lon) {
-			// 現在の行・列から頂点の番号を計算
+			// 現在の行�E列から頂点の番号を計箁E
 			int first = lat * (lonDiv + 1) + lon;
 			int second = first + lonDiv + 1;
 
 			// 二つの三角形を使って四角形を埋める
-			indices.push_back(first);         // 左上
-			indices.push_back(first + 1);     // 右上
-			indices.push_back(second);        // 左下
+			indices.push_back(first);         // 左丁E
+			indices.push_back(first + 1);     // 右丁E
+			indices.push_back(second);        // 左丁E
 
-			indices.push_back(second);        // 左下
-			indices.push_back(first + 1);     // 右上
-			indices.push_back(second + 1);    // 右下
+			indices.push_back(second);        // 左丁E
+			indices.push_back(first + 1);     // 右丁E
+			indices.push_back(second + 1);    // 右丁E
 		}
 	}
 }
@@ -500,23 +501,23 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 Node ReadNode(aiNode *node) {
     Node result;
 
-    // 1. 行列の取得と転置
+    // 1. 行�Eの取得と転置
     aiMatrix4x4 aiLocalMatrix = node->mTransformation;
-    aiLocalMatrix.Transpose(); // 列ベクトル形式を行ベクトル形式に転置
+    aiLocalMatrix.Transpose(); // 列�Eクトル形式を行�Eクトル形式に転置
 
-    // 2. 行列の要素をコピー
+    // 2. 行�Eの要素をコピ�E
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
             result.localMatrix.m[i][j] = aiLocalMatrix[i][j];
         }
     }
 
-    // 3. 名前と子供の解析
-    result.name = node->mName.C_Str();          // Node名を格納
-    result.children.resize(node->mNumChildren); // 子供の数だけ確保
+    // 3. 名前と子供�E解极E
+    result.name = node->mName.C_Str();          // Node名を格紁E
+    result.children.resize(node->mNumChildren); // 子供�E数だけ確俁E
 
     for (uint32_t childIndex = 0; childIndex < node->mNumChildren; ++childIndex) {
-        // 再帰的に読んで階層構造を作っていく
+        // 再帰皁E��読んで階層構造を作ってぁE��
         result.children[childIndex] = ReadNode(node->mChildren[childIndex]);
     }
 
@@ -529,31 +530,31 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     std::string filePath = directoryPath + "/" + filename;
 
     // 1. ファイルの読み込み
-    // 資料にある通り、三角形化、巻き順反転、UV反転を指定
+    // 賁E��にある通り、三角形化、巻き頁E��転、UV反転を指宁E
     const aiScene *scene = importer.ReadFile(filePath.c_str(),
-                                             // 1. すべての面を三角形に変換（DirectXが理解できる形式にする）
+                                             // 1. すべての面を三角形に変換�E�EirectXが理解できる形式にする�E�E
                                              aiProcess_Triangulate |
-                                                 // 2. V軸を反転（glTFなどの左下原点を、DirectX標準の左上原点に合わせる）
+                                                 // 2. V軸を反転�E�ElTFなどの左下原点を、DirectX標準�E左上原点に合わせる�E�E
                                                  aiProcess_FlipUVs |
-                                                 // 3. 右手系から左手系へ変換（軸の反転や巻き順の調整をセットで行う）
+                                                 // 3. 右手系から左手系へ変換�E�軸の反転めE��き頁E�E調整をセチE��で行う�E�E
                                                  aiProcess_ConvertToLeftHanded |
-                                                 // 4. 法線がない場合に滑らかな法線を生成（ライティング計算に必須）
+                                                 // 4. 法線がなぁE��合に滑らかな法線を生�E�E�ライチE��ング計算に忁E��！E
                                                  aiProcess_GenSmoothNormals |
-                                                 // 5. ノード階層の変形を頂点に焼き付ける（glTFの回転ズレを直す今回の重要フラグ）
+                                                 // 5. ノ�Eド階層の変形を頂点に焼き付ける！ElTFの回転ズレを直す今回の重要フラグ�E�E
                                                  aiProcess_PreTransformVertices);
 
-    // メッシュがない場合はエラー
+    // メチE��ュがなぁE��合�Eエラー
     assert(scene && scene->HasMeshes());
 
-    // 2. メッシュの解析（資料に基づき、全メッシュをループ）
+    // 2. メチE��ュの解析（賁E��に基づき、�EメチE��ュをループ！E
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh *mesh = scene->mMeshes[meshIndex];
 
-        // 法線とTexcoordがないメッシュは今回は非対応（資料のassert）
+        // 法線とTexcoordがなぁE��チE��ュは今回は非対応（賁E��のassert�E�E
         assert(mesh->HasNormals());
         assert(mesh->HasTextureCoords(0));
 
-        // 頂点データの解析
+        // 頂点チE�Eタの解极E
         for (uint32_t vIndex = 0; vIndex < mesh->mNumVertices; ++vIndex) {
             aiVector3D &position = mesh->mVertices[vIndex];
             aiVector3D &normal = mesh->mNormals[vIndex];
@@ -564,7 +565,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
 
-            // 左手系への変換（資料の通り、Xを反転）
+            // 左手系への変換�E�賁E��の通り、Xを反転�E�E
             vertex.position = {position.x, position.y, position.z, 1.0f};
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
@@ -572,10 +573,10 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             modelData.vertices.push_back(vertex);
         }
 
-        // インデックス（Face）の解析（資料：Indexed描画に対応させる）
+        // インチE��クス�E�Eace�E��E解析（賁E���E�Indexed描画に対応させる�E�E
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
             aiFace &face = mesh->mFaces[faceIndex];
-            assert(face.mNumIndices == 3); // 三角形のみサポート
+            assert(face.mNumIndices == 3); // 三角形のみサポ�EチE
 
             for (uint32_t element = 0; element < face.mNumIndices; ++element) {
                 uint32_t vertexIndex = face.mIndices[element];
@@ -584,7 +585,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         }
     }
 
-    // 3. マテリアルの解析（資料に基づき、Diffuseテクスチャを取得）
+    // 3. マテリアルの解析（賁E��に基づき、DiffuseチE��スチャを取得！E
     for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
         aiMaterial *material = scene->mMaterials[materialIndex];
         if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
@@ -601,8 +602,8 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename) {
 	MaterialData materialData;// 構築するMaterialData
-	std::string line;//　ファイルから読んだ1行目を格納する
-	std::ifstream file(directoryPath + "/" + filename);// ファイルを開く
+	std::string line;//　ファイルから読んだ1行目を格納すめE
+	std::ifstream file(directoryPath + "/" + filename);// ファイルを開ぁE
 	assert(file.is_open());// 開けなかったら止める
 
 	while(std::getline(file, line)) {
@@ -610,7 +611,7 @@ MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const st
 		std::istringstream s(line);
 		s >> identifier;
 
-		// identifierに応じた処理
+		// identifierに応じた�E琁E
 		if(identifier == "map_Kd") {
 			std::string textureFilename;
 			s >> textureFilename;
@@ -633,47 +634,47 @@ SoundData SoundLoadWave(const char *filename) {
 	std::ifstream file;
 	// .wavファイルをバイナリモードで開く
 	file.open(filename, std::ios_base::binary);
-	// ファイルオープン失敗を検出する
+	// ファイルオープン失敗を検�Eする
 	assert(file.is_open());
 
-	/*.wavデータ読み込み
+	/*.wavチE�Eタ読み込み
 	*********************************************************/
 
 	// RIFFヘッダーの読み込み
 	RiffHeader riff;
 	file.read((char *)&riff, sizeof(riff));
 	OutputDebugStringA(std::format("Read RIFF ID: {}\n", std::string(riff.chunk.id, 4)).c_str());
-	// タイプがRIFFかチェック
+	// タイプがRIFFかチェチE��
 	if(strncmp(riff.chunk.id, "RIFF", 4) != 0) {
 		assert(0);
 	}
-	// タイプがWAVEかチェック
+	// タイプがWAVEかチェチE��
 	if(strncmp(riff.type, "WAVE", 4) != 0) {
 		assert(0);
 	}
 
 	// Formatチャンク読み込み
 	FormatChunk format = {};
-	// fmtチャンクを探すループ
+	// fmtチャンクを探すルーチE
 	while(true) {
 		// チャンクヘッダーを読む
 		file.read((char *)&format.chunk, sizeof(ChunkHeader));
 
-		// チャンクIDが "fmt " なら break
+		// チャンクIDぁE"fmt " なめEbreak
 		if(strncmp(format.chunk.id, "fmt ", 4) == 0) {
 			break;
 		}
 
-		// それ以外ならスキップ
+		// それ以外ならスキチE�E
 		file.seekg(format.chunk.size, std::ios_base::cur);
 	}
-	// チャンク本体の読み込み
+	// チャンク本体�E読み込み
 	assert(format.chunk.size <= sizeof(format.fmt));
 	file.read((char *)&format.fmt, format.chunk.size);
 	// Dataチャンクの読み込み
 	ChunkHeader data;
 	file.read((char *)&data, sizeof(data));
-	// JUNKチャンクを検出した場合
+	// JUNKチャンクを検�Eした場吁E
 	if(strncmp(data.id, "JUNK", 4) == 0) {
 		// 読み取り位置をJUNKチャンクの終わりまで進める
 		file.seekg(data.size, std::ios_base::cur);
@@ -685,17 +686,17 @@ SoundData SoundLoadWave(const char *filename) {
 		assert(0);
 	}
 
-	// Dataチャンクのデータ部分読み込み
+	// DataチャンクのチE�Eタ部刁E��み込み
     auto pBuffer = std::make_unique<char[]>(data.size);
     file.read(pBuffer.get(), data.size);
 
 	// waveファイルを閉じる
 	file.close();
 
-	/*.読み込んだ音声データをreturn
+	/*.読み込んだ音声チE�Eタをreturn
 	*********************************************************/
 
-	// returnするための音声データ
+	// returnするための音声チE�Eタ
 	SoundData soundData = {};
 
 	soundData.wfex = format.fmt;
@@ -746,19 +747,19 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
     HRESULT hr;
     Microsoft::WRL::ComPtr<IMFSourceReader> pSourceReader;
 
-    // 1. SourceReaderの作成
+    // 1. SourceReaderの作�E
     std::wstring wFilename = ConvertString(filename);
     hr = MFCreateSourceReaderFromURL(wFilename.c_str(), nullptr, &pSourceReader);
     assert(SUCCEEDED(hr));
 
-    // 2. 出力形式をPCM（解凍後の生データ）に設定
+    // 2. 出力形式をPCM�E�解凍後�E生データ�E�に設宁E
     Microsoft::WRL::ComPtr<IMFMediaType> pTargetMediaType;
     MFCreateMediaType(&pTargetMediaType);
     pTargetMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
     pTargetMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
     pSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, pTargetMediaType.Get());
 
-    // 3. 最終的な波形フォーマットを取得
+    // 3. 最終的な波形フォーマットを取征E
     Microsoft::WRL::ComPtr<IMFMediaType> pActualMediaType;
     pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &pActualMediaType);
 
@@ -766,7 +767,7 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
     UINT32 wfexSize;
     MFCreateWaveFormatExFromMFMediaType(pActualMediaType.Get(), &pWfex, &wfexSize);
 
-    // 4. 全てのサンプルを読み込んでバッファに格納
+    // 4. 全てのサンプルを読み込んでバッファに格紁E
     std::vector<BYTE> audioData;
     while (true) {
         DWORD dwFlags = 0;
@@ -806,7 +807,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
 
     assert(device != nullptr);
 
-    // 生成するResourceの設定
+    // 生�EするResourceの設宁E
     D3D12_RESOURCE_DESC resourceDesc{};
     resourceDesc.Width = width;
     resourceDesc.Height = height;
@@ -816,15 +817,15 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     resourceDesc.SampleDesc.Count = 1;
     resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
-    // ★資料の指示1: RenderTargetとして利用可能にする特殊なフラグ
+    // ☁E��E��の持E��1: RenderTargetとして利用可能にする特殊なフラグ
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
-    // 利用するHeapの設定
+    // 利用するHeapの設宁E
     D3D12_HEAP_PROPERTIES heapProperties{};
-    // ★資料の指示2: 当然VRAM上に作る (DEFAULT)
+    // ☁E��E��の持E��2: 当然VRAM上に作る (DEFAULT)
     heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-    // クリア時の色を設定（レンダーターゲット生成時にはこれが必要です）
+    // クリア時�E色を設定（レンダーターゲチE��生�E時にはこれが忁E��です！E
     D3D12_CLEAR_VALUE clearValue{};
     clearValue.Format = format;
     clearValue.Color[0] = clearColor.x; // R
@@ -848,7 +849,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
 void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t> &indices) {
     vertices.resize(24);
 
-    // --- 頂点座標の定義 ---
+    // --- 頂点座標�E定義 ---
     // 右面 (+X)
     vertices[0].position = {1.0f, 1.0f, 1.0f, 1.0f};
     vertices[1].position = {1.0f, 1.0f, -1.0f, 1.0f};
@@ -880,8 +881,8 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
     vertices[22].position = {-1.0f, -1.0f, -1.0f, 1.0f};
     vertices[23].position = {1.0f, -1.0f, -1.0f, 1.0f};
 
-    // --- インデックスの定義（内側を向く順序） ---
-    // 各面 [0,1,2][2,1,3] のパターンで計36個
+    // --- インチE��クスの定義�E��E側を向く頁E��！E---
+    // 吁E�� [0,1,2][2,1,3] のパターンで訁E6倁E
     for (uint32_t i = 0; i < 6; ++i) {
         uint32_t offset = i * 4;
         indices.push_back(offset + 0);
@@ -892,3 +893,50 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
         indices.push_back(offset + 3);
     }
 }
+
+
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename) {
+    Animation animation; // create animation
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
+    const aiScene* scene = importer.ReadFile(filePath.c_str(), 0);
+    assert(scene->mNumAnimations != 0); // assert animation exists
+    aiAnimation* animationAssimp = scene->mAnimations[0]; // use first animation
+    animation.duration = float(animationAssimp->mDuration / animationAssimp->mTicksPerSecond); // convert to seconds
+
+    // loop channels for node animations
+    for (uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex) {
+        aiNodeAnim* nodeAnimationAssimp = animationAssimp->mChannels[channelIndex];
+        NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimationAssimp->mNodeName.C_Str()];
+        
+        // Translate
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumPositionKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mPositionKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {-keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z}; // right-hand to left-hand
+            nodeAnimation.translate.push_back(keyframe);
+        }
+
+        // Rotate
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumRotationKeys; ++keyIndex) {
+            aiQuatKey& keyAssimp = nodeAnimationAssimp->mRotationKeys[keyIndex];
+            KeyframeQuaternion keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            // right-hand to left-hand conversion for Quaternion
+            keyframe.value = {keyAssimp.mValue.x, -keyAssimp.mValue.y, -keyAssimp.mValue.z, keyAssimp.mValue.w};
+            nodeAnimation.rotate.push_back(keyframe);
+        }
+
+        // Scale
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumScalingKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.scale.push_back(keyframe);
+        }
+    }
+    return animation;
+}
+
