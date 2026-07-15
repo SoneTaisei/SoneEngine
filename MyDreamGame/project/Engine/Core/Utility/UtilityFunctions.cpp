@@ -8,6 +8,7 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include "Renderer/SrvManager.h"
+#include <algorithm>
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #ifdef USE_IMGUI
@@ -547,6 +548,9 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh *mesh = scene->mMeshes[meshIndex];
 
+        // MultiMesh/MultiMaterial対応のため、頂点の開始位置を記録しておく
+        uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
+
         // 豕慕ｷ壹→Texcoord縺後↑縺・Γ繝・す繝･縺ｯ莉雁屓縺ｯ髱槫ｯｾ蠢懶ｼ郁ｳ・侭縺ｮassert・・
         assert(mesh->HasNormals());
         assert(mesh->HasTextureCoords(0));
@@ -578,23 +582,23 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             std::string jointName = bone->mName.C_Str();
             JointWeightData& weightData = modelData.skinClusterData[jointName];
 
-            aiMatrix4x4 bindPoseMatrixAssimp = bone->mOffsetMatrix;
-            Matrix4x4 bindPoseMatrix;
-            bindPoseMatrix.m[0][0] = bindPoseMatrixAssimp.a1; bindPoseMatrix.m[0][1] = bindPoseMatrixAssimp.b1; bindPoseMatrix.m[0][2] = bindPoseMatrixAssimp.c1; bindPoseMatrix.m[0][3] = bindPoseMatrixAssimp.d1;
-            bindPoseMatrix.m[1][0] = bindPoseMatrixAssimp.a2; bindPoseMatrix.m[1][1] = bindPoseMatrixAssimp.b2; bindPoseMatrix.m[1][2] = bindPoseMatrixAssimp.c2; bindPoseMatrix.m[1][3] = bindPoseMatrixAssimp.d2;
-            bindPoseMatrix.m[2][0] = bindPoseMatrixAssimp.a3; bindPoseMatrix.m[2][1] = bindPoseMatrixAssimp.b3; bindPoseMatrix.m[2][2] = bindPoseMatrixAssimp.c3; bindPoseMatrix.m[2][3] = bindPoseMatrixAssimp.d3;
-            bindPoseMatrix.m[3][0] = bindPoseMatrixAssimp.a4; bindPoseMatrix.m[3][1] = bindPoseMatrixAssimp.b4; bindPoseMatrix.m[3][2] = bindPoseMatrixAssimp.c4; bindPoseMatrix.m[3][3] = bindPoseMatrixAssimp.d4;
-            
-            // 左手系への変換 (X軸反転)
-            // (1, -1, -1) のスケール反転が必要な場合は別途対応するが、Assimpの機能で反転されている場合もある。
-            // ここではDecomposeしてXを反転させるか、既存のReadNodeと同様の処理が必要だが、単純にm[0][1], m[0][2], m[1][0], m[2][0]などの符号反転で対応するアプローチもある。
-            // ひとまずInverseBindPose行列をそのまま代入する。
-            weightData.inverseBindPoseMatrix = bindPoseMatrix;
+            aiMatrix4x4 bindPoseMatrixAssimp = bone->mOffsetMatrix.Inverse(); // BindPoseMatrixに戻す
+            aiVector3D scale, translate;
+            aiQuaternion rotate;
+            bindPoseMatrixAssimp.Decompose(scale, rotate, translate); // 成分を抽出
+            // 左手系のBindPoseMatrixを作る (AssimpのaiProcess_ConvertToLeftHandedにより既に左手系に変換されているため、反転は不要)
+            Matrix4x4 bindPoseMatrix = TransformFunctions::MakeAffineMatrix(
+                { scale.x, scale.y, scale.z },
+                { rotate.x, rotate.y, rotate.z, rotate.w },
+                { translate.x, translate.y, translate.z }
+            );
+            // InverseBindPoseMatrixにする
+            weightData.inverseBindPoseMatrix = TransformFunctions::Inverse(bindPoseMatrix);
 
             for (uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
                 weightData.vertexWeights.push_back({
                     bone->mWeights[weightIndex].mWeight,
-                    bone->mWeights[weightIndex].mVertexId
+                    bone->mWeights[weightIndex].mVertexId + vertexOffset // vertexOffsetを加算する
                 });
             }
         }
@@ -605,7 +609,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
 
             for (uint32_t element = 0; element < face.mNumIndices; ++element) {
                 uint32_t vertexIndex = face.mIndices[element];
-                modelData.indices.push_back(vertexIndex);
+                modelData.indices.push_back(vertexIndex + vertexOffset); // vertexOffsetを加算する
             }
         }
     }
@@ -1044,21 +1048,19 @@ SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const
     device->CreateShaderResourceView(skinCluster.paletteResource.Get(), &srvDesc, skinCluster.paletteSrvHandle.first);
 
     // influenceResourceの生成 (頂点ごとのウェイトデータ)
-    skinCluster.influenceResource = CreateBufferResource(device, sizeof(VertexWeightData) * modelData.vertices.size());
-    VertexWeightData* mappedInfluence = nullptr;
+    skinCluster.influenceResource = CreateBufferResource(device, sizeof(VertexInfluence) * modelData.vertices.size());
+    VertexInfluence* mappedInfluence = nullptr;
     skinCluster.influenceResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedInfluence));
-    std::memset(mappedInfluence, 0, sizeof(VertexWeightData) * modelData.vertices.size());
+    std::memset(mappedInfluence, 0, sizeof(VertexInfluence) * modelData.vertices.size());
     skinCluster.mappedInfluence = {mappedInfluence, modelData.vertices.size()};
 
     skinCluster.influenceBufferView.BufferLocation = skinCluster.influenceResource->GetGPUVirtualAddress();
-    skinCluster.influenceBufferView.SizeInBytes = UINT(sizeof(VertexWeightData) * modelData.vertices.size());
-    skinCluster.influenceBufferView.StrideInBytes = sizeof(VertexWeightData);
+    skinCluster.influenceBufferView.SizeInBytes = UINT(sizeof(VertexInfluence) * modelData.vertices.size());
+    skinCluster.influenceBufferView.StrideInBytes = sizeof(VertexInfluence);
 
     // InverseBindPoseMatrix の保存
     skinCluster.inverseBindPoseMatrices.resize(skeleton.joints.size());
-    for (size_t i = 0; i < skeleton.joints.size(); ++i) {
-        skinCluster.inverseBindPoseMatrices[i] = TransformFunctions::MakeIdentity4x4(); // デフォルト
-    }
+    std::generate(skinCluster.inverseBindPoseMatrices.begin(), skinCluster.inverseBindPoseMatrices.end(), TransformFunctions::MakeIdentity4x4);
 
     // ウェイト情報のパース
     for (const auto& jointWeight : modelData.skinClusterData) {
@@ -1074,9 +1076,9 @@ SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const
 
             // 空いているウェイトスロットを探す
             for (uint32_t slot = 0; slot < kNumMaxInfluence; ++slot) {
-                if (skinCluster.mappedInfluence[vIndex].weight[slot] == 0.0f) {
-                    skinCluster.mappedInfluence[vIndex].weight[slot] = weightInfo.weight;
-                    skinCluster.mappedInfluence[vIndex].jointIndex[slot] = jointIndex;
+                if (skinCluster.mappedInfluence[vIndex].weights[slot] == 0.0f) {
+                    skinCluster.mappedInfluence[vIndex].weights[slot] = weightInfo.weight;
+                    skinCluster.mappedInfluence[vIndex].jointIndices[slot] = jointIndex;
                     break;
                 }
             }
@@ -1099,10 +1101,8 @@ void Update(SkinCluster& skinCluster, const Skeleton& skeleton) {
         Matrix4x4 paletteMatrix = inverseBindPose * skeletonSpaceMatrix;
         skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix = paletteMatrix;
         
-        // 法線用の逆転置行列 (スケールが含まれていなければ paletteMatrix と同一でもよいが厳密には逆転置)
-        // 簡易的に paletteMatrix をそのまま送るか、Transpose(Inverse(paletteMatrix)) を計算する
-        // ここでは一旦そのまま
-        skinCluster.mappedPalette[jointIndex].skeletonSpaceInverseTransposeMatrix = paletteMatrix;
+        // 法線用の逆転置行列
+        skinCluster.mappedPalette[jointIndex].skeletonSpaceInverseTransposeMatrix = TransformFunctions::Transpose(TransformFunctions::Inverse(paletteMatrix));
     }
 }
 

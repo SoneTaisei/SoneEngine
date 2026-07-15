@@ -1,4 +1,4 @@
-﻿#include "Object3d.hlsli"
+#include "Object3d.hlsli"
 
 // Transformation matrix for the object
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
@@ -17,46 +17,52 @@ struct Well {
 // SkinCluster data (Palette)
 StructuredBuffer<Well> gPalette : register(t1);
 
-// Vertex Shader Input (now including Weight and Indices)
+// Vertex Shader Input
 struct SkinningVertexShaderInput {
-    float4 position : POSITION;
-    float2 texcoord : TEXCOORD;
-    float3 normal : NORMAL;
-    float4 color : COLOR;
-    float4 weight : WEIGHT;
-    int4 jointIndices : BONEINDICES;
+    float4 position : POSITION0;
+    float2 texcoord : TEXCOORD0;
+    float3 normal : NORMAL0;
+    float4 color : COLOR0;
+    float4 weight : WEIGHT0;
+    int4 index : INDEX0;
 };
+
+struct Skinned {
+    float4 position;
+    float3 normal;
+};
+
+Skinned Skinning(SkinningVertexShaderInput input) {
+    Skinned skinned;
+    
+    // 位置の変換
+    skinned.position = mul(input.position, gPalette[input.index.x].skeletonSpaceMatrix) * input.weight.x;
+    skinned.position += mul(input.position, gPalette[input.index.y].skeletonSpaceMatrix) * input.weight.y;
+    skinned.position += mul(input.position, gPalette[input.index.z].skeletonSpaceMatrix) * input.weight.z;
+    skinned.position += mul(input.position, gPalette[input.index.w].skeletonSpaceMatrix) * input.weight.w;
+    skinned.position.w = 1.0f; // 確実に1を入れる
+    
+    // 法線の変換
+    skinned.normal = mul(input.normal, (float3x3)gPalette[input.index.x].skeletonSpaceInverseTransposeMatrix) * input.weight.x;
+    skinned.normal += mul(input.normal, (float3x3)gPalette[input.index.y].skeletonSpaceInverseTransposeMatrix) * input.weight.y;
+    skinned.normal += mul(input.normal, (float3x3)gPalette[input.index.z].skeletonSpaceInverseTransposeMatrix) * input.weight.z;
+    skinned.normal += mul(input.normal, (float3x3)gPalette[input.index.w].skeletonSpaceInverseTransposeMatrix) * input.weight.w;
+    skinned.normal = normalize(skinned.normal); // 正規化して戻してあげる
+    
+    return skinned;
+}
 
 VertexShaderOutput main(SkinningVertexShaderInput input) {
     VertexShaderOutput output;
     
-    matrix skinnedMatrix = (matrix)0;
+    Skinned skinned = Skinning(input); // まずSkinning計算を行って、Skinning後の頂点情報を手に入れる
     
-    // Calculate skinned matrix
-    for (int i = 0; i < 4; ++i) {
-        if (input.weight[i] > 0.0f) {
-            skinnedMatrix += gPalette[input.jointIndices[i]].skeletonSpaceMatrix * input.weight[i];
-        }
-    }
-    
-    // If no weights are assigned (fallback), use identity matrix
-    if (input.weight[0] == 0.0f && input.weight[1] == 0.0f && 
-        input.weight[2] == 0.0f && input.weight[3] == 0.0f) {
-        skinnedMatrix = float4x4(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-    }
-    
-    // Transform position by skinning matrix
-    float4 skinnedPosition = mul(input.position, skinnedMatrix);
-    
-    // Final position using WVP matrix
-    output.position = mul(skinnedPosition, gTransformationMatrix.WVP);
-    output.worldPosition = mul(skinnedPosition, gTransformationMatrix.World).xyz;
+    // Skinning結果を使って変換
+    output.position = mul(skinned.position, gTransformationMatrix.WVP);
+    output.worldPosition = mul(skinned.position, gTransformationMatrix.World).xyz;
     output.localPosition = input.position.xyz;
     output.texcoord = input.texcoord;
-    
-    // Transform normal by skinning matrix
-    float3 skinnedNormal = mul(input.normal, (float3x3)skinnedMatrix);
-    output.normal = normalize(mul(skinnedNormal, (float3x3)gTransformationMatrix.WorldInverseTranspose));
+    output.normal = normalize(mul(skinned.normal, (float3x3)gTransformationMatrix.WorldInverseTranspose));
     
     output.color = input.color;
     
