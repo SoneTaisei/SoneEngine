@@ -446,6 +446,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (newType != currentSceneType_) {
                     currentSceneType_ = newType;
                     sceneManager->ChangeScene(SceneFactory::CreateScene(currentSceneType_));
+                    selectedGameObject_ = nullptr;
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
@@ -568,7 +569,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("ヒエラルキー", &showHierarchy_)) {
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
-                if (ImGui::CollapsingHeader("オブジェクト (Objects)", ImGuiTreeNodeFlags_DefaultOpen)) {
                 if (ImGui::CollapsingHeader("GameObjects", ImGuiTreeNodeFlags_DefaultOpen)) {
                     for (auto &obj : activeScene->GetGameObjects()) {
                         bool isSelected = (selectedGameObject_ == obj);
@@ -580,9 +580,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
                 }
+                if (ImGui::CollapsingHeader("オブジェクト (Objects)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     for (auto *obj : activeScene->GetObjects()) {
                         bool isSelected = (selectedObject_ == obj);
                         if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = nullptr;
                             selectedObject_ = obj;
                             selectedParticle_ = nullptr;
                             selectedPrimitive_ = nullptr;
@@ -593,6 +595,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     for (auto *particle : activeScene->GetParticles()) {
                         bool isSelected = (selectedParticle_ == particle);
                         if (ImGui::Selectable(particle->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = nullptr;
                             selectedParticle_ = particle;
                             selectedObject_ = nullptr;
                             selectedPrimitive_ = nullptr;
@@ -603,6 +606,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     for (auto *primitive : activeScene->GetPrimitives()) {
                         bool isSelected = (selectedPrimitive_ == primitive);
                         if (ImGui::Selectable(primitive->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = nullptr;
                             selectedPrimitive_ = primitive;
                             selectedObject_ = nullptr;
                             selectedParticle_ = nullptr;
@@ -632,6 +636,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
                 if (ImGui::Button("グローバル設定を表示", ImVec2(-1, 0))) {
+                    selectedGameObject_ = nullptr;
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
