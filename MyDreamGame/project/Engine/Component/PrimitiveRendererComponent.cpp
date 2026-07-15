@@ -1,4 +1,4 @@
-#include "PrimitiveRendererComponent.h"
+﻿#include "PrimitiveRendererComponent.h"
 #include "GameObject/GameObject.h"
 #include "TransformComponent.h"
 #include "Renderer/Renderer.h"
@@ -62,7 +62,7 @@ void PrimitiveRendererComponent::Update() {
     }
 }
 
-void PrimitiveRendererComponent::UpdateGhost(const Transform& currentTransform) {
+void PrimitiveRendererComponent::UpdateGhost(const EulerTransform& currentTransform) {
     if (currentGhostIndex_ < kMaxGhosts) {
         uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
         uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
@@ -87,7 +87,7 @@ void PrimitiveRendererComponent::Draw() {
     Renderer::GetInstance()->AddPrimitiveComponent(this);
 }
 
-void PrimitiveRendererComponent::DrawGhost(ID3D12GraphicsCommandList* commandList, const Transform& transform, const Material& material) {
+void PrimitiveRendererComponent::DrawGhost(ID3D12GraphicsCommandList* commandList, const EulerTransform& transform, const Material& material) {
     // 外部からのGhost描画用
     // TODO: 実際の描画ロジック（VertexBuffer, IndexBufferのセットなど）を実装
 }

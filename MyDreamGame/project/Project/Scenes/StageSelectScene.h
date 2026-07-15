@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Scene/IScene.h"
 #include "Resource/Model/Model.h"
 #include <d3d12.h>
@@ -41,7 +41,7 @@ private:
 
     std::vector<std::shared_ptr<GameObject>> gameObjects_;
 
-    Transform cameraTransform_; // カメラの座標・回転
+    EulerTransform cameraTransform_; // カメラの座標・回転
     Matrix4x4 viewProjection_;  // 描画に使う行列
 
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス

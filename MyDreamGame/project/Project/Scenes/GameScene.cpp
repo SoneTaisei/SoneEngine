@@ -1,4 +1,4 @@
-#include "GameScene.h"
+﻿#include "GameScene.h"
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
@@ -551,7 +551,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                         }
 
                         // ゴースト用のTransformとMaterialを作成
-                        Transform ghostTransform = playerPrim->GetTransform();
+                        EulerTransform ghostTransform = playerPrim->GetTransform();
                         ghostTransform.translate = frameData.position;
                         ghostTransform.scale = frameData.scale;
                         ghostTransform.rotate = frameData.rotation;
@@ -566,7 +566,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                         playerPrim->DrawGhost(ghostTransform, ghostMaterial);
 
                         // 3D -> NDC Conversion for the current frame's position
-                        Vector3 ndcCurr = TransformFunctions::Transform(frameData.position, viewProjectionMatrix);
+                        Vector3 ndcCurr = TransformFunctions::EulerTransform(frameData.position, viewProjectionMatrix);
 
                         ImVec2 pCurr;
                         bool isCurrVisible = false;
@@ -590,7 +590,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                         if (i >= FRAME_STEP) {
                             int prevIndex = i - FRAME_STEP;
                             if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
-                                Vector3 ndcPrev = TransformFunctions::Transform(currentReplay.frames[prevIndex].position, viewProjectionMatrix);
+                                Vector3 ndcPrev = TransformFunctions::EulerTransform(currentReplay.frames[prevIndex].position, viewProjectionMatrix);
 
                                 // Draw only if both current and previous points are visible
                                 if (isCurrVisible && ndcPrev.z >= 0.0f && ndcPrev.z <= 1.0f) {

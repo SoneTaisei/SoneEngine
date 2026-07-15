@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <memory>
 #include "Core/Utility/Structs.h"
 
@@ -31,7 +31,7 @@ public:
 
     void DrawObject3D(Object3D* obj);
     void DrawPrimitiveObject(PrimitiveObject* obj);
-    void DrawPrimitiveGhost(PrimitiveObject* obj, const Transform& transform, const Material& material);
+    void DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& transform, const Material& material);
 
     void AddMeshComponent(MeshRendererComponent* comp);
     void AddPrimitiveComponent(PrimitiveRendererComponent* comp);

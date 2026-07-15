@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <d3d12.h>
 #include <wrl.h>
 #include "Core/Utility/Utilityfunctions.h"
@@ -44,7 +44,7 @@ private:
     TransformMatrix *mappedTransform_ = nullptr;               // 箱の中身へのアクセス権
 
     // 座標変換用
-    Transform transform_{ {1.0f,1.0f,1.0f}, {0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f} };
+    EulerTransform transform_{ {1.0f,1.0f,1.0f}, {0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f} };
 
     // テクスチャ情報
     uint32_t textureIndex_ = 0;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Scene/IScene.h"
 #include <d3d12.h>
 #include "Resource/Model/Model.h"
@@ -39,7 +39,7 @@ public:
 private:
     // メンバ変数としてモデル、テクスチャ、座標を持つ
     uint32_t textureHandle_ = 0;
-    Transform transform_ = {};
+    EulerTransform transform_ = {};
     
 
     Model *playerModel_ = nullptr;
@@ -67,7 +67,7 @@ private:
     const int srvIndex_ = 110;
 
     // ■ 追加: タイトルシーン専用カメラ
-    Transform cameraTransform_{}; // カメラの座標・回転
+    EulerTransform cameraTransform_{}; // カメラの座標・回転
     Matrix4x4 viewProjection_{};  // 描画に使う行列
 
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス

@@ -13,13 +13,18 @@ public:
     void Draw();
     void DisplayImGui(const std::string& label);
 
-    // --- Transformのゲッター/セッター ---
     const Vector3& GetTranslation() const { return transform_.translate; }
     void SetTranslation(const Vector3& translate) { transform_.translate = translate; }
     const Vector3& GetRotation() const { return transform_.rotate; }
     void SetRotation(const Vector3& rotate) { transform_.rotate = rotate; }
     const Vector3& GetScale() const { return transform_.scale; }
     void SetScale(const Vector3& scale) { transform_.scale = scale; }
+
+    // 直接WorldMatrixを設定するフラグと行列
+    void SetOverrideMatrix(bool enable, const Matrix4x4& matrix = {}) { 
+        overrideMatrix_ = enable; 
+        overriddenWorldMatrix_ = matrix; 
+    }
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     static void SetDefaultTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { sDefaultTextureHandle_ = handle; }
@@ -51,7 +56,7 @@ private:
     TransformMatrix* mappedTransform_ = nullptr;
 
     // CPU側データ
-    Transform transform_;
+    EulerTransform transform_;
     Material material_;
     Matrix4x4 worldMatrix_;
 
@@ -62,6 +67,9 @@ private:
 
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
     static D3D12_GPU_DESCRIPTOR_HANDLE sDefaultTextureHandle_;
+
+    bool overrideMatrix_ = false;
+    Matrix4x4 overriddenWorldMatrix_ = {};
 
     // --- 残像 (Trail) 設定 ---
     bool showTrail_ = false;
@@ -78,8 +86,8 @@ public:
     bool GetShowTrail() const { return showTrail_; }
     void SetShowTrail(bool show) { showTrail_ = show; }
 
-    const Transform& GetTransform() const { return transform_; }
+    const EulerTransform& GetTransform() const { return transform_; }
 
     void ResetGhostIndex() { currentGhostIndex_ = 0; }
-    void DrawGhost(const Transform& transform, const Material& material);
+    void DrawGhost(const EulerTransform& transform, const Material& material);
 };

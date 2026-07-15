@@ -1,6 +1,9 @@
 #pragma once
 #include "IComponent.h"
 #include "Core/Utility/Animation.h"
+#include "Core/Utility/Structs.h"
+#include "Renderer/SkeletonDebugRenderer.h"
+#include <memory>
 #include <string>
 
 class AnimatorComponent : public IComponent {
@@ -14,9 +17,24 @@ public:
     void SetTime(float time) { animationTime_ = time; }
     void SetTargetNodeName(const std::string& name) { targetNodeName_ = name; }
 
+    void SetModelData(const ModelData& modelData);
+    void DrawDebug(const Matrix4x4& worldMatrix);
+
+    const Skeleton& GetSkeleton() const { return skeleton_; }
+    const SkinCluster& GetSkinCluster() const { return skinCluster_; }
+
+
 private:
     Animation animation_;
     float animationTime_ = 0.0f;
     bool isPlaying_ = true;
-    std::string targetNodeName_ = "Cube"; // Default node name for AnimatedCube.gltf
+    std::string targetNodeName_ = "Cube";
+
+    Skeleton skeleton_;
+    SkinCluster skinCluster_;
+    bool hasSkeleton_ = false;
+public:
+    bool HasSkeleton() const { return hasSkeleton_; }
+    std::unique_ptr<SkeletonDebugRenderer> debugRenderer_;
+
 };

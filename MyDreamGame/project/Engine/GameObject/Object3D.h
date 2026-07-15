@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Core/Utility/Structs.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Model/Model.h"
@@ -67,7 +67,7 @@ private:
     Model *model_ = nullptr;
 
     // CPU側データ
-    Transform transform_;
+    EulerTransform transform_;
     Material material_;
     DirectionalLight light_;
     PointLight pointLight_; // CPU側でも値を保持しておくと便利
@@ -91,7 +91,7 @@ private:
     BlendMode trailBlendMode_ = BlendMode::kBlendModeAdd;
     float trailStartAlpha_ = 0.5f;
 
-    std::deque<Transform> trailHistory_;
+    std::deque<EulerTransform> trailHistory_;
     static const int kMaxHistory = 10000; // 裏で記録しておく最大フレーム数
 
     static const int kMaxTrails = 1024;

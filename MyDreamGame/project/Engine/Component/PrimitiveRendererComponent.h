@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "IComponent.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Core/Utility/Structs.h"
@@ -29,10 +29,10 @@ public:
     // トレイル描画用
     bool GetShowTrail() const { return showTrail_; }
     void SetShowTrail(bool show) { showTrail_ = show; }
-    void DrawGhost(ID3D12GraphicsCommandList* commandList, const Transform& transform, const Material& material);
+    void DrawGhost(ID3D12GraphicsCommandList* commandList, const EulerTransform& transform, const Material& material);
 
 private:
-    void UpdateGhost(const Transform& currentTransform);
+    void UpdateGhost(const EulerTransform& currentTransform);
 
     Primitive* primitive_ = nullptr;
     Material material_;

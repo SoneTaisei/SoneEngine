@@ -1,4 +1,4 @@
-﻿#include "PrimitiveObject.h"
+#include "PrimitiveObject.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
@@ -84,10 +84,14 @@ void PrimitiveObject::Update() {
         localMatrix = rotateMatrix;
     }
     
-    worldMatrix_ = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
-    
-    if (parent_) {
-        worldMatrix_ = TransformFunctions::Multiply(worldMatrix_, parent_->GetWorldMatrix());
+    if (overrideMatrix_) {
+        worldMatrix_ = overriddenWorldMatrix_;
+    } else {
+        worldMatrix_ = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
+        
+        if (parent_) {
+            worldMatrix_ = TransformFunctions::Multiply(worldMatrix_, parent_->GetWorldMatrix());
+        }
     }
     
     mappedTransform_->World = worldMatrix_;
@@ -100,7 +104,7 @@ void PrimitiveObject::Draw() {
     Renderer::GetInstance()->DrawPrimitiveObject(this);
 }
 
-void PrimitiveObject::DrawGhost(const Transform& transform, const Material& material) {
+void PrimitiveObject::DrawGhost(const EulerTransform& transform, const Material& material) {
     Renderer::GetInstance()->DrawPrimitiveGhost(this, transform, material);
 }
 

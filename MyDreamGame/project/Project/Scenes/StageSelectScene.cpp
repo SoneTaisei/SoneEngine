@@ -41,34 +41,37 @@ void StageSelectScene::Initialize() {
     device = DirectXCommon::GetInstance()->GetDevice();
 
     // 1. マネージャから素材を借りる（頂点バッファを重複させない！）
-    Model *skydomeModelResource = ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.gltf");
-    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/monsterBall.png");
-    D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH = TextureManager::GetInstance()->GetGpuHandle(skydomeIndex);
+    // Model *skydomeModelResource = ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.gltf");
+    // uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/monsterBall.png");
+    // D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH...
 
     // 2. GameObjectを作る
-    auto skydomeObject = std::make_shared<GameObject>("Skydome");
-    auto transform = skydomeObject->AddComponent<TransformComponent>();
-    transform->SetRotation({0.0f, 0.0f, 0.0f});
+    // auto skydomeObject = ...
+    // auto transform = ...
+    // transform->SetRotation({0.0f, 0.0f, 0.0f});
 
     // 3. 描画コンポーネントのアタッチとテクスチャの設定
-    auto skydomeRenderer = skydomeObject->AddComponent<MeshRendererComponent>();
-    skydomeRenderer->Initialize(device.Get(), skydomeModelResource);
-    skydomeRenderer->SetTextureHandle(skydomeTH);
-    skydomeModelResource->SetTextureHandle(skydomeTH);
+    // auto skydomeRenderer = ...
+    // skydomeRenderer->Initialize...
+    // skydomeRenderer->SetTextureHandle...
+    // skydomeModelResource->SetTextureHandle...
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
-    gameObjects_.push_back(skydomeObject);
+    // gameObjects_.push_back(skydomeObject);
 
     // AnimatedCubeの追加
-    Model* animatedCubeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/AnimatedCube", "AnimatedCube.gltf");
-    Animation cubeAnimation = LoadAnimationFile("resources/Object/School/AnimatedCube", "AnimatedCube.gltf");
+    Model* animatedCubeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/human", "walk.gltf");
+    Animation cubeAnimation = LoadAnimationFile("resources/Object/School/human", "walk.gltf");
     
-    auto animatedCubeObject = std::make_shared<GameObject>("AnimatedCube");
+    auto animatedCubeObject = std::make_shared<GameObject>("human_walk");
     auto cubeTransform = animatedCubeObject->AddComponent<TransformComponent>();
-    cubeTransform->SetPosition({0.0f, 0.0f, 0.0f}); // 中央に配置
+    // プログラムのロード時にスケール等を調整するようにしたため、ここでは完全に基準値を設定する
+    cubeTransform->SetPosition({0.0f, 0.0f, 0.0f});
+    cubeTransform->SetScale({1.0f, 1.0f, 1.0f});
+    cubeTransform->SetRotation({0.0f, 0.0f, 0.0f}); // ローテーションも完全に0にする
     
-    uint32_t cubeTexIndex = TextureManager::GetInstance()->Load("resources/Object/School/AnimatedCube/AnimatedCube_BaseColor.png");
+    uint32_t cubeTexIndex = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
     D3D12_GPU_DESCRIPTOR_HANDLE cubeTH = TextureManager::GetInstance()->GetGpuHandle(cubeTexIndex);
     
     auto cubeRenderer = animatedCubeObject->AddComponent<MeshRendererComponent>();
@@ -78,6 +81,7 @@ void StageSelectScene::Initialize() {
     
     auto cubeAnimator = animatedCubeObject->AddComponent<AnimatorComponent>();
     cubeAnimator->Initialize();
+    cubeAnimator->SetModelData(animatedCubeModel->GetModelData()); // Skeletonの生成
     cubeAnimator->SetAnimation(cubeAnimation);
     cubeAnimator->SetTargetNodeName("AnimatedCube");
     cubeAnimator->Play();

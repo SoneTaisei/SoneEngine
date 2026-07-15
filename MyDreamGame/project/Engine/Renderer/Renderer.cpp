@@ -1,7 +1,9 @@
 #include "Renderer.h"
+#include "Component/AnimatorComponent.h"
 #include "DirectXCommon/DirectXCommon.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Renderer.h"
+#include "Component/AnimatorComponent.h"
 #include "DirectXCommon/DirectXCommon.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Resource/Sprite/Sprite.h"
@@ -115,8 +117,7 @@ void Renderer::DrawObject3D(Object3D* obj) {
     *obj->mappedMaterial_ = obj->material_;
 
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(obj->transform_.scale, obj->transform_.rotate, obj->transform_.translate);
-    Matrix4x4 nodeMatrix = obj->model_->GetModelData().rootNode.localMatrix;
-    Matrix4x4 finalWorldMatrix = nodeMatrix * worldMatrix;
+    Matrix4x4 finalWorldMatrix = worldMatrix;
 
     obj->mappedTransform_->World = finalWorldMatrix;
     obj->mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
@@ -149,7 +150,7 @@ void Renderer::DrawObject3D(Object3D* obj) {
                 Vector3 pastScale = obj->trailHistory_[i].scale;
                 
                 Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
-                Matrix4x4 tFinalWorldMatrix = nodeMatrix * tWorldMatrix;
+                Matrix4x4 tFinalWorldMatrix = tWorldMatrix;
 
                 TransformMatrix* tMat = reinterpret_cast<TransformMatrix*>(obj->mappedTrailTransform_ + transformSize * trailCount);
                 tMat->World = tFinalWorldMatrix;
@@ -305,7 +306,7 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
     }
 }
 
-void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const Transform& transform, const Material& material) {
+void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& transform, const Material& material) {
     if (!obj || !dxCommon_ || !obj->primitive_) return;
     if (obj->currentGhostIndex_ >= PrimitiveObject::kMaxGhosts) return;
 
@@ -432,40 +433,69 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
     mappedTransform->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
 
-    commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
-
-    if (comp->GetBlendMode() == BlendMode::kBlendModeAdd) {
-        if (comp->IsDoubleSided()) {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
-        } else {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
+    AnimatorComponent* animator = comp->GetGameObject()->GetComponent<AnimatorComponent>();
+    bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+    
+    if (useSkinning) {
+        commandList->SetGraphicsRootSignature(dxCommon_->GetSkinningRootSignature());
+        commandList->SetPipelineState(dxCommon_->GetSkinningPipelineState());
+        
+        commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+        
+        if (ModelCommon* mc = comp->GetModel()->GetModelCommon()) {
+            commandList->SetGraphicsRootConstantBufferView(4, mc->GetDirectionalLightGPUAddress());
+            commandList->SetGraphicsRootConstantBufferView(5, mc->GetPointLightGPUAddress());
+            commandList->SetGraphicsRootConstantBufferView(6, mc->GetSpotLightGPUAddress());
+        }        
+        if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+            commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
         }
+        
+        // Skinning Palette setup at index 9
+        const SkinCluster& skinCluster = animator->GetSkinCluster();
+        commandList->SetGraphicsRootDescriptorTable(9, skinCluster.paletteSrvHandle.second);
+        
+
+
+        comp->GetModel()->Draw(&skinCluster.influenceBufferView);
     } else {
-        if (comp->GetMaterial().color.w < 1.0f) {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
-        } else {
+        commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
+
+        if (comp->GetBlendMode() == BlendMode::kBlendModeAdd) {
             if (comp->IsDoubleSided()) {
-                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
             } else {
-                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
+            }
+        } else {
+            if (comp->GetMaterial().color.w < 1.0f) {
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
+            } else {
+                if (comp->IsDoubleSided()) {
+                    commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+                } else {
+                    commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
+                }
             }
         }
-    }
 
-    commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+        commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
-    if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
-        commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
-    }
+        if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+            commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+        }
 
-    comp->GetModel()->Draw();
-
-    if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
-        commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
-        commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
         comp->GetModel()->Draw();
+
+        if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
+            commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
+            comp->GetModel()->Draw();
+        }
     }
 }
 

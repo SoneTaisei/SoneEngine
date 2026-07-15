@@ -1,4 +1,4 @@
-#ifdef USE_IMGUI
+﻿#ifdef USE_IMGUI
 #include "EditorManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Effect/ParticleManager.h"
@@ -1263,7 +1263,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                         
                         auto WorldToScreen = [&](float wx, float wy) -> ImVec2 {
-                            Vector3 ndc = TransformFunctions::Transform({wx, wy, 0.0f}, viewProj);
+                            Vector3 ndc = TransformFunctions::EulerTransform({wx, wy, 0.0f}, viewProj);
                             float screenX = imageScreenPos.x + (ndc.x + 1.0f) * 0.5f * imageSize.x;
                             float screenY = imageScreenPos.y + (1.0f - ndc.y) * 0.5f * imageSize.y;
                             return ImVec2(screenX, screenY);
@@ -1366,7 +1366,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (camera) {
                             Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                             Matrix4x4 invViewProj = TransformFunctions::Inverse(viewProj);
-                            worldPos = TransformFunctions::Transform({ndcX, ndcY, 0.0f}, invViewProj);
+                            worldPos = TransformFunctions::EulerTransform({ndcX, ndcY, 0.0f}, invViewProj);
                         }
 
                         // モード切り替えショートカット

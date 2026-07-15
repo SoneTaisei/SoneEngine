@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Vector3.h"
 #include "Matrix4x4.h"
 #include "Matrix3x3.h"
@@ -38,7 +38,7 @@ public:
 	static Matrix4x4 MakeRoteZMatrix(float radian);
 	static Matrix4x4 MakeTranslateMatrix(const Vector3& translate);
 	static Matrix4x4 MakeScaleMatrix(const Vector3& scale);
-	static Vector3 Transform(const Vector3& vector, const Matrix4x4& matrix);
+	static Vector3 EulerTransform(const Vector3& vector, const Matrix4x4& matrix);
 	static Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
 	static Matrix4x4 MakeRotateMatrix(const Quaternion& quaternion);
 	static Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& rotate, const Vector3& translate);

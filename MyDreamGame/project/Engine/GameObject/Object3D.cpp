@@ -49,15 +49,16 @@ void Object3D::Update() {
     *mappedMaterial_ = material_;
 
     // 笘・繝槭ロ繝ｼ繧ｸ繝｣縺九ｉ譛譁ｰ縺ｮ繧ｫ繝｡繝ｩ諠・ｱ繧偵ご繝・ヨ・・
+    // 笘・繝槭ロ繝ｼ繧ｸ繝｣縺九ｉ譛€譁ｰ縺ｮ繧ｫ繝｡繝ｩ諠・ｱ繧偵ご繝・ヨ・・
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
     // 閾ｪ霄ｫ縺ｮ繝ｯ繝ｼ繝ｫ繝芽｡悟・菴懈・
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    // 繝｢繝・Ν蛛ｴ縺ｮ繝・・繧ｿ繧剃ｽｿ縺｣縺ｦ譛邨ら噪縺ｪ陦悟・繧定ｨ育ｮ・
+    // 繝｢繝・Ν蛛ｴ縺ｮ繝ｭ繝ｼ繧ｫ繝ｫ陦悟・繧帝勁螟厄ｼ医せ繧ｭ繝九Φ繧ｰ蟇ｾ蠢懊・縺溘ａ・・
     Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
-    Matrix4x4 finalWorldMatrix = nodeMatrix * worldMatrix;
+    Matrix4x4 finalWorldMatrix = TransformFunctions::Multiply(nodeMatrix, worldMatrix);
 
     mappedTransform_->World = finalWorldMatrix;
     mappedTransform_->WVP = finalWorldMatrix * viewMatrix * projectionMatrix;

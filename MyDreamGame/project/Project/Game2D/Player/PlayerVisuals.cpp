@@ -1,4 +1,4 @@
-#include "Graphics/TextureManager.h"
+﻿#include "Graphics/TextureManager.h"
 #include "PlayerVisuals.h"
 #include <random>
 #include <cmath>
@@ -125,7 +125,7 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
                 float offsetX = -params.halfWidth_ + cellW * 0.5f + cellW * x;
                 float offsetY = -params.halfHeight_ + cellH * 0.5f + cellH * y;
                 
-                Transform ghostTransform;
+                EulerTransform ghostTransform;
                 ghostTransform.scale = { cellW, cellH, 1.0f };
                 ghostTransform.rotate = {0.0f, 0.0f, 0.0f};
                 
@@ -172,7 +172,7 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
                 float alpha = 1.0f - (ring.timer / ring.duration);
                 alpha = alpha * alpha; 
                 
-                Transform tr;
+                EulerTransform tr;
                 tr.translate = ring.position;
                 tr.scale = { currentSize, currentSize, currentSize };
                 tr.rotate = ring.rotation;
@@ -191,7 +191,7 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
             if (dust.active) {
                 float alpha = 1.0f - (dust.timer / dust.duration);
                 float currentSize = dust.startSize * alpha;
-                Transform t;
+                EulerTransform t;
                 t.translate = dust.position;
                 t.scale = { currentSize, currentSize, currentSize };
                 t.rotate = { 0.0f, 0.0f, 0.0f };
@@ -209,7 +209,7 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
         for (const auto& confetti : confettiParticles_) {
             if (confetti.active) {
                 float currentSize = confetti.size;
-                Transform t;
+                EulerTransform t;
                 t.translate = confetti.position;
                 t.scale = { currentSize, currentSize, currentSize };
                 t.rotate = confetti.rotation;
