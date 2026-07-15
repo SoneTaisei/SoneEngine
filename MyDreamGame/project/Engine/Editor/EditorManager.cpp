@@ -1,4 +1,4 @@
-﻿#ifdef USE_IMGUI
+#ifdef USE_IMGUI
 #include "EditorManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Effect/ParticleManager.h"
@@ -54,6 +54,96 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+
+    // =================================================================
+    // Custom Mid Dark (Mocha と 漆黒の中間くらいのダークテーマ)
+    // =================================================================
+    ImGuiStyle* style_ptr = &ImGui::GetStyle();
+    ImVec4* colors = style_ptr->Colors;
+
+    auto ImVec4FromHex = [](uint32_t hex, float alpha = 1.0f) {
+        return ImVec4(
+            ((hex >> 16) & 0xFF) / 255.0f,
+            ((hex >> 8) & 0xFF) / 255.0f,
+            ((hex >> 0) & 0xFF) / 255.0f,
+            alpha
+        );
+    };
+
+    // Mochaのほのかな青紫みを残しつつ、かなり暗めに設定
+    ImVec4 base = ImVec4FromHex(0x14141E);
+    ImVec4 mantle = ImVec4FromHex(0x0F0F16);
+    ImVec4 crust = ImVec4FromHex(0x08080C);
+    ImVec4 surface0 = ImVec4FromHex(0x232333);
+    ImVec4 surface1 = ImVec4FromHex(0x333547);
+    ImVec4 surface2 = ImVec4FromHex(0x45475A);
+    ImVec4 text = ImVec4FromHex(0xCDD6F4);
+    ImVec4 subtext0 = ImVec4FromHex(0xA6ADC8);
+    ImVec4 mauve = ImVec4FromHex(0xCBA6F7);
+    ImVec4 pink = ImVec4FromHex(0xF5C2E7);
+
+    colors[ImGuiCol_Text]                   = text;
+    colors[ImGuiCol_TextDisabled]           = subtext0;
+    colors[ImGuiCol_WindowBg]               = base;
+    colors[ImGuiCol_ChildBg]                = mantle;
+    colors[ImGuiCol_PopupBg]                = mantle;
+    colors[ImGuiCol_Border]                 = surface1;
+    colors[ImGuiCol_BorderShadow]           = crust;
+    colors[ImGuiCol_FrameBg]                = surface0;
+    colors[ImGuiCol_FrameBgHovered]         = surface1;
+    colors[ImGuiCol_FrameBgActive]          = surface2;
+    colors[ImGuiCol_TitleBg]                = mantle;
+    colors[ImGuiCol_TitleBgActive]          = base;
+    colors[ImGuiCol_TitleBgCollapsed]       = crust;
+    colors[ImGuiCol_MenuBarBg]              = mantle;
+    colors[ImGuiCol_ScrollbarBg]            = mantle;
+    colors[ImGuiCol_ScrollbarGrab]          = surface0;
+    colors[ImGuiCol_ScrollbarGrabHovered]   = surface1;
+    colors[ImGuiCol_ScrollbarGrabActive]    = surface2;
+    colors[ImGuiCol_CheckMark]              = mauve;
+    colors[ImGuiCol_SliderGrab]             = mauve;
+    colors[ImGuiCol_SliderGrabActive]       = pink;
+    colors[ImGuiCol_Button]                 = surface0;
+    colors[ImGuiCol_ButtonHovered]          = surface1;
+    colors[ImGuiCol_ButtonActive]           = surface2;
+    colors[ImGuiCol_Header]                 = surface1;
+    colors[ImGuiCol_HeaderHovered]          = ImVec4(mauve.x, mauve.y, mauve.z, 0.6f);
+    colors[ImGuiCol_HeaderActive]           = ImVec4(mauve.x, mauve.y, mauve.z, 0.8f);
+    colors[ImGuiCol_Separator]              = surface1;
+    colors[ImGuiCol_SeparatorHovered]       = ImVec4(mauve.x, mauve.y, mauve.z, 0.6f);
+    colors[ImGuiCol_SeparatorActive]        = ImVec4(mauve.x, mauve.y, mauve.z, 0.8f);
+    colors[ImGuiCol_ResizeGrip]             = surface0;
+    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(mauve.x, mauve.y, mauve.z, 0.6f);
+    colors[ImGuiCol_ResizeGripActive]       = ImVec4(mauve.x, mauve.y, mauve.z, 0.8f);
+    colors[ImGuiCol_Tab]                    = mantle;
+    colors[ImGuiCol_TabHovered]             = surface1;
+    colors[ImGuiCol_TabActive]              = surface0;
+    colors[ImGuiCol_TabUnfocused]           = mantle;
+    colors[ImGuiCol_TabUnfocusedActive]     = base;
+    colors[ImGuiCol_DockingPreview]         = ImVec4(mauve.x, mauve.y, mauve.z, 0.3f);
+    colors[ImGuiCol_DockingEmptyBg]         = crust;
+    colors[ImGuiCol_PlotLines]              = mauve;
+    colors[ImGuiCol_PlotLinesHovered]       = pink;
+    colors[ImGuiCol_PlotHistogram]          = mauve;
+    colors[ImGuiCol_PlotHistogramHovered]   = pink;
+    colors[ImGuiCol_TableHeaderBg]          = surface0;
+    colors[ImGuiCol_TableBorderStrong]      = surface1;
+    colors[ImGuiCol_TableBorderLight]       = surface0;
+    colors[ImGuiCol_TableRowBg]             = base;
+    colors[ImGuiCol_TableRowBgAlt]          = mantle;
+    colors[ImGuiCol_TextSelectedBg]         = ImVec4(mauve.x, mauve.y, mauve.z, 0.3f);
+    colors[ImGuiCol_DragDropTarget]         = mauve;
+    colors[ImGuiCol_NavHighlight]           = mauve;
+    colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(subtext0.x, subtext0.y, subtext0.z, 0.7f);
+    colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(crust.x, crust.y, crust.z, 0.5f);
+    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(crust.x, crust.y, crust.z, 0.5f);
+
+    style_ptr->WindowRounding    = 4.0f;
+    style_ptr->FrameRounding     = 4.0f;
+    style_ptr->GrabRounding      = 4.0f;
+    style_ptr->PopupRounding     = 4.0f;
+    style_ptr->ScrollbarRounding = 4.0f;
+    style_ptr->TabRounding       = 4.0f;
 
     // 2. フラグの設定
     ImGuiIO &io = ImGui::GetIO();
