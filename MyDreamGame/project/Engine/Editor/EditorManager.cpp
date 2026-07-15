@@ -2963,7 +2963,6 @@ void EditorManager::Finalize() {
 }
 
 void EditorManager::SaveSceneConfig() {
-    std::filesystem::create_directories("json");
 
     std::ofstream ofs("resources/json/editor_config.json");
     if (ofs.is_open()) {
