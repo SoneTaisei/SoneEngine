@@ -66,22 +66,52 @@ void JumpBlock::OnCollision(Player2D* player) {
     float minDist = (std::min)({ distTop, distBottom, distLeft, distRight });
 
     Vector3 vel = player->GetVelocity();
-    const float threshold = 0.15f; // 接触判定�E余裁E
+    const float threshold = 0.15f; // 接触判定E余裁E
 
-    if (minDist == distTop && distTop < threshold && activeTop) {
+    bool isGrazeTop = distTop < 0.5f && vel.y <= 0.0f;
+
+    if ((minDist == distTop && distTop < threshold && activeTop) || 
+        ((minDist == distLeft || minDist == distRight) && isGrazeTop && activeTop)) {
+        
+        // 判定バッファ：横からかすった場合のみ、ばねの上にキャラを吸い寄せる（位置補正）
+        Vector3 pos = player->GetPosition();
+        float playerHalfHeight = (playerAABB.top - playerAABB.bottom) * 0.5f;
+        float playerHalfWidth = (playerAABB.right - playerAABB.left) * 0.5f;
+        
+        if (minDist == distLeft && isGrazeTop) {
+            // 左からかすった場合、少しだけ右(内側)に寄せる
+            pos.x = blockAABB.left - playerHalfWidth + 0.1f;
+        } else if (minDist == distRight && isGrazeTop) {
+            // 右からかすった場合、少しだけ左(内側)に寄せる
+            pos.x = blockAABB.right + playerHalfWidth - 0.1f;
+        }
+        
+        pos.y = blockAABB.top + playerHalfHeight;
+        player->SetPosition(pos);
+
+        // 1. 速度の上書き
         vel.y = jumpVelocityVertical_;
         player->SetVelocity(vel);
+        player->SetIsOnGround(false);
+
+        // 2. ダッシュ回数の全回復
+        player->RefillDash();
+
+        // 3. ヒットストップ（約1〜2フレーム：0.03秒）
+        // (コントロール無効化は操作性が悪いため削除)
+        player->ApplyHitstop(0.03f);
+
     } else if (minDist == distBottom && distBottom < threshold && activeBottom) {
         vel.y = -jumpVelocityVertical_;
         player->SetVelocity(vel);
     } else if (minDist == distLeft && distLeft < threshold && activeLeft) {
         player->SetExternalVelocityX(-jumpVelocityHorizontal_);
-        vel.y = 5.0f; // 少し上に浮かせることで接地判定を解除し、�E性がすぐに消されるのを防ぁE
+        vel.y = 5.0f; // 少し上に浮かせることで接地判定を解除し、慣性がすぐに消されるのを防ぐ
         player->SetVelocity(vel);
         player->SetIsOnGround(false);
     } else if (minDist == distRight && distRight < threshold && activeRight) {
         player->SetExternalVelocityX(jumpVelocityHorizontal_);
-        vel.y = 5.0f; // 少し上に浮かせめE
+        vel.y = 5.0f; // 少し上に浮かせる
         player->SetVelocity(vel);
         player->SetIsOnGround(false);
     }

@@ -42,4 +42,7 @@ struct PlayerState {
     float inWallTimer_ = 0.0f;
     float stamina_ = 110.0f;
     bool isExhausted_ = false;
+    float springControlDisableTimer_ = 0.0f; // ばねヒット直後の左右入力無視タイマー
+    float hitstopTimer_ = 0.0f; // ヒットストップ用のタイマー
+
 };

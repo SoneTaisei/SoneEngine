@@ -11,6 +11,11 @@
 void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
     if (state_.isDead_ || state_.isGoal_) return;
 
+    if (state_.hitstopTimer_ > 0.0f) {
+        state_.hitstopTimer_ -= deltaTime;
+        return; // ヒットストップ中は物理演算・入力をスキップ
+    }
+
     HandleInputLogic(state_, params_, input_, visuals_, deltaTime);
     ApplyGravity(state_, params_, deltaTime);
 
@@ -72,6 +77,9 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     if (state_.wallClingReleaseTimer_ > 0.0f) {
         state_.wallClingReleaseTimer_ -= deltaTime;
     }
+    if (state_.springControlDisableTimer_ > 0.0f) {
+        state_.springControlDisableTimer_ -= deltaTime;
+    }
 
     if (state_.isOnGround_) {
         state_.stamina_ = params_.maxStamina_;
@@ -123,6 +131,12 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         
         bool allowLeft = true;
         bool allowRight = true;
+        
+        if (state_.springControlDisableTimer_ > 0.0f) {
+            allowLeft = false;
+            allowRight = false;
+        }
+        
         if (state_.wallJumpDirLockTimer_ > 0.0f) {
             if (state_.lockedDirectionX_ == -1.0f) allowLeft = false;
             if (state_.lockedDirectionX_ == 1.0f) allowRight = false;

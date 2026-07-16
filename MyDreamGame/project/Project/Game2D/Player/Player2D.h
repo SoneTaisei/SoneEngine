@@ -41,6 +41,11 @@ public:
     Vector3 GetVelocity() const { return state_.velocity_; }
     void SetExternalVelocityX(float velX) { state_.externalVelocityX_ = velX; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
+    
+    // セレステ風ジャンプブロック（ばね）用のアクション
+    void RefillDash() { state_.canDash_ = true; state_.isDashing_ = false; state_.dashTimer_ = 0.0f; }
+    void ApplyHitstop(float duration) { state_.hitstopTimer_ = duration; }
+    void SetSpringControlDisable(float duration) { state_.springControlDisableTimer_ = duration; }
     // JSON Parameters
 
     // プレイヤーの位置を取得（カメラ追従用）

@@ -436,6 +436,8 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.score_ = 0;
     state_.stuckTimer_ = 0.0f;
     state_.inWallTimer_ = 0.0f;
+    state_.springControlDisableTimer_ = 0.0f;
+    state_.hitstopTimer_ = 0.0f;
     
     if (visuals_.GetPrimitiveObject()) {
         visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
