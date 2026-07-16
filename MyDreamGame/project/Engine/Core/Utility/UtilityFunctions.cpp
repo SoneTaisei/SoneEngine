@@ -1,4 +1,4 @@
-#include "Core/Utility/LogManager.h"
+﻿#include "Core/Utility/LogManager.h"
 #pragma warning(disable: 4828)
 #include "UtilityFunctions.h"
 #include <map>
@@ -19,50 +19,50 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 #endif // USE_IMGUI
 
-	// 繝｡繝・そ繝ｼ繧ｸ縺ｫ蠢懊§縺ｦ繧ｲ繝ｼ繝蝗ｺ譛峨・蜃ｦ逅・ｒ陦後≧
+	// メッセージに応じてゲーム固有の処理を行う
 	switch(msg) {
-		// 繧ｦ繧｣繝ｳ繝峨え縺檎ｴ螢翫＆繧後◆
+		// ウィンドウが破壊された
 	case WM_DESTROY:
-		// OS縺ｫ蠢懊§縺ｦ縲√い繝励Μ蝗ｺ譛峨・邨ゆｺ・ｒ莨昴∴繧・
+		// OSに応じて、アプリ固有の終了を伝える
 		PostQuitMessage(0);
 		return 0;
 	}
 
-	// 讓呎ｺ悶・繝｡繝・そ繝ｼ繧ｸ蜃ｦ逅・ｒ陦後≧
+	// 標準のメッセージ処理を行う
 	return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 void Log(const std::string &message) {
-	// 繝・ヰ繝・げ蜃ｺ蜉幢ｼ亥ｾ捺擂縺ｮ蜍穂ｽ懶ｼ・
+	// デバッグ出力（従来の動作）
 	OutputDebugStringA(message.c_str());
 
-	// 繝ｭ繧ｰ繝輔ぃ繧､繝ｫ繧剃ｸ蠎ｦ縺縺台ｽ懈・縺励※菴ｿ縺・屓縺呻ｼ医せ繝ｬ繝・ラ繧ｻ繝ｼ繝包ｼ・
+	// ログファイルを一度だけ作成して使います（スレッドセーフ）
 	static std::once_flag s_logInitFlag;
 	static std::ofstream s_logStream;
 	static std::mutex s_logMutex;
 
 	std::call_once(s_logInitFlag, []() {
 		try {
-			// logs 繝・ぅ繝ｬ繧ｯ繝医Μ繧剃ｽ懈・
+			// logs ディレクトリを作成
 			std::filesystem::create_directories("logs");
 
-			// 迴ｾ蝨ｨ縺ｮ譎ょ綾繧堤ｧ貞腰菴阪↓荳ｸ繧√ｋ
+			// 現在の時刻を秒単位に丸める
 			auto now = std::chrono::system_clock::now();
 			auto nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
 
-			// 繝ｭ繝ｼ繧ｫ繝ｫ繧ｿ繧､繝繧ｾ繝ｼ繝ｳ縺ｫ螟画鋤縺励※繝輔か繝ｼ繝槭ャ繝茨ｼ亥・繧ｳ繝ｼ繝峨→蜷後§譖ｸ蠑上ｒ菴ｿ逕ｨ・・
+			// ローカルタイムゾーンに変換してフォーマット（文字コードと同じ書式を使用）
 			std::chrono::zoned_time localTime{ std::chrono::current_zone(), nowSeconds };
 			std::string dateString = std::format("{:%Y%d_%H%M%S}", localTime);
 
-			// 繝輔ぃ繧､繝ｫ繝代せ繧剃ｽ懈・縺励※ open・郁ｿｽ險倥Δ繝ｼ繝会ｼ・
+			// ファイルパスを作成して open（追記モード）
 			std::string logFilePath = std::string("logs/") + dateString + ".log";
 			s_logStream.open(logFilePath, std::ios::app | std::ios::binary);
 		} catch(...) {
-			// 萓句､悶・辟｡隕悶＠縺ｦ繝・ヰ繝・げ蜃ｺ蜉帙・縺ｿ陦後≧・医Ο繧ｰ螟ｱ謨励＠縺ｦ繧ゅい繝励Μ縺梧ｭ｢縺ｾ繧峨↑縺・ｈ縺・↓縺吶ｋ・・
+			// 例外は無視してデバッグ出力のみ行う（ログ失敗してもアプリが止まらないようにする）
 		}
 				   });
 
-				   // 螳滄圀縺ｮ譖ｸ縺崎ｾｼ縺ｿ
+				   // 実際の書き込み
 	std::lock_guard<std::mutex> lock(s_logMutex);
 	if(s_logStream && s_logStream.good()) {
 		s_logStream << message;
@@ -103,12 +103,12 @@ std::string str0{ "STRING" };
 std::string str1{ std::to_string(10) };
 
 LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
-	// 譎ょ綾繧貞叙蠕励＠縺ｦ縲∵凾蛻ｻ繧貞錐蜑阪↓蜈･繧後◆繝輔ぃ繧､繝ｫ繧剃ｽ懈・縲・umps繝・ぅ繝ｬ繧ｯ繝医Μ莉･荳九↓蜃ｺ蜉・
+	// 時刻を取得して、時刻を名前に入れたファイルを作成、dumpsディレクトリ以下に出力
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	wchar_t filePath[MAX_PATH] = { 0 };
 
-	// 繝・ぅ繝ｬ繧ｯ繝医Μ菴懈・・亥､ｱ謨励＠縺ｦ繧らｶ夊｡鯉ｼ・
+	// ディレクトリ作成（失敗しても続行）
 	if(!CreateDirectoryW(L"./Dumps", nullptr)) {
 		DWORD err = GetLastError();
 		if(err != ERROR_ALREADY_EXISTS) {
@@ -116,14 +116,14 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
 		}
 	}
 
-	// 繝輔ぃ繧､繝ｫ蜷搾ｼ育ｧ貞腰菴搾ｼ・
+	// ファイル名（秒単位）
 	StringCchPrintfW(filePath, MAX_PATH, L"./Dumps/%04d-%02d-%02d_%02d%02d%02d.dmp",
 					 time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond);
 
-				 // 繝ｭ繧ｰ縺ｫ繝代せ繧貞・蜉・
+				 // ログにパスを出力
 	Log(std::format("ExportDump: target path: {}\n", ConvertString(filePath)));
 
-	// 繝輔ぃ繧､繝ｫ菴懈・
+	// ファイル作成
 	HANDLE dumpFileHandle = CreateFileW(
 		filePath,
 		GENERIC_READ | GENERIC_WRITE,
@@ -139,17 +139,17 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
 		return EXCEPTION_EXECUTE_HANDLER;
 	}
 
-	// processId(exeID)縺ｨ繧ｯ繝ｩ繝・す繝･(萓句､・縺ｮ逋ｺ逕溘＠縺殳hreadID繧貞叙蠕・
+	// processId(exeID)とクラッシュ(例外)の発生したthreadIDを取得
 	DWORD processId = GetCurrentProcessId();
 	DWORD threadId = GetCurrentThreadId();
 
-	// 險ｭ螳壽ュ蝣ｱ繧貞・蜉・
+	// 設定情報を出力
 	MINIDUMP_EXCEPTION_INFORMATION minidumpInformation{};
 	minidumpInformation.ThreadId = threadId;
 	minidumpInformation.ExceptionPointers = exception;
 	minidumpInformation.ClientPointers = TRUE;
 
-	// Dump繧貞・蜉帙らｵ先棡繧偵Ο繧ｰ縺ｫ谿九☆
+	// Dumpを出力。結果をログに残す
 	BOOL writeResult = MiniDumpWriteDump(
 		GetCurrentProcess(),
 		processId,
@@ -168,16 +168,16 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
 
 	CloseHandle(dumpFileHandle);
 
-	// 縺ｻ縺九↓髢｢騾｣莉倥￠繧峨ｌ縺ｦ縺・ｋSEH萓句､悶ワ繝ｳ繝峨Λ縺後≠繧後・螳溯｡後る壼ｸｸ繝励Ο繧ｻ繧ｹ繧堤ｵゆｺ・☆繧九・
+	// ほかに関連付けられているSEH例外ハンドラがあれば実行。通常プロセスを終了する。
 	return EXCEPTION_EXECUTE_HANDLER;
 }
 
 IDxcBlob *CompileShader(
-	// Compiler縺吶ｋShader繝輔ぃ繧､繝ｫ縺ｸ縺ｮ繝代せ
+	// CompilerするShaderファイルへのパス
 	const std::wstring &filePath,
-	// Compiler縺ｫ菴ｿ逕ｨ縺吶ｋProfile
+	// Compilerに使用するProfile
 	const wchar_t *profile,
-	// 蛻晄悄蛹悶〒逕滓・縺励◆繧ゅ・繧・縺､
+	// 初期化で生成したものを渡す
 	IDxcUtils *dxcUtils,
 	IDxcCompiler3 *dxcCompiler,
 	IDxcIncludeHandler *includeHandler) {
@@ -186,7 +186,7 @@ IDxcBlob *CompileShader(
 	*1. hlsl繝輔ぃ繧､繝ｫ繧定ｪｭ繧
 	*********************************************************/
 
-	// 縺薙ｌ縺九ｉ繧ｷ繧ｧ繝ｼ繝繝ｼ繧偵さ繝ｳ繝代う繝ｫ縺吶ｋ譌ｨ繧偵Ο繧ｰ縺ｫ蜃ｺ縺・
+	// これからシェーダーをコンパイルする旨をログに出す
 	Log(ConvertString(std::format(L"Begin CompileShader, path:{},profile:{}\n", filePath, profile)));
 	// hlsl繝輔ぃ繧､繝ｫ繧定ｪｭ繧
 	IDxcBlobEncoding *shaderSource = nullptr;
@@ -196,28 +196,28 @@ IDxcBlob *CompileShader(
 		GetCurrentDirectoryW(MAX_PATH, buf);
 		Log(ConvertString(std::format(L"Failed to load shader file: {}. hr: {:08X}, CWD: {}\n", filePath, hr, buf)));
 	}
-	// 縺ゅ″繧峨ａ縺ｪ縺九▲縺溘ｉ豁｢繧√ｋ
+	// あきらめなかったら止める
 	assert(SUCCEEDED(hr));
-	// 隱ｭ縺ｿ霎ｼ繧薙□繝輔ぃ繧､繝ｫ縺ｮ蜀・ｮｹ繧定ｨｭ螳壹☆繧・
+	// 読み込んだファイルの中身を設定する
 	DxcBuffer shaderSourceBuffer;
 	shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
 	shaderSourceBuffer.Size = shaderSource->GetBufferSize();
-	shaderSourceBuffer.Encoding = DXC_CP_UTF8;// UTF8縺ｮ譁・ｭ励さ繝ｼ繝峨〒縺ゅｋ縺薙→繧帝夂衍
+	shaderSourceBuffer.Encoding = DXC_CP_UTF8;// UTF8の文字コードであることを通知
 
 	/*********************************************************
-	*2.Compile縺吶ｋ
+	2.Compileする
 	*********************************************************/
 
 	LPCWSTR arguments[] = {
-        filePath.c_str(),         // 繧ｳ繝ｳ繝代う繝ｫ蟇ｾ雎｡縺ｮhlsl繝輔ぃ繧､繝ｫ蜷・
-        L"-E", L"main",           // 繧ｨ繝ｳ繝医Μ繝ｼ繝昴う繝ｳ繝医・謖・ｮ壹ょ渕譛ｬ逧・↓main莉･螟悶↓縺ｯ縺励↑縺・
-        L"-T", profile,           // ShaderProfile縺ｮ險ｭ螳・
-        L"-Zi", L"-Qembed_debug", // 繝・ヰ繝・げ逕ｨ縺ｮ諠・ｱ繧貞沂繧∬ｾｼ繧
-        L"-Od",                   // 譛驕ｩ蛹悶ｒ螟悶＠縺ｦ縺翫￥
-        L"-Zpr",                  // 繝｡繝｢繝ｪ繝ｬ繧､繧｢繧ｦ繝医・陦悟━蜈・
-        L"-HV", L"2021",          // 笘・縺薙ｌ繧定ｿｽ蜉・・HLSL2021繝ｫ繝ｼ繝ｫ繧帝←逕ｨ縺励※C++縺ｨ蜷後§蝙句錐繧剃ｽｿ縺医ｋ繧医≧縺ｫ縺吶ｋ
+        filePath.c_str(),         // コンパイル対象のhlslファイル名
+        L"-E", L"main",           // エントリーポイントの指定。基本的にmain以外にはしない
+        L"-T", profile,           // ShaderProfileの設定
+        L"-Zi", L"-Qembed_debug", // デバッグ用の情報を埋め込む
+        L"-Od",                   // 最適化を外しておく
+        L"-Zpr",                  // メモリレイアウトは行優先
+        L"-HV", L"2021",          // ※これを追加：HLSL2021ルールを適用してC++と同じ型名を使えるようにする
     };
-	// 螳滄圀縺ｫShader繧偵さ繝ｳ繝代う繝ｫ縺吶ｋ
+	// 実際にShaderをコンパイルする
 	IDxcResult *shaderResult = nullptr;
 	hr = dxcCompiler->Compile(
 		&shaderSourceBuffer,
@@ -226,46 +226,46 @@ IDxcBlob *CompileShader(
 		includeHandler,
 		IID_PPV_ARGS(&shaderResult)
 	);
-	// 繧ｳ繝ｳ繝代う繝ｩ繧ｨ繝ｩ繝ｼ縺ｧ縺ｯ縺ｪ縺重xc縺瑚ｵｷ蜍輔〒縺阪↑縺・↑縺ｩ縺ｮ閾ｴ蜻ｽ逧・↑繧ｨ繝ｩ繝ｼ
+	// コンパイラエラーではなくdxcが起動できないなどの致命的なエラー
 	assert(SUCCEEDED(hr));
 /*********************************************************
-	*3.隴ｦ蜻翫・繧ｨ繝ｩ繝ｼ縺悟・縺ｦ縺・↑縺・°遒ｺ隱・
+	3.警告やエラーが出ているか確認
 	*********************************************************/
 
 	IDxcBlobUtf8 *shaderError = nullptr;
 	shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
 
-	// shaderError縺御ｽ懊ｉ繧後※縺・※縲√°縺､荳ｭ霄ｫ縺ｮ譁・ｭ怜・縺ｮ髟ｷ縺輔′0縺ｧ縺ｯ縺ｪ縺・ｴ蜷医□縺代お繝ｩ繝ｼ縺ｨ縺ｿ縺ｪ縺・
+	// shaderErrorが作られており、かつ中身の文字列の長さが0ではない場合だけエラーとみなす
 	if(shaderError != nullptr && shaderError->GetStringLength() != 0) {
 		Log(shaderError->GetStringPointer());
-		// 隴ｦ蜻翫・繧ｨ繝ｩ繝ｼ邨ｶ蟇ｾ繝繝｡
+		// 警告やエラー絶対ダメ
 		assert(false);
 	}
 	/*********************************************************
-	*4.Compile邨先棡繧貞女縺大叙縺｣縺ｦ霑斐☆
+	4.Compile結果を受け取って返す
 	*********************************************************/
 
-	// 繧ｳ繝ｳ繝代う繝ｫ邨先棡縺九ｉ螳溯｡檎畑縺ｮ繝舌う繝翫Μ驛ｨ蛻・ｒ蜿門ｾ・
+	// コンパイル結果から実行用のバイナリ部分を取得
 	IDxcBlob *shaderBlob = nullptr;
 	hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
 	assert(SUCCEEDED(hr));
-	// 謌仙粥謚ｼ縺励◆繝ｭ繧ｰ繧貞・縺・
+	// 成功したログを出す
 	Log(ConvertString(std::format(L"Compile Succeeded, path:{},profile:{}\n", filePath, profile)));
-	// 繧ゅ≧菴ｿ繧上↑縺・Μ繧ｽ繝ｼ繧ｹ繧帝幕謾ｾ
+	// もう使わないソースを開放
 	shaderSource->Release();
 	shaderResult->Release();
-	// 螳溯｡檎畑縺ｮ繝舌う繝翫Μ繧定ｿ泌唆
+	// 実行用のバイナリを返却
 	return shaderBlob;
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComPtr<ID3D12Device> device, size_t sizeInBytes) {
-	assert(device != nullptr); // 螳牙・繝√ぉ繝・け
+	assert(device != nullptr); // 安全チェック
 
-	// 繧｢繝・・繝ｭ繝ｼ繝臥畑縺ｮ繝偵・繝励・險ｭ螳夲ｼ・PU縺九ｉGPU縺ｫ繝・・繧ｿ繧帝√ｋ逕ｨ・・
+	// アップロード用のヒープの設定（CPUからGPUにデータを送る用）
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
 
-	// 繝舌ャ繝輔ぃ繝ｪ繧ｽ繝ｼ繧ｹ縺ｮ險ｭ螳・
+	// バッファリソースの設定
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	resourceDesc.Width = sizeInBytes;
@@ -275,13 +275,13 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComP
 	resourceDesc.SampleDesc.Count = 1;
 	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-	// 螳滄圀縺ｫ繝ｪ繧ｽ繝ｼ繧ｹ・医ヰ繝・ヵ繧｡・峨ｒ菴懈・
+	// 実際にリソース（バッファ）を作成
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
 	HRESULT hr = device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
-		D3D12_RESOURCE_STATE_COMMON, // 蛻晄悄迥ｶ諷具ｼ郁ｪｭ縺ｿ蜿悶ｊ逕ｨ・・
+		D3D12_RESOURCE_STATE_COMMON, // 初期状態（読み取り用）
 		nullptr,
 		IID_PPV_ARGS(&resource)
 	);
@@ -289,10 +289,10 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComP
 		throw std::runtime_error("CreateBufferResource failed! VRAM might be full or arguments invalid.");
 	}
 
-	return resource; // 菴懊▲縺溘ヰ繝・ヵ繧｡繧定ｿ斐☆・・
+	return resource; // 作ったバッファを返す
 }
 
-// DescriptorHeap縺ｮ菴懈・髢｢謨ｰ
+// DescriptorHeapの作成関数
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
 	Microsoft::WRL::ComPtr<ID3D12Device> device, D3D12_DESCRIPTOR_HEAP_TYPE heapType, UINT numDescriptors, bool shaderVisible) {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
@@ -306,67 +306,67 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(
 	return heap;
 }
 
-// Texture繝・・繧ｿ繧定ｪｭ繧
+// Textureデータを読む
 DirectX::ScratchImage LoadTexture(const std::string &filePath) {
-    // 繝輔ぃ繧､繝ｫ繝代せ遒ｺ隱咲畑縺ｮ繝ｭ繧ｰ
+    // ファイルパス確認用のログ
     OutputDebugStringA(("LoadTexture: " + filePath + "\n").c_str());
 
     DirectX::ScratchImage image{};
     std::wstring filePathW = ConvertString(filePath);
     HRESULT hr;
 
-    // 笘・ｳ・侭縺ｮ謖・､ｺ1・咼DS繝輔ぃ繧､繝ｫ縺ｫ蟇ｾ蠢懊☆繧・
+    // 備考1：DDSファイルに対応する
     if (filePathW.ends_with(L".dds")) {
-        // .dds縺ｧ邨ゅｏ縺｣縺ｦ縺・◆繧吋DS縺ｨ縺励※隱ｭ縺ｿ霎ｼ繧縲ＴRGB諠・ｱ縺悟性縺ｾ繧後※縺・ｋ縺ｮ縺ｧ繝輔Λ繧ｰ縺ｯNONE
+        // .ddsで終わっていたらDDSとして読み込む。sRGB情報が含まれているのでフラグはNONE
         hr = DirectX::LoadFromDDSFile(filePathW.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image);
     } else {
-        // 縺昴ｌ莉･螟悶・蠕捺擂騾壹ｊWIC・・NG繧ЙPG縺ｪ縺ｩ・峨→縺励※隱ｭ縺ｿ霎ｼ繧
+        // それ以外は従来通りWIC（PNGやJPGなど）として読み込む
         hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
     if (FAILED(hr)) {
         throw std::runtime_error("LoadTexture failed to load file: " + filePath);
     }
 
-    // 笘・ｳ・侭縺ｮ謖・､ｺ2・壼悸邵ｮ繝輔か繝ｼ繝槭ャ繝医°蛻､螳壹＠縺ｦ繝溘ャ繝励・繝・・逕滓・繧貞・縺代ｋ
+    // 備考2：圧縮フォーマットか判定してミップマップ生成を避ける
     DirectX::ScratchImage mipImages{};
     if (DirectX::IsCompressed(image.GetMetadata().format)) {
-        // 蝨ｧ邵ｮ繝輔か繝ｼ繝槭ャ繝医↑繧峨◎縺ｮ縺ｾ縺ｾ菴ｿ縺・ｼ・irectXTex縺檎峩謗･縺ｮ繝溘ャ繝励・繝・・逕滓・縺ｫ髱槫ｯｾ蠢懊↑縺溘ａ・・
+        // 圧縮フォーマットならそのまま使う（DirectXTexが直接のミップマップ生成に非対応なため）
         mipImages = std::move(image);
     } else {
-        // 髱槫悸邵ｮ縺ｪ繧峨Α繝・・繝槭ャ繝励ｒ菴懈・縺吶ｋ
+        // 非圧縮ならミップマップを作成する
         hr = DirectX::GenerateMipMaps(
             image.GetImages(), image.GetImageCount(), image.GetMetadata(),
-            DirectX::TEX_FILTER_SRGB, 4, mipImages); // 隨ｬ5蠑墓焚縺ｮ 0(MAX) 繧・4 縺ｪ縺ｩ莉ｻ諢上↓螟画峩蜿ｯ閭ｽ
+            DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) や 4 など任意に変更可能
         assert(SUCCEEDED(hr));
     }
 
     return mipImages;
 }
 
-// DirectX12縺ｮTextureResource繧剃ｽ懊ｋ
+// DirectX12のTextureResourceを作る
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device, const DirectX::TexMetadata &metadata) {
-	// metadata繧偵ｂ縺ｨ縺ｫResource縺ｮ險ｭ螳・
+	// metadataをもとにResourceの設定
 	D3D12_RESOURCE_DESC resourceDesc{};
-	resourceDesc.Width = UINT(metadata.width);// 讓ｪ蟷・
+	resourceDesc.Width = UINT(metadata.width);// 横幅
 	resourceDesc.Height = UINT(metadata.height);// 鬮倥＆
-	resourceDesc.MipLevels = UINT(metadata.mipLevels);// mipmap縺ｮ謨ｰ
-	resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 螂･陦後″ ro 驟榊・Texture縺ｮ驟榊・謨ｰ
-	resourceDesc.Format = metadata.format;// Texture縺ｮFormat
-	resourceDesc.SampleDesc.Count = 1;// 繧ｵ繝ｳ繝励Μ繝ｳ繧ｰ繧ｫ繧ｦ繝ｳ繝・
-	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);// Texture縺ｮ谺｡蜈・焚縲・谺｡蜈・
+	resourceDesc.MipLevels = UINT(metadata.mipLevels);// mipmapの数
+	resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 奥行き or 配列Textureの配列数
+	resourceDesc.Format = metadata.format;// TextureのFormat
+	resourceDesc.SampleDesc.Count = 1;// サンプリングカウント
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);// Textureの次元（2次元）
 
-	// 蛻ｩ逕ｨ縺吶ｋHeap縺ｮ險ｭ螳・
+	// 利用するHeapの設定
 	D3D12_HEAP_PROPERTIES heapProperties{};
-	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;// 邏ｰ縺九＞險ｭ螳壹ｒ陦後≧
+	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;// 細かい設定を行う
 
-	// Resource縺ｮ逕滓・
+	// Resourceの生成
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
 	HRESULT hr = device->CreateCommittedResource(
-		&heapProperties,// Heap縺ｮ險ｭ螳・
-		D3D12_HEAP_FLAG_NONE,// Heap縺ｮ迚ｹ谿翫↑險ｭ螳壹ゆｻ雁屓縺ｯ縺ｪ縺・
-		&resourceDesc,// Resource縺ｮ險ｭ螳・
-		D3D12_RESOURCE_STATE_COPY_DEST,// 蛻晏屓縺ｮResourceState縲・
-		nullptr,//Clear譛驕ｩ蛟､縲ゆｻ雁屓縺ｯ菴ｿ繧上↑縺・
+		&heapProperties,// Heapの設定
+		D3D12_HEAP_FLAG_NONE,// Heapの特殊な設定。今回はなし
+		&resourceDesc,// Resourceの設定
+		D3D12_RESOURCE_STATE_COPY_DEST,// 初回のResourceState
+		nullptr,//Clear最適値。今回は使わない
 		IID_PPV_ARGS(&resource)
 	);
 	if (FAILED(hr)) {
@@ -375,20 +375,20 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::Com
 	return resource;
 }
 
-// 謌ｻ繧雁､繧堤ｴ謳阪＠縺ｦ縺ｯ縺ｪ繧峨↑縺・・縺ｧ縺薙ｌ繧剃ｻ倥￠繧・
+// 戻り値を破棄してはならないのでこれを付ける
 [[nodiscard]]
-// TextureResouorce縺ｫ繝・・繧ｿ繧定ｻ｢騾√☆繧・
+// TextureResourceにデータを転送する
 Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(Microsoft::WRL::ComPtr<ID3D12Resource> texture, const DirectX::ScratchImage &mipImages, Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
 	std::vector<D3D12_SUBRESOURCE_DATA>subresources;
-	// 隱ｭ縺ｿ霎ｼ繧薙□繝・・繧ｿ縺九ｉDirectX12逕ｨ縺ｮSubresource縺ｮ驟榊・繧剃ｽ懈・
+	// 読み込んだデータからDirectX12用のSubresourceの配列を作成
 	DirectX::PrepareUpload(device.Get(), mipImages.GetImages(), mipImages.GetImageCount(), mipImages.GetMetadata(), subresources);
-	// IntermediateResource縺ｫ蠢・ｦ√↑繧ｵ繧､繧ｺ繧定ｨ育ｮ励☆繧・
+	// IntermediateResourceに必要なサイズを計算する
 	uint64_t intermediateSize = GetRequiredIntermediateSize(texture.Get(), 0, UINT(subresources.size()));
-	// 險育ｮ励＠縺溘し繧､繧ｺ縺ｧIntermediateResource繧剃ｽ懊ｋ
+	// 計算したサイズでIntermediateResourceを作る
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = CreateBufferResource(device, intermediateSize);
-	// 繝・・繧ｿ霆｢騾√ｒ繧ｳ繝槭Φ繝峨↓遨阪・
+	// データ転送をコマンドに積む
 	UpdateSubresources(commandList.Get(), texture.Get(), intermediateResource.Get(), 0, 0, UINT(subresources.size()), subresources.data());
-	// Teture縺ｸ縺ｮ霆｢騾∝ｾ後・蛻ｩ逕ｨ縺ｧ縺阪ｋ繧医≧縲．3D12_RESOURCE_STATE_COPY_DEST縺九ｉD3D12_RESOURCE_STATE_GENERIC_READ縺ｸResourceState繧貞､画峩縺吶ｋ
+	// Textureへの転送後に利用できるよう、D3D12_RESOURCE_STATE_COPY_DESTからD3D12_RESOURCE_STATE_GENERIC_READへResourceStateを変更する
 	D3D12_RESOURCE_BARRIER barrier{};
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -401,7 +401,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(Microsoft::WRL::ComPtr<
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microsoft::WRL::ComPtr<ID3D12Device> device, int32_t width, int32_t height) {
-	// 逕滓・縺吶ｋResource縺ｮ險ｭ螳・
+	// 生成するResourceの設定
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = width;
 	resourceDesc.Height = height;
@@ -409,19 +409,19 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 	resourceDesc.DepthOrArraySize = 1;// 螂･陦後″
 	resourceDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	resourceDesc.SampleDesc.Count = 1;
-	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;// 2谺｡蜈・
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;// 2次元
 	resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-	// 蛻ｩ逕ｨ縺吶ｋHeap縺ｮ險ｭ螳・
+	// 利用するHeapの設定
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	// 豺ｱ螻､蛟､縺ｮ繧ｯ繝ｪ繧｢險ｭ螳・
+	// 深度値のクリア設定
 	D3D12_CLEAR_VALUE depthClearValue{};
 	depthClearValue.DepthStencil.Depth = 1.0f;
-	depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;// 繝輔か繝ｼ繝槭ャ繝医ｒResource縺ｨ蜷医ｏ縺帙ｋ
+	depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;// フォーマットをResourceと合わせる
 
-	// Resource縺ｮ險ｭ螳・
+	// Resourceの設定
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
 	HRESULT hr = device->CreateCommittedResource(
 		&heapProperties,
@@ -436,14 +436,14 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 	return resource;
 }
 
-// DescriptorHandle繧貞叙蠕励☆繧・CPU)
+// DescriptorHandleを取得する(CPU)
 D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap, uint32_t descriptorSize, uint32_t index) {
 	D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	handleCPU.ptr += (descriptorSize * index);
 	return handleCPU;
 }
 
-// DescriptorHandle繧貞叙蠕励☆繧・GPU)
+// DescriptorHandleを取得する(GPU)
 D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap, uint32_t descriptorSize, uint32_t index) {
 	D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	handleGPU.ptr += (descriptorSize * index);
@@ -453,50 +453,50 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12
 
 
 void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &indices, float radius, int latDiv, int lonDiv) {
-	// 邱ｯ蠎ｦ縺ｮ蛻・牡謨ｰ: 荳翫°繧我ｸ九∈菴墓ｮｵ縺ｫ蛻・￠繧九°
-	// 邨悟ｺｦ縺ｮ蛻・牡謨ｰ: 讓ｪ縺ｫ菴募・蜑ｲ縺吶ｋ縺具ｼ郁ｵ､驕薙・霈ｪ蛻・ｊ縺ｿ縺溘＞縺ｪ繧､繝｡繝ｼ繧ｸ・・
+	// 緯度の分割数: 上から下へ何段に分割するか
+	// 経度の分割数: 横に何分割するか（赤道の輪切りみたいなイメージ）
 
-	// 鬆らせ縺ｮ逕滓・・育ｷｯ蠎ｦ譁ｹ蜷代↓繝ｫ繝ｼ繝暦ｼ・
+	// 頂点の生成（緯度方向にループ）
 	for(int lat = 0; lat <= latDiv; ++lat) {
-		float theta = lat * float(M_PI) / float(latDiv); // 邱ｯ蠎ｦ縺ｮ隗貞ｺｦ・・ ~ ﾏ・・
+		float theta = lat * float(M_PI) / float(latDiv); // 緯度の角度（0 ~ π）
 		float sinTheta = sinf(theta);
 		float cosTheta = cosf(theta);
 
-		// 邨悟ｺｦ譁ｹ蜷代↓繝ｫ繝ｼ繝・
+		// 経度方向にループ
 		for(int lon = 0; lon <= lonDiv; ++lon) {
-			float phi = lon * 2.0f * float(M_PI) / float(lonDiv); // 邨悟ｺｦ縺ｮ隗貞ｺｦ・・ ~ 2ﾏ・・
+			float phi = lon * 2.0f * float(M_PI) / float(lonDiv); // 経度の角度（0 ~ 2π）
 			float sinPhi = sinf(phi);
 			float cosPhi = cosf(phi);
 
-			// 逅・・x, y, z蠎ｧ讓吶ｒ豎ゅａ繧・
+			// 球面のx, y, z座標を求める
 			float x = cosPhi * sinTheta;
 			float y = cosTheta;
 			float z = sinPhi * sinTheta;
 
-			// 鬆らせ繝・・繧ｿ繧剃ｽ懈・
+			// 頂点データを作成
 			VertexData v{};
-			v.position = { radius * x, radius * y, radius * z, 1.0f }; // 逅・・陦ｨ髱｢荳翫・轤ｹ
+			v.position = { radius * x, radius * y, radius * z, 1.0f }; // 球の表面上の点
 			v.normal = {v.position.x / radius, v.position.y / radius, v.position.z / radius};
             v.texcoord = { (float)lon / lonDiv, (float)lat / latDiv };
             v.color = {1.0f, 1.0f, 1.0f, 1.0f};
             vertices.push_back(v); // 鬆らせ繝ｪ繧ｹ繝医↓霑ｽ蜉
 		}
 	}
-	// 荳芽ｧ貞ｽ｢繧､繝ｳ繝・ャ繧ｯ繧ｹ縺ｮ逕滓・・磯らせ繧偵▽縺ｪ縺撰ｼ・
+	// 三角形インデックスの生成（頂点をつなぐ）
 	for(int lat = 0; lat < latDiv; ++lat) {
 		for(int lon = 0; lon < lonDiv; ++lon) {
-			// 迴ｾ蝨ｨ縺ｮ陦後・蛻励°繧蛾らせ縺ｮ逡ｪ蜿ｷ繧定ｨ育ｮ・
+			// 現在の行・列から頂点の番号を計算
 			int first = lat * (lonDiv + 1) + lon;
 			int second = first + lonDiv + 1;
 
-			// 莠後▽縺ｮ荳芽ｧ貞ｽ｢繧剃ｽｿ縺｣縺ｦ蝗幄ｧ貞ｽ｢繧貞沂繧√ｋ
-			indices.push_back(first);         // 蟾ｦ荳・
-			indices.push_back(first + 1);     // 蜿ｳ荳・
-			indices.push_back(second);        // 蟾ｦ荳・
+			// 二つの三角形を使って四角形を埋める
+			indices.push_back(first);         // 左下
+			indices.push_back(first + 1);     // 右下
+			indices.push_back(second);        // 左上
 
-			indices.push_back(second);        // 蟾ｦ荳・
-			indices.push_back(first + 1);     // 蜿ｳ荳・
-			indices.push_back(second + 1);    // 蜿ｳ荳・
+			indices.push_back(second);        // 左上
+			indices.push_back(first + 1);     // 右下
+			indices.push_back(second + 1);    // 右上
 		}
 	}
 }
@@ -527,35 +527,35 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     Assimp::Importer importer;
     std::string filePath = directoryPath + "/" + filename;
 
-    // 1. 繝輔ぃ繧､繝ｫ縺ｮ隱ｭ縺ｿ霎ｼ縺ｿ
-    // 雉・侭縺ｫ縺ゅｋ騾壹ｊ縲∽ｸ芽ｧ貞ｽ｢蛹悶∝ｷｻ縺埼・渚霆｢縲ゞV蜿崎ｻ｢繧呈欠螳・
+    // 1. ファイルの読み込み
+    // 備考にある通り、三角形化、巻き順反転、UV反転を指定
     const aiScene *scene = importer.ReadFile(filePath.c_str(),
-                                             // 1. 縺吶∋縺ｦ縺ｮ髱｢繧剃ｸ芽ｧ貞ｽ｢縺ｫ螟画鋤・・irectX縺檎炊隗｣縺ｧ縺阪ｋ蠖｢蠑上↓縺吶ｋ・・
+                                             // 1. すべての面を三角形に変換（DirectXが理解できる形式にする）
                                              aiProcess_Triangulate |
-                                                 // 2. V霆ｸ繧貞渚霆｢・・lTF縺ｪ縺ｩ縺ｮ蟾ｦ荳句次轤ｹ繧偵．irectX讓呎ｺ悶・蟾ｦ荳雁次轤ｹ縺ｫ蜷医ｏ縺帙ｋ・・
+                                                 // 2. V軸を反転（glTFなどの左下原点を、DirectX標準の左上原点に合わせる）
                                                  aiProcess_FlipUVs |
-                                                 // 3. 蜿ｳ謇狗ｳｻ縺九ｉ蟾ｦ謇狗ｳｻ縺ｸ螟画鋤・郁ｻｸ縺ｮ蜿崎ｻ｢繧・ｷｻ縺埼・・隱ｿ謨ｴ繧偵そ繝・ヨ縺ｧ陦後≧・・
+                                                 // 3. 右手系から左手系へ変換（Z軸の反転や巻き順の調整をセットで行う）
                                                  aiProcess_ConvertToLeftHanded |
                                                  // 4. 法線がない場合に滑らかな法線を生成（ライティング計算に必要）
                                                  aiProcess_GenSmoothNormals |
                                                  // グローバルスケールを適用
                                                  aiProcess_GlobalScale);
 
-    // 繝｡繝・す繝･縺後↑縺・ｴ蜷医・繧ｨ繝ｩ繝ｼ
+    // メッシュがない場合はエラー
     assert(scene && scene->HasMeshes());
 
-    // 2. 繝｡繝・す繝･縺ｮ隗｣譫撰ｼ郁ｳ・侭縺ｫ蝓ｺ縺･縺阪∝・繝｡繝・す繝･繧偵Ν繝ｼ繝暦ｼ・
+    // 2. メッシュの解析（備考に基づき、全メッシュをループ）
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh *mesh = scene->mMeshes[meshIndex];
 
         // MultiMesh/MultiMaterial対応のため、頂点の開始位置を記録しておく
         uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
 
-        // 豕慕ｷ壹→Texcoord縺後↑縺・Γ繝・す繝･縺ｯ莉雁屓縺ｯ髱槫ｯｾ蠢懶ｼ郁ｳ・侭縺ｮassert・・
+        // 法線とTexcoordがないメッシュは今回は非対応（備考のassert）
         assert(mesh->HasNormals());
         assert(mesh->HasTextureCoords(0));
 
-        // 鬆らせ繝・・繧ｿ縺ｮ隗｣譫・
+        // 頂点データの解析
         for (uint32_t vIndex = 0; vIndex < mesh->mNumVertices; ++vIndex) {
             aiVector3D &position = mesh->mVertices[vIndex];
             aiVector3D &normal = mesh->mNormals[vIndex];
@@ -566,7 +566,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
 
-            // 蟾ｦ謇狗ｳｻ縺ｸ縺ｮ螟画鋤・郁ｳ・侭縺ｮ騾壹ｊ縲々繧貞渚霆｢・・
+            // 左手系への変換（備考の通り、Xを反転）
             vertex.position = {position.x, position.y, position.z, 1.0f};
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
@@ -574,7 +574,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             modelData.vertices.push_back(vertex);
         }
 
-        // 繧､繝ｳ繝・ャ繧ｯ繧ｹ・・ace・峨・隗｣譫撰ｼ郁ｳ・侭・唔ndexed謠冗判縺ｫ蟇ｾ蠢懊＆縺帙ｋ・・
+        // インデックス(Face)の解析（備考のIndexed描画に対応させる）
         
         // Bone解析
         for (uint32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
@@ -605,7 +605,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
 
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
             aiFace &face = mesh->mFaces[faceIndex];
-            assert(face.mNumIndices == 3); // 荳芽ｧ貞ｽ｢縺ｮ縺ｿ繧ｵ繝昴・繝・
+            assert(face.mNumIndices == 3); // 三角形のみサポート
 
             for (uint32_t element = 0; element < face.mNumIndices; ++element) {
                 uint32_t vertexIndex = face.mIndices[element];
@@ -614,7 +614,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         }
     }
 
-    // 3. 繝槭ユ繝ｪ繧｢繝ｫ縺ｮ隗｣譫撰ｼ郁ｳ・侭縺ｫ蝓ｺ縺･縺阪．iffuse繝・け繧ｹ繝√Ε繧貞叙蠕暦ｼ・
+    // 3. マテリアルの解析（備考に基づき、Diffuseテクスチャを取得）
     for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
         aiMaterial *material = scene->mMaterials[materialIndex];
         if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
@@ -631,20 +631,20 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename) {
 	MaterialData materialData;// 讒狗ｯ峨☆繧貴aterialData
-	std::string line;//縲繝輔ぃ繧､繝ｫ縺九ｉ隱ｭ繧薙□1陦檎岼繧呈ｼ邏阪☆繧・
-	std::ifstream file(directoryPath + "/" + filename);// 繝輔ぃ繧､繝ｫ繧帝幕縺・
-	assert(file.is_open());// 髢九￠縺ｪ縺九▲縺溘ｉ豁｢繧√ｋ
+	std::string line;//　ファイルから読んだ1行目を格納する
+	std::ifstream file(directoryPath + "/" + filename);// ファイルを開く
+	assert(file.is_open());// 開けなかったら止める
 
 	while(std::getline(file, line)) {
 		std::string identifier;
 		std::istringstream s(line);
 		s >> identifier;
 
-		// identifier縺ｫ蠢懊§縺溷・逅・
+		// identifierに応じた処理
 		if(identifier == "map_Kd") {
 			std::string textureFilename;
 			s >> textureFilename;
-			// 騾｣邨舌＠縺ｦ繝輔ぃ繧､繝ｫ繝代せ縺ｫ縺吶ｋ
+			// 連結してファイルパスにする
 			materialData.textureFilePath = directoryPath + "/" + textureFilename;
 
 			OutputDebugStringA(("Material Texture Path: " + materialData.textureFilePath + "\n").c_str());
@@ -659,55 +659,55 @@ SoundData SoundLoadWave(const char *filename) {
 	/*繝輔ぃ繧､繝ｫ繧ｪ繝ｼ繝励Φ
 	*********************************************************/
 
-	// 繝輔ぃ繧､繝ｫ蜈･蜉帙せ繝医Μ繝ｼ繝縺ｮ繧､繝ｳ繧ｹ繧ｿ繝ｳ繧ｹ
+	// ファイル入力ストリームのインスタンス
 	std::ifstream file;
 	// .wav繝輔ぃ繧､繝ｫ繧偵ヰ繧､繝翫Μ繝｢繝ｼ繝峨〒髢九￥
 	file.open(filename, std::ios_base::binary);
-	// 繝輔ぃ繧､繝ｫ繧ｪ繝ｼ繝励Φ螟ｱ謨励ｒ讀懷・縺吶ｋ
+	// ファイルオープン失敗を検出する
 	assert(file.is_open());
 
-	/*.wav繝・・繧ｿ隱ｭ縺ｿ霎ｼ縺ｿ
+	/*.wavデータ読み込み
 	*********************************************************/
 
-	// RIFF繝倥ャ繝繝ｼ縺ｮ隱ｭ縺ｿ霎ｼ縺ｿ
+	// RIFFヘッダーの読み込み
 	RiffHeader riff;
 	file.read((char *)&riff, sizeof(riff));
 	OutputDebugStringA(std::format("Read RIFF ID: {}\n", std::string(riff.chunk.id, 4)).c_str());
-	// 繧ｿ繧､繝励′RIFF縺九メ繧ｧ繝・け
+	// タイプがRIFFかチェック
 	if(strncmp(riff.chunk.id, "RIFF", 4) != 0) {
 		assert(0);
 	}
-	// 繧ｿ繧､繝励′WAVE縺九メ繧ｧ繝・け
+	// タイプがWAVEかチェック
 	if(strncmp(riff.type, "WAVE", 4) != 0) {
 		assert(0);
 	}
 
-	// Format繝√Ε繝ｳ繧ｯ隱ｭ縺ｿ霎ｼ縺ｿ
+	// Formatチャンク読み込み
 	FormatChunk format = {};
-	// fmt繝√Ε繝ｳ繧ｯ繧呈爾縺吶Ν繝ｼ繝・
+	// fmtチャンクを探すループ
 	while(true) {
 		// 繝√Ε繝ｳ繧ｯ繝倥ャ繝繝ｼ繧定ｪｭ繧
 		file.read((char *)&format.chunk, sizeof(ChunkHeader));
 
-		// 繝√Ε繝ｳ繧ｯID縺・"fmt " 縺ｪ繧・break
+		// チャンクIDが"fmt " ならbreak
 		if(strncmp(format.chunk.id, "fmt ", 4) == 0) {
 			break;
 		}
 
-		// 縺昴ｌ莉･螟悶↑繧峨せ繧ｭ繝・・
+		// それ以外ならスキップ
 		file.seekg(format.chunk.size, std::ios_base::cur);
 	}
-	// 繝√Ε繝ｳ繧ｯ譛ｬ菴薙・隱ｭ縺ｿ霎ｼ縺ｿ
+	// チャンク本体の読み込み
 	assert(format.chunk.size <= sizeof(format.fmt));
 	file.read((char *)&format.fmt, format.chunk.size);
-	// Data繝√Ε繝ｳ繧ｯ縺ｮ隱ｭ縺ｿ霎ｼ縺ｿ
+	// Dataチャンクの読み込み
 	ChunkHeader data;
 	file.read((char *)&data, sizeof(data));
-	// JUNK繝√Ε繝ｳ繧ｯ繧呈､懷・縺励◆蝣ｴ蜷・
+	// JUNKチャンクを検出した場合
 	if(strncmp(data.id, "JUNK", 4) == 0) {
-		// 隱ｭ縺ｿ蜿悶ｊ菴咲ｽｮ繧谷UNK繝√Ε繝ｳ繧ｯ縺ｮ邨ゅｏ繧翫∪縺ｧ騾ｲ繧√ｋ
+		// 読み取り位置をJUNKチャンクの終わりまで進める
 		file.seekg(data.size, std::ios_base::cur);
-		// 蜀崎ｪｭ縺ｿ霎ｼ縺ｿ
+		// 再読み込み
 		file.read((char *)&data, sizeof(data));
 	}
 
@@ -715,17 +715,17 @@ SoundData SoundLoadWave(const char *filename) {
 		assert(0);
 	}
 
-	// Data繝√Ε繝ｳ繧ｯ縺ｮ繝・・繧ｿ驛ｨ蛻・ｪｭ縺ｿ霎ｼ縺ｿ
+	// Dataチャンクのデータ部分読み込み
     auto pBuffer = std::make_unique<char[]>(data.size);
     file.read(pBuffer.get(), data.size);
 
-	// wave繝輔ぃ繧､繝ｫ繧帝哩縺倥ｋ
+	// waveファイルを閉じる
 	file.close();
 
-	/*.隱ｭ縺ｿ霎ｼ繧薙□髻ｳ螢ｰ繝・・繧ｿ繧池eturn
+	/*.読み込んだ音声データをreturn
 	*********************************************************/
 
-	// return縺吶ｋ縺溘ａ縺ｮ髻ｳ螢ｰ繝・・繧ｿ
+	// returnするための音声データ
 	SoundData soundData = {};
 
 	soundData.wfex = format.fmt;
@@ -737,7 +737,7 @@ SoundData SoundLoadWave(const char *filename) {
 }
 
 void SoundUnload(SoundData *soundData) {
-	// 繝舌ャ繝輔ぃ縺ｮ繝｡繝｢繝ｪ繧定ｧ｣謾ｾ
+	// バッファのメモリを解放
     soundData->pBuffer.reset();
 
 	soundData->bufferSize = 0;
@@ -776,19 +776,19 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
     HRESULT hr;
     Microsoft::WRL::ComPtr<IMFSourceReader> pSourceReader;
 
-    // 1. SourceReader縺ｮ菴懈・
+    // 1. SourceReaderの作成
     std::wstring wFilename = ConvertString(filename);
     hr = MFCreateSourceReaderFromURL(wFilename.c_str(), nullptr, &pSourceReader);
     assert(SUCCEEDED(hr));
 
-    // 2. 蜃ｺ蜉帛ｽ｢蠑上ｒPCM・郁ｧ｣蜃榊ｾ後・逕溘ョ繝ｼ繧ｿ・峨↓險ｭ螳・
+    // 2. 出力形式をPCM（解凍後の生データ）に設定
     Microsoft::WRL::ComPtr<IMFMediaType> pTargetMediaType;
     MFCreateMediaType(&pTargetMediaType);
     pTargetMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
     pTargetMediaType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
     pSourceReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, pTargetMediaType.Get());
 
-    // 3. 譛邨ら噪縺ｪ豕｢蠖｢繝輔か繝ｼ繝槭ャ繝医ｒ蜿門ｾ・
+    // 3. 最終的な波形フォーマットを取得
     Microsoft::WRL::ComPtr<IMFMediaType> pActualMediaType;
     pSourceReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, &pActualMediaType);
 
@@ -796,7 +796,7 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
     UINT32 wfexSize;
     MFCreateWaveFormatExFromMFMediaType(pActualMediaType.Get(), &pWfex, &wfexSize);
 
-    // 4. 蜈ｨ縺ｦ縺ｮ繧ｵ繝ｳ繝励Ν繧定ｪｭ縺ｿ霎ｼ繧薙〒繝舌ャ繝輔ぃ縺ｫ譬ｼ邏・
+    // 4. 全てのサンプルを読み込んでバッファに格納
     std::vector<BYTE> audioData;
     while (true) {
         DWORD dwFlags = 0;
@@ -822,7 +822,7 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
     soundData.bufferSize = (unsigned int)audioData.size();
     std::memcpy(soundData.pBuffer.get(), audioData.data(), audioData.size());
 
-    CoTaskMemFree(pWfex); // MF縺檎函謌舌＠縺溘ヵ繧ｩ繝ｼ繝槭ャ繝域ｧ矩菴薙ｒ隗｣謾ｾ
+    CoTaskMemFree(pWfex); // MFが生成したフォーマット構造体を解放
     return soundData;
 }
 
@@ -836,7 +836,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
 
     assert(device != nullptr);
 
-    // 逕滓・縺吶ｋResource縺ｮ險ｭ螳・
+    // 生成するResourceの設定
     D3D12_RESOURCE_DESC resourceDesc{};
     resourceDesc.Width = width;
     resourceDesc.Height = height;
@@ -846,15 +846,15 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     resourceDesc.SampleDesc.Count = 1;
     resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
-    // 笘・ｳ・侭縺ｮ謖・､ｺ1: RenderTarget縺ｨ縺励※蛻ｩ逕ｨ蜿ｯ閭ｽ縺ｫ縺吶ｋ迚ｹ谿翫↑繝輔Λ繧ｰ
+    // 備考1: RenderTargetとして利用可能にする特殊なフラグ
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
-    // 蛻ｩ逕ｨ縺吶ｋHeap縺ｮ險ｭ螳・
+    // 利用するHeapの設定
     D3D12_HEAP_PROPERTIES heapProperties{};
-    // 笘・ｳ・侭縺ｮ謖・､ｺ2: 蠖鍋┯VRAM荳翫↓菴懊ｋ (DEFAULT)
+    // 備考2: 当然VRAM上に作る (DEFAULT)
     heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-    // 繧ｯ繝ｪ繧｢譎ゅ・濶ｲ繧定ｨｭ螳夲ｼ医Ξ繝ｳ繝繝ｼ繧ｿ繝ｼ繧ｲ繝・ヨ逕滓・譎ゅ↓縺ｯ縺薙ｌ縺悟ｿ・ｦ√〒縺呻ｼ・
+    // クリア時の色を設定（レンダーターゲット生成時にはこれが必要です）
     D3D12_CLEAR_VALUE clearValue{};
     clearValue.Format = format;
     clearValue.Color[0] = clearColor.x; // R
@@ -878,7 +878,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
 void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t> &indices) {
     vertices.resize(24);
 
-    // --- 鬆らせ蠎ｧ讓吶・螳夂ｾｩ ---
+    // --- 頂点座標の定義 ---
     // 蜿ｳ髱｢ (+X)
     vertices[0].position = {1.0f, 1.0f, 1.0f, 1.0f};
     vertices[1].position = {1.0f, 1.0f, -1.0f, 1.0f};
@@ -910,8 +910,8 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
     vertices[22].position = {-1.0f, -1.0f, -1.0f, 1.0f};
     vertices[23].position = {1.0f, -1.0f, -1.0f, 1.0f};
 
-    // --- 繧､繝ｳ繝・ャ繧ｯ繧ｹ縺ｮ螳夂ｾｩ・亥・蛛ｴ繧貞髄縺城・ｺ擾ｼ・---
-    // 蜷・擇 [0,1,2][2,1,3] 縺ｮ繝代ち繝ｼ繝ｳ縺ｧ險・6蛟・
+    // --- インデックスの定義（外側を向く順！）---
+    // 例 [0,1,2][2,1,3] のパターンで計6個
     for (uint32_t i = 0; i < 6; ++i) {
         uint32_t offset = i * 4;
         indices.push_back(offset + 0);

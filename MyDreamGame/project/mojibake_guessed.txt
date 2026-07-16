@@ -1,0 +1,237 @@
+--- Engine\Core\Utility\UtilityFunctions.cpp ---
+22: // メチEージに応じてゲーム固有E処琁E行う
+24: // ウィンドウが破壊された
+26: // OSに応じて、アプリ固有E終亁E伝えめE
+31: // 標準EメチEージ処琁E行う
+36: // チEチE出力（従来の動作！E
+39: // ログファイルを一度だけ作Eして使ぁEす（スレチEセーフ！E
+46: // logs チEレクトリを作E
+49: // 現在の時刻を秒単位に丸める
+53: // ローカルタイムゾーンに変換してフォーマット（Eコードと同じ書式を使用EE
+57: // ファイルパスを作Eして openE追記モード！E
+61: // 例外E無視してチEチE出力Eみ行うEログ失敗してもアプリが止まらなぁEぁEするEE
+65: // 実際の書き込み
+106: // 時刻を取得して、時刻を名前に入れたファイルを作E、EumpsチEレクトリ以下に出劁E
+111: // チEレクトリ作EE失敗しても続行！E
+119: // ファイル名（秒単位！E
+123: // ログにパスをE劁E
+126: // ファイル作E
+142: // processId(exeID)とクラチEュ(例夁Eの発生したthreadIDを取征E
+146: // 設定情報をE劁E
+152: // DumpをE力。結果をログに残す
+171: // ほかに関連付けられてぁESEH例外ハンドラがあれE実行。通常プロセスを終亁Eる、E
+176: // CompilerするShaderファイルへのパス
+178: // Compilerに使用するProfile
+180: // 初期化で生EしたもEめEつ
+189: // これからシェーダーをコンパイルする旨をログに出ぁE
+199: // あきらめなかったら止める
+201: // 読み込んだファイルの冁Eを設定すめE
+205: shaderSourceBuffer.Encoding = DXC_CP_UTF8;// UTF8の斁Eコードであることを通知
+208: *2.Compileする
+212: filePath.c_str(),         // コンパイル対象のhlslファイル吁E
+213: L"-E", L"main",           // エントリーポイントE持E。基本皁Emain以外にはしなぁE
+214: L"-T", profile,           // ShaderProfileの設宁E
+215: L"-Zi", L"-Qembed_debug", // チEチE用の惁Eを埋め込む
+216: L"-Od",                   // 最適化を外しておく
+217: L"-Zpr",                  // メモリレイアウトE行優允E
+218: L"-HV", L"2021",          // ☁Eこれを追加EEHLSL2021ルールを適用してC++と同じ型名を使えるようにする
+220: // 実際にShaderをコンパイルする
+229: // コンパイラエラーではなくdxcが起動できなぁEどの致命皁Eエラー
+232: *3.警告EエラーがEてぁEぁE確誁E
+238: // shaderErrorが作られてぁE、かつ中身の斁EEの長さが0ではなぁE合だけエラーとみなぁE
+241: // 警告Eエラー絶対ダメ
+245: *4.Compile結果を受け取って返す
+248: // コンパイル結果から実行用のバイナリ部刁E取征E
+252: // 成功押したログをEぁE
+254: // もう使わなぁEソースを開放
+257: // 実行用のバイナリを返却
+262: assert(device != nullptr); // 安EチェチE
+264: // アチEEロード用のヒEプE設定！EPUからGPUにチEEタを送る用EE
+268: // バッファリソースの設宁E
+278: // 実際にリソースEバチEァEを作E
+284: D3D12_RESOURCE_STATE_COMMON, // 初期状態（読み取り用EE
+292: return resource; // 作ったバチEァを返すEE
+295: // DescriptorHeapの作E関数
+309: // TextureチEEタを読む
+311: // ファイルパス確認用のログ
+318: // ☁EEの持E1EDDSファイルに対応すめE
+320: // .ddsで終わってぁEらDDSとして読み込む。sRGB惁Eが含まれてぁEのでフラグはNONE
+323: // それ以外E従来通りWICEENGやJPGなどEとして読み込む
+330: // ☁EEの持E2E圧縮フォーマットか判定してミップEチEE生EをEける
+333: // 圧縮フォーマットならそのまま使ぁEEirectXTexが直接のミップEチEE生Eに非対応なためEE
+336: // 非圧縮ならミチEEマップを作Eする
+339: DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) めE4 など任意に変更可能
+346: // DirectX12のTextureResourceを作る
+348: // metadataをもとにResourceの設宁E
+350: resourceDesc.Width = UINT(metadata.width);// 横幁E
+352: resourceDesc.MipLevels = UINT(metadata.mipLevels);// mipmapの数
+353: resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 奥行き ro 配ETextureの配E数
+354: resourceDesc.Format = metadata.format;// TextureのFormat
+355: resourceDesc.SampleDesc.Count = 1;// サンプリングカウンチE
+356: resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);// Textureの次允E、E次允E
+358: // 利用するHeapの設宁E
+360: heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;// 細かい設定を行う
+362: // Resourceの生E
+365: &heapProperties,// Heapの設宁E
+366: D3D12_HEAP_FLAG_NONE,// Heapの特殊な設定。今回はなぁE
+367: &resourceDesc,// Resourceの設宁E
+368: D3D12_RESOURCE_STATE_COPY_DEST,// 初回のResourceState、E
+369: nullptr,//Clear最適値。今回は使わなぁE
+378: // 戻り値を破損してはならなぁEEでこれを付けめE
+380: // TextureResouorceにチEEタを転送すめE
+383: // 読み込んだチEEタからDirectX12用のSubresourceの配Eを作E
+385: // IntermediateResourceに忁Eなサイズを計算すめE
+387: // 計算したサイズでIntermediateResourceを作る
+389: // チEEタ転送をコマンドに積E
+391: // Tetureへの転送後E利用できるよう、D3D12_RESOURCE_STATE_COPY_DESTからD3D12_RESOURCE_STATE_GENERIC_READへResourceStateを変更する
+404: // 生EするResourceの設宁E
+412: resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;// 2次允E
+415: // 利用するHeapの設宁E
+419: // 深層値のクリア設宁E
+422: depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;// フォーマットをResourceと合わせる
+424: // Resourceの設宁E
+439: // DescriptorHandleを取得すめECPU)
+446: // DescriptorHandleを取得すめEGPU)
+456: // 緯度の刁E数: 上から下へ何段に刁Eるか
+457: // 経度の刁E数: 横に何E割するか（赤道E輪刁EみたいなイメージEE
+459: // 頂点の生EE緯度方向にループ！E
+461: float theta = lat * float(M_PI) / float(latDiv); // 緯度の角度EE ~ πEE
+465: // 経度方向にルーチE
+467: float phi = lon * 2.0f * float(M_PI) / float(lonDiv); // 経度の角度EE ~ 2πEE
+471: // 琁EEx, y, z座標を求めめE
+476: // 頂点チEEタを作E
+478: v.position = { radius * x, radius * y, radius * z, 1.0f }; // 琁EE表面上E点
+485: // 三角形インチEクスの生EE頂点をつなぐ！E
+488: // 現在の行E列から頂点の番号を計箁E
+492: // 二つの三角形を使って四角形を埋める
+493: indices.push_back(first);         // 左丁E
+494: indices.push_back(first + 1);     // 右丁E
+495: indices.push_back(second);        // 左丁E
+497: indices.push_back(second);        // 左丁E
+498: indices.push_back(first + 1);     // 右丁E
+499: indices.push_back(second + 1);    // 右丁E
+530: // 1. ファイルの読み込み
+531: // 賁Eにある通り、三角形化、巻き頁E転、UV反転を指宁E
+533: // 1. すべての面を三角形に変換EEirectXが理解できる形式にするEE
+535: // 2. V軸を反転EElTFなどの左下原点を、DirectX標準E左上原点に合わせるEE
+537: // 3. 右手系から左手系へ変換E軸の反転めEき頁EE調整をセチEで行うEE
+544: // メチEュがなぁE合Eエラー
+547: // 2. メチEュの解析（賁Eに基づき、EメチEュをループ！E
+554: // 法線とTexcoordがなぁEチEュは今回は非対応（賁EのassertEE
+558: // 頂点チEEタの解极E
+569: // 左手系への変換E賁Eの通り、Xを反転EE
+577: // インチEクスEEaceEE解析（賁EEIndexed描画に対応させるEE
+608: assert(face.mNumIndices == 3); // 三角形のみサポEチE
+617: // 3. マテリアルの解析（賁Eに基づき、DiffuseチEスチャを取得！E
+634: std::string line;//　ファイルから読んだ1行目を格納すめE
+635: std::ifstream file(directoryPath + "/" + filename);// ファイルを開ぁE
+636: assert(file.is_open());// 開けなかったら止める
+643: // identifierに応じたE琁E
+647: // 連結してファイルパスにする
+662: // ファイル入力ストリームのインスタンス
+666: // ファイルオープン失敗を検Eする
+669: /*.wavチEEタ読み込み
+672: // RIFFヘッダーの読み込み
+676: // タイプがRIFFかチェチE
+680: // タイプがWAVEかチェチE
+685: // Formatチャンク読み込み
+687: // fmtチャンクを探すルーチE
+692: // チャンクIDぁE"fmt " なめEbreak
+697: // それ以外ならスキチEE
+700: // チャンク本体E読み込み
+703: // Dataチャンクの読み込み
+706: // JUNKチャンクを検Eした場吁E
+708: // 読み取り位置をJUNKチャンクの終わりまで進める
+710: // 再読み込み
+718: // DataチャンクのチEEタ部刁Eみ込み
+722: // waveファイルを閉じる
+725: /*.読み込んだ音声チEEタをreturn
+728: // returnするための音声チEEタ
+740: // バッファのメモリを解放
+779: // 1. SourceReaderの作E
+784: // 2. 出力形式をPCME解凍後E生データEに設宁E
+791: // 3. 最終的な波形フォーマットを取征E
+799: // 4. 全てのサンプルを読み込んでバッファに格紁E
+825: CoTaskMemFree(pWfex); // MFが生成したフォーマット構造体を解放
+839: // 生EするResourceの設宁E
+849: // ☁EEの持E1: RenderTargetとして利用可能にする特殊なフラグ
+852: // 利用するHeapの設宁E
+854: // ☁EEの持E2: 当然VRAM上に作る (DEFAULT)
+857: // クリア時E色を設定（レンダーターゲチE生E時にはこれが忁Eです！E
+881: // --- 頂点座標E定義 ---
+913: // --- インチEクスの定義EE側を向く頁E！E---
+914: // 吁E [0,1,2][2,1,3] のパターンで訁E6倁E
+--- Engine\Effect\ParticleManager.cpp ---
+23: // --- 乱数生E器の準備 ---
+27: // 初期化時はリストをクリアするだけ（最初EパEチEクル0個！E
+30: // エミッタのチEォルト設宁E
+31: emitter_.count = 3;           // 1回で3個EめE
+32: emitter_.frequency = 0.5f;    // 0.5秒ごとに発甁E
+33: emitter_.frequencyTime = 0.0f;// タイマE初期匁E
+38: // 刁EEE設定！E-1.0f EE1.0f の間E値をランダムに出ぁE
+41: // 色用の乱数刁EE(0.0f EE1.0f)
+46: // 1. Instancingリソースの作E
+51: // 初期匁E(単位行E)
+57: // 2. SRVの作E
+67: // ストライチE1要素のサイズ)めEParticleForGPU に合わせる
+73: // ハンドルの計箁E(持Eされたindexの場所を使ぁE
+82: // 3. マテリアルの作E
+88: // materialResource_->Unmap(0, nullptr); // 書き続けるならUnmapしなぁE
+90: // 4. チEスチャ読み込み
+91: // コマンドリストが忁EなのでParticleCommonから取得するか、TextureManager::Loadのタイミングを老Eる忁EがあるぁE
+92: // ここでは初期化時にコマンドリストを渡してぁEぁEめ、事前にロード済みであることを前提とするか、E
+93: // InitializeにCommandListを渡すよぁE変更するのが良ぁEE
+94: // 今回は簡易的にロードE琁E呼ぶ (冁Eでロード済みならハンドルだけ返ってくる)
+97: // +x方向に15m/s、篁Eは原点中忁E -1 ~ 1
+116: // ランダムな移動Eクトル
+119: // 位置Eエミッタの場所(translate) + ランダムなオフセチE
+120: // これにより「エミッタの場所から」パーチEクルがEるよぁEなりまぁE
+138: // エミッタの位置を渡して生E
+147: // 刁EEE設宁E
+152: // 値をランダムにセチE
+220: // Emitterの座標をぁEめE
+221: // 賁Eの記述: ImGui::DragFloat3("EmitterTranslate", &emitter.transform.translate.x, 0.01f, -100.0f, 100.0f);
+223: // ウィンドウが乱立しなぁEぁECollapsingHeader等で囲むのが一般皁Eすが、E
+224: // まずE賁E通りに実裁Eます、E
+227: // (おまぁE 頻度もいじれると便利なので追加しておくと良ぁEしょぁE
+230: // ■ 追加: ビルボEドEON/OFF刁E替ぁE
+241: // ☁Eこで ParticleCommon からカメラ行EをもらうEE
+246: // ビルボEド行Eの計算をフラグで刁Eさせる
+250: // ONの場吁E カメラの向きに合わせて回転を作る (既存E処琁E
+257: // OFFの場吁E 回転なぁE(単位行E)
+258: // ※もしパEチEクル個別の回転(it->transform.rotate)を使ぁEぁE合E
+259: //   ここで個別に計算する忁Eがありますが、まずE「向かなぁE状態にしまぁE
+263: // 2. 全パEチEクルをループしてGPUバッファに書き込む
+267: // 行E計箁E
+281: // チEEタセチE
+--- Engine\GameObject\Object3D.cpp ---
+13: model_ = model; // 共有されてぁEモチEをセチE
+16: // マテリアルが透EにならなぁEぁE初期値を設定すめE
+17: material_.color = {1.0f, 1.0f, 1.0f, 1.0f};                    // 白色で不透E (RGBA)
+18: material_.lightingType = 1;                                    // ライチEング有効
+19: material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 以前作った単位行Eを返す関数
+24: // マテリアルと座標変換リソースの作EEE刁EE刁Eけ！E
+51: // ☁Eマネージャから最新のカメラ惁EをゲチEEE
+52: // ☁Eマネージャから新のカメラ惁EをゲチEEE
+57: // 自身のワールド行E作E
+59: // モチE側のローカル行Eを除外（スキニング対応EためEE
+66: // ☁Eここを修正EE頁EE World * View * Projection
+69: // ☁E追加E法線用行Eの計算（これがなぁEライチEングが真っ黒になります！E
+72: // 軌跡用履歴の保孁E
+--- Engine\GameObject\PrimitiveObject.cpp ---
+39: // ゴースト描画用リソースの初期匁E
+59: // カメラのワールド行EEビュー行Eの送EEEを取征E
+61: // 回転成Eのみを抽出してビルボEド行Eとする
+70: // 回転行Eの作E (XYZの頁E合E)
+78: // ビルボEドが有効な場合E、ビルボEド回転を適用した後にローカル回転を適用する
+79: // (Z回転などで表示を傾けられるようにするため)
+--- Engine\Resource\Sprite\Sprite.cpp ---
+9: // 破棁EれるときにリストからE刁E削除
+19: // ☁EこでCommonに自刁E登録EE
+22: // マテリアルリソース作E
+29: // 行E用のバッファリソースを作E
+31: // 書き込み用のポインタを紐付けめE
+34: // 初期値設宁E
+39: // チEスチャサイズを取得（Eり抜き計算用EE
+42: texSize_ = texBaseSize_; // チEォルトE全篁E
+51: // 忁EならここでUVアニメーション処琁Eど

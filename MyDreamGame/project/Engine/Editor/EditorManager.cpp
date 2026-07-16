@@ -2012,6 +2012,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 ImGui::SetNextItemAllowOverlap();
                                 if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
                                     mapEditorSelectedTool_ = tool.id;
+                                    selectedGameObject_ = nullptr;
+                                    selectedObject_ = nullptr;
+                                    selectedParticle_ = nullptr;
+                                    selectedPrimitive_ = nullptr;
                                 }
 
                                 bool isHovered = ImGui::IsItemHovered();
@@ -2098,6 +2102,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     newDef.properties["jumpVelocityHorizontal"] = 15.0f;
                                     palette.push_back(newDef);
                                     mapEditorSelectedTool_ = newDef.id; // 新しいものを選択状態にする
+                                    selectedGameObject_ = nullptr;
+                                    selectedObject_ = nullptr;
+                                    selectedParticle_ = nullptr;
+                                    selectedPrimitive_ = nullptr;
                                     mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                                 }
                             }

@@ -1,4 +1,4 @@
-#include "Object3D.h"
+﻿#include "Object3D.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include <DirectXMath.h>
@@ -10,18 +10,18 @@
 D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
 
 void Object3D::Initialize(ID3D12Device *device, Model *model) {
-    model_ = model; // 蜈ｱ譛峨＆繧後※縺・ｋ繝｢繝・Ν繧偵そ繝・ヨ
+    model_ = model; // 共有されているモデルをセット
     transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
-    // 繝槭ユ繝ｪ繧｢繝ｫ縺碁乗・縺ｫ縺ｪ繧峨↑縺・ｈ縺・↓蛻晄悄蛟､繧定ｨｭ螳壹☆繧・
-    material_.color = {1.0f, 1.0f, 1.0f, 1.0f};                    // 逋ｽ濶ｲ縺ｧ荳埼乗・ (RGBA)
-    material_.lightingType = 1;                                    // 繝ｩ繧､繝・ぅ繝ｳ繧ｰ譛牙柑
-    material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 莉･蜑堺ｽ懊▲縺溷腰菴崎｡悟・繧定ｿ斐☆髢｢謨ｰ
+    // マテリアルが透明にならないよう初期値を設定する
+    material_.color = {1.0f, 1.0f, 1.0f, 1.0f};                    // 白色で不透明 (RGBA)
+    material_.lightingType = 1;                                    // ライティング有効
+    material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 以前作った単位行列を返す関数
     material_.shininess = 50.0f;
     material_.enableEnvironmentMap = 1;
     material_.environmentCoefficient = 0.1f;
 
-    // 繝槭ユ繝ｪ繧｢繝ｫ縺ｨ蠎ｧ讓吝､画鋤繝ｪ繧ｽ繝ｼ繧ｹ縺ｮ菴懈・・郁・蛻・・蛻・□縺托ｼ・
+    // マテリアルと座標変換リソースの作成（1つ分だけ！）
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
 
@@ -48,28 +48,28 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
 void Object3D::Update() {
     *mappedMaterial_ = material_;
 
-    // 笘・繝槭ロ繝ｼ繧ｸ繝｣縺九ｉ譛譁ｰ縺ｮ繧ｫ繝｡繝ｩ諠・ｱ繧偵ご繝・ヨ・・
-    // 笘・繝槭ロ繝ｼ繧ｸ繝｣縺九ｉ譛€譁ｰ縺ｮ繧ｫ繝｡繝ｩ諠・ｱ繧偵ご繝・ヨ・・
+    // マネージャから最新のカメラ情報をゲット
+    // ※マネージャから最新のカメラ情報をゲット！！
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
-    // 閾ｪ霄ｫ縺ｮ繝ｯ繝ｼ繝ｫ繝芽｡悟・菴懈・
+    // 自身のワールド行列作成
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    // 繝｢繝・Ν蛛ｴ縺ｮ繝ｭ繝ｼ繧ｫ繝ｫ陦悟・繧帝勁螟厄ｼ医せ繧ｭ繝九Φ繧ｰ蟇ｾ蠢懊・縺溘ａ・・
+    // モデル側のローカル行列を除外（スキニング対応のため）
     Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
     Matrix4x4 finalWorldMatrix = TransformFunctions::Multiply(nodeMatrix, worldMatrix);
 
     mappedTransform_->World = finalWorldMatrix;
     mappedTransform_->WVP = finalWorldMatrix * viewMatrix * projectionMatrix;
 
-    // 笘・縺薙％繧剃ｿｮ豁｣・・鬆・ｺ上・ World * View * Projection
+    // ※ここを修正：順は World * View * Projection
     mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(finalWorldMatrix, viewMatrix), projectionMatrix);
 
-    // 笘・霑ｽ蜉・壽ｳ慕ｷ夂畑陦悟・縺ｮ險育ｮ暦ｼ医％繧後′縺ｪ縺・→繝ｩ繧､繝・ぅ繝ｳ繧ｰ縺檎悄縺｣鮟偵↓縺ｪ繧翫∪縺呻ｼ・
+    // ※追加：法線用行列の計算（これがないとライティングが真っ黒になります！）
     mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
 
-    // 霆瑚ｷ｡逕ｨ螻･豁ｴ縺ｮ菫晏ｭ・
+    // 軌跡用履歴の保存
     trailHistory_.push_front(transform_);
     if (trailHistory_.size() > kMaxHistory) {
         trailHistory_.pop_back();

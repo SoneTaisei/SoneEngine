@@ -1,4 +1,4 @@
-#include "PrimitiveObject.h"
+﻿#include "PrimitiveObject.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
@@ -36,7 +36,7 @@ void PrimitiveObject::Initialize(ID3D12Device* device, Primitive* primitive) {
     mappedTransform_->WVP = identity;
     mappedTransform_->WorldInverseTranspose = identity;
 
-    // 繧ｴ繝ｼ繧ｹ繝域緒逕ｻ逕ｨ繝ｪ繧ｽ繝ｼ繧ｹ縺ｮ蛻晄悄蛹・
+    // ゴースト描画用リソースの初期化
     uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
     uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
     
@@ -56,9 +56,9 @@ void PrimitiveObject::Update() {
 
     Matrix4x4 billboardMatrix = TransformFunctions::MakeIdentity4x4();
     if (isBillboard_) {
-        // 繧ｫ繝｡繝ｩ縺ｮ繝ｯ繝ｼ繝ｫ繝芽｡悟・・医ン繝･繝ｼ陦悟・縺ｮ騾・｡悟・・峨ｒ蜿門ｾ・
+        // カメラのワールド行列(ビュー行列の逆行列)を取得
         Matrix4x4 cameraMatrix = TransformFunctions::Inverse(viewMatrix);
-        // 蝗櫁ｻ｢謌仙・縺ｮ縺ｿ繧呈歓蜃ｺ縺励※繝薙Ν繝懊・繝芽｡悟・縺ｨ縺吶ｋ
+        // 回転成分のみを抽出してビルボード行列とする
         billboardMatrix = cameraMatrix;
         billboardMatrix.m[3][0] = 0.0f;
         billboardMatrix.m[3][1] = 0.0f;
@@ -67,7 +67,7 @@ void PrimitiveObject::Update() {
 
     Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(transform_.scale);
     
-    // 蝗櫁ｻ｢陦悟・縺ｮ菴懈・ (XYZ縺ｮ鬆・〒蜷域・)
+    // 回転行列の作成 (XYZの順で合成)
     Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(transform_.rotate.x);
     Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(transform_.rotate.y);
     Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(transform_.rotate.z);
@@ -75,8 +75,8 @@ void PrimitiveObject::Update() {
 
     Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(transform_.translate);
 
-    // 繝薙Ν繝懊・繝峨′譛牙柑縺ｪ蝣ｴ蜷医・縲√ン繝ｫ繝懊・繝牙屓霆｢繧帝←逕ｨ縺励◆蠕後↓繝ｭ繝ｼ繧ｫ繝ｫ蝗櫁ｻ｢繧帝←逕ｨ縺吶ｋ
-    // (Z蝗櫁ｻ｢縺ｪ縺ｩ縺ｧ陦ｨ遉ｺ繧貞だ縺代ｉ繧後ｋ繧医≧縺ｫ縺吶ｋ縺溘ａ)
+    // ビルボードが有効な場合、ビルボード回転を適用した後にローカル回転を適用する
+    // (Z回転などで表示を傾けられるようにするため)
     Matrix4x4 localMatrix;
     if (isBillboard_) {
         localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
