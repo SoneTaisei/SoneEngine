@@ -1,26 +1,27 @@
 #include "Object3D.h"
+#include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Renderer/Renderer.h"
 #include "Editor/ReplayManager.h"
 #include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
 
 void Object3D::Initialize(ID3D12Device *device, Model *model) {
-    model_ = model; // 共有されているモデルをセット
+    model_ = model; // 蜈ｱ譛峨＆繧後※縺・ｋ繝｢繝・Ν繧偵そ繝・ヨ
     transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
-    // マテリアルが透明にならないように初期値を設定する
-    material_.color = {1.0f, 1.0f, 1.0f, 1.0f};                    // 白色で不透明 (RGBA)
-    material_.lightingType = 1;                                    // ライティング有効
-    material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 以前作った単位行列を返す関数
+    // 繝槭ユ繝ｪ繧｢繝ｫ縺碁乗・縺ｫ縺ｪ繧峨↑縺・ｈ縺・↓蛻晄悄蛟､繧定ｨｭ螳壹☆繧・
+    material_.color = {1.0f, 1.0f, 1.0f, 1.0f};                    // 逋ｽ濶ｲ縺ｧ荳埼乗・ (RGBA)
+    material_.lightingType = 1;                                    // 繝ｩ繧､繝・ぅ繝ｳ繧ｰ譛牙柑
+    material_.uvTransform = TransformFunctions::MakeIdentity4x4(); // 莉･蜑堺ｽ懊▲縺溷腰菴崎｡悟・繧定ｿ斐☆髢｢謨ｰ
     material_.shininess = 50.0f;
     material_.enableEnvironmentMap = 1;
     material_.environmentCoefficient = 0.1f;
 
-    // マテリアルと座標変換リソースの作成（自分の分だけ）
+    // 繝槭ユ繝ｪ繧｢繝ｫ縺ｨ蠎ｧ讓吝､画鋤繝ｪ繧ｽ繝ｼ繧ｹ縺ｮ菴懈・・郁・蛻・・蛻・□縺托ｼ・
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
     transformResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedTransform_));
 
@@ -47,165 +48,36 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
 void Object3D::Update() {
     *mappedMaterial_ = material_;
 
-    // ★ マネージャから最新のカメラ情報をゲット！
+    // 笘・繝槭ロ繝ｼ繧ｸ繝｣縺九ｉ譛譁ｰ縺ｮ繧ｫ繝｡繝ｩ諠・ｱ繧偵ご繝・ヨ・・
+    // 笘・繝槭ロ繝ｼ繧ｸ繝｣縺九ｉ譛€譁ｰ縺ｮ繧ｫ繝｡繝ｩ諠・ｱ繧偵ご繝・ヨ・・
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
-    // 自身のワールド行列作成
+    // 閾ｪ霄ｫ縺ｮ繝ｯ繝ｼ繝ｫ繝芽｡悟・菴懈・
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    // モデル側のデータを使って最終的な行列を計算
+    // 繝｢繝・Ν蛛ｴ縺ｮ繝ｭ繝ｼ繧ｫ繝ｫ陦悟・繧帝勁螟厄ｼ医せ繧ｭ繝九Φ繧ｰ蟇ｾ蠢懊・縺溘ａ・・
     Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
-    Matrix4x4 finalWorldMatrix = nodeMatrix * worldMatrix;
+    Matrix4x4 finalWorldMatrix = TransformFunctions::Multiply(nodeMatrix, worldMatrix);
 
     mappedTransform_->World = finalWorldMatrix;
     mappedTransform_->WVP = finalWorldMatrix * viewMatrix * projectionMatrix;
 
-    // ★ ここを修正！ 順序は World * View * Projection
+    // 笘・縺薙％繧剃ｿｮ豁｣・・鬆・ｺ上・ World * View * Projection
     mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(finalWorldMatrix, viewMatrix), projectionMatrix);
 
-    // ★ 追加：法線用行列の計算（これがないとライティングが真っ黒になります）
+    // 笘・霑ｽ蜉・壽ｳ慕ｷ夂畑陦悟・縺ｮ險育ｮ暦ｼ医％繧後′縺ｪ縺・→繝ｩ繧､繝・ぅ繝ｳ繧ｰ縺檎悄縺｣鮟偵↓縺ｪ繧翫∪縺呻ｼ・
     mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
 
-    // 軌跡用履歴の保存
+    // 霆瑚ｷ｡逕ｨ螻･豁ｴ縺ｮ菫晏ｭ・
     trailHistory_.push_front(transform_);
     if (trailHistory_.size() > kMaxHistory) {
         trailHistory_.pop_back();
     }
 }
 
-void Object3D::Draw(ID3D12GraphicsCommandList *commandList) {
-    // --- 追加: エディタでの変更を即時反映させるため、Draw直前にもマテリアルとワールド行列を更新 ---
-    *mappedMaterial_ = material_;
-
-    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
-    Matrix4x4 finalWorldMatrix = nodeMatrix * worldMatrix;
-
-    mappedTransform_->World = finalWorldMatrix;
-    mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
-    // -------------------------------------------------------------------------------------------------
-
-    // 描画直前に最新のカメラ行列でWVPを再計算してGPUに送る（停止中のデバッグカメラ追従のため）
-    CameraManager *cameraMgr = CameraManager::GetInstance();
-    Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
-    Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
-    mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(mappedTransform_->World, viewMatrix), projectionMatrix);
-
-    auto dxCommon = DirectXCommon::GetInstance();
-
-    // Ensure common model root signature is bound
-    commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-
-    // ==============================================================
-    // ★ 0. トレイル (残像) の描画 (設定されている場合のみ)
-    // ==============================================================
-    if (showTrail_ && model_) {
-        if (!trailHistory_.empty() && trailLength_ > 0 && trailStep_ > 0) {
-            
-            // トレイル用のブレンドモード設定
-            if (trailBlendMode_ == BlendMode::kBlendModeAdd) {
-                commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCullAdditive() : dxCommon->GetGraphicsPipelineStateAdditive());
-            } else {
-                commandList->SetPipelineState(isDoubleSided_ ? dxCommon->GetGraphicsPipelineStateNoCull() : dxCommon->GetGraphicsPipelineState());
-            }
-
-            int trailCount = 0;
-            uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
-            uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
-
-            Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
-
-            size_t maxTrails = (std::min)(trailHistory_.size(), (size_t)trailLength_);
-            for (size_t i = 0; i < maxTrails; i += trailStep_) {
-                if (trailCount >= kMaxTrails) break;
-                
-                Vector3 pastPos = trailHistory_[i].translate;
-                Vector3 pastRot = trailHistory_[i].rotate;
-                Vector3 pastScale = trailHistory_[i].scale;
-                
-                // --- WorldMatrix 計算 ---
-                Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
-                Matrix4x4 finalWorldMatrix = nodeMatrix * tWorldMatrix;
-
-                // --- CBV に書き込み ---
-                TransformMatrix* tMat = reinterpret_cast<TransformMatrix*>(mappedTrailTransform_ + transformSize * trailCount);
-                tMat->World = finalWorldMatrix;
-                tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
-                tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(finalWorldMatrix, viewMatrix), projectionMatrix);
-
-                Material* mMat = reinterpret_cast<Material*>(mappedTrailMaterial_ + materialSize * trailCount);
-                *mMat = material_;
-                // 過去に行くほどアルファ値を下げるか
-                float alphaFactor = 1.0f;
-                if (trailFadeOut_) {
-                    alphaFactor = 1.0f - (static_cast<float>(i) / static_cast<float>(maxTrails));
-                }
-                mMat->color.w = material_.color.w * trailStartAlpha_ * alphaFactor;
-
-                // --- 描画 ---
-                commandList->SetGraphicsRootConstantBufferView(1, trailTransformResource_->GetGPUVirtualAddress() + transformSize * trailCount);
-                commandList->SetGraphicsRootConstantBufferView(0, trailMaterialResource_->GetGPUVirtualAddress() + materialSize * trailCount);
-                commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-                if (sEnvironmentMapHandle.ptr != 0) {
-                    commandList->SetGraphicsRootDescriptorTable(7, sEnvironmentMapHandle);
-                }
-                model_->Draw();
-
-                trailCount++;
-            }
-        }
-    }
-
-    // ==============================================================
-    // ★ 1. 先に Main drawing pass (本体のメッシュ) を描画する！
-    // ==============================================================
-    if (blendMode_ == BlendMode::kBlendModeAdd) {
-        if (isDoubleSided_) {
-            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCullAdditive());
-        } else {
-            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateAdditive());
-        }
-    } else {
-        // 通常合成 (kBlendModeNormal)
-        // アルファ値が1.0未満、または意図的に半透明として扱う場合はデプス書き込みなしのパイプラインを使う
-        if (material_.color.w < 1.0f) {
-            commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateTransparent());
-        } else {
-            if (isDoubleSided_) {
-                commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateNoCull());
-            } else {
-                commandList->SetPipelineState(dxCommon->GetGraphicsPipelineState());
-            }
-        }
-    }
-
-    // 💡 スロット1が行列、スロット0がマテリアルが正解です！
-    commandList->SetGraphicsRootConstantBufferView(1, transformResource_->GetGPUVirtualAddress()); // 行列 (スロット1)
-    commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());  // マテリアル (スロット0)
-    // カメラの定数バッファをセット (スロット3)
-    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-
-    // 環境マップをスロット7にセット
-    if (sEnvironmentMapHandle.ptr != 0) {
-        commandList->SetGraphicsRootDescriptorTable(7, sEnvironmentMapHandle);
-    }
-
-    // 本体の描画
-    model_->Draw();
-
-    // ==============================================================
-    // ★ 2. 後から Outline drawing pass (ワイヤーフレーム) を重ねる！
-    // ==============================================================
-    if (dxCommon->IsOutlineEnabled() && material_.color.w >= 1.0f && blendMode_ != BlendMode::kBlendModeAdd) {
-        commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateOutline());
-        commandList->SetGraphicsRootConstantBufferView(8, dxCommon->GetOutlineParamsGPUAddress());
-        
-        // ※ルートパラメータ（行列やマテリアル）は本体描画時にセット済みなのでそのまま使えます
-        
-        // ワイヤーフレームの描画
-        model_->Draw();
-    }
+void Object3D::Draw() {
+    Renderer::GetInstance()->DrawObject3D(this);
 }
 
 void Object3D::DisplayImGui(const std::string &label) {
@@ -224,7 +96,7 @@ void Object3D::DisplayImGui(const std::string &label) {
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
+        if (ImGui::TreeNode("Trail (霆瑚ｷ｡繝ｻ谿句ワ)")) {
             ImGui::Checkbox("Show Trail", &showTrail_);
             if (showTrail_) {
                 ImGui::Checkbox("Fade Out", &trailFadeOut_);

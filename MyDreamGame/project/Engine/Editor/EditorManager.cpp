@@ -48,11 +48,102 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
     ScanAvailableModels();
+    ScanAvailableTextures();
 
     // 1. ImGuiコンテキストの作成
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+
+    // =================================================================
+    // Custom Mid Dark (Mocha と 漆黒の中間くらいのダークテーマ)
+    // =================================================================
+    ImGuiStyle* style_ptr = &ImGui::GetStyle();
+    ImVec4* colors = style_ptr->Colors;
+
+    auto ImVec4FromHex = [](uint32_t hex, float alpha = 1.0f) {
+        return ImVec4(
+            ((hex >> 16) & 0xFF) / 255.0f,
+            ((hex >> 8) & 0xFF) / 255.0f,
+            ((hex >> 0) & 0xFF) / 255.0f,
+            alpha
+        );
+    };
+
+    // Mochaのほのかな青紫みを残しつつ、かなり暗めに設定
+    ImVec4 base = ImVec4FromHex(0x14141E);
+    ImVec4 mantle = ImVec4FromHex(0x0F0F16);
+    ImVec4 crust = ImVec4FromHex(0x08080C);
+    ImVec4 surface0 = ImVec4FromHex(0x232333);
+    ImVec4 surface1 = ImVec4FromHex(0x333547);
+    ImVec4 surface2 = ImVec4FromHex(0x45475A);
+    ImVec4 text = ImVec4FromHex(0xCDD6F4);
+    ImVec4 subtext0 = ImVec4FromHex(0xA6ADC8);
+    ImVec4 mauve = ImVec4FromHex(0xCBA6F7);
+    ImVec4 pink = ImVec4FromHex(0xF5C2E7);
+
+    colors[ImGuiCol_Text]                   = text;
+    colors[ImGuiCol_TextDisabled]           = subtext0;
+    colors[ImGuiCol_WindowBg]               = base;
+    colors[ImGuiCol_ChildBg]                = mantle;
+    colors[ImGuiCol_PopupBg]                = mantle;
+    colors[ImGuiCol_Border]                 = surface1;
+    colors[ImGuiCol_BorderShadow]           = crust;
+    colors[ImGuiCol_FrameBg]                = surface0;
+    colors[ImGuiCol_FrameBgHovered]         = surface1;
+    colors[ImGuiCol_FrameBgActive]          = surface2;
+    colors[ImGuiCol_TitleBg]                = mantle;
+    colors[ImGuiCol_TitleBgActive]          = base;
+    colors[ImGuiCol_TitleBgCollapsed]       = crust;
+    colors[ImGuiCol_MenuBarBg]              = mantle;
+    colors[ImGuiCol_ScrollbarBg]            = mantle;
+    colors[ImGuiCol_ScrollbarGrab]          = surface0;
+    colors[ImGuiCol_ScrollbarGrabHovered]   = surface1;
+    colors[ImGuiCol_ScrollbarGrabActive]    = surface2;
+    colors[ImGuiCol_CheckMark]              = mauve;
+    colors[ImGuiCol_SliderGrab]             = mauve;
+    colors[ImGuiCol_SliderGrabActive]       = pink;
+    colors[ImGuiCol_Button]                 = surface0;
+    colors[ImGuiCol_ButtonHovered]          = surface1;
+    colors[ImGuiCol_ButtonActive]           = surface2;
+    colors[ImGuiCol_Header]                 = surface1;
+    colors[ImGuiCol_HeaderHovered]          = ImVec4(mauve.x, mauve.y, mauve.z, 0.6f);
+    colors[ImGuiCol_HeaderActive]           = ImVec4(mauve.x, mauve.y, mauve.z, 0.8f);
+    colors[ImGuiCol_Separator]              = surface1;
+    colors[ImGuiCol_SeparatorHovered]       = ImVec4(mauve.x, mauve.y, mauve.z, 0.6f);
+    colors[ImGuiCol_SeparatorActive]        = ImVec4(mauve.x, mauve.y, mauve.z, 0.8f);
+    colors[ImGuiCol_ResizeGrip]             = surface0;
+    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(mauve.x, mauve.y, mauve.z, 0.6f);
+    colors[ImGuiCol_ResizeGripActive]       = ImVec4(mauve.x, mauve.y, mauve.z, 0.8f);
+    colors[ImGuiCol_Tab]                    = mantle;
+    colors[ImGuiCol_TabHovered]             = surface1;
+    colors[ImGuiCol_TabActive]              = surface0;
+    colors[ImGuiCol_TabUnfocused]           = mantle;
+    colors[ImGuiCol_TabUnfocusedActive]     = base;
+    colors[ImGuiCol_DockingPreview]         = ImVec4(mauve.x, mauve.y, mauve.z, 0.3f);
+    colors[ImGuiCol_DockingEmptyBg]         = crust;
+    colors[ImGuiCol_PlotLines]              = mauve;
+    colors[ImGuiCol_PlotLinesHovered]       = pink;
+    colors[ImGuiCol_PlotHistogram]          = mauve;
+    colors[ImGuiCol_PlotHistogramHovered]   = pink;
+    colors[ImGuiCol_TableHeaderBg]          = surface0;
+    colors[ImGuiCol_TableBorderStrong]      = surface1;
+    colors[ImGuiCol_TableBorderLight]       = surface0;
+    colors[ImGuiCol_TableRowBg]             = base;
+    colors[ImGuiCol_TableRowBgAlt]          = mantle;
+    colors[ImGuiCol_TextSelectedBg]         = ImVec4(mauve.x, mauve.y, mauve.z, 0.3f);
+    colors[ImGuiCol_DragDropTarget]         = mauve;
+    colors[ImGuiCol_NavHighlight]           = mauve;
+    colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(subtext0.x, subtext0.y, subtext0.z, 0.7f);
+    colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(crust.x, crust.y, crust.z, 0.5f);
+    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(crust.x, crust.y, crust.z, 0.5f);
+
+    style_ptr->WindowRounding    = 4.0f;
+    style_ptr->FrameRounding     = 4.0f;
+    style_ptr->GrabRounding      = 4.0f;
+    style_ptr->PopupRounding     = 4.0f;
+    style_ptr->ScrollbarRounding = 4.0f;
+    style_ptr->TabRounding       = 4.0f;
 
     // 2. フラグの設定
     ImGuiIO &io = ImGui::GetIO();
@@ -102,6 +193,27 @@ void EditorManager::ScanAvailableModels() {
     }
 }
 
+void EditorManager::ScanAvailableTextures() {
+    availableTextures_.clear();
+    std::vector<std::string> pathsToScan = { "resources/Sprite", "resources/Object" };
+    for (const auto& pathStr : pathsToScan) {
+        std::filesystem::path basePath(pathStr);
+        if (!std::filesystem::exists(basePath) || !std::filesystem::is_directory(basePath)) continue;
+
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(basePath)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".png" || ext == ".jpg" || ext == ".dds" || ext == ".jpeg") {
+                    std::string relativePath = std::filesystem::relative(entry.path(), "resources").string();
+                    std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
+                    availableTextures_.push_back(relativePath);
+                }
+            }
+        }
+    }
+}
+
 void EditorManager::BeginFrame() {
     ImGui_ImplDX12_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -140,22 +252,74 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (mapChip) {
                 if (loadMapDataStrNextFrame_) {
                     mapChip->LoadFromString(mapDataStrToLoad_);
+                    mapChip->GetRooms() = savedRoomsForPlay_;
                     loadMapDataStrNextFrame_ = false;
                 } else {
-                    std::string name = stageFilename_;
-                    bool hasExt = false;
-                    if (name.length() >= 4) {
-                        std::string ext = name.substr(name.length() - 4);
-                        if (ext == ".txt" || ext == ".TXT") hasExt = true;
-                    }
-                    if (!hasExt) name += ".txt";
-                    std::string filepath = "resources/json/MapData/" + name;
-                    mapChip->LoadFromFile(filepath);
+                    mapChip->LoadFromStageName(stageFilename_);
                 }
             }
         }
         sceneJustReset_ = false;
     }
+
+    auto TrackDragFloat3 = [&](const char* label, Vector3* vec, float speed = 0.1f, float v_min = 0.0f, float v_max = 0.0f, const char* format = "%.3f", std::function<void()> onUpdate = nullptr) {
+        static Vector3 oldVal;
+        bool changed = ImGui::DragFloat3(label, &vec->x, speed, v_min, v_max, format);
+        if (ImGui::IsItemActivated()) oldVal = *vec;
+        if (ImGui::IsItemDeactivatedAfterEdit()) PushCommand(vec, oldVal, *vec, onUpdate);
+        return changed;
+    };
+    auto TrackColorEdit4 = [&](const char* label, Vector4* vec, std::function<void()> onUpdate = nullptr) {
+        static Vector4 oldVal;
+        bool changed = ImGui::ColorEdit4(label, &vec->x);
+        if (ImGui::IsItemActivated()) oldVal = *vec;
+        if (ImGui::IsItemDeactivatedAfterEdit()) PushCommand(vec, oldVal, *vec, onUpdate);
+        return changed;
+    };
+    auto TrackDragFloat = [&](const char* label, float* v, float speed = 0.1f, float v_min = 0.0f, float v_max = 0.0f, const char* format = "%.3f", std::function<void()> onUpdate = nullptr) {
+        static float oldVal;
+        bool changed = ImGui::DragFloat(label, v, speed, v_min, v_max, format);
+        if (ImGui::IsItemActivated()) oldVal = *v;
+        if (ImGui::IsItemDeactivatedAfterEdit()) PushCommand(v, oldVal, *v, onUpdate);
+        return changed;
+    };
+    auto TrackSliderFloat = [&](const char* label, float* v, float v_min, float v_max, const char* format = "%.3f", std::function<void()> onUpdate = nullptr) {
+        static float oldVal;
+        bool changed = ImGui::SliderFloat(label, v, v_min, v_max, format);
+        if (ImGui::IsItemActivated()) oldVal = *v;
+        if (ImGui::IsItemDeactivatedAfterEdit()) PushCommand(v, oldVal, *v, onUpdate);
+        return changed;
+    };
+    auto TrackActionDragFloat = [&](const char* label, float* v, float speed, float v_min, float v_max, const char* format, std::function<void(float)> setter) {
+        static float oldVal;
+        bool changed = ImGui::DragFloat(label, v, speed, v_min, v_max, format);
+        if (ImGui::IsItemActivated()) oldVal = *v;
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            float newVal = *v;
+            PushActionCommand([=](){ setter(oldVal); }, [=](){ setter(newVal); });
+        }
+        return changed;
+    };
+    auto TrackActionDragInt = [&](const char* label, int* v, float speed, int v_min, int v_max, std::function<void(int)> setter) {
+        static int oldVal;
+        bool changed = ImGui::DragInt(label, v, speed, v_min, v_max);
+        if (ImGui::IsItemActivated()) oldVal = *v;
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            int newVal = *v;
+            PushActionCommand([=](){ setter(oldVal); }, [=](){ setter(newVal); });
+        }
+        return changed;
+    };
+    auto TrackActionDragFloat3 = [&](const char* label, float* v, float speed, float v_min, float v_max, const char* format, std::function<void(const Vector3&)> setter) {
+        static Vector3 oldVal;
+        bool changed = ImGui::DragFloat3(label, v, speed, v_min, v_max, format);
+        if (ImGui::IsItemActivated()) oldVal = {v[0], v[1], v[2]};
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            Vector3 newVal = {v[0], v[1], v[2]};
+            PushActionCommand([=](){ setter(oldVal); }, [=](){ setter(newVal); });
+        }
+        return changed;
+    };
 
     // --- リプレイ終了時の自動デバッグカメラ復帰処理 ---
     static bool wasReplayingLastFrame = false;
@@ -191,6 +355,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     MapChip2D* mapChip = sceneManager->GetCurrentScene()->GetMapChip();
                     if (mapChip) {
                         mapDataStrToLoad_ = mapChip->GetMapDataAsString();
+                        savedRoomsForPlay_ = mapChip->GetRooms();
                     }
                 }
             }
@@ -281,6 +446,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (newType != currentSceneType_) {
                     currentSceneType_ = newType;
                     sceneManager->ChangeScene(SceneFactory::CreateScene(currentSceneType_));
+                    selectedGameObject_ = nullptr;
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
@@ -403,10 +569,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("ヒエラルキー", &showHierarchy_)) {
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
+                if (ImGui::CollapsingHeader("GameObjects", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (auto &obj : activeScene->GetGameObjects()) {
+                        bool isSelected = (selectedGameObject_ == obj);
+                        if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = obj;
+                            selectedObject_ = nullptr;
+                            selectedParticle_ = nullptr;
+                            selectedPrimitive_ = nullptr;
+                        }
+                    }
+                }
                 if (ImGui::CollapsingHeader("オブジェクト (Objects)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     for (auto *obj : activeScene->GetObjects()) {
                         bool isSelected = (selectedObject_ == obj);
                         if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = nullptr;
                             selectedObject_ = obj;
                             selectedParticle_ = nullptr;
                             selectedPrimitive_ = nullptr;
@@ -417,6 +595,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     for (auto *particle : activeScene->GetParticles()) {
                         bool isSelected = (selectedParticle_ == particle);
                         if (ImGui::Selectable(particle->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = nullptr;
                             selectedParticle_ = particle;
                             selectedObject_ = nullptr;
                             selectedPrimitive_ = nullptr;
@@ -427,6 +606,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     for (auto *primitive : activeScene->GetPrimitives()) {
                         bool isSelected = (selectedPrimitive_ == primitive);
                         if (ImGui::Selectable(primitive->GetName().c_str(), isSelected)) {
+                            selectedGameObject_ = nullptr;
                             selectedPrimitive_ = primitive;
                             selectedObject_ = nullptr;
                             selectedParticle_ = nullptr;
@@ -451,11 +631,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     if (showInspector_) {
         if (ImGui::Begin("インスペクター", &showInspector_)) {
             bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9));
-            if (selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected) {
+            if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
                 if (ImGui::Button("グローバル設定を表示", ImVec2(-1, 0))) {
+                    selectedGameObject_ = nullptr;
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
@@ -467,7 +648,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Spacing();
             }
 
-            if (selectedObject_) {
+            if (selectedGameObject_) {
+                selectedGameObject_->DisplayImGui();
+            } else if (selectedObject_) {
                 selectedObject_->DisplayImGui("Object Properties");
             } else if (selectedParticle_) {
                 selectedParticle_->DrawImGui();
@@ -526,36 +709,38 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     break;
                                 }
                             }
-                            if (ImGui::Combo("Type", &currentType, types, 8)) {
+                            if (ImGui::Combo("種類 (Type)", &currentType, types, 8)) {
                                 targetDef->type = types[currentType];
                                 changed = true;
-                                // デフォルトプロパティを設定
-                                if (targetDef->type == "JumpBlock") {
-                                    targetDef->properties["jumpVelocity"] = 15.0f;
-                                } else if (targetDef->type == "LiftBlock") {
-                                    targetDef->properties["speed"] = 2.0f;
-                                    targetDef->properties["direction"] = "horizontal";
-                                    targetDef->properties["range"] = 10.0f;
-                                } else {
+                                // デフォルトプロパティを設定 (BasicToolsのテンプレートに合わせる)
+                                bool foundTemplate = false;
+                                for (const auto& t : mapChip->GetTemplatePalette()) {
+                                    if (t.type == targetDef->type) {
+                                        targetDef->properties = t.properties;
+                                        foundTemplate = true;
+                                        break;
+                                    }
+                                }
+                                if (!foundTemplate) {
                                     targetDef->properties = nlohmann::json::object(); // リセット
                                 }
                             }
 
                             float col[4] = { targetDef->color.x, targetDef->color.y, targetDef->color.z, targetDef->color.w };
-                            if (ImGui::ColorEdit4("Color", col)) {
+                            if (ImGui::ColorEdit4("色 (Color)", col)) {
                                 targetDef->color = { col[0], col[1], col[2], col[3] };
                                 changed = true;
                             }
 
                             float scale[3] = { targetDef->scale.x, targetDef->scale.y, targetDef->scale.z };
-                            if (ImGui::DragFloat3("Scale", scale, 0.01f)) {
+                            if (ImGui::DragFloat3("スケール (Scale)", scale, 0.01f)) {
                                 targetDef->scale = { scale[0], scale[1], scale[2] };
                                 changed = true;
                             }
 
-                            if (ImGui::BeginCombo("Model", targetDef->modelName.empty() ? "None" : targetDef->modelName.c_str())) {
+                            if (ImGui::BeginCombo("モデル (Model)", targetDef->modelName.empty() ? "なし (None)" : targetDef->modelName.c_str())) {
                                 bool isNoneSelected = targetDef->modelName.empty();
-                                if (ImGui::Selectable("None", isNoneSelected)) {
+                                if (ImGui::Selectable("なし (None)", isNoneSelected)) {
                                     targetDef->modelName = "";
                                     changed = true;
                                 }
@@ -575,12 +760,50 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 ImGui::EndCombo();
                             }
 
+                            if (ImGui::BeginCombo("テクスチャ (Texture)", targetDef->textureName.empty() ? "なし (None)" : targetDef->textureName.c_str())) {
+                                bool isTexNoneSelected = targetDef->textureName.empty();
+                                if (ImGui::Selectable("なし (None)", isTexNoneSelected)) {
+                                    targetDef->textureName = "";
+                                    changed = true;
+                                }
+                                if (isTexNoneSelected) {
+                                    ImGui::SetItemDefaultFocus();
+                                }
+                                for (const auto& texPath : availableTextures_) {
+                                    bool isSelected = (targetDef->textureName == texPath);
+                                    if (ImGui::Selectable(texPath.c_str(), isSelected)) {
+                                        targetDef->textureName = texPath;
+                                        changed = true;
+                                    }
+                                    if (isSelected) {
+                                        ImGui::SetItemDefaultFocus();
+                                    }
+                                }
+                                ImGui::EndCombo();
+                            }
+
                             ImGui::Separator();
-                            ImGui::Text("Properties:");
+                            ImGui::Text("プロパティ:");
+                            auto getJpKey = [](const std::string& k) {
+                                if (k == "speed") return std::string("スピード (speed)");
+                                if (k == "speedForward") return std::string("往路の速さ (speedForward)");
+                                if (k == "speedBackward") return std::string("復路の速さ (speedBackward)");
+                                if (k == "waitTime") return std::string("待機時間 (waitTime)");
+                                if (k == "acceleration") return std::string("加速度 (acceleration)");
+                                if (k == "maxSpeedForward") return std::string("往路の最高速度 (maxSpeedForward)");
+                                if (k == "maxSpeedBackward") return std::string("復路の最高速度 (maxSpeedBackward)");
+                                if (k == "maxSpeed") return std::string("最高速度 (maxSpeed)");
+                                if (k == "direction") return std::string("方向 (direction)");
+                                if (k == "range") return std::string("移動距離 (range)");
+                                if (k == "jumpVelocityVertical") return std::string("縦ジャンプ力 (jumpVelocityVertical)");
+                                if (k == "jumpVelocityHorizontal") return std::string("横ジャンプ力 (jumpVelocityHorizontal)");
+                                return k;
+                            };
                             for (auto& [key, value] : targetDef->properties.items()) {
-                                if (value.is_number_float()) {
+                                std::string jpKey = getJpKey(key);
+                                if (value.is_number()) {
                                     float v = value.get<float>();
-                                    if (ImGui::DragFloat(key.c_str(), &v, 0.1f)) {
+                                    if (ImGui::DragFloat(jpKey.c_str(), &v, 0.1f)) {
                                         value = v;
                                         changed = true;
                                     }
@@ -588,13 +811,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     std::string v = value.get<std::string>();
                                     char buf[256];
                                     strcpy_s(buf, sizeof(buf), v.c_str());
-                                    if (ImGui::InputText(key.c_str(), buf, sizeof(buf))) {
+                                    if (ImGui::InputText(jpKey.c_str(), buf, sizeof(buf))) {
                                         value = buf;
                                         changed = true;
                                     }
                                 } else if (value.is_boolean()) {
                                     bool v = value.get<bool>();
-                                    if (ImGui::Checkbox(key.c_str(), &v)) {
+                                    if (ImGui::Checkbox(jpKey.c_str(), &v)) {
                                         value = v;
                                         changed = true;
                                     }
@@ -602,11 +825,50 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
 
                             static bool autoApply = true;
-                            ImGui::Checkbox("Auto Apply", &autoApply);
+                            ImGui::Checkbox("自動適用 (Auto Apply)", &autoApply);
+                            ImGui::SameLine();
+                            if (ImGui::Button("デフォルトに戻す (Reset to Default)")) {
+                                bool found = false;
+                                auto& templates = mapChip->GetTemplatePalette();
+                                for (const auto& t : templates) {
+                                    if (t.type == targetDef->type) {
+                                        targetDef->color = t.color;
+                                        targetDef->scale = t.scale;
+                                        targetDef->modelName = t.modelName;
+                                        targetDef->textureName = t.textureName;
+                                        targetDef->properties = t.properties;
+                                        changed = true;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    targetDef->color = {1.0f, 1.0f, 1.0f, 1.0f};
+                                    targetDef->scale = {1.0f, 1.0f, 1.0f};
+                                    targetDef->modelName = "";
+                                    targetDef->textureName = "";
+                                    bool foundTemplate = false;
+                                    for (const auto& t : mapChip->GetTemplatePalette()) {
+                                        if (t.type == targetDef->type) {
+                                            targetDef->properties = t.properties;
+                                            foundTemplate = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!foundTemplate) {
+                                        targetDef->properties = nlohmann::json::object();
+                                    }
+                                    changed = true;
+                                }
+                            }
 
                             if (ImGui::Button("変更を適用 (Apply & Rebuild)") || (autoApply && changed)) {
                                 if (isTemplate) {
                                     mapChip->SaveTemplatesToFile("resources/json/templates_config.json");
+                                } else {
+                                    std::string name = stageFilename_;
+                                    if (name.length() < 4 || name.substr(name.length() - 4) != ".txt") name += ".txt";
+                                    mapChip->SaveToFile("resources/json/MapData/" + name);
                                 }
                                 mapChip->RebuildChipObjects();
                             }
@@ -626,9 +888,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 {
                     auto dxCommon = DirectXCommon::GetInstance();
                     bool outlineEnabled = dxCommon->IsOutlineEnabled();
+                    bool oldOutline = outlineEnabled;
                     if (ImGui::Checkbox("アウトラインを有効化", &outlineEnabled)) {
                         dxCommon->SetOutlineEnabled(outlineEnabled);
                         SaveSceneConfig();
+                        PushActionCommand([=](){ dxCommon->SetOutlineEnabled(oldOutline); SaveSceneConfig(); }, 
+                                          [=](){ dxCommon->SetOutlineEnabled(outlineEnabled); SaveSceneConfig(); });
                     }
                 }
                 ImGui::Spacing();
@@ -636,66 +901,146 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Text("グローバル設定 (ライティング)");
                 ImGui::Separator();
 
-                static int activeLightType = 2;
-                static bool enableFog = false;
-                static float dIntensity = 1.0f;
-                static float pIntensity = 1.0f;
-                static float sIntensity = 4.0f;
-                static float spotAngleDeg = 30.0f;
-                static float spotFalloffDeg = 20.0f;
+                bool lightingChanged = false;
 
                 ImGui::Text("アクティブな光源");
-                ImGui::RadioButton("平行光源 (Directional)", &activeLightType, 0);
+                lightingChanged |= ImGui::RadioButton("平行光源 (Directional)", &activeLightType_, 0);
                 ImGui::SameLine();
-                ImGui::RadioButton("点光源 (Point)", &activeLightType, 1);
+                lightingChanged |= ImGui::RadioButton("点光源 (Point)", &activeLightType_, 1);
                 ImGui::SameLine();
-                ImGui::RadioButton("スポットライト (Spot)", &activeLightType, 2);
+                lightingChanged |= ImGui::RadioButton("スポットライト (Spot)", &activeLightType_, 2);
                 ImGui::Separator();
 
                 DirectionalLight *dLight = modelCommon->GetDirectionalLight();
                 PointLight *pLight = modelCommon->GetPointLight();
                 SpotLight *sLight = modelCommon->GetSpotLight();
 
-                if (activeLightType == 0) {
-                    dLight->intensity = dIntensity;
+                bool isFlatShading = (dLight->enableFlatShading != 0);
+                if (ImGui::Checkbox("フラットシェーディング", &isFlatShading)) {
+                    dLight->enableFlatShading = isFlatShading ? 1 : 0;
+                }
+                ImGui::Separator();
+
+                if (activeLightType_ == 0) {
+                    dLight->intensity = dIntensity_;
                     pLight->intensity = 0.0f;
                     sLight->intensity = 0.0f;
                     ImGui::Text("平行光源設定");
-                    ImGui::ColorEdit4("色", &dLight->color.x);
-                    ImGui::DragFloat("輝度 (Intensity)", &dIntensity, 0.01f, 0.0f, 10.0f);
-                    ImGui::DragFloat3("方向", &dLight->direction.x, 0.01f, -1.0f, 1.0f);
-                    dLight->direction = TransformFunctions::Normalize(dLight->direction);
-                } else if (activeLightType == 1) {
-                    pLight->intensity = pIntensity;
+                    
+                    auto onLightUpdate = [=]() { SaveLightingConfig(modelCommon); };
+                    
+                    lightingChanged |= TrackColorEdit4("色", &dLight->color, onLightUpdate);
+                    if (TrackDragFloat("輝度 (Intensity)", &dIntensity_, 0.01f, 0.0f, 10.0f, "%.3f", [=](){ dLight->intensity = dIntensity_; onLightUpdate(); })) {
+                        dLight->intensity = dIntensity_;
+                        lightingChanged = true;
+                    }
+                    if (TrackDragFloat3("方向", &dLight->direction, 0.01f, -1.0f, 1.0f, "%.3f", [=](){ dLight->direction = TransformFunctions::Normalize(dLight->direction); onLightUpdate(); })) {
+                        dLight->direction = TransformFunctions::Normalize(dLight->direction);
+                        lightingChanged = true;
+                    }
+                } else if (activeLightType_ == 1) {
+                    pLight->intensity = pIntensity_;
                     dLight->intensity = 0.0f;
                     sLight->intensity = 0.0f;
                     ImGui::Text("点光源設定");
-                    ImGui::ColorEdit4("色", &pLight->color.x);
-                    ImGui::DragFloat("輝度 (Intensity)", &pIntensity, 0.01f, 0.0f, 10.0f);
-                    ImGui::DragFloat3("位置", &pLight->position.x, 0.1f);
-                    ImGui::DragFloat("半径 (Radius)", &pLight->radius, 0.1f, 0.0f, 100.0f);
-                    ImGui::DragFloat("減衰 (Decay)", &pLight->decay, 0.01f, 0.0f, 10.0f);
-                } else if (activeLightType == 2) {
-                    sLight->intensity = sIntensity;
+                    
+                    auto onLightUpdate = [=]() { SaveLightingConfig(modelCommon); };
+                    
+                    lightingChanged |= TrackColorEdit4("色", &pLight->color, onLightUpdate);
+                    if (TrackDragFloat("輝度 (Intensity)", &pIntensity_, 0.01f, 0.0f, 10.0f, "%.3f", [=](){ pLight->intensity = pIntensity_; onLightUpdate(); })) {
+                        pLight->intensity = pIntensity_;
+                        lightingChanged = true;
+                    }
+                    lightingChanged |= TrackDragFloat3("位置", &pLight->position, 0.1f, 0.0f, 0.0f, "%.3f", onLightUpdate);
+                    lightingChanged |= TrackDragFloat("半径 (Radius)", &pLight->radius, 0.1f, 0.0f, 100.0f, "%.3f", onLightUpdate);
+                    lightingChanged |= TrackDragFloat("減衰 (Decay)", &pLight->decay, 0.01f, 0.0f, 10.0f, "%.3f", onLightUpdate);
+                } else if (activeLightType_ == 2) {
+                    sLight->intensity = sIntensity_;
                     dLight->intensity = 0.0f;
                     pLight->intensity = 0.0f;
                     ImGui::Text("スポットライト設定");
-                    ImGui::ColorEdit4("色", &sLight->color.x);
-                    ImGui::DragFloat("輝度 (Intensity)", &sIntensity, 0.01f, 0.0f, 20.0f);
-                    ImGui::DragFloat3("位置", &sLight->position.x, 0.1f);
-                    if (ImGui::DragFloat3("方向", &sLight->direction.x, 0.01f, -1.0f, 1.0f)) {
-                        sLight->direction = TransformFunctions::Normalize(sLight->direction);
+                    
+                    auto onLightUpdate = [=]() { SaveLightingConfig(modelCommon); };
+                    
+                    lightingChanged |= TrackColorEdit4("色", &sLight->color, onLightUpdate);
+                    if (TrackDragFloat("輝度 (Intensity)", &sIntensity_, 0.01f, 0.0f, 20.0f, "%.3f", [=](){ sLight->intensity = sIntensity_; onLightUpdate(); })) {
+                        sLight->intensity = sIntensity_;
+                        lightingChanged = true;
                     }
-                    ImGui::DragFloat("距離", &sLight->distance, 0.1f, 0.0f, 100.0f);
-                    ImGui::DragFloat("減衰 (Decay)", &sLight->decay, 0.01f, 0.0f, 10.0f);
-                    ImGui::SliderFloat("全角 (Total Angle)", &spotAngleDeg, 0.0f, 90.0f);
-                    ImGui::SliderFloat("フォールオフ開始角", &spotFalloffDeg, 0.0f, spotAngleDeg);
-                    sLight->cosAngle = std::cos(spotAngleDeg * (std::numbers::pi_v<float> / 180.0f));
-                    sLight->cosFalloffStart = std::cos(spotFalloffDeg * (std::numbers::pi_v<float> / 180.0f));
+                    lightingChanged |= TrackDragFloat3("位置", &sLight->position, 0.1f, 0.0f, 0.0f, "%.3f", onLightUpdate);
+                    if (TrackDragFloat3("方向", &sLight->direction, 0.01f, -1.0f, 1.0f, "%.3f", [=](){ sLight->direction = TransformFunctions::Normalize(sLight->direction); onLightUpdate(); })) {
+                        sLight->direction = TransformFunctions::Normalize(sLight->direction);
+                        lightingChanged = true;
+                    }
+                    lightingChanged |= TrackDragFloat("距離", &sLight->distance, 0.1f, 0.0f, 100.0f, "%.3f", onLightUpdate);
+                    lightingChanged |= TrackDragFloat("減衰 (Decay)", &sLight->decay, 0.01f, 0.0f, 10.0f, "%.3f", onLightUpdate);
+                    
+                    if (TrackSliderFloat("全角 (Total Angle)", &spotAngleDeg_, 0.0f, 90.0f, "%.3f", [=](){ sLight->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f); onLightUpdate(); })) {
+                        sLight->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f);
+                        lightingChanged = true;
+                    }
+                    if (TrackSliderFloat("フォールオフ開始角", &spotFalloffDeg_, 0.0f, spotAngleDeg_, "%.3f", [=](){ sLight->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f); onLightUpdate(); })) {
+                        sLight->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f);
+                        lightingChanged = true;
+                    }
+                }
+
+                if (lightingChanged) {
+                    SaveLightingConfig(modelCommon);
                 }
 
                 ImGui::Separator();
-                ImGui::Checkbox("フォグエフェクトを有効化", &enableFog);
+                bool oldFog = enableFog_;
+                if (ImGui::Checkbox("フォグエフェクトを有効化", &enableFog_)) {
+                    SaveLightingConfig(modelCommon);
+                    bool newFog = enableFog_;
+                    PushActionCommand([=](){ enableFog_ = oldFog; SaveLightingConfig(modelCommon); }, 
+                                      [=](){ enableFog_ = newFog; SaveLightingConfig(modelCommon); });
+                }
+
+                ImGui::Spacing();
+                ImGui::Text("グローバル設定 (ゲームカメラ)");
+                ImGui::Separator();
+                if (gameCamera) {
+                    float scale = gameCamera->GetScale();
+                    Vector3 rot = gameCamera->GetRotation();
+                    float follow = gameCamera->GetFollowLerp();
+                    float trans = gameCamera->GetTransitionLerp();
+
+                    // カメラスケール (Zoom)
+                    if (TrackActionDragFloat("カメラスケール (Zoom)", &scale, 0.01f, 0.1f, 10.0f, "%.2f", [=](float v){ gameCamera->SetScale(v); SaveSceneConfig(); })) {
+                        gameCamera->SetScale(scale);
+                    }
+
+                    // カメラ角度 (Rotation) - ラジアンを度数法で表示・編集
+                    float rotDeg[3] = { rot.x * 180.0f / 3.14159265f, rot.y * 180.0f / 3.14159265f, rot.z * 180.0f / 3.14159265f };
+                    if (TrackActionDragFloat3("カメラ角度 (Rotation)", rotDeg, 0.5f, -180.0f, 180.0f, "%.1f", [=](const Vector3& v){ 
+                        Vector3 r = { v.x * 3.14159265f / 180.0f, v.y * 3.14159265f / 180.0f, v.z * 3.14159265f / 180.0f };
+                        gameCamera->SetRotation(r); SaveSceneConfig(); 
+                    })) {
+                        rot.x = rotDeg[0] * 3.14159265f / 180.0f;
+                        rot.y = rotDeg[1] * 3.14159265f / 180.0f;
+                        rot.z = rotDeg[2] * 3.14159265f / 180.0f;
+                        gameCamera->SetRotation(rot);
+                    }
+
+                    if (TrackActionDragFloat("追従速度 (FollowLerp)", &follow, 0.005f, 0.0f, 1.0f, "%.3f", [=](float v){ gameCamera->SetFollowLerp(v); SaveSceneConfig(); })) {
+                        gameCamera->SetFollowLerp(follow);
+                    }
+                    if (TrackActionDragFloat("遷移速度 (TransitionLerp)", &trans, 0.005f, 0.0f, 1.0f, "%.3f", [=](float v){ gameCamera->SetTransitionLerp(v); SaveSceneConfig(); })) {
+                        gameCamera->SetTransitionLerp(trans);
+                    }
+
+                    ImGui::Spacing();
+                    if (ImGui::Button("カメラ設定をJSON保存 (Save)", ImVec2(-1, 0))) {
+                        gameCamera->SaveConfig();
+                    }
+                    if (ImGui::Button("カメラ設定をJSON読込 (Load)", ImVec2(-1, 0))) {
+                        gameCamera->LoadConfig();
+                    }
+                } else {
+                    ImGui::TextDisabled("※ゲームカメラが有効ではありません。");
+                }
                 }
             }
 
@@ -747,23 +1092,23 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::Spacing();
 
             // ドラッグとキーボード入力（Ctrl+クリック等）が一体化したfloat調整用ヘルパー関数
-            auto DrawFloatControl = [](const char *label, float *val, float minVal, float maxVal, float speed = 0.005f) {
+            auto DrawFloatControl = [&](const char *label, float *val, float minVal, float maxVal, float speed = 0.005f) {
                 ImGui::Text("%s", label); // ラベルの描画
 
                 ImGui::PushID(label);
                 ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
-                ImGui::DragFloat("##drag", val, speed, minVal, maxVal, "%.3f");
+                TrackActionDragFloat("##drag", val, speed, minVal, maxVal, "%.3f", [=](float v){ *val = v; SaveSceneConfig(); });
                 ImGui::PopItemWidth();
                 ImGui::PopID();
             };
 
             // ドラッグとキーボード入力が一体化したint調整用ヘルパー関数
-            auto DrawIntControl = [](const char *label, int *val, int minVal, int maxVal, float speed = 0.05f) {
+            auto DrawIntControl = [&](const char *label, int *val, int minVal, int maxVal, float speed = 0.05f) {
                 ImGui::Text("%s", label);
 
                 ImGui::PushID(label);
                 ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
-                ImGui::DragInt("##drag", val, speed, minVal, maxVal);
+                TrackActionDragInt("##drag", val, speed, minVal, maxVal, [=](int v){ *val = v; SaveSceneConfig(); });
                 ImGui::PopItemWidth();
                 ImGui::PopID();
             };
@@ -969,6 +1314,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("マップチップ画面", &showMapEditor_)) {
             isMapEditorVisible_ = true;
 
+            ImGui::Text("編集モード:");
+            ImGui::SameLine();
+            int modeInt = static_cast<int>(mapEditMode_);
+            ImGui::RadioButton("通常塗", &modeInt, 0); ImGui::SameLine();
+            ImGui::RadioButton("範囲選択", &modeInt, 1); ImGui::SameLine();
+            ImGui::RadioButton("コピー", &modeInt, 2); ImGui::SameLine();
+            ImGui::RadioButton("貼り付け", &modeInt, 3); ImGui::SameLine();
+            ImGui::RadioButton("バケツ塗", &modeInt, 4);
+            mapEditMode_ = static_cast<MapEditMode>(modeInt);
+
             IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
                 MapChip2D* mapChip = activeScene->GetMapChip();
@@ -1003,7 +1358,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                         
                         auto WorldToScreen = [&](float wx, float wy) -> ImVec2 {
-                            Vector3 ndc = TransformFunctions::Transform({wx, wy, 0.0f}, viewProj);
+                            Vector3 ndc = TransformFunctions::EulerTransform({wx, wy, 0.0f}, viewProj);
                             float screenX = imageScreenPos.x + (ndc.x + 1.0f) * 0.5f * imageSize.x;
                             float screenY = imageScreenPos.y + (1.0f - ndc.y) * 0.5f * imageSize.y;
                             return ImVec2(screenX, screenY);
@@ -1030,28 +1385,58 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
                         }
 
-                        // ルーム境界線の描画（フリップスクロールのトリガーライン）
-                        const auto& bx = mapChip->GetBoundaryX();
-                        const auto& by = mapChip->GetBoundaryY();
+                        // ルームの描画
+                        const auto& rooms = mapChip->GetRooms();
+                        for (size_t i = 0; i < rooms.size(); ++i) {
+                            const auto& r = rooms[i];
+                            ImVec2 pTL = WorldToScreen(r.x, r.y + r.height);
+                            ImVec2 pBR = WorldToScreen(r.x + r.width, r.y);
+                            ImU32 color = (isRoomEditMode_ && draggingRoomIndex_ == static_cast<int>(i)) ? IM_COL32(255, 255, 0, 100) : IM_COL32(50, 50, 255, 50);
+                            ImU32 borderColor = (isRoomEditMode_ && draggingRoomIndex_ == static_cast<int>(i)) ? IM_COL32(255, 255, 0, 255) : IM_COL32(50, 50, 255, 255);
+                            drawList->AddRectFilled(pTL, pBR, color);
+                            drawList->AddRect(pTL, pBR, borderColor, 0.0f, 0, 2.0f);
+                        }
 
-                        // 縦のルーム境界線
-                        for (size_t i = 0; i < bx.size(); ++i) {
-                            float rx = bx[i];
-                            ImVec2 p1 = WorldToScreen(rx, 0.0f);
-                            ImVec2 p2 = WorldToScreen(rx, static_cast<float>(mapHeight));
-                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexX_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
-                            drawList->AddLine(p1, p2, color, 3.0f);
+                        // 範囲選択の描画
+                        if (selectStartX_ != -1 && selectStartY_ != -1 && selectEndX_ != -1 && selectEndY_ != -1) {
+                            int minX = (std::min)(selectStartX_, selectEndX_);
+                            int maxX = (std::max)(selectStartX_, selectEndX_);
+                            int minY = (std::min)(selectStartY_, selectEndY_);
+                            int maxY = (std::max)(selectStartY_, selectEndY_);
+                            ImVec2 pTL = WorldToScreen(static_cast<float>(minX), static_cast<float>(maxY + 1));
+                            ImVec2 pBR = WorldToScreen(static_cast<float>(maxX + 1), static_cast<float>(minY));
+                            drawList->AddRectFilled(pTL, pBR, IM_COL32(0, 255, 255, 80));
+                            drawList->AddRect(pTL, pBR, IM_COL32(0, 255, 255, 255), 0.0f, 0, 2.0f);
                         }
                         
-                        // 横のルーム境界線
-                        for (size_t i = 0; i < by.size(); ++i) {
-                            float ry = by[i];
-                            ImVec2 p1 = WorldToScreen(0.0f, ry);
-                            ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), ry);
-                            ImU32 color = (isBoundaryEditMode_ && draggingBoundaryIndexY_ == i) ? IM_COL32(255, 255, 0, 255) : IM_COL32(255, 50, 50, 200);
-                            drawList->AddLine(p1, p2, color, 3.0f);
+                        // プレビュー描画
+                        if (mapEditMode_ == MapEditMode::Normal && !pendingBlocks_.empty()) {
+                            for (const auto& pos : pendingBlocks_) {
+                                ImVec2 pTL = WorldToScreen(static_cast<float>(pos.first), static_cast<float>(pos.second + 1));
+                                ImVec2 pBR = WorldToScreen(static_cast<float>(pos.first + 1), static_cast<float>(pos.second));
+                                drawList->AddRectFilled(pTL, pBR, IM_COL32(255, 100, 100, 150));
+                                drawList->AddRect(pTL, pBR, IM_COL32(255, 100, 100, 255), 0.0f, 0, 2.0f);
+                            }
                         }
-                        
+
+                        // スポーン地点とルームリスポーン地点の描画（ゲーム上では非表示のためここでオーバーレイ描画）
+                        for (int y = 0; y < mapHeight; ++y) {
+                            for (int x = 0; x < mapWidth; ++x) {
+                                MapChip2D::ChipType type = mapChip->GetChip(x, y);
+                                if (type == MapChip2D::ChipType::kPlayerSpawn || type == MapChip2D::ChipType::kRoomRespawn) {
+                                    ImVec2 pTL = WorldToScreen(static_cast<float>(x), static_cast<float>(y + 1));
+                                    ImVec2 pBR = WorldToScreen(static_cast<float>(x + 1), static_cast<float>(y));
+                                    if (type == MapChip2D::ChipType::kPlayerSpawn) {
+                                        drawList->AddRectFilled(pTL, pBR, IM_COL32(51, 153, 255, 180));
+                                        drawList->AddRect(pTL, pBR, IM_COL32(51, 153, 255, 255), 0.0f, 0, 2.0f);
+                                    } else {
+                                        drawList->AddRectFilled(pTL, pBR, IM_COL32(51, 204, 255, 180));
+                                        drawList->AddRect(pTL, pBR, IM_COL32(51, 204, 255, 255), 0.0f, 0, 2.0f);
+                                    }
+                                }
+                            }
+                        }
+
                         drawList->PopClipRect();
                     }
                     
@@ -1076,119 +1461,317 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (camera) {
                             Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                             Matrix4x4 invViewProj = TransformFunctions::Inverse(viewProj);
-                            worldPos = TransformFunctions::Transform({ndcX, ndcY, 0.0f}, invViewProj);
+                            worldPos = TransformFunctions::EulerTransform({ndcX, ndcY, 0.0f}, invViewProj);
                         }
 
-                        if (isBoundaryEditMode_) {
-                            float hitDist = 0.5f; // 当たり判定の距離（ワールド座標基準）
-                            auto& bx = mapChip->GetBoundaryX();
-                            auto& by = mapChip->GetBoundaryY();
+                        // モード切り替えショートカット
+                        if (ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0.0f) {
+                            int m = static_cast<int>(mapEditMode_);
+                            if (ImGui::GetIO().MouseWheel < 0.0f) m = (m + 1) % 5;
+                            else m = (m + 4) % 5;
+                            mapEditMode_ = static_cast<MapEditMode>(m);
+                        }
+
+                        // Undo / Redo
+                        if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                            Undo();
+                        }
+                        if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+                            Redo();
+                        }
+
+                        if (isRoomEditMode_) {
+                            float hitDist = 0.5f;
+                            auto& rooms = mapChip->GetRooms();
 
                             // ドラッグ開始判定
                             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-                                draggingBoundaryIndexX_ = -1;
-                                draggingBoundaryIndexY_ = -1;
+                                BeginRoomHistoryCapture(mapChip);
+                                draggingRoomIndex_ = -1;
+                                roomDragHandle_ = 0;
 
-                                // X軸の線の当たり判定
-                                for (size_t i = 0; i < bx.size(); ++i) {
-                                    if (std::abs(worldPos.x - bx[i]) < hitDist) {
-                                        draggingBoundaryIndexX_ = static_cast<int>(i);
+                                for (int i = static_cast<int>(rooms.size()) - 1; i >= 0; --i) {
+                                    const auto& r = rooms[i];
+                                    bool inX = (worldPos.x >= r.x && worldPos.x <= r.x + r.width);
+                                    bool inY = (worldPos.y >= r.y && worldPos.y <= r.y + r.height);
+                                    
+                                    bool onLeft = std::abs(worldPos.x - r.x) < hitDist;
+                                    bool onRight = std::abs(worldPos.x - (r.x + r.width)) < hitDist;
+                                    bool onBottom = std::abs(worldPos.y - r.y) < hitDist;
+                                    bool onTop = std::abs(worldPos.y - (r.y + r.height)) < hitDist;
+                                    
+                                    if ((inX && inY) || ((onLeft || onRight) && inY) || ((onTop || onBottom) && inX)) {
+                                        draggingRoomIndex_ = i;
+                                        if (onLeft && onTop) roomDragHandle_ = 2;
+                                        else if (onRight && onTop) roomDragHandle_ = 3;
+                                        else if (onLeft && onBottom) roomDragHandle_ = 4;
+                                        else if (onRight && onBottom) roomDragHandle_ = 5;
+                                        else if (onLeft) roomDragHandle_ = 6;
+                                        else if (onRight) roomDragHandle_ = 7;
+                                        else if (onTop) roomDragHandle_ = 8;
+                                        else if (onBottom) roomDragHandle_ = 9;
+                                        else {
+                                            roomDragHandle_ = 1; // Move
+                                            roomDragOffsetX_ = worldPos.x - r.x;
+                                            roomDragOffsetY_ = worldPos.y - r.y;
+                                        }
                                         break;
                                     }
                                 }
-                                // Y軸の線の当たり判定（Xと独立して判定し、両方ヒット＝交点とする）
-                                for (size_t i = 0; i < by.size(); ++i) {
-                                    if (std::abs(worldPos.y - by[i]) < hitDist) {
-                                        draggingBoundaryIndexY_ = static_cast<int>(i);
-                                        break;
-                                    }
+
+                                if (draggingRoomIndex_ != -1 && ImGui::GetIO().KeyCtrl) {
+                                    rooms.erase(rooms.begin() + draggingRoomIndex_);
+                                    draggingRoomIndex_ = -1;
+                                    roomDragHandle_ = 0;
+                                } else if (draggingRoomIndex_ == -1 && !ImGui::GetIO().KeyCtrl) {
+                                    bool snap = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+                                    StageRoom newRoom;
+                                    newRoom.x = snap ? std::floor(worldPos.x) : worldPos.x;
+                                    newRoom.y = snap ? std::floor(worldPos.y) : worldPos.y;
+                                    newRoom.width = 1.0f;
+                                    newRoom.height = 1.0f;
+                                    rooms.push_back(newRoom);
+                                    draggingRoomIndex_ = static_cast<int>(rooms.size()) - 1;
+                                    roomDragHandle_ = 5; // BottomRight drag
                                 }
                             }
 
-                            // 左ドラッグ（マス目スナップ）
-                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-                                float snapX = std::round(worldPos.x);
-                                float snapY = std::round(worldPos.y);
-                                if (draggingBoundaryIndexX_ != -1) {
-                                    bx[draggingBoundaryIndexX_] = std::clamp(snapX, 0.0f, static_cast<float>(mapChip->GetWidth()));
-                                }
-                                if (draggingBoundaryIndexY_ != -1) {
-                                    by[draggingBoundaryIndexY_] = std::clamp(snapY, 0.0f, static_cast<float>(mapChip->GetHeight()));
-                                }
-                            }
-                            
-                            // 右ドラッグ（自由移動）
-                            if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-                                if (draggingBoundaryIndexX_ != -1) {
-                                    bx[draggingBoundaryIndexX_] = std::clamp(worldPos.x, 0.0f, static_cast<float>(mapChip->GetWidth()));
-                                }
-                                if (draggingBoundaryIndexY_ != -1) {
-                                    by[draggingBoundaryIndexY_] = std::clamp(worldPos.y, 0.0f, static_cast<float>(mapChip->GetHeight()));
-                                }
-                            }
-
-                            // リリース時の判定（追加または削除、並び替え）
-                            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
-                                bool isLeft = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-                                ImGuiMouseButton btn = isLeft ? ImGuiMouseButton_Left : ImGuiMouseButton_Right;
+                            if ((ImGui::IsMouseDragging(ImGuiMouseButton_Left) || ImGui::IsMouseDragging(ImGuiMouseButton_Right)) && draggingRoomIndex_ != -1) {
+                                auto& r = rooms[draggingRoomIndex_];
+                                bool snap = ImGui::IsMouseDragging(ImGuiMouseButton_Left);
+                                float snapX_left = snap ? std::floor(worldPos.x) : worldPos.x;
+                                float snapY_bottom = snap ? std::floor(worldPos.y) : worldPos.y;
+                                float snapX_right = snap ? std::floor(worldPos.x) + 1.0f : worldPos.x;
+                                float snapY_top = snap ? std::floor(worldPos.y) + 1.0f : worldPos.y;
+                                float minSize = snap ? 1.0f : 0.1f;
                                 
-                                // ドラッグしていたか？
-                                ImVec2 dragDelta = ImGui::GetMouseDragDelta(btn);
-                                bool wasDragging = (std::abs(dragDelta.x) > 1.0f || std::abs(dragDelta.y) > 1.0f);
-
-                                if (wasDragging) {
-                                    // 移動終了、並び替えのみ
-                                    std::sort(bx.begin(), bx.end());
-                                    std::sort(by.begin(), by.end());
+                                if (roomDragHandle_ == 1) { // Move
+                                    float targetX = snap ? std::floor(worldPos.x) : worldPos.x;
+                                    float targetY = snap ? std::floor(worldPos.y) : worldPos.y;
+                                    r.x = targetX - roomDragOffsetX_;
+                                    r.y = targetY - roomDragOffsetY_;
+                                    if (snap) {
+                                        r.x = std::round(r.x);
+                                        r.y = std::round(r.y);
+                                    }
                                 } else {
-                                    // クリック操作
-                                    int hitX = -1, hitY = -1;
-                                    for (size_t i = 0; i < bx.size(); ++i) {
-                                        if (std::abs(worldPos.x - bx[i]) < hitDist) hitX = static_cast<int>(i);
+                                    if (roomDragHandle_ == 2 || roomDragHandle_ == 6 || roomDragHandle_ == 4) {
+                                        float right = r.x + r.width;
+                                        r.x = std::fmin(snapX_left, right - minSize);
+                                        r.width = right - r.x;
                                     }
-                                    for (size_t i = 0; i < by.size(); ++i) {
-                                        if (std::abs(worldPos.y - by[i]) < hitDist) hitY = static_cast<int>(i);
+                                    if (roomDragHandle_ == 3 || roomDragHandle_ == 7 || roomDragHandle_ == 5) {
+                                        r.width = std::fmax(minSize, snapX_right - r.x);
                                     }
-
-                                    if (hitX != -1 || hitY != -1) {
-                                        if (ImGui::GetIO().KeyCtrl) {
-                                            // Ctrl+クリックで削除（交点の場合は両方削除）
-                                            if (hitX != -1) bx.erase(bx.begin() + hitX);
-                                            if (hitY != -1) by.erase(by.begin() + hitY);
-                                        }
-                                    } else {
-                                        // 追加
-                                        float addX = isLeft ? std::round(worldPos.x) : worldPos.x;
-                                        float addY = isLeft ? std::round(worldPos.y) : worldPos.y;
-                                        if (boundaryAddMode_ == 0 || boundaryAddMode_ == 2) {
-                                            bx.push_back(addX);
-                                            std::sort(bx.begin(), bx.end());
-                                        }
-                                        if (boundaryAddMode_ == 1 || boundaryAddMode_ == 2) {
-                                            by.push_back(addY);
-                                            std::sort(by.begin(), by.end());
-                                        }
+                                    if (roomDragHandle_ == 4 || roomDragHandle_ == 9 || roomDragHandle_ == 5) {
+                                        float top = r.y + r.height;
+                                        r.y = std::fmin(snapY_bottom, top - minSize);
+                                        r.height = top - r.y;
+                                    }
+                                    if (roomDragHandle_ == 2 || roomDragHandle_ == 8 || roomDragHandle_ == 3) {
+                                        r.height = std::fmax(minSize, snapY_top - r.y);
                                     }
                                 }
+                            }
 
-                                draggingBoundaryIndexX_ = -1;
-                                draggingBoundaryIndexY_ = -1;
+                            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+                                EndRoomHistoryCapture(mapChip);
+                                draggingRoomIndex_ = -1;
+                                roomDragHandle_ = 0;
                             }
                         } else {
-                            // 既存のペイントツール処理
-                            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                                if (camera) {
-                                    int mapWidth = mapChip->GetWidth();
-                                    int mapHeight = mapChip->GetHeight();
-                                    int gridX = mapChip->WorldToChipX(worldPos.x);
-                                    int gridY = mapChip->WorldToChipY(worldPos.y);
-                                    
-                                    if (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight) {
-                                        // 1〜9(Basic Tools) は設定・テンプレート専用なのでマップには配置できない
-                                        if (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ >= 100) {
-                                            if (mapChip->GetChip(gridX, gridY) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
-                                                mapChip->SetChip(gridX, gridY, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                            if (camera) {
+                                int mapWidth = mapChip->GetWidth();
+                                int mapHeight = mapChip->GetHeight();
+                                int gridX = mapChip->WorldToChipX(worldPos.x);
+                                int gridY = mapChip->WorldToChipY(worldPos.y);
+
+                                bool inBounds = (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight);
+                                bool isSelectableTool = (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ == 10 || mapEditorSelectedTool_ >= 100);
+                                
+                                if (mapEditMode_ == MapEditMode::Normal) {
+                                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && isSelectableTool) {
+                                        if (inBounds) {
+                                            if (std::find(pendingBlocks_.begin(), pendingBlocks_.end(), std::make_pair(gridX, gridY)) == pendingBlocks_.end()) {
+                                                pendingBlocks_.push_back({gridX, gridY});
                                             }
+                                        }
+                                        prevGridX_ = gridX;
+                                        prevGridY_ = gridY;
+                                    }
+                                    else if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && isSelectableTool) {
+                                        if (prevGridX_ != -1 && prevGridY_ != -1 && (prevGridX_ != gridX || prevGridY_ != gridY)) {
+                                            int x0 = prevGridX_;
+                                            int y0 = prevGridY_;
+                                            int x1 = gridX;
+                                            int y1 = gridY;
+                                            int dx = std::abs(x1 - x0);
+                                            int dy = std::abs(y1 - y0);
+                                            int sx = x0 < x1 ? 1 : -1;
+                                            int sy = y0 < y1 ? 1 : -1;
+                                            int err = (dx > dy ? dx : -dy) / 2;
+                                            int e2;
+
+                                            while (true) {
+                                                if (x0 >= 0 && x0 < mapWidth && y0 >= 0 && y0 < mapHeight) {
+                                                    if (std::find(pendingBlocks_.begin(), pendingBlocks_.end(), std::make_pair(x0, y0)) == pendingBlocks_.end()) {
+                                                        pendingBlocks_.push_back({x0, y0});
+                                                    }
+                                                }
+                                                if (x0 == x1 && y0 == y1) break;
+                                                e2 = err;
+                                                if (e2 > -dx) { err -= dy; x0 += sx; }
+                                                if (e2 < dy) { err += dx; y0 += sy; }
+                                            }
+                                        }
+                                        prevGridX_ = gridX;
+                                        prevGridY_ = gridY;
+                                    }
+                                    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                                        if (!pendingBlocks_.empty()) {
+                                            BeginMapHistoryCapture(mapChip);
+                                            for (const auto& pos : pendingBlocks_) {
+                                                if (mapChip->GetChip(pos.first, pos.second) != static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_)) {
+                                                    mapChip->SetChip(pos.first, pos.second, static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_));
+                                                }
+                                            }
+                                            EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty(); // Greedy Meshingの再計算
+                                            pendingBlocks_.clear();
+                                        }
+                                        prevGridX_ = -1;
+                                        prevGridY_ = -1;
+                                    }
+                                }
+                                else if (mapEditMode_ == MapEditMode::Select) {
+                                    bool isInsideSelection = false;
+                                    if (selectStartX_ != -1 && selectStartY_ != -1 && selectEndX_ != -1 && selectEndY_ != -1) {
+                                        int minX = (std::min)(selectStartX_, selectEndX_);
+                                        int maxX = (std::max)(selectStartX_, selectEndX_);
+                                        int minY = (std::min)(selectStartY_, selectEndY_);
+                                        int maxY = (std::max)(selectStartY_, selectEndY_);
+                                        if (gridX >= minX && gridX <= maxX && gridY >= minY && gridY <= maxY) {
+                                            isInsideSelection = true;
+                                        }
+                                    }
+
+                                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                                        if (isInsideSelection) {
+                                            isDraggingSelection_ = true;
+                                            dragStartGridX_ = gridX;
+                                            dragStartGridY_ = gridY;
+                                            
+                                            // Copy the selection
+                                            int minX = (std::min)(selectStartX_, selectEndX_);
+                                            int maxX = (std::max)(selectStartX_, selectEndX_);
+                                            int minY = (std::min)(selectStartY_, selectEndY_);
+                                            int maxY = (std::max)(selectStartY_, selectEndY_);
+                                            
+                                            clipboardMapData_.clear();
+                                            for (int y = minY; y <= maxY; ++y) {
+                                                std::vector<int> row;
+                                                for (int x = minX; x <= maxX; ++x) {
+                                                    row.push_back(static_cast<int>(mapChip->GetChip(x, y)));
+                                                }
+                                                clipboardMapData_.push_back(row);
+                                            }
+                                            BeginMapHistoryCapture(mapChip);
+                                            // Clear original area
+                                            for (int y = minY; y <= maxY; ++y) {
+                                                for (int x = minX; x <= maxX; ++x) {
+                                                    mapChip->SetChip(x, y, MapChip2D::ChipType::kNone);
+                                                }
+                                            }
+                                        } else {
+                                            selectStartX_ = gridX;
+                                            selectStartY_ = gridY;
+                                            selectEndX_ = gridX;
+                                            selectEndY_ = gridY;
+                                        }
+                                    } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                                        if (!isDraggingSelection_) {
+                                            selectEndX_ = gridX;
+                                            selectEndY_ = gridY;
+                                        }
+                                    } else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                                        if (isDraggingSelection_) {
+                                            int deltaX = gridX - dragStartGridX_;
+                                            int deltaY = gridY - dragStartGridY_;
+                                            
+                                            int minX = (std::min)(selectStartX_, selectEndX_);
+                                            int minY = (std::min)(selectStartY_, selectEndY_);
+                                            
+                                            // Paste to new location
+                                            for (size_t r = 0; r < clipboardMapData_.size(); ++r) {
+                                                for (size_t c = 0; c < clipboardMapData_[r].size(); ++c) {
+                                                    int tx = minX + deltaX + static_cast<int>(c);
+                                                    int ty = minY + deltaY + static_cast<int>(r);
+                                                    if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
+                                                        if (clipboardMapData_[r][c] != static_cast<int>(MapChip2D::ChipType::kNone)) {
+                                                            mapChip->SetChip(tx, ty, static_cast<MapChip2D::ChipType>(clipboardMapData_[r][c]));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty();
+                                            
+                                            // Update selection rect
+                                            selectStartX_ += deltaX;
+                                            selectEndX_ += deltaX;
+                                            selectStartY_ += deltaY;
+                                            selectEndY_ += deltaY;
+                                            
+                                            isDraggingSelection_ = false;
+                                        }
+                                    }
+                                }
+                                else if (mapEditMode_ == MapEditMode::Copy) {
+                                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                                        if (selectStartX_ != -1 && selectStartY_ != -1 && selectEndX_ != -1 && selectEndY_ != -1) {
+                                            int minX = (std::max)(0, (std::min)(selectStartX_, selectEndX_));
+                                            int maxX = (std::min)(mapWidth - 1, (std::max)(selectStartX_, selectEndX_));
+                                            int minY = (std::max)(0, (std::min)(selectStartY_, selectEndY_));
+                                            int maxY = (std::min)(mapHeight - 1, (std::max)(selectStartY_, selectEndY_));
+                                            
+                                            clipboardMapData_.clear();
+                                            for (int y = minY; y <= maxY; ++y) {
+                                                std::vector<int> row;
+                                                for (int x = minX; x <= maxX; ++x) {
+                                                    row.push_back(static_cast<int>(mapChip->GetChip(x, y)));
+                                                }
+                                                clipboardMapData_.push_back(row);
+                                            }
+                                        }
+                                    }
+                                }
+                                else if (mapEditMode_ == MapEditMode::Paste) {
+                                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && inBounds) {
+                                        if (!clipboardMapData_.empty()) {
+                                            BeginMapHistoryCapture(mapChip);
+                                            for (int y = 0; y < static_cast<int>(clipboardMapData_.size()); ++y) {
+                                                for (int x = 0; x < static_cast<int>(clipboardMapData_[y].size()); ++x) {
+                                                    int targetX = gridX + x;
+                                                    int targetY = gridY + y;
+                                                    if (targetX >= 0 && targetX < mapWidth && targetY >= 0 && targetY < mapHeight) {
+                                                        mapChip->SetChip(targetX, targetY, static_cast<MapChip2D::ChipType>(clipboardMapData_[y][x]));
+                                                    }
+                                                }
+                                            }
+                                            EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty();
+                                        }
+                                    }
+                                }
+                                else if (mapEditMode_ == MapEditMode::BucketFill) {
+                                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && inBounds && isSelectableTool) {
+                                        MapChip2D::ChipType targetType = mapChip->GetChip(gridX, gridY);
+                                        MapChip2D::ChipType replacementType = static_cast<MapChip2D::ChipType>(mapEditorSelectedTool_);
+                                        if (targetType != replacementType) {
+                                            BeginMapHistoryCapture(mapChip);
+                                            mapChip->BucketFill(gridX, gridY, targetType, replacementType);
+                                            EndMapHistoryCapture(mapChip);
+                                            mapChip->SetDirty();
                                         }
                                     }
                                 }
@@ -1243,6 +1826,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         // エラー時は無視
                     }
 
+                    // ファイルパス取得用ラムダ（.txtの自動付与）
+                    auto GetFullFilePath = [](const char* filename) {
+                        std::string name = filename;
+                        bool hasExt = false;
+                        if (name.length() >= 4) {
+                            std::string ext = name.substr(name.length() - 4);
+                            if (ext == ".txt" || ext == ".TXT") {
+                                hasExt = true;
+                            }
+                        }
+                        if (!hasExt) {
+                            name += ".txt";
+                        }
+                        return std::string("resources/json/MapData/") + name;
+                    };
+
                     // 既存のマップファイルを選択するコンボボックス
                     if (!stageFiles.empty()) {
                         static int selectedFileIndex = -1;
@@ -1266,6 +1865,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 if (ImGui::Selectable(stageFiles[i].c_str(), isSelected)) {
                                     strcpy_s(stageFilename_, sizeof(stageFilename_), stageFiles[i].c_str());
                                     selectedFileIndex = i;
+                                    
+                                    // 選択時に自動でロードする
+                                    if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
+                                        mapEditorInputWidth_ = mapChip->GetWidth();
+                                        mapEditorInputHeight_ = mapChip->GetHeight();
+                                    }
                                 }
                                 if (isSelected) {
                                     ImGui::SetItemDefaultFocus();
@@ -1275,10 +1880,26 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
 
-                    // ファイル名入力
-                    ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_));
+                    // ファイル名入力 (Enterキーでロード)
+                    if (ImGui::InputText("ファイル名", stageFilename_, sizeof(stageFilename_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
+                            mapEditorInputWidth_ = mapChip->GetWidth();
+                            mapEditorInputHeight_ = mapChip->GetHeight();
+                        }
+                    }
 
                     ImGui::Spacing();
+                    
+                    // ルーム編集モード
+                    ImGui::Checkbox("ルーム編集モード", &isRoomEditMode_);
+                    if (isRoomEditMode_) {
+                        ImGui::Text("左ドラッグ: マス目にスナップして作成・移動・リサイズ");
+                        ImGui::Text("右ドラッグ: スナップなしで作成・移動・リサイズ");
+                        ImGui::Text("Ctrl + クリック: ルームの削除");
+                    }
+
+                    ImGui::Separator();
+                    
                     ImGui::Text("マップサイズ設定 (1画面＝ 幅:20, 高さ:11)");
                     ImGui::TextDisabled("※ 画面を増やしたい場合はサイズを広げてください");
                     
@@ -1290,39 +1911,18 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::InputInt("Height", &mapEditorInputHeight_);
                     ImGui::SameLine();
                     if (ImGui::Button("Apply Size")) {
+                        BeginMapHistoryCapture(mapChip);
                         if (mapEditorInputWidth_ < 1) mapEditorInputWidth_ = 1;
                         if (mapEditorInputHeight_ < 1) mapEditorInputHeight_ = 1;
                         mapChip->Resize(mapEditorInputWidth_, mapEditorInputHeight_);
+                        EndMapHistoryCapture(mapChip);
                     }
 
                     ImGui::Separator();
 
-                    // ファイルパス取得用ラムダ（.txtの自動付与）
-                    auto GetFullFilePath = [](const char* filename) {
-                        std::string name = filename;
-                        bool hasExt = false;
-                        if (name.length() >= 4) {
-                            std::string ext = name.substr(name.length() - 4);
-                            if (ext == ".txt" || ext == ".TXT") {
-                                hasExt = true;
-                            }
-                        }
-                        if (!hasExt) {
-                            name += ".txt";
-                        }
-                        return std::string("resources/json/MapData/") + name;
-                    };
-
                     // 操作ボタン
                     if (ImGui::Button("保存")) {
                         mapChip->SaveToFile(GetFullFilePath(stageFilename_));
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("読み込み")) {
-                        if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
-                            mapEditorInputWidth_ = mapChip->GetWidth();
-                            mapEditorInputHeight_ = mapChip->GetHeight();
-                        }
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("クリア")) {
@@ -1339,27 +1939,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::Separator();
                     // ==========================================
 
-                    // 境界線（ルームトリガー）編集モード
-                    ImGui::Checkbox("境界線（トリガー）編集モード", &isBoundaryEditMode_);
-                    if (isBoundaryEditMode_) {
-                        ImGui::Text("追加モード: ");
-                        ImGui::SameLine();
-                        ImGui::RadioButton("縦線(横画面遷移用)", &boundaryAddMode_, 0); ImGui::SameLine();
-                        ImGui::RadioButton("横線(縦画面遷移用)", &boundaryAddMode_, 1); ImGui::SameLine();
-                        ImGui::RadioButton("両方(交点)", &boundaryAddMode_, 2);
-
-                        ImGui::TextDisabled("・左クリック(ドラッグ): マス目にスナップして追加・移動\n"
-                                            "・右クリック(ドラッグ): 自由に(スナップなしで)追加・移動\n"
-                                            "・交差している部分をドラッグすると両方同時に移動します\n"
-                                            "・線の上でCtrl + クリック: 線の削除");
-                    }
-                    ImGui::Spacing();
-                    ImGui::Separator();
-
                     // ペイントツール選択
                     static int selectedTool = 1; // 0 = None (Erase), 1 = Block (Paint), 2 = Death (DeathBlock), 3 = Goal, 4 = Coin
-                    // ペイントツール選択 (境界線編集モード中は操作不可にするかグレーアウトする)
-                    ImGui::BeginDisabled(isBoundaryEditMode_);
+                    // ペイントツール選択 (ルーム編集モード中は操作不可にするかグレーアウトする)
+                    ImGui::BeginDisabled(isRoomEditMode_);
                     ImGui::Text("Paint Tool:");
                     ImGui::Spacing();
 
@@ -1372,6 +1955,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     std::vector<ToolIcon> systemTools = {
                         { 6, "Spawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f },
+                        { 10, "RoomSpawn", ImVec4(0.2f, 0.8f, 1.0f, 1.0f), 1.0f },
                         { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f }
                     };
 
@@ -1510,7 +2094,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     newDef.id = 100 + static_cast<int>(palette.size());
                                     newDef.name = "Custom " + std::to_string(palette.size() + 1);
                                     newDef.type = "JumpBlock";
-                                    newDef.properties["jumpVelocity"] = 15.0f;
+                                    newDef.properties["jumpVelocityVertical"] = 15.0f;
+                                    newDef.properties["jumpVelocityHorizontal"] = 15.0f;
                                     palette.push_back(newDef);
                                     mapEditorSelectedTool_ = newDef.id; // 新しいものを選択状態にする
                                     mapChip->SaveToFile(GetFullFilePath(stageFilename_));
@@ -2366,9 +2951,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     LogManager::GetInstance()->Draw();
 }
 
-void EditorManager::Draw(ID3D12GraphicsCommandList *commandList) {
+void EditorManager::Draw() {
     ImGui::Render();
-    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+    ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), DirectXCommon::GetInstance()->GetCommandList());
 }
 
 void EditorManager::Finalize() {
@@ -2378,7 +2963,6 @@ void EditorManager::Finalize() {
 }
 
 void EditorManager::SaveSceneConfig() {
-    std::filesystem::create_directories("json");
 
     std::ofstream ofs("resources/json/editor_config.json");
     if (ofs.is_open()) {
@@ -2462,6 +3046,221 @@ void EditorManager::LoadSceneConfig() {
                 }
             }
         }
+    }
+}
+
+void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
+    std::filesystem::create_directories("resources/json");
+    std::ofstream ofs("resources/json/lighting_config.json");
+    if (ofs.is_open()) {
+        nlohmann::json j;
+        j["activeLightType"] = activeLightType_;
+        j["enableFog"] = enableFog_;
+        j["enableFlatShading"] = enableFlatShading_;
+        j["dIntensity"] = dIntensity_;
+        j["pIntensity"] = pIntensity_;
+        j["sIntensity"] = sIntensity_;
+        j["spotAngleDeg"] = spotAngleDeg_;
+        j["spotFalloffDeg"] = spotFalloffDeg_;
+
+        if (modelCommon) {
+            auto d = modelCommon->GetDirectionalLight();
+            j["dLight"]["color"] = {d->color.x, d->color.y, d->color.z, d->color.w};
+            j["dLight"]["direction"] = {d->direction.x, d->direction.y, d->direction.z};
+            
+            auto p = modelCommon->GetPointLight();
+            j["pLight"]["color"] = {p->color.x, p->color.y, p->color.z, p->color.w};
+            j["pLight"]["position"] = {p->position.x, p->position.y, p->position.z};
+            j["pLight"]["radius"] = p->radius;
+            j["pLight"]["decay"] = p->decay;
+
+            auto s = modelCommon->GetSpotLight();
+            j["sLight"]["color"] = {s->color.x, s->color.y, s->color.z, s->color.w};
+            j["sLight"]["position"] = {s->position.x, s->position.y, s->position.z};
+            j["sLight"]["direction"] = {s->direction.x, s->direction.y, s->direction.z};
+            j["sLight"]["distance"] = s->distance;
+            j["sLight"]["decay"] = s->decay;
+        }
+
+        ofs << j.dump(4);
+        ofs.close();
+    }
+}
+
+void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
+    std::ifstream ifs("resources/json/lighting_config.json");
+    if (!ifs.is_open()) return;
+
+    try {
+        nlohmann::json j;
+        ifs >> j;
+        if (j.contains("activeLightType")) activeLightType_ = j["activeLightType"];
+        if (j.contains("enableFog")) enableFog_ = j["enableFog"];
+        if (j.contains("enableFlatShading")) enableFlatShading_ = j["enableFlatShading"];
+        if (j.contains("dIntensity")) dIntensity_ = j["dIntensity"];
+        if (j.contains("pIntensity")) pIntensity_ = j["pIntensity"];
+        if (j.contains("sIntensity")) sIntensity_ = j["sIntensity"];
+        if (j.contains("spotAngleDeg")) spotAngleDeg_ = j["spotAngleDeg"];
+        if (j.contains("spotFalloffDeg")) spotFalloffDeg_ = j["spotFalloffDeg"];
+
+        if (modelCommon) {
+            auto d = modelCommon->GetDirectionalLight();
+            if (j.contains("dLight")) {
+                if (j["dLight"].contains("color")) {
+                    d->color = {j["dLight"]["color"][0], j["dLight"]["color"][1], j["dLight"]["color"][2], j["dLight"]["color"][3]};
+                }
+                if (j["dLight"].contains("direction")) {
+                    d->direction = {j["dLight"]["direction"][0], j["dLight"]["direction"][1], j["dLight"]["direction"][2]};
+                }
+            }
+            d->enableFlatShading = enableFlatShading_ ? 1 : 0;
+            
+            auto p = modelCommon->GetPointLight();
+            if (j.contains("pLight")) {
+                if (j["pLight"].contains("color")) p->color = {j["pLight"]["color"][0], j["pLight"]["color"][1], j["pLight"]["color"][2], j["pLight"]["color"][3]};
+                if (j["pLight"].contains("position")) p->position = {j["pLight"]["position"][0], j["pLight"]["position"][1], j["pLight"]["position"][2]};
+                if (j["pLight"].contains("radius")) p->radius = j["pLight"]["radius"];
+                if (j["pLight"].contains("decay")) p->decay = j["pLight"]["decay"];
+            }
+
+            auto s = modelCommon->GetSpotLight();
+            if (j.contains("sLight")) {
+                if (j["sLight"].contains("color")) s->color = {j["sLight"]["color"][0], j["sLight"]["color"][1], j["sLight"]["color"][2], j["sLight"]["color"][3]};
+                if (j["sLight"].contains("position")) s->position = {j["sLight"]["position"][0], j["sLight"]["position"][1], j["sLight"]["position"][2]};
+                if (j["sLight"].contains("direction")) s->direction = {j["sLight"]["direction"][0], j["sLight"]["direction"][1], j["sLight"]["direction"][2]};
+                if (j["sLight"].contains("distance")) s->distance = j["sLight"]["distance"];
+                if (j["sLight"].contains("decay")) s->decay = j["sLight"]["decay"];
+            }
+            
+            // intensity の反映
+            if (activeLightType_ == 0) {
+                d->intensity = dIntensity_;
+                p->intensity = 0.0f;
+                s->intensity = 0.0f;
+            } else if (activeLightType_ == 1) {
+                d->intensity = 0.0f;
+                p->intensity = pIntensity_;
+                s->intensity = 0.0f;
+            } else if (activeLightType_ == 2) {
+                d->intensity = 0.0f;
+                p->intensity = 0.0f;
+                s->intensity = sIntensity_;
+                s->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f);
+                s->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f);
+            }
+        }
+    } catch (...) {}
+}
+
+void EditorManager::Undo() {
+    if (undoStack_.empty()) return;
+    auto cmd = undoStack_.back();
+    undoStack_.pop_back();
+    cmd->Undo();
+    redoStack_.push_back(cmd);
+}
+
+void EditorManager::Redo() {
+    if (redoStack_.empty()) return;
+    auto cmd = redoStack_.back();
+    redoStack_.pop_back();
+    cmd->Redo();
+    undoStack_.push_back(cmd);
+}
+
+class MapEditCommand : public EditorManager::IEditorCommand {
+    MapChip2D* mapChip_;
+    EditorManager::MapState oldState_;
+    EditorManager::MapState newState_;
+public:
+    MapEditCommand(MapChip2D* chip, const EditorManager::MapState& oldS, const EditorManager::MapState& newS)
+        : mapChip_(chip), oldState_(oldS), newState_(newS) {}
+    void Undo() override {
+        mapChip_->Resize(oldState_.width, oldState_.height);
+        for (int y = 0; y < oldState_.height; ++y) {
+            for (int x = 0; x < oldState_.width; ++x) {
+                mapChip_->SetChip(x, y, static_cast<MapChip2D::ChipType>(oldState_.data[y][x]));
+            }
+        }
+    }
+    void Redo() override {
+        mapChip_->Resize(newState_.width, newState_.height);
+        for (int y = 0; y < newState_.height; ++y) {
+            for (int x = 0; x < newState_.width; ++x) {
+                mapChip_->SetChip(x, y, static_cast<MapChip2D::ChipType>(newState_.data[y][x]));
+            }
+        }
+    }
+};
+
+class RoomEditCommand : public EditorManager::IEditorCommand {
+    MapChip2D* mapChip_;
+    EditorManager::RoomState oldState_;
+    EditorManager::RoomState newState_;
+public:
+    RoomEditCommand(MapChip2D* chip, const EditorManager::RoomState& oldS, const EditorManager::RoomState& newS)
+        : mapChip_(chip), oldState_(oldS), newState_(newS) {}
+    void Undo() override {
+        mapChip_->GetRooms() = oldState_.rooms;
+    }
+    void Redo() override {
+        mapChip_->GetRooms() = newState_.rooms;
+    }
+};
+
+static void CaptureMapState(MapChip2D* mapChip, EditorManager::MapState& state) {
+    state.width = mapChip->GetWidth();
+    state.height = mapChip->GetHeight();
+    state.data.clear();
+    for (int y = 0; y < state.height; ++y) {
+        std::vector<int> row;
+        for (int x = 0; x < state.width; ++x) {
+            row.push_back(static_cast<int>(mapChip->GetChip(x, y)));
+        }
+        state.data.push_back(row);
+    }
+}
+
+void EditorManager::BeginMapHistoryCapture(MapChip2D* mapChip) {
+    if (!mapChip) return;
+    CaptureMapState(mapChip, oldMapState_);
+}
+
+void EditorManager::EndMapHistoryCapture(MapChip2D* mapChip) {
+    if (!mapChip) return;
+    MapState newState;
+    CaptureMapState(mapChip, newState);
+    // 変化があればコマンドを積む
+    if (oldMapState_.width != newState.width || oldMapState_.height != newState.height || oldMapState_.data != newState.data) {
+        PushCommand(std::make_shared<MapEditCommand>(mapChip, oldMapState_, newState));
+    }
+}
+
+void EditorManager::BeginRoomHistoryCapture(MapChip2D* mapChip) {
+    if (!mapChip) return;
+    oldRoomState_.rooms = mapChip->GetRooms();
+}
+
+void EditorManager::EndRoomHistoryCapture(MapChip2D* mapChip) {
+    if (!mapChip) return;
+    RoomState newState;
+    newState.rooms = mapChip->GetRooms();
+    bool changed = false;
+    if (oldRoomState_.rooms.size() != newState.rooms.size()) {
+        changed = true;
+    } else {
+        for (size_t i = 0; i < newState.rooms.size(); ++i) {
+            if (oldRoomState_.rooms[i].x != newState.rooms[i].x ||
+                oldRoomState_.rooms[i].y != newState.rooms[i].y ||
+                oldRoomState_.rooms[i].width != newState.rooms[i].width ||
+                oldRoomState_.rooms[i].height != newState.rooms[i].height) {
+                changed = true;
+                break;
+            }
+        }
+    }
+    if (changed) {
+        PushCommand(std::make_shared<RoomEditCommand>(mapChip, oldRoomState_, newState));
     }
 }
 #endif

@@ -30,10 +30,25 @@ public:
     int GetCurrentRoomY() const { return currentRoomY_; }
 
     // カスタム境界線データ（フリップスクロール用）
-    void SetBoundaries(const std::vector<float>& bx, const std::vector<float>& by) {
-        boundaryX_ = bx;
-        boundaryY_ = by;
+    void SetRooms(const std::vector<StageRoom>& rooms) {
+        rooms_ = rooms;
     }
+
+    float GetFollowLerp() const { return followLerp_; }
+    void SetFollowLerp(float lerp) { followLerp_ = lerp; }
+
+    float GetTransitionLerp() const { return transitionLerp_; }
+    void SetTransitionLerp(float lerp) { transitionLerp_ = lerp; }
+
+    float GetScale() const { return scale_; }
+    void SetScale(float scale) {
+        scale_ = (scale > 0.01f) ? scale : 0.01f;
+        orthoWidth_ = 20.0f / scale_;
+        orthoHeight_ = 11.25f / scale_;
+    }
+
+    void LoadConfig(const std::string& filepath = "resources/json/camera_config.json");
+    void SaveConfig(const std::string& filepath = "resources/json/camera_config.json");
 
 private:
     // 正射影行列でUpdateMatrixをオーバーライド的に使う
@@ -44,9 +59,9 @@ private:
 
     float orthoWidth_ = 20.0f;  // 正射影の横幅（ワールド座標単位）
     float orthoHeight_ = 11.25f; // 正射影の縦幅
+    float scale_ = 1.0f;         // 正射影のスケール（拡大率）
 
-    std::vector<float> boundaryX_;
-    std::vector<float> boundaryY_;
+    std::vector<StageRoom> rooms_;
 
     // カメラ追従の滑らかさ
     float followLerp_ = 0.1f;

@@ -1,5 +1,6 @@
 #pragma once
 #include"Core/Utility/Structs.h"
+#include "Animation.h"
 #include"GameObject/ResourceObject.h"
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -56,6 +57,7 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 /// <param name="filename"></param>
 /// <returns></returns>
 ModelData LoadModelFile(const std::string &directoryPath, const std::string &filename);
+Animation LoadAnimationFile(const std::string &directoryPath, const std::string &filename);
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename);
 
@@ -90,3 +92,11 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
 
 void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t> &indices);
 
+
+int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints);
+Skeleton CreateSkeleton(const Node& rootNode);
+void Update(Skeleton& skeleton);
+void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
+
+SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const Skeleton& skeleton, const ModelData& modelData);
+void Update(SkinCluster& skinCluster, const Skeleton& skeleton);

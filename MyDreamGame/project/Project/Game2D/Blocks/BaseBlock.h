@@ -3,6 +3,12 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include "GameObject/Object3D.h"
+#include "Core/Utility/Structs.h"
+#include "GameObject/GameObject.h"
+#include "Component/TransformComponent.h"
+#include "Component/PrimitiveRendererComponent.h"
+#include "Component/MeshRendererComponent.h"
+#include "Component/ColliderComponent.h"
 class Player2D;
 class MapChip2D;
 struct ID3D12Device;
@@ -17,19 +23,14 @@ public:
     virtual void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {}
     
     virtual void Update() {
-        if (primitiveObj_) {
-            primitiveObj_->Update();
-        }
-        if (object3D_) {
-            object3D_->Update();
+        if (gameObject_) {
+            gameObject_->Update();
         }
     }
     
-    virtual void Draw(ID3D12GraphicsCommandList* commandList) {
-        if (object3D_) {
-            object3D_->Draw(commandList);
-        } else if (primitiveObj_) {
-            primitiveObj_->Draw(commandList);
+    virtual void Draw() {
+        if (gameObject_) {
+            gameObject_->Draw(); // Rendererへの登録が行われる
         }
     }
 
@@ -44,25 +45,57 @@ public:
     // プレイヤーと接触した際の処理
     virtual void OnCollision(Player2D* player) {}
     
-    // プレイヤーが上に乗った際の処理
     virtual void OnPlayerStand() {}
+    
+    // プレイヤーが横などから接触した際の処理
+    virtual void OnPlayerTouch() {}
 
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
 
-    PrimitiveObject* GetPrimitive() const { return primitiveObj_.get(); }
-    Object3D* GetObject3D() const { return object3D_.get(); }
-    void SetObject3D(std::unique_ptr<Object3D> obj) { object3D_ = std::move(obj); }
+    GameObject* GetGameObject() const { return gameObject_.get(); }
+    void SetGameObject(std::unique_ptr<GameObject> obj) { gameObject_ = std::move(obj); }
     
     // 消滅フラグ（コイン取得時など）
     bool IsDestroyed() const { return isDestroyed_; }
     void Destroy() { isDestroyed_ = true; }
 
+    void SetupCollider() {
+        if (!gameObject_) return;
+        auto* cc = gameObject_->AddComponent<ColliderComponent>();
+        cc->SetLayerMask(kLayerBlock);
+        cc->SetIsSolid(IsSolid());
+        cc->SetIsOneWay(IsOneWay());
+        cc->SetIsMoving(IsMoving());
+        cc->SetVelocity(GetVelocity());
+        cc->SetUserData(this);
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            cc->SetBoxSize({tc->GetScale().x, tc->GetScale().y, tc->GetScale().z});
+            cc->SetBoxSize({1.0f, 1.0f, 1.0f}); // TransformComponentのスケールが反映されるので1.0でOK
+        }
+    }
+
+    AABB2D GetAABB() const {
+        Vector3 pos = {0.0f, 0.0f, 0.0f};
+        Vector3 scale = {1.0f, 1.0f, 1.0f};
+        if (gameObject_) {
+            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+                pos = tc->GetPosition();
+                scale = tc->GetScale();
+            }
+        }
+        return {
+            pos.x - scale.x * 0.5f,
+            pos.y + scale.y * 0.5f,
+            pos.x + scale.x * 0.5f,
+            pos.y - scale.y * 0.5f
+        };
+    }
+
 protected:
     MapChip2D* map_ = nullptr;
     int chipX_ = 0;
     int chipY_ = 0;
-    std::unique_ptr<PrimitiveObject> primitiveObj_;
-    std::unique_ptr<Object3D> object3D_;
+    std::unique_ptr<GameObject> gameObject_;
     bool isDestroyed_ = false;
 };

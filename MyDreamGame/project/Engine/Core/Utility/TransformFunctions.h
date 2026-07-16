@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 #include "Vector3.h"
 #include "Matrix4x4.h"
 #include "Matrix3x3.h"
 #include "Vector4.h"
+#include "Quaternion.h"
 #include <array>
 
 inline Vector3 operator*(const Matrix4x4& mat, const Vector3& vec) {
@@ -37,8 +38,10 @@ public:
 	static Matrix4x4 MakeRoteZMatrix(float radian);
 	static Matrix4x4 MakeTranslateMatrix(const Vector3& translate);
 	static Matrix4x4 MakeScaleMatrix(const Vector3& scale);
-	static Vector3 Transform(const Vector3& vector, const Matrix4x4& matrix);
+	static Vector3 EulerTransform(const Vector3& vector, const Matrix4x4& matrix);
 	static Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
+	static Matrix4x4 MakeRotateMatrix(const Quaternion& quaternion);
+	static Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& rotate, const Vector3& translate);
 	static Matrix4x4 Add(const Matrix4x4& matrix1, const Matrix4x4& matrix2);
 	static Vector3 AddV(const Vector3 a, const Vector3 b);
 	static Matrix4x4 Subtract(const Matrix4x4& matrix1, const Matrix4x4& matrix2);
@@ -57,6 +60,7 @@ public:
 	static Matrix4x4 MakeViewportMatrix(float left, float top, float width, float height, float minDepth, float maxDepth);
 
 	static Vector3 Normalize(Vector3 v);
+	static Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t);
 	static Matrix4x4 MakeViewMatrix(const Vector3& rotate, const Vector3& translate);
 
 	// Frustum Culling utilities

@@ -1,4 +1,4 @@
-#include "GameScene.h"
+﻿#include "GameScene.h"
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
@@ -9,58 +9,106 @@
 #include "Editor/EditorManager.h"
 #endif
 #include "Editor/ReplayManager.h"
+#include "Renderer/Renderer.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
 #include "Graphics/Skybox.h"
+#include "Core/Utility/ParameterManager.h"
 
-std::string GameScene::s_TargetMapFilePath = "resources/json/MapData/map_data.txt";
+std::string GameScene::s_TargetMapFilePath = "resources/json/Map/map_data.json";
 
-void GameScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
-    commandList_ = commandList.Get();
+void GameScene::OnEnter(SceneManager* sceneManager) {
+    // StageSelectSceneから選択されたステージのパスを受け取る
+    if (sceneManager->HasData("SelectedStagePath")) {
+        std::string selectedPath = sceneManager->GetData<std::string>("SelectedStagePath");
+        if (!selectedPath.empty()) {
+            s_TargetMapFilePath = selectedPath;
+            // TODO: マップの再読み込みなどをここで行うか、Initializeのタイミングと調整する
+        }
+    }
+}
+
+void GameScene::OnExit(SceneManager* sceneManager) {
+    // スコアなどを保存してTitleやStageSelectに渡す
+    if (player_) {
+        sceneManager->SetData("LastScore", player_->GetScore());
+    }
+}
+
+void GameScene::Initialize() {
+    Log("GameScene::Initialize: Start\n");
 
     // 1. Device取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
-    commandList->GetDevice(IID_PPV_ARGS(&device));
+    device = DirectXCommon::GetInstance()->GetDevice();
+    Log("GameScene::Initialize: Device got\n");
 
     // 2. PrimitiveManagerの初期化（まだの場合）
     PrimitiveManager::GetInstance()->Initialize(device.Get());
+    Log("GameScene::Initialize: PrimitiveManager Initialized\n");
 
     // リプレイ保存リストとマクロの読み込み
     ReplayManager::GetInstance()->LoadSavedList();
     ReplayManager::GetInstance()->LoadMacros();
+    Log("GameScene::Initialize: ReplayManager loaded\n");
 
     // ★ Skyboxの初期化処理を追加
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/skybox_highres_build.dds", commandList);
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
+    Log("GameScene::Initialize: Skybox loaded\n");
 
     // CoinEffectの作成（コイン取得用）
     coinEffect_ = std::make_unique<CoinEffect>();
     coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
+    Log("GameScene::Initialize: CoinEffect Initialized\n");
+
+    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
+    ringEffect_ = std::make_unique<RingEffect>();
+    ringEffect_->Initialize(device.Get(), gradationHandle);
+    cylinderEffect_ = std::make_unique<CylinderEffect>();
+    cylinderEffect_->Initialize(device.Get(), gradationHandle);
+    Log("GameScene::Initialize: Effects Initialized\n");
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
-    map_->Initialize(commandList.Get(), s_TargetMapFilePath);
+    map_->Initialize( s_TargetMapFilePath);
+    Log("GameScene::Initialize: Map Initialized\n");
 
     // 6. プレイヤーの生成と初期化
-    player_ = std::make_unique<Player2D>();
-    player_->Initialize(commandList.Get());
+    playerObj_ = std::make_unique<GameObject>("Player");
+    playerObj_->AddComponent<TransformComponent>();
+    player_ = playerObj_->AddComponent<Player2D>();
+    Log("GameScene::Initialize: Player Initialized\n");
+    
     player_->FindSpawnPoint(*map_);
+    Log("GameScene::Initialize: Player SpawnPoint found\n");
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
-        gameCamera_->InitializeOrthographic(1280, 720, 20.0f, 11.25f);
+        Log("GameScene::Initialize: Camera config...\n");
+        float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
+        float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
+        gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
         // プレイヤーの位置をカメラ追従ターゲットに設定
         gameCamera_->SetFollowTarget(&player_->GetPosition());
+        Log("GameScene::Initialize: Camera configured\n");
     }
+    Log("GameScene::Initialize: Finish\n");
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
     if (coinEffect_) {
         coinEffect_->Update(1.0f / 60.0f);
+    }
+    if (ringEffect_) {
+        ringEffect_->Update(1.0f / 60.0f);
+    }
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(1.0f / 60.0f);
     }
 
     if (skybox_) {
@@ -70,14 +118,16 @@ void GameScene::Update(SceneManager *sceneManager) {
     float dt = TimeManager::GetInstance().GetDeltaTime();
     
     // フェードイン演出
+    float transitionSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "transitionSpeed", 1.5f);
     if (transitionAlpha_ > 0.0f) {
-        transitionAlpha_ -= dt * 1.5f;
+        transitionAlpha_ -= dt * transitionSpeed;
         if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
     }
 
     if (gameState_ == GameState::StartReady) {
         stateTimer_ += dt;
-        if (stateTimer_ > 2.0f) {
+        float startReadyTime = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyTime", 2.0f);
+        if (stateTimer_ > startReadyTime) {
             gameState_ = GameState::Playing;
             stateTimer_ = 0.0f;
         }
@@ -140,12 +190,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                     const auto& frames = ReplayManager::GetInstance()->GetTemporaryRecordedFrames();
                     for (const auto& frame : frames) {
                         player_->SetPosition(frame.position);
-                        player_->SimulateCollisions(*map_);
                     }
                     
                     // 今ポップしたフレームの座標でも判定しておく
                     player_->SetPosition(poppedFrame.position);
-                    player_->SimulateCollisions(*map_);
                     
                     // 再構築を再開（ここで一括構築される）
                     map_->SetRebuildEnabled(true);
@@ -183,8 +231,8 @@ void GameScene::Update(SceneManager *sceneManager) {
                     // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
                     for (int i = 0; i <= curFrame; ++i) {
                         player_->SetPosition(replayData.frames[i].position);
-                        player_->SimulateCollisions(*map_);
                     }
+                    map_->SetRebuildEnabled(true);
 
                     // 4. コイン回収用に座標を動かしたので、シミュレーション再開用の正しい座標に戻す
                     if (curFrame == 0) {
@@ -236,10 +284,15 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
 
             if (gameCamera_ && map_) {
-                gameCamera_->SetBoundaries(map_->GetBoundaryX(), map_->GetBoundaryY());
+                gameCamera_->SetRooms(map_->GetRooms());
             }
 
-            player_->Update(*map_, gameCamera_ && gameCamera_->IsTransitioning());
+            // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
+            if (map_) {
+                map_->Update();
+            }
+
+            player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
 
             // ゴール判定
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
@@ -291,11 +344,6 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
     }
-
-    // 5. マップの更新
-    if (map_) {
-        map_->Update();
-    }
 }
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
@@ -333,7 +381,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SHIFT : Dash");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
         ImGui::End();
     }
 
@@ -413,42 +462,45 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
     if (modelCommon_) {
-        modelCommon_->PreDraw(commandList_);
+        modelCommon_->PreDraw();
     }
 
     if (skybox_) {
-        skybox_->Draw(commandList_);
+        skybox_->Draw();
         
         auto dxCommon = DirectXCommon::GetInstance();
-        commandList_->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-        commandList_->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+        DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
         if (modelCommon_) {
-            modelCommon_->PreDraw(commandList_);
+            modelCommon_->PreDraw();
         }
     }
 
     // 2. 2Dオブジェクト（マップ・プレイヤー）の描画
     // ModelCommonの描画前処理
-    modelCommon_->PreDraw(commandList_);
+    modelCommon_->PreDraw();
 
     // マップの描画
     if (map_) {
-        map_->Draw(commandList_);
+        map_->Draw();
     }
 
     // プレイヤーの描画
     if (player_) {
-        player_->Draw(commandList_);
+        player_->Draw();
     }
+
+    // コンポーネントの描画を実行
+    Renderer::GetInstance()->RenderComponents();
 
     if (coinEffect_) {
 #ifdef USE_IMGUI
         if (EditorManager::IsShowEffects()) {
-            coinEffect_->Draw(commandList_);
+            coinEffect_->Draw();
         }
 #else
-        coinEffect_->Draw(commandList_);
+        coinEffect_->Draw();
 #endif
     }
 
@@ -499,7 +551,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                         }
 
                         // ゴースト用のTransformとMaterialを作成
-                        Transform ghostTransform = playerPrim->GetTransform();
+                        EulerTransform ghostTransform = playerPrim->GetTransform();
                         ghostTransform.translate = frameData.position;
                         ghostTransform.scale = frameData.scale;
                         ghostTransform.rotate = frameData.rotation;
@@ -511,10 +563,10 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                         ghostMaterial.color = ghostColor;
 
                         // プレイヤーのPrimitiveを使って残像(ゴースト)を描画
-                        playerPrim->DrawGhost(commandList_, ghostTransform, ghostMaterial);
+                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
 
                         // 3D -> NDC Conversion for the current frame's position
-                        Vector3 ndcCurr = TransformFunctions::Transform(frameData.position, viewProjectionMatrix);
+                        Vector3 ndcCurr = TransformFunctions::EulerTransform(frameData.position, viewProjectionMatrix);
 
                         ImVec2 pCurr;
                         bool isCurrVisible = false;
@@ -538,7 +590,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                         if (i >= FRAME_STEP) {
                             int prevIndex = i - FRAME_STEP;
                             if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
-                                Vector3 ndcPrev = TransformFunctions::Transform(currentReplay.frames[prevIndex].position, viewProjectionMatrix);
+                                Vector3 ndcPrev = TransformFunctions::EulerTransform(currentReplay.frames[prevIndex].position, viewProjectionMatrix);
 
                                 // Draw only if both current and previous points are visible
                                 if (isCurrVisible && ndcPrev.z >= 0.0f && ndcPrev.z <= 1.0f) {
@@ -566,7 +618,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     // 3. パーティクルの描画
     // 描画前処理
-    particleCommon_->PreDraw(commandList_);
+    particleCommon_->PreDraw();
 
     // パーティクルの描画
 #ifdef USE_IMGUI
@@ -585,6 +637,14 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
 
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
+
+    // 1. 背景エフェクト
+    if (cylinderEffect_) {
+        result.push_back(cylinderEffect_->GetRoot());
+    }
+    if (ringEffect_) {
+        result.push_back(ringEffect_->GetRoot());
+    }
 
     // 2. プレイヤー
     if (player_) {
@@ -625,6 +685,12 @@ void GameScene::UpdateEditor() {
         // ImGui更新（もしあれば）
         coinEffect_->Update(1.0f / 60.0f);
     }
+    if (ringEffect_) {
+        ringEffect_->Update(1.0f / 60.0f);
+    }
+    if (cylinderEffect_) {
+        cylinderEffect_->Update(1.0f / 60.0f);
+    }
     // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
     if (player_) {
         if (map_) {
@@ -637,6 +703,7 @@ void GameScene::UpdateEditor() {
         }
     }
     if (map_) {
+        map_->Update();
         for (auto* mapPrim : map_->GetPrimitiveObjects()) {
             if (mapPrim) {
                 mapPrim->Update();

@@ -12,15 +12,26 @@ public:
 
     bool IsSolid() const override { return true; }
     void OnPlayerStand() override { isPlayerStandingThisFrame_ = true; }
+    void OnPlayerTouch() override { isPlayerStandingThisFrame_ = true; }
+
+    void SetProperties(const nlohmann::json& properties) override;
 
     Vector3 GetVelocity() const override { return velocity_; }
-    bool IsMoving() const override { return state_ == LiftState::MovingForward || state_ == LiftState::MovingBackward; }
+    bool IsMoving() const override { return true; }
 
 private:
     Vector3 velocity_ = { 0.0f, 0.0f, 0.0f };
     Vector3 direction_ = { 0.0f, 0.0f, 0.0f };
     float speedForward_ = 6.0f;
     float speedBackward_ = 3.0f;
+
+    float waitTime_ = 1.0f;
+    float acceleration_ = 2.0f;
+    float maxSpeedForward_ = 10.0f;
+    float maxSpeedBackward_ = 5.0f;
+    
+    float currentSpeed_ = 0.0f;
+    float shakeTimer_ = 0.0f;
     
     float minRailWorldX_ = 0.0f;
     float maxRailWorldX_ = 0.0f;

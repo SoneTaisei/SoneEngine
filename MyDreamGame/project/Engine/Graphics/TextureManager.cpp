@@ -1,4 +1,5 @@
 #include "TextureManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/SrvManager.h"
 #include <cassert>
 
@@ -20,7 +21,9 @@ void TextureManager::Finalize() {
     device_ = nullptr;
 }
 
-uint32_t TextureManager::Load(const std::string &filePath, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
+uint32_t TextureManager::Load(const std::string &filePath) {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
+    
     // 既に読み込み済みのテクスチャか検索
     for (uint32_t i = 0; i < textures_.size(); ++i) {
         if (textures_[i].filePath == filePath) {

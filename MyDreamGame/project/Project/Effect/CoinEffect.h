@@ -10,7 +10,7 @@ public:
 
     void Initialize(ID3D12Device* device);
     void Update(float deltaTime);
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw();
 
     void Emit(const Vector3& position);
 

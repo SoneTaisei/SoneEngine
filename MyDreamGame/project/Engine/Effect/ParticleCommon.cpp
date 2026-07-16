@@ -1,4 +1,5 @@
 #include "ParticleCommon.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include <cassert>
 #include <format>
 #include <dxcapi.h>
@@ -27,7 +28,8 @@ void ParticleCommon::Initialize(ID3D12Device *device) {
     *wvpData_ = viewProjection_;
 }
 
-void ParticleCommon::PreDraw(ID3D12GraphicsCommandList *commandList) {
+void ParticleCommon::PreDraw() {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     assert(commandList);
     commandList_ = commandList;
 

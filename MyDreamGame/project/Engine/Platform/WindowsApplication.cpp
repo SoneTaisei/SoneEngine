@@ -12,11 +12,13 @@
 #include "Graphics/MapEditorCamera.h"
 #endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Renderer/Renderer.h"
 #include "../../Project/Scenes/GameScene.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
 #include "Scene/SceneFactory.h"
+#include "Graphics/CameraManager.h"
 #include "Window.h"
 #include "Core/TimeManager.h"
 // (※もし足りないヘッダーがあって赤線が出たら、ここに追加してください)
@@ -59,6 +61,9 @@ void WindowsApplication::Initialize() {
     dxCommon_ = std::make_unique<DirectXCommon>();
     dxCommon_->Initialize(window_->GetHwnd(), kWindowWidth_, kWindowHeight_);
 
+    // Rendererの初期化
+    Renderer::GetInstance()->Initialize(dxCommon_.get());
+
     // dxCommon_から必要なポインタを取得
     ID3D12Device *device = dxCommon_->GetDevice();
     ID3D12GraphicsCommandList *commandList = dxCommon_->GetCommandList();
@@ -92,15 +97,15 @@ void WindowsApplication::Initialize() {
     PrimitiveManager::GetInstance()->Initialize(device);
 
     // デフォルトの環境マップ（スカイボックス用テクスチャ）をロードして設定
-    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds", commandList);
+    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(defaultSkyboxHandle));
 
     // 1x1ピクセルのデフォルト白テクスチャをロードして PrimitiveObject に設定
-    uint32_t defaultWhiteHandle = TextureManager::GetInstance()->Load("white", commandList);
+    uint32_t defaultWhiteHandle = TextureManager::GetInstance()->Load("white");
     PrimitiveObject::SetDefaultTextureHandle(TextureManager::GetInstance()->GetGpuHandle(defaultWhiteHandle));
 
     // ディゾルブ用のマスクテクスチャをロードして設定
-    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/noise0.png", commandList);
+    uint32_t dissolveMaskHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/noise0.png");
     dxCommon_->SetDissolveMaskTexture(TextureManager::GetInstance()->GetGpuHandle(dissolveMaskHandle));
 
     // SpriteCommon の生成と初期化
@@ -111,7 +116,7 @@ void WindowsApplication::Initialize() {
     sceneManager_->SetSpriteCommon(spriteCommon_.get());
 
     // SceneManager初期化
-    sceneManager_->Initialize(commandList);
+    sceneManager_->Initialize();
 
     // ParticleCommon の生成と初期化
     particleCommon_ = std::make_unique<ParticleCommon>();
@@ -149,11 +154,15 @@ void WindowsApplication::Initialize() {
     isDebugCameraActive_ = false;
 #endif
 
-// Initialize() の中の #ifdef USE_IMGUI のブロックを以下に置き換え
 #ifdef USE_IMGUI
     editorManager_ = std::make_unique<EditorManager>();
-    // commandQueue は dxCommon から取得して渡します
+    // commandQueue を dxCommon から取得して渡す
     editorManager_->Initialize(hwnd, device, dxCommon_->GetCommandQueue());
+    editorManager_->LoadSceneConfig();
+    editorManager_->LoadLightingConfig(modelCommon_.get());
+#else
+    // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
+    modelCommon_->LoadLightingConfig();
 #endif
 
     // 音声の初期化
@@ -206,6 +215,11 @@ void WindowsApplication::Update() {
     }
 
 #ifdef USE_IMGUI
+    // エディタ表示/非表示の切り替え
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F1)) {
+        showImGui_ = !showImGui_;
+    }
+
     // ESCキーの処理 (閉じる / 最小化) - リリース版では無効化
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE)) {
         bool isShiftDown = KeyboardInput::GetInstance()->IsKeyDown(DIK_LSHIFT) || 
@@ -221,100 +235,116 @@ void WindowsApplication::Update() {
 #endif
 
 #ifdef USE_IMGUI
-    // 1. フレームの開始
-    editorManager_->BeginFrame();
+    if (showImGui_) {
+        // 1. フレームの開始
+        editorManager_->BeginFrame();
 
-    // 2. UIの更新（巨大なコードがこの1行に！）
-    // ※ activeCamera_ の書き換えができるようにアドレス(&)を渡します
-    editorManager_->UpdateUI(
-        modelCommon_.get(),
-        gameCamera_.get(),
-        debugCamera_.get(),
-        &activeCamera_,
-        isDebugCameraActive_,
-        dxCommon_->GetPostProcessSrvHandleGPU(),
-        sceneManager_.get());
-#endif
+        // 2. UIの更新（巨大なコードがこの1行に！）
+        // ※ activeCamera_ の書き換えができるようにアドレス(&)を渡します
+        editorManager_->UpdateUI(
+            modelCommon_.get(),
+            gameCamera_.get(),
+            debugCamera_.get(),
+            &activeCamera_,
+            isDebugCameraActive_,
+            dxCommon_->GetPostProcessSrvHandleGPU(),
+            sceneManager_.get());
 
-    // --- エディターの状態に応じて更新処理を切り替え ---
-#ifdef USE_IMGUI
-    static bool wasActive = false;
-    bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
-    bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
+        // --- エディターの状態に応じて更新処理を切り替え ---
+        static bool wasActive = false;
+        bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
+        bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
 
-    if (isCurrentlyActive && !isTakeoverPausing) {
-        if (!wasActive) {
-            // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する
-            if (sceneManager_->GetCurrentScene()) {
-                auto* map = sceneManager_->GetCurrentScene()->GetMapChip();
-                if (map) {
-                    map->SaveToFile("resources/json/MapData/temp_play_map.txt");
+        if (isCurrentlyActive && !isTakeoverPausing) {
+            if (!wasActive) {
+                // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する
+                if (sceneManager_->GetCurrentScene()) {
+                    auto* map = sceneManager_->GetCurrentScene()->GetMapChip();
+                    if (map) {
+                        map->SaveToFile("resources/json/MapData/temp_play_map.txt");
+                    }
                 }
             }
-        }
 
-        // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
-        sceneManager_->Update();
-        wasActive = true;
-    } else if (isTakeoverPausing) {
-        // カウントダウン中はシーンを更新しないが、wasActiveは維持する
-        wasActive = true; 
-        if (sceneManager_->GetCurrentScene()) {
-            sceneManager_->GetCurrentScene()->UpdateEditor();
-        }
-    } else {
-        if (wasActive) {
-            // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
-            
-            // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
-            std::string originalPath = GameScene::s_TargetMapFilePath;
-            GameScene::s_TargetMapFilePath = "resources/json/MapData/temp_play_map.txt";
-            
-            sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
-            
-            // シーン遷移を即時処理してマップをロードさせる
-            sceneManager_->ProcessSceneTransition();
-            
-            // パスを元に戻す（次回の正常なロードやSaveなどのため）
-            GameScene::s_TargetMapFilePath = originalPath;
-            
-            // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
-            editorManager_->ClearSelection();
-            
-            wasActive = false;
-        } else {
-            // 【停止中】トランスフォーム等の行列再計算のみ実行
+            // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
+            sceneManager_->Update();
+            wasActive = true;
+        } else if (isTakeoverPausing) {
+            // カウントダウン中はシーンを更新しないが、wasActiveは維持する
+            wasActive = true; 
             if (sceneManager_->GetCurrentScene()) {
                 sceneManager_->GetCurrentScene()->UpdateEditor();
             }
-            // シーン遷移のみ処理する（エディターからのシーン切替に対応）
-            sceneManager_->ProcessSceneTransition();
+        } else {
+            if (wasActive) {
+                // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
+                
+                // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
+                std::string originalPath = GameScene::s_TargetMapFilePath;
+                GameScene::s_TargetMapFilePath = "resources/json/MapData/temp_play_map.txt";
+                
+                sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
+                
+                // シーン遷移を即時処理してマップをロードさせる
+                sceneManager_->ProcessSceneTransition();
+                
+                // パスを元に戻す（次回の正常なロードやSaveなどのため）
+                GameScene::s_TargetMapFilePath = originalPath;
+                
+                // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
+                editorManager_->ClearSelection();
+                
+                wasActive = false;
+            } else {
+                // 【停止中】トランスフォーム等の行列再計算のみ実行
+                if (sceneManager_->GetCurrentScene()) {
+                    sceneManager_->GetCurrentScene()->UpdateEditor();
+                }
+                // シーン遷移のみ処理する（エディターからのシーン切替に対応）
+                sceneManager_->ProcessSceneTransition();
+            }
         }
-    }
-    
-    // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
-    gameCamera_->Update();
-
-    // カメラの切り替え（チェックボックスの状態を優先）
-    if (editorManager_->IsMapEditorVisible()) {
-        activeCamera_ = mapEditorCamera_.get();
-        isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
-        bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsBoundaryDragging();
-        mapEditorCamera_->Update(allowCameraInput);
-    } else if (editorManager_->UseDebugCamera()) {
-        activeCamera_ = debugCamera_.get();
-        isDebugCameraActive_ = true;
         
-        bool allowCameraInput = editorManager_->IsGameViewHovered() || !ImGui::GetIO().WantCaptureMouse;
-        debugCamera_->Update(allowCameraInput);
+        // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
+        gameCamera_->Update();
+
+        // カメラの切り替え（チェックボックスの状態を優先）
+        if (editorManager_->IsMapEditorVisible()) {
+            activeCamera_ = mapEditorCamera_.get();
+            isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
+            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
+            mapEditorCamera_->Update(allowCameraInput);
+        } else if (editorManager_->UseDebugCamera()) {
+            activeCamera_ = debugCamera_.get();
+            isDebugCameraActive_ = true;
+            
+            if (EditorManager::IsPlaying()) {
+                CameraManager::GetInstance()->SetCullingCameraInfo(gameCamera_->GetViewMatrix(), gameCamera_->GetProjectionMatrix());
+            } else {
+                CameraManager::GetInstance()->ClearCullingCameraInfo();
+            }
+            
+            bool allowCameraInput = editorManager_->IsGameViewHovered() || !ImGui::GetIO().WantCaptureMouse;
+            debugCamera_->Update(allowCameraInput);
+        } else {
+            activeCamera_ = gameCamera_.get();
+            isDebugCameraActive_ = false;
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
+        }
     } else {
+        // ImGui 非表示時は通常通りシーンとカメラを更新し、アクティブカメラをゲームカメラに強制する
+        sceneManager_->Update();
+        gameCamera_->Update();
         activeCamera_ = gameCamera_.get();
         isDebugCameraActive_ = false;
+        CameraManager::GetInstance()->ClearCullingCameraInfo();
     }
 #else
     // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
     gameCamera_->Update();
+    CameraManager::GetInstance()->ClearCullingCameraInfo();
 #endif
 
     // 現在のアクティブカメラの行列をViewProjectionに反映
@@ -335,11 +365,11 @@ void WindowsApplication::Draw() {
     ID3D12DescriptorHeap *descriptorHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
     commandList->SetDescriptorHeaps(1, descriptorHeaps);
 
-    modelCommon_->PreDraw(commandList);
+    modelCommon_->PreDraw();
     sceneManager_->Draw(viewProjection_->GetMatrix());
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
-    particleCommon_->PreDraw(commandList);
+    particleCommon_->PreDraw();
     // ------------------------------------
 
     // ★ ポストエフェクトを実行 (RenderTexture -> PostProcessTexture)
@@ -351,8 +381,13 @@ void WindowsApplication::Draw() {
     // --- ここから Swapchain への描画 ---
 
 #ifdef USE_IMGUI
-    // メインウィンドウのImGuiを描画
-    editorManager_->Draw(commandList);
+    if (showImGui_) {
+        // メインウィンドウのImGuiを描画
+        editorManager_->Draw();
+    } else {
+        // ImGui非表示時はゲーム画面を直接描画する
+        dxCommon_->DrawRenderTexture();
+    }
 #else
     // ImGuiを使わない場合はRenderTextureを直接画面に描画する
     dxCommon_->DrawRenderTexture();

@@ -32,9 +32,9 @@ void CoinEffect::Update(float deltaTime) {
     }
 }
 
-void CoinEffect::Draw(ID3D12GraphicsCommandList* commandList) {
+void CoinEffect::Draw() {
     for (auto& p : particles_) {
-        p.obj->Draw(commandList);
+        p.obj->Draw();
     }
 }
 

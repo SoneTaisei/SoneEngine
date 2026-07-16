@@ -10,43 +10,86 @@
 #include "Scene/SceneFactory.h"
 #include "GameScene.h"
 #include "Core/TimeManager.h"
+#include "Graphics/CameraManager.h"
+#include "Renderer/Renderer.h"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
+#include "Component/TransformComponent.h"
+#include "GameObject/Object3D.h"
 
-StageSelectScene::~StageSelectScene() {
+StageSelectScene::~StageSelectScene() {}
+
+void StageSelectScene::OnEnter(SceneManager* sceneManager) {
+    // シーン開始時に、可能なら前回の選択ステージなどを復元する
 }
 
-void StageSelectScene::Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
+void StageSelectScene::OnExit(SceneManager* sceneManager) {
+    // 次のシーンへ渡すデータをセットする（選択したステージのパスなど）
+    if (!stageConfigs_.empty() && currentStageIndex_ < stageConfigs_.size()) {
+        sceneManager->SetData("SelectedStagePath", std::string(stageConfigs_[currentStageIndex_].jsonPath));
+    }
+}
 
-    commandList_ = commandList;
+void StageSelectScene::Initialize() {
+
+    
 
     // Deviceの取得
     Microsoft::WRL::ComPtr<ID3D12Device> device;
-    commandList->GetDevice(IID_PPV_ARGS(&device));
+    device = DirectXCommon::GetInstance()->GetDevice();
 
     // 1. マネージャから素材を借りる（頂点バッファを重複させない！）
-    Model *skydomeModelResource = ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.gltf");
-    uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/monsterBall.png", commandList_);
-    D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH = TextureManager::GetInstance()->GetGpuHandle(skydomeIndex);
+    // Model *skydomeModelResource = ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.gltf");
+    // uint32_t skydomeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/monsterBall.png");
+    // D3D12_GPU_DESCRIPTOR_HANDLE skydomeTH...
 
-    // 2. 実体(Object3D)を作る
-    auto skydomeObject = std::make_unique<Object3D>();
-    skydomeObject->Initialize(device.Get(), skydomeModelResource);
+    // 2. GameObjectを作る
+    // auto skydomeObject = ...
+    // auto transform = ...
+    // transform->SetRotation({0.0f, 0.0f, 0.0f});
 
-    // 3. 個別の設定をする
-    skydomeObject->SetTextureHandle(skydomeTH);
-    skydomeObject->SetRotation({0.0f, 0.0f, 0.0f});
+    // 3. 描画コンポーネントのアタッチとテクスチャの設定
+    // auto skydomeRenderer = ...
+    // skydomeRenderer->Initialize...
+    // skydomeRenderer->SetTextureHandle...
+    // skydomeModelResource->SetTextureHandle...
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
-    skydomeObject->SetName("Skydome");
+    // gameObjects_.push_back(skydomeObject);
 
-    objects_.push_back(std::move(skydomeObject));
+    // AnimatedCubeの追加
+    Model* animatedCubeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/human", "walk.gltf");
+    Animation cubeAnimation = LoadAnimationFile("resources/Object/School/human", "walk.gltf");
+    
+    auto animatedCubeObject = std::make_shared<GameObject>("human_walk");
+    auto cubeTransform = animatedCubeObject->AddComponent<TransformComponent>();
+    // プログラムのロード時にスケール等を調整するようにしたため、ここでは完全に基準値を設定する
+    cubeTransform->SetPosition({0.0f, 0.0f, 0.0f});
+    cubeTransform->SetScale({1.0f, 1.0f, 1.0f});
+    cubeTransform->SetRotation({0.0f, 0.0f, 0.0f}); // ローテーションも完全に0にする
+    
+    uint32_t cubeTexIndex = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
+    D3D12_GPU_DESCRIPTOR_HANDLE cubeTH = TextureManager::GetInstance()->GetGpuHandle(cubeTexIndex);
+    
+    auto cubeRenderer = animatedCubeObject->AddComponent<MeshRendererComponent>();
+    cubeRenderer->Initialize(device.Get(), animatedCubeModel);
+    cubeRenderer->SetTextureHandle(cubeTH);
+    animatedCubeModel->SetTextureHandle(cubeTH); // Modelの内部テクスチャハンドルを上書き
+    
+    auto cubeAnimator = animatedCubeObject->AddComponent<AnimatorComponent>();
+    cubeAnimator->Initialize();
+    cubeAnimator->SetModelData(animatedCubeModel->GetModelData()); // Skeletonの生成
+    cubeAnimator->SetAnimation(cubeAnimation);
+    cubeAnimator->SetTargetNodeName("AnimatedCube");
+    cubeAnimator->Play();
+    
+    gameObjects_.push_back(animatedCubeObject);
 
     // Skyboxの初期化
-    uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/school/rostock_laage_airport_4k.dds", commandList_.Get());
+    uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxHandle);
 
@@ -64,8 +107,10 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
     // 一般的な設定：視野角0.45rad, アスペクト比16:9, 近平面0.1, 遠平面1000.0
     Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
 
+    CameraManager::GetInstance()->SetCameraInfo(cameraTransform_.translate, viewMatrix, projectionMatrix);
+
     // 全オブジェクトの更新（座標変換行列の計算など）
-    for (auto &object : objects_) {
+    for (auto &object : gameObjects_) {
         object->Update();
     }
 
@@ -104,33 +149,31 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
     if (modelCommon_) {
-        modelCommon_->PreDraw(commandList_.Get());
+        modelCommon_->PreDraw();
     }
 
     if (skybox_) {
-        skybox_->Draw(commandList_.Get());
+        skybox_->Draw();
         
         auto dxCommon = DirectXCommon::GetInstance();
-        commandList_.Get()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-        commandList_.Get()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
+        DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+        DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
         if (modelCommon_) {
-            modelCommon_->PreDraw(commandList_.Get());
+            modelCommon_->PreDraw();
         }
     }
 
     // 各オブジェクトに「自分の行列で描画して！」と頼む
-    for (auto &object : objects_) {
-        object->Draw(commandList_.Get());
+    for (auto &object : gameObjects_) {
+        object->Draw();
     }
+
+    Renderer::GetInstance()->RenderComponents();
 }
 
 std::vector<Object3D *> StageSelectScene::GetObjects() {
-    std::vector<Object3D *> result;
-    for (auto &obj : objects_) {
-        result.push_back(obj.get());
-    }
-    return result;
+    return {};
 }
 
 void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {

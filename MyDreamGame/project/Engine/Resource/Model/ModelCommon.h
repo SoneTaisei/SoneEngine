@@ -14,7 +14,7 @@ public:
     void Initialize(ID3D12Device *device);
 
     // 描画前処理（CommandListを受け取る）
-    void PreDraw(ID3D12GraphicsCommandList *commandList);
+    void PreDraw();
 
     // 登録されている全モデルを描画する
     // モデルはViewProjection行列を必要とするので引数で受け取る
@@ -38,7 +38,13 @@ public:
     PointLight *GetPointLight() { return mappedPointLight_; }
     SpotLight *GetSpotLight() { return mappedSpotLight_; }
     CameraForGPU *GetCamera() { return mappedCamera_; }
+    
+    D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const { return directionalLightResource_->GetGPUVirtualAddress(); }
+    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightGPUAddress() const { return pointLightResource_->GetGPUVirtualAddress(); }
+    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_->GetGPUVirtualAddress(); }
 
+    // 設定ファイルからの読み込み
+    void LoadLightingConfig();
 
 private:
     ID3D12Device *device_ = nullptr;

@@ -13,7 +13,10 @@ public:
     void Update();
 
     // 描画（ルールは内部でDirectXCommonから取得するため引数はスッキリ！）
-    void Draw(ID3D12GraphicsCommandList *commandList);
+    void Draw();
+
+    // 色（明るさなど）を設定する
+    void SetColor(const Vector4& color) { if(mappedMaterial_) mappedMaterial_->color = color; }
 
 private:
     uint32_t textureHandle_ = 0;

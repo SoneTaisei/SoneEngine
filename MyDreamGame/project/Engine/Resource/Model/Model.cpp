@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include <cassert>
 
 // 必要に応じてextern宣言など
@@ -80,17 +81,18 @@ void Model::CreateBuffers() {
     indexResource_->Unmap(0, nullptr);
 }
 
-void Model::Draw() {
-    ID3D12GraphicsCommandList *commandList = modelCommon_->GetCommandList();
+void Model::Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView) {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
 
-    // 行列のセット（SetGraphicsRootConstantBufferView）は、
-    // Object3D側で呼ぶようにするか、引数でアドレスを受け取る形にします。
-
-    // テクスチャと頂点データのセット
     commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
-    commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+    
+    if (weightBufferView != nullptr) {
+        D3D12_VERTEX_BUFFER_VIEW views[] = { vertexBufferView_, *weightBufferView };
+        commandList->IASetVertexBuffers(0, 2, views);
+    } else {
+        commandList->IASetVertexBuffers(0, 1, &vertexBufferView_);
+    }
+    
     commandList->IASetIndexBuffer(&indexBufferView_);
-
-    // 描画実行
     commandList->DrawIndexedInstanced(UINT(modelData_.indices.size()), 1, 0, 0, 0);
 }

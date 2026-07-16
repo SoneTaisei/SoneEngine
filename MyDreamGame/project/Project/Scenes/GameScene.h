@@ -3,13 +3,15 @@
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
 #include "Effect/CoinEffect.h"
+#include "Effect/CylinderEffect.h"
+#include "Effect/RingEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <d3d12.h>
 #include <memory>
 
 // 2Dゲーム用クラス
-#include "Game2D/Player2D.h"
+#include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 
 class GameCamera;
@@ -28,7 +30,9 @@ class GameScene : public IScene {
 public:
     static std::string s_TargetMapFilePath;
 
-    void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
+    void Initialize() override;
+    void OnEnter(SceneManager *sceneManager) override;
+    void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
@@ -48,6 +52,8 @@ private:
     // ---------------------------------------------------
     // パーティクル管理クラス
     std::unique_ptr<CoinEffect> coinEffect_;
+    std::unique_ptr<CylinderEffect> cylinderEffect_;
+    std::unique_ptr<RingEffect> ringEffect_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();
@@ -55,8 +61,8 @@ private:
 
     // ---------------------------------------------------
     // 2Dゲーム用オブジェクト (Game_develop)
-    // ---------------------------------------------------
-    std::unique_ptr<Player2D> player_;
+    std::unique_ptr<GameObject> playerObj_;
+    Player2D* player_ = nullptr;
     std::unique_ptr<MapChip2D> map_;
 
     int previousScore_ = 0; // コインエフェクト発生用
@@ -73,7 +79,7 @@ private:
     // 共通システム
     // ---------------------------------------------------
     // コマンドリストを覚えておくための変数
-    ID3D12GraphicsCommandList *commandList_ = nullptr;
+    
 
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;
