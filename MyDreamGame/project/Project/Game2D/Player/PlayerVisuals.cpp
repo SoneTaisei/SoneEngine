@@ -1,5 +1,6 @@
-﻿#include "Graphics/TextureManager.h"
+#include "Graphics/TextureManager.h"
 #include "PlayerVisuals.h"
+#include "Core/TimeManager.h"
 #include <random>
 #include <cmath>
 
@@ -33,6 +34,8 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
+    visualTime_ += deltaTime;
+    
     if (primitiveObj_) {
         primitiveObj_->SetTranslation(state.position_);
         
@@ -54,7 +57,23 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
             }
         } else {
-            primitiveObj_->GetMaterial().color = params.colorNormal_;
+            if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
+                float blink = std::sin(visualTime_ * 40.0f);
+                if (blink > 0.0f) {
+                    primitiveObj_->GetMaterial().color = params.colorTired_;
+                } else {
+                    primitiveObj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                }
+            } else if (state.stamina_ <= params.maxStamina_ * 0.5f) {
+                float blink = std::sin(visualTime_ * 20.0f);
+                if (blink > 0.0f) {
+                    primitiveObj_->GetMaterial().color = params.colorTired_;
+                } else {
+                    primitiveObj_->GetMaterial().color = params.colorNormal_;
+                }
+            } else {
+                primitiveObj_->GetMaterial().color = params.colorNormal_;
+            }
             primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
             primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
         }

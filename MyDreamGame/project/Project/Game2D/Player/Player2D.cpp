@@ -309,6 +309,12 @@ void Player2D::DisplayImGui() {
 
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);
         ImGui::DragFloat3("速度", &state_.velocity_.x, 0.1f);
+        
+        ImGui::Text("現在のスタミナ: %.1f / %.1f", state_.stamina_, params_.maxStamina_);
+        if (state_.isExhausted_) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "(疲労状態)");
+        }
 
         if (ImGui::TreeNode("基本移動")) {
             ImGui::DragFloat("移動速度", &params_.moveSpeed_, 0.1f, 0.0f, 30.0f);
@@ -333,6 +339,14 @@ void Player2D::DisplayImGui() {
             ImGui::TreePop();
         }
 
+        if (ImGui::TreeNode("スタミナ (Stamina)")) {
+            ImGui::DragFloat("最大スタミナ", &params_.maxStamina_, 1.0f, 0.0f, 500.0f);
+            ImGui::DragFloat("壁張り付き時消費量/秒", &params_.staminaConsumeCling_, 0.5f, 0.0f, 100.0f);
+            ImGui::DragFloat("壁登り時消費量/秒", &params_.staminaConsumeClimb_, 0.5f, 0.0f, 100.0f);
+            ImGui::DragFloat("壁ジャンプ時消費量", &params_.staminaConsumeJump_, 0.5f, 0.0f, 100.0f);
+            ImGui::TreePop();
+        }
+
         if (ImGui::TreeNode("演出・ゲームルール")) {
             ImGui::DragFloat("死亡演出時間", &params_.deathDuration_, 0.01f, 0.0f, 5.0f);
             ImGui::DragFloat("リスポーン時間", &params_.respawnDuration_, 0.01f, 0.0f, 5.0f);
@@ -343,6 +357,7 @@ void Player2D::DisplayImGui() {
         if (ImGui::TreeNode("色")) {
             ImGui::ColorEdit4("通常カラー", &params_.colorNormal_.x);
             ImGui::ColorEdit4("ダッシュカラー", &params_.colorDashed_.x);
+            ImGui::ColorEdit4("疲労カラー", &params_.colorTired_.x);
             ImGui::TreePop();
         }
 

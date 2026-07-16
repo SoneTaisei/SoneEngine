@@ -69,7 +69,15 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
 }
 
 void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime) {
-    
+    if (state_.wallClingReleaseTimer_ > 0.0f) {
+        state_.wallClingReleaseTimer_ -= deltaTime;
+    }
+
+    if (state_.isOnGround_) {
+        state_.stamina_ = params_.maxStamina_;
+        state_.isExhausted_ = false;
+    }
+
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
 
@@ -100,7 +108,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
 
         // 壁掴み（Kキー）を押している場合、前フレームで壁に接触していれば、その方向への仮想入力を維持する
         // これにより方向キーを離しても張り付き続ける
-        if (!state_.isOnGround_ && input_.isClingHeld) {
+        if (!state_.isOnGround_ && input_.isClingHeld && !state_.isExhausted_) {
             if (state_.isTouchingWallRight_) {
                 inputRight = true;
                 inputLeft = false; // 逆方向への入力を無視して壁から降りないようにする
@@ -158,12 +166,16 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             state_.velocity_.x = startVelX + (endVelX - startVelX) * t;
         }
 
-        // 壁ずり落ち / 壁張り付きの判定 (空中で、落下中か静止中の場合のみ)
-        if (!state_.isOnGround_ && state_.velocity_.y <= 0.0f) {
-            if ((state_.isTouchingWallRight_ && inputRight) || (state_.isTouchingWallLeft_ && inputLeft)) {
+        // 壁ずり落ち / 壁張り付きの判定 (壁に向かって入力している場合)
+        if (!state_.isOnGround_ && state_.wallClingReleaseTimer_ <= 0.0f) {
+            bool tryingToCling = (input_.isClingHeld && !state_.isExhausted_);
+            bool touchingWall = ((state_.isTouchingWallRight_ && inputRight) || (state_.isTouchingWallLeft_ && inputLeft));
+            
+            // 落下中、または壁をつかもうとしている時は判定を入れる
+            if (touchingWall && (state_.velocity_.y <= 0.0f || tryingToCling)) {
                 state_.isWallSliding_ = true;
                 state_.externalVelocityX_ = 0.0f;
-                if (input_.isClingHeld) {
+                if (tryingToCling) {
                     state_.isWallClinging_ = true;
                 }
             }
@@ -190,7 +202,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 visuals_.SpawnJumpDust({state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f}, 0.0f);
             } else if (state_.isTouchingWallRight_) {
                 // 壁張り付き状態（Control入力がある場合）
-                bool isPressingCling = input_.isClingHeld;
+                bool isPressingCling = input_.isClingHeld && !state_.isExhausted_;
                 // 壁掴み中で逆方向(左)に入力がある場合は壁キック。それ以外は真上ジャンプ
                 bool wantWallKick = (isPressingCling && input_.moveX < 0.0f) || !isPressingCling;
 
@@ -198,6 +210,13 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     // 壁張り付き中は真上ジャンプ
                     state_.velocity_.x = 0.0f;
                     state_.velocity_.y = params_.jumpPower_;
+                    
+                    state_.stamina_ -= params_.staminaConsumeJump_;
+                    if (state_.stamina_ <= 0.0f) {
+                        state_.stamina_ = 0.0f;
+                        state_.isExhausted_ = true;
+                    }
+                    state_.wallClingReleaseTimer_ = 0.15f;
                 } else {
                     // 右壁キック（左へ跳ね返る）
                     state_.velocity_.x = -params_.wallJumpPower_.x;
@@ -208,6 +227,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     
                     state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
                     state_.lockedDirectionX_ = 1.0f; // 右方向への入力をロック
+                    state_.wallClingReleaseTimer_ = 0.15f;
                 }
                 
                 // 慣性を加算 (真上ジャンプ・壁キック共通)
@@ -224,7 +244,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isWallClinging_ = false;
             } else if (state_.isTouchingWallLeft_) {
                 // 壁張り付き状態（Control入力がある場合）
-                bool isPressingCling = input_.isClingHeld;
+                bool isPressingCling = input_.isClingHeld && !state_.isExhausted_;
                 // 壁掴み中で逆方向(右)に入力がある場合は壁キック。それ以外は真上ジャンプ
                 bool wantWallKick = (isPressingCling && input_.moveX > 0.0f) || !isPressingCling;
 
@@ -232,6 +252,13 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     // 壁張り付き中は真上ジャンプ
                     state_.velocity_.x = 0.0f;
                     state_.velocity_.y = params_.jumpPower_;
+                    
+                    state_.stamina_ -= params_.staminaConsumeJump_;
+                    if (state_.stamina_ <= 0.0f) {
+                        state_.stamina_ = 0.0f;
+                        state_.isExhausted_ = true;
+                    }
+                    state_.wallClingReleaseTimer_ = 0.15f;
                 } else {
                     // 左壁キック（右へ跳ね返る）
                     state_.velocity_.x = params_.wallJumpPower_.x;
@@ -242,6 +269,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     
                     state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
                     state_.lockedDirectionX_ = -1.0f; // 左方向への入力をロック
+                    state_.wallClingReleaseTimer_ = 0.15f;
                 }
                 
                 // 慣性を加算 (真上ジャンプ・壁キック共通)
@@ -297,13 +325,28 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
 void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params_, float deltaTime) {
     if (state_.isDashing_) return; // ダッシュ中は重力を無視
 
-    if (state_.isWallClinging_) {
+    if (state_.isWallClinging_ && !state_.isExhausted_) {
         KeyboardInput* keyboard = KeyboardInput::GetInstance();
         float moveY = 0.0f;
         if (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) moveY += 1.0f;
         if (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) moveY -= 1.0f;
-        state_.velocity_.y = moveY * params_.wallClimbSpeed_; // Wで上、Sで下へ移動
-        return;
+        
+        if (moveY > 0.0f) {
+            state_.stamina_ -= params_.staminaConsumeClimb_ * deltaTime;
+        } else {
+            state_.stamina_ -= params_.staminaConsumeCling_ * deltaTime;
+        }
+        
+        if (state_.stamina_ <= 0.0f) {
+            state_.stamina_ = 0.0f;
+            state_.isExhausted_ = true;
+            state_.isWallClinging_ = false;
+        }
+        
+        if (state_.isWallClinging_) {
+            state_.velocity_.y = moveY * params_.wallClimbSpeed_; // Wで上、Sで下へ移動
+            return;
+        }
     }
 
     state_.velocity_.y += params_.gravity_ * deltaTime;
@@ -311,7 +354,11 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
     // 最大落下速度を制限
     float currentMaxFallSpeed = params_.maxFallSpeed_;
     if (state_.isWallSliding_ && state_.velocity_.y < 0.0f) {
-        currentMaxFallSpeed = params_.wallSlideSpeed_; // ずり落ち中はゆっくり落下
+        if (state_.isExhausted_) {
+            currentMaxFallSpeed = params_.wallSlideSpeed_ * 3.0f; // 疲労時は速くずり落ちる
+        } else {
+            currentMaxFallSpeed = params_.wallSlideSpeed_; // ずり落ち中はゆっくり落下
+        }
     }
 
     if (state_.velocity_.y < currentMaxFallSpeed) {

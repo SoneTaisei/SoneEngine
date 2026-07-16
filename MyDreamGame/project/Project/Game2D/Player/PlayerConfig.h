@@ -24,6 +24,12 @@ struct PlayerParams {
     float respawnDuration_ = 0.5f;
     float goalWaitTime_ = 2.0f;
     float runDustInterval_ = 0.1f;
+    
+    float maxStamina_ = 110.0f;
+    float staminaConsumeCling_ = 10.0f;
+    float staminaConsumeClimb_ = 45.0f;
+    float staminaConsumeJump_ = 27.5f;
+    Vector4 colorTired_ = { 0.8f, 0.2f, 0.2f, 1.0f };
 };
 
 class PlayerConfig {

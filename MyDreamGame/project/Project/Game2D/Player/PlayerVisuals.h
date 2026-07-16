@@ -61,5 +61,7 @@ private:
     std::vector<ConfettiParticle> confettiParticles_;
     std::vector<DashRingParticle> dashRingParticles_;
 
+    float visualTime_ = 0.0f;
+
     float EaseInElastic(float t) const;
 };

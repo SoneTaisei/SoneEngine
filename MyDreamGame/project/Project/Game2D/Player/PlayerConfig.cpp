@@ -39,6 +39,12 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["goalWaitTime_"] = params.goalWaitTime_;
         j["runDustInterval_"] = params.runDustInterval_;
         
+        j["maxStamina_"] = params.maxStamina_;
+        j["staminaConsumeCling_"] = params.staminaConsumeCling_;
+        j["staminaConsumeClimb_"] = params.staminaConsumeClimb_;
+        j["staminaConsumeJump_"] = params.staminaConsumeJump_;
+        j["colorTired_"] = { params.colorTired_.x, params.colorTired_.y, params.colorTired_.z, params.colorTired_.w };
+        
         std::ofstream file(filepath);
         if (file.is_open()) {
             file << j.dump(4);
@@ -100,6 +106,18 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         if (j.contains("respawnDuration_")) params.respawnDuration_ = j["respawnDuration_"];
         if (j.contains("goalWaitTime_")) params.goalWaitTime_ = j["goalWaitTime_"];
         if (j.contains("runDustInterval_")) params.runDustInterval_ = j["runDustInterval_"];
+        
+        if (j.contains("maxStamina_")) params.maxStamina_ = j["maxStamina_"];
+        if (j.contains("staminaConsumeCling_")) params.staminaConsumeCling_ = j["staminaConsumeCling_"];
+        if (j.contains("staminaConsumeClimb_")) params.staminaConsumeClimb_ = j["staminaConsumeClimb_"];
+        if (j.contains("staminaConsumeJump_")) params.staminaConsumeJump_ = j["staminaConsumeJump_"];
+        
+        if (j.contains("colorTired_")) {
+            params.colorTired_.x = j["colorTired_"][0];
+            params.colorTired_.y = j["colorTired_"][1];
+            params.colorTired_.z = j["colorTired_"][2];
+            params.colorTired_.w = j["colorTired_"][3];
+        }
         
         std::cout << "Player parameters loaded from " << filepath << std::endl;
     } catch (const std::exception& e) {

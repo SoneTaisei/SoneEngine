@@ -40,4 +40,6 @@ struct PlayerState {
     float stuckTimer_ = 0.0f;
     Vector3 prevPositionForBugCheck_ = { 0.0f, 0.0f, 0.0f };
     float inWallTimer_ = 0.0f;
+    float stamina_ = 110.0f;
+    bool isExhausted_ = false;
 };
