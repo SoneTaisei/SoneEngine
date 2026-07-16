@@ -77,7 +77,11 @@ void ReplayManager::ApplyMacro(int startFrame, const ReplayMacro& macro) {
     int currentFrameIdx = startFrame;
     for (const auto& block : macro.blocks) {
         for (int i = 0; i < block.duration; ++i) {
-            if (currentFrameIdx >= currentReplay_.totalFrames) break;
+            if (currentFrameIdx >= currentReplay_.totalFrames) {
+                // 総フレーム数を超える場合は末尾のフレームをコピーして拡張
+                currentReplay_.frames.push_back(currentReplay_.frames.back());
+                currentReplay_.totalFrames++;
+            }
 
             // マクロのキー状態を適用
             // "LRJDCWS" 順
@@ -96,6 +100,13 @@ void ReplayManager::ApplyMacro(int startFrame, const ReplayMacro& macro) {
 
     // 変更をMMLに反映
     RebuildMmlFromFrames(currentReplay_);
+    
+    // 適用履歴を記録
+    AppliedMacro am;
+    am.name = macro.name;
+    am.startFrame = startFrame;
+    am.duration = currentFrameIdx - startFrame;
+    currentReplay_.appliedMacros.push_back(am);
 }
 
 void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraInitPos, const std::string& mapDataStr) {
@@ -163,6 +174,8 @@ void ReplayManager::StopRecord() {
     if (!isRecording_) return;
     isRecording_ = false;
 
+    bool wasMacroRecording = isRecordingMacro_;
+
     // マクロ録画予約されていた場合、録画した入力データをマクロとして抽出
     if (isRecordingMacro_ && !temporaryRecordedFrames_.empty()) {
         ReplayMacro rm;
@@ -201,6 +214,11 @@ void ReplayManager::StopRecord() {
         
         AddMacro(rm);
         isRecordingMacro_ = false;
+    }
+
+    if (wasMacroRecording) {
+        temporaryRecordedFrames_.clear();
+        return;
     }
 
     // 録画されたフレーム数が極端に短い場合は履歴に登録しない
@@ -704,6 +722,15 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
         }
         ofs << std::endl;
     }
+    
+    // 適用済みマクロ (AppliedMacros)
+    if (!data.appliedMacros.empty()) {
+        ofs << "[AppliedMacros]" << std::endl;
+        for (const auto& m : data.appliedMacros) {
+            ofs << m.name << "," << m.startFrame << "," << m.duration << std::endl;
+        }
+        ofs << std::endl;
+    }
 
     // 1フレームずつの状態データ (STR)
     // フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z
@@ -789,6 +816,16 @@ bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outDat
                 j.endFrame = std::stoi(p3);
                 j.maxJitter = std::stoi(p4);
                 outData.jitters.push_back(j);
+            }
+        } else if (currentSection == "AppliedMacros") {
+            std::stringstream amss(line);
+            std::string p1, p2, p3;
+            if (std::getline(amss, p1, ',') && std::getline(amss, p2, ',') && std::getline(amss, p3)) {
+                AppliedMacro m;
+                m.name = p1;
+                m.startFrame = std::stoi(p2);
+                m.duration = std::stoi(p3);
+                outData.appliedMacros.push_back(m);
             }
         } else if (currentSection == "STR") {
             // 新フォーマット: F0000|PlayerX,Y,Z|CamX,CamY,CamZ|LRJDC|R,G,B,A|ScaleX,Y,Z|RotX,Y,Z

@@ -29,6 +29,15 @@ struct JitterSetting {
 };
 
 /// <summary>
+/// タイムライン上に適用されたマクロの記録
+/// </summary>
+struct AppliedMacro {
+    std::string name;
+    int startFrame;
+    int duration;
+};
+
+/// <summary>
 /// 1プレイ全体のリプレイデータ
 /// </summary>
 struct ReplayData {
@@ -43,6 +52,7 @@ struct ReplayData {
     std::string mmlTracks[5];                 // MMLに圧縮された5つのキー状態トラック
                                               // T0: 左右移動(L,R,N), T1: ジャンプ(J,N), T2: ダッシュ(D,N), T3: 壁張り付き(C,N), T4: 上下移動(W,S,N)
     std::vector<JitterSetting> jitters;       // 動的ブレ設定リスト
+    std::vector<AppliedMacro> appliedMacros;  // 適用されたマクロの記録
     
     int id = -1;                              // このリプレイデータの一意なID
     int parentId = -1;                        // 派生元のリプレイのID（-1ならルート）
@@ -119,7 +129,7 @@ public:
 
     // マクロ録画用
     void ReserveMacroRecording(const std::string& name) { isRecordingMacro_ = true; macroRecordingName_ = name; }
-    void CancelMacroRecording() { isRecordingMacro_ = false; macroRecordingName_ = ""; }
+    void CancelMacroRecording() { isRecordingMacro_ = false; macroRecordingName_ = ""; temporaryRecordedFrames_.clear(); }
     bool IsRecordingMacro() const { return isRecordingMacro_; }
 
     // ゲッター・セッター

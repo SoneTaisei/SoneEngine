@@ -758,6 +758,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     }
                                 }
                                 ImGui::EndCombo();
+
                             }
 
                             if (ImGui::BeginCombo("テクスチャ (Texture)", targetDef->textureName.empty() ? "なし (None)" : targetDef->textureName.c_str())) {
@@ -2431,525 +2432,313 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::EndTabItem();
                 }
 
-                // --- タブ3：タイムラインエディタ (TAS) ---
+
+                // --- タブ3：タイムラインエディタ (動画編集ソフト風マルチトラックUI) ---
                 if (ImGui::BeginTabItem("タイムラインエディタ")) {
-                    static char saveNameBuf[64] = "edited_replay.mml";
-                    static int rangeStart = -1;
-                    static int rangeEnd = -1;
-                    static bool isSelecting = false;
-                    
                     auto& activeReplay = replayMgr->GetCurrentReplay();
                     if (activeReplay.totalFrames == 0) {
                         ImGui::Text("編集対象のリプレイデータがロードされていません。");
                         ImGui::Text("履歴から再生するか、ファイルをロード再生してください。");
                     } else {
-                        ImGui::Text("リプレイ編集 (タイムライン / TAS)");
+                        ImGui::Text("リプレイ編集 (マルチトラック・タイムライン)");
                         ImGui::Text("総フレーム: %d | 録画日時: %s", activeReplay.totalFrames, activeReplay.dateStr.c_str());
                         ImGui::Spacing();
 
-                        ImGui::Text("編集後保存名:");
+                        // --- 保存まわりのUI（既存のものを維持） ---
+                        static char saveNameBuf[64] = "edited_replay.mml";
+                        ImGui::Text("編集後保存名:"); ImGui::SameLine();
                         ImGui::SetNextItemWidth(200.0f);
-                        ImGui::InputText("##SaveName", saveNameBuf, IM_ARRAYSIZE(saveNameBuf));
-                        ImGui::SameLine();
+                        ImGui::InputText("##SaveName", saveNameBuf, IM_ARRAYSIZE(saveNameBuf)); ImGui::SameLine();
                         if (ImGui::Button("編集内容を保存 (MML+STR)")) {
                             replayMgr->SaveToFile(activeReplay, saveNameBuf);
                         }
                         ImGui::SameLine();
                         ImGui::TextDisabled("※編集内容は自動保存されます");
-
-                        ImGui::Spacing();
                         ImGui::Separator();
-                        ImGui::Text("▼ カスタムシークバー (右ドラッグで範囲選択 / Ctrl+ホイールでズーム)");
-                        
-                        // 1. 表示するキーの選択
-                        static int selectedKeyToVisualize = 0; // Default to Left
-                        const char* keyNames[] = { "Left (L)", "Right (R)", "Jump (J)", "Dash (D)", "Cling (C)", "Up (W)", "Down (S)" };
-                        ImGui::Combo("対象キー", &selectedKeyToVisualize, keyNames, IM_ARRAYSIZE(keyNames));
-                        
+
+                        // --- タイムライン制御用の静的設定 ---
                         static float seekbarZoom = 1.0f;
+                        const float baseFrameWidth = 10.0f; // 1フレームあたりの基本ピクセル幅
+                        float frameWidth = baseFrameWidth * seekbarZoom;
+                        int totalFrames = activeReplay.totalFrames;
+                        float timelineWidth = totalFrames * frameWidth;
+                        float laneHeight = 30.0f; // 各トラックの縦幅
 
-                        // Ctrl + ホイールでズーム
-                        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl) {
-                            float wheel = ImGui::GetIO().MouseWheel;
-                            if (wheel != 0.0f) {
-                                // ズーム倍率の変更
-                                float oldZoom = seekbarZoom;
-                                seekbarZoom += wheel * 0.1f * seekbarZoom; // 倍率に応じたズーム速度
-                                if (seekbarZoom < 0.1f) seekbarZoom = 0.1f;
-                                if (seekbarZoom > 100.0f) seekbarZoom = 100.0f;
-                            }
-                        }
-
-                        // 選択されたブロックの保持用（スコープを外に出す）
+                        // 選択中のブロック情報
                         static int selectedBlockStart = -1;
                         static int selectedBlockEnd = -1;
                         static int selectedBlockKey = -1;
+                        static bool isSelecting = false;
+                        static int rangeStart = -1;
+                        static int rangeEnd = -1;
 
-                        int k = selectedKeyToVisualize;
-                        if (selectedBlockKey != k) {
-                            selectedBlockStart = -1;
-                            selectedBlockEnd = -1;
-                            selectedBlockKey = k;
+                        // Ctrl + マウスホイールでタイムライン全体の拡大縮小（ズーム）
+                        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl) {
+                            float wheel = ImGui::GetIO().MouseWheel;
+                            if (wheel != 0.0f) {
+                                seekbarZoom += wheel * 0.1f * seekbarZoom;
+                                seekbarZoom = (std::clamp)(seekbarZoom, 0.2f, 50.0f);
+                            }
                         }
 
-                        // (3) 範囲選択ロジック用の状態
+                        ImGui::TextDisabled("💡 操作方法: [左ドラッグ] シーク / [右ドラッグ] キーON範囲選択 / [マクロタブからドラッグ＆ドロップ] 配置");
 
-
-                        ImGui::BeginChild("SeekbarScrollRegion", ImVec2(0, 60), false, ImGuiWindowFlags_HorizontalScrollbar);
-                        // カスタムシークバー描画
+                        // スクロール可能な領域を作成（横スクロールバーを表示）
+                        // トラック数 (マクロトラック + キー5本) = 計6レーン分の高さを確保
+                        ImGui::BeginChild("TimelineScrollRegion", ImVec2(0, laneHeight * 6 + 40), true, ImGuiWindowFlags_HorizontalScrollbar);
+                        
                         ImVec2 p_min = ImGui::GetCursorScreenPos();
-                        // ImGui::GetWindowWidth() は BeginChild 内だと利用可能な幅（スクロールなし時）
-                        float baseWidth = ImGui::GetWindowWidth(); 
-                        float width = baseWidth * seekbarZoom;
-                        if (width < 200.0f) width = 200.0f;
-                        float height = 40.0f;
-                        ImVec2 p_max = ImVec2(p_min.x + width, p_min.y + height);
-
-                        ImGui::InvisibleButton("##CustomSeekbar", ImVec2(width, height));
-                        bool isActive = ImGui::IsItemActive(); 
-                        bool isHovered = ImGui::IsItemHovered();
-
+                        ImVec2 p_max = ImVec2(p_min.x + timelineWidth, p_min.y + laneHeight * 6);
                         ImDrawList* drawList = ImGui::GetWindowDrawList();
-                        
-                        int totalFrames = activeReplay.totalFrames;
-                        if (totalFrames < 1) totalFrames = 1;
-                        int maxFrame = totalFrames - 1;
 
-                        // (1) 背景
-                        drawList->AddRectFilled(p_min, p_max, IM_COL32(50, 50, 50, 255), 4.0f);
+                        // タイムライン全体のベースとなる見えないボタン（イベント反応用）
+                        ImGui::InvisibleButton("##MultiTrackTimelineCanvas", ImVec2(timelineWidth, laneHeight * 6));
+                        bool isTimelineActive = ImGui::IsItemActive();
+                        bool isTimelineHovered = ImGui::IsItemHovered();
 
-                        // (1.5) グリッド線の描画
-                        float frameWidth = width / totalFrames;
-                        float scrollX = ImGui::GetScrollX();
-                        float viewWidth = ImGui::GetWindowWidth();
-                        
-                        int startIdx = (int)(scrollX / width * totalFrames);
-                        int endIdx = (int)((scrollX + viewWidth) / width * totalFrames) + 1;
-                        if (startIdx < 0) startIdx = 0;
-                        if (endIdx > totalFrames) endIdx = totalFrames;
-
-                        if (frameWidth > 2.0f) {
-                            // 1フレームの幅が十分あるときは1フレームごとに描画
-                            for (int i = startIdx; i <= endIdx; ++i) {
-                                float x = p_min.x + (width * i / totalFrames);
-                                ImU32 color;
-                                if (i % 60 == 0) color = IM_COL32(150, 150, 150, 150);
-                                else if (i % 10 == 0) color = IM_COL32(100, 100, 100, 100);
-                                else color = IM_COL32(70, 70, 70, 100); // 目立ちすぎない色
-                                drawList->AddLine(ImVec2(x, p_min.y), ImVec2(x, p_max.y), color, 1.0f);
-                            }
-                        } else if (frameWidth > 0.1f) {
-                            // 縮小されているときは10フレームごとに描画
-                            for (int i = startIdx - (startIdx % 10); i <= endIdx; i += 10) {
-                                if (i < 0) continue;
-                                float x = p_min.x + (width * i / totalFrames);
-                                ImU32 color;
-                                if (i % 60 == 0) color = IM_COL32(150, 150, 150, 150);
-                                else color = IM_COL32(100, 100, 100, 100);
-                                drawList->AddLine(ImVec2(x, p_min.y), ImVec2(x, p_max.y), color, 1.0f);
-                            }
-                        }
-
-                        // (2) キーONの区間を描画
-                        char target = (k==0)?'L':(k==1)?'R':(k==2)?'J':(k==3)?'D':(k==4)?'C':(k==5)?'W':'S';
-                        int runStart = -1;
-                        for (int i = 0; i <= maxFrame; ++i) {
-                            bool on = (activeReplay.frames[i].keys[k] == target);
-                            if (on && runStart == -1) runStart = i;
-                            else if (!on && runStart != -1) {
-                                int runEnd = i - 1;
-                                float x1 = p_min.x + (width * runStart / totalFrames);
-                                float x2 = p_min.x + (width * i / totalFrames);
-                                
-                                bool isThisSelected = (selectedBlockStart == runStart && selectedBlockEnd == runEnd && selectedBlockKey == k);
-                                
-                                // ブロックのクリック判定 (左クリックで選択)
-                                if (isHovered && ImGui::IsMouseClicked(0)) {
-                                    float mouseX = ImGui::GetIO().MousePos.x;
-                                    float mouseY = ImGui::GetIO().MousePos.y;
-                                    if (mouseX >= x1 && mouseX <= x2 && mouseY >= p_min.y && mouseY <= p_max.y) {
-                                        selectedBlockStart = runStart;
-                                        selectedBlockEnd = runEnd;
-                                        isThisSelected = true;
-                                    }
-                                }
-
-                                int jitterAmt = 0;
-                                for (const auto& j : activeReplay.jitters) {
-                                    if (j.keyIdx == k && j.startFrame == runStart && j.endFrame == runEnd && j.maxJitter > 0) {
-                                        jitterAmt = j.maxJitter;
-                                        break;
-                                    }
-                                }
-
-                                // ブレ幅の範囲を青色で描画
-                                if (jitterAmt > 0) {
-                                    float jx1 = p_min.x + (width * (std::max)(0, runStart - jitterAmt) / totalFrames);
-                                    float jx2 = p_min.x + (width * (std::min)(totalFrames, runEnd + 1 + jitterAmt) / totalFrames);
-                                    drawList->AddRectFilled(ImVec2(jx1, p_min.y + 1.0f), ImVec2(jx2, p_max.y - 1.0f), IM_COL32(50, 150, 255, 150));
-                                }
-
-                                if (isThisSelected) {
-                                    drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 0, 255));
-                                    drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 255, 255, 255), 0.0f, 0, 2.0f);
-                                } else {
-                                    // ブレ設定がされているブロックは色を少し変える
-                                    if (jitterAmt > 0) {
-                                        drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(255, 180, 0, 200));
-                                    } else {
-                                        drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
-                                    }
-                                }
-
-                                runStart = -1;
-                            }
-                        }
-                        if (runStart != -1) {
-                            int runEnd = maxFrame;
-                            float x1 = p_min.x + (width * runStart / totalFrames);
-                            float x2 = p_min.x + width;
-                            drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(200, 200, 0, 150));
-                        }
-
-                        // 範囲選択ロジックの操作部分
+                        // マウス位置から現在のフレームを逆算
                         float mouseX = ImGui::GetIO().MousePos.x;
-                        float t = (std::max)(0.0f, (std::min)(1.0f, (mouseX - p_min.x) / width));
-                        int hoverFrame = (int)(t * totalFrames);
-                        if (hoverFrame >= totalFrames) hoverFrame = totalFrames - 1;
+                        float mouseTimelineX = mouseX - p_min.x;
+                        int hoverFrame = (std::clamp)((int)(mouseTimelineX / frameWidth), 0, totalFrames - 1);
+                        int hoverTrack = (std::clamp)((int)((ImGui::GetIO().MousePos.y - p_min.y) / laneHeight), 0, 5);
 
-                        if (ImGui::IsMouseClicked(1) && isHovered) {
+                        // 1. 背景と目盛りの描画
+                        drawList->AddRectFilled(p_min, p_max, IM_COL32(30, 30, 35, 255));
+                        for (int f = 0; f <= totalFrames; f += 10) {
+                            float lineX = p_min.x + f * frameWidth;
+                            ImU32 lineColor = (f % 60 == 0) ? IM_COL32(120, 120, 120, 150) : IM_COL32(60, 60, 60, 100);
+                            drawList->AddLine(ImVec2(lineX, p_min.y), ImVec2(lineX, p_max.y), lineColor, 1.0f);
+                            
+                            // 60フレーム（1秒）ごとにタイムコード風のテキストを描画
+                            if (f % 60 == 0 && frameWidth > 0.5f) {
+                                char timeStr[16];
+                                sprintf_s(timeStr, "%df", f);
+                                drawList->AddText(ImVec2(lineX + 4.0f, p_min.y + 2.0f), IM_COL32(180, 180, 180, 200), timeStr);
+                            }
+                        }
+
+                        // 2. 各種トラックデータの描画 (マルチトラック)
+                        // レーン構成: 0=マクロ配置, 1=L/R, 2=Jump, 3=Dash, 4=Cling, 5=Up/Down
+                        const char* trackNames[] = { "🎬 Macros", "↔ Left/Right", "🦘 Jump", "⚡ Dash", "🧱 Cling", "↕ Up/Down" };
+                        char keyChars[] = { '-', 'L', 'J', 'D', 'C', 'W' }; // 代表キー文字判定用
+
+                        // --- レーン0: 適用済みマクロブロックの描画 ---
+                        {
+                            float ly = p_min.y + 0 * laneHeight;
+                            drawList->AddLine(ImVec2(p_min.x, ly + laneHeight), ImVec2(p_max.x, ly + laneHeight), IM_COL32(80, 80, 80, 255));
+
+                            for (const auto& am : activeReplay.appliedMacros) {
+                                float mx1 = p_min.x + am.startFrame * frameWidth;
+                                float mx2 = p_min.x + (am.startFrame + am.duration) * frameWidth;
+                                ImVec2 box_min(mx1 + 1, ly + 3);
+                                ImVec2 box_max(mx2 - 1, ly + laneHeight - 3);
+
+                                // クリップ（動画の素材ブロック）のようなデザインで描画
+                                drawList->AddRectFilled(box_min, box_max, IM_COL32(50, 160, 120, 220), 4.0f);
+                                drawList->AddRect(box_min, box_max, IM_COL32(100, 255, 180, 255), 4.0f, 0, 1.5f);
+                                
+                                if (mx2 - mx1 > 30.0f) {
+                                    ImGui::PushClipRect(box_min, box_max, true);
+                                    drawList->AddText(ImVec2(box_min.x + 4.0f, box_min.y + 2.0f), IM_COL32(255, 255, 255, 255), am.name.c_str());
+                                    ImGui::PopClipRect();
+                                }
+                            }
+
+                            // マクロレーンへのドラッグ＆ドロップ受け入れ（MMLマクロ素材のタイムライン配置）
+                            ImGui::SetCursorScreenPos(ImVec2(p_min.x, ly));
+                            ImGui::InvisibleButton("##MacroDropZone", ImVec2(timelineWidth, laneHeight));
+                            if (ImGui::BeginDragDropTarget()) {
+                                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_MML_MACRO_CLIP")) {
+                                    int macroIdx = *(const int*)payload->Data;
+                                    int targetDropFrame = (std::clamp)((int)((ImGui::GetMousePos().x - p_min.x) / frameWidth), 0, totalFrames - 1);
+                                    if (macroIdx >= 0 && macroIdx < replayMgr->GetMacros().size()) {
+                                        replayMgr->ApplyMacro(targetDropFrame, replayMgr->GetMacros()[macroIdx]);
+                                        replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+                        }
+
+                        // --- レーン1～5: キー入力ブロックの描画 ---
+                        for (int k = 0; k < 5; ++k) {
+                            int trackIdx = k + 1; // マクロレーンの下なので +1
+                            int keyMapIdx = (k == 0) ? 0 : (k == 1) ? 2 : (k == 2) ? 3 : (k == 3) ? 4 : 5; // ReplayManager側のキーインデックスと同期
+                            float ly = p_min.y + trackIdx * laneHeight;
+                            
+                            // 横のトラック区切り線
+                            drawList->AddLine(ImVec2(p_min.x, ly + laneHeight), ImVec2(p_max.x, ly + laneHeight), IM_COL32(80, 80, 80, 255));
+
+                            int runStart = -1;
+                            for (int f = 0; f <= totalFrames; ++f) {
+                                // L/RやW/Sなど、複数の文字が入り得るトラックを柔軟に評価
+                                bool isOn = false;
+                                if (f < totalFrames) {
+                                    char c = activeReplay.frames[f].keys[keyMapIdx];
+                                    if (keyMapIdx == 0) isOn = (c == 'L' || c == 'R');
+                                    else if (keyMapIdx == 5) isOn = (c == 'W' || activeReplay.frames[f].keys[6] == 'S');
+                                    else isOn = (c != '-');
+                                }
+
+                                if (isOn && runStart == -1) runStart = f;
+                                else if (!isOn && runStart != -1) {
+                                    float kx1 = p_min.x + runStart * frameWidth;
+                                    float kx2 = p_min.x + f * frameWidth;
+                                    ImVec2 kbox_min(kx1 + 1, ly + 4);
+                                    ImVec2 kbox_max(kx2 - 1, ly + laneHeight - 4);
+
+                                    // 動画のクリップ風にキーON区間を表示
+                                    ImU32 blockColor = (keyMapIdx == 2) ? IM_COL32(210, 100, 50, 200) : IM_COL32(190, 170, 40, 180); // ジャンプ等は色分け
+                                    drawList->AddRectFilled(kbox_min, kbox_max, blockColor, 2.0f);
+                                    drawList->AddRect(kbox_min, kbox_max, IM_COL32(255, 255, 200, 255), 2.0f);
+
+                                    // インスペクター用の選択ロジック
+                                    if (isTimelineHovered && ImGui::IsMouseClicked(0)) {
+                                        float mx = ImGui::GetIO().MousePos.x;
+                                        float my = ImGui::GetIO().MousePos.y;
+                                        if (mx >= kx1 && mx <= kx2 && my >= ly && my <= ly + laneHeight) {
+                                            selectedBlockStart = runStart;
+                                            selectedBlockEnd = f - 1;
+                                            selectedBlockKey = keyMapIdx;
+                                        }
+                                    }
+
+                                    // Jitter表示のオーバーレイ
+                                    int jitterAmt = 0;
+                                    for (const auto& j : activeReplay.jitters) {
+                                        if (j.keyIdx == keyMapIdx && j.startFrame == runStart && j.endFrame == (f - 1)) {
+                                            jitterAmt = j.maxJitter; break;
+                                        }
+                                    }
+                                    if (jitterAmt > 0) {
+                                        float jx1 = p_min.x + ((std::max)(0, runStart - jitterAmt)) * frameWidth;
+                                        float jx2 = p_min.x + ((std::min)(totalFrames, f + jitterAmt)) * frameWidth;
+                                        drawList->AddRect(ImVec2(jx1, ly + 1), ImVec2(jx2, ly + laneHeight - 1), IM_COL32(50, 160, 255, 200), 2.0f, 0, 1.5f);
+                                    }
+
+                                    // 黄色枠選択状態の維持
+                                    if (selectedBlockStart == runStart && selectedBlockEnd == (f - 1) && selectedBlockKey == keyMapIdx) {
+                                        drawList->AddRect(kbox_min, kbox_max, IM_COL32(255, 255, 0, 255), 2.0f, 0, 2.0f);
+                                    }
+
+                                    runStart = -1;
+                                }
+                            }
+                        }
+
+                        // 3. 右クリックドラッグによる、特定レーン内の範囲書き換え処理
+                        static int rangeTrackIdx = -1;
+                        if (ImGui::IsMouseClicked(1) && isTimelineHovered) {
                             isSelecting = true;
                             rangeStart = hoverFrame;
                             rangeEnd = hoverFrame;
+                            rangeTrackIdx = hoverTrack;
                         }
                         if (isSelecting) {
                             if (ImGui::IsMouseDown(1)) {
                                 rangeEnd = hoverFrame;
+                                // 選択中の範囲を半透明ブルーでハイライト
+                                if (rangeTrackIdx >= 0) {
+                                    float r0 = (std::min)(rangeStart, rangeEnd) * frameWidth;
+                                    float r1 = ((std::max)(rangeStart, rangeEnd) + 1) * frameWidth;
+                                    float ry = p_min.y + rangeTrackIdx * laneHeight;
+                                    drawList->AddRectFilled(ImVec2(p_min.x + r0, ry), ImVec2(p_min.x + r1, ry + laneHeight), IM_COL32(100, 150, 255, 90));
+                                    drawList->AddRect(ImVec2(p_min.x + r0, ry), ImVec2(p_min.x + r1, ry + laneHeight), IM_COL32(100, 150, 255, 255));
+                                }
                             } else {
                                 isSelecting = false;
                             }
                         }
 
-                        // 選択範囲の描画
-                        if (rangeStart != -1 && rangeEnd != -1) {
-                            int r0 = (std::min)(rangeStart, rangeEnd);
-                            int r1 = (std::max)(rangeStart, rangeEnd);
-                            float x1 = p_min.x + (width * r0 / totalFrames);
-                            float x2 = p_min.x + (width * (r1 + 1) / totalFrames);
-                            drawList->AddRectFilled(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 100));
-                            drawList->AddRect(ImVec2(x1, p_min.y), ImVec2(x2, p_max.y), IM_COL32(100, 150, 255, 255));
-                        }
-
-                        // (4) 現在位置ライン
+                        // 4. 再生位置シークバー（赤い縦線インジケーター）の描画
                         int curFrame = replayMgr->GetCurrentFrame();
-                        float curX = p_min.x + (width * curFrame / totalFrames);
-                        drawList->AddLine(ImVec2(curX, p_min.y - 2), ImVec2(curX, p_max.y + 2), IM_COL32(255, 50, 50, 255), 2.0f);
+                        float curX = p_min.x + curFrame * frameWidth;
+                        drawList->AddLine(ImVec2(curX, p_min.y - 4), ImVec2(curX, p_max.y + 4), IM_COL32(255, 60, 60, 255), 2.0f);
+                        drawList->AddCircleFilled(ImVec2(curX, p_min.y), 5.0f, IM_COL32(255, 60, 60, 255));
 
-                        // 左クリックでシーク
-                        if (isActive && ImGui::IsMouseDown(0)) {
+                        // 左クリックドラッグで動画のように直感シーク
+                        if (isTimelineActive && ImGui::IsMouseDown(0) && hoverTrack > 0) {
                             replayMgr->SetCurrentFrame(hoverFrame);
                         }
-                        
+
+                        // 5. トラック名ラベルの描画（スクロールしても左端に常駐固定する動画編集UIの挙動）
+                        float scrollX = ImGui::GetScrollX();
+                        for (int i = 0; i < 6; ++i) {
+                            float ly = p_min.y + i * laneHeight;
+                            ImVec2 label_min(p_min.x + scrollX, ly + 1);
+                            ImVec2 label_max(p_min.x + scrollX + 110.0f, ly + laneHeight - 1);
+                            drawList->AddRectFilled(label_min, label_max, IM_COL32(50, 50, 55, 240), 4.0f);
+                            drawList->AddRect(label_min, label_max, IM_COL32(75, 75, 80, 200), 4.0f);
+                            drawList->AddText(ImVec2(label_min.x + 6.0f, label_min.y + 6.0f), IM_COL32(240, 240, 245, 255), trackNames[i]);
+                        }
+
                         ImGui::EndChild();
 
-                        ImGui::Spacing();
-                        if (rangeStart != -1 && rangeEnd != -1) {
+                        // --- 範囲編集確定時の処理用ボタン ---
+                        if (!isSelecting && rangeStart != -1 && rangeEnd != -1 && rangeTrackIdx > 0) {
                             int r0 = (std::min)(rangeStart, rangeEnd);
                             int r1 = (std::max)(rangeStart, rangeEnd);
-                            ImGui::Text("選択範囲: F%04d ～ F%04d", r0, r1);
+                            int targetKeyMapIdx = (rangeTrackIdx == 1) ? 0 : (rangeTrackIdx == 2) ? 2 : (rangeTrackIdx == 3) ? 3 : (rangeTrackIdx == 4) ? 4 : 5;
                             
-                            auto DoRangeEditAndSave = [&](bool isOn) {
-                                for(int i=r0; i<=r1; ++i){
-                                    replayMgr->ApplyTimelineEdit(i, k, isOn);
+                            ImGui::Text("📂 選択範囲: [%s]レーン F%04d ～ F%04d", trackNames[rangeTrackIdx], r0, r1);
+                            
+                            auto DoMultiTrackRangeEdit = [&](bool isOn) {
+                                for (int i = r0; i <= r1; ++i) {
+                                    if (targetKeyMapIdx == 0 && isOn) {
+                                        activeReplay.frames[i].keys[0] = 'R'; // L/RレーンならデフォルトRを入れる (簡易対応)
+                                    } else {
+                                        replayMgr->ApplyTimelineEdit(i, targetKeyMapIdx, isOn);
+                                    }
                                 }
-                                if (!activeReplay.filename.empty()) {
-                                    replayMgr->SaveToFile(activeReplay, activeReplay.filename);
-                                } else {
-                                    replayMgr->SaveToFile(activeReplay, saveNameBuf);
-                                }
+                                replayMgr->RebuildMmlFromFrames(activeReplay);
+                                replayMgr->SaveToFile(activeReplay, saveNameBuf);
+                                rangeStart = -1; rangeEnd = -1; // リセット
                             };
 
                             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-                            if (ImGui::Button("選択範囲を ON にする")) {
-                                DoRangeEditAndSave(true);
-                            }
-                            ImGui::PopStyleColor();
+                            if (ImGui::Button("選択範囲を入力 ON にする")) { DoMultiTrackRangeEdit(true); }
+                            ImGui::PopStyleColor(); ImGui::SameLine();
 
-                            ImGui::SameLine();
-                            
                             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
-                            if (ImGui::Button("選択範囲を OFF にする")) {
-                                DoRangeEditAndSave(false);
-                            }
+                            if (ImGui::Button("選択範囲を無入力 (OFF) にする")) { DoMultiTrackRangeEdit(false); }
                             ImGui::PopStyleColor();
-                        } else {
-                            ImGui::Text("※右クリック+ドラッグで範囲を選択し、手動でON/OFFを書き換えできます");
                         }
 
-                        ImGui::Spacing();
-                        ImGui::Separator();
+                        // --- Jitter設定用のセクション ---
                         if (selectedBlockStart != -1 && selectedBlockEnd != -1) {
-                            ImGui::Text("選択中のブロック: F%04d ～ F%04d", selectedBlockStart, selectedBlockEnd);
-                            
-                            // 既存のJitterSettingを探す
+                            ImGui::Separator();
+                            ImGui::Text("🛠 選択中のクリップブロック: F%04d ～ F%04d", selectedBlockStart, selectedBlockEnd);
                             JitterSetting* currentJitter = nullptr;
                             for (auto& j : activeReplay.jitters) {
-                                if (j.keyIdx == k && j.startFrame == selectedBlockStart && j.endFrame == selectedBlockEnd) {
-                                    currentJitter = &j;
-                                    break;
+                                if (j.keyIdx == selectedBlockKey && j.startFrame == selectedBlockStart && j.endFrame == selectedBlockEnd) {
+                                    currentJitter = &j; break;
                                 }
                             }
-                            
                             int jitterVal = currentJitter ? currentJitter->maxJitter : 0;
-                            
-                            ImGui::Text("動的なブレ (Jitter) 設定");
-                            if (ImGui::SliderInt("ブレの強さ (±フレーム)##Jitter", &jitterVal, 0, 15)) {
-                                if (currentJitter) {
-                                    currentJitter->maxJitter = jitterVal;
-                                } else if (jitterVal > 0) {
+                            if (ImGui::SliderInt("人間らしいゆらぎ (±フレームJitter)", &jitterVal, 0, 15)) {
+                                if (currentJitter) currentJitter->maxJitter = jitterVal;
+                                else if (jitterVal > 0) {
                                     JitterSetting j;
-                                    j.keyIdx = k;
+                                    j.keyIdx = selectedBlockKey;
                                     j.startFrame = selectedBlockStart;
                                     j.endFrame = selectedBlockEnd;
                                     j.maxJitter = jitterVal;
                                     activeReplay.jitters.push_back(j);
                                 }
-                                
-                                // Jitterが0になったら削除する
                                 if (jitterVal == 0 && currentJitter) {
                                     auto it = std::remove_if(activeReplay.jitters.begin(), activeReplay.jitters.end(),
                                         [&](const JitterSetting& js) {
-                                            return js.keyIdx == k && js.startFrame == selectedBlockStart && js.endFrame == selectedBlockEnd;
+                                            return js.keyIdx == selectedBlockKey && js.startFrame == selectedBlockStart && js.endFrame == selectedBlockEnd;
                                         });
                                     activeReplay.jitters.erase(it, activeReplay.jitters.end());
                                 }
-
-                                if (!activeReplay.filename.empty()) {
-                                    replayMgr->SaveToFile(activeReplay, activeReplay.filename);
-                                } else {
-                                    replayMgr->SaveToFile(activeReplay, saveNameBuf);
-                                }
-                            }
-                            ImGui::TextDisabled("※再生・ループのたびに、このブロックのタイミングがランダムに変化します");
-                        } else {
-                            ImGui::TextDisabled("※黄色いブロックをクリックすると、動的なブレを設定できます");
-                        }
-
-                    } // if (activeReplay.totalFrames > 0) をここで閉じる
-
-                    ImGui::Spacing();
-                    ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
-                    ImGui::Spacing();
-                        
-                        if (ImGui::CollapsingHeader("📋 入力マクロ (ワンクリック配置)", ImGuiTreeNodeFlags_DefaultOpen)) {
-                            auto& macros = replayMgr->GetMacros();
-                            static int selectedMacroIdx = 0;
-                            
-                            // マクロ一覧
-                            if (!macros.empty()) {
-                                if (selectedMacroIdx >= macros.size()) selectedMacroIdx = 0;
-                                
-                                std::string previewName = macros[selectedMacroIdx].name;
-                                if (ImGui::BeginCombo("マクロ一覧", previewName.c_str())) {
-                                    for (int i = 0; i < macros.size(); ++i) {
-                                        bool is_selected = (selectedMacroIdx == i);
-                                        if (ImGui::Selectable(macros[i].name.c_str(), is_selected)) {
-                                            selectedMacroIdx = i;
-                                        }
-                                        if (is_selected) ImGui::SetItemDefaultFocus();
-                                    }
-                                    ImGui::EndCombo();
-                                }
-                                
-                                ImGui::SameLine();
-                                if (ImGui::Button("削除")) {
-                                    replayMgr->RemoveMacro(selectedMacroIdx);
-                                    if (selectedMacroIdx > 0) selectedMacroIdx--;
-                                }
-                            } else {
-                                ImGui::TextDisabled("登録されたマクロがありません。");
-                            }
-                            
-                            // 新規作成UI
-                            static char newMacroName[64] = "NewMacro";
-                            ImGui::InputText("新規マクロ名", newMacroName, IM_ARRAYSIZE(newMacroName));
-                            ImGui::SameLine();
-                            if (ImGui::Button("空から新規作成")) {
-                                ReplayMacro rm;
-                                rm.name = newMacroName;
-                                rm.blocks.push_back({10, "-------"}); // デフォルトで1ブロック追加
-                                replayMgr->AddMacro(rm);
-                                selectedMacroIdx = (int)macros.size() - 1;
-                            }
-                            
-                            // マクロ録画（実際のプレイを記録する）UI
-                            ImGui::SameLine();
-                            if (replayMgr->IsRecordingMacro()) {
-                                ImGui::TextColored(ImVec4(1, 0, 0, 1), "🔴 マクロ録画待機中...");
-                                ImGui::SameLine();
-                                if (ImGui::Button("キャンセル")) {
-                                    replayMgr->CancelMacroRecording();
-                                }
-                                ImGui::SameLine();
-                                if (ImGui::Button("⏹ 録画を終了して保存")) {
-                                    // 録画を強制停止（停止時に自動的にマクロに抽出・保存される）
-                                    replayMgr->StopRecord();
-                                }
-                            } else {
-                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
-                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
-                                if (ImGui::Button("🔴 実際のプレイをマクロとして録画開始")) {
-                                    replayMgr->ReserveMacroRecording(newMacroName);
-                                    
-                                    // 録画のためにエディタのカメラとポーズを解除し、ゲームをリセットして操作可能にする
-                                    isPlaying_ = true; // ← ここを追加（ゲームを開始させる）
-                                    useDebugCamera_ = false;
-                                    sceneJustReset_ = true;
-                                }
-                                ImGui::PopStyleColor(3);
-                            }
-                            
-                            if (replayMgr->IsRecordingMacro()) {
-                                ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "※ゲームをプレイして録画を完了してください。\n「⏹ 録画を終了して保存」か、ゲーム中のRキーでマクロとして保存されます。");
-                            }
-                            
-                            // 選択範囲から作成するUI (リプレイがある時のみ)
-                            if (activeReplay.totalFrames > 0 && rangeStart != -1 && rangeEnd != -1) {
-                                int r0 = (std::min)(rangeStart, rangeEnd);
-                                int r1 = (std::max)(rangeStart, rangeEnd);
-                                
-                                ImGui::SameLine();
-                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-                                if (ImGui::Button("選択範囲から抽出して作成")) {
-                                    ReplayMacro rm;
-                                    rm.name = std::string(newMacroName);
-                                    
-                                    if (r1 < activeReplay.totalFrames) {
-                                        MacroBlock currentBlock;
-                                        bool isFirst = true;
-                                        
-                                        for (int i = r0; i <= r1; ++i) {
-                                            char currentKeys[8];
-                                            for(int k=0; k<7; ++k) currentKeys[k] = activeReplay.frames[i].keys[k];
-                                            currentKeys[7] = '\0';
-                                            
-                                            if (isFirst) {
-                                                currentBlock.duration = 1;
-                                                strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
-                                                isFirst = false;
-                                            } else {
-                                                // キーが同じならdurationを増やす
-                                                bool same = true;
-                                                for(int k=0; k<7; ++k) {
-                                                    if(currentBlock.keys[k] != currentKeys[k]) { same = false; break; }
-                                                }
-                                                if (same) {
-                                                    currentBlock.duration++;
-                                                } else {
-                                                    // 変わったら今のブロックを保存して新しいブロックへ
-                                                    rm.blocks.push_back(currentBlock);
-                                                    currentBlock.duration = 1;
-                                                    strncpy_s(currentBlock.keys, currentKeys, sizeof(currentBlock.keys));
-                                                }
-                                            }
-                                        }
-                                        if (!isFirst) {
-                                            rm.blocks.push_back(currentBlock);
-                                        }
-                                    }
-                                    
-                                    // 万が一抽出に失敗して空になった場合はダミーを入れる
-                                    if (rm.blocks.empty()) rm.blocks.push_back({10, "-------"});
-                                    
-                                    replayMgr->AddMacro(rm);
-                                    selectedMacroIdx = (int)macros.size() - 1;
-                                }
-                                ImGui::PopStyleColor();
-                            }
-                            
-                            // 選択中マクロの編集と配置
-                            if (!macros.empty() && selectedMacroIdx < macros.size()) {
-                                ImGui::Separator();
-                                ImGui::Text("【%s】のブロック構成", macros[selectedMacroIdx].name.c_str());
-                                
-                                auto& curMacro = macros[selectedMacroIdx];
-                                
-                                for (int i = 0; i < curMacro.blocks.size(); ++i) {
-                                    auto& b = curMacro.blocks[i];
-                                    ImGui::PushID(i);
-                                    
-                                    ImGui::SetNextItemWidth(100.0f);
-                                    if (ImGui::InputInt("F (フレーム)", &b.duration)) {
-                                        if (b.duration < 1) b.duration = 1;
-                                        replayMgr->SaveMacros();
-                                    }
-                                    
-                                    ImGui::SameLine();
-                                    ImGui::Text(" キー:");
-                                    ImGui::SameLine();
-                                    
-                                    // 7つのキーON/OFFトグル
-                                    const char* keyNames[7] = {"L", "R", "J", "D", "C", "W", "S"};
-                                    const char keyChars[7] = {'L', 'R', 'J', 'D', 'C', 'W', 'S'};
-                                    
-                                    for (int k = 0; k < 7; ++k) {
-                                        bool isOn = (b.keys[k] != '-');
-                                        if (ImGui::Checkbox(keyNames[k], &isOn)) {
-                                            b.keys[k] = isOn ? keyChars[k] : '-';
-                                            replayMgr->SaveMacros(); // 即時保存
-                                        }
-                                        if (k < 6) ImGui::SameLine();
-                                    }
-                                    
-                                    ImGui::SameLine();
-                                    if (ImGui::Button("X")) {
-                                        curMacro.blocks.erase(curMacro.blocks.begin() + i);
-                                        replayMgr->SaveMacros();
-                                        ImGui::PopID();
-                                        break; // ループを抜けて再描画
-                                    }
-                                    
-                                    ImGui::PopID();
-                                }
-                                
-                                if (ImGui::Button("+ ブロック追加")) {
-                                    curMacro.blocks.push_back({10, "-------"});
-                                    replayMgr->SaveMacros();
-                                }
-                                
-                                ImGui::Spacing();
-                                ImGui::Separator();
-                                
-                                // 配置ボタン (リプレイがある時のみ)
-                                if (activeReplay.totalFrames > 0) {
-                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
-                                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
-                                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.4f, 0.7f, 1.0f));
-                                    
-                                    // 配置先は、選択範囲の始点、または現在のフレーム
-                                    int placeStart = (rangeStart != -1) ? (std::min)(rangeStart, rangeEnd) : replayMgr->GetCurrentFrame();
-                                    
-                                    if (ImGui::Button("⇒ タイムラインに配置 (流し込む)")) {
-                                        replayMgr->ApplyMacro(placeStart, curMacro);
-                                        
-                                        // 適用後、現在のアクティブリプレイを保存する
-                                        if (!activeReplay.filename.empty()) {
-                                            replayMgr->SaveToFile(activeReplay, activeReplay.filename);
-                                        } else {
-                                            replayMgr->SaveToFile(activeReplay, saveNameBuf);
-                                        }
-                                    }
-                                    ImGui::PopStyleColor(3);
-                                    ImGui::SameLine();
-                                    ImGui::Text("配置開始フレーム: F%04d", placeStart);
-                                } else {
-                                    ImGui::TextDisabled("※タイムラインに配置するには、履歴からリプレイを選択してください。");
-                                }
+                                replayMgr->SaveToFile(activeReplay, saveNameBuf);
                             }
                         }
+                    }
                     ImGui::EndTabItem();
                 }
+
                 ImGui::EndTabBar();
             }
         }
