@@ -13,6 +13,7 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneFactory.h"
 #include "Core/Utility/Structs.h"
+#include "ReplayManager.h"
 
 class SceneManager;
 class ParticleManager;
@@ -73,12 +74,39 @@ public:
     // 現在選択中のシーンタイプを取得
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
 
+    // リプレイノード（キー入力ブロック）選択構造体
+    struct SelectedReplayBlock {
+        int trackIdx = -1;      // トラックインデックス (0~6)
+        int startFrame = -1;    // 開始フレーム
+        int endFrame = -1;      // 終了フレーム (排他、startFrame <= f < endFrame)
+
+        bool IsValid() const {
+            return trackIdx >= 0 && trackIdx < 7 && startFrame >= 0 && endFrame > startFrame;
+        }
+        bool Equals(int t, int s, int e) const {
+            return trackIdx == t && startFrame == s && endFrame == e;
+        }
+        void Clear() {
+            trackIdx = -1;
+            startFrame = -1;
+            endFrame = -1;
+        }
+    };
+
+    enum class ReplayBlockDragMode {
+        None,
+        Move,         // ノード全体の移動
+        ResizeLeft,   // 左端リサイズ（開始フレーム変更）
+        ResizeRight   // 右端リサイズ（終了フレーム変更）
+    };
+
     // 選択状態のクリア (シーン再生成時にワイルドポインタになるのを防ぐ)
     void ClearSelection() {
         selectedObject_ = nullptr;
         selectedGameObject_ = nullptr;
         selectedParticle_ = nullptr;
         selectedPrimitive_ = nullptr;
+        selectedReplayBlock_.Clear();
         sceneJustReset_ = true; // シーンリセットのフラグを立てる
         ClearHistory();
     }
@@ -270,6 +298,19 @@ private:
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅
     float timelineScrollX_ = 0.0f;  // タイムライン横スクロール位置
+
+    // リプレイノード選択・ドラッグ状態
+    SelectedReplayBlock selectedReplayBlock_;
+    ReplayBlockDragMode replayBlockDragMode_ = ReplayBlockDragMode::None;
+    ReplayBlockDragMode pendingBlockDragMode_ = ReplayBlockDragMode::None; // 閾値判定用のドラッグ予備状態
+    ImVec2 dragStartMousePos_ = ImVec2(0.0f, 0.0f);                      // クリック開始位置
+    SelectedReplayBlock draggingBlockOriginal_; // ドラッグ開始時の元ブロック
+    int dragStartMouseFrame_ = 0;               // ドラッグ開始時のマウス位置フレーム
+    bool isRulerScrubbing_ = false;             // ルーラーでのシークドラッグ中フラグ
+
+    // リプレイ Undo 用一時保存
+    ReplayData replayDragOldReplayData_;
+    SelectedReplayBlock replayDragOldSelectedBlock_;
 
     // リプレイ保存ダイアログ用
     int saveTargetHistoryIdx_ = -1;

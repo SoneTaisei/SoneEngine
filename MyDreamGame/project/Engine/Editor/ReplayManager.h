@@ -108,6 +108,9 @@ public:
 
     // タイムライン編集時のユーティリティ (編集したSTRからMMLと座標を再生成)
     void ApplyTimelineEdit(int frameIdx, int keyIdx, bool active);
+    void SetTrackKeyRange(int trackIdx, int startFrame, int endFrame, bool active);
+    void ModifyBlockRange(int trackIdx, int oldStart, int oldEnd, int newStart, int newEnd);
+    void DeleteBlockRange(int trackIdx, int startFrame, int endFrame);
     void ApplyMacro(int startFrame, const ReplayMacro& macro); // マクロを流し込む
     void RebuildMmlFromFrames(ReplayData& data);
     void RebuildFramesFromMml(ReplayData& data);

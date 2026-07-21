@@ -797,7 +797,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     if (showInspector_) {
         if (ImGui::Begin("インスペクター", &showInspector_)) {
             bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9));
-            if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected) {
+            if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected || selectedReplayBlock_.IsValid()) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
@@ -806,6 +806,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     selectedObject_ = nullptr;
                     selectedParticle_ = nullptr;
                     selectedPrimitive_ = nullptr;
+                    selectedReplayBlock_.Clear();
                     mapEditorSelectedTool_ = 0;
                 }
                 ImGui::PopStyleColor(3);
@@ -814,7 +815,140 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Spacing();
             }
 
-            if (selectedGameObject_) {
+            if (selectedReplayBlock_.IsValid()) {
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "キー入力ノード プロパティ");
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                const char* trackNames[7] = {
+                    "左移動 (L)", "右移動 (R)", "上移動 (W)", "下移動 (S)",
+                    "ジャンプ (J)", "ダッシュ (D)", "壁張り付き (C)"
+                };
+                ImGui::Text("トラック: %s", trackNames[selectedReplayBlock_.trackIdx]);
+                ImGui::Spacing();
+
+                int startF = selectedReplayBlock_.startFrame;
+                int endF = selectedReplayBlock_.endFrame;
+                int duration = endF - startF;
+                float startSec = startF / 60.0f;
+                float durationSec = duration / 60.0f;
+
+                static ReplayData inspectorOldData;
+                static SelectedReplayBlock inspectorOldBlock;
+
+                bool changed = false;
+
+                auto CheckEditStart = [&]() {
+                    if (ImGui::IsItemActivated()) {
+                        inspectorOldData = ReplayManager::GetInstance()->GetCurrentReplay();
+                        inspectorOldBlock = selectedReplayBlock_;
+                    }
+                };
+
+                auto CheckEditEnd = [&]() {
+                    if (ImGui::IsItemDeactivatedAfterEdit()) {
+                        ReplayData newData = ReplayManager::GetInstance()->GetCurrentReplay();
+                        SelectedReplayBlock newBlock = selectedReplayBlock_;
+                        ReplayData oldD = inspectorOldData;
+                        SelectedReplayBlock oldB = inspectorOldBlock;
+
+                        PushActionCommand(
+                            [oldD, oldB, this]() {
+                                auto replayMgr = ReplayManager::GetInstance();
+                                replayMgr->GetCurrentReplay() = oldD;
+                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                this->selectedReplayBlock_ = oldB;
+                            },
+                            [newData, newBlock, this]() {
+                                auto replayMgr = ReplayManager::GetInstance();
+                                replayMgr->GetCurrentReplay() = newData;
+                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                this->selectedReplayBlock_ = newBlock;
+                            }
+                        );
+                    }
+                };
+
+                if (ImGui::DragInt("開始フレーム", &startF, 1.0f, 0, 99999)) {
+                    if (startF < 0) startF = 0;
+                    endF = startF + duration;
+                    changed = true;
+                }
+                CheckEditStart();
+                CheckEditEnd();
+                ImGui::TextDisabled(" (開始時刻: %.2f 秒)", startSec);
+
+                if (ImGui::DragInt("長さ (フレーム数)", &duration, 1.0f, 1, 99999)) {
+                    if (duration < 1) duration = 1;
+                    endF = startF + duration;
+                    changed = true;
+                }
+                CheckEditStart();
+                CheckEditEnd();
+                ImGui::TextDisabled(" (継続時間: %.2f 秒)", durationSec);
+
+                if (ImGui::DragInt("終了フレーム", &endF, 1.0f, startF + 1, 99999)) {
+                    if (endF <= startF) endF = startF + 1;
+                    duration = endF - startF;
+                    changed = true;
+                }
+                CheckEditStart();
+                CheckEditEnd();
+
+                if (changed) {
+                    ReplayManager::GetInstance()->ModifyBlockRange(
+                        selectedReplayBlock_.trackIdx,
+                        selectedReplayBlock_.startFrame,
+                        selectedReplayBlock_.endFrame,
+                        startF,
+                        endF
+                    );
+                    selectedReplayBlock_.startFrame = startF;
+                    selectedReplayBlock_.endFrame = endF;
+                }
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                if (ImGui::Button("再生位置をここに合わせる", ImVec2(-1, 28))) {
+                    ReplayManager::GetInstance()->SetCurrentFrame(selectedReplayBlock_.startFrame);
+                }
+
+                ImGui::Spacing();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+                if (ImGui::Button("ノードを削除", ImVec2(-1, 28))) {
+                    ReplayData oldData = ReplayManager::GetInstance()->GetCurrentReplay();
+                    SelectedReplayBlock oldBlock = selectedReplayBlock_;
+
+                    ReplayManager::GetInstance()->DeleteBlockRange(
+                        selectedReplayBlock_.trackIdx,
+                        selectedReplayBlock_.startFrame,
+                        selectedReplayBlock_.endFrame
+                    );
+                    selectedReplayBlock_.Clear();
+
+                    ReplayData newData = ReplayManager::GetInstance()->GetCurrentReplay();
+                    SelectedReplayBlock newBlock = selectedReplayBlock_;
+
+                    PushActionCommand(
+                        [oldData, oldBlock, this]() {
+                            auto replayMgr = ReplayManager::GetInstance();
+                            replayMgr->GetCurrentReplay() = oldData;
+                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            this->selectedReplayBlock_ = oldBlock;
+                        },
+                        [newData, newBlock, this]() {
+                            auto replayMgr = ReplayManager::GetInstance();
+                            replayMgr->GetCurrentReplay() = newData;
+                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            this->selectedReplayBlock_ = newBlock;
+                        }
+                    );
+                }
+                ImGui::PopStyleColor(2);
+            } else if (selectedGameObject_) {
                 selectedGameObject_->DisplayImGui();
             } else if (selectedObject_) {
                 selectedObject_->DisplayImGui("Object Properties");
@@ -2135,7 +2269,39 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // 2-a. ルーラーを描画 (Top 0 ~ rulerHeight)
                 ImVec2 rulerTopLeft = ImVec2(p0.x + trackHeaderWidth, p0.y);
                 ImVec2 rulerBottomRight = ImVec2(p0.x + trackHeaderWidth + timelineWidth, p0.y + rulerHeight);
-                drawList->AddRectFilled(rulerTopLeft, rulerBottomRight, IM_COL32(35, 30, 50, 255));
+                ImVec2 mousePos = ImGui::GetMousePos();
+                bool isChildHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+                bool mouseInRuler = (mousePos.x >= rulerTopLeft.x && mousePos.x <= rulerBottomRight.x &&
+                                     mousePos.y >= rulerTopLeft.y && mousePos.y <= rulerBottomRight.y);
+
+                // マウスがルーラー領域上にある場合のインタラクション
+                if (isChildHovered && mouseInRuler && replayBlockDragMode_ == ReplayBlockDragMode::None) {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    ImGui::SetTooltip("クリック/ドラッグでシーク位置変更");
+                    if (ImGui::IsMouseClicked(0)) {
+                        isRulerScrubbing_ = true;
+                    }
+                }
+
+                // ルーラードラッグ中のシーク処理
+                if (isRulerScrubbing_) {
+                    if (ImGui::IsMouseDown(0)) {
+                        float relativeX = mousePos.x - (p0.x + trackHeaderWidth);
+                        int targetFrame = (int)(relativeX / timelineZoom_ + 0.5f);
+                        if (targetFrame < 0) targetFrame = 0;
+                        if (targetFrame > totalFrames) targetFrame = totalFrames;
+                        replayMgr->SetCurrentFrame(targetFrame);
+
+                        float sec = targetFrame / 60.0f;
+                        ImGui::SetTooltip("シーク位置: %02d:%05.2f (%d F)", (int)sec / 60, fmod(sec, 60.0f), targetFrame);
+                    } else {
+                        isRulerScrubbing_ = false;
+                    }
+                }
+
+                // ルーラー背景 (ホバー・ドラッグ時は明るくハイライト)
+                ImU32 rulerBgColor = (mouseInRuler || isRulerScrubbing_) ? IM_COL32(55, 45, 75, 255) : IM_COL32(35, 30, 50, 255);
+                drawList->AddRectFilled(rulerTopLeft, rulerBottomRight, rulerBgColor);
                 drawList->AddLine(ImVec2(p0.x, p0.y + rulerHeight), ImVec2(p0.x + contentWidth, p0.y + rulerHeight), IM_COL32(70, 60, 90, 255), 1.5f);
 
                 // ルーラーの目盛り描画 (60F = 1秒ごとにテキスト・長目盛り、ステップごとに短目盛り)
@@ -2169,6 +2335,77 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     // フレームデータが存在する場合、アクティブ区間をビジュアルブロックとして描画
                     if (!frames.empty()) {
+                        ImVec2 mousePos = ImGui::GetMousePos();
+                        bool isChildHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+
+                        auto RenderAndHandleBlock = [&](int trackIdx, int blockStart, int blockEnd) {
+                            float bMinX = trackBgMin.x + blockStart * timelineZoom_;
+                            float bMaxX = trackBgMin.x + blockEnd * timelineZoom_;
+                            if (bMaxX - bMinX < 4.0f) bMaxX = bMinX + 4.0f; // 最小幅確保
+
+                            float blockMinY = trackY + 2.0f;
+                            float blockMaxY = trackY + trackHeight - 2.0f;
+
+                            bool isSelected = selectedReplayBlock_.Equals(trackIdx, blockStart, blockEnd);
+
+                            // ヒットテスト (マウス位置判定)
+                            bool mouseInY = (mousePos.y >= blockMinY && mousePos.y <= blockMaxY);
+                            bool mouseInX = (mousePos.x >= bMinX && mousePos.x <= bMaxX);
+                            bool mouseHoverBlock = mouseInY && mouseInX;
+
+                            // 端の判定 (左右6pxの範囲)
+                            bool nearLeft = mouseInY && (std::abs(mousePos.x - bMinX) <= 6.0f);
+                            bool nearRight = mouseInY && (std::abs(mousePos.x - bMaxX) <= 6.0f);
+
+                            // ホバー時のインタラクション・カーソル変更
+                            if (isChildHovered && replayBlockDragMode_ == ReplayBlockDragMode::None) {
+                                if (nearLeft || nearRight) {
+                                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                                    if (nearLeft) ImGui::SetTooltip("左端ドラッグ: 開始位置を変更");
+                                    else if (nearRight) ImGui::SetTooltip("右端ドラッグ: 長さを変更");
+                                } else if (mouseHoverBlock) {
+                                    ImGui::SetTooltip("トラック: %s\n開始: %df ~ 終了: %df\n長さ: %df (%.2f秒)",
+                                        trackNames[trackIdx], blockStart, blockEnd, blockEnd - blockStart, (blockEnd - blockStart) / 60.0f);
+                                }
+
+                                // クリック検出 -> 選択 & ドラッグ予備状態設定
+                                if ((nearLeft || nearRight || mouseHoverBlock) && ImGui::IsMouseClicked(0)) {
+                                    selectedReplayBlock_ = { trackIdx, blockStart, blockEnd };
+                                    draggingBlockOriginal_ = selectedReplayBlock_;
+                                    dragStartMouseFrame_ = (int)((mousePos.x - (p0.x + trackHeaderWidth)) / timelineZoom_);
+                                    dragStartMousePos_ = mousePos;
+                                    replayDragOldReplayData_ = ReplayManager::GetInstance()->GetCurrentReplay();
+                                    replayDragOldSelectedBlock_ = selectedReplayBlock_;
+                                    replayBlockDragMode_ = ReplayBlockDragMode::None;
+
+                                    if (nearLeft) pendingBlockDragMode_ = ReplayBlockDragMode::ResizeLeft;
+                                    else if (nearRight) pendingBlockDragMode_ = ReplayBlockDragMode::ResizeRight;
+                                    else pendingBlockDragMode_ = ReplayBlockDragMode::Move;
+                                }
+                            }
+
+                            // 描画: ノード本体
+                            drawList->AddRectFilled(ImVec2(bMinX, blockMinY), ImVec2(bMaxX, blockMaxY), trackColors[trackIdx], 3.0f);
+                            drawList->AddRect(ImVec2(bMinX, blockMinY), ImVec2(bMaxX, blockMaxY), IM_COL32(255, 255, 255, mouseHoverBlock ? 220 : 120), 3.0f);
+
+                            // 選択時 (Clipchamp風白枠ハイライト & 左右ハンドルつまみ)
+                            if (isSelected) {
+                                // 太い白枠ハイライト
+                                drawList->AddRect(ImVec2(bMinX - 1.0f, blockMinY - 1.0f), ImVec2(bMaxX + 1.0f, blockMaxY + 1.0f), IM_COL32(255, 255, 255, 255), 3.0f, 0, 2.0f);
+                                drawList->AddRectFilled(ImVec2(bMinX, blockMinY), ImVec2(bMaxX, blockMinY + 4.0f), IM_COL32(255, 255, 255, 90), 3.0f, ImDrawFlags_RoundCornersTop);
+
+                                // 左端白いハンドル
+                                drawList->AddRectFilled(ImVec2(bMinX - 4.0f, blockMinY - 1.0f), ImVec2(bMinX + 3.0f, blockMaxY + 1.0f), IM_COL32(255, 255, 255, 255), 3.0f);
+                                drawList->AddRect(ImVec2(bMinX - 4.0f, blockMinY - 1.0f), ImVec2(bMinX + 3.0f, blockMaxY + 1.0f), IM_COL32(40, 40, 60, 255), 3.0f);
+                                drawList->AddLine(ImVec2(bMinX - 1.0f, blockMinY + 4.0f), ImVec2(bMinX - 1.0f, blockMaxY - 4.0f), IM_COL32(100, 100, 120, 255), 1.0f);
+
+                                // 右端白いハンドル
+                                drawList->AddRectFilled(ImVec2(bMaxX - 3.0f, blockMinY - 1.0f), ImVec2(bMaxX + 4.0f, blockMaxY + 1.0f), IM_COL32(255, 255, 255, 255), 3.0f);
+                                drawList->AddRect(ImVec2(bMaxX - 3.0f, blockMinY - 1.0f), ImVec2(bMaxX + 4.0f, blockMaxY + 1.0f), IM_COL32(40, 40, 60, 255), 3.0f);
+                                drawList->AddLine(ImVec2(bMaxX + 1.0f, blockMinY + 4.0f), ImVec2(bMaxX + 1.0f, blockMaxY - 4.0f), IM_COL32(100, 100, 120, 255), 1.0f);
+                            }
+                        };
+
                         int blockStart = -1;
                         for (int f = 0; f < (int)frames.size() && f <= totalFrames; f++) {
                             const char* keys = frames[f].keys;
@@ -2185,21 +2422,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 if (blockStart == -1) blockStart = f;
                             } else {
                                 if (blockStart != -1) {
-                                    float bMinX = trackBgMin.x + blockStart * timelineZoom_;
-                                    float bMaxX = trackBgMin.x + f * timelineZoom_;
-                                    if (bMaxX - bMinX < 2.0f) bMaxX = bMinX + 2.0f; // 最小幅確保
-                                    drawList->AddRectFilled(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), trackColors[t], 3.0f);
-                                    drawList->AddRect(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), IM_COL32(255, 255, 255, 120), 3.0f);
+                                    RenderAndHandleBlock(t, blockStart, f);
                                     blockStart = -1;
                                 }
                             }
                         }
                         if (blockStart != -1) {
-                            float bMinX = trackBgMin.x + blockStart * timelineZoom_;
-                            float bMaxX = trackBgMin.x + (int)frames.size() * timelineZoom_;
-                            if (bMaxX - bMinX < 2.0f) bMaxX = bMinX + 2.0f;
-                            drawList->AddRectFilled(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), trackColors[t], 3.0f);
-                            drawList->AddRect(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), IM_COL32(255, 255, 255, 120), 3.0f);
+                            RenderAndHandleBlock(t, blockStart, (int)frames.size());
                         }
                     }
                 }
@@ -2240,7 +2469,132 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     drawList->AddText(ImVec2(headerLeftX + 10.0f, trackY + 3.0f), IM_COL32(230, 225, 250, 255), trackNames[t]);
                 }
 
-                // 2-d. マウスドラッグ / クリックによるシークスクラブ & Ctrlドラッグによる横スクロール
+                // 2-d. ドラッグ閾値判定 & ドラッグ中のノード更新
+                if (pendingBlockDragMode_ != ReplayBlockDragMode::None && replayBlockDragMode_ == ReplayBlockDragMode::None) {
+                    if (ImGui::IsMouseDown(0)) {
+                        float dist = std::hypot(mousePos.x - dragStartMousePos_.x, mousePos.y - dragStartMousePos_.y);
+                        if (dist >= 4.0f) { // 4ピクセル以上でドラッグモードへ昇格
+                            replayBlockDragMode_ = pendingBlockDragMode_;
+                            pendingBlockDragMode_ = ReplayBlockDragMode::None;
+                        }
+                    } else {
+                        pendingBlockDragMode_ = ReplayBlockDragMode::None;
+                    }
+                }
+                if (replayBlockDragMode_ != ReplayBlockDragMode::None) {
+                    ImVec2 mousePos = ImGui::GetMousePos();
+                    int currentMouseFrame = (int)((mousePos.x - (p0.x + trackHeaderWidth)) / timelineZoom_ + 0.5f);
+                    if (currentMouseFrame < 0) currentMouseFrame = 0;
+
+                    int frameDelta = currentMouseFrame - dragStartMouseFrame_;
+
+                    int pStart = draggingBlockOriginal_.startFrame;
+                    int pEnd = draggingBlockOriginal_.endFrame;
+
+                    if (replayBlockDragMode_ == ReplayBlockDragMode::Move) {
+                        int dur = draggingBlockOriginal_.endFrame - draggingBlockOriginal_.startFrame;
+                        pStart = (std::max)(0, draggingBlockOriginal_.startFrame + frameDelta);
+                        pEnd = pStart + dur;
+                    } else if (replayBlockDragMode_ == ReplayBlockDragMode::ResizeLeft) {
+                        pStart = std::clamp(draggingBlockOriginal_.startFrame + frameDelta, 0, draggingBlockOriginal_.endFrame - 1);
+                        pEnd = draggingBlockOriginal_.endFrame;
+                    } else if (replayBlockDragMode_ == ReplayBlockDragMode::ResizeRight) {
+                        pStart = draggingBlockOriginal_.startFrame;
+                        pEnd = (std::max)(draggingBlockOriginal_.startFrame + 1, draggingBlockOriginal_.endFrame + frameDelta);
+                    }
+
+                    // ドラッグ中のプレビュー描画
+                    int t = draggingBlockOriginal_.trackIdx;
+                    float trackY = p0.y + rulerHeight + t * (trackHeight + trackPadding) + 4.0f;
+                    float prevMinX = p0.x + trackHeaderWidth + pStart * timelineZoom_;
+                    float prevMaxX = p0.x + trackHeaderWidth + pEnd * timelineZoom_;
+                    if (prevMaxX - prevMinX < 4.0f) prevMaxX = prevMinX + 4.0f;
+
+                    drawList->AddRectFilled(ImVec2(prevMinX, trackY + 2.0f), ImVec2(prevMaxX, trackY + trackHeight - 2.0f), IM_COL32(255, 255, 255, 90), 3.0f);
+                    drawList->AddRect(ImVec2(prevMinX - 1.0f, trackY + 1.0f), ImVec2(prevMaxX + 1.0f, trackY + trackHeight - 1.0f), IM_COL32(255, 235, 59, 255), 3.0f, 0, 2.0f);
+
+                    ImGui::SetTooltip("移動/長さ変更中\n開始: %df ~ 終了: %df\n長さ: %df (%.2f秒)",
+                        pStart, pEnd, pEnd - pStart, (pEnd - pStart) / 60.0f);
+
+                    if (ImGui::IsMouseReleased(0)) {
+                        ReplayData oldData = replayDragOldReplayData_;
+                        SelectedReplayBlock oldBlock = replayDragOldSelectedBlock_;
+
+                        ReplayManager::GetInstance()->ModifyBlockRange(
+                            draggingBlockOriginal_.trackIdx,
+                            draggingBlockOriginal_.startFrame,
+                            draggingBlockOriginal_.endFrame,
+                            pStart,
+                            pEnd
+                        );
+                        selectedReplayBlock_ = { draggingBlockOriginal_.trackIdx, pStart, pEnd };
+
+                        ReplayData newData = ReplayManager::GetInstance()->GetCurrentReplay();
+                        SelectedReplayBlock newBlock = selectedReplayBlock_;
+
+                        PushActionCommand(
+                            [oldData, oldBlock, this]() {
+                                auto replayMgr = ReplayManager::GetInstance();
+                                replayMgr->GetCurrentReplay() = oldData;
+                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                this->selectedReplayBlock_ = oldBlock;
+                            },
+                            [newData, newBlock, this]() {
+                                auto replayMgr = ReplayManager::GetInstance();
+                                replayMgr->GetCurrentReplay() = newData;
+                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                this->selectedReplayBlock_ = newBlock;
+                            }
+                        );
+
+                        replayBlockDragMode_ = ReplayBlockDragMode::None;
+                    }
+                }
+
+                // Deleteキーによる選択ノード削除ショートカット
+                if (selectedReplayBlock_.IsValid() && ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+                    ReplayData oldData = ReplayManager::GetInstance()->GetCurrentReplay();
+                    SelectedReplayBlock oldBlock = selectedReplayBlock_;
+
+                    ReplayManager::GetInstance()->DeleteBlockRange(
+                        selectedReplayBlock_.trackIdx,
+                        selectedReplayBlock_.startFrame,
+                        selectedReplayBlock_.endFrame
+                    );
+                    selectedReplayBlock_.Clear();
+
+                    ReplayData newData = ReplayManager::GetInstance()->GetCurrentReplay();
+                    SelectedReplayBlock newBlock = selectedReplayBlock_;
+
+                    PushActionCommand(
+                        [oldData, oldBlock, this]() {
+                            auto replayMgr = ReplayManager::GetInstance();
+                            replayMgr->GetCurrentReplay() = oldData;
+                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            this->selectedReplayBlock_ = oldBlock;
+                        },
+                        [newData, newBlock, this]() {
+                            auto replayMgr = ReplayManager::GetInstance();
+                            replayMgr->GetCurrentReplay() = newData;
+                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            this->selectedReplayBlock_ = newBlock;
+                        }
+                    );
+                }
+
+                // リプレイエディター上での Undo (Ctrl+Z) / Redo (Ctrl+Y or Ctrl+Shift+Z)
+                if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+                    bool ctrl = io.KeyCtrl;
+                    bool shift = io.KeyShift;
+                    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z, false) && !shift) {
+                        Undo();
+                    }
+                    if ((ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) || (ctrl && shift && ImGui::IsKeyPressed(ImGuiKey_Z, false))) {
+                        Redo();
+                    }
+                }
+
+                // 2-e. Ctrlドラッグによる横スクロール & 空き領域クリックでのノード選択解除
                 ImGui::SetCursorScreenPos(p0);
                 ImGui::InvisibleButton("##TimelineCanvasButton", ImVec2(contentWidth, totalCanvasHeight));
                 if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -2248,14 +2602,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         // Ctrl + ドラッグで左右移動 (スクロール)
                         float scrollX = ImGui::GetScrollX();
                         ImGui::SetScrollX(scrollX - io.MouseDelta.x);
-                    } else {
-                        // 通常ドラッグでシークスクラブ
-                        ImVec2 mousePos = ImGui::GetMousePos();
-                        float relativeX = mousePos.x - (p0.x + trackHeaderWidth);
-                        int targetFrame = (int)(relativeX / timelineZoom_ + 0.5f);
-                        if (targetFrame < 0) targetFrame = 0;
-                        if (targetFrame > totalFrames) targetFrame = totalFrames;
-                        replayMgr->SetCurrentFrame(targetFrame);
+                    }
+                }
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !io.KeyCtrl) {
+                    if (replayBlockDragMode_ == ReplayBlockDragMode::None && pendingBlockDragMode_ == ReplayBlockDragMode::None) {
+                        selectedReplayBlock_.Clear();
                     }
                 }
 

@@ -510,7 +510,7 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
 }
 
 void ReplayManager::SetCurrentFrame(int frame) {
-    if (!isPlaying_ || currentReplay_.totalFrames == 0) return;
+    if (currentReplay_.totalFrames == 0) return;
     int prevFrame = currentFrame_;
     currentFrame_ = (std::max)(0, (std::min)(frame, currentReplay_.totalFrames - 1));
     if (prevFrame != currentFrame_) {
@@ -535,6 +535,79 @@ void ReplayManager::ApplyTimelineEdit(int frameIdx, int keyIdx, bool active) {
     // キーが変更されたため、MMLトラックを再計算する
     RebuildMmlFromFrames(currentReplay_);
 }
+
+static void GetTrackKeyInfo(int trackIdx, int& outKeyPos, char& outKeyChar) {
+    switch (trackIdx) {
+    case 0: outKeyPos = 0; outKeyChar = 'L'; break;
+    case 1: outKeyPos = 1; outKeyChar = 'R'; break;
+    case 2: outKeyPos = 5; outKeyChar = 'W'; break;
+    case 3: outKeyPos = 6; outKeyChar = 'S'; break;
+    case 4: outKeyPos = 2; outKeyChar = 'J'; break;
+    case 5: outKeyPos = 3; outKeyChar = 'D'; break;
+    case 6: outKeyPos = 4; outKeyChar = 'C'; break;
+    default: outKeyPos = 0; outKeyChar = '-'; break;
+    }
+}
+
+void ReplayManager::SetTrackKeyRange(int trackIdx, int startFrame, int endFrame, bool active) {
+    if (trackIdx < 0 || trackIdx >= 7) return;
+    if (startFrame > endFrame) std::swap(startFrame, endFrame);
+    if (startFrame < 0) startFrame = 0;
+
+    int keyPos;
+    char keyChar;
+    GetTrackKeyInfo(trackIdx, keyPos, keyChar);
+
+    if (endFrame > static_cast<int>(currentReplay_.frames.size())) {
+        FrameData fillFrame = currentReplay_.frames.empty() ? FrameData{} : currentReplay_.frames.back();
+        for (int k = 0; k < 7; ++k) fillFrame.keys[k] = '-';
+        fillFrame.keys[7] = '\0';
+        currentReplay_.frames.resize(endFrame, fillFrame);
+    }
+
+    for (int f = startFrame; f < endFrame && f < static_cast<int>(currentReplay_.frames.size()); ++f) {
+        currentReplay_.frames[f].keys[keyPos] = active ? keyChar : '-';
+    }
+
+    currentReplay_.totalFrames = static_cast<int>(currentReplay_.frames.size());
+    RebuildMmlFromFrames(currentReplay_);
+}
+
+void ReplayManager::ModifyBlockRange(int trackIdx, int oldStart, int oldEnd, int newStart, int newEnd) {
+    if (trackIdx < 0 || trackIdx >= 7) return;
+    int keyPos;
+    char keyChar;
+    GetTrackKeyInfo(trackIdx, keyPos, keyChar);
+
+    // 1. 旧範囲の該当キーをクリア
+    int validOldStart = (std::max)(0, oldStart);
+    int validOldEnd = (std::min)(static_cast<int>(currentReplay_.frames.size()), oldEnd);
+    for (int f = validOldStart; f < validOldEnd; ++f) {
+        currentReplay_.frames[f].keys[keyPos] = '-';
+    }
+
+    // 2. 新範囲に必要なフレームを確保
+    if (newEnd > static_cast<int>(currentReplay_.frames.size())) {
+        FrameData fillFrame = currentReplay_.frames.empty() ? FrameData{} : currentReplay_.frames.back();
+        for (int k = 0; k < 7; ++k) fillFrame.keys[k] = '-';
+        fillFrame.keys[7] = '\0';
+        currentReplay_.frames.resize(newEnd, fillFrame);
+    }
+
+    // 3. 新範囲にキーをセット
+    int validNewStart = (std::max)(0, newStart);
+    for (int f = validNewStart; f < newEnd && f < static_cast<int>(currentReplay_.frames.size()); ++f) {
+        currentReplay_.frames[f].keys[keyPos] = keyChar;
+    }
+
+    currentReplay_.totalFrames = static_cast<int>(currentReplay_.frames.size());
+    RebuildMmlFromFrames(currentReplay_);
+}
+
+void ReplayManager::DeleteBlockRange(int trackIdx, int startFrame, int endFrame) {
+    SetTrackKeyRange(trackIdx, startFrame, endFrame, false);
+}
+
 
 void ReplayManager::GenerateRuntimeKeys() {
     int maxFrame = currentReplay_.totalFrames;
