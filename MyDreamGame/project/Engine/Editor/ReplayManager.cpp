@@ -282,7 +282,7 @@ void ReplayManager::TriggerBugReport(const std::string& reason) {
     auto time = std::chrono::system_clock::to_time_t(now);
     std::tm tm{};
     localtime_s(&tm, &time);
-    std::string filename = std::format("bug_report_{:04}{:02}{:02}_{:02}{:02}{:02}.json", 
+    std::string filename = std::format("bug_report_{:04}{:02}{:02}_{:02}{:02}{:02}.mml", 
                                         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, 
                                         tm.tm_hour, tm.tm_min, tm.tm_sec);
                                         
@@ -467,17 +467,38 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
 
         if (isSnapEnabled_ || forceSnapNextFrame_) {
             if (distSq > 0.0025f || forceSnapNextFrame_) {
-                playerPos = recordedPos;
+                if (isInterpolationEnabled_ && currentFrame_ + 1 < static_cast<int>(currentReplay_.frames.size())) {
+                    const auto& nextFrame = currentReplay_.frames[currentFrame_ + 1];
+                    playerPos.x = recordedPos.x + (nextFrame.position.x - recordedPos.x) * 0.5f;
+                    playerPos.y = recordedPos.y + (nextFrame.position.y - recordedPos.y) * 0.5f;
+                    playerPos.z = recordedPos.z + (nextFrame.position.z - recordedPos.z) * 0.5f;
+                } else {
+                    playerPos = recordedPos;
+                }
             }
         }
     } else {
-        // ★ PAUSE中の場合は物理演算が止まらない対策として常に指定フレームの座標に強制上書きする
-        playerPos = currentFrame.position;
+        // ★ PAUSE中の場合は物理演算が止まらない対策として常に指定フレームの座標に強制作成・補間上書きする
+        if (isInterpolationEnabled_ && currentFrame_ + 1 < static_cast<int>(currentReplay_.frames.size())) {
+            const auto& nextFrame = currentReplay_.frames[currentFrame_ + 1];
+            playerPos.x = currentFrame.position.x + (nextFrame.position.x - currentFrame.position.x) * 0.5f;
+            playerPos.y = currentFrame.position.y + (nextFrame.position.y - currentFrame.position.y) * 0.5f;
+            playerPos.z = currentFrame.position.z + (nextFrame.position.z - currentFrame.position.z) * 0.5f;
+        } else {
+            playerPos = currentFrame.position;
+        }
     }
 
-    // カメラ座標の同期（カメラはキー操作で物理挙動しないためダイレクトに同期）
+    // カメラ座標の同期（カメラはキー操作で物理挙動しないためダイレクトに同期・補間）
     if (isSnapEnabled_ || forceSnapNextFrame_ || isPaused_) {
-        cameraPos = currentFrame.cameraPosition;
+        if (isInterpolationEnabled_ && currentFrame_ + 1 < static_cast<int>(currentReplay_.frames.size())) {
+            const auto& nextFrame = currentReplay_.frames[currentFrame_ + 1];
+            cameraPos.x = currentFrame.cameraPosition.x + (nextFrame.cameraPosition.x - currentFrame.cameraPosition.x) * 0.5f;
+            cameraPos.y = currentFrame.cameraPosition.y + (nextFrame.cameraPosition.y - currentFrame.cameraPosition.y) * 0.5f;
+            cameraPos.z = currentFrame.cameraPosition.z + (nextFrame.cameraPosition.z - currentFrame.cameraPosition.z) * 0.5f;
+        } else {
+            cameraPos = currentFrame.cameraPosition;
+        }
     }
 
     forceSnapNextFrame_ = false;
@@ -677,12 +698,20 @@ std::vector<char> ReplayManager::DecodeMmlToTrack(const std::string& mmlStr, int
 
 bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filename) {
     std::filesystem::create_directories("resources/json/saved_replays");
-    std::string filepath = "resources/json/saved_replays/" + filename;
+    std::string cleanName = filename;
     
-    // 拡張子の補正
-    if (filepath.find(".mml") == std::string::npos) {
-        filepath += ".mml";
+    // ".json.mml" または ".json" の文字を除去する
+    size_t jsonPos = cleanName.find(".json");
+    if (jsonPos != std::string::npos) {
+        cleanName.erase(jsonPos, 5);
     }
+    
+    // ".mml" が末尾になければ付加する
+    if (cleanName.length() < 4 || cleanName.substr(cleanName.length() - 4) != ".mml") {
+        cleanName += ".mml";
+    }
+
+    std::string filepath = "resources/json/saved_replays/" + cleanName;
 
     std::ofstream ofs(filepath);
     if (!ofs.is_open()) return false;
@@ -752,11 +781,19 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
 }
 
 bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outData) {
-    std::ifstream ifs(filepath);
+    std::string pathToOpen = filepath;
+    if (!std::filesystem::exists(pathToOpen)) {
+        std::string altPath = "resources/json/saved_replays/" + filepath;
+        if (std::filesystem::exists(altPath)) {
+            pathToOpen = altPath;
+        }
+    }
+
+    std::ifstream ifs(pathToOpen);
     if (!ifs.is_open()) return false;
 
     outData.frames.clear();
-    outData.filename = std::filesystem::path(filepath).filename().string();
+    outData.filename = std::filesystem::path(pathToOpen).filename().string();
     
     std::string line;
     std::string currentSection = "";

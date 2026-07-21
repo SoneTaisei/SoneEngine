@@ -620,19 +620,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("マイメディア (リプレイ履歴)", &showHierarchy_)) {
             auto replayMgr = ReplayManager::GetInstance();
             if (replayMgr->IsRecording()) {
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "● 録画中... (%d フレーム)", replayMgr->GetRecordedFrameCount());
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "[録画中...] (%d フレーム)", replayMgr->GetRecordedFrameCount());
             } else if (replayMgr->IsPlaying()) {
                 if (replayMgr->IsPaused()) {
-                    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.2f, 1.0f), "⏸ 一時停止中 (%d / %d F)", replayMgr->GetCurrentFrame(), replayMgr->GetCurrentReplay().totalFrames);
+                    ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.2f, 1.0f), "[一時停止中] (%d / %d F)", replayMgr->GetCurrentFrame(), replayMgr->GetCurrentReplay().totalFrames);
                 } else {
-                    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "▶ 再生中 (%d / %d F)", replayMgr->GetCurrentFrame(), replayMgr->GetCurrentReplay().totalFrames);
+                    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "[再生中] (%d / %d F)", replayMgr->GetCurrentFrame(), replayMgr->GetCurrentReplay().totalFrames);
                 }
             } else {
                 ImGui::Text("待機中");
             }
             ImGui::Separator();
 
-            if (ImGui::CollapsingHeader("📂 一時履歴データ (未保存)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("一時履歴データ (未保存)", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const auto& history = replayMgr->GetHistory();
                 if (history.empty()) {
                     ImGui::TextDisabled(" (履歴データなし)");
@@ -656,8 +656,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                         ImGui::SameLine();
                         if (ImGui::Button("保存", ImVec2(70, 0))) {
-                            std::string fname = "replay_" + std::to_string(history[selectedHistoryIdx].id) + ".json";
-                            replayMgr->SaveToFile(history[selectedHistoryIdx], fname);
+                            saveTargetHistoryIdx_ = selectedHistoryIdx;
+                            snprintf(saveFileNameBuf_, sizeof(saveFileNameBuf_), "replay_%d", history[selectedHistoryIdx].id);
+                            ImGui::OpenPopup("リプレイの保存");
                         }
                     }
                 }
@@ -665,7 +666,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             ImGui::Spacing();
 
-            if (ImGui::CollapsingHeader("💾 保存済みリプレイデータ", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("保存済みリプレイデータ", ImGuiTreeNodeFlags_DefaultOpen)) {
                 replayMgr->LoadSavedList();
                 const auto& savedFiles = replayMgr->GetSavedList();
 
@@ -683,6 +684,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Spacing();
                         if (ImGui::Button("ファイル再生", ImVec2(90, 0))) {
                             replayMgr->StartPlayback(-1, savedFiles[selectedFileIdx]);
+                            const auto& curReplay = replayMgr->GetCurrentReplay();
+                            if (!curReplay.mapDataStr.empty()) {
+                                this->mapDataStrToLoad_ = curReplay.mapDataStr;
+                                this->loadMapDataStrNextFrame_ = true;
+                            }
                         }
                         ImGui::SameLine();
                         if (ImGui::Button("ファイル削除", ImVec2(90, 0))) {
@@ -691,6 +697,34 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
                 }
+            }
+
+            // リプレイ保存時のファイル名入力ダイアログ
+            if (ImGui::BeginPopupModal("リプレイの保存", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("保存するファイル名を入力してください (.mml):");
+                ImGui::Spacing();
+                ImGui::SetNextItemWidth(250.0f);
+                ImGui::InputText("##SaveFileNameInput", saveFileNameBuf_, sizeof(saveFileNameBuf_));
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                if (ImGui::Button("保存", ImVec2(100, 26))) {
+                    if (strlen(saveFileNameBuf_) > 0) {
+                        const auto& historyList = replayMgr->GetHistory();
+                        if (saveTargetHistoryIdx_ >= 0 && saveTargetHistoryIdx_ < (int)historyList.size()) {
+                            replayMgr->SaveToFile(historyList[saveTargetHistoryIdx_], std::string(saveFileNameBuf_));
+                        }
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("キャンセル", ImVec2(100, 26))) {
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::EndPopup();
             }
         }
         ImGui::End();
@@ -1928,17 +1962,37 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- 下部ペイン (通常: マップ設定 / リプレイ時: タイムライン) ---
     if (showMapSettings_) {
         if (currentMode_ == EditorMode::Replay) {
-            if (ImGui::Begin("タイムライン", &showMapSettings_)) {
+            if (ImGui::Begin("タイムライン", &showMapSettings_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 auto replayMgr = ReplayManager::GetInstance();
                 const auto& currentReplay = replayMgr->GetCurrentReplay();
 
-                // 1. コントロールボタン群
+                int currentFrame = replayMgr->GetCurrentFrame();
+                int totalFrames = currentReplay.totalFrames;
+                if (totalFrames <= 0 && replayMgr->IsRecording()) {
+                    totalFrames = replayMgr->GetRecordedFrameCount();
+                }
+                if (totalFrames <= 0) totalFrames = 1;
+
+                // 1. コントロールバー (ヘッダー)
+                // コマ戻し (1F)
+                if (ImGui::Button("|<", ImVec2(32, 28))) {
+                    if (currentFrame > 0) {
+                        replayMgr->SetCurrentFrame(currentFrame - 1);
+                    }
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム戻る");
+                ImGui::SameLine();
+
+                // 再生 / 一時停止 (Clipchamp風パープルボタン)
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.90f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.32f, 1.00f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.15f, 0.80f, 1.0f));
                 if (replayMgr->IsPlaying() && !replayMgr->IsPaused()) {
-                    if (ImGui::Button("⏸ 一時停止 (Pause)", ImVec2(120, 28))) {
+                    if (ImGui::Button("一時停止", ImVec2(90, 28))) {
                         replayMgr->PausePlayback();
                     }
                 } else {
-                    if (ImGui::Button("▶ 再生 (Play)", ImVec2(120, 28))) {
+                    if (ImGui::Button("再生", ImVec2(90, 28))) {
                         if (replayMgr->IsPaused()) {
                             replayMgr->ResumePlayback();
                         } else {
@@ -1958,51 +2012,254 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
                 }
+                ImGui::PopStyleColor(3);
                 ImGui::SameLine();
-                if (ImGui::Button("⏹ 停止 (Stop)", ImVec2(90, 28))) {
+
+                // コマ送り (1F)
+                if (ImGui::Button(">|", ImVec2(32, 28))) {
+                    if (currentFrame < totalFrames) {
+                        replayMgr->SetCurrentFrame(currentFrame + 1);
+                    }
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム進む");
+                ImGui::SameLine();
+
+                // 停止
+                if (ImGui::Button("停止", ImVec2(65, 28))) {
                     replayMgr->StopPlayback();
                 }
-
                 ImGui::SameLine();
+
+                // ループ再生
                 bool isLoop = replayMgr->IsLoopPlay();
-                if (ImGui::Checkbox("🔄 ループ再生", &isLoop)) {
+                if (ImGui::Checkbox("ループ", &isLoop)) {
                     replayMgr->SetLoopPlay(isLoop);
                 }
+                ImGui::SameLine();
+
+                // 補間 (Lerp) 設定
+                bool isInterpolation = replayMgr->IsInterpolationEnabled();
+                if (ImGui::Checkbox("補間", &isInterpolation)) {
+                    replayMgr->SetInterpolationEnabled(isInterpolation);
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("フレーム間の位置補間 (Lerp) のON/OFF");
+                ImGui::SameLine();
+                ImGui::Spacing();
+                ImGui::SameLine();
+
+                // デジタルタイム表示 (Clipchampスタイル)
+                float currentSec = currentFrame / 60.0f;
+                float totalSec = totalFrames / 60.0f;
+                int curMin = (int)currentSec / 60;
+                float curS = fmod(currentSec, 60.0f);
+                int totMin = (int)totalSec / 60;
+                float totS = fmod(totalSec, 60.0f);
+
+                ImGui::TextColored(ImVec4(0.88f, 0.80f, 1.0f, 1.0f), "%02d:%05.2f / %02d:%05.2f  (%d / %d F)",
+                    curMin, curS, totMin, totS, currentFrame, totalFrames);
+
+                ImGui::SameLine();
+                // ズーム倍率テキスト表示 & 引き継ぎボタン
+                ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 240.0f);
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextColored(ImVec4(0.85f, 0.85f, 1.0f, 1.0f), "ズーム: %.1fx", timelineZoom_);
 
                 ImGui::SameLine();
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-                if (ImGui::Button("🎮 この位置から操作を引き継ぐ", ImVec2(200, 28))) {
+                if (ImGui::Button("操作引き継ぎ", ImVec2(110, 28))) {
                     replayMgr->TakeoverPlayback();
                     takeoverCountdown_ = 3.0f;
                 }
                 ImGui::PopStyleColor();
 
-                // 2. シークバー
-                int currentFrame = replayMgr->GetCurrentFrame();
-                int totalFrames = currentReplay.totalFrames;
-                if (totalFrames <= 0 && replayMgr->IsRecording()) {
-                    totalFrames = replayMgr->GetRecordedFrameCount();
-                }
-
-                ImGui::Spacing();
-                ImGui::SetNextItemWidth(-1.0f);
-                if (ImGui::SliderInt("##TimelineSlider", &currentFrame, 0, totalFrames > 0 ? totalFrames : 1, "Frame: %d / %d")) {
-                    replayMgr->SetCurrentFrame(currentFrame);
-                }
-
-                // 3. タイム表示
-                float currentSec = currentFrame / 60.0f;
-                float totalSec = totalFrames / 60.0f;
-                ImGui::Text("⏱ 時間: %02d:%05.2f / %02d:%05.2f", (int)currentSec / 60, fmod(currentSec, 60.0f), (int)totalSec / 60, fmod(totalSec, 60.0f));
-
-                // 4. MMLキー入力トラック表示
                 ImGui::Separator();
-                ImGui::Text("🎹 キー入力トラック (MML):");
-                const char* trackNames[5] = {"T0 (移動 L/R)", "T1 (ジャンプ J)", "T2 (ダッシュ D)", "T3 (壁張り付き C)", "T4 (上下 W/S)"};
-                for (int t = 0; t < 5; t++) {
-                    const char* mml = (!currentReplay.mmlTracks[t].empty()) ? currentReplay.mmlTracks[t].c_str() : "(データなし)";
-                    ImGui::Text("%s: %s", trackNames[t], mml);
+
+                // 2. タイムラインルーラー & ビジュアルトラック描画エリア
+                const float trackHeaderWidth = 130.0f; // トラック名表示エリアの幅
+                const float rulerHeight = 28.0f;       // ルーラーエリアの高さ
+                const float trackHeight = 22.0f;      // 1トラックあたりの高さ
+                const float trackPadding = 4.0f;
+                const int numTracks = 7;
+                const char* trackNames[7] = {
+                    "左移動 (L)",
+                    "右移動 (R)",
+                    "上移動 (W)",
+                    "下移動 (S)",
+                    "ジャンプ (J)",
+                    "ダッシュ (D)",
+                    "壁張り付き (C)"
+                };
+                const ImU32 trackColors[7] = {
+                    IM_COL32(76, 175, 80, 220),   // 左: グリーン
+                    IM_COL32(139, 195, 74, 220),  // 右: ライトグリーン
+                    IM_COL32(255, 235, 59, 220),  // 上: イエロー
+                    IM_COL32(0, 188, 212, 220),   // 下: シアン
+                    IM_COL32(33, 150, 243, 220),  // ジャンプ: ブルー
+                    IM_COL32(255, 152, 0, 220),   // ダッシュ: オレンジ
+                    IM_COL32(156, 39, 176, 220)   // 壁張り付き: パープル
+                };
+
+                float timelineWidth = (float)totalFrames * timelineZoom_;
+                float contentWidth = trackHeaderWidth + timelineWidth + 50.0f;
+                float totalCanvasHeight = rulerHeight + (trackHeight + trackPadding) * numTracks + 6.0f;
+
+                // スクロール可能なChild Windowとしてキャンバスを作成（縦スクロールバーを完全に除去）
+                ImGui::SetNextWindowContentSize(ImVec2(contentWidth, totalCanvasHeight));
+                ImGui::BeginChild("TimelineScrollChild", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar);
+
+                // マウスホイールでのズーム & Ctrl+ホイールでの左右スクロール
+                ImGuiIO& io = ImGui::GetIO();
+                if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+                    if (io.MouseWheel != 0.0f) {
+                        if (io.KeyCtrl) {
+                            // Ctrl + マウスホイール -> 左右スクロール移動
+                            float scrollX = ImGui::GetScrollX();
+                            ImGui::SetScrollX(scrollX - io.MouseWheel * 60.0f);
+                        } else {
+                            // 通常のマウスホイール -> ズーム倍率変更
+                            timelineZoom_ += io.MouseWheel * 0.5f;
+                            if (timelineZoom_ < 1.0f) timelineZoom_ = 1.0f;
+                            if (timelineZoom_ > 30.0f) timelineZoom_ = 30.0f;
+                        }
+                    }
                 }
+
+                ImVec2 p0 = ImGui::GetCursorScreenPos();
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                float scrollX = ImGui::GetScrollX();
+                float headerLeftX = p0.x + scrollX; // 画面左端に固定表示するためのX座標
+
+                // 全体背景
+                drawList->AddRectFilled(p0, ImVec2(p0.x + contentWidth, p0.y + totalCanvasHeight), IM_COL32(20, 18, 28, 255));
+
+                // 2-a. ルーラーを描画 (Top 0 ~ rulerHeight)
+                ImVec2 rulerTopLeft = ImVec2(p0.x + trackHeaderWidth, p0.y);
+                ImVec2 rulerBottomRight = ImVec2(p0.x + trackHeaderWidth + timelineWidth, p0.y + rulerHeight);
+                drawList->AddRectFilled(rulerTopLeft, rulerBottomRight, IM_COL32(35, 30, 50, 255));
+                drawList->AddLine(ImVec2(p0.x, p0.y + rulerHeight), ImVec2(p0.x + contentWidth, p0.y + rulerHeight), IM_COL32(70, 60, 90, 255), 1.5f);
+
+                // ルーラーの目盛り描画 (60F = 1秒ごとにテキスト・長目盛り、ステップごとに短目盛り)
+                int stepFrame = (timelineZoom_ >= 8.0f) ? 10 : (timelineZoom_ >= 3.0f ? 30 : 60);
+                for (int f = 0; f <= totalFrames; f += stepFrame) {
+                    float x = rulerTopLeft.x + f * timelineZoom_;
+                    if (f % 60 == 0 || f % stepFrame == 0) {
+                        bool isMajor = (f % 60 == 0);
+                        float lineH = isMajor ? 12.0f : 7.0f;
+                        drawList->AddLine(ImVec2(x, rulerBottomRight.y - lineH), ImVec2(x, rulerBottomRight.y), IM_COL32(180, 170, 210, 200), isMajor ? 1.5f : 1.0f);
+
+                        if (isMajor || timelineZoom_ >= 4.0f) {
+                            float sec = f / 60.0f;
+                            char timeStr[32];
+                            snprintf(timeStr, sizeof(timeStr), "%02d:%02d", (int)sec / 60, (int)sec % 60);
+                            drawList->AddText(ImVec2(x + 3.0f, p0.y + 3.0f), IM_COL32(200, 190, 230, 230), timeStr);
+                        }
+                    }
+                }
+
+                // 2-b. トラック本体背景 & MMLキー入力ブロックの描画
+                const auto& frames = currentReplay.frames;
+                for (int t = 0; t < numTracks; t++) {
+                    float trackY = p0.y + rulerHeight + t * (trackHeight + trackPadding) + 4.0f;
+
+                    // トラック本体背景
+                    ImVec2 trackBgMin = ImVec2(p0.x + trackHeaderWidth, trackY);
+                    ImVec2 trackBgMax = ImVec2(p0.x + trackHeaderWidth + timelineWidth, trackY + trackHeight);
+                    drawList->AddRectFilled(trackBgMin, trackBgMax, IM_COL32(28, 25, 38, 255), 3.0f);
+                    drawList->AddRect(trackBgMin, trackBgMax, IM_COL32(50, 45, 65, 180), 3.0f);
+
+                    // フレームデータが存在する場合、アクティブ区間をビジュアルブロックとして描画
+                    if (!frames.empty()) {
+                        int blockStart = -1;
+                        for (int f = 0; f < (int)frames.size() && f <= totalFrames; f++) {
+                            const char* keys = frames[f].keys;
+                            bool isActive = false;
+                            if (t == 0) isActive = (keys[0] == 'L');
+                            else if (t == 1) isActive = (keys[1] == 'R');
+                            else if (t == 2) isActive = (keys[5] == 'W');
+                            else if (t == 3) isActive = (keys[6] == 'S');
+                            else if (t == 4) isActive = (keys[2] == 'J');
+                            else if (t == 5) isActive = (keys[3] == 'D');
+                            else if (t == 6) isActive = (keys[4] == 'C');
+
+                            if (isActive) {
+                                if (blockStart == -1) blockStart = f;
+                            } else {
+                                if (blockStart != -1) {
+                                    float bMinX = trackBgMin.x + blockStart * timelineZoom_;
+                                    float bMaxX = trackBgMin.x + f * timelineZoom_;
+                                    if (bMaxX - bMinX < 2.0f) bMaxX = bMinX + 2.0f; // 最小幅確保
+                                    drawList->AddRectFilled(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), trackColors[t], 3.0f);
+                                    drawList->AddRect(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), IM_COL32(255, 255, 255, 120), 3.0f);
+                                    blockStart = -1;
+                                }
+                            }
+                        }
+                        if (blockStart != -1) {
+                            float bMinX = trackBgMin.x + blockStart * timelineZoom_;
+                            float bMaxX = trackBgMin.x + (int)frames.size() * timelineZoom_;
+                            if (bMaxX - bMinX < 2.0f) bMaxX = bMinX + 2.0f;
+                            drawList->AddRectFilled(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), trackColors[t], 3.0f);
+                            drawList->AddRect(ImVec2(bMinX, trackY + 2.0f), ImVec2(bMaxX, trackY + trackHeight - 2.0f), IM_COL32(255, 255, 255, 120), 3.0f);
+                        }
+                    }
+                }
+
+                // 2-c. シーク指示線（プレイヘッド垂直線 & 紫丸ノブ）
+                float playheadX = p0.x + trackHeaderWidth + currentFrame * timelineZoom_;
+
+                // 垂直ライン (全トラックを縦断)
+                drawList->AddLine(
+                    ImVec2(playheadX, p0.y),
+                    ImVec2(playheadX, p0.y + totalCanvasHeight),
+                    IM_COL32(255, 255, 255, 240),
+                    2.0f
+                );
+                // 紫色のシャドウ・光彩
+                drawList->AddLine(
+                    ImVec2(playheadX - 1.0f, p0.y),
+                    ImVec2(playheadX - 1.0f, p0.y + totalCanvasHeight),
+                    IM_COL32(160, 32, 240, 120),
+                    4.0f
+                );
+
+                // ルーラー上部の丸型ピン（Clipchampヘッド）
+                drawList->AddCircleFilled(ImVec2(playheadX, p0.y + 10.0f), 8.0f, IM_COL32(160, 32, 240, 255));
+                drawList->AddCircleFilled(ImVec2(playheadX, p0.y + 10.0f), 5.0f, IM_COL32(255, 255, 255, 255));
+                drawList->AddCircle(ImVec2(playheadX, p0.y + 10.0f), 8.5f, IM_COL32(255, 255, 255, 200), 0, 1.5f);
+
+                // 2-d. トラックヘッダーの画面左端固定描画 (Sticky Column)
+                // 左上ルーラー交差部のマスク背景
+                drawList->AddRectFilled(ImVec2(headerLeftX, p0.y), ImVec2(headerLeftX + trackHeaderWidth, p0.y + rulerHeight), IM_COL32(30, 25, 45, 255));
+                drawList->AddLine(ImVec2(headerLeftX + trackHeaderWidth - 1.0f, p0.y), ImVec2(headerLeftX + trackHeaderWidth - 1.0f, p0.y + totalCanvasHeight), IM_COL32(60, 50, 80, 255), 1.5f);
+
+                // 各トラック名ラベルをスクロール固定位置に最前面描画
+                for (int t = 0; t < numTracks; t++) {
+                    float trackY = p0.y + rulerHeight + t * (trackHeight + trackPadding) + 4.0f;
+                    drawList->AddRectFilled(ImVec2(headerLeftX + 2.0f, trackY), ImVec2(headerLeftX + trackHeaderWidth - 5.0f, trackY + trackHeight), IM_COL32(40, 35, 55, 255), 4.0f);
+                    drawList->AddRect(ImVec2(headerLeftX + 2.0f, trackY), ImVec2(headerLeftX + trackHeaderWidth - 5.0f, trackY + trackHeight), IM_COL32(65, 55, 85, 200), 4.0f);
+                    drawList->AddText(ImVec2(headerLeftX + 10.0f, trackY + 3.0f), IM_COL32(230, 225, 250, 255), trackNames[t]);
+                }
+
+                // 2-d. マウスドラッグ / クリックによるシークスクラブ & Ctrlドラッグによる横スクロール
+                ImGui::SetCursorScreenPos(p0);
+                ImGui::InvisibleButton("##TimelineCanvasButton", ImVec2(contentWidth, totalCanvasHeight));
+                if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    if (io.KeyCtrl) {
+                        // Ctrl + ドラッグで左右移動 (スクロール)
+                        float scrollX = ImGui::GetScrollX();
+                        ImGui::SetScrollX(scrollX - io.MouseDelta.x);
+                    } else {
+                        // 通常ドラッグでシークスクラブ
+                        ImVec2 mousePos = ImGui::GetMousePos();
+                        float relativeX = mousePos.x - (p0.x + trackHeaderWidth);
+                        int targetFrame = (int)(relativeX / timelineZoom_ + 0.5f);
+                        if (targetFrame < 0) targetFrame = 0;
+                        if (targetFrame > totalFrames) targetFrame = totalFrames;
+                        replayMgr->SetCurrentFrame(targetFrame);
+                    }
+                }
+
+                ImGui::EndChild();
             }
             ImGui::End();
         } else {

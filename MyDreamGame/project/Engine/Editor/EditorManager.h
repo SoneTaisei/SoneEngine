@@ -267,6 +267,14 @@ private:
     bool showMapEditor_ = true;
     bool showMapSettings_ = true;
 
+    // タイムライン（リプレイエディター）用パラメータ
+    float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅
+    float timelineScrollX_ = 0.0f;  // タイムライン横スクロール位置
+
+    // リプレイ保存ダイアログ用
+    int saveTargetHistoryIdx_ = -1;
+    char saveFileNameBuf_[128] = "replay_1";
+
     static bool showObjects_;
     static bool showEffects_;
 };

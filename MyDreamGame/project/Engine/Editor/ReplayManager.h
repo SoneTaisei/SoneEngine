@@ -147,6 +147,9 @@ public:
     bool IsSnapEnabled() const { return isSnapEnabled_; }
     void SetSnapEnabled(bool enable) { isSnapEnabled_ = enable; }
 
+    bool IsInterpolationEnabled() const { return isInterpolationEnabled_; }
+    void SetInterpolationEnabled(bool enable) { isInterpolationEnabled_ = enable; }
+
     ReplayData& GetCurrentReplay() { return currentReplay_; }
     const std::vector<ReplayData>& GetHistory() const { return history_; }
     const std::vector<std::string>& GetSavedList() const { return savedList_; }
@@ -174,6 +177,7 @@ private:
     bool isPaused_ = false;
     bool isLoopPlay_ = false;
     bool isSnapEnabled_ = true;
+    bool isInterpolationEnabled_ = true; // フレーム間の座標補間フラグ
     bool forceSnapNextFrame_ = false; // シーク時に強制スナップするフラグ
     bool hasLoggedDesync_ = false;    // 再生中にズレをすでにログ出力したかどうか
     bool isTakeoverRecording_ = false; // 乗っ取り（割り込み）からの録画フラグ
