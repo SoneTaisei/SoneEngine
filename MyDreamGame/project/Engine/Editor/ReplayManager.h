@@ -3,8 +3,49 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <random>
+#include <cstdint>
 
 class KeyboardInput;
+
+/// <summary>
+/// リプレイのヘッダー情報（決定論的システム用）
+/// </summary>
+struct ReplayHeader {
+    uint32_t randomSeed = 1337;          // 録画・再生・検証開始時の乱数シード
+    float fixedDeltaTime = 1.0f / 60.0f; // 固定フレームレート
+    int totalFrames = 0;
+};
+
+/// <summary>
+/// 決定論的擬似乱数管理クラス
+/// </summary>
+class DeterministicRandom {
+private:
+    std::mt19937 engine;
+public:
+    DeterministicRandom(uint32_t seed = 1337) {
+        engine.seed(seed);
+    }
+    void Initialize(uint32_t seed) {
+        engine.seed(seed);
+    }
+    int GetRange(int min, int max) {
+        std::uniform_int_distribution<int> dist(min, max);
+        return dist(engine);
+    }
+};
+
+/// <summary>
+/// ステージ難易度のスコアリング評価結果
+/// </summary>
+struct DifficultyScore {
+    float averageAPM = 0.0f;               // 1分あたりのキー操作切り替え回数 (Actions Per Minute)
+    float maxPrecisionScore = 0.0f;        // シリアリティ（崖っぷちジャンプ等の操作精度スコア）
+    float stagnationDuration = 0.0f;       // プレイヤーの停滞・迷い時間（秒）
+    float finalCalculatedDifficulty = 0.0f; // 総合難易度スコア (0 ~ 100+)
+};
+
 
 /// <summary>
 /// 1フレーム分のリプレイデータ
@@ -135,6 +176,19 @@ public:
     void CancelMacroRecording() { isRecordingMacro_ = false; macroRecordingName_ = ""; temporaryRecordedFrames_.clear(); }
     bool IsRecordingMacro() const { return isRecordingMacro_; }
 
+    // 高速自動モンキーテスト & 難易度解析
+    void ExecuteFastMonkeyTest(int iterations = 10, int jitterChance = 5);
+    DifficultyScore AnalyzeReplayDifficulty(const std::vector<FrameData>& replayData);
+
+    uint32_t GetRandomSeed() const { return replayHeader_.randomSeed; }
+    void SetRandomSeed(uint32_t seed) { replayHeader_.randomSeed = seed; deterministicRandom_.Initialize(seed); }
+    DeterministicRandom& GetDeterministicRandom() { return deterministicRandom_; }
+    const ReplayHeader& GetReplayHeader() const { return replayHeader_; }
+
+    const std::vector<std::string>& GetMonkeyTestLogs() const { return monkeyTestLogs_; }
+    void ClearMonkeyTestLogs() { monkeyTestLogs_.clear(); }
+    const DifficultyScore& GetLastAnalyzedScore() const { return lastAnalyzedScore_; }
+
     // ゲッター・セッター
     bool IsRecording() const { return isRecording_; }
     bool IsPlaying() const { return isPlaying_; }
@@ -175,6 +229,11 @@ private:
     void GenerateRuntimeKeys();
 
 private:
+    ReplayHeader replayHeader_;                       // 決定論的ヘッダー情報
+    DeterministicRandom deterministicRandom_{ 1337 }; // 決定論的乱数発生器
+    std::vector<std::string> monkeyTestLogs_;          // モンキーテストの実行ログ
+    DifficultyScore lastAnalyzedScore_;               // 直近の難易度解析スコア
+
     bool isRecording_ = false;
     bool isPlaying_ = false;
     bool isPaused_ = false;
@@ -190,6 +249,7 @@ private:
     int takeoverSourceId_ = -1;       // 乗っ取り元のReplayData ID
     int nextReplayId_ = 1;            // 次に割り当てるReplayData ID
     int currentFrame_ = 0;
+
 
     Vector3 playerInitPos_ = { 0.0f, 0.0f, 0.0f };
     Vector3 cameraInitPos_ = { 0.0f, 0.0f, 0.0f };

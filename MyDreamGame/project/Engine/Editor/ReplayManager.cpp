@@ -449,14 +449,14 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         float dz = playerPos.z - recordedPos.z;
         float distSq = dx * dx + dy * dy + dz * dz;
 
-        // isSnapEnabled_ (TASモードの補正) がOFFでも、ズレ検知のログは出す
-        if (distSq > 0.0025f && !forceSnapNextFrame_ && !hasLoggedDesync_) {
+        // 位置補正(isSnapEnabled_)がOFFの時のみ、ズレ検知のエラーログを出力する
+        if (distSq > 0.0025f && !isSnapEnabled_ && !forceSnapNextFrame_ && !hasLoggedDesync_) {
             std::string errorMsg = std::format(
                 "リプレイのズレ検知 (フレーム: {}, ズレ量: {:.3f})\n"
                 "  [現在座標] X:{:.3f}, Y:{:.3f}, Z:{:.3f}\n"
                 "  [録画座標] X:{:.3f}, Y:{:.3f}, Z:{:.3f}\n"
                 "  [原因] 録画時と再生時で物理演算の結果に誤差が蓄積しています。\n"
-                "  [対策] TAS編集メニューの「位置補正」をONにするか、物理演算を固定時間で行うよう変更してください。",
+                "  [対策] インスペクターの「位置補正」をONにするか、物理演算を固定時間で行うよう変更してください。",
                 currentFrame_, std::sqrt(distSq),
                 playerPos.x, playerPos.y, playerPos.z,
                 recordedPos.x, recordedPos.y, recordedPos.z
@@ -1058,3 +1058,149 @@ void ReplayManager::DeleteSavedFile(const std::string& filepath) {
         LoadSavedList();
     }
 }
+
+void ReplayManager::ExecuteFastMonkeyTest(int iterations, int jitterChance) {
+    monkeyTestLogs_.clear();
+    
+    const auto& baseReplay = currentReplay_.frames;
+    if (baseReplay.empty()) {
+        monkeyTestLogs_.push_back("[WARN] モンキーテストを開始できません: リプレイデータが空です。");
+        return;
+    }
+
+    char timeBuffer[64];
+    std::time_t t = std::time(nullptr);
+    std::tm tm;
+    localtime_s(&tm, &t);
+    std::strftime(timeBuffer, sizeof(timeBuffer), "%Y/%m/%d %H:%M:%S", &tm);
+
+    monkeyTestLogs_.push_back("[INFO] モンキーテスト開始 - 試行回数: " + std::to_string(iterations) + 
+                             ", Jitter発生率: " + std::to_string(jitterChance) + "% - " + timeBuffer);
+
+    int totalDetectedBugs = 0;
+    DeterministicRandom testRandom(replayHeader_.randomSeed);
+
+    for (int iter = 0; iter < iterations; ++iter) {
+        uint32_t currentSeed = replayHeader_.randomSeed + iter;
+        testRandom.Initialize(currentSeed);
+
+        bool bugDetectedInIter = false;
+        int bugFrame = -1;
+        std::string bugReason = "";
+
+        Vector3 simulatedPos = currentReplay_.playerInitPos;
+        Vector3 previousPos = simulatedPos;
+        int zeroMoveStreak = 0;
+
+        for (int frame = 0; frame < static_cast<int>(baseReplay.size()); ++frame) {
+            FrameData currentFrameData = baseReplay[frame];
+
+            // Jitter適用（設定確率で入力状態を変化）
+            if (testRandom.GetRange(0, 100) < jitterChance) {
+                currentFrameData.keys[2] = (currentFrameData.keys[2] == 'J') ? '-' : 'J';
+            }
+
+            simulatedPos = currentFrameData.position;
+            float dx = simulatedPos.x - previousPos.x;
+            float dy = simulatedPos.y - previousPos.y;
+            float distSq = dx * dx + dy * dy;
+
+            if (distSq < 0.0001f) {
+                zeroMoveStreak++;
+            } else {
+                zeroMoveStreak = 0;
+            }
+
+            // バグ検知判定
+            if (simulatedPos.y < -500.0f || simulatedPos.y > 5000.0f || std::isnan(simulatedPos.x) || std::isnan(simulatedPos.y)) {
+                bugDetectedInIter = true;
+                bugFrame = frame;
+                bugReason = "プレイヤーの座標異常/画面外落下を検知 (Pos: " + 
+                            std::to_string((int)simulatedPos.x) + ", " + std::to_string((int)simulatedPos.y) + ")";
+                break;
+            } else if (zeroMoveStreak > 180) { // 3秒以上のスタック
+                bugDetectedInIter = true;
+                bugFrame = frame;
+                bugReason = "3秒間以上の位置スタック（進行阻害）を検知";
+                break;
+            }
+
+            previousPos = simulatedPos;
+        }
+
+        if (bugDetectedInIter) {
+            totalDetectedBugs++;
+            std::string logMsg = "[BUG DETECTED] テストケース #" + std::to_string(iter + 1) + 
+                                 " (Seed: " + std::to_string(currentSeed) + ") Frame " + 
+                                 std::to_string(bugFrame) + " にて異常検出: " + bugReason;
+            monkeyTestLogs_.push_back(logMsg);
+        }
+    }
+
+    if (totalDetectedBugs == 0) {
+        monkeyTestLogs_.push_back("[SUCCESS] モンキーテスト完了: 全 " + std::to_string(iterations) + " 回の試行でバグは検知されませんでした。");
+    } else {
+        monkeyTestLogs_.push_back("[SUMMARY] モンキーテスト完了: 合計 " + std::to_string(totalDetectedBugs) + " 件のバグ検知ログを出力しました。");
+    }
+}
+
+DifficultyScore ReplayManager::AnalyzeReplayDifficulty(const std::vector<FrameData>& replayData) {
+    DifficultyScore score;
+    if (replayData.empty()) {
+        lastAnalyzedScore_ = score;
+        return score;
+    }
+
+    int inputChanges = 0;
+    int zeroSpeedFrames = 0;
+    float tightJumpSum = 0.0f;
+    int jumpCount = 0;
+
+    for (size_t i = 1; i < replayData.size(); ++i) {
+        // APM計算
+        bool keyChanged = false;
+        for (int k = 0; k < 7; ++k) {
+            if (replayData[i].keys[k] != replayData[i - 1].keys[k]) {
+                keyChanged = true;
+                break;
+            }
+        }
+        if (keyChanged) {
+            inputChanges++;
+        }
+
+        // テンポ（停滞フレーム）計算
+        float vx = replayData[i].position.x - replayData[i - 1].position.x;
+        float vy = replayData[i].position.y - replayData[i - 1].position.y;
+        if (std::abs(vx) < 0.01f && std::abs(vy) < 0.01f) {
+            zeroSpeedFrames++;
+        }
+
+        // シリアリティ（精密ジャンプ）計算
+        bool prevJump = (replayData[i - 1].keys[2] == 'J');
+        bool currJump = (replayData[i].keys[2] == 'J');
+        if (currJump && !prevJump) {
+            jumpCount++;
+            float distToEdgeSq = std::abs(vx);
+            if (distToEdgeSq < 0.05f) {
+                tightJumpSum += 80.0f;
+            } else {
+                tightJumpSum += 30.0f;
+            }
+        }
+    }
+
+    float totalSeconds = replayData.size() / 60.0f;
+    if (totalSeconds > 0.0f) {
+        score.averageAPM = (inputChanges / totalSeconds) * 60.0f;
+        score.stagnationDuration = zeroSpeedFrames / 60.0f;
+    }
+    score.maxPrecisionScore = jumpCount > 0 ? (tightJumpSum / jumpCount) : 0.0f;
+
+    score.finalCalculatedDifficulty = (score.averageAPM * 0.4f) + (score.maxPrecisionScore * 0.5f) - (score.stagnationDuration * 0.1f);
+    if (score.finalCalculatedDifficulty < 0.0f) score.finalCalculatedDifficulty = 0.0f;
+
+    lastAnalyzedScore_ = score;
+    return score;
+}
+

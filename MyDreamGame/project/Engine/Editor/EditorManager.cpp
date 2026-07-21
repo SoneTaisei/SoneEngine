@@ -808,6 +808,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     selectedPrimitive_ = nullptr;
                     selectedReplayBlock_.Clear();
                     mapEditorSelectedTool_ = 0;
+                    selectedReplaySeekbar_ = false;
                 }
                 ImGui::PopStyleColor(3);
                 ImGui::Spacing();
@@ -911,6 +912,43 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Separator();
                 ImGui::Spacing();
 
+                // ノードごとの手振れ/Jitter補正強度編集
+                auto replayMgrInstance = ReplayManager::GetInstance();
+                auto& currentJitters = replayMgrInstance->GetCurrentReplay().jitters;
+                int currentJitterVal = 0;
+                for (const auto& j : currentJitters) {
+                    if (j.keyIdx == selectedReplayBlock_.trackIdx && j.startFrame == selectedReplayBlock_.startFrame) {
+                        currentJitterVal = j.maxJitter;
+                        break;
+                    }
+                }
+                if (ImGui::DragInt("手振れ/Jitter強度 (±F)", &currentJitterVal, 1.0f, 0, 30)) {
+                    if (currentJitterVal < 0) currentJitterVal = 0;
+                    bool found = false;
+                    for (auto& j : currentJitters) {
+                        if (j.keyIdx == selectedReplayBlock_.trackIdx && j.startFrame == selectedReplayBlock_.startFrame) {
+                            j.maxJitter = currentJitterVal;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found && currentJitterVal > 0) {
+                        JitterSetting newJitter;
+                        newJitter.keyIdx = selectedReplayBlock_.trackIdx;
+                        newJitter.startFrame = selectedReplayBlock_.startFrame;
+                        newJitter.endFrame = selectedReplayBlock_.endFrame;
+                        newJitter.maxJitter = currentJitterVal;
+                        currentJitters.push_back(newJitter);
+                    }
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("再生時に設定フレーム数の範囲内でキー入力をブレ（揺らぎ）させる強度を設定します");
+                }
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
                 if (ImGui::Button("再生位置をここに合わせる", ImVec2(-1, 28))) {
                     ReplayManager::GetInstance()->SetCurrentFrame(selectedReplayBlock_.startFrame);
                 }
@@ -957,9 +995,91 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             } else if (selectedPrimitive_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
             } else {
-                IScene *activeScene = sceneManager->GetCurrentScene();
-                bool handled = false;
-                if (activeScene) {
+                if (currentMode_ == EditorMode::Replay || selectedReplaySeekbar_) {
+                    ImGui::TextColored(ImVec4(0.55f, 0.4f, 1.0f, 1.0f), "リプレイ グローバル設定 (手振れ補正 & 高速デバッグ)");
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    auto replayMgrInst = ReplayManager::GetInstance();
+
+                    // --- 1. 手振れ補正 & 再生制御 ---
+                    if (ImGui::CollapsingHeader("手振れ補正 & 再生設定", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        bool isSnap = replayMgrInst->IsSnapEnabled();
+                        if (ImGui::Checkbox("位置補正 (手振れ補正/スナップ)", &isSnap)) {
+                            replayMgrInst->SetSnapEnabled(isSnap);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生時の位置ズレを強制スナップ補正するON/OFF");
+
+                        bool isLerp = replayMgrInst->IsInterpolationEnabled();
+                        if (ImGui::Checkbox("フレーム間補間 (Lerp)", &isLerp)) {
+                            replayMgrInst->SetInterpolationEnabled(isLerp);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("フレーム間の滑らかな移動補間のON/OFF");
+
+                        bool isLoop = replayMgrInst->IsLoopPlay();
+                        if (ImGui::Checkbox("ループ再生", &isLoop)) {
+                            replayMgrInst->SetLoopPlay(isLoop);
+                        }
+                    }
+
+                    // --- 2. 第1章 完全決定論的デバッグ & 高速自動モンキーテスト ---
+                    if (ImGui::CollapsingHeader("完全決定論デバッグ & 高速自動モンキーテスト", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        int currentSeed = static_cast<int>(replayMgrInst->GetRandomSeed());
+                        if (ImGui::DragInt("乱数シード (Seed)", &currentSeed, 1.0f, 0, 999999)) {
+                            if (currentSeed < 0) currentSeed = 0;
+                            replayMgrInst->SetRandomSeed(static_cast<uint32_t>(currentSeed));
+                        }
+
+                        static int testIterations = 20;
+                        static int testJitterChance = 5;
+                        ImGui::DragInt("テスト試行回数", &testIterations, 1.0f, 1, 500);
+                        ImGui::SliderInt("Jitter発生確率 (%)", &testJitterChance, 0, 50);
+
+                        ImGui::Spacing();
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.4f, 1.0f));
+                        if (ImGui::Button("高速自動モンキーテストを実行", ImVec2(-1, 30))) {
+                            replayMgrInst->ExecuteFastMonkeyTest(testIterations, testJitterChance);
+                        }
+                        ImGui::PopStyleColor();
+
+                        const auto& logs = replayMgrInst->GetMonkeyTestLogs();
+                        if (!logs.empty()) {
+                            ImGui::Spacing();
+                            ImGui::Text("テスト実行ログ (%d 件)", (int)logs.size());
+                            ImGui::BeginChild("MonkeyTestLogArea", ImVec2(0, 120), true);
+                            for (const auto& logLine : logs) {
+                                if (logLine.find("[BUG") != std::string::npos) {
+                                    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", logLine.c_str());
+                                } else if (logLine.find("[SUCCESS]") != std::string::npos) {
+                                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", logLine.c_str());
+                                } else {
+                                    ImGui::TextUnformatted(logLine.c_str());
+                                }
+                            }
+                            ImGui::EndChild();
+                            if (ImGui::Button("ログをクリア")) {
+                                replayMgrInst->ClearMonkeyTestLogs();
+                            }
+                        }
+                    }
+
+                    // --- 3. 第2章 ステージ難易度自動スコアリング ---
+                    if (ImGui::CollapsingHeader("ステージ難易度自動スコアリング", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        if (ImGui::Button("リプレイ難易度を解析", ImVec2(-1, 28))) {
+                            replayMgrInst->AnalyzeReplayDifficulty(replayMgrInst->GetCurrentReplay().frames);
+                        }
+
+                        const auto& score = replayMgrInst->GetLastAnalyzedScore();
+                        ImGui::Text("操作速度 (APM): %.1f", score.averageAPM);
+                        ImGui::Text("崖際精度 (Precision): %.1f 点", score.maxPrecisionScore);
+                        ImGui::Text("停滞時間 (Stagnation): %.2f 秒", score.stagnationDuration);
+                        ImGui::Separator();
+                        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "総合推定難易度スコア: %.1f", score.finalCalculatedDifficulty);
+                    }
+                } else {
+                    IScene *activeScene = sceneManager->GetCurrentScene();
+                    bool handled = false;
+                    if (activeScene) {
                     MapChip2D* mapChip = activeScene->GetMapChip();
                     if (mapChip && (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9))) {
                         // ブロックの設定を表示
@@ -1341,6 +1461,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
                 } else {
                     ImGui::TextDisabled("※ゲームカメラが有効ではありません。");
+                }
                 }
                 }
             }
@@ -2280,6 +2401,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::SetTooltip("クリック/ドラッグでシーク位置変更");
                     if (ImGui::IsMouseClicked(0)) {
                         isRulerScrubbing_ = true;
+                        selectedGameObject_ = nullptr;
+                        selectedObject_ = nullptr;
+                        selectedParticle_ = nullptr;
+                        selectedPrimitive_ = nullptr;
+                        selectedReplayBlock_.Clear();
+                        mapEditorSelectedTool_ = 0;
+                        selectedReplaySeekbar_ = true;
                     }
                 }
 

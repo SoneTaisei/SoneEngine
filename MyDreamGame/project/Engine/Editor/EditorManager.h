@@ -203,6 +203,8 @@ private:
     std::shared_ptr<GameObject> selectedGameObject_ = nullptr;
     ParticleManager *selectedParticle_ = nullptr;
     PrimitiveObject *selectedPrimitive_ = nullptr;
+    bool selectedReplaySeekbar_ = false; // シークバー/リプレイ全般が選択されているかのフラグ
+
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
     bool isMapEditorVisible_ = false; // マップエディタがアクティブタブとして表示されているか
