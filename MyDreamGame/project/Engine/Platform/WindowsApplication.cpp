@@ -308,8 +308,12 @@ void WindowsApplication::Update() {
         // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
         gameCamera_->Update();
 
-        // カメラの切り替え（チェックボックスの状態を優先）
-        if (editorManager_->IsMapEditorVisible()) {
+        // カメラの切り替え（リプレイ再生中、またはチェックボックスの状態を優先）
+        if (ReplayManager::GetInstance()->IsPlaying()) {
+            activeCamera_ = gameCamera_.get();
+            isDebugCameraActive_ = false;
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
+        } else if (editorManager_->IsMapEditorVisible()) {
             activeCamera_ = mapEditorCamera_.get();
             isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
             CameraManager::GetInstance()->ClearCullingCameraInfo();

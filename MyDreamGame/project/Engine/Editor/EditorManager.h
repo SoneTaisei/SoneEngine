@@ -252,12 +252,18 @@ private:
     float spotFalloffDeg_ = 20.0f;
     bool enableFlatShading_ = false;
 
+    enum class EditorMode {
+        Normal,
+        Replay
+    };
+    EditorMode currentMode_ = EditorMode::Normal;
+
     // 各ウィンドウの表示状態フラグ
     bool showInspector_ = true;
     bool showHierarchy_ = true;
     bool showGameView_ = true;
     bool showPostEffect_ = true;
-    bool showReplayManager_ = true;
+    bool showReplayEditor_ = true;
     bool showMapEditor_ = true;
     bool showMapSettings_ = true;
 
