@@ -5,8 +5,11 @@
 #include <memory>
 #include <random>
 #include <cstdint>
+#include <thread>
+#include <atomic>
 
 class KeyboardInput;
+class MapChip2D;
 
 /// <summary>
 /// リプレイのヘッダー情報（決定論的システム用）
@@ -176,9 +179,23 @@ public:
     void CancelMacroRecording() { isRecordingMacro_ = false; macroRecordingName_ = ""; temporaryRecordedFrames_.clear(); }
     bool IsRecordingMacro() const { return isRecordingMacro_; }
 
-    // 高速自動モンキーテスト & 難易度解析
+    // 高速自動モンキーテスト & 難易度解析 & 物理A*
     void ExecuteFastMonkeyTest(int iterations = 10, int jitterChance = 5);
     DifficultyScore AnalyzeReplayDifficulty(const std::vector<FrameData>& replayData);
+
+    // 物理ベースA* 探索ルート (非同期スレッド対応)
+    void ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, int maxNodes = 10000);
+    bool IsAISearching() const { return isAISearching_.load(); }
+
+    void SetAIPathPositions(const std::vector<Vector3>& path) { aiPathPositions_ = path; }
+    const std::vector<Vector3>& GetAIPathPositions() const { return aiPathPositions_; }
+    void ClearAIPathPositions() { aiPathPositions_.clear(); }
+    
+    bool IsShowAIGhost() const { return showAIGhost_; }
+    void SetShowAIGhost(bool show) { showAIGhost_ = show; }
+
+    const std::string& GetAIPathStatusMsg() const { return aiPathStatusMsg_; }
+    void SetAIPathStatusMsg(const std::string& msg) { aiPathStatusMsg_ = msg; }
 
     uint32_t GetRandomSeed() const { return replayHeader_.randomSeed; }
     void SetRandomSeed(uint32_t seed) { replayHeader_.randomSeed = seed; deterministicRandom_.Initialize(seed); }
@@ -233,6 +250,11 @@ private:
     DeterministicRandom deterministicRandom_{ 1337 }; // 決定論的乱数発生器
     std::vector<std::string> monkeyTestLogs_;          // モンキーテストの実行ログ
     DifficultyScore lastAnalyzedScore_;               // 直近の難易度解析スコア
+    std::vector<Vector3> aiPathPositions_;            // 物理A*で計算されたAI探索ルート
+    bool showAIGhost_ = true;                         // AIゴースト描画フラグ
+    std::string aiPathStatusMsg_ = "";                // AI探索結果ステータスメッセージ
+    std::thread aiSearchThread_;                      // 非同期AI探索用スレッド
+    std::atomic<bool> isAISearching_{ false };         // AI探索中フラグ
 
     bool isRecording_ = false;
     bool isPlaying_ = false;

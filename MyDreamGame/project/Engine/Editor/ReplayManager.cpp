@@ -1,4 +1,5 @@
 #include "ReplayManager.h"
+#include "PhysicsAStar.h"
 #include "Input/KeyboardInput.h"
 #include <fstream>
 #include <sstream>
@@ -1202,5 +1203,33 @@ DifficultyScore ReplayManager::AnalyzeReplayDifficulty(const std::vector<FrameDa
 
     lastAnalyzedScore_ = score;
     return score;
+}
+
+void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, int maxNodes) {
+    if (isAISearching_.load()) return; // 既に探索中ならスキップ
+
+    if (aiSearchThread_.joinable()) {
+        aiSearchThread_.join();
+    }
+
+    isAISearching_.store(true);
+    aiPathStatusMsg_ = "AI探索中... (バックグラウンド計算中)";
+
+    aiSearchThread_ = std::thread([this, startPos, goalPos, mapChip, maxNodes]() {
+        PhysicsAStar astar;
+        std::vector<Vector3> path;
+        bool success = astar.FindValidPath(startPos, goalPos, mapChip, path, maxNodes);
+
+        if (success) {
+            aiPathPositions_ = path;
+            float seconds = path.size() / 60.0f;
+            aiPathStatusMsg_ = std::format("クリア可能！ (推定時間: {:.2f} 秒 / 全 {} フレーム)", seconds, path.size());
+        } else {
+            aiPathPositions_.clear();
+            aiPathStatusMsg_ = "[詰み] ゴールまでの経路が存在しません！";
+        }
+
+        isAISearching_.store(false);
+    });
 }
 

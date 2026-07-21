@@ -227,6 +227,7 @@
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\PhysicsAStar.cpp" />
       <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
@@ -423,6 +424,7 @@
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
+    <ClInclude Include="Engine\Editor\PhysicsAStar.h" />
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
     <ClInclude Include="Engine\Graphics\Skybox.h" />
     <ClInclude Include="Engine\Graphics\CameraManager.h" />

@@ -1,4 +1,4 @@
-﻿#include "GameScene.h"
+#include "GameScene.h"
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
@@ -609,6 +609,54 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                     }
 
                     // クリップ矩形を解除
+                    drawList->PopClipRect();
+                }
+            }
+
+            // --- 物理ベースA* 探索ルート（AIゴースト）の描画 ---
+            const auto& aiPath = replayManager->GetAIPathPositions();
+            if (replayManager->IsShowAIGhost() && !aiPath.empty()) {
+                auto* playerPrim = player_->GetPrimitiveObject();
+                if (playerPrim) {
+                    ImVec2 gameViewPos = EditorManager::GetGameViewPos();
+                    ImVec2 gameViewSize = EditorManager::GetGameViewSize();
+                    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+                    drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
+
+                    const int AI_STEP = 5; // 5フレームごとに描画
+                    const float GHOST_ALPHA = 0.6f;
+
+                    for (int i = 0; i < static_cast<int>(aiPath.size()); i += AI_STEP) {
+                        const Vector3& pos = aiPath[i];
+
+                        EulerTransform ghostTransform = playerPrim->GetTransform();
+                        ghostTransform.translate = pos;
+
+                        Material ghostMaterial = playerPrim->GetMaterial();
+                        ghostMaterial.color = Vector4{ 0.0f, 0.9f, 1.0f, GHOST_ALPHA }; // シアンブルー
+
+                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
+
+                        Vector3 ndcCurr = TransformFunctions::EulerTransform(pos, viewProjectionMatrix);
+                        if (ndcCurr.z >= 0.0f && ndcCurr.z <= 1.0f) {
+                            ImVec2 pCurr(
+                                gameViewPos.x + (ndcCurr.x + 1.0f) * 0.5f * gameViewSize.x,
+                                gameViewPos.y + (1.0f - ndcCurr.y) * 0.5f * gameViewSize.y
+                            );
+                            drawList->AddCircleFilled(pCurr, 3.5f, IM_COL32(0, 220, 255, 255));
+
+                            if (i >= AI_STEP) {
+                                Vector3 ndcPrev = TransformFunctions::EulerTransform(aiPath[i - AI_STEP], viewProjectionMatrix);
+                                if (ndcPrev.z >= 0.0f && ndcPrev.z <= 1.0f) {
+                                    ImVec2 pPrev(
+                                        gameViewPos.x + (ndcPrev.x + 1.0f) * 0.5f * gameViewSize.x,
+                                        gameViewPos.y + (1.0f - ndcPrev.y) * 0.5f * gameViewSize.y
+                                    );
+                                    drawList->AddLine(pPrev, pCurr, IM_COL32(0, 220, 255, 255), 2.0f);
+                                }
+                            }
+                        }
+                    }
                     drawList->PopClipRect();
                 }
             }

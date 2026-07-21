@@ -12,6 +12,7 @@
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
 #include "ReplayManager.h"
+#include "PhysicsAStar.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
@@ -562,6 +563,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("ゲームビュー", &showGameView_)) {
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
                 currentMode_ = EditorMode::Normal;
+                selectedReplaySeekbar_ = false;
             }
             isGameViewHovered_ = ImGui::IsWindowHovered();
             {
@@ -995,31 +997,20 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             } else if (selectedPrimitive_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
             } else {
-                if (currentMode_ == EditorMode::Replay || selectedReplaySeekbar_) {
+                if (currentMode_ == EditorMode::Replay) {
                     ImGui::TextColored(ImVec4(0.55f, 0.4f, 1.0f, 1.0f), "リプレイ グローバル設定 (手振れ補正 & 高速デバッグ)");
                     ImGui::Separator();
                     ImGui::Spacing();
 
                     auto replayMgrInst = ReplayManager::GetInstance();
 
-                    // --- 1. 手振れ補正 & 再生制御 ---
-                    if (ImGui::CollapsingHeader("手振れ補正 & 再生設定", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    // --- 1. 手振れ補正設定 ---
+                    if (ImGui::CollapsingHeader("手振れ補正設定", ImGuiTreeNodeFlags_DefaultOpen)) {
                         bool isSnap = replayMgrInst->IsSnapEnabled();
                         if (ImGui::Checkbox("位置補正 (手振れ補正/スナップ)", &isSnap)) {
                             replayMgrInst->SetSnapEnabled(isSnap);
                         }
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生時の位置ズレを強制スナップ補正するON/OFF");
-
-                        bool isLerp = replayMgrInst->IsInterpolationEnabled();
-                        if (ImGui::Checkbox("フレーム間補間 (Lerp)", &isLerp)) {
-                            replayMgrInst->SetInterpolationEnabled(isLerp);
-                        }
-                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("フレーム間の滑らかな移動補間のON/OFF");
-
-                        bool isLoop = replayMgrInst->IsLoopPlay();
-                        if (ImGui::Checkbox("ループ再生", &isLoop)) {
-                            replayMgrInst->SetLoopPlay(isLoop);
-                        }
                     }
 
                     // --- 2. 第1章 完全決定論的デバッグ & 高速自動モンキーテスト ---
@@ -1075,6 +1066,79 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Text("停滞時間 (Stagnation): %.2f 秒", score.stagnationDuration);
                         ImGui::Separator();
                         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "総合推定難易度スコア: %.1f", score.finalCalculatedDifficulty);
+                    }
+
+                    // --- 4. 第4章 物理ベースA* (詰みチェック & AIルート表示) ---
+                    if (ImGui::CollapsingHeader("物理ベースA* (詰みチェック & AIルート表示)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        static float startPos[2] = { 0.0f, 0.0f };
+                        static float goalPos[2] = { 30.0f, 0.0f };
+                        static int maxAStarNodes = 8000;
+
+                        ImGui::DragFloat2("スタート座標 (X, Y)", startPos, 0.5f);
+                        if (ImGui::Button("自キャラ初期位置から自動取得", ImVec2(-1, 0))) {
+                            const auto& currentReplay = replayMgrInst->GetCurrentReplay();
+                            startPos[0] = currentReplay.playerInitPos.x;
+                            startPos[1] = currentReplay.playerInitPos.y;
+                        }
+                        ImGui::Spacing();
+
+                        ImGui::DragFloat2("ゴール座標 (X, Y)", goalPos, 0.5f);
+                        if (ImGui::Button("マップのゴールブロック位置から自動取得", ImVec2(-1, 0))) {
+                            IScene* activeScene = sceneManager->GetCurrentScene();
+                            if (activeScene && activeScene->GetMapChip()) {
+                                auto* mapChip = activeScene->GetMapChip();
+                                bool foundGoal = false;
+                                for (int y = 0; y < mapChip->GetHeight(); ++y) {
+                                    for (int x = 0; x < mapChip->GetWidth(); ++x) {
+                                        if (mapChip->GetChipType(x, y) == MapChip2D::ChipType::kGoal) {
+                                            float halfChip = mapChip->GetChipSize() * 0.5f;
+                                            goalPos[0] = mapChip->ChipToWorldX(x) + halfChip;
+                                            goalPos[1] = mapChip->ChipToWorldY(y) + halfChip;
+                                            foundGoal = true;
+                                            break;
+                                        }
+                                    }
+                                    if (foundGoal) break;
+                                }
+                            }
+                        }
+                        ImGui::Spacing();
+
+                        ImGui::DragInt("探索上限ノード数", &maxAStarNodes, 500, 1000, 50000);
+
+                        bool showAI = replayMgrInst->IsShowAIGhost();
+                        if (ImGui::Checkbox("AIルートをゴースト表示", &showAI)) {
+                            replayMgrInst->SetShowAIGhost(showAI);
+                        }
+
+                        bool isSearching = replayMgrInst->IsAISearching();
+                        if (isSearching) {
+                            ImGui::BeginDisabled();
+                        }
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.5f, 0.8f, 1.0f));
+                        std::string btnText = isSearching ? "AI探索中... (バックグラウンド計算中)" : "物理A* AI探索を実行 (詰みチェック)";
+                        if (ImGui::Button(btnText.c_str(), ImVec2(-1, 30))) {
+                            IScene* activeScene = sceneManager->GetCurrentScene();
+                            MapChip2D* mapChip = activeScene ? activeScene->GetMapChip() : nullptr;
+                            Vector3 sPos = { startPos[0], startPos[1], 0.0f };
+                            Vector3 gPos = { goalPos[0], goalPos[1], 0.0f };
+
+                            replayMgrInst->ExecuteAStarAsync(sPos, gPos, mapChip, maxAStarNodes);
+                        }
+                        ImGui::PopStyleColor();
+                        if (isSearching) {
+                            ImGui::EndDisabled();
+                        }
+
+                        const auto& statusMsg = replayMgrInst->GetAIPathStatusMsg();
+                        if (!statusMsg.empty()) {
+                            ImGui::Spacing();
+                            if (statusMsg.find("[詰み]") != std::string::npos) {
+                                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", statusMsg.c_str());
+                            } else {
+                                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", statusMsg.c_str());
+                            }
+                        }
                     }
                 } else {
                     IScene *activeScene = sceneManager->GetCurrentScene();
@@ -2283,21 +2347,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (ImGui::Button("停止", ImVec2(65, 28))) {
                     replayMgr->StopPlayback();
                 }
-                ImGui::SameLine();
-
-                // ループ再生
-                bool isLoop = replayMgr->IsLoopPlay();
-                if (ImGui::Checkbox("ループ", &isLoop)) {
-                    replayMgr->SetLoopPlay(isLoop);
-                }
-                ImGui::SameLine();
-
-                // 補間 (Lerp) 設定
-                bool isInterpolation = replayMgr->IsInterpolationEnabled();
-                if (ImGui::Checkbox("補間", &isInterpolation)) {
-                    replayMgr->SetInterpolationEnabled(isInterpolation);
-                }
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("フレーム間の位置補間 (Lerp) のON/OFF");
                 ImGui::SameLine();
                 ImGui::Spacing();
                 ImGui::SameLine();
