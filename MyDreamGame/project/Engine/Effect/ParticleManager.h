@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <d3d12.h>
 #include <wrl.h>
 #include <string>
@@ -21,7 +21,7 @@ struct AccelerationField {
 };
 
 struct Emitter {
-    Transform transform; // エミッタのTransform（発生位置など）
+    EulerTransform transform; // エミッタのTransform（発生位置など）
     uint32_t count;      // 一回で発生する数
     float frequency;     // 発生頻度（秒）
     float frequencyTime; // 頻度用タイマー
@@ -29,7 +29,7 @@ struct Emitter {
 
 // CPU側で持つ個々のパーティクル情報
 struct ParticleData {
-    Transform transform;
+    EulerTransform transform;
     Vector3 velocity; // 速度
     Vector4 color;    // 色
     float lifeTime;
@@ -52,8 +52,8 @@ struct ParticleProperty {
 };
 
 class ParticleManager {
+    friend class Renderer;
 public:
-
     ParticleManager() = default;
     virtual~ParticleManager();
     // 初期化

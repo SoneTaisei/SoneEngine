@@ -20,11 +20,12 @@ public:
     void InitializeSphere(ModelCommon *modelCommon);
 
     // 描画
-    void Draw();
+    void Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView = nullptr);
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     // ゲッター
     ModelData GetModelData() const { return modelData_; }
+    ModelCommon* GetModelCommon() const { return modelCommon_; }
 
 
 private:

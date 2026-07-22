@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Core/Utility/Structs.h" // Vector3, Matrix4x4 等の定義
 
 class Camera {
@@ -26,7 +26,7 @@ public:
 
 protected: // 継承先（DebugCamera）でも使えるように private ではなく protected にする
     // Transform構造体を使うと管理が楽です（無ければVector3 rotation, translationでもOK）
-    Transform transform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f} };
+    EulerTransform transform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f} };
 
     Matrix4x4 viewMatrix_;
     Matrix4x4 projectionMatrix_;

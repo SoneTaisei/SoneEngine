@@ -1,4 +1,5 @@
 #include "MapChip2D.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
 #include <fstream>
@@ -18,21 +19,17 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"
+#include "Component/ColliderComponent.h"
+#include "Collision/CollisionManager.h"
 
-void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath) {
-    commandList->GetDevice(IID_PPV_ARGS(&device_));
+void MapChip2D::Initialize(const std::string& mapFilePath) {
+    device_ = DirectXCommon::GetInstance()->GetDevice();
+    currentFilePath_ = mapFilePath;
 
     // デフォルトテクスチャのロード
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> comPtrCommandList(commandList);
-    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png", comPtrCommandList);
+    
+    uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
-
-    // 保存ファイルがあれば読込み、なければ初期構築して保存する
-    if (!LoadFromFile(mapFilePath)) {
-        BuildMap();
-        GenerateDefaultBoundaries();
-        SaveToFile(mapFilePath);
-    }
 
     // テンプレートの読み込み（なければデフォルト生成して保存）
     if (!LoadTemplatesFromFile("resources/json/templates_config.json") || templatePalette_.empty()) {
@@ -48,23 +45,32 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
         };
         addTemplate(1, "Block", "NormalBlock", {0.3f, 0.7f, 0.3f, 1.0f}, nlohmann::json::object());
         addTemplate(2, "Death", "DeathBlock", {1.0f, 0.2f, 0.2f, 1.0f}, nlohmann::json::object());
-        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object());
+        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object()); // 紫色に変更
         addTemplate(4, "Coin", "CoinBlock", {1.0f, 0.8f, 0.0f, 1.0f}, nlohmann::json::object());
         addTemplate(5, "OneWay", "OneWayBlock", {0.4f, 0.8f, 0.8f, 1.0f}, nlohmann::json::object());
         
         nlohmann::json liftProps;
-        liftProps["speed"] = 2.0f;
-        liftProps["direction"] = "horizontal";
-        liftProps["range"] = 10.0f;
+        liftProps["speedForward"] = 6.0f;
+        liftProps["speedBackward"] = 3.0f;
+        liftProps["waitTime"] = 1.0f;
+        liftProps["acceleration"] = 2.0f;
         addTemplate(7, "Lift", "LiftBlock", {0.9f, 0.6f, 0.1f, 1.0f}, liftProps);
         
         addTemplate(8, "Rail", "RailBlock", {0.7f, 0.7f, 0.7f, 1.0f}, nlohmann::json::object());
         
         nlohmann::json jumpProps;
-        jumpProps["jumpVelocity"] = 15.0f;
+        jumpProps["jumpVelocityVertical"] = 15.0f;
+        jumpProps["jumpVelocityHorizontal"] = 15.0f;
         addTemplate(9, "Jump", "JumpBlock", {1.0f, 0.5f, 0.0f, 1.0f}, jumpProps);
 
         SaveTemplatesToFile("resources/json/templates_config.json");
+    }
+
+    // 保存ファイルがあれば読込み、なければ初期構築して保存する
+    if (!LoadFromFile(mapFilePath)) {
+        BuildMap();
+        GenerateDefaultRooms();
+        SaveToFile(mapFilePath);
     }
 
     // 古いファイル等で CustomPalette が空の場合、テンプレートのブロックを CustomBlocks として登録する
@@ -79,6 +85,11 @@ void MapChip2D::Initialize(ID3D12GraphicsCommandList* commandList, const std::st
 }
 
 void MapChip2D::Update() {
+    if (isDirty_) {
+        RebuildChipObjects();
+        isDirty_ = false;
+    }
+
     for (auto it = updateBlocks_.begin(); it != updateBlocks_.end();) {
         if (*it) {
             (*it)->Update();
@@ -102,9 +113,10 @@ void MapChip2D::Update() {
     }
 }
 
-void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
+void MapChip2D::Draw() {
     auto cameraMgr = CameraManager::GetInstance();
-    Matrix4x4 vp = TransformFunctions::Multiply(cameraMgr->GetViewMatrix(), cameraMgr->GetProjectionMatrix());
+    Matrix4x4 vp = TransformFunctions::Multiply(cameraMgr->GetCullingViewMatrix(), cameraMgr->GetCullingProjectionMatrix());
+    
     std::array<Vector4, 6> planes;
     TransformFunctions::ExtractFrustumPlanes(vp, planes);
 
@@ -114,16 +126,13 @@ void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
             float radius = 0.0f;
             bool shouldCheck = false;
 
-            if (block->GetObject3D()) {
-                center = block->GetObject3D()->GetTranslation();
-                Vector3 scale = block->GetObject3D()->GetScale();
-                radius = (std::max)({scale.x, scale.y, scale.z}) * 2.5f; // Safe radius
-                shouldCheck = true;
-            } else if (block->GetPrimitive()) {
-                center = block->GetPrimitive()->GetTransform().translate;
-                Vector3 scale = block->GetPrimitive()->GetTransform().scale;
-                radius = (std::max)({scale.x, scale.y, scale.z}) * 2.0f; // Safe radius
-                shouldCheck = true;
+            if (block->GetGameObject()) {
+                if (auto* tc = block->GetGameObject()->GetComponent<TransformComponent>()) {
+                    center = tc->GetPosition();
+                    Vector3 scale = tc->GetScale();
+                    radius = (std::max)({scale.x, scale.y, scale.z}) * 2.0f; // Safe radius
+                    shouldCheck = true;
+                }
             }
 
             if (shouldCheck) {
@@ -132,7 +141,7 @@ void MapChip2D::Draw(ID3D12GraphicsCommandList* commandList) {
                 }
             }
 
-            block->Draw(commandList);
+            block->Draw();
         }
     }
 }
@@ -165,16 +174,9 @@ float MapChip2D::ChipToWorldY(int chipY) const {
 }
 
 std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
-    std::vector<PrimitiveObject*> result;
-    for (const auto& block : updateBlocks_) {
-        if (block) {
-            auto* prim = block->GetPrimitive();
-            if (prim) {
-                result.push_back(prim);
-            }
-        }
-    }
-    return result;
+    // 互換性のため空を返すか、必要な場合は GameObject から収集する
+    std::vector<PrimitiveObject*> list;
+    return list;
 }
 
 void MapChip2D::BuildMap() {
@@ -256,7 +258,7 @@ void MapChip2D::BuildMap() {
     mapData_[4][27] = ChipType::kCoin;
 }
 
-void MapChip2D::CreateChipObjects(ID3D12GraphicsCommandList* commandList) {
+void MapChip2D::CreateChipObjects() {
     RebuildChipObjects();
 }
 
@@ -273,16 +275,38 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
             }
         }
     }
-
     if (mapData_[y][x] != type) {
         mapData_[y][x] = type;
-        RebuildChipObjects();
+        isDirty_ = true;
     }
 }
 
 MapChip2D::ChipType MapChip2D::GetChip(int x, int y) const {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return ChipType::kNone;
     return mapData_[y][x];
+}
+
+void MapChip2D::BucketFill(int startX, int startY, ChipType targetType, ChipType replacementType) {
+    if (startX < 0 || startX >= mapWidth_ || startY < 0 || startY >= mapHeight_) return;
+    if (targetType == replacementType) return;
+    if (mapData_[startY][startX] != targetType) return;
+
+    std::vector<std::pair<int, int>> queue;
+    queue.push_back({startX, startY});
+
+    while (!queue.empty()) {
+        auto [x, y] = queue.back();
+        queue.pop_back();
+
+        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) continue;
+        if (mapData_[y][x] == targetType) {
+            SetChip(x, y, replacementType);
+            queue.push_back({x + 1, y});
+            queue.push_back({x - 1, y});
+            queue.push_back({x, y + 1});
+            queue.push_back({x, y - 1});
+        }
+    }
 }
 
 void MapChip2D::ClearMap() {
@@ -295,8 +319,12 @@ void MapChip2D::ClearMap() {
 }
 
 void MapChip2D::ResetMap() {
-    BuildMap();
-    RebuildChipObjects();
+    if (!currentFilePath_.empty()) {
+        LoadFromFile(currentFilePath_);
+    } else {
+        BuildMap();
+        RebuildChipObjects();
+    }
 }
 
 void MapChip2D::RebuildChipObjects() {
@@ -315,7 +343,7 @@ void MapChip2D::RebuildChipObjects() {
             if (visited[y][x]) continue;
 
             ChipType type = mapData_[y][x];
-            if (type == ChipType::kNone || type == ChipType::kPlayerSpawn) {
+            if (type == ChipType::kNone || type == ChipType::kPlayerSpawn || type == ChipType::kRoomRespawn) {
                 visited[y][x] = true;
                 continue;
             }
@@ -326,7 +354,7 @@ void MapChip2D::RebuildChipObjects() {
             
             bool canMerge = false;
             if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock);
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kLift);
             } else {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 const CustomBlockDef* def = nullptr;
@@ -334,7 +362,7 @@ void MapChip2D::RebuildChipObjects() {
                     if (d.id == typeId) { def = &d; break; }
                 }
                 if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock");
+                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock");
                     // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
                     if (!def->modelName.empty()) {
                         canMerge = false;
@@ -364,113 +392,8 @@ void MapChip2D::RebuildChipObjects() {
                 }
             }
 
-            float worldX = ChipToWorldX(x) + (spanWidth * chipSize_) * 0.5f;
-            float worldY = ChipToWorldY(y) + (spanHeight * chipSize_) * 0.5f;
-
-            std::shared_ptr<BaseBlock> newBlock = nullptr;
-
-            if (type == ChipType::kBlock) {
-                newBlock = std::make_shared<NormalBlock>(this, x, y);
-            } else if (type == ChipType::kDeathBlock) {
-                newBlock = std::make_shared<DeathBlock>(this, x, y);
-            } else if (type == ChipType::kGoal) {
-                newBlock = std::make_shared<GoalBlock>(this, x, y);
-            } else if (type == ChipType::kCoin) {
-                newBlock = std::make_shared<CoinBlock>(this, x, y);
-            } else if (type == ChipType::kOneWayBlock) {
-                newBlock = std::make_shared<OneWayBlock>(this, x, y);
-            } else if (type == ChipType::kLift) {
-                newBlock = std::make_shared<LiftBlock>(this, x, y);
-            } else if (type == ChipType::kRail) {
-                newBlock = std::make_shared<RailBlock>(this, x, y);
-            } else if (type == ChipType::kJumpBlock) {
-                newBlock = std::make_shared<JumpBlock>(this, x, y);
-            } else if (typeId >= 100) {
-                // カスタムブロック
-                const CustomBlockDef* def = nullptr;
-                for (const auto& d : customPalette_) {
-                    if (d.id == typeId) { def = &d; break; }
-                }
-                if (def) {
-                    if (def->type == "NormalBlock") newBlock = std::make_shared<NormalBlock>(this, x, y);
-                    else if (def->type == "DeathBlock") newBlock = std::make_shared<DeathBlock>(this, x, y);
-                    else if (def->type == "GoalBlock") newBlock = std::make_shared<GoalBlock>(this, x, y);
-                    else if (def->type == "CoinBlock") newBlock = std::make_shared<CoinBlock>(this, x, y);
-                    else if (def->type == "OneWayBlock") newBlock = std::make_shared<OneWayBlock>(this, x, y);
-                    else if (def->type == "LiftBlock") newBlock = std::make_shared<LiftBlock>(this, x, y);
-                    else if (def->type == "RailBlock") newBlock = std::make_shared<RailBlock>(this, x, y);
-                    else if (def->type == "JumpBlock") newBlock = std::make_shared<JumpBlock>(this, x, y);
-                }
-            }
-
+            std::shared_ptr<BaseBlock> newBlock = InstantiateBlock(x, y, type, spanWidth, spanHeight, boxPrimitive);
             if (newBlock) {
-                newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, spanWidth * chipSize_, spanHeight * chipSize_);
-                
-                // ブロックのプロパティと色・スケール・モデルを反映
-                const CustomBlockDef* def = nullptr;
-                if (typeId >= 100) {
-                    for (const auto& d : customPalette_) {
-                        if (d.id == typeId) { def = &d; break; }
-                    }
-                } else if (typeId >= 1 && typeId <= 9) {
-                    for (const auto& d : templatePalette_) {
-                        if (d.id == typeId) { def = &d; break; }
-                    }
-                }
-                
-                if (def) {
-                    newBlock->SetProperties(def->properties);
-                    if (newBlock->GetPrimitive()) {
-                        newBlock->GetPrimitive()->GetMaterial().color = def->color;
-                        
-                        // カスタムスケールの適用
-                        const Transform& t = newBlock->GetPrimitive()->GetTransform();
-                        newBlock->GetPrimitive()->SetScale({ 
-                            t.scale.x * def->scale.x, 
-                            t.scale.y * def->scale.y, 
-                            t.scale.z * def->scale.z 
-                        });
-                    }
-                    
-                    // モデルの読み込み
-                    if (!def->modelName.empty()) {
-                        Model* model = nullptr;
-                        
-                        // .obj で終わっているなら、resources からの相対パスとみなして読み込む
-                        if (def->modelName.length() >= 4 && def->modelName.substr(def->modelName.length() - 4) == ".obj") {
-                            std::string fullPath = "resources/" + def->modelName;
-                            std::filesystem::path p(fullPath);
-                            std::string dirPath = p.parent_path().string();
-                            std::string fileName = p.filename().string();
-                            std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
-                            model = ModelManager::GetInstance()->GetModel(dirPath, fileName);
-                        } else {
-                            // 旧形式のフォールバック（名前だけの場合）
-                            model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + def->modelName, def->modelName + ".obj");
-                            if (!model) {
-                                model = ModelManager::GetInstance()->GetModel("resources/models", def->modelName + ".obj");
-                            }
-                        }
-                        
-                        if (model) {
-                            auto obj = std::make_unique<Object3D>();
-                            obj->Initialize(device_.Get(), model);
-                            obj->SetTranslation({ worldX, worldY, 0.0f });
-                            obj->SetScale(def->scale);
-                            obj->SetTextureHandle(gpuHandle_);
-                            obj->GetMaterial().color = def->color;
-                            newBlock->SetObject3D(std::move(obj));
-                        }
-                    }
-                }
-
-                if (newBlock->GetPrimitive()) {
-                    newBlock->GetPrimitive()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
-                    if (spanWidth > 1 || spanHeight > 1) {
-                        Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({(float)spanWidth, (float)spanHeight, 1.0f});
-                        newBlock->GetPrimitive()->GetMaterial().uvTransform = uvTrans;
-                    }
-                }
                 updateBlocks_.push_back(newBlock);
 
                 for (int h = 0; h < spanHeight; ++h) {
@@ -486,6 +409,47 @@ void MapChip2D::RebuildChipObjects() {
             x += spanWidth - 1;
         }
     }
+    CreateBoundaries();
+}
+
+void MapChip2D::CreateBoundaries() {
+    for (int i = 0; i < 4; ++i) {
+        if (!boundaries_[i]) {
+            boundaries_[i] = std::make_unique<GameObject>("Boundary" + std::to_string(i));
+            boundaries_[i]->AddComponent<TransformComponent>();
+            auto* cc = boundaries_[i]->AddComponent<ColliderComponent>();
+            cc->SetLayerMask(kLayerBlock);
+            cc->SetIsSolid(true);
+        }
+    }
+    
+    float w = mapWidth_ * chipSize_;
+    float h = mapHeight_ * chipSize_;
+    float thickness = 100.0f; // トンネル防止用
+
+    // Bottom
+    auto* tc0 = boundaries_[0]->GetComponent<TransformComponent>();
+    tc0->SetPosition({w * 0.5f, -thickness * 0.5f, 0.0f});
+    tc0->SetScale({w + thickness * 2, thickness, 1.0f});
+    boundaries_[0]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+
+    // Top
+    auto* tc1 = boundaries_[1]->GetComponent<TransformComponent>();
+    tc1->SetPosition({w * 0.5f, h + thickness * 0.5f, 0.0f});
+    tc1->SetScale({w + thickness * 2, thickness, 1.0f});
+    boundaries_[1]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+
+    // Left
+    auto* tc2 = boundaries_[2]->GetComponent<TransformComponent>();
+    tc2->SetPosition({-thickness * 0.5f, h * 0.5f, 0.0f});
+    tc2->SetScale({thickness, h, 1.0f});
+    boundaries_[2]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+
+    // Right
+    auto* tc3 = boundaries_[3]->GetComponent<TransformComponent>();
+    tc3->SetPosition({w + thickness * 0.5f, h * 0.5f, 0.0f});
+    tc3->SetScale({thickness, h, 1.0f});
+    boundaries_[3]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 }
 
 bool MapChip2D::SaveToFile(const std::string& filepath) {
@@ -504,15 +468,25 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
 
     // 境界線メタデータの保存
     std::string boundsPath = filepath;
-    size_t lastDot = boundsPath.find_last_of(".");
-    if (lastDot != std::string::npos) {
-        boundsPath = boundsPath.substr(0, lastDot) + "_bounds.txt";
-    } else {
-        boundsPath += "_bounds.txt";
+    size_t extPos = boundsPath.find_last_of('.');
+    if (extPos != std::string::npos) {
+        boundsPath = boundsPath.substr(0, extPos) + "_bounds.txt";
     }
-    SaveBoundariesToFile(boundsPath);
+    SaveRoomsToFile(boundsPath);
 
     return true;
+}
+
+bool MapChip2D::LoadFromStageName(const std::string& stageName) {
+    std::string name = stageName;
+    bool hasExt = false;
+    if (name.length() >= 4) {
+        std::string ext = name.substr(name.length() - 4);
+        if (ext == ".txt" || ext == ".TXT") hasExt = true;
+    }
+    if (!hasExt) name += ".txt";
+    std::string filepath = "resources/json/MapData/" + name;
+    return LoadFromFile(filepath);
 }
 
 bool MapChip2D::LoadFromFile(const std::string& filepath) {
@@ -533,9 +507,9 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
             boundsPath += "_bounds.txt";
         }
         
-        if (!LoadBoundariesFromFile(boundsPath)) {
-            // ファイルがなければ自動生成
-            GenerateDefaultBoundaries();
+        if (!LoadRoomsFromFile(boundsPath)) {
+            // ファイルがなければデフォルトを生成
+            GenerateDefaultRooms();
         }
     }
     
@@ -564,6 +538,7 @@ std::string MapChip2D::GetMapDataAsString() const {
         p["color"] = {{"r", def.color.x}, {"g", def.color.y}, {"b", def.color.z}, {"a", def.color.w}};
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
+        p["textureName"] = def.textureName;
         p["properties"] = def.properties;
         paletteArray.push_back(p);
     }
@@ -593,7 +568,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
             }
         }
         
-        customPalette_.clear();
+        // customPalette_.clear(); // クリアせず統合する
         if (j.contains("customPalette")) {
             auto paletteArray = j["customPalette"];
             for (const auto& p : paletteArray) {
@@ -613,8 +588,46 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                     def.scale.z = p["scale"]["z"];
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
+                if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
-                customPalette_.push_back(def);
+                
+                bool found = false;
+                for (auto& existing : customPalette_) {
+                    if (existing.id == def.id) {
+                        existing = def;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    customPalette_.push_back(def);
+                }
+            }
+            
+            // 読み込んだ Custom Block のプロパティ構造をテンプレート（Basic）に合わせる
+            for (auto& def : customPalette_) {
+                for (const auto& t : templatePalette_) {
+                    if (t.type == def.type) {
+                        // テンプレートに存在しない古いプロパティは削除する
+                        std::vector<std::string> keysToRemove;
+                        for (auto& [key, val] : def.properties.items()) {
+                            if (!t.properties.contains(key)) {
+                                keysToRemove.push_back(key);
+                            }
+                        }
+                        for (const auto& key : keysToRemove) {
+                            def.properties.erase(key);
+                        }
+                        
+                        // テンプレートに存在するが Custom Block に無いプロパティは追加する
+                        for (auto& [key, val] : t.properties.items()) {
+                            if (!def.properties.contains(key)) {
+                                def.properties[key] = val;
+                            }
+                        }
+                        break;
+                    }
+                }
             }
         }
         
@@ -639,7 +652,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 }
             }
         }
-        customPalette_.clear();
+        // customPalette_.clear(); // 古い形式のテキスト読み込みでもクリアしない
         RebuildChipObjects();
         return true;
     }
@@ -670,67 +683,45 @@ void MapChip2D::Resize(int newWidth, int newHeight) {
     RebuildChipObjects();
 }
 
-void MapChip2D::GenerateDefaultBoundaries() {
-    boundaryX_.clear();
-    boundaryY_.clear();
-
-    float roomWidth = 20.0f;
-    float roomHeight = 11.25f;
-
-    for (float rx = 0.0f; rx <= static_cast<float>(mapWidth_); rx += roomWidth) {
-        boundaryX_.push_back(rx);
-    }
-    for (float ry = 0.0f; ry <= static_cast<float>(mapHeight_); ry += roomHeight) {
-        boundaryY_.push_back(ry);
-    }
+void MapChip2D::GenerateDefaultRooms() {
+    rooms_.clear();
+    float totalWidth = mapWidth_ * chipSize_;
+    float totalHeight = mapHeight_ * chipSize_;
+    
+    StageRoom room;
+    room.x = 0.0f;
+    room.y = 0.0f;
+    room.width = totalWidth;
+    room.height = totalHeight;
+    rooms_.push_back(room);
 }
 
-bool MapChip2D::SaveBoundariesToFile(const std::string& filepath) {
-    std::filesystem::path path(filepath);
-    if (path.has_parent_path()) {
-        std::filesystem::create_directories(path.parent_path());
-    }
-
+bool MapChip2D::SaveRoomsToFile(const std::string& filepath) {
     std::ofstream ofs(filepath);
     if (!ofs.is_open()) return false;
 
-    ofs << boundaryX_.size() << "\n";
-    for (size_t i = 0; i < boundaryX_.size(); ++i) {
-        ofs << boundaryX_[i] << (i < boundaryX_.size() - 1 ? " " : "");
+    ofs << rooms_.size() << "\n";
+    for (const auto& r : rooms_) {
+        ofs << r.x << " " << r.y << " " << r.width << " " << r.height << "\n";
     }
-    ofs << "\n";
-
-    ofs << boundaryY_.size() << "\n";
-    for (size_t i = 0; i < boundaryY_.size(); ++i) {
-        ofs << boundaryY_[i] << (i < boundaryY_.size() - 1 ? " " : "");
-    }
-    ofs << "\n";
-
     ofs.close();
     return true;
 }
 
-bool MapChip2D::LoadBoundariesFromFile(const std::string& filepath) {
+bool MapChip2D::LoadRoomsFromFile(const std::string& filepath) {
     std::ifstream ifs(filepath);
     if (!ifs.is_open()) return false;
 
-    size_t xSize = 0, ySize = 0;
-    if (!(ifs >> xSize)) return false;
+    size_t size = 0;
+    if (!(ifs >> size)) return false;
 
-    boundaryX_.clear();
-    for (size_t i = 0; i < xSize; ++i) {
-        float val;
-        if (ifs >> val) boundaryX_.push_back(val);
+    rooms_.clear();
+    for (size_t i = 0; i < size; ++i) {
+        StageRoom r;
+        if (ifs >> r.x >> r.y >> r.width >> r.height) {
+            rooms_.push_back(r);
+        }
     }
-
-    if (!(ifs >> ySize)) return false;
-
-    boundaryY_.clear();
-    for (size_t i = 0; i < ySize; ++i) {
-        float val;
-        if (ifs >> val) boundaryY_.push_back(val);
-    }
-
     ifs.close();
     return true;
 }
@@ -751,6 +742,7 @@ bool MapChip2D::SaveTemplatesToFile(const std::string& filepath) {
         p["color"] = {{"r", def.color.x}, {"g", def.color.y}, {"b", def.color.z}, {"a", def.color.w}};
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
+        p["textureName"] = def.textureName;
         p["properties"] = def.properties;
         templatesArray.push_back(p);
     }
@@ -791,6 +783,7 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                     def.scale.z = p["scale"]["z"];
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
+                if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
                 templatePalette_.push_back(def);
             }
@@ -799,4 +792,140 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
     } catch (...) {
         return false;
     }
+}
+
+
+std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive* boxPrimitive) {
+    float worldX = ChipToWorldX(x) + (spanWidth * chipSize_) * 0.5f;
+    float worldY = ChipToWorldY(y) + (spanHeight * chipSize_) * 0.5f;
+
+    std::shared_ptr<BaseBlock> newBlock = nullptr;
+    int typeId = static_cast<int>(type);
+
+    if (type == ChipType::kBlock) {
+        newBlock = std::make_shared<NormalBlock>(this, x, y);
+    } else if (type == ChipType::kDeathBlock) {
+        newBlock = std::make_shared<DeathBlock>(this, x, y);
+    } else if (type == ChipType::kGoal) {
+        newBlock = std::make_shared<GoalBlock>(this, x, y);
+    } else if (type == ChipType::kCoin) {
+        newBlock = std::make_shared<CoinBlock>(this, x, y);
+    } else if (type == ChipType::kOneWayBlock) {
+        newBlock = std::make_shared<OneWayBlock>(this, x, y);
+    } else if (type == ChipType::kLift) {
+        newBlock = std::make_shared<LiftBlock>(this, x, y);
+    } else if (type == ChipType::kRail) {
+        newBlock = std::make_shared<RailBlock>(this, x, y);
+    } else if (type == ChipType::kJumpBlock) {
+        newBlock = std::make_shared<JumpBlock>(this, x, y);
+    } else if (typeId >= 100) {
+        const CustomBlockDef* def = nullptr;
+        for (const auto& d : customPalette_) {
+            if (d.id == typeId) { def = &d; break; }
+        }
+        if (def) {
+            if (def->type == "NormalBlock") newBlock = std::make_shared<NormalBlock>(this, x, y);
+            else if (def->type == "DeathBlock") newBlock = std::make_shared<DeathBlock>(this, x, y);
+            else if (def->type == "GoalBlock") newBlock = std::make_shared<GoalBlock>(this, x, y);
+            else if (def->type == "CoinBlock") newBlock = std::make_shared<CoinBlock>(this, x, y);
+            else if (def->type == "OneWayBlock") newBlock = std::make_shared<OneWayBlock>(this, x, y);
+            else if (def->type == "LiftBlock") newBlock = std::make_shared<LiftBlock>(this, x, y);
+            else if (def->type == "RailBlock") newBlock = std::make_shared<RailBlock>(this, x, y);
+            else if (def->type == "JumpBlock") newBlock = std::make_shared<JumpBlock>(this, x, y);
+        }
+    }
+
+    if (newBlock) {
+        newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, spanWidth * chipSize_, spanHeight * chipSize_);
+        
+        const CustomBlockDef* def = nullptr;
+        if (typeId >= 100) {
+            for (const auto& d : customPalette_) {
+                if (d.id == typeId) { def = &d; break; }
+            }
+        } else if (typeId >= 1 && typeId <= 9) {
+            for (const auto& d : templatePalette_) {
+                if (d.id == typeId) { def = &d; break; }
+            }
+        }
+        
+        if (def) {
+            newBlock->SetProperties(def->properties);
+            if (newBlock->GetGameObject()) {
+                if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                    prc->GetMaterial().color = def->color;
+                    
+                    if (!def->textureName.empty()) {
+                        uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
+                        prc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+                    }
+                    
+
+                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        tc->SetScale({ 
+                            tc->GetScale().x * def->scale.x, 
+                            tc->GetScale().y * def->scale.y, 
+                            tc->GetScale().z * def->scale.z 
+                        });
+                    }
+                }
+            }
+            
+            if (!def->modelName.empty()) {
+                Model* model = nullptr;
+                if (def->modelName.length() >= 4 && def->modelName.substr(def->modelName.length() - 4) == ".obj") {
+                    std::string fullPath = "resources/" + def->modelName;
+                    std::filesystem::path p(fullPath);
+                    std::string dirPath = p.parent_path().string();
+                    std::string fileName = p.filename().string();
+                    std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
+                    model = ModelManager::GetInstance()->GetModel(dirPath, fileName);
+                } else {
+                    model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + def->modelName, def->modelName + ".obj");
+                    if (!model) {
+                        model = ModelManager::GetInstance()->GetModel("resources/models", def->modelName + ".obj");
+                    }
+                }
+                
+                if (model && newBlock->GetGameObject()) {
+                    // PrimitiveRendererComponent を無効化する代わりに、MeshRendererComponent を追加
+                    auto* mrc = newBlock->GetGameObject()->AddComponent<MeshRendererComponent>();
+                    mrc->Initialize(device_.Get(), model);
+                    
+                    if (!def->textureName.empty()) {
+                        uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
+                        mrc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+                    } else {
+                        mrc->SetTextureHandle(gpuHandle_);
+                    }
+                    mrc->GetMaterial().color = def->color;
+
+                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        tc->SetPosition({ worldX, worldY, 0.0f });
+                        tc->SetScale(def->scale);
+                    }
+                    
+                    // モデルがある場合はプリミティブを非表示または削除（コンポーネントを取り除く機能がない場合はアルファ0にする等）
+                    if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                        prc->GetMaterial().color.w = 0.0f; // 透明にして見えなくする
+                    }
+                }
+            }
+        }
+
+        if (newBlock->GetGameObject()) {
+            newBlock->GetGameObject()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
+            if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                    float tileX = tc->GetScale().x / chipSize_;
+                    float tileY = tc->GetScale().y / chipSize_;
+                    float tileZ = tc->GetScale().z / chipSize_;
+                    Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
+                    prc->GetMaterial().uvTransform = uvTrans;
+                    prc->GetMaterial().enableBoxMapping = 1.0f;
+                }
+            }
+        }
+    }
+    return newBlock;
 }

@@ -3,6 +3,7 @@
 #include <wrl.h>
 #include <d3d12.h>
 #include"Core/Utility/UtilityFunctions.h"
+#include "GameObject/GameObject.h"
 
 // 前方宣言
 class SceneManager;
@@ -19,8 +20,14 @@ class IScene {
 public:
     virtual ~IScene() = default;
 
-    // 初期化
-    virtual void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) = 0;
+    // 初期化 (シーン生成時に一度だけ呼ばれる)
+    virtual void Initialize() = 0;
+
+    // シーンがアクティブになった時に呼ばれる (遷移後)
+    virtual void OnEnter(SceneManager* sceneManager) {}
+
+    // シーンから他のシーンへ遷移する直前に呼ばれる
+    virtual void OnExit(SceneManager* sceneManager) {}
 
     // 更新
     virtual void Update(SceneManager *sceneManager) = 0;
@@ -36,6 +43,7 @@ public:
 
     // ヒエラルキー用: オブジェクトリストの取得 (デフォルトは空)
     virtual std::vector<Object3D *> GetObjects() { return {}; }
+    virtual std::vector<std::shared_ptr<GameObject>> GetGameObjects() { return {}; }
     virtual std::vector<ParticleManager *> GetParticles() { return {}; }
     virtual std::vector<PrimitiveObject *> GetPrimitives() { return {}; }
 

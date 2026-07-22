@@ -11,6 +11,7 @@
 /// 2Dスクロールゲーム用マップクラス
 /// 2D配列でマップチップを管理し、PrimitiveObject(Box)で描画する
 /// </summary>
+
 class MapChip2D {
 public:
     enum class ChipType : int {
@@ -24,11 +25,12 @@ public:
         kLift = 7,  // 動く足場（リフト）
         kRail = 8,  // リフトの移動レール
         kJumpBlock = 9, // ジャンプ台
+        kRoomRespawn = 10, // 部屋用リスポーン地点
     };
 
-    void Initialize(ID3D12GraphicsCommandList* commandList, const std::string& mapFilePath);
+    void Initialize(const std::string& mapFilePath);
     void Update();
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw();
 
     // 指定座標のブロックを取得する
     BaseBlock* GetBlock(int chipX, int chipY) const;
@@ -61,6 +63,9 @@ public:
     // チップを取得
     ChipType GetChip(int x, int y) const;
 
+    // バケツ塗り（フラッドフィル）
+    void BucketFill(int startX, int startY, ChipType targetType, ChipType replacementType);
+
     // マップをすべてクリア
     void ClearMap();
 
@@ -78,23 +83,22 @@ public:
 
     bool SaveToFile(const std::string& filepath);
     bool LoadFromFile(const std::string& filepath);
+    bool LoadFromStageName(const std::string& stageName);
 
     // 文字列ベースのマップデータ取得＆設定（リプレイ用）
     std::string GetMapDataAsString() const;
     bool LoadFromString(const std::string& data);
 
-    // 境界線（ルームトリガー）データの管理
-    std::vector<float>& GetBoundaryX() { return boundaryX_; }
-    std::vector<float>& GetBoundaryY() { return boundaryY_; }
-    const std::vector<float>& GetBoundaryX() const { return boundaryX_; }
-    const std::vector<float>& GetBoundaryY() const { return boundaryY_; }
+    // 境界線（ルームトリガー）データの管理 -> Roomに変更
+    std::vector<StageRoom>& GetRooms() { return rooms_; }
+    const std::vector<StageRoom>& GetRooms() const { return rooms_; }
     
-    // デフォルト境界線の生成（マップサイズに基づいて自動生成）
-    void GenerateDefaultBoundaries();
+    // デフォルトルームの生成（マップサイズに基づいて自動生成）
+    void GenerateDefaultRooms();
     
-    // 境界線メタデータの保存と読込
-    bool SaveBoundariesToFile(const std::string& filepath);
-    bool LoadBoundariesFromFile(const std::string& filepath);
+    // ルームデータの保存と読込
+    bool SaveRoomsToFile(const std::string& filepath);
+    bool LoadRoomsFromFile(const std::string& filepath);
 
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
@@ -107,6 +111,7 @@ public:
         Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         Vector3 scale = {1.0f, 1.0f, 1.0f};
         std::string modelName = "";
+        std::string textureName = "";
     };
 
     std::vector<CustomBlockDef>& GetCustomPalette() { return customPalette_; }
@@ -119,9 +124,12 @@ public:
     bool SaveTemplatesToFile(const std::string& filepath);
     bool LoadTemplatesFromFile(const std::string& filepath);
 
+public:
+    void SetDirty() { isDirty_ = true; }
 private:
+    std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void BuildMap();
-    void CreateChipObjects(ID3D12GraphicsCommandList* commandList);
+    void CreateChipObjects();
 
 private:
     // マップデータ（左下が(0,0)）
@@ -130,9 +138,11 @@ private:
     int mapHeight_ = 0;
     float chipSize_ = 1.0f; // 1チップのサイズ（ワールド座標）
 
-    // ルーム境界線データ（ワールド座標）
-    std::vector<float> boundaryX_;
-    std::vector<float> boundaryY_;
+    // ルームデータ（ワールド座標）
+    std::vector<StageRoom> rooms_;
+
+    std::unique_ptr<GameObject> boundaries_[4];
+    void CreateBoundaries();
 
     // 実行時に生成される各種ブロックのインスタンス
     std::vector<std::vector<std::shared_ptr<BaseBlock>>> activeBlocks_;
@@ -151,4 +161,6 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_{};
 
     bool isRebuildEnabled_ = true;
+    bool isDirty_ = false;
+    std::string currentFilePath_ = "";
 };

@@ -135,6 +135,8 @@ public:
 	D3D12_RENDER_TARGET_VIEW_DESC GetRtvDesc() const { return rtvDesc_; }
 	ID3D12RootSignature *GetRootSignature() const { return rootSignature_.Get(); }
 	ID3D12PipelineState *GetGraphicsPipelineState() const { return graphicsPipelineState_.Get(); }
+	ID3D12RootSignature *GetSkinningRootSignature() const { return skinningRootSignature_.Get(); }
+	ID3D12PipelineState *GetSkinningPipelineState() const { return skinningPipelineState_.Get(); }
 	ID3D12PipelineState *GetGraphicsPipelineStateNoCull() const { return graphicsPipelineStateNoCull_.Get(); }
 	ID3D12PipelineState *GetGraphicsPipelineStateAdditive() const { return graphicsPipelineStateAdditive_.Get(); }
 	ID3D12PipelineState *GetGraphicsPipelineStateNoCullAdditive() const { return graphicsPipelineStateNoCullAdditive_.Get(); }
@@ -223,6 +225,8 @@ private:
 	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc_{};
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> skinningRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> skinningPipelineState_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateNoCull_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateAdditive_;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateNoCullAdditive_;

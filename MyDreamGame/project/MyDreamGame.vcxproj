@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -73,7 +73,7 @@
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile>
+    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -95,12 +95,12 @@
     </Link>
     <PostBuildEvent>
       <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
-set OUT_DIR=$(TargetDir)
-xcopy "$(ProjectDir)resources" "%OUT_DIR%resources" /E /I /Y /D</Command>
+set "OUT_DIR=$(TargetDir)"
+xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile>
+    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -123,12 +123,12 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%resources" /E /I /Y /D</Command>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
-set OUT_DIR=$(TargetDir)
-xcopy "$(ProjectDir)resources" "%OUT_DIR%resources" /E /I /Y /D</Command>
+set "OUT_DIR=$(TargetDir)"
+xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <ClCompile>
+    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -154,11 +154,13 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%resources" /E /I /Y /D</Command>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
-xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
+xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Graphics\CameraManager.cpp" />
+    <ClCompile Include="Engine\Renderer\Renderer.cpp" />
+    <ClCompile Include="Engine\Renderer\SkeletonDebugRenderer.cpp" />
     <ClCompile Include="Engine\Editor\EditorManager.cpp" />
     <ClCompile Include="externals\imgui\backends\imgui_impl_dx12.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -208,11 +210,21 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Engine\GameObject\GameObject.cpp" />
+    <ClCompile Include="Engine\Component\TransformComponent.cpp" />
+    <ClCompile Include="Engine\Component\AnimatorComponent.cpp" />
+    <ClCompile Include="Engine\Component\ColliderComponent.cpp" />
+    <ClCompile Include="Engine\Collision\CollisionManager.cpp" />
+    <ClCompile Include="Engine\Component\MeshRendererComponent.cpp" />
+    <ClCompile Include="Engine\Component\PrimitiveRendererComponent.cpp" />
     <ClCompile Include="Engine\GameObject\Object3D.cpp" />
     <ClCompile Include="Engine\GameObject\ResourceObject.cpp" />
     <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp" />
     <ClCompile Include="Engine\Core\Utility\LogManager.cpp" />
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp" />
+    <ClCompile Include="Engine\Core\Utility\Quaternion.cpp" />
+    <ClCompile Include="Engine\Core\Utility\Animation.cpp" />
+    <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp" />
     <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
     <ClCompile Include="Project\Scenes\StageSelectScene.cpp" />
@@ -226,7 +238,9 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
     <ClCompile Include="Project\Effect\CoinEffect.cpp" />
-    <ClCompile Include="Project\Game2D\Player2D.cpp" />
+    <ClCompile Include="Project\Game2D\Player\Player2D.cpp" />
+    <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
+    <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\LiftBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\RailBlock.cpp" />
@@ -236,8 +250,13 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
-    <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
-      <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveBox.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveSphere.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveCircle.cpp" />
@@ -247,7 +266,9 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveTorus.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveTriangle.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp" />
-</ItemGroup>
+    <ClCompile Include="Project\Game2D\Player\PlayerInput.cpp" />
+    <ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp" />
+  </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -359,7 +380,10 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Graphics\CameraManager.h" />
+    <ClInclude Include="Engine\Renderer\Renderer.h" />
+    <ClInclude Include="Engine\Renderer\SkeletonDebugRenderer.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
+    <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />
     <ClInclude Include="externals\imgui\imgui_internal.h" />
@@ -392,6 +416,14 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Graphics\DebugCamera.h" />
     <ClInclude Include="Engine\Graphics\MapEditorCamera.h" />
     <ClInclude Include="Engine\Input\InputManager.h" />
+    <ClInclude Include="Engine\GameObject\GameObject.h" />
+    <ClInclude Include="Engine\Component\IComponent.h" />
+    <ClInclude Include="Engine\Component\TransformComponent.h" />
+    <ClInclude Include="Engine\Component\AnimatorComponent.h" />
+    <ClInclude Include="Engine\Component\ColliderComponent.h" />
+    <ClInclude Include="Engine\Collision\CollisionManager.h" />
+    <ClInclude Include="Engine\Component\MeshRendererComponent.h" />
+    <ClInclude Include="Engine\Component\PrimitiveRendererComponent.h" />
     <ClInclude Include="Engine\GameObject\Object3D.h" />
     <ClInclude Include="Engine\GameObject\ResourceObject.h" />
     <ClInclude Include="Engine\Core\Utility\ImGuiHelper.h" />
@@ -399,6 +431,9 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Core\Utility\TransformFunctions.h" />
     <ClInclude Include="Engine\Core\Utility\LogManager.h" />
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h" />
+    <ClInclude Include="Engine\Core\Utility\Quaternion.h" />
+    <ClInclude Include="Engine\Core\Utility\Animation.h" />
+    <ClInclude Include="Engine\Core\Utility\ParameterManager.h" />
     <ClInclude Include="Engine\Graphics\TextureManager.h" />
     <ClInclude Include="Project\Scenes\TitleScene.h" />
     <ClInclude Include="Project\Scenes\StageSelectScene.h" />
@@ -412,7 +447,10 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
     <ClInclude Include="Project\Effect\CoinEffect.h" />
-    <ClInclude Include="Project\Game2D\Player2D.h" />
+    <ClInclude Include="Project\Game2D\Player\Player2D.h" />
+    <ClInclude Include="Project\Game2D\Player\PlayerState.h" />
+    <ClInclude Include="Project\Game2D\Player\PlayerConfig.h" />
+    <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\LiftBlock.h" />
@@ -423,7 +461,13 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\CoinBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />
-    <ClInclude Include="Engine\Editor\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayTimelineEditor.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
+    <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
+    <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />
+    <ClInclude Include="Project\Game2D\Player\PlayerPhysics.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">
@@ -461,3 +505,6 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
+
+
+

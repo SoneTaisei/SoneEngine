@@ -8,7 +8,8 @@
 #include <memory>
 #include "Effect/ParticleCommon.h"
 #include "Effect/windowParticle.h"
-#include "GameObject/Object3D.h"
+#include "GameObject/GameObject.h"
+#include "Component/MeshRendererComponent.h"
 #include "Graphics/Skybox.h"
 #include "Graphics/DebugCamera.h"
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -23,7 +24,9 @@
 class TitleScene : public IScene {
 public:
     ~TitleScene() override;
-    void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
+    void Initialize() override;
+    void OnEnter(SceneManager *sceneManager) override;
+    void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
@@ -36,20 +39,15 @@ public:
 private:
     // メンバ変数としてモデル、テクスチャ、座標を持つ
     uint32_t textureHandle_ = 0;
-    Transform transform_ = {};
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_{};
+    EulerTransform transform_ = {};
+    
 
     Model *playerModel_ = nullptr;
 
-    std::vector<std::unique_ptr<Object3D>> objects_{};
+    std::vector<std::shared_ptr<GameObject>> gameObjects_{};
     std::vector<std::unique_ptr<Sprite>> sprites_{};
 
     // ■ 追加: パーティクル管理用変数
-
-    // 1. 共通基盤
-    std::unique_ptr<ModelCommon> modelCommon_{};
-    std::unique_ptr<SpriteCommon> spriteCommon_{};
-    std::unique_ptr<ParticleCommon> particleCommon_{};
 
     // 2. パーティクルリスト (所有権管理用)
     std::vector<std::unique_ptr<ParticleManager>> particles_{};
@@ -64,7 +62,7 @@ private:
     const int srvIndex_ = 110;
 
     // ■ 追加: タイトルシーン専用カメラ
-    Transform cameraTransform_{}; // カメラの座標・回転
+    EulerTransform cameraTransform_{}; // カメラの座標・回転
     Matrix4x4 viewProjection_{};  // 描画に使う行列
 
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス

@@ -82,8 +82,8 @@ void DirectXCommon::PreDraw() {
     // 引数に renderTextureRtvHandle_ を渡す
     commandList_->OMSetRenderTargets(1, &renderTextureRtvHandle_, false, &dsvHandle);
 
-    // ★修正2：画面のクリアも RenderTexture に対して行う（赤色などのクリアカラー）
-    float clearColor[] = {1.0f, 0.0f, 0.0f, 1.0f}; // 先ほど InitializeRenderTexture で決めた赤色
+    // ★修正2：画面のクリアも RenderTexture に対して行う（Initialize時のクリア値と合わせる）
+    float clearColor[] = {0.1f, 0.25f, 0.5f, 1.0f}; // InitializeRenderTextureで設定した値と一致させる
     commandList_->ClearRenderTargetView(renderTextureRtvHandle_, clearColor, 0, nullptr);
 
     // 深度バッファをクリア (ここはそのまま)
@@ -368,7 +368,7 @@ void DirectXCommon::CreatePipelines() {
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
     staticSamplers[0].MinLOD = 0;
@@ -450,6 +450,62 @@ void DirectXCommon::CreatePipelines() {
     graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
     hr = device_->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineState_));
+
+    // =====================================================================================
+    // スキンメッシュ用のパイプラインステート (skinningPipelineState_)
+    // =====================================================================================
+
+    // RootSignature は通常描画のもの (rootParameters) に Palette用 (VS, t1) を追加したもの
+    CD3DX12_DESCRIPTOR_RANGE paletteRange{};
+    paletteRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1); // t1
+
+    D3D12_ROOT_PARAMETER skinningRootParameters[10] = {};
+    for (int i = 0; i < 9; ++i) {
+        skinningRootParameters[i] = rootParameters[i];
+    }
+
+    // 追加の パレットSRV (t1, VS)
+    skinningRootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    skinningRootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    skinningRootParameters[9].DescriptorTable.pDescriptorRanges = &paletteRange;
+    skinningRootParameters[9].DescriptorTable.NumDescriptorRanges = 1;
+
+    D3D12_ROOT_SIGNATURE_DESC skinningRootSignatureDesc{};
+    skinningRootSignatureDesc.pParameters = skinningRootParameters;
+    skinningRootSignatureDesc.NumParameters = 10;
+    skinningRootSignatureDesc.pStaticSamplers = staticSamplers;
+    skinningRootSignatureDesc.NumStaticSamplers = _countof(staticSamplers);
+    skinningRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    Microsoft::WRL::ComPtr<ID3DBlob> skinningSignatureBlob = nullptr;
+    D3D12SerializeRootSignature(&skinningRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &skinningSignatureBlob, &errorBlob);
+    device_->CreateRootSignature(0, skinningSignatureBlob->GetBufferPointer(), skinningSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&skinningRootSignature_));
+
+    // 2. InputLayout の拡張 (WEIGHT, BONEINDICES の追加)
+    D3D12_INPUT_ELEMENT_DESC skinningInputElementDescs[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "WEIGHT",   0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "INDEX",    0, DXGI_FORMAT_R32G32B32A32_SINT,  1, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+    };
+
+    D3D12_INPUT_LAYOUT_DESC skinningInputLayoutDesc{};
+    skinningInputLayoutDesc.pInputElementDescs = skinningInputElementDescs;
+    skinningInputLayoutDesc.NumElements = _countof(skinningInputElementDescs);
+
+    // 3. Shader のコンパイル
+    Microsoft::WRL::ComPtr<IDxcBlob> skinningVertexShaderBlob = CompileShader(L"resources/shaders/SkinningObject3d.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    // ピクセルシェーダは既存の Object3d.PS.hlsl を流用
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC skinningPipelineStateDesc = graphicsPipelineStateDesc;
+    skinningPipelineStateDesc.pRootSignature = skinningRootSignature_.Get();
+    skinningPipelineStateDesc.InputLayout = skinningInputLayoutDesc;
+    skinningPipelineStateDesc.VS = { skinningVertexShaderBlob->GetBufferPointer(), skinningVertexShaderBlob->GetBufferSize() };
+
+    device_->CreateGraphicsPipelineState(&skinningPipelineStateDesc, IID_PPV_ARGS(&skinningPipelineState_));
+
     assert(SUCCEEDED(hr));
 
     // カリングなし

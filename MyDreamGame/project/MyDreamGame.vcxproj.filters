@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<?xml version='1.0' encoding='utf-8'?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
       <Filter>Shader\Object</Filter>
@@ -90,6 +90,15 @@
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\Quaternion.cpp">
+      <Filter>Engine\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\Animation.cpp">
+      <Filter>Engine\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp">
+      <Filter>Engine\Utility</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Core\Utility\LogManager.cpp">
       <Filter>Engine\Utility</Filter>
     </ClCompile>
@@ -110,6 +119,27 @@
     </ClCompile>
     <ClCompile Include="Engine\Graphics\MapEditorCamera.cpp">
       <Filter>Engine\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\GameObject\GameObject.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Component\TransformComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Component\AnimatorComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Component\ColliderComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Collision\CollisionManager.cpp">
+      <Filter>Engine\Collision</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Component\MeshRendererComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Component\PrimitiveRendererComponent.cpp">
+      <Filter>Engine\Component</Filter>
     </ClCompile>
     <ClCompile Include="Engine\GameObject\Object3D.cpp">
       <Filter>Engine\Graphics\Object</Filter>
@@ -160,8 +190,14 @@
     <ClCompile Include="Project\Effect\CoinEffect.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Game2D\Player2D.cpp">
+    <ClCompile Include="Project\Game2D\Player\Player2D.cpp">
       <Filter>Application\Game2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp">
+      <Filter>Application\2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp">
+      <Filter>Application\2D</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Project\Game2D</Filter>
@@ -179,10 +215,10 @@
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp">
-      <Filter>Project\Game2D</Filter>
+      <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp">
-      <Filter>Project\Game2D</Filter>
+      <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
@@ -190,7 +226,12 @@
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
       <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
@@ -221,7 +262,7 @@
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-</ItemGroup>
+<ClCompile Include="Project\Game2D\Player\PlayerInput.cpp"><Filter>Project\Game2D</Filter></ClCompile><ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp"><Filter>Project\Game2D</Filter></ClCompile></ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -296,6 +337,15 @@
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\Quaternion.h">
+      <Filter>Engine\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\Animation.h">
+      <Filter>Engine\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\ParameterManager.h">
+      <Filter>Engine\Utility</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Core\Utility\LogManager.h">
       <Filter>Engine\Utility</Filter>
     </ClInclude>
@@ -316,6 +366,30 @@
     </ClInclude>
     <ClInclude Include="Engine\Graphics\MapEditorCamera.h">
       <Filter>Engine\Graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\GameObject\GameObject.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\IComponent.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\TransformComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\AnimatorComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\ColliderComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Collision\CollisionManager.h">
+      <Filter>Engine\Collision</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\MeshRendererComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\PrimitiveRendererComponent.h">
+      <Filter>Engine\Component</Filter>
     </ClInclude>
     <ClInclude Include="Engine\GameObject\Object3D.h">
       <Filter>Engine\Graphics\Object</Filter>
@@ -354,6 +428,7 @@
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
+    <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h" />
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
     <ClInclude Include="Engine\Graphics\Skybox.h" />
     <ClInclude Include="Engine\Graphics\CameraManager.h" />
@@ -369,8 +444,17 @@
     <ClInclude Include="Project\Effect\CoinEffect.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Game2D\Player2D.h">
+    <ClInclude Include="Project\Game2D\Player\Player2D.h">
       <Filter>Application\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\PlayerState.h">
+      <Filter>Application\2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\PlayerConfig.h">
+      <Filter>Application\2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h">
+      <Filter>Application\2D</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Project\Game2D</Filter>
@@ -402,7 +486,11 @@
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Editor\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayTimelineEditor.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
+    <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
       <ClInclude Include="Engine\Resource\Primitive\PrimitivePlane.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
@@ -433,7 +521,7 @@
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveStar.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-</ItemGroup>
+<ClInclude Include="Project\Game2D\Player\PlayerInput.h"><Filter>Project\Game2D</Filter></ClInclude><ClInclude Include="Project\Game2D\Player\PlayerPhysics.h"><Filter>Project\Game2D</Filter></ClInclude></ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>

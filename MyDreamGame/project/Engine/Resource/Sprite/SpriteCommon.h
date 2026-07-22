@@ -18,7 +18,7 @@ public:
     void Finalize();
 
     // 描画前処理 (共通の設定をコマンドリストに積む)
-    void PreDraw(ID3D12GraphicsCommandList *commandList);
+    void PreDraw();
 
     // ★登録されている全スプライトを描画する
     void DrawAll();

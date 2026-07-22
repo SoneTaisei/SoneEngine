@@ -1,3 +1,5 @@
+﻿#include "Core/Utility/LogManager.h"
+#pragma warning(disable: 4828)
 #include "UtilityFunctions.h"
 #include <map>
 #include <fstream>
@@ -5,6 +7,8 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include "Renderer/SrvManager.h"
+#include <algorithm>
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #ifdef USE_IMGUI
@@ -32,7 +36,7 @@ void Log(const std::string &message) {
 	// デバッグ出力（従来の動作）
 	OutputDebugStringA(message.c_str());
 
-	// ログファイルを一度だけ作成して使い回す（スレッドセーフ）
+	// ログファイルを一度だけ作成して使います（スレッドセーフ）
 	static std::once_flag s_logInitFlag;
 	static std::ofstream s_logStream;
 	static std::mutex s_logMutex;
@@ -46,7 +50,7 @@ void Log(const std::string &message) {
 			auto now = std::chrono::system_clock::now();
 			auto nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
 
-			// ローカルタイムゾーンに変換してフォーマット（元コードと同じ書式を使用）
+			// ローカルタイムゾーンに変換してフォーマット（文字コードと同じ書式を使用）
 			std::chrono::zoned_time localTime{ std::chrono::current_zone(), nowSeconds };
 			std::string dateString = std::format("{:%Y%d_%H%M%S}", localTime);
 
@@ -99,7 +103,7 @@ std::string str0{ "STRING" };
 std::string str1{ std::to_string(10) };
 
 LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
-	// 時刻を取得して、時刻を名前に入れたファイルを作成。Dumpsディレクトリ以下に出力
+	// 時刻を取得して、時刻を名前に入れたファイルを作成、dumpsディレクトリ以下に出力
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	wchar_t filePath[MAX_PATH] = { 0 };
@@ -139,7 +143,7 @@ LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception) {
 	DWORD processId = GetCurrentProcessId();
 	DWORD threadId = GetCurrentThreadId();
 
-	// 設定情報を入力
+	// 設定情報を出力
 	MINIDUMP_EXCEPTION_INFORMATION minidumpInformation{};
 	minidumpInformation.ThreadId = threadId;
 	minidumpInformation.ExceptionPointers = exception;
@@ -173,18 +177,18 @@ IDxcBlob *CompileShader(
 	const std::wstring &filePath,
 	// Compilerに使用するProfile
 	const wchar_t *profile,
-	// 初期化で生成したものを3つ
+	// 初期化で生成したものを渡す
 	IDxcUtils *dxcUtils,
 	IDxcCompiler3 *dxcCompiler,
 	IDxcIncludeHandler *includeHandler) {
 
 	/*********************************************************
-	*1. hlslファイルを読む
+	*1. hlsl繝輔ぃ繧､繝ｫ繧定ｪｭ繧
 	*********************************************************/
 
 	// これからシェーダーをコンパイルする旨をログに出す
 	Log(ConvertString(std::format(L"Begin CompileShader, path:{},profile:{}\n", filePath, profile)));
-	// hlslファイルを読む
+	// hlsl繝輔ぃ繧､繝ｫ繧定ｪｭ繧
 	IDxcBlobEncoding *shaderSource = nullptr;
 	HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
 	if (FAILED(hr)) {
@@ -194,14 +198,14 @@ IDxcBlob *CompileShader(
 	}
 	// あきらめなかったら止める
 	assert(SUCCEEDED(hr));
-	// 読み込んだファイルの内容を設定する
+	// 読み込んだファイルの中身を設定する
 	DxcBuffer shaderSourceBuffer;
 	shaderSourceBuffer.Ptr = shaderSource->GetBufferPointer();
 	shaderSourceBuffer.Size = shaderSource->GetBufferSize();
 	shaderSourceBuffer.Encoding = DXC_CP_UTF8;// UTF8の文字コードであることを通知
 
 	/*********************************************************
-	*2.Compileする
+	2.Compileする
 	*********************************************************/
 
 	LPCWSTR arguments[] = {
@@ -211,7 +215,7 @@ IDxcBlob *CompileShader(
         L"-Zi", L"-Qembed_debug", // デバッグ用の情報を埋め込む
         L"-Od",                   // 最適化を外しておく
         L"-Zpr",                  // メモリレイアウトは行優先
-        L"-HV", L"2021",          // ★ これを追加！ HLSL2021ルールを適用してC++と同じ型名を使えるようにする
+        L"-HV", L"2021",          // ※これを追加：HLSL2021ルールを適用してC++と同じ型名を使えるようにする
     };
 	// 実際にShaderをコンパイルする
 	IDxcResult *shaderResult = nullptr;
@@ -225,29 +229,29 @@ IDxcBlob *CompileShader(
 	// コンパイラエラーではなくdxcが起動できないなどの致命的なエラー
 	assert(SUCCEEDED(hr));
 /*********************************************************
-	*3.警告・エラーが出ていないか確認
+	3.警告やエラーが出ているか確認
 	*********************************************************/
 
 	IDxcBlobUtf8 *shaderError = nullptr;
 	shaderResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&shaderError), nullptr);
 
-	// shaderErrorが作られていて、かつ中身の文字列の長さが0ではない場合だけエラーとみなす
+	// shaderErrorが作られており、かつ中身の文字列の長さが0ではない場合だけエラーとみなす
 	if(shaderError != nullptr && shaderError->GetStringLength() != 0) {
 		Log(shaderError->GetStringPointer());
-		// 警告・エラー絶対ダメ
+		// 警告やエラー絶対ダメ
 		assert(false);
 	}
 	/*********************************************************
-	*4.Compile結果を受け取って返す
+	4.Compile結果を受け取って返す
 	*********************************************************/
 
 	// コンパイル結果から実行用のバイナリ部分を取得
 	IDxcBlob *shaderBlob = nullptr;
 	hr = shaderResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
 	assert(SUCCEEDED(hr));
-	// 成功押したログを出す
+	// 成功したログを出す
 	Log(ConvertString(std::format(L"Compile Succeeded, path:{},profile:{}\n", filePath, profile)));
-	// もう使わないリソースを開放
+	// もう使わないソースを開放
 	shaderSource->Release();
 	shaderResult->Release();
 	// 実行用のバイナリを返却
@@ -281,9 +285,11 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComP
 		nullptr,
 		IID_PPV_ARGS(&resource)
 	);
-	assert(SUCCEEDED(hr)); // 成功してるか確認
+	if (FAILED(hr)) {
+		throw std::runtime_error("CreateBufferResource failed! VRAM might be full or arguments invalid.");
+	}
 
-	return resource; // 作ったバッファを返す！
+	return resource; // 作ったバッファを返す
 }
 
 // DescriptorHeapの作成関数
@@ -309,7 +315,7 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
     std::wstring filePathW = ConvertString(filePath);
     HRESULT hr;
 
-    // ★資料の指示1：DDSファイルに対応する
+    // 備考1：DDSファイルに対応する
     if (filePathW.ends_with(L".dds")) {
         // .ddsで終わっていたらDDSとして読み込む。sRGB情報が含まれているのでフラグはNONE
         hr = DirectX::LoadFromDDSFile(filePathW.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image);
@@ -317,9 +323,11 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
         // それ以外は従来通りWIC（PNGやJPGなど）として読み込む
         hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
-    assert(SUCCEEDED(hr));
+    if (FAILED(hr)) {
+        throw std::runtime_error("LoadTexture failed to load file: " + filePath);
+    }
 
-    // ★資料の指示2：圧縮フォーマットか判定してミップマップ生成を分ける
+    // 備考2：圧縮フォーマットか判定してミップマップ生成を避ける
     DirectX::ScratchImage mipImages{};
     if (DirectX::IsCompressed(image.GetMetadata().format)) {
         // 圧縮フォーマットならそのまま使う（DirectXTexが直接のミップマップ生成に非対応なため）
@@ -328,7 +336,7 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
         // 非圧縮ならミップマップを作成する
         hr = DirectX::GenerateMipMaps(
             image.GetImages(), image.GetImageCount(), image.GetMetadata(),
-            DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) を 4 など任意に変更可能
+            DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) や 4 など任意に変更可能
         assert(SUCCEEDED(hr));
     }
 
@@ -340,12 +348,12 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::Com
 	// metadataをもとにResourceの設定
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = UINT(metadata.width);// 横幅
-	resourceDesc.Height = UINT(metadata.height);// 高さ
+	resourceDesc.Height = UINT(metadata.height);// 鬮倥＆
 	resourceDesc.MipLevels = UINT(metadata.mipLevels);// mipmapの数
-	resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 奥行き ro 配列Textureの配列数
+	resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 奥行き or 配列Textureの配列数
 	resourceDesc.Format = metadata.format;// TextureのFormat
 	resourceDesc.SampleDesc.Count = 1;// サンプリングカウント
-	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);// Textureの次元数。2次元
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);// Textureの次元（2次元）
 
 	// 利用するHeapの設定
 	D3D12_HEAP_PROPERTIES heapProperties{};
@@ -357,17 +365,19 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::Com
 		&heapProperties,// Heapの設定
 		D3D12_HEAP_FLAG_NONE,// Heapの特殊な設定。今回はなし
 		&resourceDesc,// Resourceの設定
-		D3D12_RESOURCE_STATE_COPY_DEST,// 初回のResourceState。
+		D3D12_RESOURCE_STATE_COPY_DEST,// 初回のResourceState
 		nullptr,//Clear最適値。今回は使わない
 		IID_PPV_ARGS(&resource)
 	);
-	assert(SUCCEEDED(hr));
+	if (FAILED(hr)) {
+		throw std::runtime_error("CreateTextureResource failed to create committed resource.");
+	}
 	return resource;
 }
 
-// 戻り値を破損してはならないのでこれを付ける
+// 戻り値を破棄してはならないのでこれを付ける
 [[nodiscard]]
-// TextureResouorceにデータを転送する
+// TextureResourceにデータを転送する
 Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(Microsoft::WRL::ComPtr<ID3D12Resource> texture, const DirectX::ScratchImage &mipImages, Microsoft::WRL::ComPtr<ID3D12Device> device, Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) {
 	std::vector<D3D12_SUBRESOURCE_DATA>subresources;
 	// 読み込んだデータからDirectX12用のSubresourceの配列を作成
@@ -378,7 +388,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> UploadTextureData(Microsoft::WRL::ComPtr<
 	Microsoft::WRL::ComPtr<ID3D12Resource> intermediateResource = CreateBufferResource(device, intermediateSize);
 	// データ転送をコマンドに積む
 	UpdateSubresources(commandList.Get(), texture.Get(), intermediateResource.Get(), 0, 0, UINT(subresources.size()), subresources.data());
-	// Tetureへの転送後は利用できるよう、D3D12_RESOURCE_STATE_COPY_DESTからD3D12_RESOURCE_STATE_GENERIC_READへResourceStateを変更する
+	// Textureへの転送後に利用できるよう、D3D12_RESOURCE_STATE_COPY_DESTからD3D12_RESOURCE_STATE_GENERIC_READへResourceStateを変更する
 	D3D12_RESOURCE_BARRIER barrier{};
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -396,7 +406,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 	resourceDesc.Width = width;
 	resourceDesc.Height = height;
 	resourceDesc.MipLevels = 1;
-	resourceDesc.DepthOrArraySize = 1;// 奥行き
+	resourceDesc.DepthOrArraySize = 1;// 螂･陦後″
 	resourceDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	resourceDesc.SampleDesc.Count = 1;
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;// 2次元
@@ -406,7 +416,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 	D3D12_HEAP_PROPERTIES heapProperties{};
 	heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	// 深層値のクリア設定
+	// 深度値のクリア設定
 	D3D12_CLEAR_VALUE depthClearValue{};
 	depthClearValue.DepthStencil.Depth = 1.0f;
 	depthClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;// フォーマットをResourceと合わせる
@@ -443,7 +453,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(Microsoft::WRL::ComPtr<ID3D12
 
 
 void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &indices, float radius, int latDiv, int lonDiv) {
-	// 緯度の分割数: 上から下へ何段に分けるか
+	// 緯度の分割数: 上から下へ何段に分割するか
 	// 経度の分割数: 横に何分割するか（赤道の輪切りみたいなイメージ）
 
 	// 頂点の生成（緯度方向にループ）
@@ -458,7 +468,7 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 			float sinPhi = sinf(phi);
 			float cosPhi = cosf(phi);
 
-			// 球のx, y, z座標を求める
+			// 球面のx, y, z座標を求める
 			float x = cosPhi * sinTheta;
 			float y = cosTheta;
 			float z = sinPhi * sinTheta;
@@ -469,7 +479,7 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 			v.normal = {v.position.x / radius, v.position.y / radius, v.position.z / radius};
             v.texcoord = { (float)lon / lonDiv, (float)lat / latDiv };
             v.color = {1.0f, 1.0f, 1.0f, 1.0f};
-            vertices.push_back(v); // 頂点リストに追加
+            vertices.push_back(v); // 鬆らせ繝ｪ繧ｹ繝医↓霑ｽ蜉
 		}
 	}
 	// 三角形インデックスの生成（頂点をつなぐ）
@@ -480,13 +490,13 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 			int second = first + lonDiv + 1;
 
 			// 二つの三角形を使って四角形を埋める
-			indices.push_back(first);         // 左上
-			indices.push_back(first + 1);     // 右上
-			indices.push_back(second);        // 左下
+			indices.push_back(first);         // 左下
+			indices.push_back(first + 1);     // 右下
+			indices.push_back(second);        // 左上
 
-			indices.push_back(second);        // 左下
-			indices.push_back(first + 1);     // 右上
-			indices.push_back(second + 1);    // 右下
+			indices.push_back(second);        // 左上
+			indices.push_back(first + 1);     // 右下
+			indices.push_back(second + 1);    // 右上
 		}
 	}
 }
@@ -494,23 +504,18 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 Node ReadNode(aiNode *node) {
     Node result;
 
-    // 1. 行列の取得と転置
-    aiMatrix4x4 aiLocalMatrix = node->mTransformation;
-    aiLocalMatrix.Transpose(); // 列ベクトル形式を行ベクトル形式に転置
+    aiVector3D scale, translate;
+    aiQuaternion rotate;
+    node->mTransformation.Decompose(scale, rotate, translate);
+    result.transform.scale = { scale.x, scale.y, scale.z };
+    result.transform.rotate = { rotate.x, rotate.y, rotate.z, rotate.w };
+    result.transform.translate = { translate.x, translate.y, translate.z };
+    result.localMatrix = TransformFunctions::MakeAffineMatrix(result.transform.scale, result.transform.rotate, result.transform.translate);
 
-    // 2. 行列の要素をコピー
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            result.localMatrix.m[i][j] = aiLocalMatrix[i][j];
-        }
-    }
-
-    // 3. 名前と子供の解析
-    result.name = node->mName.C_Str();          // Node名を格納
-    result.children.resize(node->mNumChildren); // 子供の数だけ確保
+    result.name = node->mName.C_Str();
+    result.children.resize(node->mNumChildren);
 
     for (uint32_t childIndex = 0; childIndex < node->mNumChildren; ++childIndex) {
-        // 再帰的に読んで階層構造を作っていく
         result.children[childIndex] = ReadNode(node->mChildren[childIndex]);
     }
 
@@ -523,27 +528,30 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     std::string filePath = directoryPath + "/" + filename;
 
     // 1. ファイルの読み込み
-    // 資料にある通り、三角形化、巻き順反転、UV反転を指定
+    // 備考にある通り、三角形化、巻き順反転、UV反転を指定
     const aiScene *scene = importer.ReadFile(filePath.c_str(),
                                              // 1. すべての面を三角形に変換（DirectXが理解できる形式にする）
                                              aiProcess_Triangulate |
                                                  // 2. V軸を反転（glTFなどの左下原点を、DirectX標準の左上原点に合わせる）
                                                  aiProcess_FlipUVs |
-                                                 // 3. 右手系から左手系へ変換（軸の反転や巻き順の調整をセットで行う）
+                                                 // 3. 右手系から左手系へ変換（Z軸の反転や巻き順の調整をセットで行う）
                                                  aiProcess_ConvertToLeftHanded |
-                                                 // 4. 法線がない場合に滑らかな法線を生成（ライティング計算に必須）
+                                                 // 4. 法線がない場合に滑らかな法線を生成（ライティング計算に必要）
                                                  aiProcess_GenSmoothNormals |
-                                                 // 5. ノード階層の変形を頂点に焼き付ける（glTFの回転ズレを直す今回の重要フラグ）
-                                                 aiProcess_PreTransformVertices);
+                                                 // グローバルスケールを適用
+                                                 aiProcess_GlobalScale);
 
     // メッシュがない場合はエラー
     assert(scene && scene->HasMeshes());
 
-    // 2. メッシュの解析（資料に基づき、全メッシュをループ）
+    // 2. メッシュの解析（備考に基づき、全メッシュをループ）
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh *mesh = scene->mMeshes[meshIndex];
 
-        // 法線とTexcoordがないメッシュは今回は非対応（資料のassert）
+        // MultiMesh/MultiMaterial対応のため、頂点の開始位置を記録しておく
+        uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
+
+        // 法線とTexcoordがないメッシュは今回は非対応（備考のassert）
         assert(mesh->HasNormals());
         assert(mesh->HasTextureCoords(0));
 
@@ -558,7 +566,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
 
-            // 左手系への変換（資料の通り、Xを反転）
+            // 左手系への変換（備考の通り、Xを反転）
             vertex.position = {position.x, position.y, position.z, 1.0f};
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
@@ -566,19 +574,47 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             modelData.vertices.push_back(vertex);
         }
 
-        // インデックス（Face）の解析（資料：Indexed描画に対応させる）
+        // インデックス(Face)の解析（備考のIndexed描画に対応させる）
+        
+        // Bone解析
+        for (uint32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
+            aiBone* bone = mesh->mBones[boneIndex];
+            std::string jointName = bone->mName.C_Str();
+            JointWeightData& weightData = modelData.skinClusterData[jointName];
+
+            aiMatrix4x4 bindPoseMatrixAssimp = bone->mOffsetMatrix.Inverse(); // BindPoseMatrixに戻す
+            aiVector3D scale, translate;
+            aiQuaternion rotate;
+            bindPoseMatrixAssimp.Decompose(scale, rotate, translate); // 成分を抽出
+            // 左手系のBindPoseMatrixを作る (AssimpのaiProcess_ConvertToLeftHandedにより既に左手系に変換されているため、反転は不要)
+            Matrix4x4 bindPoseMatrix = TransformFunctions::MakeAffineMatrix(
+                { scale.x, scale.y, scale.z },
+                { rotate.x, rotate.y, rotate.z, rotate.w },
+                { translate.x, translate.y, translate.z }
+            );
+            // InverseBindPoseMatrixにする
+            weightData.inverseBindPoseMatrix = TransformFunctions::Inverse(bindPoseMatrix);
+
+            for (uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
+                weightData.vertexWeights.push_back({
+                    bone->mWeights[weightIndex].mWeight,
+                    bone->mWeights[weightIndex].mVertexId + vertexOffset // vertexOffsetを加算する
+                });
+            }
+        }
+
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
             aiFace &face = mesh->mFaces[faceIndex];
             assert(face.mNumIndices == 3); // 三角形のみサポート
 
             for (uint32_t element = 0; element < face.mNumIndices; ++element) {
                 uint32_t vertexIndex = face.mIndices[element];
-                modelData.indices.push_back(vertexIndex);
+                modelData.indices.push_back(vertexIndex + vertexOffset); // vertexOffsetを加算する
             }
         }
     }
 
-    // 3. マテリアルの解析（資料に基づき、Diffuseテクスチャを取得）
+    // 3. マテリアルの解析（備考に基づき、Diffuseテクスチャを取得）
     for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
         aiMaterial *material = scene->mMaterials[materialIndex];
         if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
@@ -594,7 +630,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
 }
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename) {
-	MaterialData materialData;// 構築するMaterialData
+	MaterialData materialData;// 讒狗ｯ峨☆繧貴aterialData
 	std::string line;//　ファイルから読んだ1行目を格納する
 	std::ifstream file(directoryPath + "/" + filename);// ファイルを開く
 	assert(file.is_open());// 開けなかったら止める
@@ -620,12 +656,12 @@ MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const st
 SoundData SoundLoadWave(const char *filename) {
 	//HRESULT result;
 
-	/*ファイルオープン
+	/*繝輔ぃ繧､繝ｫ繧ｪ繝ｼ繝励Φ
 	*********************************************************/
 
 	// ファイル入力ストリームのインスタンス
 	std::ifstream file;
-	// .wavファイルをバイナリモードで開く
+	// .wav繝輔ぃ繧､繝ｫ繧偵ヰ繧､繝翫Μ繝｢繝ｼ繝峨〒髢九￥
 	file.open(filename, std::ios_base::binary);
 	// ファイルオープン失敗を検出する
 	assert(file.is_open());
@@ -650,10 +686,10 @@ SoundData SoundLoadWave(const char *filename) {
 	FormatChunk format = {};
 	// fmtチャンクを探すループ
 	while(true) {
-		// チャンクヘッダーを読む
+		// 繝√Ε繝ｳ繧ｯ繝倥ャ繝繝ｼ繧定ｪｭ繧
 		file.read((char *)&format.chunk, sizeof(ChunkHeader));
 
-		// チャンクIDが "fmt " なら break
+		// チャンクIDが"fmt " ならbreak
 		if(strncmp(format.chunk.id, "fmt ", 4) == 0) {
 			break;
 		}
@@ -779,7 +815,7 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
         pBuffer->Unlock();
     }
 
-    // SoundData構造体に詰めて返す
+    // SoundData讒矩菴薙↓隧ｰ繧√※霑斐☆
     SoundData soundData = {};
     soundData.wfex = *pWfex;
     soundData.pBuffer = std::make_unique<BYTE[]>(audioData.size());
@@ -810,12 +846,12 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     resourceDesc.SampleDesc.Count = 1;
     resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
-    // ★資料の指示1: RenderTargetとして利用可能にする特殊なフラグ
+    // 備考1: RenderTargetとして利用可能にする特殊なフラグ
     resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
     // 利用するHeapの設定
     D3D12_HEAP_PROPERTIES heapProperties{};
-    // ★資料の指示2: 当然VRAM上に作る (DEFAULT)
+    // 備考2: 当然VRAM上に作る (DEFAULT)
     heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
 
     // クリア時の色を設定（レンダーターゲット生成時にはこれが必要です）
@@ -843,39 +879,39 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
     vertices.resize(24);
 
     // --- 頂点座標の定義 ---
-    // 右面 (+X)
+    // 蜿ｳ髱｢ (+X)
     vertices[0].position = {1.0f, 1.0f, 1.0f, 1.0f};
     vertices[1].position = {1.0f, 1.0f, -1.0f, 1.0f};
     vertices[2].position = {1.0f, -1.0f, 1.0f, 1.0f};
     vertices[3].position = {1.0f, -1.0f, -1.0f, 1.0f};
-    // 左面 (-X)
+    // 蟾ｦ髱｢ (-X)
     vertices[4].position = {-1.0f, 1.0f, -1.0f, 1.0f};
     vertices[5].position = {-1.0f, 1.0f, 1.0f, 1.0f};
     vertices[6].position = {-1.0f, -1.0f, -1.0f, 1.0f};
     vertices[7].position = {-1.0f, -1.0f, 1.0f, 1.0f};
-    // 前面 (+Z)
+    // 蜑埼擇 (+Z)
     vertices[8].position = {-1.0f, 1.0f, 1.0f, 1.0f};
     vertices[9].position = {1.0f, 1.0f, 1.0f, 1.0f};
     vertices[10].position = {-1.0f, -1.0f, 1.0f, 1.0f};
     vertices[11].position = {1.0f, -1.0f, 1.0f, 1.0f};
-    // 後面 (-Z)
+    // 蠕碁擇 (-Z)
     vertices[12].position = {1.0f, 1.0f, -1.0f, 1.0f};
     vertices[13].position = {-1.0f, 1.0f, -1.0f, 1.0f};
     vertices[14].position = {1.0f, -1.0f, -1.0f, 1.0f};
     vertices[15].position = {-1.0f, -1.0f, -1.0f, 1.0f};
-    // 上面 (+Y)
+    // 荳企擇 (+Y)
     vertices[16].position = {-1.0f, 1.0f, -1.0f, 1.0f};
     vertices[17].position = {1.0f, 1.0f, -1.0f, 1.0f};
     vertices[18].position = {-1.0f, 1.0f, 1.0f, 1.0f};
     vertices[19].position = {1.0f, 1.0f, 1.0f, 1.0f};
-    // 下面 (-Y)
+    // 荳矩擇 (-Y)
     vertices[20].position = {-1.0f, -1.0f, 1.0f, 1.0f};
     vertices[21].position = {1.0f, -1.0f, 1.0f, 1.0f};
     vertices[22].position = {-1.0f, -1.0f, -1.0f, 1.0f};
     vertices[23].position = {1.0f, -1.0f, -1.0f, 1.0f};
 
-    // --- インデックスの定義（内側を向く順序） ---
-    // 各面 [0,1,2][2,1,3] のパターンで計36個
+    // --- インデックスの定義（外側を向く順！）---
+    // 例 [0,1,2][2,1,3] のパターンで計6個
     for (uint32_t i = 0; i < 6; ++i) {
         uint32_t offset = i * 4;
         indices.push_back(offset + 0);
@@ -886,3 +922,187 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
         indices.push_back(offset + 3);
     }
 }
+
+
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename) {
+    Animation animation; // create animation
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
+    const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
+    assert(scene->mNumAnimations != 0); // assert animation exists
+    aiAnimation* animationAssimp = scene->mAnimations[0]; // use first animation
+    animation.duration = float(animationAssimp->mDuration / animationAssimp->mTicksPerSecond); // convert to seconds
+
+    // loop channels for node animations
+    for (uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex) {
+        aiNodeAnim* nodeAnimationAssimp = animationAssimp->mChannels[channelIndex];
+        NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimationAssimp->mNodeName.C_Str()];
+        
+        // Translate
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumPositionKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mPositionKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z}; // Converter already handled by Assimp
+            nodeAnimation.translate.push_back(keyframe);
+        }
+
+        // Rotate
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumRotationKeys; ++keyIndex) {
+            aiQuatKey& keyAssimp = nodeAnimationAssimp->mRotationKeys[keyIndex];
+            KeyframeQuaternion keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z, keyAssimp.mValue.w}; // Converter already handled by Assimp
+            nodeAnimation.rotate.push_back(keyframe);
+        }
+
+        // Scale
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumScalingKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.scale.push_back(keyframe);
+        }
+    }
+    return animation;
+}
+
+
+int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints) {
+    Joint joint;
+    joint.name = node.name;
+    joint.localMatrix = node.localMatrix;
+    joint.skeletonSpaceMatrix = TransformFunctions::MakeIdentity4x4();
+    joint.transform = node.transform;
+    joint.index = int32_t(joints.size());
+    joint.parent = parent;
+    joints.push_back(joint);
+    for (const Node& child : node.children) {
+        int32_t childIndex = CreateJoint(child, joint.index, joints);
+        joints[joint.index].children.push_back(childIndex);
+    }
+    return joint.index;
+}
+
+Skeleton CreateSkeleton(const Node& rootNode) {
+    Skeleton skeleton;
+    skeleton.root = CreateJoint(rootNode, {}, skeleton.joints);
+
+    for (const Joint& joint : skeleton.joints) {
+        skeleton.jointMap.emplace(joint.name, joint.index);
+    }
+
+    Update(skeleton);
+    
+    // Log joint count
+    
+
+    return skeleton;
+}
+
+void Update(Skeleton& skeleton) {
+    for (Joint& joint : skeleton.joints) {
+        joint.localMatrix = TransformFunctions::MakeAffineMatrix(joint.transform.scale, joint.transform.rotate, joint.transform.translate);
+        if (joint.parent) {
+            joint.skeletonSpaceMatrix = joint.localMatrix * skeleton.joints[*joint.parent].skeletonSpaceMatrix;
+        } else {
+            joint.skeletonSpaceMatrix = joint.localMatrix;
+        }
+    }
+}
+
+void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime) {
+    for (Joint& joint : skeleton.joints) {
+        if (auto it = animation.nodeAnimations.find(joint.name); it != animation.nodeAnimations.end()) {
+            const NodeAnimation& rootNodeAnimation = (*it).second;
+            joint.transform.translate = CalculateValue(rootNodeAnimation.translate, animationTime);
+            joint.transform.rotate = CalculateValue(rootNodeAnimation.rotate, animationTime);
+            joint.transform.scale = CalculateValue(rootNodeAnimation.scale, animationTime);
+        }
+    }
+}
+
+
+SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const Skeleton& skeleton, const ModelData& modelData) {
+    SkinCluster skinCluster;
+
+    // paletteResourceの生成 (関節数分のマトリックス配列)
+    skinCluster.paletteResource = CreateBufferResource(device, sizeof(WellForGPU) * skeleton.joints.size());
+    WellForGPU* mappedPalette = nullptr;
+    skinCluster.paletteResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedPalette));
+    skinCluster.mappedPalette = {mappedPalette, skeleton.joints.size()};
+
+    // SRVの生成
+    SrvManager::GetInstance()->Allocate(&skinCluster.paletteSrvHandle.first, &skinCluster.paletteSrvHandle.second);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srvDesc.Buffer.FirstElement = 0;
+    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    srvDesc.Buffer.NumElements = UINT(skeleton.joints.size());
+    srvDesc.Buffer.StructureByteStride = sizeof(WellForGPU);
+
+    device->CreateShaderResourceView(skinCluster.paletteResource.Get(), &srvDesc, skinCluster.paletteSrvHandle.first);
+
+    // influenceResourceの生成 (頂点ごとのウェイトデータ)
+    skinCluster.influenceResource = CreateBufferResource(device, sizeof(VertexInfluence) * modelData.vertices.size());
+    VertexInfluence* mappedInfluence = nullptr;
+    skinCluster.influenceResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedInfluence));
+    std::memset(mappedInfluence, 0, sizeof(VertexInfluence) * modelData.vertices.size());
+    skinCluster.mappedInfluence = {mappedInfluence, modelData.vertices.size()};
+
+    skinCluster.influenceBufferView.BufferLocation = skinCluster.influenceResource->GetGPUVirtualAddress();
+    skinCluster.influenceBufferView.SizeInBytes = UINT(sizeof(VertexInfluence) * modelData.vertices.size());
+    skinCluster.influenceBufferView.StrideInBytes = sizeof(VertexInfluence);
+
+    // InverseBindPoseMatrix の保存
+    skinCluster.inverseBindPoseMatrices.resize(skeleton.joints.size());
+    std::generate(skinCluster.inverseBindPoseMatrices.begin(), skinCluster.inverseBindPoseMatrices.end(), TransformFunctions::MakeIdentity4x4);
+
+    // ウェイト情報のパース
+    for (const auto& jointWeight : modelData.skinClusterData) {
+        auto it = skeleton.jointMap.find(jointWeight.first);
+        if (it == skeleton.jointMap.end()) continue; // そのボーンは存在しない
+
+        int32_t jointIndex = it->second;
+        skinCluster.inverseBindPoseMatrices[jointIndex] = jointWeight.second.inverseBindPoseMatrix;
+
+        for (const auto& weightInfo : jointWeight.second.vertexWeights) {
+            uint32_t vIndex = weightInfo.vertexIndex;
+            if (vIndex >= modelData.vertices.size()) continue;
+
+            // 空いているウェイトスロットを探す
+            for (uint32_t slot = 0; slot < kNumMaxInfluence; ++slot) {
+                if (skinCluster.mappedInfluence[vIndex].weights[slot] == 0.0f) {
+                    skinCluster.mappedInfluence[vIndex].weights[slot] = weightInfo.weight;
+                    skinCluster.mappedInfluence[vIndex].jointIndices[slot] = jointIndex;
+                    break;
+                }
+            }
+        }
+    }
+
+    return skinCluster;
+}
+
+
+
+void Update(SkinCluster& skinCluster, const Skeleton& skeleton) {
+    for (size_t jointIndex = 0; jointIndex < skeleton.joints.size(); ++jointIndex) {
+        assert(jointIndex < skinCluster.inverseBindPoseMatrices.size());
+        
+        Matrix4x4 inverseBindPose = skinCluster.inverseBindPoseMatrices[jointIndex];
+        Matrix4x4 skeletonSpaceMatrix = skeleton.joints[jointIndex].skeletonSpaceMatrix;
+
+        // パレットに格納する行列 = inverseBindPose * skeletonSpaceMatrix
+        Matrix4x4 paletteMatrix = inverseBindPose * skeletonSpaceMatrix;
+        skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix = paletteMatrix;
+        
+        // 法線用の逆転置行列
+        skinCluster.mappedPalette[jointIndex].skeletonSpaceInverseTransposeMatrix = TransformFunctions::Transpose(TransformFunctions::Inverse(paletteMatrix));
+    }
+}
+

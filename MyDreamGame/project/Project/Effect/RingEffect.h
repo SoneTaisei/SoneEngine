@@ -12,7 +12,7 @@ public:
 
     void Initialize(ID3D12Device* device, uint32_t textureHandle);
     void Update(float deltaTime);
-    void Draw(ID3D12GraphicsCommandList* commandList);
+    void Draw();
 
     PrimitiveObject* GetRoot() const { return ringEffectRoot_.get(); }
     std::vector<PrimitiveObject*> GetParticles();

@@ -1,6 +1,7 @@
-#include "TransformFunctions.h"
+﻿#include "TransformFunctions.h"
 #include "Structs.h"
 #include"assert.h"
+#include <DirectXMath.h>
 
 Matrix4x4 TransformFunctions::MakeRoteXMatrix(float radian) {
 	Matrix4x4 result{};
@@ -73,7 +74,7 @@ Matrix4x4 TransformFunctions::MakeScaleMatrix(const Vector3 &scale) {
 }
 
 // 座標変換
-Vector3 TransformFunctions::Transform(const Vector3 &vector, const Matrix4x4 &matrix) {
+Vector3 TransformFunctions::EulerTransform(const Vector3 &vector, const Matrix4x4 &matrix) {
 	Vector3 result;
 
 	result.x = vector.x * matrix.m[0][0] + vector.y * matrix.m[1][0] + vector.z * matrix.m[2][0] + 1.0f * matrix.m[3][0];
@@ -219,99 +220,11 @@ Vector3 TransformFunctions::MultiplyV(float scalar, Vector3 vector) {
 
 // 逆行列
 Matrix4x4 TransformFunctions::Inverse(const Matrix4x4 &matrix) {
-	float determinant =
-		matrix.m[0][0] * matrix.m[1][1] * matrix.m[2][2] * matrix.m[3][3] +
-		matrix.m[0][0] * matrix.m[1][2] * matrix.m[2][3] * matrix.m[3][1] +
-		matrix.m[0][0] * matrix.m[1][3] * matrix.m[2][1] * matrix.m[3][2] -
-		matrix.m[0][0] * matrix.m[1][3] * matrix.m[2][2] * matrix.m[3][1] -
-		matrix.m[0][0] * matrix.m[1][2] * matrix.m[2][1] * matrix.m[3][3] -
-		matrix.m[0][0] * matrix.m[1][1] * matrix.m[2][3] * matrix.m[3][2] -
-		matrix.m[0][1] * matrix.m[1][0] * matrix.m[2][2] * matrix.m[3][3] -
-		matrix.m[0][2] * matrix.m[1][0] * matrix.m[2][3] * matrix.m[3][1] -
-		matrix.m[0][3] * matrix.m[1][0] * matrix.m[2][1] * matrix.m[3][2] +
-		matrix.m[0][3] * matrix.m[1][0] * matrix.m[2][2] * matrix.m[3][1] +
-		matrix.m[0][2] * matrix.m[1][0] * matrix.m[2][1] * matrix.m[3][3] +
-		matrix.m[0][1] * matrix.m[1][0] * matrix.m[2][3] * matrix.m[3][2] +
-		matrix.m[0][1] * matrix.m[1][2] * matrix.m[2][0] * matrix.m[3][3] +
-		matrix.m[0][2] * matrix.m[1][3] * matrix.m[2][0] * matrix.m[3][1] +
-		matrix.m[0][3] * matrix.m[1][1] * matrix.m[2][0] * matrix.m[3][2] -
-		matrix.m[0][3] * matrix.m[1][2] * matrix.m[2][0] * matrix.m[3][1] -
-		matrix.m[0][2] * matrix.m[1][1] * matrix.m[2][0] * matrix.m[3][3] -
-		matrix.m[0][1] * matrix.m[1][3] * matrix.m[2][0] * matrix.m[3][2] -
-		matrix.m[0][1] * matrix.m[1][2] * matrix.m[2][3] * matrix.m[3][0] -
-		matrix.m[0][2] * matrix.m[1][3] * matrix.m[2][1] * matrix.m[3][0] -
-		matrix.m[0][3] * matrix.m[1][1] * matrix.m[2][2] * matrix.m[3][0] +
-		matrix.m[0][3] * matrix.m[1][2] * matrix.m[2][1] * matrix.m[3][0] +
-		matrix.m[0][2] * matrix.m[1][1] * matrix.m[2][3] * matrix.m[3][0] +
-		matrix.m[0][1] * matrix.m[1][3] * matrix.m[2][2] * matrix.m[3][0];
-
-	float determinantRecp = 1.0f / determinant;
+	DirectX::XMMATRIX xmMat = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(&matrix));
+	DirectX::XMVECTOR det;
+	DirectX::XMMATRIX xmInv = DirectX::XMMatrixInverse(&det, xmMat);
 	Matrix4x4 result;
-	result.m[0][0] =
-		determinantRecp * (
-			matrix.m[1][1] * matrix.m[2][2] * matrix.m[3][3] + matrix.m[1][2] * matrix.m[2][3] * matrix.m[3][1] + matrix.m[1][3] * matrix.m[2][1] * matrix.m[3][2] -
-			matrix.m[1][3] * matrix.m[2][2] * matrix.m[3][1] - matrix.m[1][2] * matrix.m[2][1] * matrix.m[3][3] - matrix.m[1][1] * matrix.m[2][3] * matrix.m[3][2]);
-	result.m[0][1] =
-		determinantRecp * (
-			-matrix.m[0][1] * matrix.m[2][2] * matrix.m[3][3] - matrix.m[0][2] * matrix.m[2][3] * matrix.m[3][1] - matrix.m[0][3] * matrix.m[2][1] * matrix.m[3][2] +
-			matrix.m[0][3] * matrix.m[2][2] * matrix.m[3][1] + matrix.m[0][2] * matrix.m[2][1] * matrix.m[3][3] + matrix.m[0][1] * matrix.m[2][3] * matrix.m[3][2]);
-	result.m[0][2] =
-		determinantRecp * (
-			matrix.m[0][1] * matrix.m[1][2] * matrix.m[3][3] + matrix.m[0][2] * matrix.m[1][3] * matrix.m[3][1] + matrix.m[0][3] * matrix.m[1][1] * matrix.m[3][2] -
-			matrix.m[0][3] * matrix.m[1][2] * matrix.m[3][1] - matrix.m[0][2] * matrix.m[1][1] * matrix.m[3][3] - matrix.m[0][1] * matrix.m[1][3] * matrix.m[3][2]);
-	result.m[0][3] =
-		determinantRecp * (
-			-matrix.m[0][1] * matrix.m[1][2] * matrix.m[2][3] - matrix.m[0][2] * matrix.m[1][3] * matrix.m[2][1] - matrix.m[0][3] * matrix.m[1][1] * matrix.m[2][2] +
-			matrix.m[0][3] * matrix.m[1][2] * matrix.m[2][1] + matrix.m[0][2] * matrix.m[1][1] * matrix.m[2][3] + matrix.m[0][1] * matrix.m[1][3] * matrix.m[2][2]);
-	result.m[1][0] =
-		determinantRecp * (
-			-matrix.m[1][0] * matrix.m[2][2] * matrix.m[3][3] - matrix.m[1][2] * matrix.m[2][3] * matrix.m[3][0] - matrix.m[1][3] * matrix.m[2][0] * matrix.m[3][2] +
-			matrix.m[1][3] * matrix.m[2][2] * matrix.m[3][0] + matrix.m[1][2] * matrix.m[2][0] * matrix.m[3][3] + matrix.m[1][0] * matrix.m[2][3] * matrix.m[3][2]);
-	result.m[1][1] =
-		determinantRecp * (
-			matrix.m[0][0] * matrix.m[2][2] * matrix.m[3][3] + matrix.m[0][2] * matrix.m[2][3] * matrix.m[3][0] + matrix.m[0][3] * matrix.m[2][0] * matrix.m[3][2] -
-			matrix.m[0][3] * matrix.m[2][2] * matrix.m[3][0] - matrix.m[0][2] * matrix.m[2][0] * matrix.m[3][3] - matrix.m[0][0] * matrix.m[2][3] * matrix.m[3][2]);
-	result.m[1][2] =
-		determinantRecp * (
-			-matrix.m[0][0] * matrix.m[1][2] * matrix.m[3][3] - matrix.m[0][2] * matrix.m[1][3] * matrix.m[3][0] - matrix.m[0][3] * matrix.m[1][0] * matrix.m[3][2] +
-			matrix.m[0][3] * matrix.m[1][2] * matrix.m[3][0] + matrix.m[0][2] * matrix.m[1][0] * matrix.m[3][3] + matrix.m[0][0] * matrix.m[1][3] * matrix.m[3][2]);
-	result.m[1][3] =
-		determinantRecp * (
-			matrix.m[0][0] * matrix.m[1][2] * matrix.m[2][3] + matrix.m[0][2] * matrix.m[1][3] * matrix.m[2][0] + matrix.m[0][3] * matrix.m[1][0] * matrix.m[2][2] -
-			matrix.m[0][3] * matrix.m[1][2] * matrix.m[2][0] - matrix.m[0][2] * matrix.m[1][0] * matrix.m[2][3] - matrix.m[0][0] * matrix.m[1][3] * matrix.m[2][2]);
-	result.m[2][0] =
-		determinantRecp * (
-			matrix.m[1][0] * matrix.m[2][1] * matrix.m[2][3] + matrix.m[1][1] * matrix.m[2][3] * matrix.m[3][1] + matrix.m[1][3] * matrix.m[2][0] * matrix.m[3][1] -
-			matrix.m[1][3] * matrix.m[2][1] * matrix.m[3][0] - matrix.m[1][1] * matrix.m[2][0] * matrix.m[3][3] - matrix.m[1][0] * matrix.m[2][3] * matrix.m[3][2]);
-	result.m[2][1] =
-		determinantRecp * (
-			-matrix.m[0][0] * matrix.m[2][1] * matrix.m[3][3] - matrix.m[0][1] * matrix.m[2][3] * matrix.m[3][0] - matrix.m[0][3] * matrix.m[2][0] * matrix.m[3][1] +
-			matrix.m[0][3] * matrix.m[2][1] * matrix.m[3][0] + matrix.m[0][1] * matrix.m[2][0] * matrix.m[3][3] + matrix.m[0][0] * matrix.m[2][3] * matrix.m[3][1]);
-	result.m[2][2] =
-		determinantRecp * (
-			matrix.m[0][0] * matrix.m[1][1] * matrix.m[3][3] + matrix.m[0][1] * matrix.m[1][3] * matrix.m[3][0] + matrix.m[0][3] * matrix.m[1][0] * matrix.m[3][1] -
-			matrix.m[0][3] * matrix.m[1][1] * matrix.m[3][0] - matrix.m[0][1] * matrix.m[1][0] * matrix.m[3][3] - matrix.m[0][0] * matrix.m[1][3] * matrix.m[3][1]);
-	result.m[2][3] =
-		determinantRecp * (
-			-matrix.m[0][0] * matrix.m[1][1] * matrix.m[2][3] - matrix.m[0][1] * matrix.m[1][3] * matrix.m[2][0] - matrix.m[0][3] * matrix.m[1][0] * matrix.m[2][1] +
-			matrix.m[0][3] * matrix.m[1][1] * matrix.m[2][0] + matrix.m[0][1] * matrix.m[1][0] * matrix.m[2][3] + matrix.m[0][0] * matrix.m[1][3] * matrix.m[2][1]);
-	result.m[3][0] =
-		determinantRecp * (
-			-matrix.m[1][0] * matrix.m[2][1] * matrix.m[3][2] - matrix.m[1][1] * matrix.m[2][2] * matrix.m[3][0] - matrix.m[1][2] * matrix.m[2][0] * matrix.m[3][1] +
-			matrix.m[1][2] * matrix.m[2][1] * matrix.m[3][0] + matrix.m[1][1] * matrix.m[2][0] * matrix.m[3][2] + matrix.m[1][0] * matrix.m[2][2] * matrix.m[3][1]);
-	result.m[3][1] =
-		determinantRecp * (
-			matrix.m[0][0] * matrix.m[2][1] * matrix.m[3][2] + matrix.m[0][1] * matrix.m[2][2] * matrix.m[3][0] + matrix.m[0][2] * matrix.m[2][0] * matrix.m[3][1] -
-			matrix.m[0][2] * matrix.m[2][1] * matrix.m[3][0] - matrix.m[0][1] * matrix.m[2][0] * matrix.m[3][2] - matrix.m[0][0] * matrix.m[2][2] * matrix.m[3][1]);
-	result.m[3][2] =
-		determinantRecp * (
-			-matrix.m[0][0] * matrix.m[1][1] * matrix.m[3][2] - matrix.m[0][1] * matrix.m[1][2] * matrix.m[3][0] - matrix.m[0][2] * matrix.m[1][0] * matrix.m[3][1] +
-			matrix.m[0][2] * matrix.m[1][1] * matrix.m[3][0] + matrix.m[0][1] * matrix.m[1][0] * matrix.m[3][2] + matrix.m[0][0] * matrix.m[1][2] * matrix.m[3][1]);
-	result.m[3][3] =
-		determinantRecp * (
-			matrix.m[0][0] * matrix.m[1][1] * matrix.m[2][2] + matrix.m[0][1] * matrix.m[1][2] * matrix.m[2][0] + matrix.m[0][2] * matrix.m[1][0] * matrix.m[2][1] -
-			matrix.m[0][2] * matrix.m[1][1] * matrix.m[2][0] - matrix.m[0][1] * matrix.m[1][0] * matrix.m[2][2] - matrix.m[0][0] * matrix.m[1][2] * matrix.m[2][1]);
-
+	DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&result), xmInv);
 	return result;
 }
 
@@ -469,3 +382,47 @@ bool TransformFunctions::IsSphereInFrustum(const Vector3& center, float radius, 
     }
     return true;
 }
+
+Matrix4x4 TransformFunctions::MakeRotateMatrix(const Quaternion& quaternion) {
+    Matrix4x4 result = MakeIdentity4x4();
+    float xx = quaternion.x * quaternion.x;
+    float yy = quaternion.y * quaternion.y;
+    float zz = quaternion.z * quaternion.z;
+    float ww = quaternion.w * quaternion.w;
+    float xy = quaternion.x * quaternion.y;
+    float xz = quaternion.x * quaternion.z;
+    float yz = quaternion.y * quaternion.z;
+    float wx = quaternion.w * quaternion.x;
+    float wy = quaternion.w * quaternion.y;
+    float wz = quaternion.w * quaternion.z;
+
+    result.m[0][0] = ww + xx - yy - zz;
+    result.m[0][1] = 2.0f * (xy + wz);
+    result.m[0][2] = 2.0f * (xz - wy);
+    
+    result.m[1][0] = 2.0f * (xy - wz);
+    result.m[1][1] = ww - xx + yy - zz;
+    result.m[1][2] = 2.0f * (yz + wx);
+    
+    result.m[2][0] = 2.0f * (xz + wy);
+    result.m[2][1] = 2.0f * (yz - wx);
+    result.m[2][2] = ww - xx - yy + zz;
+
+    return result;
+}
+
+Matrix4x4 TransformFunctions::MakeAffineMatrix(const Vector3& scale, const Quaternion& rotate, const Vector3& translate) {
+    Matrix4x4 scaleMatrix = MakeScaleMatrix(scale);
+    Matrix4x4 rotateMatrix = MakeRotateMatrix(rotate);
+    Matrix4x4 translateMatrix = MakeTranslateMatrix(translate);
+    return Multiply(Multiply(scaleMatrix, rotateMatrix), translateMatrix);
+}
+
+Vector3 TransformFunctions::Lerp(const Vector3& v1, const Vector3& v2, float t) {
+    return {
+        v1.x + t * (v2.x - v1.x),
+        v1.y + t * (v2.y - v1.y),
+        v1.z + t * (v2.z - v1.z)
+    };
+}
+

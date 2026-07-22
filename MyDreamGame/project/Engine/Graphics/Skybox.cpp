@@ -1,4 +1,5 @@
 #include "Skybox.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Graphics/TextureManager.h"
@@ -45,8 +46,8 @@ void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {
 
     materialBuffer_ = CreateBufferResource(device, (sizeof(Material) + 255) & ~255u);
     materialBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedMaterial_));
-    // 色は白（テクスチャの色をそのまま出す）
-    mappedMaterial_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    // 色は指定された値 (RGB: 150) に設定
+    mappedMaterial_->color = {150.0f / 255.0f, 150.0f / 255.0f, 150.0f / 255.0f, 1.0f};
 }
 
 void Skybox::Update() {
@@ -68,7 +69,8 @@ void Skybox::Update() {
     mappedTransform_->World = worldMatrix;
 }
 
-void Skybox::Draw(ID3D12GraphicsCommandList *commandList) {
+void Skybox::Draw() {
+    auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // 1. DirectXCommonから専用のルール（PSO・RootSignature）を取得してセット
     DirectXCommon *dxCommon = DirectXCommon::GetInstance();
     commandList->SetGraphicsRootSignature(dxCommon->GetSkyboxRootSignature());

@@ -103,9 +103,9 @@ void RingEffect::Update(float deltaTime) {
     }
 }
 
-void RingEffect::Draw(ID3D12GraphicsCommandList* commandList) {
+void RingEffect::Draw() {
     for (auto& ring : primitiveParticles_) {
-        ring->Draw(commandList);
+        ring->Draw();
     }
 }
 

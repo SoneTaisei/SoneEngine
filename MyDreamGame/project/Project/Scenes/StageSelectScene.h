@@ -1,9 +1,11 @@
-#pragma once
+﻿#pragma once
 #include "Scene/IScene.h"
 #include "Resource/Model/Model.h"
 #include <d3d12.h>
 #include <memory>
-#include "GameObject/Object3D.h"
+#include "GameObject/GameObject.h"
+#include "Component/MeshRendererComponent.h"
+#include "Component/AnimatorComponent.h"
 #include "Graphics/Skybox.h"
 
 #include <string>
@@ -12,13 +14,16 @@
 class StageSelectScene : public IScene {
 public:
     ~StageSelectScene() override;
-    void Initialize(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList) override;
+    void Initialize() override;
+    void OnEnter(SceneManager *sceneManager) override;
+    void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
 
     // ヒエラルキー用
     std::vector<Object3D *> GetObjects() override;
+    std::vector<std::shared_ptr<GameObject>> GetGameObjects() override { return gameObjects_; }
 
 private:
     void SaveConfig();
@@ -32,11 +37,11 @@ private:
     int stageCount_ = 1;
     std::vector<StageConfig> stageConfigs_;
 
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
+    
 
-    std::vector<std::unique_ptr<Object3D>> objects_;
+    std::vector<std::shared_ptr<GameObject>> gameObjects_;
 
-    Transform cameraTransform_; // カメラの座標・回転
+    EulerTransform cameraTransform_; // カメラの座標・回転
     Matrix4x4 viewProjection_;  // 描画に使う行列
 
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
