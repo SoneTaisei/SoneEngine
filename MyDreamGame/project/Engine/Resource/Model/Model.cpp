@@ -1,5 +1,6 @@
 #include "Model.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Graphics/TextureManager.h"
 #include <cassert>
 
 // 必要に応じてextern宣言など
@@ -84,7 +85,13 @@ void Model::CreateBuffers() {
 void Model::Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView) {
     auto commandList = DirectXCommon::GetInstance()->GetCommandList();
 
-    commandList->SetGraphicsRootDescriptorTable(2, textureHandle_);
+    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = textureHandle_;
+    if (activeTexture.ptr == 0) {
+        uint32_t defaultWhite = TextureManager::GetInstance()->Load("white");
+        activeTexture = TextureManager::GetInstance()->GetGpuHandle(defaultWhite);
+    }
+
+    commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
     
     if (weightBufferView != nullptr) {
         D3D12_VERTEX_BUFFER_VIEW views[] = { vertexBufferView_, *weightBufferView };

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Scene/IScene.h"
 #include <d3d12.h>
 #include "Resource/Model/Model.h"
@@ -48,11 +48,6 @@ private:
     std::vector<std::unique_ptr<Sprite>> sprites_{};
 
     // ■ 追加: パーティクル管理用変数
-
-    // 1. 共通基盤
-    std::unique_ptr<ModelCommon> modelCommon_{};
-    std::unique_ptr<SpriteCommon> spriteCommon_{};
-    std::unique_ptr<ParticleCommon> particleCommon_{};
 
     // 2. パーティクルリスト (所有権管理用)
     std::vector<std::unique_ptr<ParticleManager>> particles_{};

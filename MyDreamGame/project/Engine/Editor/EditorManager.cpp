@@ -510,14 +510,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 hasIniFile = true;
                 // 古いiniファイルからレイアウトが崩れるのを防ぐため、新しいウィンドウが無い場合は強制リセット
                 bool hasReplayEditor = false;
+                bool hasStageSelectEditor = false;
                 char buffer[256];
                 while (fgets(buffer, sizeof(buffer), f)) {
                     if (strstr(buffer, "マイメディア")) {
                         hasReplayEditor = true;
-                        break;
+                    }
+                    if (strstr(buffer, "ステージセレクトエディター")) {
+                        hasStageSelectEditor = true;
                     }
                 }
-                if (!hasReplayEditor) {
+                if (!hasReplayEditor || !hasStageSelectEditor) {
                     resetLayout = true;
                 }
                 fclose(f);
@@ -545,13 +548,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
             ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
 
+            // 左側
             ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
             ImGui::DockBuilderDockWindow("マイメディア (リプレイ履歴)", dock_id_left);
 
+            // 右側
             ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
             ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
 
+            // 下側
             ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
             ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
 

@@ -14,6 +14,7 @@
 #endif
 #include "Scene/SceneFactory.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Renderer/Renderer.h"
 #include "Component/TransformComponent.h"
 #include "GameObject/Object3D.h"
 
@@ -35,15 +36,7 @@ void TitleScene::Initialize() {
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
-    // --- 各種共通管理クラスの初期化 ---
-    modelCommon_ = std::make_unique<ModelCommon>();
-    modelCommon_->Initialize(device.Get());
 
-    spriteCommon_ = std::make_unique<SpriteCommon>();
-    spriteCommon_->Initialize(DirectXCommon::GetInstance(), 1280, 720);
-
-    particleCommon_ = std::make_unique<ParticleCommon>();
-    particleCommon_->Initialize(device.Get());
 
     // 1. マネージャからモデル（素材）を取得（なければロードされる）
     Model *planeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.gltf");
@@ -57,7 +50,9 @@ void TitleScene::Initialize() {
     auto planeRenderer = planeObject->AddComponent<MeshRendererComponent>();
     planeRenderer->Initialize(device.Get(), planeModel);
     uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png");
-    planeRenderer->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(planeIndex));
+    D3D12_GPU_DESCRIPTOR_HANDLE planeTH = TextureManager::GetInstance()->GetGpuHandle(planeIndex);
+    planeRenderer->SetTextureHandle(planeTH);
+    planeModel->SetTextureHandle(planeTH);
 
     gameObjects_.push_back(planeObject);
 
@@ -65,7 +60,7 @@ void TitleScene::Initialize() {
     auto sprite = std::make_unique<Sprite>();
 
     // ③ 初期化 (spriteCommon_はIScene等で定義されている前提)
-    sprite->Initialize(spriteCommon_.get(), planeIndex);
+    sprite->Initialize(spriteCommon_, planeIndex);
 
     // ④ 位置やサイズなどのパラメータを設定
     // 画面中央付近に配置する例
@@ -181,6 +176,9 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     }
 #endif
+
+    // コンポーネントの描画を実行
+    Renderer::GetInstance()->RenderComponents();
 
     // -------------------------------------------------
     // ■ エフェクト/パーティクルの描画

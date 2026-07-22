@@ -82,8 +82,8 @@ void DirectXCommon::PreDraw() {
     // 引数に renderTextureRtvHandle_ を渡す
     commandList_->OMSetRenderTargets(1, &renderTextureRtvHandle_, false, &dsvHandle);
 
-    // ★修正2：画面のクリアも RenderTexture に対して行う（赤色などのクリアカラー）
-    float clearColor[] = {1.0f, 0.0f, 0.0f, 1.0f}; // 先ほど InitializeRenderTexture で決めた赤色
+    // ★修正2：画面のクリアも RenderTexture に対して行う（Initialize時のクリア値と合わせる）
+    float clearColor[] = {0.1f, 0.25f, 0.5f, 1.0f}; // InitializeRenderTextureで設定した値と一致させる
     commandList_->ClearRenderTargetView(renderTextureRtvHandle_, clearColor, 0, nullptr);
 
     // 深度バッファをクリア (ここはそのまま)
