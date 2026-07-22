@@ -25,6 +25,12 @@ ReplayManager::ReplayManager() {
     levelEvolutionAI_ = std::make_unique<LevelEvolutionAI>();
 }
 
+ReplayManager::~ReplayManager() {
+    if (aiSearchThread_.joinable()) {
+        aiSearchThread_.join();
+    }
+}
+
 void ReplayManager::LoadMacros() {
     macros_ = ReplayIO::LoadMacros();
 }

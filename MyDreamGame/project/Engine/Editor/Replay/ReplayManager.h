@@ -236,7 +236,7 @@ public:
 
 private:
     ReplayManager();
-    ~ReplayManager() = default;
+    ~ReplayManager();
     ReplayManager(const ReplayManager&) = delete;
     ReplayManager& operator=(const ReplayManager&) = delete;
 
