@@ -183,15 +183,43 @@ bool PhysicsAStar::FindValidPath(const Vector3& startPos, const Vector3& goalPos
     startState.y = startPos.y;
     startState.vx = 0.0f;
     startState.vy = 0.0f;
-    startState.isGrounded = true;
+    startState.isGrounded = false;
     startState.frameCount = 0;
-    startState.heuristic = CalculateHeuristic(startState.x, startState.y, goalPos.x, goalPos.y);
     startState.parentIndex = -1;
-    startState.pathSegment.push_back(startPos);
 
-    if (mapChip && CheckCollisionAt(startState.x, startState.y, mapChip)) {
-        startState.y += 0.5f;
+    // 初期位置が空中だった場合、下方に着地させて空中浮遊を防止する
+    if (mapChip) {
+        // 既に地形に埋まっている場合は少し上に逃がす
+        if (CheckCollisionAt(startState.x, startState.y, mapChip)) {
+            while (startState.y < 5000.0f && CheckCollisionAt(startState.x, startState.y, mapChip)) {
+                startState.y += 0.1f;
+            }
+        }
+
+        // 下方の地面を探索
+        float testY = startState.y;
+        float groundY = -999.0f;
+        const float step = 0.02f; // 2cm刻みで高精度に地面を探す
+        const float maxDist = 30.0f; // 最大30m下まで
+        for (float dist = 0.0f; dist < maxDist; dist += step) {
+            float checkY = testY - dist;
+            if (CheckCollisionAt(startState.x, checkY, mapChip)) {
+                groundY = checkY + step; // 衝突する直前の安全な接地座標
+                break;
+            }
+        }
+
+        if (groundY > -900.0f) {
+            startState.y = groundY;
+            startState.isGrounded = true;
+        }
+    } else {
+        startState.isGrounded = true;
     }
+
+    startState.heuristic = CalculateHeuristic(startState.x, startState.y, goalPos.x, goalPos.y);
+    // 補正後の座標をゴースト及び軌跡の最初の点として登録する
+    startState.pathSegment.push_back(Vector3{ startState.x, startState.y, 0.0f });
 
     nodePool.push_back(startState);
     openSet.push({ startState.TotalCost(), 0 });
