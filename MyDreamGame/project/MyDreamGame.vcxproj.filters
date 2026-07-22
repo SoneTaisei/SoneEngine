@@ -227,6 +227,7 @@
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\LevelEvolutionAI.cpp" />
     <ClCompile Include="Engine\Editor\PhysicsAStar.cpp" />
       <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp">
       <Filter>Engine\Graphics\Object</Filter>
@@ -483,6 +484,7 @@
       <Filter>Project\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\LevelEvolutionAI.h" />
       <ClInclude Include="Engine\Resource\Primitive\PrimitivePlane.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>

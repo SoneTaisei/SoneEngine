@@ -180,8 +180,10 @@ public:
     bool IsRecordingMacro() const { return isRecordingMacro_; }
 
     // 高速自動モンキーテスト & 難易度解析 & 物理A*
-    void ExecuteFastMonkeyTest(int iterations = 10, int jitterChance = 5);
-    DifficultyScore AnalyzeReplayDifficulty(const std::vector<FrameData>& replayData);
+    void ExecuteFastMonkeyTest(MapChip2D* mapChip, int iterations = 10, int jitterChance = 5);
+    DifficultyScore AnalyzeReplayDifficulty(const std::vector<FrameData>& replayData, MapChip2D* mapChip);
+    std::vector<FrameData> SimulateMacro(const std::vector<FrameData>& perfectMacro, MapChip2D* mapChip);
+    class LevelEvolutionAI* GetLevelEvolutionAI() { return levelEvolutionAI_.get(); }
 
     // 物理ベースA* 探索ルート (非同期スレッド対応)
     void ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, int maxNodes = 10000);
@@ -233,7 +235,7 @@ public:
     const std::vector<FrameData>& GetTemporaryRecordedFrames() const { return temporaryRecordedFrames_; }
 
 private:
-    ReplayManager() = default;
+    ReplayManager();
     ~ReplayManager() = default;
     ReplayManager(const ReplayManager&) = delete;
     ReplayManager& operator=(const ReplayManager&) = delete;
@@ -244,6 +246,8 @@ private:
 
     // 再生・ループ時に実行用キーバッファを生成する
     void GenerateRuntimeKeys();
+    bool CheckCollisionAt(float x, float y, MapChip2D* mapChip) const;
+    float CalculateDistanceToGround(const Vector3& playerPos, MapChip2D* mapChip) const;
 
 private:
     ReplayHeader replayHeader_;                       // 決定論的ヘッダー情報
@@ -284,5 +288,6 @@ private:
     std::vector<std::string> savedList_;              // json/saved_replays/ 下のファイル名リスト
     std::vector<ReplayMacro> macros_;                 // 登録されたマクロリスト
     
+    std::unique_ptr<class LevelEvolutionAI> levelEvolutionAI_;
     std::vector<std::string> runtimeKeys_;            // 再生時に使用する動的キー配列 (1要素につき7文字の文字列)
 };

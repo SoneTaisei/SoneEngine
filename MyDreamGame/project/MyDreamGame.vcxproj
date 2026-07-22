@@ -251,6 +251,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
     <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\LevelEvolutionAI.cpp" />
     <ClCompile Include="Engine\Editor\PhysicsAStar.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveBox.cpp" />
@@ -458,6 +459,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\CoinBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />
     <ClInclude Include="Engine\Editor\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\LevelEvolutionAI.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerPhysics.h" />
   </ItemGroup>

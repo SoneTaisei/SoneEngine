@@ -13,6 +13,7 @@
 #include "Scene/SceneManager.h"
 #include "ReplayManager.h"
 #include "PhysicsAStar.h"
+#include "LevelEvolutionAI.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
@@ -1029,7 +1030,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Spacing();
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.4f, 1.0f));
                         if (ImGui::Button("高速自動モンキーテストを実行", ImVec2(-1, 30))) {
-                            replayMgrInst->ExecuteFastMonkeyTest(testIterations, testJitterChance);
+                            IScene* activeScene = sceneManager->GetCurrentScene();
+                            MapChip2D* mapChip = activeScene ? activeScene->GetMapChip() : nullptr;
+                            replayMgrInst->ExecuteFastMonkeyTest(mapChip, testIterations, testJitterChance);
                         }
                         ImGui::PopStyleColor();
 
@@ -1057,7 +1060,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // --- 3. 第2章 ステージ難易度自動スコアリング ---
                     if (ImGui::CollapsingHeader("ステージ難易度自動スコアリング", ImGuiTreeNodeFlags_DefaultOpen)) {
                         if (ImGui::Button("リプレイ難易度を解析", ImVec2(-1, 28))) {
-                            replayMgrInst->AnalyzeReplayDifficulty(replayMgrInst->GetCurrentReplay().frames);
+                            IScene* activeScene = sceneManager->GetCurrentScene();
+                            MapChip2D* mapChip = activeScene ? activeScene->GetMapChip() : nullptr;
+                            replayMgrInst->AnalyzeReplayDifficulty(replayMgrInst->GetCurrentReplay().frames, mapChip);
                         }
 
                         const auto& score = replayMgrInst->GetLastAnalyzedScore();
@@ -1066,6 +1071,47 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         ImGui::Text("停滞時間 (Stagnation): %.2f 秒", score.stagnationDuration);
                         ImGui::Separator();
                         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "総合推定難易度スコア: %.1f", score.finalCalculatedDifficulty);
+                    }
+
+                    // --- 3.5 第3章 遺伝的アルゴリズムによる自動進化 ---
+                    if (ImGui::CollapsingHeader("ギミック自動進化AI (遺伝的アルゴリズム)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                        static float targetDifficulty = 50.0f;
+                        static int generations = 20;
+
+                        ImGui::SliderFloat("目標難易度", &targetDifficulty, 10.0f, 100.0f, "%.1f");
+                        ImGui::SliderInt("進化世代数", &generations, 5, 100);
+
+                        ImGui::Spacing();
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.3f, 0.7f, 1.0f));
+                        if (ImGui::Button("自動進化を実行", ImVec2(-1, 30))) {
+                            auto* evAI = replayMgrInst->GetLevelEvolutionAI();
+                            if (evAI) {
+                                IScene* activeScene = sceneManager->GetCurrentScene();
+                                MapChip2D* mapChip = activeScene ? activeScene->GetMapChip() : nullptr;
+                                evAI->RunEvolution(mapChip, replayMgrInst, targetDifficulty, generations);
+                            }
+                        }
+                        ImGui::PopStyleColor();
+
+                        auto* evAI = replayMgrInst->GetLevelEvolutionAI();
+                        if (evAI && !evAI->GetEvolutionLogs().empty()) {
+                            ImGui::Spacing();
+                            ImGui::Text("進化実行ログ");
+                            ImGui::BeginChild("EvolutionLogArea", ImVec2(0, 150), true);
+                            for (const auto& logLine : evAI->GetEvolutionLogs()) {
+                                if (logLine.find("[SUCCESS]") != std::string::npos) {
+                                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", logLine.c_str());
+                                } else if (logLine.find("[WARN]") != std::string::npos || logLine.find("[ERROR]") != std::string::npos) {
+                                    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", logLine.c_str());
+                                } else {
+                                    ImGui::TextUnformatted(logLine.c_str());
+                                }
+                            }
+                            ImGui::EndChild();
+                            if (ImGui::Button("ログをクリア##GA")) {
+                                evAI->ClearLogs();
+                            }
+                        }
                     }
 
                     // --- 4. 第4章 物理ベースA* (詰みチェック & AIルート表示) ---

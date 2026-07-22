@@ -1,5 +1,8 @@
 #include "ReplayManager.h"
+#include "Game2D/MapChip2D.h"
 #include "PhysicsAStar.h"
+#include "LevelEvolutionAI.h"
+#include "Core/Utility/LogManager.h"
 #include "Input/KeyboardInput.h"
 #include <fstream>
 #include <sstream>
@@ -13,6 +16,10 @@
 ReplayManager* ReplayManager::GetInstance() {
     static ReplayManager instance;
     return &instance;
+}
+
+ReplayManager::ReplayManager() {
+    levelEvolutionAI_ = std::make_unique<LevelEvolutionAI>();
 }
 
 void ReplayManager::LoadMacros() {
@@ -1060,12 +1067,45 @@ void ReplayManager::DeleteSavedFile(const std::string& filepath) {
     }
 }
 
-void ReplayManager::ExecuteFastMonkeyTest(int iterations, int jitterChance) {
+bool ReplayManager::CheckCollisionAt(float x, float y, MapChip2D* mapChip) const {
+    if (!mapChip) return false;
+
+    const float PLAYER_SIZE = 0.8f;
+    float halfW = PLAYER_SIZE * 0.35f;
+    float halfH = PLAYER_SIZE * 0.40f;
+    float corners[4][2] = {
+        { x - halfW, y - halfH },
+        { x + halfW, y - halfH },
+        { x - halfW, y + halfH },
+        { x + halfW, y + halfH }
+    };
+
+    for (int i = 0; i < 4; ++i) {
+        int cx = mapChip->WorldToChipX(corners[i][0]);
+        int cy = mapChip->WorldToChipY(corners[i][1]);
+
+        MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
+        if (type == MapChip2D::ChipType::kBlock || type == MapChip2D::ChipType::kDeathBlock) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ReplayManager::ExecuteFastMonkeyTest(MapChip2D* mapChip, int iterations, int jitterChance) {
     monkeyTestLogs_.clear();
     
     const auto& baseReplay = currentReplay_.frames;
     if (baseReplay.empty()) {
-        monkeyTestLogs_.push_back("[WARN] モンキーテストを開始できません: リプレイデータが空です。");
+        std::string warnMsg = "モンキーテストを開始できません: リプレイデータが空です。";
+        monkeyTestLogs_.push_back("[WARN] " + warnMsg);
+        LogManager::GetInstance()->AddLog(LogLevel::Warning, warnMsg);
+        return;
+    }
+    if (!mapChip) {
+        std::string warnMsg = "モンキーテストを開始できません: マップデータが無効です。";
+        monkeyTestLogs_.push_back("[WARN] " + warnMsg);
+        LogManager::GetInstance()->AddLog(LogLevel::Warning, warnMsg);
         return;
     }
 
@@ -1075,8 +1115,10 @@ void ReplayManager::ExecuteFastMonkeyTest(int iterations, int jitterChance) {
     localtime_s(&tm, &t);
     std::strftime(timeBuffer, sizeof(timeBuffer), "%Y/%m/%d %H:%M:%S", &tm);
 
-    monkeyTestLogs_.push_back("[INFO] モンキーテスト開始 - 試行回数: " + std::to_string(iterations) + 
-                             ", Jitter発生率: " + std::to_string(jitterChance) + "% - " + timeBuffer);
+    std::string startMsg = "モンキーテスト開始 - 試行回数: " + std::to_string(iterations) + 
+                           ", Jitter発生率: " + std::to_string(jitterChance) + "% - " + timeBuffer;
+    monkeyTestLogs_.push_back("[INFO] " + startMsg);
+    LogManager::GetInstance()->AddLog(LogLevel::Info, startMsg);
 
     int totalDetectedBugs = 0;
     DeterministicRandom testRandom(replayHeader_.randomSeed);
@@ -1090,18 +1132,105 @@ void ReplayManager::ExecuteFastMonkeyTest(int iterations, int jitterChance) {
         std::string bugReason = "";
 
         Vector3 simulatedPos = currentReplay_.playerInitPos;
+        float vx = 0.0f;
+        float vy = 0.0f;
+        bool isGrounded = true;
+        bool isDashing = false;
+        float dashTimer = 0.0f;
+        float dashCooldown = 0.0f;
+        float dashVx = 0.0f;
+        float dashVy = 0.0f;
+        bool lastPressJump = false;
+
         Vector3 previousPos = simulatedPos;
         int zeroMoveStreak = 0;
 
-        for (int frame = 0; frame < static_cast<int>(baseReplay.size()); ++frame) {
-            FrameData currentFrameData = baseReplay[frame];
+        std::vector<FrameData> testReplayFrames = currentReplay_.frames;
 
-            // Jitter適用（設定確率で入力状態を変化）
+        for (int frame = 0; frame < static_cast<int>(baseReplay.size()); ++frame) {
+            FrameData& currentFrameData = testReplayFrames[frame];
+
+            // キー入力の抽出
+            bool pressLeft  = (currentFrameData.keys[0] == 'L');
+            bool pressRight = (currentFrameData.keys[1] == 'R');
+            bool pressJump  = (currentFrameData.keys[2] == 'J');
+            bool pressDash  = (currentFrameData.keys[3] == 'D');
+
+            // Jitter適用（ジャンプキー反転）
             if (testRandom.GetRange(0, 100) < jitterChance) {
-                currentFrameData.keys[2] = (currentFrameData.keys[2] == 'J') ? '-' : 'J';
+                pressJump = !pressJump;
+                currentFrameData.keys[2] = pressJump ? 'J' : '-';
             }
 
-            simulatedPos = currentFrameData.position;
+            // 物理シミュレーション (PhysicsAStarのSimulateMacroActionベース)
+            const float FIXED_DELTA_TIME = 1.0f / 60.0f;
+            const float MOVE_SPEED = 5.0f;
+            const float JUMP_POWER = 17.0f;
+            const float GRAVITY = -40.0f;
+            const float MAX_FALL_SPEED = -15.0f;
+
+            // ダッシュ発動判定
+            if (pressDash && !isDashing && dashCooldown <= 0.0f) {
+                isDashing = true;
+                dashTimer = 8.0f * FIXED_DELTA_TIME; // 8フレームダッシュ
+                dashCooldown = 30.0f * FIXED_DELTA_TIME; // 30フレームクールダウン
+                float dirX = pressLeft ? -1.0f : (pressRight ? 1.0f : 1.0f);
+                dashVx = dirX * MOVE_SPEED * 2.2f;
+                dashVy = 0.0f;
+            }
+
+            if (isDashing) {
+                vx = dashVx;
+                vy = dashVy;
+                dashTimer -= FIXED_DELTA_TIME;
+                if (dashTimer <= 0.0f) {
+                    isDashing = false;
+                }
+            } else {
+                vx = pressLeft ? -MOVE_SPEED : (pressRight ? MOVE_SPEED : 0.0f);
+                if (!isGrounded) {
+                    vy += GRAVITY * FIXED_DELTA_TIME;
+                    if (vy < MAX_FALL_SPEED) vy = MAX_FALL_SPEED;
+                }
+            }
+
+            if (dashCooldown > 0.0f) {
+                dashCooldown -= FIXED_DELTA_TIME;
+            }
+
+            // ジャンプ発動判定
+            if (pressJump && !lastPressJump && isGrounded && !isDashing) {
+                vy = JUMP_POWER;
+                isGrounded = false;
+            }
+            lastPressJump = pressJump;
+
+            // X軸移動 & 衝突判定
+            float nextX = simulatedPos.x + vx * FIXED_DELTA_TIME;
+            if (CheckCollisionAt(nextX, simulatedPos.y, mapChip)) {
+                vx = 0.0f;
+            } else {
+                simulatedPos.x = nextX;
+            }
+
+            // Y軸移動 & 衝突判定
+            float nextY = simulatedPos.y + vy * FIXED_DELTA_TIME;
+            if (CheckCollisionAt(simulatedPos.x, nextY, mapChip)) {
+                if (vy < 0.0f) {
+                    isGrounded = true;
+                }
+                vy = 0.0f;
+            } else {
+                simulatedPos.y = nextY;
+                if (!CheckCollisionAt(simulatedPos.x, simulatedPos.y - 0.1f, mapChip)) {
+                    isGrounded = false;
+                }
+            }
+
+            // シミュレーション結果の座標を記録
+            currentFrameData.position = simulatedPos;
+
+            // 停滞（スタック）判定
             float dx = simulatedPos.x - previousPos.x;
             float dy = simulatedPos.y - previousPos.y;
             float distSq = dx * dx + dy * dy;
@@ -1113,17 +1242,30 @@ void ReplayManager::ExecuteFastMonkeyTest(int iterations, int jitterChance) {
             }
 
             // バグ検知判定
-            if (simulatedPos.y < -500.0f || simulatedPos.y > 5000.0f || std::isnan(simulatedPos.x) || std::isnan(simulatedPos.y)) {
+            // 1. 落下または座標破綻
+            if (simulatedPos.y < -100.0f || simulatedPos.y > 5000.0f || std::isnan(simulatedPos.x) || std::isnan(simulatedPos.y)) {
                 bugDetectedInIter = true;
                 bugFrame = frame;
-                bugReason = "プレイヤーの座標異常/画面外落下を検知 (Pos: " + 
-                            std::to_string((int)simulatedPos.x) + ", " + std::to_string((int)simulatedPos.y) + ")";
+                bugReason = "落下または座標破綻を検知 (Pos: " + std::to_string((int)simulatedPos.x) + ", " + std::to_string((int)simulatedPos.y) + ")";
                 break;
-            } else if (zeroMoveStreak > 180) { // 3秒以上のスタック
+            }
+            // 2. スタック（3秒以上）
+            else if (zeroMoveStreak > 180) {
                 bugDetectedInIter = true;
                 bugFrame = frame;
                 bugReason = "3秒間以上の位置スタック（進行阻害）を検知";
                 break;
+            }
+            // 3. トゲ激突（デスブロックとの接触）
+            else {
+                int cx = mapChip->WorldToChipX(simulatedPos.x);
+                int cy = mapChip->WorldToChipY(simulatedPos.y);
+                if (mapChip->GetChipType(cx, cy) == MapChip2D::ChipType::kDeathBlock) {
+                    bugDetectedInIter = true;
+                    bugFrame = frame;
+                    bugReason = "死亡ブロック（トゲ等）への激突を検知 (Pos: " + std::to_string((int)simulatedPos.x) + ", " + std::to_string((int)simulatedPos.y) + ")";
+                    break;
+                }
             }
 
             previousPos = simulatedPos;
@@ -1131,21 +1273,71 @@ void ReplayManager::ExecuteFastMonkeyTest(int iterations, int jitterChance) {
 
         if (bugDetectedInIter) {
             totalDetectedBugs++;
-            std::string logMsg = "[BUG DETECTED] テストケース #" + std::to_string(iter + 1) + 
+            std::string logMsg = "テストケース #" + std::to_string(iter + 1) + 
                                  " (Seed: " + std::to_string(currentSeed) + ") Frame " + 
                                  std::to_string(bugFrame) + " にて異常検出: " + bugReason;
-            monkeyTestLogs_.push_back(logMsg);
+            monkeyTestLogs_.push_back("[BUG DETECTED] " + logMsg);
+            LogManager::GetInstance()->AddLog(LogLevel::Error, "モンキーテスト異常検出: " + logMsg);
+
+            // バグのテストデータをリプレイとして保存
+            ReplayData bugReplay = currentReplay_;
+            bugReplay.filename = "bug_report_monkey_" + std::to_string(iter + 1) + ".json";
+            bugReplay.frames = testReplayFrames;
+            bugReplay.totalFrames = bugFrame + 1;
+            if (bugReplay.frames.size() > static_cast<size_t>(bugReplay.totalFrames)) {
+                bugReplay.frames.resize(bugReplay.totalFrames);
+            }
+            SaveToFile(bugReplay, bugReplay.filename);
         }
     }
 
     if (totalDetectedBugs == 0) {
-        monkeyTestLogs_.push_back("[SUCCESS] モンキーテスト完了: 全 " + std::to_string(iterations) + " 回の試行でバグは検知されませんでした。");
+        std::string successMsg = "モンキーテスト完了: 全 " + std::to_string(iterations) + " 回の試行でバグは検知されませんでした。";
+        monkeyTestLogs_.push_back("[SUCCESS] " + successMsg);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, successMsg);
     } else {
-        monkeyTestLogs_.push_back("[SUMMARY] モンキーテスト完了: 合計 " + std::to_string(totalDetectedBugs) + " 件のバグ検知ログを出力しました。");
+        std::string summaryMsg = "モンキーテスト完了: 合計 " + std::to_string(totalDetectedBugs) + " 件のバグ検知ログを出力しました。";
+        monkeyTestLogs_.push_back("[SUMMARY] " + summaryMsg);
+        LogManager::GetInstance()->AddLog(LogLevel::Warning, summaryMsg);
     }
 }
 
-DifficultyScore ReplayManager::AnalyzeReplayDifficulty(const std::vector<FrameData>& replayData) {
+float ReplayManager::CalculateDistanceToGround(const Vector3& playerPos, MapChip2D* mapChip) const {
+    if (!mapChip) return 999.0f;
+
+    const float PLAYER_SIZE = 0.8f;
+    float halfW = PLAYER_SIZE * 0.35f;
+    float halfH = PLAYER_SIZE * 0.40f;
+    float footY = playerPos.y - halfH;
+
+    float checkStep = 0.05f; // 5cm刻みでチェック
+    float maxCheckDist = 4.0f; // 最大4.0mまでチェック
+
+    for (float dist = 0.0f; dist <= maxCheckDist; dist += checkStep) {
+        float testY = footY - dist;
+        float testXs[3] = { playerPos.x - halfW, playerPos.x, playerPos.x + halfW };
+        
+        for (int j = 0; j < 3; ++j) {
+            int cx = mapChip->WorldToChipX(testXs[j]);
+            int cy = mapChip->WorldToChipY(testY);
+
+            MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
+            if (type == MapChip2D::ChipType::kBlock || 
+                type == MapChip2D::ChipType::kDeathBlock || 
+                type == MapChip2D::ChipType::kOneWayBlock ||
+                type == MapChip2D::ChipType::kLift) {
+                
+                float blockTopY = mapChip->ChipToWorldY(cy) + mapChip->GetChipSize();
+                float actualDist = footY - blockTopY;
+                if (actualDist < 0.0f) actualDist = 0.0f;
+                return actualDist;
+            }
+        }
+    }
+    return maxCheckDist;
+}
+
+DifficultyScore ReplayManager::AnalyzeReplayDifficulty(const std::vector<FrameData>& replayData, MapChip2D* mapChip) {
     DifficultyScore score;
     if (replayData.empty()) {
         lastAnalyzedScore_ = score;
@@ -1182,11 +1374,20 @@ DifficultyScore ReplayManager::AnalyzeReplayDifficulty(const std::vector<FrameDa
         bool currJump = (replayData[i].keys[2] == 'J');
         if (currJump && !prevJump) {
             jumpCount++;
-            float distToEdgeSq = std::abs(vx);
-            if (distToEdgeSq < 0.05f) {
-                tightJumpSum += 80.0f;
+            if (mapChip) {
+                float distanceToGround = CalculateDistanceToGround(replayData[i].position, mapChip);
+                // 0.5m未満（約半ブロック以下）の精密ジャンプを評価
+                if (distanceToGround < 0.5f) {
+                    tightJumpSum += (0.5f - distanceToGround) * 200.0f; // 0.0mで最大100点加算
+                }
             } else {
-                tightJumpSum += 30.0f;
+                // フォールバック: 速度ベースの簡易計算
+                float distToEdgeSq = std::abs(vx);
+                if (distToEdgeSq < 0.05f) {
+                    tightJumpSum += 80.0f;
+                } else {
+                    tightJumpSum += 30.0f;
+                }
             }
         }
     }
@@ -1203,6 +1404,108 @@ DifficultyScore ReplayManager::AnalyzeReplayDifficulty(const std::vector<FrameDa
 
     lastAnalyzedScore_ = score;
     return score;
+}
+
+std::vector<FrameData> ReplayManager::SimulateMacro(const std::vector<FrameData>& perfectMacro, MapChip2D* mapChip) {
+    std::vector<FrameData> result;
+    if (perfectMacro.empty() || !mapChip) return result;
+
+    Vector3 simulatedPos = currentReplay_.playerInitPos;
+    float vx = 0.0f;
+    float vy = 0.0f;
+    bool isGrounded = true;
+    bool isDashing = false;
+    float dashTimer = 0.0f;
+    float dashCooldown = 0.0f;
+    float dashVx = 0.0f;
+    float dashVy = 0.0f;
+    bool lastPressJump = false;
+
+    // 物理パラメータ
+    const float FIXED_DELTA_TIME = 1.0f / 60.0f;
+    const float MOVE_SPEED = 5.0f;
+    const float JUMP_POWER = 17.0f;
+    const float GRAVITY = -40.0f;
+    const float MAX_FALL_SPEED = -15.0f;
+
+    for (size_t frame = 0; frame < perfectMacro.size(); ++frame) {
+        FrameData currentFrameData = perfectMacro[frame];
+
+        bool pressLeft  = (currentFrameData.keys[0] == 'L');
+        bool pressRight = (currentFrameData.keys[1] == 'R');
+        bool pressJump  = (currentFrameData.keys[2] == 'J');
+        bool pressDash  = (currentFrameData.keys[3] == 'D');
+
+        // ダッシュ発動判定
+        if (pressDash && !isDashing && dashCooldown <= 0.0f) {
+            isDashing = true;
+            dashTimer = 8.0f * FIXED_DELTA_TIME;
+            dashCooldown = 30.0f * FIXED_DELTA_TIME;
+            float dirX = pressLeft ? -1.0f : (pressRight ? 1.0f : 1.0f);
+            dashVx = dirX * MOVE_SPEED * 2.2f;
+            dashVy = 0.0f;
+        }
+
+        if (isDashing) {
+            vx = dashVx;
+            vy = dashVy;
+            dashTimer -= FIXED_DELTA_TIME;
+            if (dashTimer <= 0.0f) {
+                isDashing = false;
+            }
+        } else {
+            vx = pressLeft ? -MOVE_SPEED : (pressRight ? MOVE_SPEED : 0.0f);
+            if (!isGrounded) {
+                vy += GRAVITY * FIXED_DELTA_TIME;
+                if (vy < MAX_FALL_SPEED) vy = MAX_FALL_SPEED;
+            }
+        }
+
+        if (dashCooldown > 0.0f) {
+            dashCooldown -= FIXED_DELTA_TIME;
+        }
+
+        // ジャンプ発動判定
+        if (pressJump && !lastPressJump && isGrounded && !isDashing) {
+            vy = JUMP_POWER;
+            isGrounded = false;
+        }
+        lastPressJump = pressJump;
+
+        // X軸移動 & 衝突判定
+        float nextX = simulatedPos.x + vx * FIXED_DELTA_TIME;
+        if (CheckCollisionAt(nextX, simulatedPos.y, mapChip)) {
+            vx = 0.0f;
+        } else {
+            simulatedPos.x = nextX;
+        }
+
+        // Y軸移動 & 衝突判定
+        float nextY = simulatedPos.y + vy * FIXED_DELTA_TIME;
+        if (CheckCollisionAt(simulatedPos.x, nextY, mapChip)) {
+            if (vy < 0.0f) {
+                isGrounded = true;
+            }
+            vy = 0.0f;
+        } else {
+            simulatedPos.y = nextY;
+            if (!CheckCollisionAt(simulatedPos.x, simulatedPos.y - 0.1f, mapChip)) {
+                isGrounded = false;
+            }
+        }
+
+        currentFrameData.position = simulatedPos;
+        result.push_back(currentFrameData);
+
+        // 死亡判定（死亡・落下時はシミュレーション打ち切り）
+        int cx = mapChip->WorldToChipX(simulatedPos.x);
+        int cy = mapChip->WorldToChipY(simulatedPos.y);
+        if (mapChip->GetChipType(cx, cy) == MapChip2D::ChipType::kDeathBlock || simulatedPos.y < -50.0f) {
+            break; 
+        }
+    }
+
+    return result;
 }
 
 void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, int maxNodes) {
