@@ -13,7 +13,7 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneFactory.h"
 #include "Core/Utility/Structs.h"
-#include "ReplayManager.h"
+#include "Replay/ReplayManager.h"
 
 class SceneManager;
 class ParticleManager;
@@ -51,6 +51,7 @@ public:
     static void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
+    bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
     bool IsMapEditorVisible() const { return isMapEditorVisible_; }
     bool IsMapEditorHovered() const { return isMapEditorHovered_; }
     bool IsRoomDragging() const { return draggingRoomIndex_ != -1; }
@@ -207,6 +208,7 @@ private:
 
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
+    bool isReplayEditorHovered_ = false; // リプレイエディタがホバーされているか
     bool isMapEditorVisible_ = false; // マップエディタがアクティブタブとして表示されているか
     bool wasMapEditorVisible_ = false; // 前フレームの表示状態
     bool isMapEditorHovered_ = false; // マップエディタがホバーされているか

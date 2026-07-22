@@ -1,11 +1,11 @@
-﻿#include "PrimitiveObject.h"
+#include "PrimitiveObject.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "GameObject/Object3D.h"
 #include "../externals/imgui/imgui.h"
 #include "Renderer/Renderer.h"
-#include "Editor/ReplayManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE PrimitiveObject::sDefaultTextureHandle_ = {};

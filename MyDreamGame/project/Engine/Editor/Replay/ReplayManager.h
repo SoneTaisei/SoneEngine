@@ -240,14 +240,9 @@ private:
     ReplayManager(const ReplayManager&) = delete;
     ReplayManager& operator=(const ReplayManager&) = delete;
 
-    // MMLエンコード/デコード処理の内部関数
-    std::string EncodeTrackToMml(const std::vector<char>& rawTrack);
-    std::vector<char> DecodeMmlToTrack(const std::string& mmlStr, int expectedFrames);
-
     // 再生・ループ時に実行用キーバッファを生成する
     void GenerateRuntimeKeys();
     bool CheckCollisionAt(float x, float y, MapChip2D* mapChip) const;
-    float CalculateDistanceToGround(const Vector3& playerPos, MapChip2D* mapChip) const;
 
 private:
     ReplayHeader replayHeader_;                       // 決定論的ヘッダー情報

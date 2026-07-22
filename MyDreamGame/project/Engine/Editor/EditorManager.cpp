@@ -11,9 +11,9 @@
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "ReplayManager.h"
-#include "PhysicsAStar.h"
-#include "LevelEvolutionAI.h"
+#include "Replay/ReplayManager.h"
+#include "Replay/PhysicsAStar.h"
+#include "Replay/LevelEvolutionAI.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
@@ -592,12 +592,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     }
 
     // --- Replay Editor ウィンドウ (dock_id_main) ---
+    isReplayEditorHovered_ = false;
     if (showReplayEditor_) {
         if (ImGui::Begin("リプレイエディター", &showReplayEditor_)) {
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
                 currentMode_ = EditorMode::Replay;
             }
-
+            isReplayEditorHovered_ = ImGui::IsWindowHovered();
+            
             // プレビュー表示 (ゲーム画面)
             ImVec2 contentSize = ImGui::GetContentRegionAvail();
             float aspect = 1280.0f / 720.0f;

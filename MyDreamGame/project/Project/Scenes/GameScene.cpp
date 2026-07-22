@@ -8,7 +8,7 @@
 #include "../externals/imgui/imgui.h"
 #include "Editor/EditorManager.h"
 #endif
-#include "Editor/ReplayManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include "Renderer/Renderer.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"

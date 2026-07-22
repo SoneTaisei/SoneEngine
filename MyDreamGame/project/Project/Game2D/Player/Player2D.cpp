@@ -5,7 +5,7 @@
 #include "Graphics/TextureManager.h"
 #include "Core/TimeManager.h"
 #include "Input/KeyboardInput.h"
-#include "Editor/ReplayManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include <cmath>
 #include <algorithm>
 #include <fstream>

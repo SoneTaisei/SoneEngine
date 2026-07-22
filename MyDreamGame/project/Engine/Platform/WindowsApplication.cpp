@@ -1,5 +1,5 @@
 #include "Platform/WindowsApplication.h"
-#include "Editor/ReplayManager.h"
+#include "Editor/Replay/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
 #ifdef USE_IMGUI
@@ -329,7 +329,7 @@ void WindowsApplication::Update() {
                 CameraManager::GetInstance()->ClearCullingCameraInfo();
             }
             
-            bool allowCameraInput = editorManager_->IsGameViewHovered() || !ImGui::GetIO().WantCaptureMouse;
+            bool allowCameraInput = editorManager_->IsGameViewHovered() || editorManager_->IsReplayEditorHovered() || !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {
             activeCamera_ = gameCamera_.get();

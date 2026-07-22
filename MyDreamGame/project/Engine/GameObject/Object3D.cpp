@@ -1,10 +1,10 @@
-﻿#include "Object3D.h"
+#include "Object3D.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
 #include "Renderer/Renderer.h"
-#include "Editor/ReplayManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};

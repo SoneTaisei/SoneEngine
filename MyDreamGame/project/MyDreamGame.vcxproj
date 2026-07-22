@@ -250,9 +250,12 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
-    <ClCompile Include="Engine\Editor\ReplayManager.cpp" />
-    <ClCompile Include="Engine\Editor\LevelEvolutionAI.cpp" />
-    <ClCompile Include="Engine\Editor\PhysicsAStar.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
+    <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitivePlane.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveBox.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveSphere.cpp" />
@@ -380,7 +383,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Renderer\Renderer.h" />
     <ClInclude Include="Engine\Renderer\SkeletonDebugRenderer.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
-    <ClInclude Include="Engine\Editor\PhysicsAStar.h" />
+    <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />
     <ClInclude Include="externals\imgui\imgui_internal.h" />
@@ -458,8 +461,11 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\CoinBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />
-    <ClInclude Include="Engine\Editor\ReplayManager.h" />
-    <ClInclude Include="Engine\Editor\LevelEvolutionAI.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayTimelineEditor.h" />
+    <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
+    <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerPhysics.h" />
   </ItemGroup>
