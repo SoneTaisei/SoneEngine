@@ -19,13 +19,16 @@ static void GetTrackKeyInfo(int trackIdx, int& outKeyPos, char& outKeyChar) {
 void ReplayTimelineEditor::ApplyTimelineEdit(ReplayData& data, int frameIdx, int keyIdx, bool active) {
     if (frameIdx < 0 || frameIdx >= static_cast<int>(data.frames.size())) return;
     
-    char keyChars[8] = "LRJDCWS";
-    data.frames[frameIdx].keys[keyIdx] = active ? keyChars[keyIdx] : '-';
+    int keyPos;
+    char keyChar;
+    GetTrackKeyInfo(keyIdx, keyPos, keyChar);
+    
+    data.frames[frameIdx].keys[keyPos] = active ? keyChar : '-';
 
     // 編集時はブロックが壊れる可能性があるため、重複するJitter設定をリセットする
     auto it = std::remove_if(data.jitters.begin(), data.jitters.end(),
-        [frameIdx, keyIdx](const JitterSetting& j) {
-            return (j.keyIdx == keyIdx && frameIdx >= j.startFrame && frameIdx <= j.endFrame);
+        [frameIdx, keyPos](const JitterSetting& j) {
+            return (j.keyIdx == keyPos && frameIdx >= j.startFrame && frameIdx <= j.endFrame);
         });
     data.jitters.erase(it, data.jitters.end());
 
@@ -134,7 +137,7 @@ void ReplayTimelineEditor::RebuildMmlFromFrames(ReplayData& data) {
     rawT4.reserve(data.frames.size());
 
     for (const auto& frame : data.frames) {
-        rawT0.push_back(frame.keys[0]);
+        rawT0.push_back((frame.keys[0] == 'L') ? 'L' : ((frame.keys[1] == 'R') ? 'R' : '-'));
         rawT1.push_back(frame.keys[2]);
         rawT2.push_back(frame.keys[3]);
         rawT3.push_back(frame.keys[4]);

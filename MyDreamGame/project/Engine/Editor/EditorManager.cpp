@@ -1014,13 +1014,25 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     auto replayMgrInst = ReplayManager::GetInstance();
 
-                    // --- 1. 手振れ補正設定 ---
-                    if (ImGui::CollapsingHeader("手振れ補正設定", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    // --- 1. 再生・補正設定 ---
+                    if (ImGui::CollapsingHeader("再生・補正設定", ImGuiTreeNodeFlags_DefaultOpen)) {
                         bool isSnap = replayMgrInst->IsSnapEnabled();
                         if (ImGui::Checkbox("位置補正 (手振れ補正/スナップ)", &isSnap)) {
                             replayMgrInst->SetSnapEnabled(isSnap);
                         }
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生時の位置ズレを強制スナップ補正するON/OFF");
+
+                        bool isLoop = replayMgrInst->IsLoopPlay();
+                        if (ImGui::Checkbox("ループ再生", &isLoop)) {
+                            replayMgrInst->SetLoopPlay(isLoop);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("リプレイ再生をループさせるON/OFF");
+
+                        bool isInterpolation = replayMgrInst->IsInterpolationEnabled();
+                        if (ImGui::Checkbox("座標補間 (スムーズ再生)", &isInterpolation)) {
+                            replayMgrInst->SetInterpolationEnabled(isInterpolation);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("フレーム間のプレイヤー座標を補間してスムーズに描画するON/OFF");
                     }
 
                     // --- 2. 第1章 完全決定論的デバッグ & 高速自動モンキーテスト ---
