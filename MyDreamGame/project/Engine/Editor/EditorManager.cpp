@@ -3058,6 +3058,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::PushID(sectionType * 1000 + i);
                             
                             ImVec2 p = ImGui::GetCursorScreenPos();
+                            float lastButtonX2 = 0.0f;
                             
                             if (i < numTools) {
                                 const ToolIcon& tool = tools[i];
@@ -3072,6 +3073,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = nullptr;
                                 }
+                                
+                                lastButtonX2 = ImGui::GetItemRectMax().x;
+                                ImVec2 backupCursorPos = ImGui::GetCursorScreenPos();
 
                                 bool isHovered = ImGui::IsItemHovered();
                                 ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -3144,6 +3148,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     }
                                     ImGui::PopStyleVar();
                                     ImGui::PopStyleColor();
+                                    
+                                    // カーソル位置を元の正しい位置に復帰させる
+                                    ImGui::SetCursorScreenPos(backupCursorPos);
                                 }
                             } else if (sectionType == 2) {
                                 // "＋ 追加" ボタン
@@ -3163,12 +3170,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedPrimitive_ = nullptr;
                                     mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                                 }
+                                lastButtonX2 = ImGui::GetItemRectMax().x;
                             }
 
                             ImGui::PopID();
 
                             // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
-                            float lastButtonX2 = ImGui::GetItemRectMax().x;
                             float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
                             if (nextButtonX2 < windowVisibleX && i + 1 < maxIter) {
                                 ImGui::SameLine();
