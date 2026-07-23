@@ -244,8 +244,8 @@ bool PhysicsAStar::FindValidPath(const Vector3& startPos, const Vector3& goalPos
             closestNodeIndex = currentIndex;
         }
 
-        // ゴール接近判定 (半径 2.5 unit)
-        if (distSq < 6.25f) {
+        // ゴール接近判定 (半径 0.8 unit)
+        if (distSq < 0.64f) {
             goalNodeIndex = currentIndex;
             break;
         }

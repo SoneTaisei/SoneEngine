@@ -38,6 +38,9 @@ public:
     // 描画
     virtual void Draw(const Matrix4x4 &viewProjectionMatrix) = 0;
 
+    // エディター上のウィンドウ前面オーバーレイに2D描画する用 (ImGuiのWindowDrawListを使用)
+    virtual void DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {}
+
     // シーン固有のImGui表示（インスペクター用など）
     virtual void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) {}
 

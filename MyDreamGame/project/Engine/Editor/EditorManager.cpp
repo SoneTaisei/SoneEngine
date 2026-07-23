@@ -621,7 +621,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             ImVec2 currentPos = ImGui::GetCursorPos();
             ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+            gameViewPos_ = ImGui::GetCursorScreenPos();
+            gameViewSize_ = imageSize;
             ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+
+            // 2D軌跡・AI探索ルートのオーバーレイ描画
+            IScene* activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                Camera* camera = *activeCamera;
+                if (camera) {
+                    Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    activeScene->DrawEditorOverlay(viewProj);
+                }
+            }
         }
         ImGui::End();
     }
