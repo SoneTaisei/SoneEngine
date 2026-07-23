@@ -283,6 +283,14 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
 
+            if (gameCamera_ && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding) {
+                if (player_->IsDead()) {
+                    gameCamera_->SetFollowTarget(nullptr);
+                } else {
+                    gameCamera_->SetFollowTarget(&player_->GetPosition());
+                }
+            }
+
             if (gameCamera_ && map_) {
                 gameCamera_->SetRooms(map_->GetRooms());
             }

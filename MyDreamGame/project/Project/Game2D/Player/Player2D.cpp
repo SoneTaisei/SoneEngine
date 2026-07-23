@@ -202,23 +202,32 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
 
     // 現在のルームを特定する
     const auto& rooms = map.GetRooms();
-    for (int i = 0; i < rooms.size(); ++i) {
+    bool isInAnyRoom = false;
+    for (int i = 0; i < (int)rooms.size(); ++i) {
         if (state_.position_.x >= rooms[i].x && state_.position_.x <= rooms[i].x + rooms[i].width &&
             state_.position_.y >= rooms[i].y && state_.position_.y <= rooms[i].y + rooms[i].height) {
             state_.currentRoomIndex_ = i;
+            isInAnyRoom = true;
             break;
         }
     }
 
+    // 完全にルームから逸脱している場合は死亡する
+    // ただし、トランジション中は isTransitioning = true でUpdateWithMapの先頭で早期リターンされるため、ここには来ない。
+    // また、roomsが設定されていない（空）の場合は無視する。
+    if (!rooms.empty() && !isInAnyRoom && !state_.isDead_) {
+        Kill(true);
+    }
+
     float deathY = -10.0f;
-    if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < rooms.size()) {
+    if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < (int)rooms.size()) {
         // ルームの下端から少し余裕をもたせた高さをデスマッチラインとする
         deathY = rooms[state_.currentRoomIndex_].y - 2.0f;
     }
 
     // 画面外落下時のリスポーン演出移行
     if (state_.position_.y < deathY) {
-        Kill();
+        Kill(true);
     }
 
     // 色の更新

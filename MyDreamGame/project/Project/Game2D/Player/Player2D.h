@@ -81,16 +81,25 @@ public:
     // リプレイ巻き戻し用の状態復元メソッド
 
     // ブロックのOnCollisionから呼ばれるコールバック群
-    void Kill() {
+    void Kill(bool isFallDeath = false) {
         if (!state_.isDead_) {
             state_.isDead_ = true;
             state_.isRespawning_ = false;
             state_.deathTimer_ = 0.0f;
-            // 後ろによろける演出のための速度設定 (よろけ具合を約半分に低減)
-            state_.velocity_ = { state_.velocity_.x > 0.0f ? -2.5f : (state_.velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f };
-            state_.isDashing_ = false;
-            // スローモーション開始
-            TimeManager::GetInstance().SetTimeScale(0.3f);
+            if (isFallDeath) {
+                // 落下・逸脱死の場合：上に跳ねず、下方向への初速を与えて重力で落とす
+                state_.velocity_.y = -5.0f; // 下方向への初速
+                state_.velocity_.x *= 0.2f; // 横方向の慣性はほぼなくす
+                state_.isDashing_ = false;
+                // スローモーションはかけず、通常速度で落ちていくようにする
+                TimeManager::GetInstance().SetTimeScale(1.0f);
+            } else {
+                // 後ろによろける演出のための速度設定 (よろけ具合を約半分に低減)
+                state_.velocity_ = { state_.velocity_.x > 0.0f ? -2.5f : (state_.velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f };
+                state_.isDashing_ = false;
+                // スローモーション開始
+                TimeManager::GetInstance().SetTimeScale(0.3f);
+            }
         }
     }
     void ReachGoal() {
