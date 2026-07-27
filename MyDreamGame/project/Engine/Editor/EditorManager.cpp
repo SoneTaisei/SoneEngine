@@ -1627,30 +1627,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             auto dxCommon = DirectXCommon::GetInstance();
 
-            // ポストエフェクト選択Combo
-            const char *effectNames[] = {
-                "なし (None)",
-                "コンポジット (統合エフェクト)",
-                "深度ベース・アウトライン"};
-
-            int currentComboIndex = 0;
-            auto activeEffect = dxCommon->GetPostEffect();
-            if (activeEffect == DirectXCommon::PostEffect::kComposite) {
-                currentComboIndex = 1;
-            } else if (activeEffect == DirectXCommon::PostEffect::kDepthBasedOutline) {
-                currentComboIndex = 2;
-            }
-
-            ImGui::Text("アクティブなエフェクト");
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-            if (ImGui::Combo("##ActiveEffect", &currentComboIndex, effectNames, IM_ARRAYSIZE(effectNames))) {
-                if (currentComboIndex == 0) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kNone);
-                } else if (currentComboIndex == 1) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kComposite);
-                } else if (currentComboIndex == 2) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kDepthBasedOutline);
-                }
+            bool enablePost = dxCommon->IsPostEffectEnabled();
+            if (ImGui::Checkbox("ポストエフェクトを有効化", &enablePost)) {
+                dxCommon->SetPostEffectEnabled(enablePost);
+                SaveSceneConfig();
             }
             ImGui::Spacing();
             ImGui::Separator();
@@ -1753,7 +1733,18 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             };
 
             auto params = dxCommon->GetCompositeParamsData();
-            if (params && dxCommon->GetPostEffect() == DirectXCommon::PostEffect::kComposite) {
+            if (params && dxCommon->IsPostEffectEnabled()) {
+                if (ImGui::CollapsingHeader("深度ベース・アウトライン設定 (Outline)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    bool enableOutline = dxCommon->IsDepthBasedOutlineEnabled();
+                    if (ImGui::Checkbox("アウトラインを有効化", &enableOutline)) {
+                        dxCommon->SetDepthBasedOutlineEnabled(enableOutline);
+                        SaveSceneConfig();
+                    }
+                    ImGui::Spacing();
+                }
+                ImGui::Spacing();
+
                 if (ImGui::CollapsingHeader("グレースケール設定 (Grayscale)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     DrawFloatControl("グレースケール強度", &params->grayscaleStrength, 0.0f, 1.0f);
