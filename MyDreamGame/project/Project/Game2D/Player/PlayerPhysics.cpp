@@ -2,6 +2,7 @@
 #include "Player2D.h"
 #include "Core/TimeManager.h"
 #include "Core/Utility/TransformFunctions.h"
+#include "Graphics/GameCamera.h"
 #include "../Blocks/BaseBlock.h"
 #include <algorithm>
 #include <cmath>
@@ -16,7 +17,7 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         return; // ヒットストップ中は物理演算・入力をスキップ
     }
 
-    HandleInputLogic(state_, params_, input_, visuals_, deltaTime);
+    HandleInputLogic(state_, params_, input_, visuals_, deltaTime, player);
     ApplyGravity(state_, params_, deltaTime);
 
     // ダッシュタイマーの更新
@@ -73,7 +74,7 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     SimulateCollisions(state_, params_, player);
 }
 
-void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime) {
+void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
     if (state_.wallClingReleaseTimer_ > 0.0f) {
         state_.wallClingReleaseTimer_ -= deltaTime;
     }
@@ -333,6 +334,11 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         
         // ダッシュ波紋を発生
         visuals_.SpawnDashRing(state_.position_, inputDir);
+
+        // 画面揺れをトリガー (強さ 0.2f, 時間 0.15秒)
+        if (player && player->GetCamera()) {
+            player->GetCamera()->Shake(0.2f, 0.15f);
+        }
     }
 }
 

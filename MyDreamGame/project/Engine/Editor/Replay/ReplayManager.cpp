@@ -258,7 +258,10 @@ void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath)
             return;
         }
     } else {
-        return; // 再生対象がない
+        // 引数が指定されていない場合は、現在の編集中のリプレイ（currentReplay_）をそのまま使う
+        if (currentReplay_.totalFrames == 0) {
+            return;
+        }
     }
 
     if (currentReplay_.totalFrames == 0) return;
@@ -344,8 +347,6 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
             StopPlayback(); // ループOFF：完全に停止
             return;
         }
-        StopPlayback();
-        return;
     }
 
     const FrameData& currentFrame = currentReplay_.frames[currentFrame_];

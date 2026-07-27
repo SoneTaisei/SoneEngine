@@ -53,16 +53,20 @@ void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {
 void Skybox::Update() {
     // マネージャから勝手に取ってくる
     CameraManager *cameraMgr = CameraManager::GetInstance();
-    Vector3 cameraPos = cameraMgr->GetCameraPos();
     Matrix4x4 view = cameraMgr->GetViewMatrix();
+    
+    // Skybox is drawn at infinity, so we ignore camera translation.
+    // Clear the translation components (4th row) from the view matrix.
+    view.m[3][0] = 0.0f;
+    view.m[3][1] = 0.0f;
+    view.m[3][2] = 0.0f;
     
     // Skyboxは常に遠景を描画するため、カメラの投影方式（平行投影など）に関わらず
     // 透視投影（Perspective）行列を使用して、画面全体を覆うようにする。
     Matrix4x4 projection = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
 
-
-    // あとはこれを使って WVP を計算するだけ
-    Matrix4x4 worldMatrix = TransformFunctions::MakeTranslateMatrix(cameraPos);
+    // Keep the world matrix at the origin since we cleared translation in the view matrix.
+    Matrix4x4 worldMatrix = TransformFunctions::MakeIdentity4x4();
 
     // LaTeX表記での行列合成: $$WVP = World \times View \times Projection$$
     mappedTransform_->WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(view, projection));

@@ -4,12 +4,19 @@
 #include <random>
 #include <cmath>
 
-void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle) {
+void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();
     primitiveObj_->Initialize(device, boxPrimitive);
     primitiveObj_->SetName("Player");
     primitiveObj_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
     primitiveObj_->GetMaterial().lightingType = 1;
+
+    if (playerModel) {
+        modelObj_ = std::make_unique<Object3D>();
+        modelObj_->Initialize(device, playerModel);
+        modelObj_->SetName("Player3DModel");
+        modelObj_->GetMaterial().lightingType = 1;
+    }
 
     dashRingPrimitive_ = std::make_unique<PrimitiveObject>();
     dashRingPrimitive_->Initialize(device, ringPrimitive);
@@ -80,6 +87,56 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         
         if (!state.isDead_) {
             primitiveObj_->Update();
+        }
+    }
+
+    if (modelObj_) {
+        modelObj_->SetTranslation(state.position_);
+        
+        float rotationY = modelObj_->GetRotation().y;
+        if (state.velocity_.x < -0.01f) {
+            rotationY = 3.14159265f;
+        } else if (state.velocity_.x > 0.01f) {
+            rotationY = 0.0f;
+        }
+        
+        if (state.isDashing_) {
+            modelObj_->GetMaterial().color = params.colorDashed_;
+            Vector3 dashDir = state.velocity_;
+            dashDir.z = 0.0f;
+            float speed = 1.0f;
+            if (dashDir.x != 0.0f || dashDir.y != 0.0f) {
+                float length = std::sqrt(dashDir.x * dashDir.x + dashDir.y * dashDir.y);
+                if (length > 0.0f) { dashDir.x /= length; dashDir.y /= length; speed = length; }
+            }
+            float stretch = 1.0f + (speed * 0.02f);
+            float squash = 1.0f / stretch;
+            modelObj_->SetScale({ 1.0f * stretch, 1.0f * squash, 1.0f });
+            modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
+        } else {
+            if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
+                float blink = std::sin(visualTime_ * 40.0f);
+                if (blink > 0.0f) {
+                    modelObj_->GetMaterial().color = params.colorTired_;
+                } else {
+                    modelObj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                }
+            } else if (state.stamina_ <= params.maxStamina_ * 0.5f) {
+                float blink = std::sin(visualTime_ * 20.0f);
+                if (blink > 0.0f) {
+                    modelObj_->GetMaterial().color = params.colorTired_;
+                } else {
+                    modelObj_->GetMaterial().color = params.colorNormal_;
+                }
+            } else {
+                modelObj_->GetMaterial().color = params.colorNormal_;
+            }
+            modelObj_->SetScale({ 1.0f, 1.0f, 1.0f });
+            modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
+        }
+        
+        if (!state.isDead_) {
+            modelObj_->Update();
         }
     }
 
@@ -177,7 +234,11 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
             }
         }
     } else if (!state.isDead_ && primitiveObj_) {
-        primitiveObj_->Draw();
+        if (modelObj_) {
+            modelObj_->Draw();
+        } else {
+            primitiveObj_->Draw();
+        }
     }
     
     if (dashRingPrimitive_) {

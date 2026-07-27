@@ -621,7 +621,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             ImVec2 currentPos = ImGui::GetCursorPos();
             ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+            gameViewPos_ = ImGui::GetCursorScreenPos();
+            gameViewSize_ = imageSize;
             ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+
+            // 2D軌跡・AI探索ルートのオーバーレイ描画
+            IScene* activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                Camera* camera = *activeCamera;
+                if (camera) {
+                    Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    activeScene->DrawEditorOverlay(viewProj);
+                }
+            }
         }
         ImGui::End();
     }
@@ -1014,13 +1026,25 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     auto replayMgrInst = ReplayManager::GetInstance();
 
-                    // --- 1. 手振れ補正設定 ---
-                    if (ImGui::CollapsingHeader("手振れ補正設定", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    // --- 1. 再生・補正設定 ---
+                    if (ImGui::CollapsingHeader("再生・補正設定", ImGuiTreeNodeFlags_DefaultOpen)) {
                         bool isSnap = replayMgrInst->IsSnapEnabled();
                         if (ImGui::Checkbox("位置補正 (手振れ補正/スナップ)", &isSnap)) {
                             replayMgrInst->SetSnapEnabled(isSnap);
                         }
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生時の位置ズレを強制スナップ補正するON/OFF");
+
+                        bool isLoop = replayMgrInst->IsLoopPlay();
+                        if (ImGui::Checkbox("ループ再生", &isLoop)) {
+                            replayMgrInst->SetLoopPlay(isLoop);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("リプレイ再生をループさせるON/OFF");
+
+                        bool isInterpolation = replayMgrInst->IsInterpolationEnabled();
+                        if (ImGui::Checkbox("座標補間 (スムーズ再生)", &isInterpolation)) {
+                            replayMgrInst->SetInterpolationEnabled(isInterpolation);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("フレーム間のプレイヤー座標を補間してスムーズに描画するON/OFF");
                     }
 
                     // --- 2. 第1章 完全決定論的デバッグ & 高速自動モンキーテスト ---
@@ -1603,30 +1627,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             auto dxCommon = DirectXCommon::GetInstance();
 
-            // ポストエフェクト選択Combo
-            const char *effectNames[] = {
-                "なし (None)",
-                "コンポジット (統合エフェクト)",
-                "深度ベース・アウトライン"};
-
-            int currentComboIndex = 0;
-            auto activeEffect = dxCommon->GetPostEffect();
-            if (activeEffect == DirectXCommon::PostEffect::kComposite) {
-                currentComboIndex = 1;
-            } else if (activeEffect == DirectXCommon::PostEffect::kDepthBasedOutline) {
-                currentComboIndex = 2;
-            }
-
-            ImGui::Text("アクティブなエフェクト");
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-            if (ImGui::Combo("##ActiveEffect", &currentComboIndex, effectNames, IM_ARRAYSIZE(effectNames))) {
-                if (currentComboIndex == 0) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kNone);
-                } else if (currentComboIndex == 1) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kComposite);
-                } else if (currentComboIndex == 2) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kDepthBasedOutline);
-                }
+            bool enablePost = dxCommon->IsPostEffectEnabled();
+            if (ImGui::Checkbox("ポストエフェクトを有効化", &enablePost)) {
+                dxCommon->SetPostEffectEnabled(enablePost);
+                SaveSceneConfig();
             }
             ImGui::Spacing();
             ImGui::Separator();
@@ -1729,7 +1733,18 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             };
 
             auto params = dxCommon->GetCompositeParamsData();
-            if (params && dxCommon->GetPostEffect() == DirectXCommon::PostEffect::kComposite) {
+            if (params && dxCommon->IsPostEffectEnabled()) {
+                if (ImGui::CollapsingHeader("深度ベース・アウトライン設定 (Outline)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    bool enableOutline = dxCommon->IsDepthBasedOutlineEnabled();
+                    if (ImGui::Checkbox("アウトラインを有効化", &enableOutline)) {
+                        dxCommon->SetDepthBasedOutlineEnabled(enableOutline);
+                        SaveSceneConfig();
+                    }
+                    ImGui::Spacing();
+                }
+                ImGui::Spacing();
+
                 if (ImGui::CollapsingHeader("グレースケール設定 (Grayscale)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     DrawFloatControl("グレースケール強度", &params->grayscaleStrength, 0.0f, 1.0f);
@@ -3058,6 +3073,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::PushID(sectionType * 1000 + i);
                             
                             ImVec2 p = ImGui::GetCursorScreenPos();
+                            float lastButtonX2 = 0.0f;
                             
                             if (i < numTools) {
                                 const ToolIcon& tool = tools[i];
@@ -3072,6 +3088,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = nullptr;
                                 }
+                                
+                                lastButtonX2 = ImGui::GetItemRectMax().x;
+                                ImVec2 backupCursorPos = ImGui::GetCursorScreenPos();
 
                                 bool isHovered = ImGui::IsItemHovered();
                                 ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -3144,6 +3163,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     }
                                     ImGui::PopStyleVar();
                                     ImGui::PopStyleColor();
+                                    
+                                    // カーソル位置を元の正しい位置に復帰させる
+                                    ImGui::SetCursorScreenPos(backupCursorPos);
                                 }
                             } else if (sectionType == 2) {
                                 // "＋ 追加" ボタン
@@ -3163,12 +3185,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedPrimitive_ = nullptr;
                                     mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                                 }
+                                lastButtonX2 = ImGui::GetItemRectMax().x;
                             }
 
                             ImGui::PopID();
 
                             // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
-                            float lastButtonX2 = ImGui::GetItemRectMax().x;
                             float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
                             if (nextButtonX2 < windowVisibleX && i + 1 < maxIter) {
                                 ImGui::SameLine();

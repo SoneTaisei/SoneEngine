@@ -681,6 +681,9 @@ void DirectXCommon::InitializeRenderTexture() {
     depthSrvDesc.Texture2D.MipLevels = 1;
 
     device_->CreateShaderResourceView(depthStencilResource_.Get(), &depthSrvDesc, depthStencilSrvHandleCPU_);
+
+    // 最終出力先SRVハンドルの初期値
+    finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
 }
 
 void DirectXCommon::CreatePostEffectPipelines() {
@@ -918,7 +921,48 @@ void DirectXCommon::CreatePostEffectPipelines() {
 }
 
 void DirectXCommon::ExecutePostEffect() {
-    if (postEffect_ == PostEffect::kDepthBasedOutline) {
+    if (!isPostEffectEnabled_) {
+        // ポストプロセス無効時は、単に renderTexture -> postProcess へコピーするだけにする
+        D3D12_RESOURCE_BARRIER barriers[2] = {};
+        barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barriers[0].Transition.pResource = renderTextureResource_.Get();
+        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barriers[1].Transition.pResource = postProcessResource_.Get();
+        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(2, barriers);
+
+        commandList_->OMSetRenderTargets(1, &postProcessRtvHandle_, false, nullptr);
+        float clearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
+        commandList_->ClearRenderTargetView(postProcessRtvHandle_, clearColor, 0, nullptr);
+
+        commandList_->RSSetViewports(1, &viewport_);
+        commandList_->RSSetScissorRects(1, &scissorRect_);
+
+        commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
+        commandList_->SetPipelineState(copyImagePipelineState_.Get());
+
+        commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
+        commandList_->DrawInstanced(3, 1, 0, 0);
+
+        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        
+        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList_->ResourceBarrier(2, barriers);
+
+        finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
+        return;
+    }
+
+    if (isDepthBasedOutlineEnabled_) {
+        // --- 1パス目: 深度ベース・アウトライン (renderTexture -> postProcess) ---
         // 1. バリアを張る (RenderTexture: RT -> SRV, PostProcess: SRV -> RT, DepthStencil: WRITE -> SRV)
         D3D12_RESOURCE_BARRIER barriers[3] = {};
         barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -961,26 +1005,70 @@ void DirectXCommon::ExecutePostEffect() {
         commandList_->SetGraphicsRootConstantBufferView(3, projectionInverseParamResource_->GetGPUVirtualAddress());
 
         // ディスクリプタテーブルのバインド
-        // t0
         commandList_->SetGraphicsRootDescriptorTable(0, renderTextureSrvHandleGPU_);
-        // t1 (DepthTexture)
         commandList_->SetGraphicsRootDescriptorTable(2, depthStencilSrvHandleGPU_);
 
         commandList_->DrawInstanced(3, 1, 0, 0);
 
-        // 4. バリアを戻す (PostProcess: RT -> SRV, RenderTexture: SRV -> RT, DepthStencil: SRV -> WRITE)
-        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        // 4. バリア遷移 (PostProcess: RT -> SRV, DepthStencil: SRV -> WRITE)
+        // ※ RenderTexture は SRV のまま（次のパスで RENDER_TARGET に遷移させるため）
+        D3D12_RESOURCE_BARRIER midBarriers[2] = {};
+        midBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        midBarriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        midBarriers[0].Transition.pResource = postProcessResource_.Get();
+        midBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        midBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
-        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        midBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        midBarriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        midBarriers[1].Transition.pResource = depthStencilResource_.Get();
+        midBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        midBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        commandList_->ResourceBarrier(2, midBarriers);
 
-        barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-        commandList_->ResourceBarrier(3, barriers);
+        // --- 2パス目: コンポジット (postProcess -> renderTexture) ---
+        // 1. RenderTexture を RT に遷移
+        D3D12_RESOURCE_BARRIER renderTexToRTBarrier = {};
+        renderTexToRTBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        renderTexToRTBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        renderTexToRTBarrier.Transition.pResource = renderTextureResource_.Get();
+        renderTexToRTBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        renderTexToRTBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(1, &renderTexToRTBarrier);
+
+        // 2. 描画先を RenderTexture に設定
+        commandList_->OMSetRenderTargets(1, &renderTextureRtvHandle_, false, nullptr);
+        commandList_->ClearRenderTargetView(renderTextureRtvHandle_, clearColor, 0, nullptr);
+
+        // 3. パイプライン設定
+        commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
+        
+        if (compositeParamsData_) {
+            auto now = std::chrono::steady_clock::now();
+            float elapsedSeconds = std::chrono::duration<float>(now - startTime_).count();
+            compositeParamsData_->noiseTime = elapsedSeconds;
+        }
+        commandList_->SetPipelineState(compositePipelineState_.Get());
+        commandList_->SetGraphicsRootConstantBufferView(1, compositeParamResource_->GetGPUVirtualAddress());
+        commandList_->SetGraphicsRootDescriptorTable(2, dissolveMaskSrvHandleGPU_);
+
+        // 入力として postProcessResource_ (パス1の出力) をバインド
+        commandList_->SetGraphicsRootDescriptorTable(0, postProcessSrvHandleGPU_);
+        commandList_->DrawInstanced(3, 1, 0, 0);
+
+        // 4. RenderTexture を SRV に遷移 (コピー処理のために読み取れるようにする)
+        D3D12_RESOURCE_BARRIER renderTexToSRVBarrier = {};
+        renderTexToSRVBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        renderTexToSRVBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        renderTexToSRVBarrier.Transition.pResource = renderTextureResource_.Get();
+        renderTexToSRVBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        renderTexToSRVBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList_->ResourceBarrier(1, &renderTexToSRVBarrier);
+
+        finalPostProcessSRVHandle_ = renderTextureSrvHandleGPU_;
     }
     else {
-        // 既存のポストプロセス
+        // --- 1パスのみ: コンポジット (renderTexture -> postProcess) ---
         // 1. バリアを張る (RenderTexture: RT -> SRV, PostProcess: SRV -> RT)
         D3D12_RESOURCE_BARRIER barriers[2] = {};
         barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1047,6 +1135,9 @@ void DirectXCommon::ExecutePostEffect() {
         barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         commandList_->ResourceBarrier(2, barriers);
+
+        // 最終出力先は postProcessSrvHandleGPU_
+        finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
     }
 }
 
@@ -1080,8 +1171,19 @@ void DirectXCommon::DrawRenderTexture() {
     commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
     commandList_->SetPipelineState(copyImagePipelineState_.Get());
 
-    commandList_->SetGraphicsRootDescriptorTable(0, postProcessSrvHandleGPU_);
+    commandList_->SetGraphicsRootDescriptorTable(0, finalPostProcessSRVHandle_);
     commandList_->DrawInstanced(3, 1, 0, 0);
+
+    // もし最終結果が renderTextureResource_ にある場合、次のフレームで RENDER_TARGET として使えるように戻す
+    if (finalPostProcessSRVHandle_.ptr == renderTextureSrvHandleGPU_.ptr) {
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = renderTextureResource_.Get();
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(1, &barrier);
+    }
 
     // ビューポートとシザーを元に戻す（念のため）
     commandList_->RSSetViewports(1, &swapchainViewport_);

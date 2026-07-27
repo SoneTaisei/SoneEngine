@@ -36,6 +36,7 @@ public:
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
+    void DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) override;
     void UpdateEditor() override;
 
     // ヒエラルキー用

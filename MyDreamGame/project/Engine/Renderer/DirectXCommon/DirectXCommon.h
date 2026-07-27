@@ -21,6 +21,7 @@ public:
         kGaussian,
         kComposite,
         kDepthBasedOutline,
+        kCompositeAndOutline,
     };
 
     struct VignetteParams {
@@ -125,6 +126,10 @@ public:
     // ポストエフェクトの設定
     void SetPostEffect(PostEffect effect) { postEffect_ = effect; }
     PostEffect GetPostEffect() const { return postEffect_; }
+    bool IsPostEffectEnabled() const { return isPostEffectEnabled_; }
+    void SetPostEffectEnabled(bool enabled) { isPostEffectEnabled_ = enabled; }
+    bool IsDepthBasedOutlineEnabled() const { return isDepthBasedOutlineEnabled_; }
+    void SetDepthBasedOutlineEnabled(bool enabled) { isDepthBasedOutlineEnabled_ = enabled; }
     int32_t GetWindowWidth() const { return windowWidth_; }
     int32_t GetWindowHeight() const { return windowHeight_; }
 
@@ -255,6 +260,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE postProcessRtvHandle_{};
     D3D12_CPU_DESCRIPTOR_HANDLE postProcessSrvHandleCPU_{};
     D3D12_GPU_DESCRIPTOR_HANDLE postProcessSrvHandleGPU_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE finalPostProcessSRVHandle_{};
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> copyImageRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> copyImagePipelineState_;
@@ -281,6 +287,8 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE dissolveMaskSrvHandleGPU_{};
 
     PostEffect postEffect_ = PostEffect::kComposite;
+    bool isPostEffectEnabled_ = true;
+    bool isDepthBasedOutlineEnabled_ = true;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;

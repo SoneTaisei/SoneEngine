@@ -7,6 +7,8 @@
 #include "PlayerState.h"
 #include "Core/Utility/Structs.h"
 
+#include "GameObject/Object3D.h"
+
 struct DustParticle {
     Vector3 position;
     Vector3 velocity;
@@ -40,7 +42,7 @@ struct DashRingParticle {
 
 class PlayerVisuals {
 public:
-    void Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle);
+    void Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel);
     void Update(const PlayerState& state, const PlayerParams& params, float deltaTime);
     void Draw(const PlayerState& state, const PlayerParams& params);
 
@@ -50,9 +52,11 @@ public:
     void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
 
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
+    Object3D* GetModelObject() { return modelObj_.get(); }
 
 private:
     std::unique_ptr<PrimitiveObject> primitiveObj_;
+    std::unique_ptr<Object3D> modelObj_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
