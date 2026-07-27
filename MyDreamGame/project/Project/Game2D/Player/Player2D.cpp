@@ -6,6 +6,7 @@
 #include "Core/TimeManager.h"
 #include "Input/KeyboardInput.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Resource/Model/ModelManager.h"
 #include <cmath>
 #include <algorithm>
 #include <fstream>
@@ -30,8 +31,12 @@ void Player2D::Initialize() {
     Log("Player2D::Initialize: Getting Ring Primitive\n");
     Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);
     
+    Log("Player2D::Initialize: Loading Player 3D Model\n");
+    // Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/Player", "Player.gltf");
+    Model* playerModel = nullptr; // BOX描画に戻すため nullptr に設定
+
     Log("Player2D::Initialize: Init Visuals\n");
-    visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle);
+    visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle, playerModel);
     Log("Player2D::Initialize: Finish\n");
 }
 
