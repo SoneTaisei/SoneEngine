@@ -82,6 +82,7 @@ void GameScene::Initialize() {
     playerObj_ = std::make_unique<GameObject>("Player");
     playerObj_->AddComponent<TransformComponent>();
     player_ = playerObj_->AddComponent<Player2D>();
+    player_->SetCamera(gameCamera_); // 画面揺れ連携用にカメラを渡す
     Log("GameScene::Initialize: Player Initialized\n");
     
     player_->FindSpawnPoint(*map_);

@@ -18,6 +18,7 @@
 
 // 前方宣言
 class MapChip2D;
+class GameCamera;
 
 /// <summary>
 /// 2Dスクロールゲーム用プレイヤークラス
@@ -51,6 +52,10 @@ public:
     // プレイヤーの位置を取得（カメラ追従用）
     const Vector3& GetPosition() const { return state_.position_; }
     void SetPosition(const Vector3& pos) { state_.position_ = pos; }
+
+    // カメラの設定と取得
+    void SetCamera(GameCamera* camera) { camera_ = camera; }
+    GameCamera* GetCamera() const { return camera_; }
 
     // マップからプレイヤー初期位置を検索して設定する
     void FindSpawnPoint(const MapChip2D& map);
@@ -137,8 +142,5 @@ private:
     InputState currentInput_;
     PlayerPhysics physics_;
 
-
-
-
-
+    GameCamera* camera_ = nullptr;
 };

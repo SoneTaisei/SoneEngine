@@ -8,6 +8,9 @@ public:
     void Update(); // 特に操作はないが、追従処理などをここに書く
     void UpdateMatrix() override;
 
+    // 画面揺れの開始
+    void Shake(float strength, float duration);
+
     // 2Dモード用：正射影カメラとして初期化
     void InitializeOrthographic(int kClientWidth, int kClientHeight, float viewWidth, float viewHeight);
 
@@ -71,4 +74,10 @@ private:
     int currentRoomX_ = 0;
     int currentRoomY_ = 0;
     bool isTransitioning_ = false;
+
+    // 画面揺れ用
+    float shakeStrength_ = 0.0f;
+    float shakeDuration_ = 0.0f;
+    float shakeTimer_ = 0.0f;
+    Vector3 shakeOffset_ = {0.0f, 0.0f, 0.0f};
 };
