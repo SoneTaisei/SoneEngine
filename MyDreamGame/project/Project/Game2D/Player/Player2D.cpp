@@ -18,7 +18,7 @@
 
 void Player2D::Initialize() {
     Log("Player2D::Initialize: Start\n");
-    PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
+    PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
     Log("Player2D::Initialize: Config loaded\n");
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
@@ -308,17 +308,18 @@ void Player2D::DisplayImGui() {
 
     // ツリーノードが開かれた瞬間にJSONをロードする
     if (isTreeNodeOpen && !wasTreeNodeOpen) {
-        PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
+        PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
     }
     wasTreeNodeOpen = isTreeNodeOpen;
 
     if (isTreeNodeOpen) {
         if (ImGui::Button("パラメータ保存 (Save)")) {
-            PlayerConfig::Save(params_, "resources/json/Player/player_parameters.json");
+            std::filesystem::create_directories("resources/json/shared/Player");
+            PlayerConfig::Save(params_, "resources/json/shared/Player/player_parameters.json");
         }
         ImGui::SameLine();
         if (ImGui::Button("パラメータ読込 (Load)")) {
-            PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
+            PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
         }
 
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);

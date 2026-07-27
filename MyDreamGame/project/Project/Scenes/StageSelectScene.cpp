@@ -130,7 +130,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 
     if (keyboard->IsKeyPressed(DIK_SPACE)) {
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
-            GameScene::s_TargetMapFilePath = "resources/json/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
+            GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }
         sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
         return;
@@ -233,7 +233,7 @@ void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
 void StageSelectScene::RefreshAvailableMapFiles() {
     availableMapFiles_.clear();
-    std::string path = "resources/json/MapData";
+    std::string path = "resources/json/shared/MapData";
     if (std::filesystem::exists(path) && std::filesystem::is_directory(path)) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
             if (entry.is_regular_file()) {
@@ -248,7 +248,8 @@ void StageSelectScene::RefreshAvailableMapFiles() {
 }
 
 void StageSelectScene::SaveConfig() {
-    std::ofstream ofs("resources/json/stage_config.txt");
+    std::filesystem::create_directories("resources/json/shared");
+    std::ofstream ofs("resources/json/shared/stage_config.txt");
     if (!ofs.is_open()) return;
     ofs << stageCount_ << "\n";
     for (int i = 0; i < stageCount_; ++i) {
@@ -259,7 +260,7 @@ void StageSelectScene::SaveConfig() {
 }
 
 void StageSelectScene::LoadConfig() {
-    std::ifstream ifs("resources/json/stage_config.txt");
+    std::ifstream ifs("resources/json/shared/stage_config.txt");
     if (!ifs.is_open()) {
         stageCount_ = 1;
         stageConfigs_.resize(1);

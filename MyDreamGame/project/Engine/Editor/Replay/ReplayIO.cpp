@@ -6,7 +6,7 @@
 #include <iomanip>
 
 bool ReplayIO::SaveToFile(const ReplayData& data, const std::string& filename) {
-    std::filesystem::create_directories("resources/json/saved_replays");
+    std::filesystem::create_directories("resources/json/local/saved_replays");
     std::string cleanName = filename;
     
     // ".json.mml" または ".json" の文字を除去する
@@ -20,7 +20,7 @@ bool ReplayIO::SaveToFile(const ReplayData& data, const std::string& filename) {
         cleanName += ".mml";
     }
 
-    std::string filepath = "resources/json/saved_replays/" + cleanName;
+    std::string filepath = "resources/json/local/saved_replays/" + cleanName;
 
     std::ofstream ofs(filepath);
     if (!ofs.is_open()) return false;
@@ -91,7 +91,7 @@ bool ReplayIO::SaveToFile(const ReplayData& data, const std::string& filename) {
 bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
     std::string pathToOpen = filepath;
     if (!std::filesystem::exists(pathToOpen)) {
-        std::string altPath = "resources/json/saved_replays/" + filepath;
+        std::string altPath = "resources/json/local/saved_replays/" + filepath;
         if (std::filesystem::exists(altPath)) {
             pathToOpen = altPath;
         }
@@ -271,8 +271,8 @@ bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
 
 std::vector<std::string> ReplayIO::GetSavedFileList() {
     std::vector<std::string> list;
-    std::filesystem::create_directories("resources/json/saved_replays");
-    for (const auto& entry : std::filesystem::directory_iterator("resources/json/saved_replays")) {
+    std::filesystem::create_directories("resources/json/local/saved_replays");
+    for (const auto& entry : std::filesystem::directory_iterator("resources/json/local/saved_replays")) {
         if (entry.is_regular_file() && entry.path().extension() == ".mml") {
             list.push_back(entry.path().filename().string());
         }
@@ -281,7 +281,7 @@ std::vector<std::string> ReplayIO::GetSavedFileList() {
 }
 
 void ReplayIO::DeleteSavedFile(const std::string& filepath) {
-    std::string fullpath = "resources/json/saved_replays/" + filepath;
+    std::string fullpath = "resources/json/local/saved_replays/" + filepath;
     if (std::filesystem::exists(fullpath)) {
         std::filesystem::remove(fullpath);
     }

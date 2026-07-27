@@ -17,7 +17,7 @@
 #include "Graphics/Skybox.h"
 #include "Core/Utility/ParameterManager.h"
 
-std::string GameScene::s_TargetMapFilePath = "resources/json/Map/map_data.json";
+std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
 void GameScene::OnEnter(SceneManager* sceneManager) {
     // StageSelectSceneから選択されたステージのパスを受け取る

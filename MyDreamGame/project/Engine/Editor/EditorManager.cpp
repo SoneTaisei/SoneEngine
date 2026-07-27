@@ -1428,11 +1428,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                             if (ImGui::Button("変更を適用 (Apply & Rebuild)") || (autoApply && changed)) {
                                 if (isTemplate) {
-                                    mapChip->SaveTemplatesToFile("resources/json/templates_config.json");
+                                    mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
                                 } else {
                                     std::string name = stageFilename_;
                                     if (name.length() < 4 || name.substr(name.length() - 4) != ".txt") name += ".txt";
-                                    mapChip->SaveToFile("resources/json/MapData/" + name);
+                                    mapChip->SaveToFile("resources/json/shared/MapData/" + name);
                                 }
                                 mapChip->RebuildChipObjects();
                             }
@@ -2879,8 +2879,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // json ディレクトリ内の .txt ファイルを自動走査
                     std::vector<std::string> stageFiles;
                     try {
-                        if (std::filesystem::exists("resources/json/MapData")) {
-                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/MapData")) {
+                        if (std::filesystem::exists("resources/json/shared/MapData")) {
+                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/shared/MapData")) {
                                 if (entry.is_regular_file()) {
                                     std::string filename = entry.path().filename().string();
                                     if (filename.length() >= 4) {
@@ -2909,7 +2909,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (!hasExt) {
                             name += ".txt";
                         }
-                        return std::string("resources/json/MapData/") + name;
+                        return std::string("resources/json/shared/MapData/") + name;
                     };
 
                     // 既存のマップファイルを選択するコンボボックス
@@ -3292,7 +3292,8 @@ void EditorManager::Finalize() {
 
 void EditorManager::SaveSceneConfig() {
 
-    std::ofstream ofs("resources/json/editor_config.json");
+    std::filesystem::create_directories("resources/json/local");
+    std::ofstream ofs("resources/json/local/editor_config.json");
     if (ofs.is_open()) {
         auto dxCommon = DirectXCommon::GetInstance();
         ofs << "{" << std::endl;
@@ -3305,7 +3306,7 @@ void EditorManager::SaveSceneConfig() {
 }
 
 void EditorManager::LoadSceneConfig() {
-    std::ifstream ifs("resources/json/editor_config.json");
+    std::ifstream ifs("resources/json/local/editor_config.json");
     if (!ifs.is_open()) {
         return;
     }
@@ -3378,8 +3379,8 @@ void EditorManager::LoadSceneConfig() {
 }
 
 void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
-    std::filesystem::create_directories("resources/json");
-    std::ofstream ofs("resources/json/lighting_config.json");
+    std::filesystem::create_directories("resources/json/shared");
+    std::ofstream ofs("resources/json/shared/lighting_config.json");
     if (ofs.is_open()) {
         nlohmann::json j;
         j["activeLightType"] = activeLightType_;
@@ -3416,7 +3417,7 @@ void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
 }
 
 void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
-    std::ifstream ifs("resources/json/lighting_config.json");
+    std::ifstream ifs("resources/json/shared/lighting_config.json");
     if (!ifs.is_open()) return;
 
     try {

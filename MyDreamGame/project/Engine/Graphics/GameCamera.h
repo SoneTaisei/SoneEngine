@@ -50,8 +50,8 @@ public:
         orthoHeight_ = 11.25f / scale_;
     }
 
-    void LoadConfig(const std::string& filepath = "resources/json/camera_config.json");
-    void SaveConfig(const std::string& filepath = "resources/json/camera_config.json");
+    void LoadConfig(const std::string& filepath = "resources/json/shared/camera_config.json");
+    void SaveConfig(const std::string& filepath = "resources/json/shared/camera_config.json");
 
 private:
     // 正射影行列でUpdateMatrixをオーバーライド的に使う

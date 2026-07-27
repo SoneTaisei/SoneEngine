@@ -121,7 +121,7 @@ void ModelCommon::DrawAll(const Matrix4x4 &viewProjectionMatrix) {
 }
 
 void ModelCommon::LoadLightingConfig() {
-    std::ifstream ifs("resources/json/lighting_config.json");
+    std::ifstream ifs("resources/json/shared/lighting_config.json");
     if (!ifs.is_open()) return;
 
     try {

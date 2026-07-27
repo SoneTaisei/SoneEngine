@@ -32,7 +32,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
 
     // テンプレートの読み込み（なければデフォルト生成して保存）
-    if (!LoadTemplatesFromFile("resources/json/templates_config.json") || templatePalette_.empty()) {
+    if (!LoadTemplatesFromFile("resources/json/shared/templates_config.json") || templatePalette_.empty()) {
         templatePalette_.clear();
         auto addTemplate = [&](int id, const std::string& name, const std::string& type, Vector4 color, nlohmann::json props) {
             CustomBlockDef def;
@@ -63,7 +63,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         jumpProps["jumpVelocityHorizontal"] = 15.0f;
         addTemplate(9, "Jump", "JumpBlock", {1.0f, 0.5f, 0.0f, 1.0f}, jumpProps);
 
-        SaveTemplatesToFile("resources/json/templates_config.json");
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
     // 保存ファイルがあれば読込み、なければ初期構築して保存する
@@ -485,7 +485,7 @@ bool MapChip2D::LoadFromStageName(const std::string& stageName) {
         if (ext == ".txt" || ext == ".TXT") hasExt = true;
     }
     if (!hasExt) name += ".txt";
-    std::string filepath = "resources/json/MapData/" + name;
+    std::string filepath = "resources/json/shared/MapData/" + name;
     return LoadFromFile(filepath);
 }
 
