@@ -105,42 +105,115 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
 
     if (modelObj_) {
         if (animator_) {
-            if (state.isWallClinging_ || state.isWallSliding_) {
-                animator_->SetAnimation(idleAnimation_);
+            // しがみつき中ならブレンド率を上げ、それ以外は下げる
+            bool isClinging = state.isWallClinging_ || state.isWallSliding_;
+            if (isClinging) {
+                climbBlendFactor_ += deltaTime * 5.0f; // 約0.2秒で最大値1.0fへ遷移
+                if (climbBlendFactor_ > 1.0f) climbBlendFactor_ = 1.0f;
+            } else {
+                climbBlendFactor_ -= deltaTime * 5.0f;
+                if (climbBlendFactor_ < 0.0f) climbBlendFactor_ = 0.0f;
+            }
 
-                // 両手でしがみつくためのポージング
+            // ブレンド率が0より大きい場合はしがみつき姿勢をブレンド適用
+            if (climbBlendFactor_ > 0.0f) {
+                // 下地のアニメーションを設定
+                if (isClinging) {
+                    // しがみつき中は、体（Hips）や足先が無駄に動かないように待機アニメーションを下地にする
+                    animator_->SetAnimation(idleAnimation_);
+                } else {
+                    // しがみつきから離脱するブレンド中は、移行先の通常アニメーションを下地にする
+                    if (!state.isOnGround_) {
+                        animator_->SetAnimation(jumpAnimation_);
+                    } else if (std::abs(state.velocity_.x) > 0.1f) {
+                        animator_->SetAnimation(walkAnimation_);
+                    } else {
+                        animator_->SetAnimation(idleAnimation_);
+                    }
+                }
+
+                // アニメーターのスケルトンからジョイントの初期回転（バインドポーズ）を取得するヘルパー
+                const auto& joints = animator_->GetSkeleton().joints;
+                const auto& jointMap = animator_->GetSkeleton().jointMap;
+                auto getInitialRot = [&](const std::string& name) -> Quaternion {
+                    auto it = jointMap.find(name);
+                    if (it != jointMap.end() && it->second < joints.size()) {
+                        return joints[it->second].defaultTransform.rotate;
+                    }
+                    return Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f };
+                };
+
+                // 両手でしがみつくための追加回転を合成するヘルパー
                 auto makeRot = [](const Vector3& axis, float angle) -> Quaternion {
                     float sinH = std::sin(angle / 2.0f);
                     float cosH = std::cos(angle / 2.0f);
                     return Quaternion{ axis.x * sinH, axis.y * sinH, axis.z * sinH, cosH };
                 };
 
-                // 腕を前方斜め上に伸ばす
-                Quaternion lArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.3f);
-                Quaternion rArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.3f);
-                Quaternion lForeArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -0.1f);
-                Quaternion rForeArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -0.1f);
+                // 初期姿勢をベースに、各関節に追加の回転を掛け合わせてオーバーライド値を合成する
+                // ImGuiでの調整値を反映（X -> Y -> Z の順で回転を適用）
+                Quaternion lArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugLArmRot_[0]) *
+                                     makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugLArmRot_[1]) *
+                                     makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugLArmRot_[2]);
 
-                // 手首を前腕の向きに真っ直ぐ揃える（無回転）
-                Quaternion lHandRot = Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f };
-                Quaternion rHandRot = Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f };
+                Quaternion rArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugRArmRot_[0]) *
+                                     makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugRArmRot_[1]) *
+                                     makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugRArmRot_[2]);
 
-                // 脚をコアラのように曲げる
-                Quaternion lUpLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f); // 大腿を前に曲げる
-                Quaternion rUpLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f);
-                Quaternion lLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);   // 膝を曲げる
-                Quaternion rLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);
+                // 肘（前腕）
+                Quaternion lForeArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugLForeArmRot_[0]) *
+                                         makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugLForeArmRot_[1]) *
+                                         makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugLForeArmRot_[2]);
 
-                animator_->SetJointRotationOverride("LeftArm_09", lArmRot);
-                animator_->SetJointRotationOverride("RightArm_014", rArmRot);
-                animator_->SetJointRotationOverride("LeftForeArm_010", lForeArmRot);
-                animator_->SetJointRotationOverride("RightForeArm_015", rForeArmRot);
-                animator_->SetJointRotationOverride("LeftHand_011", lHandRot);
-                animator_->SetJointRotationOverride("RightHand_016", rHandRot);
-                animator_->SetJointRotationOverride("LeftUpLeg_019", lUpLegRot);
-                animator_->SetJointRotationOverride("RightUpLeg_024", rUpLegRot);
-                animator_->SetJointRotationOverride("LeftLeg_020", lLegRot);
-                animator_->SetJointRotationOverride("RightLeg_025", rLegRot);
+                Quaternion rForeArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugRForeArmRot_[0]) *
+                                         makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugRForeArmRot_[1]) *
+                                         makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugRForeArmRot_[2]);
+
+                Quaternion lArmRot = lArmAdd * getInitialRot("LeftArm_09");
+                Quaternion rArmRot = rArmAdd * getInitialRot("RightArm_014");
+                Quaternion lForeArmRot = lForeArmAdd * getInitialRot("LeftForeArm_010");
+                Quaternion rForeArmRot = rForeArmAdd * getInitialRot("RightForeArm_015");
+
+                // 腰（体全体）の傾き
+                Quaternion hipsAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugHipsRot_[0]) *
+                                     makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugHipsRot_[1]) *
+                                     makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugHipsRot_[2]);
+                Quaternion hipsRot = hipsAdd * getInitialRot("Hips_01");
+
+                // 手首は前腕に対して無回転（初期ポーズ時の前腕との接続角度をそのまま維持する）
+                Quaternion lHandRot = getInitialRot("LeftHand_011");
+                Quaternion rHandRot = getInitialRot("RightHand_016");
+                Quaternion lHandDummyRot = getInitialRot("LeftHand_Dummy_012");
+                Quaternion rHandDummyRot = getInitialRot("RightHand_Dummy_017");
+
+                // 脚部
+                Quaternion lUpLegRot = getInitialRot("LeftUpLeg_019") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f);
+                Quaternion rUpLegRot = getInitialRot("RightUpLeg_024") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f);
+                Quaternion lLegRot = getInitialRot("LeftLeg_020") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);
+                Quaternion rLegRot = getInitialRot("RightLeg_025") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);
+
+                // 足首も初期姿勢時の角度を維持して固定（バタつき防止）
+                Quaternion lFootRot = getInitialRot("LeftFoot_021");
+                Quaternion rFootRot = getInitialRot("RightFoot_026");
+
+                animator_->SetJointRotationOverride("Hips_01", hipsRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("LeftArm_09", lArmRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("RightArm_014", rArmRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("LeftForeArm_010", lForeArmRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("RightForeArm_015", rForeArmRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("LeftHand_011", lHandRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("RightHand_016", rHandRot, climbBlendFactor_);
+
+                animator_->SetJointRotationOverride("LeftHand_Dummy_012", lHandDummyRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("RightHand_Dummy_017", rHandDummyRot, climbBlendFactor_);
+
+                animator_->SetJointRotationOverride("LeftUpLeg_019", lUpLegRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("RightUpLeg_024", rUpLegRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("LeftLeg_020", lLegRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("RightLeg_025", rLegRot, climbBlendFactor_);
+
+                animator_->SetJointRotationOverride("LeftFoot_021", lFootRot, climbBlendFactor_);
+                animator_->SetJointRotationOverride("RightFoot_026", rFootRot, climbBlendFactor_);
             } else {
                 animator_->ClearJointOverrides();
 
@@ -538,3 +611,18 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
         currentEndSize *= 0.5f;
     }
 }
+
+#ifdef USE_IMGUI
+#include "../../externals/imgui/imgui.h"
+
+void PlayerVisuals::DisplayImGui() {
+    if (ImGui::TreeNode("しがみつき姿勢 (Cling Pose Edit)")) {
+        ImGui::SliderFloat3("体（腰）回転 (Hips X,Y,Z)", debugHipsRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("左肩回転 (LArm X,Y,Z)", debugLArmRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("右肩回転 (RArm X,Y,Z)", debugRArmRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("左肘回転 (LForeArm X,Y,Z)", debugLForeArmRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("右肘回転 (RForeArm X,Y,Z)", debugRForeArmRot_, -3.14f, 3.14f);
+        ImGui::TreePop();
+    }
+}
+#endif

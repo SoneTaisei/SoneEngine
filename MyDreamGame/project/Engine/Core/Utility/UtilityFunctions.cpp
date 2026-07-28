@@ -924,6 +924,9 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
 }
 
 
+#include "LogManager.h"
+#include <set>
+
 Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename) {
     Animation animation; // create animation
     Assimp::Importer importer;
@@ -1017,6 +1020,14 @@ Animation LoadAnimationFile(const std::string& directoryPath, const std::string&
             nodeAnimation.scale.push_back(keyframe);
         }
     }
+
+    // デバッグログ: ロードされたチャンネル名を出力
+    std::string keysLog = "Loaded animation [" + animationName + "] channels: ";
+    for (const auto& [key, val] : animation.nodeAnimations) {
+        keysLog += key + ", ";
+    }
+    LogManager::GetInstance()->AddLog(LogLevel::Info, keysLog);
+
     return animation;
 }
 
@@ -1027,6 +1038,7 @@ int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std:
     joint.localMatrix = node.localMatrix;
     joint.skeletonSpaceMatrix = TransformFunctions::MakeIdentity4x4();
     joint.transform = node.transform;
+    joint.defaultTransform = node.transform;
     joint.index = int32_t(joints.size());
     joint.parent = parent;
     joints.push_back(joint);
@@ -1065,12 +1077,18 @@ void Update(Skeleton& skeleton) {
 }
 
 void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime) {
+    static std::set<std::string> reportedMissingNodes;
     for (Joint& joint : skeleton.joints) {
         if (auto it = animation.nodeAnimations.find(joint.name); it != animation.nodeAnimations.end()) {
             const NodeAnimation& rootNodeAnimation = (*it).second;
             joint.transform.translate = CalculateValue(rootNodeAnimation.translate, animationTime);
             joint.transform.rotate = CalculateValue(rootNodeAnimation.rotate, animationTime);
             joint.transform.scale = CalculateValue(rootNodeAnimation.scale, animationTime);
+        } else {
+            if (reportedMissingNodes.find(joint.name) == reportedMissingNodes.end()) {
+                reportedMissingNodes.insert(joint.name);
+                LogManager::GetInstance()->AddLog(LogLevel::Warning, "Animation channel not found for joint: " + joint.name);
+            }
         }
     }
 }

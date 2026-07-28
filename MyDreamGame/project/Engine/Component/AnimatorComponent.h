@@ -6,6 +6,11 @@
 #include <memory>
 #include <string>
 
+struct JointOverride {
+    Quaternion rotate;
+    float weight = 1.0f;
+};
+
 class AnimatorComponent : public IComponent {
 public:
     void Initialize() override;
@@ -16,9 +21,9 @@ public:
     void Stop() { isPlaying_ = false; }
     void SetTime(float time) { animationTime_ = time; }
     void SetTargetNodeName(const std::string& name) { targetNodeName_ = name; }
-    void SetJointRotationOverride(const std::string& name, const std::optional<Quaternion>& rotation) {
+    void SetJointRotationOverride(const std::string& name, const std::optional<Quaternion>& rotation, float weight = 1.0f) {
         if (rotation) {
-            jointOverrides_[name] = *rotation;
+            jointOverrides_[name] = JointOverride{ *rotation, weight };
         } else {
             jointOverrides_.erase(name);
         }
@@ -41,7 +46,7 @@ private:
     Skeleton skeleton_;
     SkinCluster skinCluster_;
     bool hasSkeleton_ = false;
-    std::map<std::string, Quaternion> jointOverrides_;
+    std::map<std::string, JointOverride> jointOverrides_;
 public:
     bool HasSkeleton() const { return hasSkeleton_; }
     std::unique_ptr<SkeletonDebugRenderer> debugRenderer_;

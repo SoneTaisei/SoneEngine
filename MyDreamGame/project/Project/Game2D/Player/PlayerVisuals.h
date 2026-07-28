@@ -71,6 +71,20 @@ private:
     std::vector<DashRingParticle> dashRingParticles_;
 
     float visualTime_ = 0.0f;
+    float climbBlendFactor_ = 0.0f;
 
+public:
+    // しがみつき時の腕の調整用パラメータ（親空間での回転：X=ピッチ, Y=ヨー, Z=ロール、ラジアン単位）
+    float debugLArmRot_[3] = { -0.200f, -3.140f, 0.262f }; 
+    float debugRArmRot_[3] = { -0.200f, 3.140f, -0.262f };
+    float debugLForeArmRot_[3] = { -0.334f, 0.0f, 0.0f };
+    float debugRForeArmRot_[3] = { -0.334f, 0.0f, 0.0f };
+    float debugHipsRot_[3] = { 0.0f, 0.0f, 0.0f };
+
+#ifdef USE_IMGUI
+    void DisplayImGui();
+#endif
+
+private:
     float EaseInElastic(float t) const;
 };

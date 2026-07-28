@@ -1,5 +1,6 @@
 #include "AnimatorComponent.h"
 #include "Core/Utility/UtilityFunctions.h"
+#include "Core/Utility/Quaternion.h"
 #include "Renderer/SkeletonDebugRenderer.h"
 #include "TransformComponent.h"
 #include "GameObject/GameObject.h"
@@ -18,14 +19,27 @@ void AnimatorComponent::Update() {
     animationTime_ = std::fmod(animationTime_, animation_.duration); // Loop playback
 
     if (hasSkeleton_) {
+        // アニメーション適用前に、全ジョイントの回転を初期ポーズ（バインドポーズ）にリセット
+        for (Joint& joint : skeleton_.joints) {
+            joint.transform.rotate = joint.defaultTransform.rotate;
+        }
+
         // Skeletonベースのアニメーション
         ApplyAnimation(skeleton_, animation_, animationTime_);
 
         // ジョイントの回転角度のオーバーライドを適用
-        for (const auto& [name, rot] : jointOverrides_) {
+        for (const auto& [name, overrideInfo] : jointOverrides_) {
             auto it = skeleton_.jointMap.find(name);
             if (it != skeleton_.jointMap.end()) {
-                skeleton_.joints[it->second].transform.rotate = rot;
+                if (overrideInfo.weight >= 1.0f) {
+                    skeleton_.joints[it->second].transform.rotate = overrideInfo.rotate;
+                } else if (overrideInfo.weight > 0.0f) {
+                    skeleton_.joints[it->second].transform.rotate = Slerp(
+                        skeleton_.joints[it->second].transform.rotate,
+                        overrideInfo.rotate,
+                        overrideInfo.weight
+                    );
+                }
             } else {
 #ifdef _DEBUG
                 OutputDebugStringA(("Joint not found for override: " + name + "\n").c_str());

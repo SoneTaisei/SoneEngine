@@ -13,6 +13,7 @@ struct Quaternion {
     Quaternion(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
 
     Vector3 ToEulerAngles() const;
+    Quaternion operator*(const Quaternion& other) const;
 };
 
 Quaternion Slerp(const Quaternion& q1, const Quaternion& q2, float t);

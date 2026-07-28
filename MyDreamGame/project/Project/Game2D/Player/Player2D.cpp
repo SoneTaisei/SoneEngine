@@ -399,6 +399,11 @@ void Player2D::DisplayImGui() {
             ImGui::TreePop();
         }
 
+        if (ImGui::TreeNode("モデルしがみつきポーズ調整 (Cling Debug)")) {
+            visuals_.DisplayImGui();
+            ImGui::TreePop();
+        }
+
         ImGui::TreePop();
     }
 #endif
