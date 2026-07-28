@@ -16,6 +16,14 @@ public:
     void Stop() { isPlaying_ = false; }
     void SetTime(float time) { animationTime_ = time; }
     void SetTargetNodeName(const std::string& name) { targetNodeName_ = name; }
+    void SetJointRotationOverride(const std::string& name, const std::optional<Quaternion>& rotation) {
+        if (rotation) {
+            jointOverrides_[name] = *rotation;
+        } else {
+            jointOverrides_.erase(name);
+        }
+    }
+    void ClearJointOverrides() { jointOverrides_.clear(); }
 
     void SetModelData(const ModelData& modelData);
     void DrawDebug(const Matrix4x4& worldMatrix);
@@ -33,6 +41,7 @@ private:
     Skeleton skeleton_;
     SkinCluster skinCluster_;
     bool hasSkeleton_ = false;
+    std::map<std::string, Quaternion> jointOverrides_;
 public:
     bool HasSkeleton() const { return hasSkeleton_; }
     std::unique_ptr<SkeletonDebugRenderer> debugRenderer_;

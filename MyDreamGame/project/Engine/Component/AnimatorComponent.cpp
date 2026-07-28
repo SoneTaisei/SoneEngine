@@ -5,6 +5,7 @@
 #include "GameObject/GameObject.h"
 #include "Core/TimeManager.h"
 #include <cmath>
+#include <iostream>
 
 void AnimatorComponent::Initialize() {
     animationTime_ = 0.0f;
@@ -19,6 +20,19 @@ void AnimatorComponent::Update() {
     if (hasSkeleton_) {
         // Skeletonベースのアニメーション
         ApplyAnimation(skeleton_, animation_, animationTime_);
+
+        // ジョイントの回転角度のオーバーライドを適用
+        for (const auto& [name, rot] : jointOverrides_) {
+            auto it = skeleton_.jointMap.find(name);
+            if (it != skeleton_.jointMap.end()) {
+                skeleton_.joints[it->second].transform.rotate = rot;
+            } else {
+#ifdef _DEBUG
+                OutputDebugStringA(("Joint not found for override: " + name + "\n").c_str());
+#endif
+            }
+        }
+
         ::Update(skeleton_); // 骨格空間のローカル・ワールド行列を計算
         ::Update(skinCluster_, skeleton_); // 今回はGPUスキニングは保留
     } else {
@@ -49,6 +63,15 @@ void AnimatorComponent::Update() {
 void AnimatorComponent::SetModelData(const ModelData& modelData) {
     skeleton_ = CreateSkeleton(modelData.rootNode);
     hasSkeleton_ = true;
+
+    // スケルトンの全ジョイント名を出力（Visual Studioの出力ウィンドウで確認できるようにする）
+    OutputDebugStringA("===== Skeleton Joints List =====\n");
+    for (const auto& joint : skeleton_.joints) {
+        std::string logLine = "Joint Index: " + std::to_string(joint.index) + ", Name: " + joint.name + "\n";
+        OutputDebugStringA(logLine.c_str());
+    }
+    OutputDebugStringA("================================\n");
+
     debugRenderer_ = std::make_unique<SkeletonDebugRenderer>();
     debugRenderer_->Initialize();
     

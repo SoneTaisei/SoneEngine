@@ -328,6 +328,12 @@ void Player2D::DisplayImGui() {
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);
         ImGui::DragFloat3("速度", &state_.velocity_.x, 0.1f);
         
+        ImGui::Text("接地状態: %s", state_.isOnGround_ ? "True" : "False");
+        ImGui::Text("壁スライド: %s", state_.isWallSliding_ ? "True" : "False");
+        ImGui::Text("壁しがみつき: %s", state_.isWallClinging_ ? "True" : "False");
+        ImGui::Text("右壁接触: %s", state_.isTouchingWallRight_ ? "True" : "False");
+        ImGui::Text("左壁接触: %s", state_.isTouchingWallLeft_ ? "True" : "False");
+        
         ImGui::Text("現在のスタミナ: %.1f / %.1f", state_.stamina_, params_.maxStamina_);
         if (state_.isExhausted_) {
             ImGui::SameLine();

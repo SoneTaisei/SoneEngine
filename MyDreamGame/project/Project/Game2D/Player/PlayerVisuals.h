@@ -61,6 +61,7 @@ private:
     std::unique_ptr<AnimatorComponent> animator_;
     Animation idleAnimation_;
     Animation walkAnimation_;
+    Animation jumpAnimation_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;

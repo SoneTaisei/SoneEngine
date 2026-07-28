@@ -23,6 +23,7 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
 
         idleAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Idle");
         walkAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Walk");
+        jumpAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Jump");
 
         animator_->SetAnimation(idleAnimation_);
         animator_->Play();
@@ -104,10 +105,52 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
 
     if (modelObj_) {
         if (animator_) {
-            if (std::abs(state.velocity_.x) > 0.1f && state.isOnGround_) {
-                animator_->SetAnimation(walkAnimation_);
-            } else {
+            if (state.isWallClinging_ || state.isWallSliding_) {
                 animator_->SetAnimation(idleAnimation_);
+
+                // 両手でしがみつくためのポージング
+                auto makeRot = [](const Vector3& axis, float angle) -> Quaternion {
+                    float sinH = std::sin(angle / 2.0f);
+                    float cosH = std::cos(angle / 2.0f);
+                    return Quaternion{ axis.x * sinH, axis.y * sinH, axis.z * sinH, cosH };
+                };
+
+                // 腕を前方斜め上に伸ばす
+                Quaternion lArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.3f);
+                Quaternion rArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.3f);
+                Quaternion lForeArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -0.1f);
+                Quaternion rForeArmRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -0.1f);
+
+                // 手首を前腕の向きに真っ直ぐ揃える（無回転）
+                Quaternion lHandRot = Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f };
+                Quaternion rHandRot = Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f };
+
+                // 脚をコアラのように曲げる
+                Quaternion lUpLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f); // 大腿を前に曲げる
+                Quaternion rUpLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f);
+                Quaternion lLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);   // 膝を曲げる
+                Quaternion rLegRot = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);
+
+                animator_->SetJointRotationOverride("LeftArm_09", lArmRot);
+                animator_->SetJointRotationOverride("RightArm_014", rArmRot);
+                animator_->SetJointRotationOverride("LeftForeArm_010", lForeArmRot);
+                animator_->SetJointRotationOverride("RightForeArm_015", rForeArmRot);
+                animator_->SetJointRotationOverride("LeftHand_011", lHandRot);
+                animator_->SetJointRotationOverride("RightHand_016", rHandRot);
+                animator_->SetJointRotationOverride("LeftUpLeg_019", lUpLegRot);
+                animator_->SetJointRotationOverride("RightUpLeg_024", rUpLegRot);
+                animator_->SetJointRotationOverride("LeftLeg_020", lLegRot);
+                animator_->SetJointRotationOverride("RightLeg_025", rLegRot);
+            } else {
+                animator_->ClearJointOverrides();
+
+                if (!state.isOnGround_) {
+                    animator_->SetAnimation(jumpAnimation_);
+                } else if (std::abs(state.velocity_.x) > 0.1f) {
+                    animator_->SetAnimation(walkAnimation_);
+                } else {
+                    animator_->SetAnimation(idleAnimation_);
+                }
             }
             animator_->Update();
         }
@@ -115,14 +158,25 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         // gaikotuモデルは足元原点のため、当たり判定の底辺に合わせるようY軸をオフセットする
         Vector3 modelPos = state.position_;
         modelPos.y -= params.halfHeight_;
-        modelObj_->SetTranslation(modelPos);
         
         float rotationY = modelObj_->GetRotation().y;
-        if (state.velocity_.x < -0.01f) {
-            rotationY = 1.57079632f;
-        } else if (state.velocity_.x > 0.01f) {
-            rotationY = -1.57079632f;
+        if (state.isWallClinging_ || state.isWallSliding_) {
+            if (state.isTouchingWallRight_) {
+                rotationY = -1.57079632f;
+                modelPos.x -= 0.2f; // 右壁から少し離す（左へずらす）
+            } else if (state.isTouchingWallLeft_) {
+                rotationY = 1.57079632f;
+                modelPos.x += 0.2f; // 左壁から少し離す（右へずらす）
+            }
+        } else {
+            if (state.velocity_.x < -0.01f) {
+                rotationY = 1.57079632f;
+            } else if (state.velocity_.x > 0.01f) {
+                rotationY = -1.57079632f;
+            }
         }
+        
+        modelObj_->SetTranslation(modelPos);
         
         if (state.isDashing_) {
             modelObj_->GetMaterial().color = params.colorDashed_;
