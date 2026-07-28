@@ -1,4 +1,4 @@
-﻿#include "Core/Utility/LogManager.h"
+#include "Core/Utility/LogManager.h"
 #pragma warning(disable: 4828)
 #include "UtilityFunctions.h"
 #include <map>
@@ -961,6 +961,58 @@ Animation LoadAnimationFile(const std::string& directoryPath, const std::string&
             aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
             KeyframeVector3 keyframe;
             keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.scale.push_back(keyframe);
+        }
+    }
+    return animation;
+}
+
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename, const std::string& animationName) {
+    Animation animation;
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
+    const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
+    assert(scene && scene->mNumAnimations != 0);
+
+    aiAnimation* animationAssimp = nullptr;
+    for (uint32_t i = 0; i < scene->mNumAnimations; ++i) {
+        if (std::string(scene->mAnimations[i]->mName.C_Str()) == animationName) {
+            animationAssimp = scene->mAnimations[i];
+            break;
+        }
+    }
+
+    if (!animationAssimp) {
+        animationAssimp = scene->mAnimations[0]; // Fallback to first animation if name not found
+    }
+
+    animation.duration = float(animationAssimp->mDuration / animationAssimp->mTicksPerSecond);
+
+    for (uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex) {
+        aiNodeAnim* nodeAnimationAssimp = animationAssimp->mChannels[channelIndex];
+        NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimationAssimp->mNodeName.C_Str()];
+        
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumPositionKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mPositionKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.translate.push_back(keyframe);
+        }
+
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumRotationKeys; ++keyIndex) {
+            aiQuatKey& keyAssimp = nodeAnimationAssimp->mRotationKeys[keyIndex];
+            KeyframeQuaternion keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z, keyAssimp.mValue.w};
+            nodeAnimation.rotate.push_back(keyframe);
+        }
+
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumScalingKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
             keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
             nodeAnimation.scale.push_back(keyframe);
         }

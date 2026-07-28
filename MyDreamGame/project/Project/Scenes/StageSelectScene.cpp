@@ -61,7 +61,7 @@ void StageSelectScene::Initialize() {
     // gameObjects_.push_back(skydomeObject);
 
     // プレイヤーモデルの追加
-    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/Player", "Player.gltf");
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
     
     auto playerObject = std::make_shared<GameObject>("player_model");
     auto playerTransform = playerObject->AddComponent<TransformComponent>();
@@ -69,7 +69,7 @@ void StageSelectScene::Initialize() {
     playerTransform->SetScale({2.0f, 2.0f, 2.0f});
     playerTransform->SetRotation({0.0f, 3.14159265f, 0.0f}); // 正面（手前）を向かせる
     
-    uint32_t playerTexIndex = TextureManager::GetInstance()->Load("resources/Object/Original/Player/Player_Diffuse.png");
+    uint32_t playerTexIndex = TextureManager::GetInstance()->Load("resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png");
     D3D12_GPU_DESCRIPTOR_HANDLE playerTH = TextureManager::GetInstance()->GetGpuHandle(playerTexIndex);
     
     auto playerRenderer = playerObject->AddComponent<MeshRendererComponent>();

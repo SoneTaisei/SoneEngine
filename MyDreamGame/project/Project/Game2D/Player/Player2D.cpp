@@ -32,8 +32,11 @@ void Player2D::Initialize() {
     Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);
     
     Log("Player2D::Initialize: Loading Player 3D Model\n");
-    // Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/Player", "Player.gltf");
-    Model* playerModel = nullptr; // BOX描画に戻すため nullptr に設定
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
+    if (playerModel) {
+        uint32_t playerTexIndex = TextureManager::GetInstance()->Load("resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png");
+        playerModel->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(playerTexIndex));
+    }
 
     Log("Player2D::Initialize: Init Visuals\n");
     visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle, playerModel);

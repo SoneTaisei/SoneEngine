@@ -1,0 +1,11 @@
+Model Information:
+* title:	Mini Simple Characters | Skeleton (Free Demo)
+* source:	https://sketchfab.com/3d-models/mini-simple-characters-skeleton-free-demo-915225c38cef4352ad463f1061b6cad6
+* author:	joaobaltieri (https://sketchfab.com/joaobaltieri)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Mini Simple Characters | Skeleton (Free Demo)" (https://sketchfab.com/3d-models/mini-simple-characters-skeleton-free-demo-915225c38cef4352ad463f1061b6cad6) by joaobaltieri (https://sketchfab.com/joaobaltieri) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

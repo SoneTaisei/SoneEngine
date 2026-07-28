@@ -16,6 +16,18 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
         modelObj_->Initialize(device, playerModel);
         modelObj_->SetName("Player3DModel");
         modelObj_->GetMaterial().lightingType = 1;
+
+        animator_ = std::make_unique<AnimatorComponent>();
+        animator_->Initialize();
+        animator_->SetModelData(playerModel->GetModelData());
+
+        idleAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Idle");
+        walkAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Walk");
+
+        animator_->SetAnimation(idleAnimation_);
+        animator_->Play();
+
+        modelObj_->SetAnimator(animator_.get());
     }
 
     dashRingPrimitive_ = std::make_unique<PrimitiveObject>();
@@ -91,13 +103,25 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
     }
 
     if (modelObj_) {
-        modelObj_->SetTranslation(state.position_);
+        if (animator_) {
+            if (std::abs(state.velocity_.x) > 0.1f && state.isOnGround_) {
+                animator_->SetAnimation(walkAnimation_);
+            } else {
+                animator_->SetAnimation(idleAnimation_);
+            }
+            animator_->Update();
+        }
+
+        // gaikotuモデルは足元原点のため、当たり判定の底辺に合わせるようY軸をオフセットする
+        Vector3 modelPos = state.position_;
+        modelPos.y -= params.halfHeight_;
+        modelObj_->SetTranslation(modelPos);
         
         float rotationY = modelObj_->GetRotation().y;
         if (state.velocity_.x < -0.01f) {
-            rotationY = 3.14159265f;
+            rotationY = 1.57079632f;
         } else if (state.velocity_.x > 0.01f) {
-            rotationY = 0.0f;
+            rotationY = -1.57079632f;
         }
         
         if (state.isDashing_) {

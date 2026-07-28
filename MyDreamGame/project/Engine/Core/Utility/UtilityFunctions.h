@@ -58,6 +58,7 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 /// <returns></returns>
 ModelData LoadModelFile(const std::string &directoryPath, const std::string &filename);
 Animation LoadAnimationFile(const std::string &directoryPath, const std::string &filename);
+Animation LoadAnimationFile(const std::string &directoryPath, const std::string &filename, const std::string &animationName);
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename);
 

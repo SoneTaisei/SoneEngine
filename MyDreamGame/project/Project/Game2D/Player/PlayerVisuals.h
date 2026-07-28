@@ -8,6 +8,7 @@
 #include "Core/Utility/Structs.h"
 
 #include "GameObject/Object3D.h"
+#include "Component/AnimatorComponent.h"
 
 struct DustParticle {
     Vector3 position;
@@ -57,6 +58,9 @@ public:
 private:
     std::unique_ptr<PrimitiveObject> primitiveObj_;
     std::unique_ptr<Object3D> modelObj_;
+    std::unique_ptr<AnimatorComponent> animator_;
+    Animation idleAnimation_;
+    Animation walkAnimation_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;

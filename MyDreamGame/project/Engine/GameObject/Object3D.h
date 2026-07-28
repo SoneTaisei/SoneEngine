@@ -1,9 +1,11 @@
-﻿#pragma once
+#pragma once
 #include "Core/Utility/Structs.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Model/Model.h"
 #include "Core/Utility/BlendMode.h"
 #include <deque>
+
+class AnimatorComponent;
 
 class Object3D {
     friend class Renderer;
@@ -43,6 +45,8 @@ public:
     void SetName(const std::string &name) { name_ = name; }
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
     void SetIsDoubleSided(bool isDoubleSided) { isDoubleSided_ = isDoubleSided; }
+    void SetAnimator(AnimatorComponent* animator) { animator_ = animator; }
+    AnimatorComponent* GetAnimator() const { return animator_; }
 
 private:
     std::string name_ = "GameObject"; // ヒエラルキー表示用の名前
@@ -65,6 +69,7 @@ private:
     PointLight *mappedPointLight_ = nullptr; // 名前を統一感あるものに変更
 
     Model *model_ = nullptr;
+    AnimatorComponent* animator_ = nullptr;
 
     // CPU側データ
     EulerTransform transform_;

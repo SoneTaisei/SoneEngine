@@ -127,7 +127,7 @@ void Renderer::DrawObject3D(Object3D* obj) {
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
     obj->mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(obj->mappedTransform_->World, viewMatrix), projectionMatrix);
 
-    commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
+    // Removed static RootSignature set to allow skinning signature to be bound dynamically below.
 
     if (obj->showTrail_ && obj->model_) {
         if (!obj->trailHistory_.empty() && obj->trailLength_ > 0 && obj->trailStep_ > 0) {
@@ -178,20 +178,29 @@ void Renderer::DrawObject3D(Object3D* obj) {
         }
     }
 
-    if (obj->blendMode_ == BlendMode::kBlendModeAdd) {
-        if (obj->isDoubleSided_) {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
-        } else {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
-        }
+    AnimatorComponent* animator = obj->GetAnimator();
+    bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+
+    if (useSkinning) {
+        commandList->SetGraphicsRootSignature(dxCommon_->GetSkinningRootSignature());
+        commandList->SetPipelineState(dxCommon_->GetSkinningPipelineState());
     } else {
-        if (obj->material_.color.w < 1.0f) {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
-        } else {
+        commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
+        if (obj->blendMode_ == BlendMode::kBlendModeAdd) {
             if (obj->isDoubleSided_) {
-                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
             } else {
-                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
+            }
+        } else {
+            if (obj->material_.color.w < 1.0f) {
+                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
+            } else {
+                if (obj->isDoubleSided_) {
+                    commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+                } else {
+                    commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
+                }
             }
         }
     }
@@ -200,11 +209,23 @@ void Renderer::DrawObject3D(Object3D* obj) {
     commandList->SetGraphicsRootConstantBufferView(0, obj->materialResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
+    if (ModelCommon* mc = obj->model_->GetModelCommon()) {
+        commandList->SetGraphicsRootConstantBufferView(4, mc->GetDirectionalLightGPUAddress());
+        commandList->SetGraphicsRootConstantBufferView(5, mc->GetPointLightGPUAddress());
+        commandList->SetGraphicsRootConstantBufferView(6, mc->GetSpotLightGPUAddress());
+    }
+
     if (Object3D::sEnvironmentMapHandle.ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::sEnvironmentMapHandle);
     }
 
-    obj->model_->Draw();
+    if (useSkinning) {
+        const SkinCluster& skinCluster = animator->GetSkinCluster();
+        commandList->SetGraphicsRootDescriptorTable(9, skinCluster.paletteSrvHandle.second);
+        obj->model_->Draw(&skinCluster.influenceBufferView);
+    } else {
+        obj->model_->Draw();
+    }
 
     if (dxCommon_->IsOutlineEnabled() && obj->material_.color.w >= 1.0f && obj->blendMode_ != BlendMode::kBlendModeAdd) {
         commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
