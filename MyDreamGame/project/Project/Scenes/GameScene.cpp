@@ -98,6 +98,17 @@ void GameScene::Initialize() {
         gameCamera_->SetFollowTarget(&player_->GetPosition());
         Log("GameScene::Initialize: Camera configured\n");
     }
+
+    // 8. LevelDataLoader による Blender レベルデータのロード (.json または .scene 対応)
+    levelDataLoader_ = std::make_unique<LevelDataLoader>();
+    std::string levelFilePath = "c:/1_授業/学年/3年前期/TL1/TL.json";
+    if (levelDataLoader_->LoadFile(levelFilePath)) {
+        levelObjects_ = levelDataLoader_->CreateObjects(device.Get(), modelCommon_);
+        Log("GameScene::Initialize: Loaded level data from TL.json\n");
+    } else if (levelDataLoader_->LoadFile("TL.scene")) {
+        levelObjects_ = levelDataLoader_->CreateObjects(device.Get(), modelCommon_);
+        Log("GameScene::Initialize: Loaded level data from TL.scene\n");
+    }
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -353,10 +364,21 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
     }
+
+    for (auto& obj : levelObjects_) {
+        if (obj) {
+            obj->Update();
+        }
+    }
 }
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
+    if (levelDataLoader_) {
+        Microsoft::WRL::ComPtr<ID3D12Device> device = DirectXCommon::GetInstance()->GetDevice();
+        levelDataLoader_->DisplayImGui(device.Get(), modelCommon_, levelObjects_);
+    }
+
     if (player_ && player_->GetPrimitiveObject() == selectedPrimitive) {
         player_->DisplayImGui();
     }
@@ -498,6 +520,12 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // プレイヤーの描画
     if (player_) {
         player_->Draw();
+    }
+
+    for (auto& obj : levelObjects_) {
+        if (obj) {
+            obj->Draw();
+        }
     }
 
     // コンポーネントの描画を実行
@@ -700,6 +728,16 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
     return result;
 }
 
+std::vector<Object3D *> GameScene::GetObjects() {
+    std::vector<Object3D *> result;
+    for (auto& obj : levelObjects_) {
+        if (obj) {
+            result.push_back(obj.get());
+        }
+    }
+    return result;
+}
+
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
 
@@ -773,6 +811,12 @@ void GameScene::UpdateEditor() {
             if (mapPrim) {
                 mapPrim->Update();
             }
+        }
+    }
+
+    for (auto& obj : levelObjects_) {
+        if (obj) {
+            obj->Update();
         }
     }
 }

@@ -20,6 +20,8 @@ class GameCamera;
 #include "Resource/Primitive/PrimitiveManager.h"
 class Skybox;
 
+#include "Scene/LevelDataLoader.h"
+
 enum class GameState {
     StartReady,
     Playing,
@@ -40,7 +42,7 @@ public:
     void UpdateEditor() override;
 
     // ヒエラルキー用
-    std::vector<Object3D *> GetObjects() override { return {}; }
+    std::vector<Object3D *> GetObjects() override;
     std::vector<ParticleManager *> GetParticles() override;
     std::vector<PrimitiveObject *> GetPrimitives() override;
 
@@ -81,6 +83,10 @@ private:
     // ---------------------------------------------------
     // コマンドリストを覚えておくための変数
     
+
+    // レベルデータローダー
+    std::unique_ptr<LevelDataLoader> levelDataLoader_;
+    std::vector<std::unique_ptr<Object3D>> levelObjects_;
 
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;

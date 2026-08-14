@@ -1,0 +1,412 @@
+#include "LevelDataLoader.h"
+#include "Resource/Model/ModelManager.h"
+#include "Core/Utility/LogManager.h"
+#include <fstream>
+#include <sstream>
+#include <iostream>
+#include <filesystem>
+#include <algorithm>
+#include <windows.h>
+
+#ifdef USE_IMGUI
+#include "../externals/imgui/imgui.h"
+#endif
+
+using namespace LevelDataStructs;
+namespace fs = std::filesystem;
+
+constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+
+// UTF-8 の std::string パスを Windows Unicode API 用の std::wstring に変換する
+static std::wstring Utf8ToWide(const std::string& str) {
+    if (str.empty()) return L"";
+    int count = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
+    if (count <= 0) return L"";
+    std::wstring wstr(count, 0);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &wstr[0], count);
+    if (!wstr.empty() && wstr.back() == L'\0') {
+        wstr.pop_back();
+    }
+    return wstr;
+}
+
+// 存在確認と補正を行ったファイルパス（std::wstring）を取得するヘルパー
+static std::wstring ResolveFilePathW(const std::string& inputPath) {
+    std::wstring winput = Utf8ToWide(inputPath);
+    if (fs::exists(winput)) {
+        return winput;
+    }
+
+    std::vector<std::string> candidates = {
+        "C:/1_授業/学年/3年前期/TL1/" + inputPath,
+        "c:/1_授業/学年/3年前期/TL1/" + inputPath,
+        "../TL1/" + inputPath,
+        "../../TL1/" + inputPath,
+        "../../../TL1/" + inputPath,
+        "resources/" + inputPath,
+        "resources/json/" + inputPath,
+        "resources/json/shared/Map/" + inputPath
+    };
+
+    if (inputPath.find("TL.json") != std::string::npos || inputPath.find("TL.scene") != std::string::npos) {
+        std::string filename = fs::path(inputPath).filename().string();
+        candidates.push_back("C:/1_授業/学年/3年前期/TL1/" + filename);
+        candidates.push_back("c:/1_授業/学年/3年前期/TL1/" + filename);
+        candidates.push_back("./" + filename);
+    }
+
+    for (const auto& candidate : candidates) {
+        std::wstring wc = Utf8ToWide(candidate);
+        if (fs::exists(wc)) {
+            return wc;
+        }
+    }
+    return winput;
+}
+
+bool LevelDataLoader::LoadFile(const std::string& filePath) {
+    std::wstring resolvedW = ResolveFilePathW(filePath);
+    fs::path p(resolvedW);
+    std::string ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    if (ext == ".scene") {
+        return LoadSceneText(filePath);
+    }
+    return LoadJSON(filePath);
+}
+
+bool LevelDataLoader::LoadJSON(const std::string& filePath) {
+    std::wstring resolvedW = ResolveFilePathW(filePath);
+    loadedFilePath_ = filePath;
+    isLoaded_ = false;
+    levelData_ = LevelData();
+
+    std::ifstream file(resolvedW);
+    if (!file.is_open()) {
+        std::string log = "[LevelDataLoader] Failed to open file: " + filePath;
+        LogManager::GetInstance()->AddLog(LogLevel::Error, log);
+        return false;
+    }
+
+    nlohmann::json deserialized;
+    try {
+        file >> deserialized;
+    } catch (const nlohmann::json::parse_error& e) {
+        std::string log = "[LevelDataLoader] JSON parse error in " + filePath + ": " + e.what();
+        LogManager::GetInstance()->AddLog(LogLevel::Error, log);
+        return false;
+    }
+
+    if (!deserialized.is_object() ||
+        !deserialized.contains("name") ||
+        !deserialized["name"].is_string()) {
+        LogManager::GetInstance()->AddLog(LogLevel::Error, "[LevelDataLoader] Invalid level data file (missing or invalid 'name').");
+        return false;
+    }
+
+    std::string sceneName = deserialized["name"].get<std::string>();
+    if (sceneName != "scene") {
+        LogManager::GetInstance()->AddLog(LogLevel::Error, "[LevelDataLoader] Header name is not 'scene': " + sceneName);
+        return false;
+    }
+
+    levelData_.name = sceneName;
+
+    if (deserialized.contains("objects") && deserialized["objects"].is_array()) {
+        for (const auto& objectJson : deserialized["objects"]) {
+            ObjectData objectData;
+            ParseObjectRecursive(objectJson, objectData);
+            levelData_.objects.push_back(objectData);
+        }
+    }
+
+    isLoaded_ = true;
+    LogManager::GetInstance()->AddLog(LogLevel::Info, "[LevelDataLoader] Successfully loaded level data: " + filePath);
+    return true;
+}
+
+bool LevelDataLoader::LoadSceneText(const std::string& filePath) {
+    std::wstring resolvedW = ResolveFilePathW(filePath);
+    loadedFilePath_ = filePath;
+    isLoaded_ = false;
+    levelData_ = LevelData();
+
+    std::ifstream file(resolvedW);
+    if (!file.is_open()) {
+        LogManager::GetInstance()->AddLog(LogLevel::Error, "[LevelDataLoader] Failed to open .scene file: " + filePath);
+        return false;
+    }
+
+    std::string line;
+    if (!std::getline(file, line) || line.find("SCENE") == std::string::npos) {
+        LogManager::GetInstance()->AddLog(LogLevel::Error, "[LevelDataLoader] Header is not SCENE in: " + filePath);
+        return false;
+    }
+
+    levelData_.name = "scene";
+    ObjectData currentObj;
+    bool inObject = false;
+
+    while (std::getline(file, line)) {
+        auto start = line.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) continue;
+        line = line.substr(start);
+
+        std::stringstream ss(line);
+        std::string token;
+        ss >> token;
+
+        if (token == "MESH" || token == "LIGHT" || token == "CAMERA") {
+            currentObj = ObjectData();
+            currentObj.type = token;
+            currentObj.name = token;
+            inObject = true;
+        } else if (inObject && token == "T") {
+            ss >> currentObj.transform.translation.x >> currentObj.transform.translation.z >> currentObj.transform.translation.y;
+        } else if (inObject && token == "R") {
+            float rx, ry, rz;
+            ss >> rx >> rz >> ry;
+            currentObj.transform.rotation = { -rx, -ry, -rz };
+        } else if (inObject && token == "S") {
+            ss >> currentObj.transform.scaling.x >> currentObj.transform.scaling.z >> currentObj.transform.scaling.y;
+        } else if (inObject && token == "N") {
+            ss >> currentObj.fileName;
+        } else if (inObject && token == "C") {
+            currentObj.hasCollider = true;
+            ss >> currentObj.collider.type;
+        } else if (inObject && token == "END") {
+            levelData_.objects.push_back(currentObj);
+            inObject = false;
+        }
+    }
+
+    isLoaded_ = true;
+    LogManager::GetInstance()->AddLog(LogLevel::Info, "[LevelDataLoader] Successfully loaded .scene text file: " + filePath);
+    return true;
+}
+
+void LevelDataLoader::ParseObjectRecursive(const nlohmann::json& objectJson, ObjectData& outObjectData) {
+    if (objectJson.contains("type") && objectJson["type"].is_string()) {
+        outObjectData.type = objectJson["type"].get<std::string>();
+    }
+    if (objectJson.contains("name") && objectJson["name"].is_string()) {
+        outObjectData.name = objectJson["name"].get<std::string>();
+    }
+
+    if (objectJson.contains("transform") && objectJson["transform"].is_object()) {
+        const auto& transform = objectJson["transform"];
+
+        if (transform.contains("translation") && transform["translation"].is_array()) {
+            outObjectData.transform.translation.x = (float)transform["translation"][0];
+            outObjectData.transform.translation.y = (float)transform["translation"][2]; // Blender Z -> Game Y
+            outObjectData.transform.translation.z = (float)transform["translation"][1]; // Blender Y -> Game Z
+        }
+
+        if (transform.contains("rotation") && transform["rotation"].is_array()) {
+            outObjectData.transform.rotation.x = -(float)transform["rotation"][0];
+            outObjectData.transform.rotation.y = -(float)transform["rotation"][2]; // Blender Z -> Game Y
+            outObjectData.transform.rotation.z = -(float)transform["rotation"][1]; // Blender Y -> Game Z
+        }
+
+        if (transform.contains("scaling") && transform["scaling"].is_array()) {
+            outObjectData.transform.scaling.x = (float)transform["scaling"][0];
+            outObjectData.transform.scaling.y = (float)transform["scaling"][2]; // Blender Z -> Game Y
+            outObjectData.transform.scaling.z = (float)transform["scaling"][1]; // Blender Y -> Game Z
+        }
+    }
+
+    if (objectJson.contains("file_name") && objectJson["file_name"].is_string()) {
+        outObjectData.fileName = objectJson["file_name"].get<std::string>();
+    }
+
+    if (objectJson.contains("collider") && objectJson["collider"].is_object()) {
+        outObjectData.hasCollider = true;
+        const auto& col = objectJson["collider"];
+        if (col.contains("type") && col["type"].is_string()) {
+            outObjectData.collider.type = col["type"].get<std::string>();
+        }
+    }
+
+    if (objectJson.contains("children") && objectJson["children"].is_array()) {
+        for (const auto& childJson : objectJson["children"]) {
+            ObjectData childData;
+            ParseObjectRecursive(childJson, childData);
+            outObjectData.children.push_back(childData);
+        }
+    }
+}
+
+std::vector<std::unique_ptr<Object3D>> LevelDataLoader::CreateObjects(
+    ID3D12Device* device,
+    ModelCommon* modelCommon,
+    const std::string& baseDirectoryPath) {
+    
+    std::vector<std::unique_ptr<Object3D>> createdObjects;
+
+    if (!isLoaded_) {
+        LogManager::GetInstance()->AddLog(LogLevel::Warning, "[LevelDataLoader] Cannot create objects: No level data loaded.");
+        return createdObjects;
+    }
+
+    for (const auto& objectData : levelData_.objects) {
+        CreateObjectRecursive(objectData, device, modelCommon, baseDirectoryPath, createdObjects);
+    }
+
+    return createdObjects;
+}
+
+// 存在する安全なモデルファイルを取得するヘルパー関数
+static Model* GetSafeModel(const std::string& requestedName, const std::string& objName) {
+    // 1. ICO球 / Sphere 判定
+    if (objName.find("ICO") != std::string::npos || objName.find("球") != std::string::npos || objName.find("Sphere") != std::string::npos) {
+        return ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.obj");
+    }
+
+    // 2. requestedName (例: "testFbx") での実ファイル検索
+    if (!requestedName.empty()) {
+        std::vector<std::pair<std::string, std::string>> checkPaths = {
+            {"resources/Object/School/" + requestedName, requestedName + ".obj"},
+            {"resources/Object/School/" + requestedName, requestedName + ".gltf"},
+            {"resources/Object/Original/" + requestedName, requestedName + ".obj"},
+            {"resources/Object/Original/" + requestedName, requestedName + ".gltf"}
+        };
+
+        for (const auto& pair : checkPaths) {
+            std::string fullPath = pair.first + "/" + pair.second;
+            if (fs::exists(Utf8ToWide(fullPath))) {
+                return ModelManager::GetInstance()->GetModel(pair.first, pair.second);
+            }
+        }
+    }
+
+    // 3. 安全なデフォルトキューブモデル
+    if (fs::exists(Utf8ToWide("resources/Object/School/multiMesh/multiMesh.obj"))) {
+        return ModelManager::GetInstance()->GetModel("resources/Object/School/multiMesh", "multiMesh.obj");
+    }
+
+    // 4. 平面モデル
+    if (fs::exists(Utf8ToWide("resources/Object/School/plane/plane.obj"))) {
+        return ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.obj");
+    }
+
+    // 5. 最後の手段
+    return ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.obj");
+}
+
+void LevelDataLoader::CreateObjectRecursive(
+    const ObjectData& objectData,
+    ID3D12Device* device,
+    ModelCommon* modelCommon,
+    const std::string& baseDirectoryPath,
+    std::vector<std::unique_ptr<Object3D>>& outObjects) {
+
+    // "MESH" タイプの場合、モデルを取得してオブジェクトを生成
+    if (objectData.type == "MESH") {
+        Model* model = GetSafeModel(objectData.fileName, objectData.name);
+
+        if (model) {
+            auto newObject = std::make_unique<Object3D>();
+            newObject->Initialize(device, model);
+
+            // トランスフォームの設定
+            newObject->SetTranslation(objectData.transform.translation);
+            
+            Vector3 radRotation = {
+                objectData.transform.rotation.x * kDegToRad,
+                objectData.transform.rotation.y * kDegToRad,
+                objectData.transform.rotation.z * kDegToRad
+            };
+            newObject->SetRotation(radRotation);
+            newObject->SetScale(objectData.transform.scaling);
+            newObject->SetName(objectData.name);
+
+            outObjects.push_back(std::move(newObject));
+        }
+    }
+
+    for (const auto& childData : objectData.children) {
+        CreateObjectRecursive(childData, device, modelCommon, baseDirectoryPath, outObjects);
+    }
+}
+
+#ifdef USE_IMGUI
+void LevelDataLoader::DisplayImGui(ID3D12Device* device, ModelCommon* modelCommon, std::vector<std::unique_ptr<Object3D>>& outObjects) {
+    if (ImGui::TreeNode("Blender 3D Level Loader Sync")) {
+        static std::vector<std::string> levelFiles = {
+            "C:/1_授業/学年/3年前期/TL1/TL.json",
+            "C:/1_授業/学年/3年前期/TL1/TL.scene",
+            "TL.json",
+            "TL.scene"
+        };
+        static int selectedIndex = 0;
+        static char inputFilenameBuf[512] = "C:/1_授業/学年/3年前期/TL1/TL.json";
+
+        std::string comboPreview = (selectedIndex >= 0 && selectedIndex < (int)levelFiles.size()) ? levelFiles[selectedIndex] : "レベルファイルを選択...";
+        if (ImGui::BeginCombo("レベルファイルを選択", comboPreview.c_str())) {
+            for (int i = 0; i < (int)levelFiles.size(); ++i) {
+                bool isSelected = (selectedIndex == i);
+                if (ImGui::Selectable(levelFiles[i].c_str(), isSelected)) {
+                    selectedIndex = i;
+                    strcpy_s(inputFilenameBuf, sizeof(inputFilenameBuf), levelFiles[i].c_str());
+
+                    if (LoadFile(levelFiles[i])) {
+                        outObjects = CreateObjects(device, modelCommon);
+                    }
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (ImGui::InputText("ファイル名", inputFilenameBuf, sizeof(inputFilenameBuf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (LoadFile(inputFilenameBuf)) {
+                outObjects = CreateObjects(device, modelCommon);
+            }
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("読み込み (Load Sync)")) {
+            if (LoadFile(inputFilenameBuf)) {
+                outObjects = CreateObjects(device, modelCommon);
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Current Loaded File: %s", loadedFilePath_.c_str());
+        ImGui::Text("Status: %s", isLoaded_ ? "Loaded Successfully" : "Not Loaded");
+
+        if (isLoaded_ && ImGui::TreeNode("Level Hierarchy")) {
+            ImGui::Text("Scene Name: %s", levelData_.name.c_str());
+            ImGui::Text("Root Objects Count: %d", (int)levelData_.objects.size());
+
+            auto renderNodeImGui = [](auto& self, const ObjectData& node) -> void {
+                std::string label = node.name + " [" + node.type + "]";
+                if (!node.fileName.empty()) {
+                    label += " (Model: " + node.fileName + ")";
+                }
+                if (node.children.empty()) {
+                    ImGui::BulletText("%s", label.c_str());
+                } else {
+                    if (ImGui::TreeNode(label.c_str())) {
+                        for (const auto& child : node.children) {
+                            self(self, child);
+                        }
+                        ImGui::TreePop();
+                    }
+                }
+            };
+
+            for (const auto& obj : levelData_.objects) {
+                renderNodeImGui(renderNodeImGui, obj);
+            }
+
+            ImGui::TreePop();
+        }
+
+        ImGui::TreePop();
+    }
+}
+#endif

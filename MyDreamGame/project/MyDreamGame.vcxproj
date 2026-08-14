@@ -197,7 +197,9 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Resource\Sprite\SpriteCommon.cpp" />
     <ClCompile Include="Engine\Scene\SceneManager.cpp" />
     <ClCompile Include="Engine\Scene\SceneFactory.cpp" />
+    <ClCompile Include="Engine\Scene\LevelDataLoader.cpp" />
     <ClCompile Include="Project\Scenes\GameScene.cpp" />
+    <ClCompile Include="Project\Scenes\BlenderLevelTestScene.cpp" />
     <ClCompile Include="Engine\Resource\Model\Model.cpp" />
     <ClCompile Include="Engine\Resource\Sprite\Sprite.cpp" />
     <ClCompile Include="Engine\Resource\Audio\AudioManager.cpp" />
@@ -404,7 +406,9 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Renderer\DirectXCommon\DirectXCommon.h" />
     <ClInclude Include="Engine\Resource\Sprite\SpriteCommon.h" />
     <ClInclude Include="Engine\Scene\SceneManager.h" />
+    <ClInclude Include="Engine\Scene\LevelDataLoader.h" />
     <ClInclude Include="Project\Scenes\GameScene.h" />
+    <ClInclude Include="Project\Scenes\BlenderLevelTestScene.h" />
     <ClInclude Include="Engine\Resource\Model\Model.h" />
     <ClInclude Include="Engine\Scene\IScene.h" />
     <ClInclude Include="Engine\Scene\SceneFactory.h" />

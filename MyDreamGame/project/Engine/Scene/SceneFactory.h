@@ -8,6 +8,7 @@ enum class SceneType {
     kTitle = 0,
     kStageSelect,
     kGame,
+    kBlenderLevelTest,
 
     kCount // シーンの数を取得するために末尾に置く
 };
@@ -16,7 +17,8 @@ enum class SceneType {
 static const char* kSceneTypeNames[] = {
     "Title",
     "StageSelect",
-    "Game"
+    "Game",
+    "BlenderLevelTest"
 };
 
 // シーンのファクトリクラス

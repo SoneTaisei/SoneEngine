@@ -33,6 +33,9 @@
     <ClCompile Include="Project\Scenes\TitleScene.cpp">
       <Filter>Application\Scene</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Scenes\BlenderLevelTestScene.cpp">
+      <Filter>Application\Scene</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Effect\windowParticle.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
@@ -82,6 +85,9 @@
       <Filter>Engine\Scene</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Scene\SceneFactory.cpp">
+      <Filter>Engine\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Scene\LevelDataLoader.cpp">
       <Filter>Engine\Scene</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp">
@@ -274,6 +280,9 @@
     <ClInclude Include="Project\Scenes\TitleScene.h">
       <Filter>Application\Scene</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Scenes\BlenderLevelTestScene.h">
+      <Filter>Application\Scene</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Effect\windowParticle.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
@@ -323,6 +332,9 @@
       <Filter>Engine\Scene</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Scene\SceneFactory.h">
+      <Filter>Engine\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Scene\LevelDataLoader.h">
       <Filter>Engine\Scene</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Core\Utility\Structs.h">
