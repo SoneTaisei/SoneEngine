@@ -29,6 +29,8 @@ struct ObjectData {
     TransformData transform;
     std::string fileName; // モデルのファイル名 (カスタムプロパティ file_name)
     
+    bool disabled = false; // 有効無効フラグ (カスタムプロパティ 無効オプション)
+
     bool hasCollider = false;
     ColliderData collider;
 

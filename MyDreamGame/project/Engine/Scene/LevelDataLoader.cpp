@@ -220,6 +220,16 @@ void LevelDataLoader::ParseObjectRecursive(const nlohmann::json& objectJson, Obj
         outObjectData.fileName = objectJson["file_name"].get<std::string>();
     }
 
+    if (objectJson.contains("無効オプション")) {
+        if (objectJson["無効オプション"].is_boolean()) {
+            outObjectData.disabled = objectJson["無効オプション"].get<bool>();
+        }
+    } else if (objectJson.contains("disabled")) {
+        if (objectJson["disabled"].is_boolean()) {
+            outObjectData.disabled = objectJson["disabled"].get<bool>();
+        }
+    }
+
     if (objectJson.contains("collider") && objectJson["collider"].is_object()) {
         outObjectData.hasCollider = true;
         const auto& col = objectJson["collider"];
@@ -301,6 +311,11 @@ void LevelDataLoader::CreateObjectRecursive(
     const std::string& baseDirectoryPath,
     std::vector<std::unique_ptr<Object3D>>& outObjects) {
 
+    // 有効無効フラグが true (無効) の場合は配置しない (スキップ)
+    if (objectData.disabled) {
+        return;
+    }
+
     // "MESH" タイプの場合、モデルを取得してオブジェクトを生成
     if (objectData.type == "MESH") {
         Model* model = GetSafeModel(objectData.fileName, objectData.name);
@@ -378,32 +393,81 @@ void LevelDataLoader::DisplayImGui(ID3D12Device* device, ModelCommon* modelCommo
         ImGui::Text("Current Loaded File: %s", loadedFilePath_.c_str());
         ImGui::Text("Status: %s", isLoaded_ ? "Loaded Successfully" : "Not Loaded");
 
-        if (isLoaded_ && ImGui::TreeNode("Level Hierarchy")) {
-            ImGui::Text("Scene Name: %s", levelData_.name.c_str());
-            ImGui::Text("Root Objects Count: %d", (int)levelData_.objects.size());
-
-            auto renderNodeImGui = [](auto& self, const ObjectData& node) -> void {
-                std::string label = node.name + " [" + node.type + "]";
-                if (!node.fileName.empty()) {
-                    label += " (Model: " + node.fileName + ")";
-                }
-                if (node.children.empty()) {
-                    ImGui::BulletText("%s", label.c_str());
-                } else {
-                    if (ImGui::TreeNode(label.c_str())) {
-                        for (const auto& child : node.children) {
-                            self(self, child);
-                        }
-                        ImGui::TreePop();
-                    }
+        if (isLoaded_) {
+            // 有効・無効オブジェクト数をカウント
+            int totalCount = 0;
+            int disabledCount = 0;
+            auto countStats = [](auto& self, const ObjectData& node, int& total, int& disabled) -> void {
+                total++;
+                if (node.disabled) disabled++;
+                for (const auto& child : node.children) {
+                    self(self, child, total, disabled);
                 }
             };
-
             for (const auto& obj : levelData_.objects) {
-                renderNodeImGui(renderNodeImGui, obj);
+                countStats(countStats, obj, totalCount, disabledCount);
             }
 
-            ImGui::TreePop();
+            ImGui::Text("Total Objects in JSON: %d", totalCount);
+            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Placed (Active) Objects: %d", (int)outObjects.size());
+            if (disabledCount > 0) {
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Disabled (Skipped) Objects: %d", disabledCount);
+            } else {
+                ImGui::Text("Disabled (Skipped) Objects: 0");
+            }
+
+            if (ImGui::TreeNode("Level Hierarchy (Blender JSON)")) {
+                ImGui::Text("Scene Name: %s", levelData_.name.c_str());
+
+                auto renderNodeImGui = [](auto& self, const ObjectData& node) -> void {
+                    std::string label = node.name + " [" + node.type + "]";
+                    if (node.disabled) {
+                        label += " [Disabled - Skipped]";
+                    }
+                    if (!node.fileName.empty()) {
+                        label += " (Model: " + node.fileName + ")";
+                    }
+
+                    if (node.disabled) {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+                    }
+
+                    if (node.children.empty()) {
+                        if (node.disabled) {
+                            ImGui::TextDisabled("  - %s", label.c_str());
+                        } else {
+                            ImGui::BulletText("%s", label.c_str());
+                        }
+                    } else {
+                        if (ImGui::TreeNode(label.c_str())) {
+                            for (const auto& child : node.children) {
+                                self(self, child);
+                            }
+                            ImGui::TreePop();
+                        }
+                    }
+
+                    if (node.disabled) {
+                        ImGui::PopStyleColor();
+                    }
+                };
+
+                for (const auto& obj : levelData_.objects) {
+                    renderNodeImGui(renderNodeImGui, obj);
+                }
+
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Active Placed Objects (In Engine)")) {
+                ImGui::Text("Active Objects Count: %d", (int)outObjects.size());
+                for (size_t i = 0; i < outObjects.size(); ++i) {
+                    if (outObjects[i]) {
+                        ImGui::BulletText("[%d] %s", (int)i, outObjects[i]->GetName().c_str());
+                    }
+                }
+                ImGui::TreePop();
+            }
         }
 
         ImGui::TreePop();
