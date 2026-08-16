@@ -5,6 +5,10 @@
 #include "TransformComponent.h"
 #include "GameObject/GameObject.h"
 #include "Core/TimeManager.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#endif
+#include "Editor/Replay/ReplayManager.h"
 #include <cmath>
 #include <iostream>
 
@@ -15,7 +19,22 @@ void AnimatorComponent::Initialize() {
 void AnimatorComponent::Update() {
     if (!isPlaying_ || animation_.duration <= 0.0f) return;
 
-    animationTime_ += TimeManager::GetInstance().GetDeltaTime();
+    bool isPlayingOrReplaying = false;
+#ifdef USE_IMGUI
+    if (EditorManager::IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+#else
+    isPlayingOrReplaying = true;
+#endif
+    if (ReplayManager::GetInstance()->IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+
+    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+    float animDeltaTime = isAnimActive ? TimeManager::GetInstance().GetDeltaTime() : 0.0f;
+
+    animationTime_ += animDeltaTime;
     animationTime_ = std::fmod(animationTime_, animation_.duration); // Loop playback
 
     if (hasSkeleton_) {

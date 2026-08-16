@@ -113,18 +113,34 @@ void GameScene::Initialize() {
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
-    if (coinEffect_) {
-        coinEffect_->Update(1.0f / 60.0f);
+    bool isPlayingOrReplaying = false;
+#ifdef USE_IMGUI
+    if (EditorManager::IsPlaying()) {
+        isPlayingOrReplaying = true;
     }
-    if (ringEffect_) {
-        ringEffect_->Update(1.0f / 60.0f);
-    }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(1.0f / 60.0f);
+#else
+    isPlayingOrReplaying = true;
+#endif
+    if (ReplayManager::GetInstance()->IsPlaying()) {
+        isPlayingOrReplaying = true;
     }
 
-    if (skybox_) {
-        skybox_->Update();
+    bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+
+    if (isGameActive) {
+        if (coinEffect_) {
+            coinEffect_->Update(1.0f / 60.0f);
+        }
+        if (ringEffect_) {
+            ringEffect_->Update(1.0f / 60.0f);
+        }
+        if (cylinderEffect_) {
+            cylinderEffect_->Update(1.0f / 60.0f);
+        }
+
+        if (skybox_) {
+            skybox_->Update();
+        }
     }
 
     float dt = TimeManager::GetInstance().GetDeltaTime();
@@ -784,19 +800,11 @@ void GameScene::UpdateEditor() {
         ReplayManager::GetInstance()->StopRecord();
     }
 
-    if (skybox_) {
-        skybox_->Update();
+    // エディタ停止中もマップの変更（isDirty_時の再構築など）に追従させる
+    if (map_) {
+        map_->Update();
     }
-    if (coinEffect_) {
-        // ImGui更新（もしあれば）
-        coinEffect_->Update(1.0f / 60.0f);
-    }
-    if (ringEffect_) {
-        ringEffect_->Update(1.0f / 60.0f);
-    }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(1.0f / 60.0f);
-    }
+
     // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
     if (player_) {
         if (map_) {
@@ -808,15 +816,8 @@ void GameScene::UpdateEditor() {
             playerPrim->Update();
         }
     }
-    if (map_) {
-        map_->Update();
-        for (auto* mapPrim : map_->GetPrimitiveObjects()) {
-            if (mapPrim) {
-                mapPrim->Update();
-            }
-        }
-    }
 
+    // レベルオブジェクトのトランスフォーム・マテリアル・行列を正常に更新する
     for (auto& obj : levelObjects_) {
         if (obj) {
             obj->Update();

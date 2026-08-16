@@ -69,6 +69,22 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
         visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
     }
 
+    // リプレイ再生中でかつ一時停止中の場合、物理演算や各種タイマー進行を停止する
+    if (ReplayManager::GetInstance()->IsPlaying() && ReplayManager::GetInstance()->IsPaused()) {
+        state_.stuckTimer_ = 0.0f;
+        state_.prevPositionForBugCheck_ = state_.position_;
+        if (visuals_.GetPrimitiveObject()) {
+            visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
+            visuals_.GetPrimitiveObject()->Update();
+        }
+        if (gameObject_) {
+            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+                tc->SetPosition(state_.position_);
+            }
+        }
+        return;
+    }
+
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
     
     // パーティクルや見た目のベース更新 (早めに呼んでおく)
@@ -256,26 +272,30 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
 
     // 砂埃パーティクルの更新
 
-    // --- バグ検知処理 ---
-    // 1. 亜空間への落下、または座標の破綻
-    if (state_.position_.y < (deathY - 50.0f) || std::isnan(state_.position_.x) || std::isnan(state_.position_.y)) {
-        ReplayManager::GetInstance()->TriggerBugReport("プレイヤーの座標が破綻、またはマップ外に落下しました。");
-        // 安全処理
-        state_.position_ = state_.startPosition_;
-        state_.velocity_ = { 0.0f, 0.0f, 0.0f };
-        state_.isDead_ = true;
-    }
-    
-    // 2. スタック検知（入力があるのに動いていない）
-    if ((std::abs(state_.velocity_.x) > 0.1f || std::abs(state_.velocity_.y) > 0.1f) && 
-        std::abs(state_.position_.x - state_.prevPositionForBugCheck_.x) < 0.001f && 
-        std::abs(state_.position_.y - state_.prevPositionForBugCheck_.y) < 0.001f) {
+    // --- バグ検知処理（リプレイ再生中は無効化） ---
+    if (!ReplayManager::GetInstance()->IsPlaying()) {
+        // 1. 亜空間への落下、または座標の破綻
+        if (state_.position_.y < (deathY - 50.0f) || std::isnan(state_.position_.x) || std::isnan(state_.position_.y)) {
+            ReplayManager::GetInstance()->TriggerBugReport("プレイヤーの座標が破綻、またはマップ外に落下しました。");
+            // 安全処理
+            state_.position_ = state_.startPosition_;
+            state_.velocity_ = { 0.0f, 0.0f, 0.0f };
+            state_.isDead_ = true;
+        }
         
-        state_.stuckTimer_ += deltaTime;
-        if (state_.stuckTimer_ > 2.0f) { // 2秒間スタック
-            ReplayManager::GetInstance()->TriggerBugReport("2秒間移動が反映されないスタック状態を検知しました。");
+        // 2. スタック検知（入力があるのに動いていない）
+        if ((std::abs(state_.velocity_.x) > 0.1f || std::abs(state_.velocity_.y) > 0.1f) && 
+            std::abs(state_.position_.x - state_.prevPositionForBugCheck_.x) < 0.001f && 
+            std::abs(state_.position_.y - state_.prevPositionForBugCheck_.y) < 0.001f) {
+            
+            state_.stuckTimer_ += deltaTime;
+            if (state_.stuckTimer_ > 2.0f) { // 2秒間スタック
+                ReplayManager::GetInstance()->TriggerBugReport("2秒間移動が反映されないスタック状態を検知しました。");
+                state_.stuckTimer_ = 0.0f;
+                state_.isDead_ = true; // スタック脱出のために死亡扱いにする
+            }
+        } else {
             state_.stuckTimer_ = 0.0f;
-            state_.isDead_ = true; // スタック脱出のために死亡扱いにする
         }
     } else {
         state_.stuckTimer_ = 0.0f;

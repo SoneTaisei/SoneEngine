@@ -21,6 +21,10 @@
 #include "Graphics/CameraManager.h"
 #include "Component/ColliderComponent.h"
 #include "Collision/CollisionManager.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#endif
+#include "Editor/Replay/ReplayManager.h"
 
 void MapChip2D::Initialize(const std::string& mapFilePath) {
     device_ = DirectXCommon::GetInstance()->GetDevice();
