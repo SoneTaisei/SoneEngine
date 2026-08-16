@@ -171,7 +171,7 @@ void Renderer::DrawObject3D(Object3D* obj) {
                 if (Object3D::sEnvironmentMapHandle.ptr != 0) {
                     commandList->SetGraphicsRootDescriptorTable(7, Object3D::sEnvironmentMapHandle);
                 }
-                obj->model_->Draw();
+                obj->model_->Draw(nullptr, obj->GetTextureHandle());
 
                 trailCount++;
             }
@@ -222,9 +222,9 @@ void Renderer::DrawObject3D(Object3D* obj) {
     if (useSkinning) {
         const SkinCluster& skinCluster = animator->GetSkinCluster();
         commandList->SetGraphicsRootDescriptorTable(9, skinCluster.paletteSrvHandle.second);
-        obj->model_->Draw(&skinCluster.influenceBufferView);
+        obj->model_->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
     } else {
-        obj->model_->Draw();
+        obj->model_->Draw(nullptr, obj->GetTextureHandle());
     }
 
     if (dxCommon_->IsOutlineEnabled() && obj->material_.color.w >= 1.0f && obj->blendMode_ != BlendMode::kBlendModeAdd) {

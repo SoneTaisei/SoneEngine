@@ -29,6 +29,7 @@ private:
     std::unique_ptr<LevelDataLoader> levelDataLoader_;
     std::vector<std::unique_ptr<Object3D>> levelObjects_;
     std::unique_ptr<Object3D> player_; // 自キャラオブジェクト
+    std::vector<std::unique_ptr<Object3D>> enemies_; // 敵キャラオブジェクト配列
 
     // 3D空間確認用カメラ
     std::unique_ptr<Camera> camera_;

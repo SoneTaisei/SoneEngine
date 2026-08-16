@@ -4,7 +4,9 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Renderer/Renderer.h"
 #include "Resource/Model/ModelManager.h"
+#include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
+#include <filesystem>
 
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
@@ -79,6 +81,39 @@ void BlenderLevelTestScene::Initialize() {
         player_->SetRotation(radRotation);
     }
 
+    // 敵キャラ配置データから敵キャラを生成・配置 (資料 02_05.敵キャラSpawnPoint 参照)
+    enemies_.clear();
+    for (const auto& enemyData : levelData.enemies) {
+        // 敵オブジェクト専用独立モデル (resources/Object/Original/enemy/enemy.obj) を使用
+        Model* enemyModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/enemy", "enemy.obj");
+        if (!enemyModel && !enemyData.fileName.empty()) {
+            enemyModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/" + enemyData.fileName, enemyData.fileName);
+            if (!enemyModel) {
+                enemyModel = ModelManager::GetInstance()->GetModel("resources/Object/School/" + enemyData.fileName, enemyData.fileName);
+            }
+        }
+        if (!enemyModel) {
+            enemyModel = ModelManager::GetInstance()->GetModel("resources/Object/School/multiMesh", "multiMesh.obj");
+        }
+
+        if (enemyModel) {
+            auto enemy = std::make_unique<Object3D>();
+            enemy->Initialize(device, enemyModel);
+
+            enemy->SetTranslation(enemyData.translation);
+            constexpr float degToRad = 3.14159265358979323846f / 180.0f;
+            Vector3 radRotation = {
+                enemyData.rotation.x * degToRad,
+                enemyData.rotation.y * degToRad,
+                enemyData.rotation.z * degToRad
+            };
+            enemy->SetRotation(radRotation);
+            enemy->SetName("EnemySpawn (" + (enemyData.fileName.empty() ? "default" : enemyData.fileName) + ")");
+            enemy->Update();
+            enemies_.push_back(std::move(enemy));
+        }
+    }
+
     if (player_) {
         player_->Update();
     }
@@ -90,7 +125,7 @@ void BlenderLevelTestScene::Initialize() {
         }
     }
 
-    std::string countLog = "[BlenderLevelTestScene] Created " + std::to_string(levelObjects_.size()) + " 3D level objects.";
+    std::string countLog = "[BlenderLevelTestScene] Created " + std::to_string(levelObjects_.size()) + " level objects, " + std::to_string(enemies_.size()) + " enemies.";
     LogManager::GetInstance()->AddLog(LogLevel::Info, countLog);
 }
 
@@ -130,6 +165,11 @@ void BlenderLevelTestScene::Update(SceneManager* sceneManager) {
     if (player_) {
         player_->Update();
     }
+    for (auto& enemy : enemies_) {
+        if (enemy) {
+            enemy->Update();
+        }
+    }
     for (auto& obj : levelObjects_) {
         if (obj) {
             obj->Update();
@@ -158,6 +198,11 @@ void BlenderLevelTestScene::UpdateEditor() {
     if (player_) {
         player_->Update();
     }
+    for (auto& enemy : enemies_) {
+        if (enemy) {
+            enemy->Update();
+        }
+    }
     for (auto& obj : levelObjects_) {
         if (obj) {
             obj->Update();
@@ -169,6 +214,12 @@ void BlenderLevelTestScene::Draw(const Matrix4x4& viewProjectionMatrix) {
     // 自キャラの描画
     if (player_) {
         player_->Draw();
+    }
+    // 敵キャラの描画
+    for (auto& enemy : enemies_) {
+        if (enemy) {
+            enemy->Draw();
+        }
     }
     // 3Dモデルオブジェクト群の描画
     for (auto& obj : levelObjects_) {
@@ -185,6 +236,11 @@ std::vector<Object3D*> BlenderLevelTestScene::GetObjects() {
     std::vector<Object3D*> result;
     if (player_) {
         result.push_back(player_.get());
+    }
+    for (auto& enemy : enemies_) {
+        if (enemy) {
+            result.push_back(enemy.get());
+        }
     }
     for (auto& obj : levelObjects_) {
         if (obj) {
@@ -232,6 +288,31 @@ void BlenderLevelTestScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
             }
         } else {
             ImGui::Text("Player object not spawned/initialized.");
+        }
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Enemy Info (Spawned)")) {
+        ImGui::Text("Enemies Count: %d", (int)enemies_.size());
+        for (size_t i = 0; i < enemies_.size(); ++i) {
+            if (enemies_[i]) {
+                std::string label = "Enemy [" + std::to_string(i) + "] " + enemies_[i]->GetName();
+                if (ImGui::TreeNode(label.c_str())) {
+                    Vector3 pos = enemies_[i]->GetTranslation();
+                    Vector3 rot = enemies_[i]->GetRotation();
+                    Vector3 scale = enemies_[i]->GetScale();
+                    if (ImGui::DragFloat3("Position", &pos.x, 0.1f)) {
+                        enemies_[i]->SetTranslation(pos);
+                    }
+                    if (ImGui::DragFloat3("Rotation (Rad)", &rot.x, 0.01f)) {
+                        enemies_[i]->SetRotation(rot);
+                    }
+                    if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                        enemies_[i]->SetScale(scale);
+                    }
+                    ImGui::TreePop();
+                }
+            }
         }
         ImGui::TreePop();
     }

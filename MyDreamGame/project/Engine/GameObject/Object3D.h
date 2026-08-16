@@ -33,9 +33,10 @@ public:
     void SetScale(const Vector3 &scale) { transform_.scale = scale; }
     
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {
-        if (model_) {
-            model_->SetTextureHandle(handle);
-        }
+        overrideTextureHandle_ = handle;
+    }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const {
+        return overrideTextureHandle_;
     }
 
     Material &GetMaterial() { return material_; }
@@ -82,6 +83,7 @@ private:
     // テクスチャ関連
     Microsoft::WRL::ComPtr<ID3D12Resource> textureResource_;
     uint32_t textureSrvHandle_ = 0;
+    D3D12_GPU_DESCRIPTOR_HANDLE overrideTextureHandle_{};
 
     // 環境マップ用
     D3D12_GPU_DESCRIPTOR_HANDLE environmentMapSrvHandle_{};

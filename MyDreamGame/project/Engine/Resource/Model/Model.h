@@ -20,7 +20,7 @@ public:
     void InitializeSphere(ModelCommon *modelCommon);
 
     // 描画
-    void Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView = nullptr);
+    void Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView = nullptr, D3D12_GPU_DESCRIPTOR_HANDLE overrideTexture = {});
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     // ゲッター

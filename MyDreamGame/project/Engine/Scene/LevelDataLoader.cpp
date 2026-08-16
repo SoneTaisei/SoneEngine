@@ -251,6 +251,12 @@ void LevelDataLoader::ParseObjectRecursive(const nlohmann::json& objectJson, Obj
         playerData.translation = outObjectData.transform.translation;
         playerData.rotation = outObjectData.transform.rotation;
         levelData_.players.push_back(playerData);
+    } else if (outObjectData.type == "EnemySpawn") {
+        EnemySpawnData enemyData;
+        enemyData.translation = outObjectData.transform.translation;
+        enemyData.rotation = outObjectData.transform.rotation;
+        enemyData.fileName = outObjectData.fileName;
+        levelData_.enemies.push_back(enemyData);
     }
 }
 
@@ -280,7 +286,14 @@ static Model* GetSafeModel(const std::string& requestedName, const std::string& 
         return ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.obj");
     }
 
-    // 2. requestedName (例: "gaikotu", "testFbx") での実ファイル検索
+    // 2. Cube 判定 (resources/Object/Original/cube/cube.obj を優先使用)
+    if (objName.find("Cube") != std::string::npos || objName.find("cube") != std::string::npos || requestedName.find("cube") != std::string::npos || requestedName.find("Cube") != std::string::npos) {
+        if (fs::exists(Utf8ToWide("resources/Object/Original/cube/cube.obj"))) {
+            return ModelManager::GetInstance()->GetModel("resources/Object/Original/cube", "cube.obj");
+        }
+    }
+
+    // 3. requestedName (例: "gaikotu", "testFbx") での実ファイル検索
     if (!requestedName.empty()) {
         std::vector<std::pair<std::string, std::string>> checkPaths = {
             {"resources/Object/Original/" + requestedName, "scene.gltf"},
@@ -298,7 +311,10 @@ static Model* GetSafeModel(const std::string& requestedName, const std::string& 
         }
     }
 
-    // 3. 安全なデフォルトキューブモデル
+    // 4. 安全なデフォルトキューブモデル
+    if (fs::exists(Utf8ToWide("resources/Object/Original/cube/cube.obj"))) {
+        return ModelManager::GetInstance()->GetModel("resources/Object/Original/cube", "cube.obj");
+    }
     if (fs::exists(Utf8ToWide("resources/Object/School/multiMesh/multiMesh.obj"))) {
         return ModelManager::GetInstance()->GetModel("resources/Object/School/multiMesh", "multiMesh.obj");
     }
@@ -419,6 +435,7 @@ void LevelDataLoader::DisplayImGui(ID3D12Device* device, ModelCommon* modelCommo
             ImGui::Text("Total Objects in JSON: %d", totalCount);
             ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Placed (Active) Objects: %d", (int)outObjects.size());
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Player Spawns Count: %d", (int)levelData_.players.size());
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.4f, 1.0f), "Enemy Spawns Count: %d", (int)levelData_.enemies.size());
             if (disabledCount > 0) {
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Disabled (Skipped) Objects: %d", disabledCount);
             } else {

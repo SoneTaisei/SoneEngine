@@ -42,10 +42,17 @@ struct PlayerSpawnData {
     Vector3 rotation = { 0.0f, 0.0f, 0.0f };
 };
 
+struct EnemySpawnData {
+    std::string fileName;
+    Vector3 translation = { 0.0f, 0.0f, 0.0f };
+    Vector3 rotation = { 0.0f, 0.0f, 0.0f };
+};
+
 struct LevelData {
     std::string name = "scene";
     std::vector<ObjectData> objects;
     std::vector<PlayerSpawnData> players; // 自キャラ出現データ配列
+    std::vector<EnemySpawnData> enemies; // 敵出現データ配列
 };
 
 } // namespace LevelDataStructs

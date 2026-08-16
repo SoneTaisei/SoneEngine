@@ -614,12 +614,15 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         }
     }
 
-    // 3. マテリアルの解析（備考に基づき、Diffuseテクスチャを取得）
+    // 3. マテリアルの解析（Diffuse / BaseColor テクスチャを取得）
     for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
         aiMaterial *material = scene->mMaterials[materialIndex];
+        aiString textureFilePath;
         if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
-            aiString textureFilePath;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
+            modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
+        } else if (material->GetTextureCount(aiTextureType_BASE_COLOR) != 0) {
+            material->GetTexture(aiTextureType_BASE_COLOR, 0, &textureFilePath);
             modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
         }
     }

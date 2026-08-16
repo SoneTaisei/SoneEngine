@@ -1,8 +1,8 @@
 # Blender 4.4.1
 # www.blender.org
-mtllib sphere.mtl
-o 球
-usemtl sphereMaterial
+mtllib enemy.mtl
+o Enemy
+usemtl enemyMaterial
 v 0.000000 0.831470 -0.555570
 v 0.000000 0.555570 -0.831470
 v 0.000000 0.195090 -0.980785
