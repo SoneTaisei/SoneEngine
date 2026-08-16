@@ -2372,7 +2372,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム戻る");
                 ImGui::SameLine();
 
-                // 再生 / 一時停止 (Clipchamp風パープルボタン)
+                // 再生 / 一時停止 (Clipchamp風パープルボタン: 保存されている元データを再生)
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.90f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.32f, 1.00f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.15f, 0.80f, 1.0f));
@@ -2382,26 +2382,25 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
                 } else {
                     if (ImGui::Button("再生", ImVec2(90, 28))) {
-                        if (replayMgr->IsPaused()) {
-                            replayMgr->ResumePlayback();
+                        replayMgr->SetSnapEnabled(true);
+                        replayMgr->SetInterpolationEnabled(true);
+                        const auto& history = replayMgr->GetHistory();
+                        if (!history.empty()) {
+                            replayMgr->StartPlayback(0);
+                            if (history[0].mapDataStr != "") {
+                                this->mapDataStrToLoad_ = history[0].mapDataStr;
+                                this->loadMapDataStrNextFrame_ = true;
+                            }
                         } else {
-                            const auto& history = replayMgr->GetHistory();
-                            if (!history.empty()) {
-                                replayMgr->StartPlayback(0);
-                                if (history[0].mapDataStr != "") {
-                                    this->mapDataStrToLoad_ = history[0].mapDataStr;
-                                    this->loadMapDataStrNextFrame_ = true;
-                                }
-                            } else {
-                                const auto& saved = replayMgr->GetSavedList();
-                                if (!saved.empty()) {
-                                    replayMgr->StartPlayback(-1, saved[0]);
-                                }
+                            const auto& saved = replayMgr->GetSavedList();
+                            if (!saved.empty()) {
+                                replayMgr->StartPlayback(-1, saved[0]);
                             }
                         }
                     }
                 }
                 ImGui::PopStyleColor(3);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("保存されている元のリプレイデータを再生します (位置補正・補間ON)");
                 ImGui::SameLine();
 
                 // コマ送り (1F)
@@ -2417,6 +2416,29 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (ImGui::Button("停止", ImVec2(65, 28))) {
                     replayMgr->StopPlayback();
                 }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生を停止します");
+                ImGui::SameLine();
+
+                // 変更内容を再生 (グリーン系ボタン: 編集されたcurrentReplay_を再生)
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.34f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.68f, 0.42f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.14f, 0.45f, 0.27f, 1.0f));
+                if (ImGui::Button("変更内容を再生", ImVec2(130, 28))) {
+                    replayMgr->SetSnapEnabled(false);
+                    replayMgr->SetInterpolationEnabled(false);
+                    if (replayMgr->IsPaused()) {
+                        replayMgr->ResumePlayback();
+                    } else {
+                        replayMgr->StartPlayback(-1, "");
+                        const auto& currentReplay = replayMgr->GetCurrentReplay();
+                        if (currentReplay.mapDataStr != "") {
+                            this->mapDataStrToLoad_ = currentReplay.mapDataStr;
+                            this->loadMapDataStrNextFrame_ = true;
+                        }
+                    }
+                }
+                ImGui::PopStyleColor(3);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("タイムラインで変更した内容（移動の長さ変更等）を適用して再生します（位置補正・補間OFF）");
                 ImGui::SameLine();
                 ImGui::Spacing();
                 ImGui::SameLine();
