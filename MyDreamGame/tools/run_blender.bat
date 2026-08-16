@@ -53,11 +53,8 @@ if "%~1"=="" (
     )
 )
 
-echo [INFO] Launching Blender...
-if defined TARGET_FILE (
-    start "" "%BLENDER_EXE%" %TARGET_FILE% --python-expr "import addon_utils; addon_utils.enable('level_editor')"
-) else (
-    start "" "%BLENDER_EXE%" --python-expr "import addon_utils; addon_utils.enable('level_editor')"
-)
+rem 4. Blenderの起動 (アドオン自動有効化パラメータを追加)
+echo [INFO] Blenderを起動します...
+start "" "%BLENDER_EXE%" %TARGET_FILE% --python-expr "import addon_utils; addon_utils.enable('level_editor', default_set=True)"
 
 endlocal
