@@ -161,6 +161,9 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
             visuals_.GetPrimitiveObject()->GetMaterial().dissolveThreshold = 0.0f;
             TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
             
+            // ステージ内の動的オブジェクト（敵やギミック等）を初期位置・状態にリセット
+            map.ResetBlocks();
+
             // リスポーン演出の開始
             state_.isRespawning_ = true;
             state_.respawnTimer_ = 0.0f;

@@ -302,6 +302,18 @@ private:
     bool showReplayEditor_ = true;
     bool showMapEditor_ = true;
     bool showMapSettings_ = true;
+    bool showAnimEditor_ = true;
+
+    // アニメーションエディター用変数
+    int animEditorTargetAnim_ = 0; // 0: WallClimb, 1: AirDash
+    float animEditorTime_ = 0.0f;
+    bool animEditorPlaying_ = false;
+    int animEditorSelectedJoint_ = 0;
+    int animEditorSelectedKeyIndex_ = -1;
+    Animation editingAnimationWallClimb_;
+    Animation editingAnimationAirDash_;
+    bool animEditorInitialized_ = false;
+    void DrawAnimationEditorUI(class SceneManager* sceneManager);
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

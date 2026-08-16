@@ -161,6 +161,27 @@
             },
             "textureName": "",
             "type": "JumpBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 1.0,
+                "g": 1.0,
+                "r": 1.0
+            },
+            "id": 12,
+            "modelName": "",
+            "name": "Enemy",
+            "properties": {
+                "moveSpeed": 2.5
+            },
+            "scale": {
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
+            },
+            "textureName": "Object/Original/enemy/monsterBall.png",
+            "type": "PatrolEnemyBlock"
         }
     ]
 }

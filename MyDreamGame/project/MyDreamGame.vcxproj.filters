@@ -232,6 +232,9 @@
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\PatrolEnemyBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
@@ -497,6 +500,9 @@
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h">
       <Filter>Project\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\PatrolEnemyBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />

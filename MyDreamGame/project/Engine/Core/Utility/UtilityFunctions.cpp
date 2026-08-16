@@ -1084,10 +1084,25 @@ void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animat
     for (Joint& joint : skeleton.joints) {
         if (auto it = animation.nodeAnimations.find(joint.name); it != animation.nodeAnimations.end()) {
             const NodeAnimation& rootNodeAnimation = (*it).second;
-            joint.transform.translate = CalculateValue(rootNodeAnimation.translate, animationTime);
-            joint.transform.rotate = CalculateValue(rootNodeAnimation.rotate, animationTime);
-            joint.transform.scale = CalculateValue(rootNodeAnimation.scale, animationTime);
+            if (!rootNodeAnimation.translate.empty()) {
+                joint.transform.translate = CalculateValue(rootNodeAnimation.translate, animationTime);
+            } else {
+                joint.transform.translate = joint.defaultTransform.translate;
+            }
+
+            if (!rootNodeAnimation.rotate.empty()) {
+                joint.transform.rotate = CalculateValue(rootNodeAnimation.rotate, animationTime);
+            } else {
+                joint.transform.rotate = joint.defaultTransform.rotate;
+            }
+
+            if (!rootNodeAnimation.scale.empty()) {
+                joint.transform.scale = CalculateValue(rootNodeAnimation.scale, animationTime);
+            } else {
+                joint.transform.scale = joint.defaultTransform.scale;
+            }
         } else {
+            joint.transform = joint.defaultTransform;
             if (reportedMissingNodes.find(joint.name) == reportedMissingNodes.end()) {
                 reportedMissingNodes.insert(joint.name);
                 LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation channel not found for joint: " + joint.name);

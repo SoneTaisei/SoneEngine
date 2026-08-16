@@ -63,6 +63,8 @@ private:
     Animation idleAnimation_;
     Animation walkAnimation_;
     Animation jumpAnimation_;
+    Animation wallClimbAnimation_;
+    Animation airDashAnimation_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
@@ -73,6 +75,8 @@ private:
 
     float visualTime_ = 0.0f;
     float climbBlendFactor_ = 0.0f;
+    float wallClimbAnimTime_ = 0.0f;
+    float airDashAnimTime_ = 0.0f;
 
 public:
     // しがみつき時の腕の調整用パラメータ（親空間での回転：X=ピッチ, Y=ヨー, Z=ロール、ラジアン単位）

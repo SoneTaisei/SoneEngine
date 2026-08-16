@@ -373,6 +373,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (mapChip) {
                         mapDataStrToLoad_ = mapChip->GetMapDataAsString();
                         savedRoomsForPlay_ = mapChip->GetRooms();
+                        mapChip->ResetBlocks();
                     }
                 }
             }
@@ -390,6 +391,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // リプレイ再生中であればそれも同時に停止させる
                 if (ReplayManager::GetInstance()->IsPlaying()) {
                     ReplayManager::GetInstance()->StopPlayback();
+                }
+
+                if (sceneManager && sceneManager->GetCurrentScene()) {
+                    MapChip2D* mapChip = sceneManager->GetCurrentScene()->GetMapChip();
+                    if (mapChip) {
+                        mapChip->ResetBlocks();
+                    }
                 }
                 
                 ImGui::SetWindowFocus("マップチップ画面");
@@ -483,6 +491,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_);
             ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_);
             ImGui::MenuItem("リプレイエディター", nullptr, &showReplayEditor_);
+            ImGui::MenuItem("アニメーションエディター", nullptr, &showAnimEditor_);
             ImGui::Separator();
             if (ImGui::MenuItem("レイアウトをリセット")) {
                 resetLayout = true;
@@ -572,6 +581,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
             ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
 
             ImGui::DockBuilderFinish(dockspace_id);
@@ -832,7 +842,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Inspector ウィンドウ ---
     if (showInspector_) {
         if (ImGui::Begin("インスペクター", &showInspector_)) {
-            bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9));
+            bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 12));
             if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected || selectedReplayBlock_.IsValid()) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
@@ -1226,7 +1236,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     bool handled = false;
                     if (activeScene) {
                     MapChip2D* mapChip = activeScene->GetMapChip();
-                    if (mapChip && (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9))) {
+                    if (mapChip && (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 12))) {
                         // ブロックの設定を表示
                         MapChip2D::CustomBlockDef* targetDef = nullptr;
                         bool isTemplate = false;
@@ -1266,15 +1276,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 changed = true;
                             }
 
-                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock" };
+                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock", "PatrolEnemyBlock" };
                             int currentType = -1;
-                            for (int i = 0; i < 8; ++i) {
+                            for (int i = 0; i < 9; ++i) {
                                 if (targetDef->type == types[i]) {
                                     currentType = i;
                                     break;
                                 }
                             }
-                            if (ImGui::Combo("種類 (Type)", &currentType, types, 8)) {
+                            if (ImGui::Combo("種類 (Type)", &currentType, types, 9)) {
                                 targetDef->type = types[currentType];
                                 changed = true;
                                 // デフォルトプロパティを設定 (BasicToolsのテンプレートに合わせる)
@@ -1363,6 +1373,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 if (k == "range") return std::string("移動距離 (range)");
                                 if (k == "jumpVelocityVertical") return std::string("縦ジャンプ力 (jumpVelocityVertical)");
                                 if (k == "jumpVelocityHorizontal") return std::string("横ジャンプ力 (jumpVelocityHorizontal)");
+                                if (k == "moveSpeed") return std::string("移動速度 (moveSpeed)");
                                 return k;
                             };
                             for (auto& [key, value] : targetDef->properties.items()) {
@@ -3064,7 +3075,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f },
                         { 7, "Lift",  ImVec4(0.9f, 0.6f, 0.1f, 1.0f), 1.0f },
                         { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f },
-                        { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f }
+                        { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f },
+                        { 12, "Enemy", ImVec4(0.9f, 0.2f, 0.2f, 1.0f), 1.0f }
                     };
 
                     std::set<std::string> availableTypes;
@@ -3303,7 +3315,194 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
     }
 
-LogManager::GetInstance()->Draw();
+    DrawAnimationEditorUI(sceneManager);
+
+    LogManager::GetInstance()->Draw();
+}
+
+void EditorManager::DrawAnimationEditorUI(SceneManager* sceneManager) {
+    if (!showAnimEditor_) return;
+
+    if (!animEditorInitialized_) {
+        if (!LoadAnimationFromJsonFile(editingAnimationWallClimb_, "resources/json/shared/Player/wall_climb_animation.json")) {
+            editingAnimationWallClimb_ = CreateDefaultWallClimbAnimation();
+        }
+        if (!LoadAnimationFromJsonFile(editingAnimationAirDash_, "resources/json/shared/Player/air_dash_animation.json")) {
+            editingAnimationAirDash_ = CreateDefaultAirDashAnimation();
+        }
+        animEditorInitialized_ = true;
+    }
+
+    if (ImGui::Begin("アニメーションエディター", &showAnimEditor_)) {
+        ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f), "Animation Keyframe Editor");
+        ImGui::Separator();
+
+        // 1. アニメーション選択
+        const char* animNames[] = { "壁つかまり移動 (WallClimb)", "空中ダッシュ (AirDash)" };
+        int prevAnim = animEditorTargetAnim_;
+        if (ImGui::Combo("対象アニメーション", &animEditorTargetAnim_, animNames, 2)) {
+            if (prevAnim != animEditorTargetAnim_) {
+                animEditorTime_ = 0.0f;
+                animEditorSelectedKeyIndex_ = -1;
+            }
+        }
+
+        Animation& curAnim = (animEditorTargetAnim_ == 0) ? editingAnimationWallClimb_ : editingAnimationAirDash_;
+        const std::string animPath = (animEditorTargetAnim_ == 0) 
+            ? "resources/json/shared/Player/wall_climb_animation.json"
+            : "resources/json/shared/Player/air_dash_animation.json";
+
+        ImGui::SameLine();
+        if (ImGui::Button("JSON保存 (Save)")) {
+            SaveAnimationToJsonFile(curAnim, animPath);
+            LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation saved to: " + animPath);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("JSON再読込 (Reload)")) {
+            LoadAnimationFromJsonFile(curAnim, animPath);
+            LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation reloaded from: " + animPath);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("デフォルト復元 (Reset)")) {
+            if (animEditorTargetAnim_ == 0) curAnim = CreateDefaultWallClimbAnimation();
+            else curAnim = CreateDefaultAirDashAnimation();
+            SaveAnimationToJsonFile(curAnim, animPath);
+        }
+
+        ImGui::Spacing();
+        // 2. タイムライン・再生コントロール
+        float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+        if (animEditorPlaying_) {
+            animEditorTime_ += deltaTime;
+            if (curAnim.duration > 0.0f && animEditorTime_ >= curAnim.duration) {
+                animEditorTime_ = std::fmod(animEditorTime_, curAnim.duration);
+            }
+        }
+
+        if (ImGui::Button(animEditorPlaying_ ? "一時停止 (Pause)##Anim" : "再生 (Play)##Anim")) {
+            animEditorPlaying_ = !animEditorPlaying_;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("先頭へ (Rewind)##Anim")) {
+            animEditorTime_ = 0.0f;
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100.0f);
+        ImGui::DragFloat("Duration(秒)", &curAnim.duration, 0.01f, 0.05f, 5.0f, "%.2fs");
+
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::SliderFloat("##AnimTimelineSlider", &animEditorTime_, 0.0f, curAnim.duration, "Time: %.3fs");
+
+        ImGui::Separator();
+
+        // 3. ジョイント（関節）選択 & キーフレーム編集
+        static const char* jointNames[] = {
+            "Hips_01",
+            "LeftArm_09",
+            "RightArm_014",
+            "LeftForeArm_010",
+            "RightForeArm_015",
+            "LeftUpLeg_019",
+            "RightUpLeg_024",
+            "LeftLeg_020",
+            "RightLeg_025",
+            "LeftFoot_021",
+            "RightFoot_026"
+        };
+        const int jointCount = sizeof(jointNames) / sizeof(jointNames[0]);
+
+        ImGui::Columns(2, "AnimEditorColumns", true);
+        ImGui::SetColumnWidth(0, 200.0f);
+
+        ImGui::Text("関節 (Joints):");
+        for (int i = 0; i < jointCount; ++i) {
+            bool selected = (animEditorSelectedJoint_ == i);
+            if (ImGui::Selectable(jointNames[i], selected)) {
+                animEditorSelectedJoint_ = i;
+                animEditorSelectedKeyIndex_ = -1;
+            }
+        }
+
+        ImGui::NextColumn();
+
+        const char* selectedJointName = jointNames[animEditorSelectedJoint_];
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "選択中: %s", selectedJointName);
+
+        NodeAnimation& nodeAnim = curAnim.nodeAnimations[selectedJointName];
+
+        if (ImGui::Button("現在時刻にキーフレーム追加 (Add Keyframe)")) {
+            Vector3 currentEuler = { 0.0f, 0.0f, 0.0f };
+            if (!nodeAnim.rotate.empty()) {
+                Quaternion q = CalculateValue(nodeAnim.rotate, animEditorTime_);
+                currentEuler = q.ToEulerAngles();
+            }
+            KeyframeQuaternion newKf;
+            newKf.time = animEditorTime_;
+            newKf.value = MakeEulerQuat(currentEuler.x, currentEuler.y, currentEuler.z);
+
+            auto it = nodeAnim.rotate.begin();
+            while (it != nodeAnim.rotate.end() && it->time < newKf.time) {
+                ++it;
+            }
+            auto insertedIt = nodeAnim.rotate.insert(it, newKf);
+            animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), insertedIt));
+        }
+
+        ImGui::Spacing();
+        ImGui::Text("回転キーフレーム一覧 (Rotation Keyframes):");
+        if (nodeAnim.rotate.empty()) {
+            ImGui::TextDisabled("キーフレームがありません。");
+        } else {
+            for (size_t k = 0; k < nodeAnim.rotate.size(); ++k) {
+                char kfLabel[64];
+                snprintf(kfLabel, sizeof(kfLabel), "Key %zu: t = %.3fs##%s_%zu", k, nodeAnim.rotate[k].time, selectedJointName, k);
+                bool isSelected = (animEditorSelectedKeyIndex_ == static_cast<int>(k));
+                if (ImGui::Selectable(kfLabel, isSelected)) {
+                    animEditorSelectedKeyIndex_ = static_cast<int>(k);
+                    animEditorTime_ = nodeAnim.rotate[k].time;
+                }
+            }
+
+            if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+                ImGui::Separator();
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "キーフレーム %d の編集 (t = %.3fs):", 
+                    animEditorSelectedKeyIndex_, nodeAnim.rotate[animEditorSelectedKeyIndex_].time);
+
+                auto& curKf = nodeAnim.rotate[animEditorSelectedKeyIndex_];
+                ImGui::DragFloat("キー時間 (Time)", &curKf.time, 0.01f, 0.0f, curAnim.duration, "%.3fs");
+
+                Vector3 euler = curKf.value.ToEulerAngles();
+                float eulerDeg[3] = { euler.x * 180.0f / 3.14159265f, euler.y * 180.0f / 3.14159265f, euler.z * 180.0f / 3.14159265f };
+                bool changed = false;
+                if (ImGui::SliderFloat3("回転 (Euler Deg: X, Y, Z)", eulerDeg, -180.0f, 180.0f, "%.1f deg")) {
+                    changed = true;
+                }
+                float eulerRad[3] = { euler.x, euler.y, euler.z };
+                if (ImGui::SliderFloat3("回転 (Euler Rad: X, Y, Z)", eulerRad, -3.14f, 3.14f, "%.3f rad")) {
+                    eulerDeg[0] = eulerRad[0] * 180.0f / 3.14159265f;
+                    eulerDeg[1] = eulerRad[1] * 180.0f / 3.14159265f;
+                    eulerDeg[2] = eulerRad[2] * 180.0f / 3.14159265f;
+                    changed = true;
+                }
+
+                if (changed) {
+                    float rx = eulerDeg[0] * 3.14159265f / 180.0f;
+                    float ry = eulerDeg[1] * 3.14159265f / 180.0f;
+                    float rz = eulerDeg[2] * 3.14159265f / 180.0f;
+                    curKf.value = MakeEulerQuat(rx, ry, rz);
+                }
+
+                if (ImGui::Button("キーフレーム削除 (Delete Keyframe)")) {
+                    nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
+                    animEditorSelectedKeyIndex_ = -1;
+                }
+            }
+        }
+
+        ImGui::Columns(1);
+    }
+    ImGui::End();
 }
 
 void EditorManager::Draw() {

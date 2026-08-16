@@ -53,6 +53,9 @@ public:
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
 
+    // リセット処理（プレイヤー死亡時・リトライ時等）
+    virtual void Reset() {}
+
     GameObject* GetGameObject() const { return gameObject_.get(); }
     void SetGameObject(std::unique_ptr<GameObject> obj) { gameObject_ = std::move(obj); }
     

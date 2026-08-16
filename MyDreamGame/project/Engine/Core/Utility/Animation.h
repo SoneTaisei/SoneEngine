@@ -28,3 +28,20 @@ struct Animation {
 
 Vector3 CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time);
 Quaternion CalculateValue(const std::vector<KeyframeQuaternion>& keyframes, float time);
+
+inline Quaternion MakeRotHelper(const Vector3& axis, float angle) {
+    float sinH = std::sin(angle / 2.0f);
+    float cosH = std::cos(angle / 2.0f);
+    return Quaternion{ axis.x * sinH, axis.y * sinH, axis.z * sinH, cosH };
+}
+
+inline Quaternion MakeEulerQuat(float x, float y, float z) {
+    return MakeRotHelper(Vector3{ 1.0f, 0.0f, 0.0f }, x) *
+           MakeRotHelper(Vector3{ 0.0f, 1.0f, 0.0f }, y) *
+           MakeRotHelper(Vector3{ 0.0f, 0.0f, 1.0f }, z);
+}
+
+bool SaveAnimationToJsonFile(const Animation& animation, const std::string& filepath);
+bool LoadAnimationFromJsonFile(Animation& outAnimation, const std::string& filepath);
+Animation CreateDefaultWallClimbAnimation();
+Animation CreateDefaultAirDashAnimation();
