@@ -29,8 +29,8 @@ class TOPBAR_MT_my_menu(bpy.types.Menu):
         # メニュー削除ボタン
         layout.operator("myaddon.myaddon_ot_remove_menu", icon='CANCEL')
 
-    def submenu(self, context):
-        self.layout.menu(TOPBAR_MT_my_menu.bl_idname)
+def draw_my_menu(self, context):
+    self.layout.menu(TOPBAR_MT_my_menu.bl_idname)
 
 # --- オペレータ: メニュー削除 ---
 class MYADDON_OT_remove_menu(bpy.types.Operator):
@@ -44,31 +44,19 @@ class MYADDON_OT_remove_menu(bpy.types.Operator):
         return {'FINISHED'}
 
 def remove_my_menu():
-    """既存のMyMenuサブメニューをトップバーから完全に全削除（重複防止）"""
+    """既存のMyMenuサブメニューをトップバーから全削除"""
+    try:
+        bpy.types.TOPBAR_MT_editor_menus.remove(draw_my_menu)
+    except Exception:
+        pass
+    
+    # 互換性のための過去の関数・ハンドラ削除
     if hasattr(bpy.types.TOPBAR_MT_editor_menus, "_draw_funcs"):
         draw_funcs = bpy.types.TOPBAR_MT_editor_menus._draw_funcs
-        to_remove = []
-        for func in draw_funcs:
-            name = getattr(func, "__name__", "")
-            qualname = getattr(func, "__qualname__", "")
-            func_str = str(func)
-            
-            # submenu, draw_menu_manual, TOPBAR_MT_my_menu 関連の関数をすべて検出
-            if (name in ("submenu", "draw_menu_manual") or 
-                "TOPBAR_MT_my_menu" in qualname or 
-                "TOPBAR_MT_my_menu" in func_str or
-                "my_menu" in name.lower()):
-                to_remove.append(func)
-        
-        # 検出した関数を重複含めてすべて削除
-        for func in to_remove:
-            while func in draw_funcs:
+        to_remove = [f for f in draw_funcs if "draw_my_menu" in str(f) or "TOPBAR_MT_my_menu" in str(f) or "submenu" in getattr(f, "__name__", "")]
+        for f in to_remove:
+            while f in draw_funcs:
                 try:
-                    draw_funcs.remove(func)
+                    draw_funcs.remove(f)
                 except ValueError:
                     break
-    else:
-        try:
-            bpy.types.TOPBAR_MT_editor_menus.remove(TOPBAR_MT_my_menu.submenu)
-        except Exception:
-            pass
