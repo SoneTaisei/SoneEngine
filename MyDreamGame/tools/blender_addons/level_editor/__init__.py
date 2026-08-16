@@ -3,7 +3,6 @@ import sys
 import importlib
 
 # アドオン開発用のモジュールリロード処理
-# 「Run Script」やアドオン再読み込み時に古いキャッシュを破棄して最新のサブモジュールをロードする
 modules_to_reload = [
     "stretch_vertex",
     "create_ico_sphere",
@@ -19,7 +18,6 @@ modules_to_reload = [
 ]
 
 for mod_name in modules_to_reload:
-    # パッケージ名が定義されている場合は相対パッケージ名、未定義の場合は単体名で検索
     full_mod_name = f"{__package__}.{mod_name}" if __package__ else mod_name
     if full_mod_name in sys.modules:
         try:
@@ -30,7 +28,7 @@ for mod_name in modules_to_reload:
 from .stretch_vertex import MYADDON_OT_stretch_vertex
 from .create_ico_sphere import MYADDON_OT_create_ico_sphere
 from .export_scene import MYADDON_OT_export_scene
-from .my_menu import TOPBAR_MT_my_menu, MYADDON_OT_remove_menu, remove_my_menu
+from .my_menu import TOPBAR_MT_my_menu, MYADDON_OT_remove_menu, draw_my_menu, remove_my_menu
 from .add_filename import MYADDON_OT_add_filename
 from .file_name import OBJECT_PT_file_name
 from .add_collider import MYADDON_OT_add_collider
@@ -73,10 +71,10 @@ classes = (
 )
 
 def register():
-    # 1. 既存のMyMenuをトップバーから削除（重複防止）
+    # 1. 既存のMyMenuをトップバーから全削除（重複防止）
     remove_my_menu()
 
-    # 2. すでに登録されているクラスがあれば安全に解除してから登録
+    # 2. クラス登録
     for cls in classes:
         try:
             bpy.utils.unregister_class(cls)
@@ -87,8 +85,8 @@ def register():
         except Exception as e:
             print(f"Failed to register class {cls}: {e}")
 
-    # 3. メニューに最新のMyMenuを追加
-    bpy.types.TOPBAR_MT_editor_menus.append(TOPBAR_MT_my_menu.submenu)
+    # 3. メニューにMyMenuの描画関数を追加
+    bpy.types.TOPBAR_MT_editor_menus.append(draw_my_menu)
     
     # 4. 描画ハンドラの登録
     if DrawCollider.handle:
