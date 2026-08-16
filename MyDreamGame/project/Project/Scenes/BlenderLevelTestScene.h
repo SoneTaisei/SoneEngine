@@ -36,5 +36,5 @@ private:
     std::unique_ptr<DebugCamera> debugCamera_;
 
     bool useDebugCamera_ = true;
-    std::string currentLevelPath_ = "c:/1_授業/学年/3年前期/TL1/TL.json";
+    std::string currentLevelPath_ = "../tools/TL.json";
 };

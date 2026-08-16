@@ -334,3 +334,8 @@ FodyWeavers.xsd
 !project/externals/**/*.py
 !externals/**/*.py
 
+# Blender portable ignore & allow project blender_addons
+tools/blender/
+!tools/blender_addons/**/*.py
+
+

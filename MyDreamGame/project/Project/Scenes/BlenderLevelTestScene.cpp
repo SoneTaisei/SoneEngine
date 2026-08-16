@@ -57,10 +57,12 @@ void BlenderLevelTestScene::Initialize() {
     // 2. レベルローダーの初期化とファイルロード
     levelDataLoader_ = std::make_unique<LevelDataLoader>();
     
-    // 絶対パス・相対パスの順でテストロード
-    if (!levelDataLoader_->LoadFile("C:/1_授業/学年/3年前期/TL1/TL.json")) {
-        if (!levelDataLoader_->LoadFile("TL.json")) {
-            levelDataLoader_->LoadFile("TL.scene");
+    // ../tools/TL.json -> tools/TL.json -> TL.json の順でロードを試行
+    if (!levelDataLoader_->LoadFile("../tools/TL.json")) {
+        if (!levelDataLoader_->LoadFile("tools/TL.json")) {
+            if (!levelDataLoader_->LoadFile("TL.json")) {
+                levelDataLoader_->LoadFile("TL.scene");
+            }
         }
     }
 

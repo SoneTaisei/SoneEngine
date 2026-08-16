@@ -38,11 +38,9 @@ static std::wstring ResolveFilePathW(const std::string& inputPath) {
     }
 
     std::vector<std::string> candidates = {
-        "C:/1_授業/学年/3年前期/TL1/" + inputPath,
-        "c:/1_授業/学年/3年前期/TL1/" + inputPath,
-        "../TL1/" + inputPath,
-        "../../TL1/" + inputPath,
-        "../../../TL1/" + inputPath,
+        "../tools/" + inputPath,
+        "tools/" + inputPath,
+        "../tools/blender_addons/" + inputPath,
         "resources/" + inputPath,
         "resources/json/" + inputPath,
         "resources/json/shared/Map/" + inputPath
@@ -50,8 +48,8 @@ static std::wstring ResolveFilePathW(const std::string& inputPath) {
 
     if (inputPath.find("TL.json") != std::string::npos || inputPath.find("TL.scene") != std::string::npos) {
         std::string filename = fs::path(inputPath).filename().string();
-        candidates.push_back("C:/1_授業/学年/3年前期/TL1/" + filename);
-        candidates.push_back("c:/1_授業/学年/3年前期/TL1/" + filename);
+        candidates.push_back("../tools/" + filename);
+        candidates.push_back("tools/" + filename);
         candidates.push_back("./" + filename);
     }
 
@@ -373,13 +371,15 @@ void LevelDataLoader::CreateObjectRecursive(
 void LevelDataLoader::DisplayImGui(ID3D12Device* device, ModelCommon* modelCommon, std::vector<std::unique_ptr<Object3D>>& outObjects) {
     if (ImGui::TreeNode("Blender 3D Level Loader Sync")) {
         static std::vector<std::string> levelFiles = {
-            "C:/1_授業/学年/3年前期/TL1/TL.json",
-            "C:/1_授業/学年/3年前期/TL1/TL.scene",
+            "../tools/TL.json",
+            "../tools/TL.scene",
+            "tools/TL.json",
+            "tools/TL.scene",
             "TL.json",
             "TL.scene"
         };
         static int selectedIndex = 0;
-        static char inputFilenameBuf[512] = "C:/1_授業/学年/3年前期/TL1/TL.json";
+        static char inputFilenameBuf[512] = "../tools/TL.json";
 
         std::string comboPreview = (selectedIndex >= 0 && selectedIndex < (int)levelFiles.size()) ? levelFiles[selectedIndex] : "レベルファイルを選択...";
         if (ImGui::BeginCombo("レベルファイルを選択", comboPreview.c_str())) {
