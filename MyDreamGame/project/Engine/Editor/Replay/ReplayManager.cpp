@@ -692,7 +692,7 @@ std::vector<FrameData> ReplayManager::SimulateMacro(const std::vector<FrameData>
     return result;
 }
 
-void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, int maxNodes) {
+void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, const PlayerParams& params, int maxNodes) {
     if (isAISearching_.load()) return; // 既に探索中ならスキップ
 
     if (aiSearchThread_.joinable()) {
@@ -702,10 +702,10 @@ void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& go
     isAISearching_.store(true);
     aiPathStatusMsg_ = "AI探索中... (バックグラウンド計算中)";
 
-    aiSearchThread_ = std::thread([this, startPos, goalPos, mapChip, maxNodes]() {
+    aiSearchThread_ = std::thread([this, startPos, goalPos, mapChip, params, maxNodes]() {
         PhysicsAStar astar;
         std::vector<Vector3> path;
-        bool success = astar.FindValidPath(startPos, goalPos, mapChip, path, maxNodes);
+        bool success = astar.FindValidPath(startPos, goalPos, mapChip, path, params, maxNodes);
 
         if (success) {
             aiPathPositions_ = path;

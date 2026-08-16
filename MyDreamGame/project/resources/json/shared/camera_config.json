@@ -1,12 +1,12 @@
 {
     "followLerp": 0.10000000149011612,
-    "orthoHeight": 11.25,
-    "orthoWidth": 20.0,
+    "orthoHeight": 18.75,
+    "orthoWidth": 33.33333206176758,
     "rotate": {
-        "x": 0.0,
+        "x": 0.06981316953897476,
         "y": 0.0,
         "z": 0.0
     },
-    "scale": 1.0,
+    "scale": 0.6000000238418579,
     "transitionLerp": 0.15000000596046448
 }

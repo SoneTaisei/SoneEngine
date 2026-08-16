@@ -131,6 +131,7 @@ public:
     AABB2D GetAABB() const;
     bool IsDead() const { return state_.isDead_; }
     bool IsGoal() const { return state_.isGoal_; }
+    const PlayerParams& GetParams() const { return params_; }
 
 private:
 

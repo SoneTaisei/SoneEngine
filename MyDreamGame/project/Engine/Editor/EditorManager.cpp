@@ -1161,7 +1161,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     // --- 4. 第4章 物理ベースA* (詰みチェック & AIルート表示) ---
                     if (ImGui::CollapsingHeader("物理ベースA* (詰みチェック & AIルート表示)", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        static int maxAStarNodes = 8000;
+                        static int maxAStarNodes = 30000;
 
                         ImGui::DragFloat2("スタート座標 (X, Y)", aStarStartPos_, 0.5f);
                         if (ImGui::Button("マップのスタート位置から自動取得", ImVec2(-1, 0))) {
@@ -1181,7 +1181,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                         ImGui::Spacing();
 
-                        ImGui::DragInt("探索上限ノード数", &maxAStarNodes, 500, 1000, 50000);
+                        ImGui::DragInt("探索上限ノード数", &maxAStarNodes, 1000, 1000, 150000);
 
                         bool showAI = replayMgrInst->IsShowAIGhost();
                         if (ImGui::Checkbox("AIルートをゴースト表示", &showAI)) {
@@ -1200,7 +1200,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             Vector3 sPos = { aStarStartPos_[0], aStarStartPos_[1], 0.0f };
                             Vector3 gPos = { aStarGoalPos_[0], aStarGoalPos_[1], 0.0f };
 
-                            replayMgrInst->ExecuteAStarAsync(sPos, gPos, mapChip, maxAStarNodes);
+                            PlayerParams params{};
+                            if (activeScene && activeScene->GetPlayer()) {
+                                params = activeScene->GetPlayer()->GetParams();
+                            }
+                            replayMgrInst->ExecuteAStarAsync(sPos, gPos, mapChip, params, maxAStarNodes);
                         }
                         ImGui::PopStyleColor();
                         if (isSearching) {
