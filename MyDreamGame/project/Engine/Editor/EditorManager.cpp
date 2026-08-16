@@ -2144,7 +2144,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 int gridY = mapChip->WorldToChipY(worldPos.y);
 
                                 bool inBounds = (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight);
-                                bool isSelectableTool = (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ == 10 || mapEditorSelectedTool_ >= 100);
+                                bool isSelectableTool = (mapEditorSelectedTool_ >= 0);
                                 
                                 if (mapEditMode_ == MapEditMode::Normal) {
                                     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && isSelectableTool) {
@@ -3645,18 +3645,11 @@ void EditorManager::UpdateAStarPositionsFromMap(MapChip2D* mapChip, SceneManager
     }
 
     // 2. もし Player2D オブジェクトが見つからない場合、MapChip2D 上の kPlayerSpawn (スポーンブロック) を検索
-    if (!foundSpawn) {
-        for (int y = 0; y < mapChip->GetHeight(); ++y) {
-            for (int x = 0; x < mapChip->GetWidth(); ++x) {
-                if (mapChip->GetChipType(x, y) == MapChip2D::ChipType::kPlayerSpawn) {
-                    aStarStartPos_[0] = mapChip->ChipToWorldX(x) + halfChip;
-                    aStarStartPos_[1] = mapChip->ChipToWorldY(y) + halfChip;
-                    foundSpawn = true;
-                    break;
-                }
-            }
-            if (foundSpawn) break;
-        }
+    if (!foundSpawn && mapChip->HasPlayerSpawn()) {
+        Vector3 spawnWorldPos = mapChip->GetPlayerSpawnWorldPosition();
+        aStarStartPos_[0] = spawnWorldPos.x;
+        aStarStartPos_[1] = spawnWorldPos.y;
+        foundSpawn = true;
     }
 
     // 3. それでも見つからない場合、ReplayManager の playerInitPos を参照（0,0でない場合）

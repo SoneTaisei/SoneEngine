@@ -177,6 +177,36 @@ float MapChip2D::ChipToWorldY(int chipY) const {
     return static_cast<float>(chipY) * chipSize_;
 }
 
+bool MapChip2D::HasPlayerSpawn() const {
+    int x, y;
+    return GetPlayerSpawnChipPosition(x, y);
+}
+
+bool MapChip2D::GetPlayerSpawnChipPosition(int& outX, int& outY) const {
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            if (mapData_[y][x] == ChipType::kPlayerSpawn) {
+                outX = x;
+                outY = y;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+Vector3 MapChip2D::GetPlayerSpawnWorldPosition(const Vector3& defaultPos) const {
+    int x, y;
+    if (GetPlayerSpawnChipPosition(x, y)) {
+        return Vector3{
+            ChipToWorldX(x) + chipSize_ * 0.5f,
+            ChipToWorldY(y) + chipSize_ * 0.5f,
+            0.0f
+        };
+    }
+    return defaultPos;
+}
+
 std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
     // 互換性のため空を返すか、必要な場合は GameObject から収集する
     std::vector<PrimitiveObject*> list;

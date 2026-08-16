@@ -44,19 +44,12 @@ void Player2D::Initialize() {
 }
 
 void Player2D::FindSpawnPoint(const MapChip2D& map) {
-    for (int y = 0; y < map.GetHeight(); ++y) {
-        for (int x = 0; x < map.GetWidth(); ++x) {
-            if (map.GetChipType(x, y) == MapChip2D::ChipType::kPlayerSpawn) {
-                // スポーン地点の中心座標を計算
-                state_.startPosition_.x = map.ChipToWorldX(x) + map.GetChipSize() * 0.5f;
-                state_.startPosition_.y = map.ChipToWorldY(y) + map.GetChipSize() * 0.5f;
-                state_.position_ = state_.startPosition_;
-                if (gameObject_) {
-                    if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
-                        tc->SetPosition(state_.position_);
-                    }
-                }
-                return;
+    if (map.HasPlayerSpawn()) {
+        state_.startPosition_ = map.GetPlayerSpawnWorldPosition(state_.startPosition_);
+        state_.position_ = state_.startPosition_;
+        if (gameObject_) {
+            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+                tc->SetPosition(state_.position_);
             }
         }
     }

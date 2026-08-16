@@ -46,6 +46,11 @@ public:
     float ChipToWorldX(int chipX) const;
     float ChipToWorldY(int chipY) const;
 
+    // プレイヤー初期位置 (kPlayerSpawn) の取得
+    bool HasPlayerSpawn() const;
+    bool GetPlayerSpawnChipPosition(int& outX, int& outY) const;
+    Vector3 GetPlayerSpawnWorldPosition(const Vector3& defaultPos = {2.0f, 5.0f, 0.0f}) const;
+
     // マップの寸法
     int GetWidth() const { return mapWidth_; }
     int GetHeight() const { return mapHeight_; }
