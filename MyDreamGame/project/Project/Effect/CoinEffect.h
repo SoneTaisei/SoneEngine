@@ -13,6 +13,7 @@ public:
     void Draw();
 
     void Emit(const Vector3& position);
+    void Clear();
 
     std::vector<PrimitiveObject*> GetParticles();
 

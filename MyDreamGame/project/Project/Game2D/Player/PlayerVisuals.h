@@ -51,6 +51,7 @@ public:
     void SpawnRunDust(const Vector3& basePos, float dirX);
     void SpawnConfetti(const Vector3& pos);
     void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
+    void ClearEffects();
 
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
     Object3D* GetModelObject() { return modelObj_.get(); }

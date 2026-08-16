@@ -107,8 +107,8 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
     frame.keys[0] = (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) ? 'L' : '-';
     frame.keys[1] = (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) ? 'R' : '-';
     frame.keys[2] = keyboard->IsKeyDown(DIK_SPACE) ? 'J' : '-';
-    frame.keys[3] = (keyboard->IsKeyDown(DIK_LSHIFT) || keyboard->IsKeyDown(DIK_RSHIFT)) ? 'D' : '-';
-    frame.keys[4] = (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) ? 'C' : '-';
+    frame.keys[3] = (keyboard->IsKeyDown(DIK_J) || keyboard->IsKeyDown(DIK_LSHIFT) || keyboard->IsKeyDown(DIK_RSHIFT)) ? 'D' : '-';
+    frame.keys[4] = (keyboard->IsKeyDown(DIK_K) || keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) ? 'C' : '-';
     frame.keys[5] = (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) ? 'W' : '-';
     frame.keys[6] = (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) ? 'S' : '-';
     frame.keys[7] = '\0';
@@ -362,8 +362,8 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         if (currentKeys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
         if (currentKeys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
         if (currentKeys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
-        if (currentKeys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
-        if (currentKeys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
+        if (currentKeys[3] == 'D') { keys[DIK_J] = 0x80; keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
+        if (currentKeys[4] == 'C') { keys[DIK_K] = 0x80; keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
         if (currentKeys[5] == 'W') { keys[DIK_W] = 0x80; keys[DIK_UP] = 0x80; }
         if (currentKeys[6] == 'S') { keys[DIK_S] = 0x80; keys[DIK_DOWN] = 0x80; }
 
@@ -373,8 +373,8 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
             if (prevKeys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
             if (prevKeys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
             if (prevKeys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
-            if (prevKeys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
-            if (prevKeys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
+            if (prevKeys[3] == 'D') { preKeys[DIK_J] = 0x80; preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
+            if (prevKeys[4] == 'C') { preKeys[DIK_K] = 0x80; preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
             if (prevKeys[5] == 'W') { preKeys[DIK_W] = 0x80; preKeys[DIK_UP] = 0x80; }
             if (prevKeys[6] == 'S') { preKeys[DIK_S] = 0x80; preKeys[DIK_DOWN] = 0x80; }
         }

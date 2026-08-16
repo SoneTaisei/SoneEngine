@@ -612,6 +612,12 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
     }
 }
 
+void PlayerVisuals::ClearEffects() {
+    dustParticles_.clear();
+    confettiParticles_.clear();
+    dashRingParticles_.clear();
+}
+
 #ifdef USE_IMGUI
 #include "../../externals/imgui/imgui.h"
 

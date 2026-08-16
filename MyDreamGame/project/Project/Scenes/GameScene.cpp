@@ -239,6 +239,8 @@ void GameScene::Update(SceneManager *sceneManager) {
                     
                     // 2. プレイヤー状態(速度含む)とスコアをリセット
                     player_->ResetState(replayData.playerInitPos);
+                    player_->ClearEffects();
+                    if (coinEffect_) coinEffect_->Clear();
                     
                     // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
                     for (int i = 0; i <= curFrame; ++i) {
@@ -252,6 +254,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                     } else {
                         player_->SetPosition(replayData.frames[curFrame - 1].position);
                     }
+                    previousScore_ = player_->GetScore();
                 }
 
                 if (!wasPlayingLastFrame_) {
@@ -533,7 +536,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     if (coinEffect_) {
 #ifdef USE_IMGUI
-        if (EditorManager::IsShowEffects()) {
+        if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
             coinEffect_->Draw();
         }
 #else
@@ -613,7 +616,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     // パーティクルの描画
 #ifdef USE_IMGUI
-    if (EditorManager::IsShowEffects()) {
+    if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
 #endif
         particleCommon_->DrawAll(viewProjectionMatrix);
 #ifdef USE_IMGUI

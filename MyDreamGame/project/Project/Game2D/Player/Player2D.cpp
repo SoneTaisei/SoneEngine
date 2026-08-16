@@ -475,6 +475,7 @@ void Player2D::ResetState(const Vector3& initPos) {
         visuals_.GetPrimitiveObject()->SetRotation({ 0.0f, 0.0f, 0.0f });
         visuals_.GetPrimitiveObject()->Update();
     }
+    visuals_.ClearEffects();
 }
 
 

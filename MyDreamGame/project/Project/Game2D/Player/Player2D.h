@@ -124,6 +124,7 @@ public:
 
     // リプレイのループやシーク時に物理状態（速度や各種フラグ）をリセットする
     void ResetState(const Vector3& initPos);
+    void ClearEffects() { visuals_.ClearEffects(); }
 
     // ゲーム状態取得用ゲッター追加
     AABB2D GetAABB() const;
