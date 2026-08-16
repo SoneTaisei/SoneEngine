@@ -19,6 +19,8 @@
 #include "Core/Utility/LogManager.h"
 #include "GameObject/MapObject2D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
+#include "Game2D/Player/Player2D.h"
+#include "Component/TransformComponent.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -249,6 +251,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
     ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
 
+    // --- 初回起動時 / マップロード時のA*座標初期化 ---
+    if (!isAStarPosInitialized_) {
+        IScene* activeScene = sceneManager->GetCurrentScene();
+        if (activeScene && activeScene->GetMapChip()) {
+            UpdateAStarPositionsFromMap(activeScene->GetMapChip(), sceneManager);
+            isAStarPosInitialized_ = true;
+        }
+    }
+
     // --- シーンリセット直後のマップ復元処理 ---
     if (sceneJustReset_) {
         IScene* activeScene = sceneManager->GetCurrentScene();
@@ -262,6 +273,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 } else {
                     mapChip->LoadFromStageName(stageFilename_);
                 }
+                UpdateAStarPositionsFromMap(mapChip, sceneManager);
             }
         }
         sceneJustReset_ = false;
@@ -1149,36 +1161,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     // --- 4. 第4章 物理ベースA* (詰みチェック & AIルート表示) ---
                     if (ImGui::CollapsingHeader("物理ベースA* (詰みチェック & AIルート表示)", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        static float startPos[2] = { 0.0f, 0.0f };
-                        static float goalPos[2] = { 30.0f, 0.0f };
                         static int maxAStarNodes = 8000;
 
-                        ImGui::DragFloat2("スタート座標 (X, Y)", startPos, 0.5f);
-                        if (ImGui::Button("自キャラ初期位置から自動取得", ImVec2(-1, 0))) {
-                            const auto& currentReplay = replayMgrInst->GetCurrentReplay();
-                            startPos[0] = currentReplay.playerInitPos.x;
-                            startPos[1] = currentReplay.playerInitPos.y;
+                        ImGui::DragFloat2("スタート座標 (X, Y)", aStarStartPos_, 0.5f);
+                        if (ImGui::Button("マップのスタート位置から自動取得", ImVec2(-1, 0))) {
+                            IScene* activeScene = sceneManager->GetCurrentScene();
+                            if (activeScene && activeScene->GetMapChip()) {
+                                UpdateAStarPositionsFromMap(activeScene->GetMapChip(), sceneManager);
+                            }
                         }
                         ImGui::Spacing();
 
-                        ImGui::DragFloat2("ゴール座標 (X, Y)", goalPos, 0.5f);
+                        ImGui::DragFloat2("ゴール座標 (X, Y)", aStarGoalPos_, 0.5f);
                         if (ImGui::Button("マップのゴールブロック位置から自動取得", ImVec2(-1, 0))) {
                             IScene* activeScene = sceneManager->GetCurrentScene();
                             if (activeScene && activeScene->GetMapChip()) {
-                                auto* mapChip = activeScene->GetMapChip();
-                                bool foundGoal = false;
-                                for (int y = 0; y < mapChip->GetHeight(); ++y) {
-                                    for (int x = 0; x < mapChip->GetWidth(); ++x) {
-                                        if (mapChip->GetChipType(x, y) == MapChip2D::ChipType::kGoal) {
-                                            float halfChip = mapChip->GetChipSize() * 0.5f;
-                                            goalPos[0] = mapChip->ChipToWorldX(x) + halfChip;
-                                            goalPos[1] = mapChip->ChipToWorldY(y) + halfChip;
-                                            foundGoal = true;
-                                            break;
-                                        }
-                                    }
-                                    if (foundGoal) break;
-                                }
+                                UpdateAStarPositionsFromMap(activeScene->GetMapChip(), sceneManager);
                             }
                         }
                         ImGui::Spacing();
@@ -1199,8 +1197,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (ImGui::Button(btnText.c_str(), ImVec2(-1, 30))) {
                             IScene* activeScene = sceneManager->GetCurrentScene();
                             MapChip2D* mapChip = activeScene ? activeScene->GetMapChip() : nullptr;
-                            Vector3 sPos = { startPos[0], startPos[1], 0.0f };
-                            Vector3 gPos = { goalPos[0], goalPos[1], 0.0f };
+                            Vector3 sPos = { aStarStartPos_[0], aStarStartPos_[1], 0.0f };
+                            Vector3 gPos = { aStarGoalPos_[0], aStarGoalPos_[1], 0.0f };
 
                             replayMgrInst->ExecuteAStarAsync(sPos, gPos, mapChip, maxAStarNodes);
                         }
@@ -2962,6 +2960,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
                                         mapEditorInputWidth_ = mapChip->GetWidth();
                                         mapEditorInputHeight_ = mapChip->GetHeight();
+                                        UpdateAStarPositionsFromMap(mapChip, sceneManager);
                                     }
                                 }
                                 if (isSelected) {
@@ -2977,6 +2976,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
                             mapEditorInputWidth_ = mapChip->GetWidth();
                             mapEditorInputHeight_ = mapChip->GetHeight();
+                            UpdateAStarPositionsFromMap(mapChip, sceneManager);
                         }
                     }
 
@@ -3025,6 +3025,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         mapChip->ResetMap();
                         mapEditorInputWidth_ = mapChip->GetWidth();
                         mapEditorInputHeight_ = mapChip->GetHeight();
+                        UpdateAStarPositionsFromMap(mapChip, sceneManager);
                     }
 
                     ImGui::Spacing();
@@ -3612,6 +3613,80 @@ void EditorManager::EndRoomHistoryCapture(MapChip2D* mapChip) {
     }
     if (changed) {
         PushCommand(std::make_shared<RoomEditCommand>(mapChip, oldRoomState_, newState));
+    }
+}
+
+void EditorManager::UpdateAStarPositionsFromMap(MapChip2D* mapChip, SceneManager* sceneManager) {
+    if (!mapChip) return;
+
+    float halfChip = mapChip->GetChipSize() * 0.5f;
+    bool foundSpawn = false;
+
+    // 1. 最優先: シーンの GetPlayer() から Player2D の位置を取得
+    IScene* activeScene = sceneManager ? sceneManager->GetCurrentScene() : nullptr;
+
+    if (activeScene) {
+        Player2D* player = activeScene->GetPlayer();
+        if (player) {
+            Vector3 pos = player->GetStartPosition();
+            if (pos.x != 0.0f || pos.y != 0.0f) {
+                aStarStartPos_[0] = pos.x;
+                aStarStartPos_[1] = pos.y;
+                foundSpawn = true;
+            } else {
+                pos = player->GetPosition();
+                if (pos.x != 0.0f || pos.y != 0.0f) {
+                    aStarStartPos_[0] = pos.x;
+                    aStarStartPos_[1] = pos.y;
+                    foundSpawn = true;
+                }
+            }
+        }
+    }
+
+    // 2. もし Player2D オブジェクトが見つからない場合、MapChip2D 上の kPlayerSpawn (スポーンブロック) を検索
+    if (!foundSpawn) {
+        for (int y = 0; y < mapChip->GetHeight(); ++y) {
+            for (int x = 0; x < mapChip->GetWidth(); ++x) {
+                if (mapChip->GetChipType(x, y) == MapChip2D::ChipType::kPlayerSpawn) {
+                    aStarStartPos_[0] = mapChip->ChipToWorldX(x) + halfChip;
+                    aStarStartPos_[1] = mapChip->ChipToWorldY(y) + halfChip;
+                    foundSpawn = true;
+                    break;
+                }
+            }
+            if (foundSpawn) break;
+        }
+    }
+
+    // 3. それでも見つからない場合、ReplayManager の playerInitPos を参照（0,0でない場合）
+    if (!foundSpawn) {
+        const auto& currentReplay = ReplayManager::GetInstance()->GetCurrentReplay();
+        if (currentReplay.playerInitPos.x != 0.0f || currentReplay.playerInitPos.y != 0.0f) {
+            aStarStartPos_[0] = currentReplay.playerInitPos.x;
+            aStarStartPos_[1] = currentReplay.playerInitPos.y;
+            foundSpawn = true;
+        }
+    }
+
+    // 4. デフォルト位置へのフォールバック (2.0, 5.0)
+    if (!foundSpawn) {
+        aStarStartPos_[0] = 2.0f;
+        aStarStartPos_[1] = 5.0f;
+    }
+
+    // 5. ゴール座標 (kGoal) の検索
+    bool foundGoal = false;
+    for (int y = 0; y < mapChip->GetHeight(); ++y) {
+        for (int x = 0; x < mapChip->GetWidth(); ++x) {
+            if (mapChip->GetChipType(x, y) == MapChip2D::ChipType::kGoal) {
+                aStarGoalPos_[0] = mapChip->ChipToWorldX(x) + halfChip;
+                aStarGoalPos_[1] = mapChip->ChipToWorldY(y) + halfChip;
+                foundGoal = true;
+                break;
+            }
+        }
+        if (foundGoal) break;
     }
 }
 #endif

@@ -52,6 +52,7 @@ public:
     // プレイヤーの位置を取得（カメラ追従用）
     const Vector3& GetPosition() const { return state_.position_; }
     void SetPosition(const Vector3& pos) { state_.position_ = pos; }
+    const Vector3& GetStartPosition() const { return state_.startPosition_; }
 
     // カメラの設定と取得
     void SetCamera(GameCamera* camera) { camera_ = camera; }

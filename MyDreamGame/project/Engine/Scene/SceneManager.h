@@ -3,6 +3,8 @@
 #include <string>
 #include <unordered_map>
 #include <any>
+#include <Windows.h>
+#include <format>
 #include "IScene.h"
 
 class SpriteCommon;
@@ -29,7 +31,10 @@ public:
     // SpriteCommonをセットする関数
     void SetSpriteCommon(SpriteCommon *spriteCommon) { spriteCommon_ = spriteCommon; }
 
-    void SetModelCommon(ModelCommon *modelCommon) { modelCommon_ = modelCommon; }
+    void SetModelCommon(ModelCommon *modelCommon) {
+        OutputDebugStringA(std::format("[DEBUG] SceneManager::SetModelCommon - ptr: {}\n", (void*)modelCommon).c_str());
+        modelCommon_ = modelCommon;
+    }
     ParticleCommon *GetParticleCommon() const { return particleCommon_; }
     void SetParticleCommon(ParticleCommon* particleCommon) {
         particleCommon_ = particleCommon;

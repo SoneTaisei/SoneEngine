@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include <Windows.h>
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
@@ -492,26 +493,21 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
-    if (modelCommon_) {
-        modelCommon_->PreDraw();
-    }
+    OutputDebugStringA("[DEBUG] GameScene::Draw Start\n");
 
+    // 1. Skyboxの描画
     if (skybox_) {
+        OutputDebugStringA("[DEBUG] GameScene::Draw Skybox Start\n");
         skybox_->Draw();
-        
-        auto dxCommon = DirectXCommon::GetInstance();
-        DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-        DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
-
-        if (modelCommon_) {
-            modelCommon_->PreDraw();
-        }
+        OutputDebugStringA("[DEBUG] GameScene::Draw Skybox End\n");
     }
 
-    // 2. 2Dオブジェクト（マップ・プレイヤー）の描画
-    // ModelCommonの描画前処理
-    modelCommon_->PreDraw();
+    // 2. 3Dモデル（マップ・プレイヤー）の描画準備
+    if (modelCommon_) {
+        OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw Start\n");
+        modelCommon_->PreDraw();
+        OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw End\n");
+    }
 
     // マップの描画
     if (map_) {

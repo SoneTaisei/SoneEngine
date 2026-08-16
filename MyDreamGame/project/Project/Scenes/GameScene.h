@@ -48,6 +48,9 @@ public:
     // マップチップの取得
     MapChip2D* GetMapChip() override { return map_.get(); }
 
+    // プレイヤーの取得
+    Player2D* GetPlayer() override { return player_; }
+
 private:
     // ---------------------------------------------------
     // 3D・パーティクル関連 (develop)

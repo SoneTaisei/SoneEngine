@@ -73,7 +73,10 @@ void Skybox::Update() {
     mappedTransform_->World = worldMatrix;
 }
 
+#include <Windows.h>
+
 void Skybox::Draw() {
+    OutputDebugStringA("[DEBUG] Skybox::Draw Start\n");
     auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // 1. DirectXCommonから専用のルール（PSO・RootSignature）を取得してセット
     DirectXCommon *dxCommon = DirectXCommon::GetInstance();
@@ -86,13 +89,24 @@ void Skybox::Draw() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // 3. 定数バッファをセット（シェーダーの register(b0), register(b1) に対応）
+    if (!transformBuffer_ || !materialBuffer_) {
+        OutputDebugStringA("[DEBUG] Skybox::Draw Aborted: transformBuffer_ or materialBuffer_ is null\n");
+        return;
+    }
+
     commandList->SetGraphicsRootConstantBufferView(0, transformBuffer_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(1, materialBuffer_->GetGPUVirtualAddress());
 
     // 4. テクスチャ(CubeMap)のSRVをセット（t0 に対応）
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = TextureManager::GetInstance()->GetSrvHandleGPU(textureHandle_);
-    commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    if (srvHandle.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    }
 
     // 5. 描画！（インデックス描画）
     commandList->DrawIndexedInstanced(indexCount_, 1, 0, 0, 0);
+
+    // ★ Skybox描画後に標準の RootSignature に戻す
+    commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+    OutputDebugStringA("[DEBUG] Skybox::Draw End\n");
 }

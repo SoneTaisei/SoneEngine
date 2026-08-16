@@ -210,9 +210,9 @@ void Renderer::DrawObject3D(Object3D* obj) {
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
     if (ModelCommon* mc = obj->model_->GetModelCommon()) {
-        commandList->SetGraphicsRootConstantBufferView(4, mc->GetDirectionalLightGPUAddress());
-        commandList->SetGraphicsRootConstantBufferView(5, mc->GetPointLightGPUAddress());
-        commandList->SetGraphicsRootConstantBufferView(6, mc->GetSpotLightGPUAddress());
+        if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
+        if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
+        if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
     }
 
     if (Object3D::sEnvironmentMapHandle.ptr != 0) {
@@ -466,9 +466,9 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
         
         if (ModelCommon* mc = comp->GetModel()->GetModelCommon()) {
-            commandList->SetGraphicsRootConstantBufferView(4, mc->GetDirectionalLightGPUAddress());
-            commandList->SetGraphicsRootConstantBufferView(5, mc->GetPointLightGPUAddress());
-            commandList->SetGraphicsRootConstantBufferView(6, mc->GetSpotLightGPUAddress());
+            if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
+            if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
+            if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
         }        
         if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
             commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());

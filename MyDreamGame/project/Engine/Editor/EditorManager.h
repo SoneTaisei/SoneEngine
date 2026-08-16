@@ -75,6 +75,10 @@ public:
     // 現在選択中のシーンタイプを取得
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
 
+    // 今読み込んでいるマップから物理A* (詰みチェック)のスタート・ゴール座標を自動更新
+    void UpdateAStarPositionsFromMap(class MapChip2D* mapChip, class SceneManager* sceneManager = nullptr);
+
+
     // リプレイノード（キー入力ブロック）選択構造体
     struct SelectedReplayBlock {
         int trackIdx = -1;      // トラックインデックス (0~6)
@@ -319,6 +323,11 @@ private:
     // リプレイ保存ダイアログ用
     int saveTargetHistoryIdx_ = -1;
     char saveFileNameBuf_[128] = "replay_1";
+
+    // 物理A* (詰みチェック)用座標
+    float aStarStartPos_[2] = { 0.0f, 0.0f };
+    float aStarGoalPos_[2] = { 30.0f, 0.0f };
+    bool isAStarPosInitialized_ = false;
 
     static bool showObjects_;
     static bool showEffects_;

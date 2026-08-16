@@ -53,13 +53,20 @@ public:
     // マップチップの取得 (デフォルトはnullptr)
     virtual MapChip2D* GetMapChip() { return nullptr; }
 
+    // プレイヤーの取得 (デフォルトはnullptr)
+    virtual class Player2D* GetPlayer() { return nullptr; }
+
     // セット用関数
     void SetSpriteCommon(SpriteCommon* spriteCommon) {
      // std::move で所有権を渡す
         spriteCommon_ = spriteCommon;
     }
 
+#include <Windows.h>
+#include <format>
+
     virtual void SetModelCommon(ModelCommon* modelCommon) {
+        OutputDebugStringA(std::format("[DEBUG] IScene::SetModelCommon - ptr: {}\n", (void*)modelCommon).c_str());
         modelCommon_ = modelCommon;
     }
 
