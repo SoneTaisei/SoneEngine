@@ -37,9 +37,15 @@ struct ObjectData {
     std::vector<ObjectData> children; // 子要素 (ツリー構造)
 };
 
+struct PlayerSpawnData {
+    Vector3 translation = { 0.0f, 0.0f, 0.0f };
+    Vector3 rotation = { 0.0f, 0.0f, 0.0f };
+};
+
 struct LevelData {
     std::string name = "scene";
     std::vector<ObjectData> objects;
+    std::vector<PlayerSpawnData> players; // 自キャラ出現データ配列
 };
 
 } // namespace LevelDataStructs

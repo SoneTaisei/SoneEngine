@@ -3,6 +3,7 @@
 #include "Graphics/CameraManager.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Renderer/Renderer.h"
+#include "Resource/Model/ModelManager.h"
 #include "Core/Utility/LogManager.h"
 
 #ifdef USE_IMGUI
@@ -34,6 +35,23 @@ void BlenderLevelTestScene::Initialize() {
         camera_->GetProjectionMatrix()
     );
 
+    // 自キャラ (Player) オブジェクトの生成 (resources/Object/Original/gaikotu を使用)
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
+    if (!playerModel) {
+        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "gaikotu.obj");
+    }
+    if (!playerModel) {
+        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/School/multiMesh", "multiMesh.obj");
+    }
+    if (!playerModel) {
+        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.obj");
+    }
+    if (playerModel) {
+        player_ = std::make_unique<Object3D>();
+        player_->Initialize(device, playerModel);
+        player_->SetName("Player (gaikotu)");
+    }
+
     // 2. レベルローダーの初期化とファイルロード
     levelDataLoader_ = std::make_unique<LevelDataLoader>();
     
@@ -46,6 +64,24 @@ void BlenderLevelTestScene::Initialize() {
 
     // オブジェクトの生成
     levelObjects_ = levelDataLoader_->CreateObjects(device, modelCommon_);
+
+    // 自キャラ配置データから自キャラに座標と回転を反映 (資料 02_04.自キャラSpawnPoint 参照)
+    const auto& levelData = levelDataLoader_->GetLevelData();
+    if (player_ && !levelData.players.empty()) {
+        const auto& playerData = levelData.players[0];
+        player_->SetTranslation(playerData.translation);
+        constexpr float degToRad = 3.14159265358979323846f / 180.0f;
+        Vector3 radRotation = {
+            playerData.rotation.x * degToRad,
+            playerData.rotation.y * degToRad,
+            playerData.rotation.z * degToRad
+        };
+        player_->SetRotation(radRotation);
+    }
+
+    if (player_) {
+        player_->Update();
+    }
 
     // 初回トランスフォーム同期
     for (auto& obj : levelObjects_) {
@@ -91,6 +127,9 @@ void BlenderLevelTestScene::Update(SceneManager* sceneManager) {
     }
 
     // 2. 3Dレベルオブジェクト群の更新
+    if (player_) {
+        player_->Update();
+    }
     for (auto& obj : levelObjects_) {
         if (obj) {
             obj->Update();
@@ -116,6 +155,9 @@ void BlenderLevelTestScene::UpdateEditor() {
         );
     }
 
+    if (player_) {
+        player_->Update();
+    }
     for (auto& obj : levelObjects_) {
         if (obj) {
             obj->Update();
@@ -124,6 +166,10 @@ void BlenderLevelTestScene::UpdateEditor() {
 }
 
 void BlenderLevelTestScene::Draw(const Matrix4x4& viewProjectionMatrix) {
+    // 自キャラの描画
+    if (player_) {
+        player_->Draw();
+    }
     // 3Dモデルオブジェクト群の描画
     for (auto& obj : levelObjects_) {
         if (obj) {
@@ -137,6 +183,9 @@ void BlenderLevelTestScene::Draw(const Matrix4x4& viewProjectionMatrix) {
 
 std::vector<Object3D*> BlenderLevelTestScene::GetObjects() {
     std::vector<Object3D*> result;
+    if (player_) {
+        result.push_back(player_.get());
+    }
     for (auto& obj : levelObjects_) {
         if (obj) {
             result.push_back(obj.get());
@@ -163,6 +212,26 @@ void BlenderLevelTestScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
                 camera_->SetRotation(rot);
                 camera_->UpdateMatrix();
             }
+        }
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Player Info (Spawned)")) {
+        if (player_) {
+            Vector3 pos = player_->GetTranslation();
+            Vector3 rot = player_->GetRotation();
+            Vector3 scale = player_->GetScale();
+            if (ImGui::DragFloat3("Position", &pos.x, 0.1f)) {
+                player_->SetTranslation(pos);
+            }
+            if (ImGui::DragFloat3("Rotation (Rad)", &rot.x, 0.01f)) {
+                player_->SetRotation(rot);
+            }
+            if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+                player_->SetScale(scale);
+            }
+        } else {
+            ImGui::Text("Player object not spawned/initialized.");
         }
         ImGui::TreePop();
     }

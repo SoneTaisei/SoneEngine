@@ -245,6 +245,13 @@ void LevelDataLoader::ParseObjectRecursive(const nlohmann::json& objectJson, Obj
             outObjectData.children.push_back(childData);
         }
     }
+
+    if (outObjectData.type == "PlayerSpawn") {
+        PlayerSpawnData playerData;
+        playerData.translation = outObjectData.transform.translation;
+        playerData.rotation = outObjectData.transform.rotation;
+        levelData_.players.push_back(playerData);
+    }
 }
 
 std::vector<std::unique_ptr<Object3D>> LevelDataLoader::CreateObjects(
@@ -273,9 +280,10 @@ static Model* GetSafeModel(const std::string& requestedName, const std::string& 
         return ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.obj");
     }
 
-    // 2. requestedName (例: "testFbx") での実ファイル検索
+    // 2. requestedName (例: "gaikotu", "testFbx") での実ファイル検索
     if (!requestedName.empty()) {
         std::vector<std::pair<std::string, std::string>> checkPaths = {
+            {"resources/Object/Original/" + requestedName, "scene.gltf"},
             {"resources/Object/School/" + requestedName, requestedName + ".obj"},
             {"resources/Object/School/" + requestedName, requestedName + ".gltf"},
             {"resources/Object/Original/" + requestedName, requestedName + ".obj"},
@@ -410,6 +418,7 @@ void LevelDataLoader::DisplayImGui(ID3D12Device* device, ModelCommon* modelCommo
 
             ImGui::Text("Total Objects in JSON: %d", totalCount);
             ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Placed (Active) Objects: %d", (int)outObjects.size());
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Player Spawns Count: %d", (int)levelData_.players.size());
             if (disabledCount > 0) {
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Disabled (Skipped) Objects: %d", disabledCount);
             } else {
