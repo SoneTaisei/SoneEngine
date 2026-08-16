@@ -20,7 +20,6 @@ class GameCamera;
 #include "Resource/Primitive/PrimitiveManager.h"
 class Skybox;
 
-#include "Scene/LevelDataLoader.h"
 
 enum class GameState {
     StartReady,
@@ -84,9 +83,6 @@ private:
     // コマンドリストを覚えておくための変数
     
 
-    // レベルデータローダー
-    std::unique_ptr<LevelDataLoader> levelDataLoader_;
-    std::vector<std::unique_ptr<Object3D>> levelObjects_;
 
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;

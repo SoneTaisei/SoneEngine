@@ -1090,7 +1090,7 @@ void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animat
         } else {
             if (reportedMissingNodes.find(joint.name) == reportedMissingNodes.end()) {
                 reportedMissingNodes.insert(joint.name);
-                LogManager::GetInstance()->AddLog(LogLevel::Warning, "Animation channel not found for joint: " + joint.name);
+                LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation channel not found for joint: " + joint.name);
             }
         }
     }
