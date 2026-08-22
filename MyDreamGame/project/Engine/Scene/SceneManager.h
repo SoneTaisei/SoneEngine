@@ -27,6 +27,9 @@ public:
     IScene *GetCurrentScene() const { return currentScene_.get(); }
 
     void ChangeScene(std::unique_ptr<IScene> nextScene);
+    void PushScene(std::unique_ptr<IScene> nextScene);
+    void PopScene();
+    bool HasSceneStack() const { return !sceneStack_.empty(); }
 
     // SpriteCommonをセットする関数
     void SetSpriteCommon(SpriteCommon *spriteCommon) { spriteCommon_ = spriteCommon; }
@@ -78,6 +81,9 @@ private:
 
     // 次のシーンを予約しておく変数
     std::unique_ptr<IScene> nextScene_ = nullptr;
+
+    // スタック型ステート管理用シーンスタック
+    std::vector<std::unique_ptr<IScene>> sceneStack_;
 
     // データ共有用の辞書
     std::unordered_map<std::string, std::any> blackboard_;

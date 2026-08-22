@@ -79,6 +79,9 @@ public:
 
     // ヒエラルキー用
     PrimitiveObject* GetPrimitiveObject() { return visuals_.GetPrimitiveObject(); }
+    Object3D* GetModelObject() { return visuals_.GetModelObject(); }
+    AnimatorComponent* GetAnimator() { return visuals_.GetAnimator(); }
+    PlayerVisuals& GetVisuals() { return visuals_; }
 
     // ゲーム状態取得用
     int GetScore() const { return state_.score_; }

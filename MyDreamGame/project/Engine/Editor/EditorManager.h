@@ -52,6 +52,7 @@ public:
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
+    bool IsAnimationEditorHovered() const { return isAnimationEditorHovered_; }
     bool IsMapEditorVisible() const { return isMapEditorVisible_; }
     bool IsMapEditorHovered() const { return isMapEditorHovered_; }
     bool IsRoomDragging() const { return draggingRoomIndex_ != -1; }
@@ -213,6 +214,8 @@ private:
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
     bool isReplayEditorHovered_ = false; // リプレイエディタがホバーされているか
+    bool isAnimationEditorHovered_ = false; // アニメーションエディタがホバーされているか
+    bool isAnimationScenePushed_ = false; // アニメーション専用シーンがスタックにプッシュされているか
     bool isMapEditorVisible_ = false; // マップエディタがアクティブタブとして表示されているか
     bool wasMapEditorVisible_ = false; // 前フレームの表示状態
     bool isMapEditorHovered_ = false; // マップエディタがホバーされているか
@@ -290,7 +293,8 @@ private:
 
     enum class EditorMode {
         Normal,
-        Replay
+        Replay,
+        Animation
     };
     EditorMode currentMode_ = EditorMode::Normal;
 
@@ -304,16 +308,45 @@ private:
     bool showMapSettings_ = true;
     bool showAnimEditor_ = true;
 
-    // アニメーションエディター用変数
-    int animEditorTargetAnim_ = 0; // 0: WallClimb, 1: AirDash
+    // アニメーションエディター（Blender風ドープシート）用変数
+    int animEditorTargetAnim_ = 0; // 0: WallClimb, 1: AirDash, 2: Custom...
     float animEditorTime_ = 0.0f;
     bool animEditorPlaying_ = false;
-    int animEditorSelectedJoint_ = 0;
+    bool animEditorLoop_ = true;
+    float animEditorFps_ = 60.0f;
+    std::string animEditorSelectedJointName_ = "Hips_01";
+    int animEditorSelectedProperty_ = 0; // 0: Rotation, 1: Translation, 2: Scale
     int animEditorSelectedKeyIndex_ = -1;
+    bool isDraggingAnimKeyframe_ = false;
+    float dragAnimKeyOriginalTime_ = 0.0f;
+    bool isSummaryKeyDrag_ = false;
+    float dragSummaryOriginalTime_ = 0.0f;
+    bool isAnimRulerScrubbing_ = false;
+    float animTimelineZoom_ = 200.0f; // 1秒あたりのピクセル幅
+    float animTimelineScrollX_ = 0.0f;
+    
+    Animation editingAnimation_;
     Animation editingAnimationWallClimb_;
     Animation editingAnimationAirDash_;
     bool animEditorInitialized_ = false;
-    void DrawAnimationEditorUI(class SceneManager* sceneManager);
+    std::vector<std::string> currentJointList_;
+
+    // カメラ軸スナップの線形補間用変数
+    bool isCameraSnapLerping_ = false;
+    float cameraSnapLerpTimer_ = 0.0f;
+    float cameraSnapLerpDuration_ = 0.25f;
+    Vector3 cameraSnapStartRot_ = {};
+    Vector3 cameraSnapEndRot_ = {};
+    Vector3 cameraSnapStartPos_ = {};
+    Vector3 cameraSnapEndPos_ = {};
+    
+    void DrawAnimationEditorMainView(class SceneManager* sceneManager, Camera** activeCamera, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle);
+    void DrawAnimationViewportGrid(const Matrix4x4& viewProjectionMatrix, ImVec2 vpPos, ImVec2 vpSize);
+    void DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
+    void DrawAnimationDopeSheetUI(class SceneManager* sceneManager);
+    void DrawAnimationInspectorUI(class SceneManager* sceneManager);
+    void RefreshAnimationJointList(class SceneManager* sceneManager);
+    void UpdateAnimationPosePreview(class SceneManager* sceneManager);
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

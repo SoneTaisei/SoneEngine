@@ -55,6 +55,7 @@ public:
 
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
     Object3D* GetModelObject() { return modelObj_.get(); }
+    AnimatorComponent* GetAnimator() { return animator_.get(); }
 
 private:
     std::unique_ptr<PrimitiveObject> primitiveObj_;

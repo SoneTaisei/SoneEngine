@@ -329,7 +329,10 @@ void WindowsApplication::Update() {
                 CameraManager::GetInstance()->ClearCullingCameraInfo();
             }
             
-            bool allowCameraInput = editorManager_->IsGameViewHovered() || editorManager_->IsReplayEditorHovered() || !ImGui::GetIO().WantCaptureMouse;
+            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
+                                    editorManager_->IsReplayEditorHovered() || 
+                                    editorManager_->IsAnimationEditorHovered() || 
+                                    !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {
             activeCamera_ = gameCamera_.get();

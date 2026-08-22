@@ -21,6 +21,7 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Game2D/Player/Player2D.h"
 #include "Component/TransformComponent.h"
+#include "Scenes/AnimationPreviewScene.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -532,6 +533,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // 古いiniファイルからレイアウトが崩れるのを防ぐため、新しいウィンドウが無い場合は強制リセット
                 bool hasReplayEditor = false;
                 bool hasStageSelectEditor = false;
+                bool hasDopeSheet = false;
                 char buffer[256];
                 while (fgets(buffer, sizeof(buffer), f)) {
                     if (strstr(buffer, "マイメディア")) {
@@ -540,8 +542,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (strstr(buffer, "ステージセレクトエディター")) {
                         hasStageSelectEditor = true;
                     }
+                    if (strstr(buffer, "ドープシート")) {
+                        hasDopeSheet = true;
+                    }
                 }
-                if (!hasReplayEditor || !hasStageSelectEditor) {
+                if (!hasReplayEditor || !hasStageSelectEditor || !hasDopeSheet) {
                     resetLayout = true;
                 }
                 fclose(f);
@@ -568,6 +573,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
             ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
             ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
+            ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
 
             // 左側
             ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
@@ -581,7 +587,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
             ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
-            ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
 
             ImGui::DockBuilderFinish(dockspace_id);
@@ -594,6 +600,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
                 currentMode_ = EditorMode::Normal;
                 selectedReplaySeekbar_ = false;
+                if (isAnimationScenePushed_) {
+                    sceneManager->PopScene();
+                    isAnimationScenePushed_ = false;
+                }
             }
             isGameViewHovered_ = ImGui::IsWindowHovered();
             {
@@ -626,6 +636,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("リプレイエディター", &showReplayEditor_)) {
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
                 currentMode_ = EditorMode::Replay;
+                if (isAnimationScenePushed_) {
+                    sceneManager->PopScene();
+                    isAnimationScenePushed_ = false;
+                }
             }
             isReplayEditorHovered_ = ImGui::IsWindowHovered();
             
@@ -656,6 +670,24 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     activeScene->DrawEditorOverlay(viewProj);
                 }
             }
+        }
+        ImGui::End();
+    }
+
+    // --- Animation Editor メインウィンドウ (dock_id_main) ---
+    isAnimationEditorHovered_ = false;
+    if (showAnimEditor_) {
+        if (ImGui::Begin("アニメーションエディター", &showAnimEditor_)) {
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
+                currentMode_ = EditorMode::Animation;
+                if (!isAnimationScenePushed_) {
+                    sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
+                    isAnimationScenePushed_ = true;
+                    RefreshAnimationJointList(sceneManager);
+                }
+            }
+            isAnimationEditorHovered_ = ImGui::IsWindowHovered();
+            DrawAnimationEditorMainView(sceneManager, activeCamera, renderTextureSrvHandle);
         }
         ImGui::End();
     }
@@ -775,11 +807,24 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         ImGui::End();
     } else {
-        // 通常モード時: 「ヒエラルキー」を表示
+        // 通常・アニメーションモード時: 「ヒエラルキー」を表示
         if (showHierarchy_) {
             if (ImGui::Begin("ヒエラルキー", &showHierarchy_)) {
                 IScene *activeScene = sceneManager->GetCurrentScene();
                 if (activeScene) {
+                    // 1. プレイヤー（存在する場合）
+                    if (activeScene->GetPlayer()) {
+                        auto* player = activeScene->GetPlayer();
+                        bool isSelected = (selectedPrimitive_ == player->GetPrimitiveObject() || (selectedObject_ && selectedObject_ == player->GetModelObject()));
+                        if (ImGui::Selectable("[Player] プレイヤー", isSelected)) {
+                            selectedGameObject_ = nullptr;
+                            selectedParticle_ = nullptr;
+                            selectedPrimitive_ = player->GetPrimitiveObject();
+                            selectedObject_ = player->GetModelObject();
+                            RefreshAnimationJointList(sceneManager);
+                        }
+                    }
+
                     if (ImGui::CollapsingHeader("GameObjects", ImGuiTreeNodeFlags_DefaultOpen)) {
                         for (auto &obj : activeScene->GetGameObjects()) {
                             bool isSelected = (selectedGameObject_ == obj);
@@ -788,6 +833,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 selectedObject_ = nullptr;
                                 selectedParticle_ = nullptr;
                                 selectedPrimitive_ = nullptr;
+                                RefreshAnimationJointList(sceneManager);
                             }
                         }
                     }
@@ -799,6 +845,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 selectedObject_ = obj;
                                 selectedParticle_ = nullptr;
                                 selectedPrimitive_ = nullptr;
+                                RefreshAnimationJointList(sceneManager);
                             }
                         }
                     }
@@ -822,6 +869,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 selectedParticle_ = nullptr;
                                 selectedPrimitive_ = primitive;
                             }
+                        }
+                    }
+
+                    // 選択中オブジェクトのスケルトンボーン一覧
+                    if (!currentJointList_.empty()) {
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        if (ImGui::TreeNodeEx("[Bones] ボーン / 関節", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            for (const auto& jointName : currentJointList_) {
+                                bool isJointSelected = (animEditorSelectedJointName_ == jointName);
+                                if (ImGui::Selectable(("  " + jointName).c_str(), isJointSelected)) {
+                                    animEditorSelectedJointName_ = jointName;
+                                    animEditorSelectedKeyIndex_ = -1;
+                                }
+                            }
+                            ImGui::TreePop();
                         }
                     }
                 }
@@ -862,7 +925,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Spacing();
             }
 
-            if (selectedReplayBlock_.IsValid()) {
+            if (currentMode_ == EditorMode::Animation) {
+                DrawAnimationInspectorUI(sceneManager);
+            } else if (selectedReplayBlock_.IsValid()) {
                 ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "キー入力ノード プロパティ");
                 ImGui::Separator();
                 ImGui::Spacing();
@@ -2361,9 +2426,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::End();
     }
 
-    // --- 下部ペイン (通常: マップ設定 / リプレイ時: タイムライン) ---
-    if (showMapSettings_) {
-        if (currentMode_ == EditorMode::Replay) {
+    // --- 下部ペイン (通常: マップ設定 / リプレイ時: タイムライン / アニメーション時: ドープシート) ---
+    if (showMapSettings_ || currentMode_ == EditorMode::Animation) {
+        if (currentMode_ == EditorMode::Animation) {
+            DrawAnimationDopeSheetUI(sceneManager);
+        } else if (currentMode_ == EditorMode::Replay) {
             if (ImGui::Begin("タイムライン", &showMapSettings_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 auto replayMgr = ReplayManager::GetInstance();
                 const auto& currentReplay = replayMgr->GetCurrentReplay();
@@ -3315,89 +3382,40 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
     }
 
-    DrawAnimationEditorUI(sceneManager);
+    UpdateAnimationPosePreview(sceneManager);
 
     LogManager::GetInstance()->Draw();
 }
 
-void EditorManager::DrawAnimationEditorUI(SceneManager* sceneManager) {
-    if (!showAnimEditor_) return;
-
-    if (!animEditorInitialized_) {
-        if (!LoadAnimationFromJsonFile(editingAnimationWallClimb_, "resources/json/shared/Player/wall_climb_animation.json")) {
-            editingAnimationWallClimb_ = CreateDefaultWallClimbAnimation();
-        }
-        if (!LoadAnimationFromJsonFile(editingAnimationAirDash_, "resources/json/shared/Player/air_dash_animation.json")) {
-            editingAnimationAirDash_ = CreateDefaultAirDashAnimation();
-        }
-        animEditorInitialized_ = true;
+void EditorManager::RefreshAnimationJointList(SceneManager* sceneManager) {
+    currentJointList_.clear();
+    
+    // 1. 選択中オブジェクトからのスケルトン検索
+    AnimatorComponent* animator = nullptr;
+    if (selectedGameObject_) {
+        animator = selectedGameObject_->GetComponent<AnimatorComponent>();
+    } else if (selectedObject_) {
+        animator = selectedObject_->GetAnimator();
     }
-
-    if (ImGui::Begin("アニメーションエディター", &showAnimEditor_)) {
-        ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f), "Animation Keyframe Editor");
-        ImGui::Separator();
-
-        // 1. アニメーション選択
-        const char* animNames[] = { "壁つかまり移動 (WallClimb)", "空中ダッシュ (AirDash)" };
-        int prevAnim = animEditorTargetAnim_;
-        if (ImGui::Combo("対象アニメーション", &animEditorTargetAnim_, animNames, 2)) {
-            if (prevAnim != animEditorTargetAnim_) {
-                animEditorTime_ = 0.0f;
-                animEditorSelectedKeyIndex_ = -1;
-            }
+    
+    // 2. 選択がない場合、SceneのPlayerを検索
+    if (!animator && sceneManager && sceneManager->GetCurrentScene()) {
+        auto* player = sceneManager->GetCurrentScene()->GetPlayer();
+        if (player) {
+            animator = player->GetAnimator();
         }
-
-        Animation& curAnim = (animEditorTargetAnim_ == 0) ? editingAnimationWallClimb_ : editingAnimationAirDash_;
-        const std::string animPath = (animEditorTargetAnim_ == 0) 
-            ? "resources/json/shared/Player/wall_climb_animation.json"
-            : "resources/json/shared/Player/air_dash_animation.json";
-
-        ImGui::SameLine();
-        if (ImGui::Button("JSON保存 (Save)")) {
-            SaveAnimationToJsonFile(curAnim, animPath);
-            LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation saved to: " + animPath);
+    }
+    
+    if (animator && animator->HasSkeleton()) {
+        const auto& joints = animator->GetSkeleton().joints;
+        for (const auto& j : joints) {
+            currentJointList_.push_back(j.name);
         }
-        ImGui::SameLine();
-        if (ImGui::Button("JSON再読込 (Reload)")) {
-            LoadAnimationFromJsonFile(curAnim, animPath);
-            LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation reloaded from: " + animPath);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("デフォルト復元 (Reset)")) {
-            if (animEditorTargetAnim_ == 0) curAnim = CreateDefaultWallClimbAnimation();
-            else curAnim = CreateDefaultAirDashAnimation();
-            SaveAnimationToJsonFile(curAnim, animPath);
-        }
-
-        ImGui::Spacing();
-        // 2. タイムライン・再生コントロール
-        float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-        if (animEditorPlaying_) {
-            animEditorTime_ += deltaTime;
-            if (curAnim.duration > 0.0f && animEditorTime_ >= curAnim.duration) {
-                animEditorTime_ = std::fmod(animEditorTime_, curAnim.duration);
-            }
-        }
-
-        if (ImGui::Button(animEditorPlaying_ ? "一時停止 (Pause)##Anim" : "再生 (Play)##Anim")) {
-            animEditorPlaying_ = !animEditorPlaying_;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("先頭へ (Rewind)##Anim")) {
-            animEditorTime_ = 0.0f;
-        }
-
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(100.0f);
-        ImGui::DragFloat("Duration(秒)", &curAnim.duration, 0.01f, 0.05f, 5.0f, "%.2fs");
-
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::SliderFloat("##AnimTimelineSlider", &animEditorTime_, 0.0f, curAnim.duration, "Time: %.3fs");
-
-        ImGui::Separator();
-
-        // 3. ジョイント（関節）選択 & キーフレーム編集
-        static const char* jointNames[] = {
+    }
+    
+    // フォールバック（デフォルトジョイント）
+    if (currentJointList_.empty()) {
+        static const char* defaultJoints[] = {
             "Hips_01",
             "LeftArm_09",
             "RightArm_014",
@@ -3410,99 +3428,1030 @@ void EditorManager::DrawAnimationEditorUI(SceneManager* sceneManager) {
             "LeftFoot_021",
             "RightFoot_026"
         };
-        const int jointCount = sizeof(jointNames) / sizeof(jointNames[0]);
+        for (const auto* name : defaultJoints) {
+            currentJointList_.push_back(name);
+        }
+    }
+    
+    // 選択中ジョイント名がリストにない場合はリストの先頭にする
+    bool found = false;
+    for (const auto& name : currentJointList_) {
+        if (name == animEditorSelectedJointName_) {
+            found = true;
+            break;
+        }
+    }
+    if (!found && !currentJointList_.empty()) {
+        animEditorSelectedJointName_ = currentJointList_[0];
+    }
+}
 
-        ImGui::Columns(2, "AnimEditorColumns", true);
-        ImGui::SetColumnWidth(0, 200.0f);
+void EditorManager::UpdateAnimationPosePreview(SceneManager* sceneManager) {
+    if (!sceneManager || !sceneManager->GetCurrentScene()) return;
+    
+    if (!animEditorInitialized_) {
+        if (!LoadAnimationFromJsonFile(editingAnimationWallClimb_, "resources/json/shared/Player/wall_climb_animation.json")) {
+            editingAnimationWallClimb_ = CreateDefaultWallClimbAnimation();
+        }
+        if (!LoadAnimationFromJsonFile(editingAnimationAirDash_, "resources/json/shared/Player/air_dash_animation.json")) {
+            editingAnimationAirDash_ = CreateDefaultAirDashAnimation();
+        }
+        editingAnimation_ = (animEditorTargetAnim_ == 0) ? editingAnimationWallClimb_ : editingAnimationAirDash_;
+        animEditorInitialized_ = true;
+    }
 
-        ImGui::Text("関節 (Joints):");
-        for (int i = 0; i < jointCount; ++i) {
-            bool selected = (animEditorSelectedJoint_ == i);
-            if (ImGui::Selectable(jointNames[i], selected)) {
-                animEditorSelectedJoint_ = i;
+    AnimatorComponent* animator = nullptr;
+    if (selectedGameObject_) {
+        animator = selectedGameObject_->GetComponent<AnimatorComponent>();
+    } else if (selectedObject_) {
+        animator = selectedObject_->GetAnimator();
+    }
+    if (!animator) {
+        auto* player = sceneManager->GetCurrentScene()->GetPlayer();
+        if (player) {
+            animator = player->GetAnimator();
+        }
+    }
+    
+    if (!animator) return;
+    
+    // 再生中の時間更新
+    if (animEditorPlaying_) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        animEditorTime_ += dt;
+        if (editingAnimation_.duration > 0.0f) {
+            if (animEditorTime_ >= editingAnimation_.duration) {
+                if (animEditorLoop_) {
+                    animEditorTime_ = std::fmod(animEditorTime_, editingAnimation_.duration);
+                } else {
+                    animEditorTime_ = editingAnimation_.duration;
+                    animEditorPlaying_ = false;
+                }
+            }
+        }
+    }
+    
+    // アニメーションをモデルに適用（アニメーションモード時または編集中）
+    if (currentMode_ == EditorMode::Animation || isPlaying_) {
+        animator->ClearJointOverrides();
+        for (const auto& [nodeName, nodeAnim] : editingAnimation_.nodeAnimations) {
+            if (!nodeAnim.rotate.empty()) {
+                Quaternion rot = CalculateValue(nodeAnim.rotate, animEditorTime_);
+                animator->SetJointRotationOverride(nodeName, rot, 1.0f);
+            }
+        }
+    }
+}
+
+void EditorManager::DrawAnimationViewportGrid(const Matrix4x4& viewProjectionMatrix, ImVec2 vpPos, ImVec2 vpSize) {
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->PushClipRect(vpPos, ImVec2(vpPos.x + vpSize.x, vpPos.y + vpSize.y), true);
+
+    const float gridExtent = 12.0f;
+    const float gridStep = 1.0f;
+    const float nearW = 0.05f; // Nearクリップ閾値
+    const float gridY = 0.005f; // 床オブジェクトとの干渉を避ける高さ
+
+    // 同次クリップ座標の計算
+    auto transformToClip = [&](const Vector3& p, Vector4& outClip) {
+        outClip.x = p.x * viewProjectionMatrix.m[0][0] + p.y * viewProjectionMatrix.m[1][0] + p.z * viewProjectionMatrix.m[2][0] + viewProjectionMatrix.m[3][0];
+        outClip.y = p.x * viewProjectionMatrix.m[0][1] + p.y * viewProjectionMatrix.m[1][1] + p.z * viewProjectionMatrix.m[2][1] + viewProjectionMatrix.m[3][1];
+        outClip.z = p.x * viewProjectionMatrix.m[0][2] + p.y * viewProjectionMatrix.m[1][2] + p.z * viewProjectionMatrix.m[2][2] + viewProjectionMatrix.m[3][2];
+        outClip.w = p.x * viewProjectionMatrix.m[0][3] + p.y * viewProjectionMatrix.m[1][3] + p.z * viewProjectionMatrix.m[2][3] + viewProjectionMatrix.m[3][3];
+    };
+
+    // クリップ座標からスクリーン座標への変換
+    auto clipToScreen = [&](const Vector4& clip, ImVec2& outP) {
+        float ndcX = clip.x / clip.w;
+        float ndcY = clip.y / clip.w;
+        outP.x = vpPos.x + (ndcX + 1.0f) * 0.5f * vpSize.x;
+        outP.y = vpPos.y + (1.0f - ndcY) * 0.5f * vpSize.y;
+    };
+
+    // 3D線分のクリッピング＆描画
+    auto drawSegment3D = [&](Vector3 p1, Vector3 p2, ImU32 col, float thickness) {
+        Vector4 c1, c2;
+        transformToClip(p1, c1);
+        transformToClip(p2, c2);
+
+        // 両方ともカメラ背後の場合はスキップ
+        if (c1.w < nearW && c2.w < nearW) return;
+
+        // 片方がカメラ背後にある場合、Near平面 (w = nearW) でクリップ
+        if (c1.w < nearW) {
+            float t = (nearW - c1.w) / (c2.w - c1.w);
+            p1 = { p1.x + (p2.x - p1.x) * t, p1.y + (p2.y - p1.y) * t, p1.z + (p2.z - p1.z) * t };
+            transformToClip(p1, c1);
+        } else if (c2.w < nearW) {
+            float t = (nearW - c2.w) / (c1.w - c2.w);
+            p2 = { p2.x + (p1.x - p2.x) * t, p2.y + (p1.y - p2.y) * t, p2.z + (p1.z - p2.z) * t };
+            transformToClip(p2, c2);
+        }
+
+        if (c1.w < nearW || c2.w < nearW) return;
+
+        ImVec2 s1, s2;
+        clipToScreen(c1, s1);
+        clipToScreen(c2, s2);
+        drawList->AddLine(s1, s2, col, thickness);
+    };
+
+    // 1. 通常グリッド線 (XZ平面) - 1.0mセグメント分割で安定描画
+    ImU32 gridCol = IM_COL32(75, 75, 80, 140);
+    for (float x = -gridExtent; x <= gridExtent; x += gridStep) {
+        if (std::abs(x) < 0.001f) continue; // Z軸(x=0)は後で強調描画
+        for (float z = -gridExtent; z < gridExtent; z += gridStep) {
+            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x, gridY, z + gridStep }, gridCol, 1.0f);
+        }
+    }
+    for (float z = -gridExtent; z <= gridExtent; z += gridStep) {
+        if (std::abs(z) < 0.001f) continue; // X軸(z=0)は後で強調描画
+        for (float x = -gridExtent; x < gridExtent; x += gridStep) {
+            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x + gridStep, gridY, z }, gridCol, 1.0f);
+        }
+    }
+
+    // 2. 0のライン強調 (X軸: 赤, Z軸: 青/緑) - 1.0mセグメント分割で安定描画
+    ImU32 xAxisCol = IM_COL32(230, 60, 75, 230);
+    for (float x = -gridExtent; x < gridExtent; x += gridStep) {
+        drawSegment3D(Vector3{ x, gridY, 0.0f }, Vector3{ x + gridStep, gridY, 0.0f }, xAxisCol, 2.0f);
+    }
+
+    ImU32 zAxisCol = IM_COL32(60, 140, 230, 230);
+    for (float z = -gridExtent; z < gridExtent; z += gridStep) {
+        drawSegment3D(Vector3{ 0.0f, gridY, z }, Vector3{ 0.0f, gridY, z + gridStep }, zAxisCol, 2.0f);
+    }
+
+    drawList->PopClipRect();
+}
+
+void EditorManager::DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize) {
+    if (!activeCamera) return;
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 center = ImVec2(vpPos.x + vpSize.x - 55.0f, vpPos.y + 55.0f);
+    const float radius = 36.0f;
+    const float badgeRadius = 9.5f;
+
+    // 背景の円形プレート（半透明）
+    drawList->AddCircleFilled(center, radius + 12.0f, IM_COL32(30, 30, 35, 130), 32);
+
+    Matrix4x4 viewMat = activeCamera->GetViewMatrix();
+
+    // 6本の軸定義 (ワールド方向, 正/負, 色, ラベル, スナップ時の目標回転, 目標位置オフセット方向)
+    struct AxisInfo {
+        Vector3 worldDir;
+        bool isPositive;
+        ImU32 color;
+        ImU32 ringColor;
+        char label;
+        Vector3 snapRotate;
+        Vector3 camOffsetDir;
+        Vector3 camDir;
+        ImVec2 screenPos;
+        bool isHovered;
+    };
+
+    const float PI_VAL = 3.1415926535f;
+    const float HALF_PI = 1.5707963268f;
+
+    AxisInfo axes[6] = {
+        // +X: 右側面 (Right) - カメラは+X側に位置し、-X方向を向く -> Y回転: -90°
+        { {  1.0f,  0.0f,  0.0f }, true,  IM_COL32(235, 65,  75,  255), IM_COL32(235, 65,  75,  180), 'X', { 0.0f, -HALF_PI, 0.0f }, {  1.0f, 0.0f, 0.0f }, {}, {}, false },
+        // -X: 左側面 (Left) - カメラは-X側に位置し、+X方向を向く -> Y回転: +90°
+        { { -1.0f,  0.0f,  0.0f }, false, IM_COL32(235, 65,  75,  140), IM_COL32(235, 65,  75,  200), ' ', { 0.0f,  HALF_PI, 0.0f }, { -1.0f, 0.0f, 0.0f }, {}, {}, false },
+        // +Y: 上面 (Top) - カメラは+Y側に位置し、真下を向く -> X回転: +90°
+        { {  0.0f,  1.0f,  0.0f }, true,  IM_COL32(130, 200, 45,  255), IM_COL32(130, 200, 45,  180), 'Y', { HALF_PI - 0.001f, 0.0f, 0.0f }, { 0.0f,  1.0f, 0.0001f }, {}, {}, false },
+        // -Y: 底面 (Bottom) - カメラは-Y側に位置し、真上を向く -> X回転: -90°
+        { {  0.0f, -1.0f,  0.0f }, false, IM_COL32(130, 200, 45,  140), IM_COL32(130, 200, 45,  200), ' ', { -HALF_PI + 0.001f, 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0001f }, {}, {}, false },
+        // +Z: 正面 (Front) - カメラは-Z側に位置し、+Z方向(手前)を向く -> Y回転: 0°
+        { {  0.0f,  0.0f,  1.0f }, true,  IM_COL32(50,  135, 245, 255), IM_COL32(50,  135, 245, 180), 'Z', { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f }, {}, {}, false },
+        // -Z: 背面 (Back) - カメラは+Z側に位置し、-Z方向(奥)を向く -> Y回転: 180°
+        { {  0.0f,  0.0f, -1.0f }, false, IM_COL32(50,  135, 245, 140), IM_COL32(50,  135, 245, 200), ' ', { 0.0f, PI_VAL, 0.0f }, { 0.0f, 0.0f,  1.0f }, {}, {}, false }
+    };
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mousePos = io.MousePos;
+
+    // カメラ座標系への変換 (ViewMatrixの回転成分を適用)
+    for (int i = 0; i < 6; ++i) {
+        axes[i].camDir.x = axes[i].worldDir.x * viewMat.m[0][0] + axes[i].worldDir.y * viewMat.m[1][0] + axes[i].worldDir.z * viewMat.m[2][0];
+        axes[i].camDir.y = axes[i].worldDir.x * viewMat.m[0][1] + axes[i].worldDir.y * viewMat.m[1][1] + axes[i].worldDir.z * viewMat.m[2][1];
+        axes[i].camDir.z = axes[i].worldDir.x * viewMat.m[0][2] + axes[i].worldDir.y * viewMat.m[1][2] + axes[i].worldDir.z * viewMat.m[2][2];
+
+        axes[i].screenPos = ImVec2(
+            center.x + axes[i].camDir.x * radius,
+            center.y - axes[i].camDir.y * radius
+        );
+    }
+
+    // 深度(camDir.z)の昇順(奥 -> 手前)にソート
+    std::vector<int> sortedIndices = { 0, 1, 2, 3, 4, 5 };
+    std::sort(sortedIndices.begin(), sortedIndices.end(), [&](int a, int b) {
+        return axes[a].camDir.z < axes[b].camDir.z;
+    });
+
+    // ホバー＆クリック判定（手前側にある軸から優先して判定）
+    int clickedAxisIdx = -1;
+    for (int i = 5; i >= 0; --i) {
+        int idx = sortedIndices[i];
+        float dx = mousePos.x - axes[idx].screenPos.x;
+        float dy = mousePos.y - axes[idx].screenPos.y;
+        float distSq = dx * dx + dy * dy;
+        float hitRadius = badgeRadius + 2.5f;
+        if (distSq <= hitRadius * hitRadius) {
+            axes[idx].isHovered = true;
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                clickedAxisIdx = idx;
+            }
+            break;
+        }
+    }
+
+    // 軸スナップの開始 (クリック時 - 線形補間アニメーション)
+    if (clickedAxisIdx >= 0) {
+        const auto& snapAxis = axes[clickedAxisIdx];
+        
+        // 注視点 (モデル中心: 0, 1.0, 0)
+        Vector3 target = { 0.0f, 1.0f, 0.0f };
+        Vector3 curCamPos = activeCamera->GetTranslation();
+        Vector3 diff = { curCamPos.x - target.x, curCamPos.y - target.y, curCamPos.z - target.z };
+        float dist = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+        if (dist < 2.0f || dist > 30.0f) dist = 6.0f; // 適切な距離にフォールバック
+
+        cameraSnapStartRot_ = activeCamera->GetRotation();
+        cameraSnapStartPos_ = curCamPos;
+
+        // 角度の最短経路補間（-PI〜+PIの差分調整）
+        auto normalizeAngleDiff = [](float start, float target) {
+            float diff = target - start;
+            while (diff > 3.14159265f) { start += 6.2831853f; diff = target - start; }
+            while (diff < -3.14159265f) { start -= 6.2831853f; diff = target - start; }
+            return start;
+        };
+        cameraSnapStartRot_.x = normalizeAngleDiff(cameraSnapStartRot_.x, snapAxis.snapRotate.x);
+        cameraSnapStartRot_.y = normalizeAngleDiff(cameraSnapStartRot_.y, snapAxis.snapRotate.y);
+        cameraSnapStartRot_.z = normalizeAngleDiff(cameraSnapStartRot_.z, snapAxis.snapRotate.z);
+
+        cameraSnapEndRot_ = snapAxis.snapRotate;
+        cameraSnapEndPos_ = {
+            target.x + snapAxis.camOffsetDir.x * dist,
+            target.y + snapAxis.camOffsetDir.y * dist,
+            target.z + snapAxis.camOffsetDir.z * dist
+        };
+        cameraSnapLerpTimer_ = 0.0f;
+        cameraSnapLerpDuration_ = 0.25f;
+        isCameraSnapLerping_ = true;
+    }
+
+    // 描画: 奥から手前へ
+    for (int idx : sortedIndices) {
+        const auto& axis = axes[idx];
+        float curRadius = axis.isHovered ? (badgeRadius + 1.5f) : badgeRadius;
+
+        if (!axis.isPositive) {
+            // 負方向軸: 半透明のリング（円周のみ）
+            if (axis.isHovered) {
+                drawList->AddCircleFilled(axis.screenPos, curRadius * 0.75f, axis.color, 16);
+                drawList->AddCircle(axis.screenPos, curRadius * 0.75f, IM_COL32(255, 255, 255, 255), 16, 2.0f);
+            } else {
+                drawList->AddCircle(axis.screenPos, curRadius * 0.75f, axis.ringColor, 16, 1.5f);
+            }
+        } else {
+            // 正方向軸: 中心から軸への線分
+            drawList->AddLine(center, axis.screenPos, axis.color, 2.5f);
+
+            // 塗りつぶしバッジ円
+            drawList->AddCircleFilled(axis.screenPos, curRadius, axis.color, 16);
+            if (axis.isHovered) {
+                drawList->AddCircle(axis.screenPos, curRadius, IM_COL32(255, 255, 255, 255), 16, 2.0f);
+            } else {
+                drawList->AddCircle(axis.screenPos, curRadius, IM_COL32(255, 255, 255, 120), 16, 1.0f);
+            }
+
+            // 文字 ('X', 'Y', 'Z')
+            char txt[2] = { axis.label, '\0' };
+            ImVec2 txtSz = ImGui::CalcTextSize(txt);
+            drawList->AddText(ImVec2(axis.screenPos.x - txtSz.x * 0.5f, axis.screenPos.y - txtSz.y * 0.5f), IM_COL32(255, 255, 255, 255), txt);
+        }
+    }
+}
+
+void EditorManager::DrawAnimationEditorMainView(SceneManager* sceneManager, Camera** activeCamera, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle) {
+    // 3Dレンダリング結果のプレビュー表示
+    ImVec2 contentSize = ImGui::GetContentRegionAvail();
+    float aspect = 1280.0f / 720.0f;
+    float windowAspect = contentSize.x / contentSize.y;
+    ImVec2 imageSize;
+    if (windowAspect > aspect) {
+        imageSize.y = contentSize.y;
+        imageSize.x = contentSize.y * aspect;
+    } else {
+        imageSize.x = contentSize.x;
+        imageSize.y = contentSize.x / aspect;
+    }
+    ImVec2 currentPos = ImGui::GetCursorPos();
+    ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+    gameViewPos_ = ImGui::GetCursorScreenPos();
+    gameViewSize_ = imageSize;
+    ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+
+    // カメラ軸スナップの線形補間アニメーション更新
+    Camera* cam = activeCamera ? *activeCamera : nullptr;
+    if (cam) {
+        if (isCameraSnapLerping_) {
+            ImGuiIO& io = ImGui::GetIO();
+            if (io.MouseDown[1] || io.MouseDown[2] || io.MouseWheel != 0.0f) {
+                // ユーザーによる手動操作があれば補間中断
+                isCameraSnapLerping_ = false;
+            } else {
+                float dt = io.DeltaTime > 0.0f ? io.DeltaTime : 0.016f;
+                cameraSnapLerpTimer_ += dt;
+                float t = std::clamp(cameraSnapLerpTimer_ / cameraSnapLerpDuration_, 0.0f, 1.0f);
+                float easeT = t * t * (3.0f - 2.0f * t); // スムーズステップ
+
+                Vector3 curRot = {
+                    cameraSnapStartRot_.x + (cameraSnapEndRot_.x - cameraSnapStartRot_.x) * easeT,
+                    cameraSnapStartRot_.y + (cameraSnapEndRot_.y - cameraSnapStartRot_.y) * easeT,
+                    cameraSnapStartRot_.z + (cameraSnapEndRot_.z - cameraSnapStartRot_.z) * easeT
+                };
+                Vector3 curPos = {
+                    cameraSnapStartPos_.x + (cameraSnapEndPos_.x - cameraSnapStartPos_.x) * easeT,
+                    cameraSnapStartPos_.y + (cameraSnapEndPos_.y - cameraSnapStartPos_.y) * easeT,
+                    cameraSnapStartPos_.z + (cameraSnapEndPos_.z - cameraSnapStartPos_.z) * easeT
+                };
+
+                cam->SetRotation(curRot);
+                cam->SetTranslation(curPos);
+                cam->UpdateMatrix();
+
+                if (t >= 1.0f) {
+                    isCameraSnapLerping_ = false;
+                }
+            }
+        }
+
+        // 3Dグリッド網 (XZ平面 & 0軸強調) の描画
+        Matrix4x4 vpMat = TransformFunctions::Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
+        DrawAnimationViewportGrid(vpMat, gameViewPos_, gameViewSize_);
+        DrawCameraOrientationGizmo(cam, gameViewPos_, gameViewSize_);
+    }
+
+    // ビューポート左上にBlender風のHUD / 情報表示
+    ImGui::SetCursorPos(ImVec2(currentPos.x + 10.0f, currentPos.y + 10.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.65f));
+    ImGui::BeginChild("##AnimViewportHUD", ImVec2(340, 78), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[3D Viewport] アニメーションビューポート");
+    int curF = static_cast<int>(std::round(animEditorTime_ * animEditorFps_));
+    int totF = static_cast<int>(std::round(editingAnimation_.duration * animEditorFps_));
+    ImGui::Text("フレーム: %d / %d  (%.3fs)", curF, totF, animEditorTime_);
+    ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.3f, 1.0f), "選択ボーン: %s", animEditorSelectedJointName_.c_str());
+    ImGui::TextDisabled("[Space] 再生/停止  [F3] デバッグカメラ");
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+}
+
+void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
+    if (!animEditorInitialized_) {
+        if (!LoadAnimationFromJsonFile(editingAnimationWallClimb_, "resources/json/shared/Player/wall_climb_animation.json")) {
+            editingAnimationWallClimb_ = CreateDefaultWallClimbAnimation();
+        }
+        if (!LoadAnimationFromJsonFile(editingAnimationAirDash_, "resources/json/shared/Player/air_dash_animation.json")) {
+            editingAnimationAirDash_ = CreateDefaultAirDashAnimation();
+        }
+        editingAnimation_ = (animEditorTargetAnim_ == 0) ? editingAnimationWallClimb_ : editingAnimationAirDash_;
+        animEditorInitialized_ = true;
+    }
+
+    if (ImGui::Begin("ドープシート (タイムライン)", &showAnimEditor_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
+            currentMode_ = EditorMode::Animation;
+            if (!isAnimationScenePushed_) {
+                sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
+                isAnimationScenePushed_ = true;
+                RefreshAnimationJointList(sceneManager);
+            }
+        }
+
+        // ========================================================
+        // 1. ヘッダーバー (Playback Controls & Actions)
+        // ========================================================
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+
+        ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "[Dope Sheet]");
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // アクション / アニメーション切替
+        const char* animNames[] = { "壁つかまり移動 (WallClimb)", "空中ダッシュ (AirDash)", "カスタム (Custom)" };
+        int prevAnim = animEditorTargetAnim_;
+        ImGui::SetNextItemWidth(190.0f);
+        if (ImGui::Combo("##AnimSelect", &animEditorTargetAnim_, animNames, 3)) {
+            if (prevAnim != animEditorTargetAnim_) {
+                if (animEditorTargetAnim_ == 0) {
+                    editingAnimation_ = editingAnimationWallClimb_;
+                } else if (animEditorTargetAnim_ == 1) {
+                    editingAnimation_ = editingAnimationAirDash_;
+                }
+                animEditorTime_ = 0.0f;
                 animEditorSelectedKeyIndex_ = -1;
             }
         }
 
-        ImGui::NextColumn();
+        const std::string animPath = (animEditorTargetAnim_ == 0) 
+            ? "resources/json/shared/Player/wall_climb_animation.json"
+            : (animEditorTargetAnim_ == 1)
+                ? "resources/json/shared/Player/air_dash_animation.json"
+                : "resources/json/shared/Player/custom_animation.json";
 
-        const char* selectedJointName = jointNames[animEditorSelectedJoint_];
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "選択中: %s", selectedJointName);
-
-        NodeAnimation& nodeAnim = curAnim.nodeAnimations[selectedJointName];
-
-        if (ImGui::Button("現在時刻にキーフレーム追加 (Add Keyframe)")) {
-            Vector3 currentEuler = { 0.0f, 0.0f, 0.0f };
-            if (!nodeAnim.rotate.empty()) {
-                Quaternion q = CalculateValue(nodeAnim.rotate, animEditorTime_);
-                currentEuler = q.ToEulerAngles();
-            }
-            KeyframeQuaternion newKf;
-            newKf.time = animEditorTime_;
-            newKf.value = MakeEulerQuat(currentEuler.x, currentEuler.y, currentEuler.z);
-
-            auto it = nodeAnim.rotate.begin();
-            while (it != nodeAnim.rotate.end() && it->time < newKf.time) {
-                ++it;
-            }
-            auto insertedIt = nodeAnim.rotate.insert(it, newKf);
-            animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), insertedIt));
+        ImGui::SameLine();
+        if (ImGui::Button("[Save] 保存")) {
+            SaveAnimationToJsonFile(editingAnimation_, animPath);
+            if (animEditorTargetAnim_ == 0) editingAnimationWallClimb_ = editingAnimation_;
+            else if (animEditorTargetAnim_ == 1) editingAnimationAirDash_ = editingAnimation_;
+            LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation saved: " + animPath);
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("JSONファイルに保存");
 
-        ImGui::Spacing();
-        ImGui::Text("回転キーフレーム一覧 (Rotation Keyframes):");
-        if (nodeAnim.rotate.empty()) {
-            ImGui::TextDisabled("キーフレームがありません。");
+        ImGui::SameLine();
+        if (ImGui::Button("[Reload] 読込")) {
+            if (LoadAnimationFromJsonFile(editingAnimation_, animPath)) {
+                if (animEditorTargetAnim_ == 0) editingAnimationWallClimb_ = editingAnimation_;
+                else if (animEditorTargetAnim_ == 1) editingAnimationAirDash_ = editingAnimation_;
+                LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation reloaded: " + animPath);
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("JSONファイルから再読込");
+
+        ImGui::SameLine();
+        if (ImGui::Button("[Reset] リセット")) {
+            if (animEditorTargetAnim_ == 0) editingAnimation_ = CreateDefaultWallClimbAnimation();
+            else if (animEditorTargetAnim_ == 1) editingAnimation_ = CreateDefaultAirDashAnimation();
+            SaveAnimationToJsonFile(editingAnimation_, animPath);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("デフォルトアニメーションに復元");
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // 再生コントロールボタン群
+        // 先頭へ (|<<)
+        if (ImGui::Button("|<<", ImVec2(32, 0))) {
+            animEditorTime_ = 0.0f;
+            animEditorPlaying_ = false;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("先頭フレームへ");
+
+        ImGui::SameLine();
+        // 1フレーム戻る (<)
+        if (ImGui::Button("<", ImVec2(28, 0))) {
+            animEditorTime_ = (std::max)(0.0f, animEditorTime_ - 1.0f / animEditorFps_);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム戻る");
+
+        // 再生 / 一時停止 ([>] 再生 / [||] 停止)
+        ImGui::SameLine();
+        if (animEditorPlaying_) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
+            if (ImGui::Button("[||] 停止", ImVec2(68, 0))) {
+                animEditorPlaying_ = false;
+            }
+            ImGui::PopStyleColor();
         } else {
-            for (size_t k = 0; k < nodeAnim.rotate.size(); ++k) {
-                char kfLabel[64];
-                snprintf(kfLabel, sizeof(kfLabel), "Key %zu: t = %.3fs##%s_%zu", k, nodeAnim.rotate[k].time, selectedJointName, k);
-                bool isSelected = (animEditorSelectedKeyIndex_ == static_cast<int>(k));
-                if (ImGui::Selectable(kfLabel, isSelected)) {
-                    animEditorSelectedKeyIndex_ = static_cast<int>(k);
-                    animEditorTime_ = nodeAnim.rotate[k].time;
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.3f, 1.0f));
+            if (ImGui::Button("[>] 再生", ImVec2(68, 0))) {
+                animEditorPlaying_ = true;
+            }
+            ImGui::PopStyleColor();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生 / 一時停止 (Space)");
+
+        ImGui::SameLine();
+        // 1フレーム進む (>)
+        if (ImGui::Button(">", ImVec2(28, 0))) {
+            animEditorTime_ = (std::min)(editingAnimation_.duration, animEditorTime_ + 1.0f / animEditorFps_);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム進む");
+
+        ImGui::SameLine();
+        // 末尾へ (>>|)
+        if (ImGui::Button(">>|", ImVec2(32, 0))) {
+            animEditorTime_ = editingAnimation_.duration;
+            animEditorPlaying_ = false;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("末尾フレームへ");
+
+        ImGui::SameLine();
+        // ループ再生トグル
+        if (animEditorLoop_) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
+            if (ImGui::Button("Loop: ON")) {
+                animEditorLoop_ = false;
+            }
+            ImGui::PopStyleColor();
+        } else {
+            if (ImGui::Button("Loop: OFF")) {
+                animEditorLoop_ = true;
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("ループ再生の切り替え");
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // フレーム・時間情報
+        int curFrame = static_cast<int>(std::round(animEditorTime_ * animEditorFps_));
+        int totalFrames = static_cast<int>(std::round(editingAnimation_.duration * animEditorFps_));
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%d / %d F (%.3fs / %.3fs)", curFrame, totalFrames, animEditorTime_, editingAnimation_.duration);
+
+        ImGui::SameLine();
+        ImGui::Text("Duration:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(65.0f);
+        ImGui::DragFloat("##Duration", &editingAnimation_.duration, 0.01f, 0.05f, 10.0f, "%.2fs");
+
+        ImGui::SameLine();
+        ImGui::Text("FPS:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(45.0f);
+        ImGui::DragFloat("##FPS", &animEditorFps_, 1.0f, 10.0f, 120.0f, "%.0f");
+
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        // キー挿入 / 削除
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 1.0f));
+        if (ImGui::Button("[+] キー挿入 (I)")) {
+            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+            Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
+            if (!nodeAnim.rotate.empty()) {
+                curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+            }
+            KeyframeQuaternion newKf{ animEditorTime_, curQ };
+            
+            bool replaced = false;
+            for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
+                if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                    nodeAnim.rotate[idx].value = curQ;
+                    animEditorSelectedKeyIndex_ = static_cast<int>(idx);
+                    replaced = true;
+                    break;
                 }
             }
+            if (!replaced) {
+                auto it = nodeAnim.rotate.begin();
+                while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
+                auto inserted = nodeAnim.rotate.insert(it, newKf);
+                animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+            }
+        }
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("現在時刻にキーフレームを記録 (Iキー)");
 
+        ImGui::SameLine();
+        if (ImGui::Button("[-] 削除 (Del)")) {
+            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
             if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-                ImGui::Separator();
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "キーフレーム %d の編集 (t = %.3fs):", 
-                    animEditorSelectedKeyIndex_, nodeAnim.rotate[animEditorSelectedKeyIndex_].time);
+                nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
+                animEditorSelectedKeyIndex_ = -1;
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("選択中のキーフレームを削除 (Deleteキー)");
 
-                auto& curKf = nodeAnim.rotate[animEditorSelectedKeyIndex_];
-                ImGui::DragFloat("キー時間 (Time)", &curKf.time, 0.01f, 0.0f, curAnim.duration, "%.3fs");
+        ImGui::PopStyleVar(2);
 
-                Vector3 euler = curKf.value.ToEulerAngles();
-                float eulerDeg[3] = { euler.x * 180.0f / 3.14159265f, euler.y * 180.0f / 3.14159265f, euler.z * 180.0f / 3.14159265f };
-                bool changed = false;
-                if (ImGui::SliderFloat3("回転 (Euler Deg: X, Y, Z)", eulerDeg, -180.0f, 180.0f, "%.1f deg")) {
-                    changed = true;
+        ImGui::Separator();
+
+        // ショートカットキー判定
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+            auto io = ImGui::GetIO();
+            if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
+                animEditorPlaying_ = !animEditorPlaying_;
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_I, false)) {
+                NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
+                if (!nodeAnim.rotate.empty()) {
+                    curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
                 }
-                float eulerRad[3] = { euler.x, euler.y, euler.z };
-                if (ImGui::SliderFloat3("回転 (Euler Rad: X, Y, Z)", eulerRad, -3.14f, 3.14f, "%.3f rad")) {
-                    eulerDeg[0] = eulerRad[0] * 180.0f / 3.14159265f;
-                    eulerDeg[1] = eulerRad[1] * 180.0f / 3.14159265f;
-                    eulerDeg[2] = eulerRad[2] * 180.0f / 3.14159265f;
-                    changed = true;
-                }
-
-                if (changed) {
-                    float rx = eulerDeg[0] * 3.14159265f / 180.0f;
-                    float ry = eulerDeg[1] * 3.14159265f / 180.0f;
-                    float rz = eulerDeg[2] * 3.14159265f / 180.0f;
-                    curKf.value = MakeEulerQuat(rx, ry, rz);
-                }
-
-                if (ImGui::Button("キーフレーム削除 (Delete Keyframe)")) {
+                KeyframeQuaternion newKf{ animEditorTime_, curQ };
+                auto it = nodeAnim.rotate.begin();
+                while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
+                auto inserted = nodeAnim.rotate.insert(it, newKf);
+                animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+                NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
                     nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
                     animEditorSelectedKeyIndex_ = -1;
                 }
             }
         }
 
-        ImGui::Columns(1);
+        // ========================================================
+        // 2. ドープシート タイムライン本体 (Canvas & Tracks)
+        // ========================================================
+        if (currentJointList_.empty()) {
+            RefreshAnimationJointList(sceneManager);
+        }
+
+        const float trackListWidth = 180.0f;
+        const float rulerHeight = 26.0f;
+        const float trackHeight = 22.0f;
+        const float summaryHeight = 24.0f;
+        int numJoints = static_cast<int>(currentJointList_.size());
+        float totalHeight = rulerHeight + summaryHeight + numJoints * trackHeight + 50.0f;
+
+        ImGuiIO& io = ImGui::GetIO();
+        ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
+        float canvasWidth = (std::max)(canvasAvail.x, 300.0f);
+
+        // ホイールによるズームと横スクロール
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+            if (io.KeyCtrl && io.MouseWheel != 0.0f) {
+                float zoomFactor = (io.MouseWheel > 0.0f) ? 1.15f : 0.87f;
+                animTimelineZoom_ = std::clamp(animTimelineZoom_ * zoomFactor, 40.0f, 800.0f);
+            } else if (io.MouseWheel != 0.0f && !io.KeyCtrl) {
+                animTimelineScrollX_ = (std::max)(0.0f, animTimelineScrollX_ - io.MouseWheel * 40.0f);
+            }
+        }
+
+        ImGui::BeginChild("##DopeSheetScrollArea", ImVec2(canvasWidth, canvasAvail.y), false, ImGuiWindowFlags_HorizontalScrollbar);
+        
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 p0 = ImGui::GetCursorScreenPos();
+        ImVec2 p1 = ImVec2(p0.x + canvasWidth, p0.y + totalHeight);
+
+        // 背景塗りつぶし
+        drawList->AddRectFilled(p0, p1, IM_COL32(30, 30, 32, 255));
+
+        // 左カラム（トラックリスト）の背景
+        drawList->AddRectFilled(p0, ImVec2(p0.x + trackListWidth, p1.y), IM_COL32(38, 38, 42, 255));
+        drawList->AddLine(ImVec2(p0.x + trackListWidth, p0.y), ImVec2(p0.x + trackListWidth, p1.y), IM_COL32(60, 60, 65, 255), 1.0f);
+
+        // タイムライン描画領域
+        float timelineStartX = p0.x + trackListWidth;
+        float timelineEndX = p0.x + canvasWidth;
+
+        // ----------------------------------------------------
+        // A. ルーラー（上部目盛りバー）
+        // ----------------------------------------------------
+        drawList->AddRectFilled(ImVec2(p0.x, p0.y), ImVec2(p1.x, p0.y + rulerHeight), IM_COL32(45, 45, 50, 255));
+        drawList->AddLine(ImVec2(p0.x, p0.y + rulerHeight), ImVec2(p1.x, p0.y + rulerHeight), IM_COL32(70, 70, 75, 255), 1.0f);
+        drawList->AddText(ImVec2(p0.x + 10, p0.y + 5), IM_COL32(200, 200, 200, 255), "チャネル / 関節");
+
+        // フレーム・秒数目盛り
+        float maxDuration = (std::max)(editingAnimation_.duration, 1.0f) + 1.0f;
+        int maxFrames = static_cast<int>(std::ceil(maxDuration * animEditorFps_));
+
+        int frameStep = (animTimelineZoom_ > 250.0f) ? 5 : (animTimelineZoom_ > 100.0f ? 10 : 30);
+
+        for (int f = 0; f <= maxFrames; f += frameStep) {
+            float t = f / animEditorFps_;
+            float x = timelineStartX + t * animTimelineZoom_ - animTimelineScrollX_;
+            if (x < timelineStartX || x > timelineEndX) continue;
+
+            drawList->AddLine(ImVec2(x, p0.y + rulerHeight - 8), ImVec2(x, p0.y + rulerHeight), IM_COL32(160, 160, 160, 255));
+            drawList->AddLine(ImVec2(x, p0.y + rulerHeight), ImVec2(x, p1.y), IM_COL32(45, 45, 50, 255), 1.0f);
+
+            char fBuf[32];
+            snprintf(fBuf, sizeof(fBuf), "%d", f);
+            drawList->AddText(ImVec2(x + 3, p0.y + 4), IM_COL32(180, 180, 180, 255), fBuf);
+        }
+
+        // ルーラースクラブ（シーク）操作
+        ImVec2 mousePos = io.MousePos;
+        bool isHoverRuler = (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y >= p0.y && mousePos.y <= p0.y + rulerHeight);
+        if (isHoverRuler && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            isAnimRulerScrubbing_ = true;
+        }
+        if (isAnimRulerScrubbing_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                float newTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
+                animEditorTime_ = std::clamp(newTime, 0.0f, editingAnimation_.duration);
+            } else {
+                isAnimRulerScrubbing_ = false;
+            }
+        }
+
+        // ----------------------------------------------------
+        // B. 概要（Summary）行
+        // ----------------------------------------------------
+        float summaryY = p0.y + rulerHeight;
+        drawList->AddRectFilled(ImVec2(p0.x, summaryY), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(50, 45, 40, 255));
+        drawList->AddLine(ImVec2(p0.x, summaryY + summaryHeight), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(70, 65, 60, 255), 1.0f);
+        drawList->AddText(ImVec2(p0.x + 10, summaryY + 4), IM_COL32(240, 180, 80, 255), "▼ 概要 (Summary)");
+
+        // サマリーキー時刻の収集
+        std::set<float> summaryKeyTimes;
+        for (const auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
+            for (const auto& k : nAnim.rotate) {
+                summaryKeyTimes.insert(k.time);
+            }
+        }
+
+        // サマリーキーの描画 & 操作
+        for (float sTime : summaryKeyTimes) {
+            float sX = timelineStartX + sTime * animTimelineZoom_ - animTimelineScrollX_;
+            if (sX >= timelineStartX && sX <= timelineEndX) {
+                float sCenterY = summaryY + summaryHeight * 0.5f;
+                ImVec2 dP[4] = {
+                    ImVec2(sX, sCenterY - 5.0f),
+                    ImVec2(sX + 5.0f, sCenterY),
+                    ImVec2(sX, sCenterY + 5.0f),
+                    ImVec2(sX - 5.0f, sCenterY)
+                };
+                bool isNearCurTime = std::abs(sTime - animEditorTime_) < 0.01f;
+                ImU32 dCol = isNearCurTime ? IM_COL32(255, 220, 60, 255) : IM_COL32(230, 160, 40, 255);
+                drawList->AddConvexPolyFilled(dP, 4, dCol);
+                drawList->AddPolyline(dP, 4, IM_COL32(20, 20, 20, 255), ImDrawFlags_Closed, 1.0f);
+
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && std::abs(mousePos.x - sX) <= 6.0f && std::abs(mousePos.y - sCenterY) <= 6.0f) {
+                    animEditorTime_ = sTime;
+                    isSummaryKeyDrag_ = true;
+                    dragSummaryOriginalTime_ = sTime;
+                }
+            }
+        }
+
+        if (isSummaryKeyDrag_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
+                newT = std::clamp(newT, 0.0f, editingAnimation_.duration);
+                float dt = newT - dragSummaryOriginalTime_;
+                if (std::abs(dt) > 0.001f) {
+                    for (auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
+                        for (auto& k : nAnim.rotate) {
+                            if (std::abs(k.time - dragSummaryOriginalTime_) < 0.005f) {
+                                k.time = newT;
+                            }
+                        }
+                    }
+                    dragSummaryOriginalTime_ = newT;
+                    animEditorTime_ = newT;
+                }
+            } else {
+                isSummaryKeyDrag_ = false;
+            }
+        }
+
+        // ----------------------------------------------------
+        // C. 各ジョイント（Joint）行
+        // ----------------------------------------------------
+        float curTrackY = summaryY + summaryHeight;
+        for (int i = 0; i < numJoints; ++i) {
+            const std::string& jointName = currentJointList_[i];
+            bool isSelected = (animEditorSelectedJointName_ == jointName);
+
+            ImU32 rowBg = isSelected ? IM_COL32(40, 65, 95, 255) : (i % 2 == 0 ? IM_COL32(34, 34, 38, 255) : IM_COL32(28, 28, 32, 255));
+            drawList->AddRectFilled(ImVec2(p0.x, curTrackY), ImVec2(p1.x, curTrackY + trackHeight), rowBg);
+            drawList->AddLine(ImVec2(p0.x, curTrackY + trackHeight), ImVec2(p1.x, curTrackY + trackHeight), IM_COL32(50, 50, 55, 255), 1.0f);
+
+            ImU32 textCol = isSelected ? IM_COL32(100, 200, 255, 255) : IM_COL32(200, 200, 200, 255);
+            drawList->AddText(ImVec2(p0.x + 14, curTrackY + 3), textCol, jointName.c_str());
+
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                if (mousePos.x >= p0.x && mousePos.x <= timelineStartX && mousePos.y >= curTrackY && mousePos.y < curTrackY + trackHeight) {
+                    animEditorSelectedJointName_ = jointName;
+                    animEditorSelectedKeyIndex_ = -1;
+                }
+            }
+
+            if (editingAnimation_.nodeAnimations.find(jointName) != editingAnimation_.nodeAnimations.end()) {
+                auto& nodeAnim = editingAnimation_.nodeAnimations[jointName];
+                for (size_t k = 0; k < nodeAnim.rotate.size(); ++k) {
+                    float kTime = nodeAnim.rotate[k].time;
+                    float kX = timelineStartX + kTime * animTimelineZoom_ - animTimelineScrollX_;
+                    if (kX >= timelineStartX - 10.0f && kX <= timelineEndX + 10.0f) {
+                        float kCenterY = curTrackY + trackHeight * 0.5f;
+                        bool isKfSelected = (isSelected && animEditorSelectedKeyIndex_ == static_cast<int>(k));
+                        
+                        ImVec2 kdP[4] = {
+                            ImVec2(kX, kCenterY - 4.5f),
+                            ImVec2(kX + 4.5f, kCenterY),
+                            ImVec2(kX, kCenterY + 4.5f),
+                            ImVec2(kX - 4.5f, kCenterY)
+                        };
+                        ImU32 kCol = isKfSelected ? IM_COL32(255, 210, 40, 255) : IM_COL32(220, 220, 220, 255);
+                        drawList->AddConvexPolyFilled(kdP, 4, kCol);
+                        drawList->AddPolyline(kdP, 4, IM_COL32(10, 10, 10, 255), ImDrawFlags_Closed, 1.0f);
+
+                        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                            if (std::abs(mousePos.x - kX) <= 6.0f && std::abs(mousePos.y - kCenterY) <= 6.0f) {
+                                animEditorSelectedJointName_ = jointName;
+                                animEditorSelectedKeyIndex_ = static_cast<int>(k);
+                                animEditorTime_ = kTime;
+                                isDraggingAnimKeyframe_ = true;
+                                dragAnimKeyOriginalTime_ = kTime;
+                            }
+                        }
+                    }
+                }
+            }
+
+            curTrackY += trackHeight;
+        }
+
+        if (isDraggingAnimKeyframe_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
+                newT = std::clamp(newT, 0.0f, editingAnimation_.duration);
+                auto& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+                    nodeAnim.rotate[animEditorSelectedKeyIndex_].time = newT;
+                    animEditorTime_ = newT;
+                }
+            } else {
+                auto& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                std::sort(nodeAnim.rotate.begin(), nodeAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) {
+                    return a.time < b.time;
+                });
+                isDraggingAnimKeyframe_ = false;
+            }
+        }
+
+        // ----------------------------------------------------
+        // D. 垂直再生ヘッド（Playhead）
+        // ----------------------------------------------------
+        float playheadX = timelineStartX + animEditorTime_ * animTimelineZoom_ - animTimelineScrollX_;
+        if (playheadX >= timelineStartX && playheadX <= timelineEndX) {
+            drawList->AddLine(ImVec2(playheadX, p0.y), ImVec2(playheadX, p1.y), IM_COL32(50, 150, 255, 255), 2.0f);
+
+            ImVec2 badgeP[4] = {
+                ImVec2(playheadX - 10.0f, p0.y),
+                ImVec2(playheadX + 10.0f, p0.y),
+                ImVec2(playheadX + 6.0f, p0.y + rulerHeight - 2),
+                ImVec2(playheadX - 6.0f, p0.y + rulerHeight - 2)
+            };
+            drawList->AddConvexPolyFilled(badgeP, 4, IM_COL32(40, 140, 255, 255));
+            drawList->AddPolyline(badgeP, 4, IM_COL32(255, 255, 255, 255), ImDrawFlags_Closed, 1.0f);
+
+            char phBuf[16];
+            snprintf(phBuf, sizeof(phBuf), "%d", curFrame);
+            ImVec2 textSize = ImGui::CalcTextSize(phBuf);
+            drawList->AddText(ImVec2(playheadX - textSize.x * 0.5f, p0.y + 3), IM_COL32(255, 255, 255, 255), phBuf);
+        }
+
+        // タイムライン領域の空きスペースクリックでシーク
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y > summaryY + summaryHeight && !isDraggingAnimKeyframe_ && !isSummaryKeyDrag_) {
+                float clickTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
+                animEditorTime_ = std::clamp(clickTime, 0.0f, editingAnimation_.duration);
+            }
+        }
+
+        ImGui::Dummy(ImVec2(timelineStartX + maxDuration * animTimelineZoom_, totalHeight));
+        ImGui::EndChild();
     }
     ImGui::End();
+}
+
+void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
+    ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "[Animation Properties] ボーン プロパティ");
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    std::string targetName = "Player (プレイヤー)";
+    if (selectedGameObject_) targetName = selectedGameObject_->GetName();
+    else if (selectedObject_) targetName = selectedObject_->GetName();
+    ImGui::Text("対象モデル: %s", targetName.c_str());
+
+    ImGui::Spacing();
+    ImGui::Text("選択ボーン (Joint):");
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::BeginCombo("##SelectedJointCombo", animEditorSelectedJointName_.c_str())) {
+        for (const auto& jName : currentJointList_) {
+            bool isSel = (animEditorSelectedJointName_ == jName);
+            if (ImGui::Selectable(jName.c_str(), isSel)) {
+                animEditorSelectedJointName_ = jName;
+                animEditorSelectedKeyIndex_ = -1;
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+    
+    Quaternion curQuat = { 0.0f, 0.0f, 0.0f, 1.0f };
+    if (!nodeAnim.rotate.empty()) {
+        curQuat = CalculateValue(nodeAnim.rotate, animEditorTime_);
+    }
+
+    Vector3 euler = curQuat.ToEulerAngles();
+    float eulerDeg[3] = { euler.x * 180.0f / 3.14159265f, euler.y * 180.0f / 3.14159265f, euler.z * 180.0f / 3.14159265f };
+    float eulerRad[3] = { euler.x, euler.y, euler.z };
+
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "ボーン回転 (Transform Rotation):");
+    bool changed = false;
+    if (ImGui::SliderFloat3("回転 (度: X, Y, Z)", eulerDeg, -180.0f, 180.0f, "%.1f°")) {
+        changed = true;
+    }
+    if (ImGui::SliderFloat3("回転 (Rad: X, Y, Z)", eulerRad, -3.14159f, 3.14159f, "%.3f rad")) {
+        eulerDeg[0] = eulerRad[0] * 180.0f / 3.14159265f;
+        eulerDeg[1] = eulerRad[1] * 180.0f / 3.14159265f;
+        eulerDeg[2] = eulerRad[2] * 180.0f / 3.14159265f;
+        changed = true;
+    }
+
+    if (changed) {
+        float rx = eulerDeg[0] * 3.14159265f / 180.0f;
+        float ry = eulerDeg[1] * 3.14159265f / 180.0f;
+        float rz = eulerDeg[2] * 3.14159265f / 180.0f;
+        Quaternion newQ = MakeEulerQuat(rx, ry, rz);
+
+        if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+            nodeAnim.rotate[animEditorSelectedKeyIndex_].value = newQ;
+        } else {
+            KeyframeQuaternion newKf{ animEditorTime_, newQ };
+            bool foundKey = false;
+            for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
+                if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                    nodeAnim.rotate[idx].value = newQ;
+                    animEditorSelectedKeyIndex_ = static_cast<int>(idx);
+                    foundKey = true;
+                    break;
+                }
+            }
+            if (!foundKey) {
+                auto it = nodeAnim.rotate.begin();
+                while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
+                auto ins = nodeAnim.rotate.insert(it, newKf);
+                animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), ins));
+            }
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 1.0f));
+    if (ImGui::Button("[+] 現在ポーズをキー挿入 (I)", ImVec2(-1, 28))) {
+        float rx = eulerDeg[0] * 3.14159265f / 180.0f;
+        float ry = eulerDeg[1] * 3.14159265f / 180.0f;
+        float rz = eulerDeg[2] * 3.14159265f / 180.0f;
+        KeyframeQuaternion newKf{ animEditorTime_, MakeEulerQuat(rx, ry, rz) };
+        auto it = nodeAnim.rotate.begin();
+        while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
+        auto inserted = nodeAnim.rotate.insert(it, newKf);
+        animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    if (ImGui::Button("[T-Pose] 選択ボーンをTポーズ(0)に", ImVec2(-1, 24))) {
+        Quaternion identityQ{ 0.0f, 0.0f, 0.0f, 1.0f };
+        if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+            nodeAnim.rotate[animEditorSelectedKeyIndex_].value = identityQ;
+        } else {
+            KeyframeQuaternion newKf{ animEditorTime_, identityQ };
+            auto it = nodeAnim.rotate.begin();
+            while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
+            auto inserted = nodeAnim.rotate.insert(it, newKf);
+            animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+        }
+    }
+    if (ImGui::Button("[Reset] 全ボーンをTポーズに初期化", ImVec2(-1, 24))) {
+        for (auto& [jName, nAnim] : editingAnimation_.nodeAnimations) {
+            nAnim.rotate.clear();
+        }
+        animEditorSelectedKeyIndex_ = -1;
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::Text("登録キーフレーム一覧 (%zu 個):", nodeAnim.rotate.size());
+    if (nodeAnim.rotate.empty()) {
+        ImGui::TextDisabled("キーフレームがありません。");
+    } else {
+        for (size_t k = 0; k < nodeAnim.rotate.size(); ++k) {
+            char kBuf[64];
+            int kFrame = static_cast<int>(std::round(nodeAnim.rotate[k].time * animEditorFps_));
+            snprintf(kBuf, sizeof(kBuf), "Key %zu: %d F (%.3fs)##%zu", k, kFrame, nodeAnim.rotate[k].time, k);
+            bool isSel = (animEditorSelectedKeyIndex_ == static_cast<int>(k));
+            if (ImGui::Selectable(kBuf, isSel)) {
+                animEditorSelectedKeyIndex_ = static_cast<int>(k);
+                animEditorTime_ = nodeAnim.rotate[k].time;
+            }
+            ImGui::SameLine(ImGui::GetWindowWidth() - 70);
+            char delBuf[32];
+            snprintf(delBuf, sizeof(delBuf), "削除##K%zu", k);
+            if (ImGui::SmallButton(delBuf)) {
+                nodeAnim.rotate.erase(nodeAnim.rotate.begin() + k);
+                if (animEditorSelectedKeyIndex_ == static_cast<int>(k)) animEditorSelectedKeyIndex_ = -1;
+                break;
+            }
+        }
+    }
 }
 
 void EditorManager::Draw() {

@@ -77,7 +77,9 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         
         float3 directionalLightDir = normalize(-gDirectionalLight.direction);
         float directionalNdotL = dot(normal, directionalLightDir);
-        float directionalCos = saturate(directionalNdotL);
+        // Half-Lambert diffuse calculation for smooth all-angle illumination
+        float halfLambert = directionalNdotL * 0.5f + 0.5f;
+        float directionalCos = halfLambert * halfLambert;
         float3 diffuseDirectional = gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * directionalCos * gDirectionalLight.intensity;
         
         float3 directionalHalfVector = normalize(directionalLightDir + toEye);
@@ -122,12 +124,13 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         float3 reflectedVector = reflect(cameraToPosition, normalize(input.normal));
         float4 environmentColor = gEnvironmentMap.Sample(gSampler, reflectedVector);
 
-        // --- 3. 最終色の合成 ---
+        // --- 3. Final color composition ---
         float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpot) * input.color.rgb;
         float3 specularTotal = (specularDirectional + specularPoint + specularSpot) * input.color.rgb;
-        float3 ambient = gMaterial.color.rgb * textureColor.rgb * 0.1f;
+        // Sufficient ambient light for uniform visibility without dark shadows
+        float3 ambient = gMaterial.color.rgb * textureColor.rgb * 0.40f;
 
-        // 環境マップによるLightingを追加する（置き換えるのではなく、そのまま足す）
+        // Add environment map lighting if enabled
         if (gMaterial.enableEnvironmentMap != 0) {
             specularTotal += environmentColor.rgb * gMaterial.environmentCoefficient;
         }
