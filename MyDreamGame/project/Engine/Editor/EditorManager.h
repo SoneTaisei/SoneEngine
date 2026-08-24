@@ -4,6 +4,7 @@
 #include <d3d12.h>
 #include <cstdint>
 #include <set>
+#include <unordered_map>
 #include <memory>
 #include <functional>
 
@@ -325,9 +326,21 @@ private:
     float animTimelineZoom_ = 200.0f; // 1秒あたりのピクセル幅
     float animTimelineScrollX_ = 0.0f;
     
+    // ボーン階層ツリー構造用
+    struct AnimJointTreeNode {
+        std::string name;
+        int32_t jointIndex = -1;
+        int32_t parentIndex = -1;
+        std::vector<int32_t> children;
+        int depth = 0;
+    };
+
     Animation editingAnimation_;
     bool animEditorInitialized_ = false;
     std::vector<std::string> currentJointList_;
+    std::vector<AnimJointTreeNode> animJointTreeNodes_;
+    std::vector<int32_t> animJointRootIndices_;
+    std::unordered_map<std::string, bool> animJointExpanded_;
     std::vector<std::string> availableAnimationFiles_;
     std::string currentAnimFilePath_ = "resources/json/shared/Player/wall_climb_animation.json";
     char newAnimSaveNameBuf_[128] = "";

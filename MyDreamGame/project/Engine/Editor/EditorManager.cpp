@@ -3418,6 +3418,8 @@ AnimatorComponent* EditorManager::GetTargetAnimator(SceneManager* sceneManager) 
 }
 
 void EditorManager::RefreshAnimationJointList(SceneManager* sceneManager) {
+    animJointTreeNodes_.clear();
+    animJointRootIndices_.clear();
     currentJointList_.clear();
     
     // 1. シーン内のスケルトンを持つAnimatorを検索
@@ -3425,8 +3427,51 @@ void EditorManager::RefreshAnimationJointList(SceneManager* sceneManager) {
     
     if (animator && animator->HasSkeleton()) {
         const auto& joints = animator->GetSkeleton().joints;
-        for (const auto& j : joints) {
+        int32_t numJoints = static_cast<int32_t>(joints.size());
+        animJointTreeNodes_.resize(numJoints);
+
+        for (int32_t i = 0; i < numJoints; ++i) {
+            const auto& j = joints[i];
             currentJointList_.push_back(j.name);
+
+            animJointTreeNodes_[i].name = j.name;
+            animJointTreeNodes_[i].jointIndex = j.index;
+            animJointTreeNodes_[i].parentIndex = j.parent.has_value() ? *j.parent : -1;
+            animJointTreeNodes_[i].children = j.children;
+            animJointTreeNodes_[i].depth = 0;
+        }
+
+        // 親を持たないジョイント（ルート候補）を収集
+        for (int32_t i = 0; i < numJoints; ++i) {
+            if (animJointTreeNodes_[i].parentIndex < 0) {
+                animJointRootIndices_.push_back(i);
+            }
+        }
+        if (animJointRootIndices_.empty() && animator->GetSkeleton().root >= 0 && animator->GetSkeleton().root < numJoints) {
+            animJointRootIndices_.push_back(animator->GetSkeleton().root);
+        } else if (animJointRootIndices_.empty() && numJoints > 0) {
+            animJointRootIndices_.push_back(0);
+        }
+
+        // 各ノードの深さ (depth) を再帰的に計算
+        std::function<void(int32_t, int)> calcDepth = [&](int32_t nodeIdx, int d) {
+            if (nodeIdx < 0 || nodeIdx >= numJoints) return;
+            animJointTreeNodes_[nodeIdx].depth = d;
+            for (int32_t childIdx : animJointTreeNodes_[nodeIdx].children) {
+                calcDepth(childIdx, d + 1);
+            }
+        };
+        for (int32_t rootIdx : animJointRootIndices_) {
+            calcDepth(rootIdx, 0);
+        }
+
+        // 開閉フラグの初期化（未設定のノードについて設定: ルートのみ展開し、子は閉じる）
+        for (int32_t i = 0; i < numJoints; ++i) {
+            const std::string& name = animJointTreeNodes_[i].name;
+            if (animJointExpanded_.find(name) == animJointExpanded_.end()) {
+                bool isRoot = (animJointTreeNodes_[i].parentIndex < 0);
+                animJointExpanded_[name] = isRoot;
+            }
         }
     }
     
@@ -3445,8 +3490,23 @@ void EditorManager::RefreshAnimationJointList(SceneManager* sceneManager) {
             "LeftFoot_021",
             "RightFoot_026"
         };
-        for (const auto* name : defaultJoints) {
+        for (int i = 0; i < 11; ++i) {
+            std::string name = defaultJoints[i];
             currentJointList_.push_back(name);
+
+            AnimJointTreeNode node;
+            node.name = name;
+            node.jointIndex = i;
+            node.parentIndex = (i == 0) ? -1 : 0;
+            node.depth = (i == 0) ? 0 : 1;
+            if (i == 0) {
+                for (int c = 1; c < 11; ++c) node.children.push_back(c);
+                animJointRootIndices_.push_back(0);
+            }
+            animJointTreeNodes_.push_back(node);
+            if (animJointExpanded_.find(name) == animJointExpanded_.end()) {
+                animJointExpanded_[name] = (i == 0);
+            }
         }
     }
     
@@ -4711,11 +4771,6 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
 
-        ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "[Dope Sheet]");
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
-
         // アクション / アニメーション切替 (ファイル一覧から選択 & 自動ロード)
         std::string currentStem = std::filesystem::path(currentAnimFilePath_).stem().string();
         std::string currentDisplay = currentStem;
@@ -4809,23 +4864,6 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("[Reset] リセット")) {
-            PushAnimUndoState("アニメーション初期化");
-            if (currentAnimFilePath_.find("wall_climb") != std::string::npos) {
-                editingAnimation_ = CreateDefaultWallClimbAnimation();
-            } else if (currentAnimFilePath_.find("air_dash") != std::string::npos) {
-                editingAnimation_ = CreateDefaultAirDashAnimation();
-            } else {
-                editingAnimation_.nodeAnimations.clear();
-                editingAnimation_.duration = 1.0f;
-            }
-            SaveAnimationToJsonFile(editingAnimation_, currentAnimFilePath_);
-            UpdateAnimationPosePreview(sceneManager);
-            LogManager::GetInstance()->AddLog(LogLevel::Info, "アニメーションを初期化しました: " + currentAnimFilePath_);
-        }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("アニメーションを初期状態に戻して保存");
-
-        ImGui::SameLine();
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
         ImGui::SameLine();
 
@@ -4904,81 +4942,6 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         int totalFrames = static_cast<int>(std::round(editingAnimation_.duration * animEditorFps_));
         ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%d / %d F (%.3fs / %.3fs)", curFrame, totalFrames, animEditorTime_, editingAnimation_.duration);
 
-        ImGui::SameLine();
-        ImGui::Text("Duration:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(65.0f);
-        if (ImGui::DragFloat("##Duration", &editingAnimation_.duration, 0.01f, 0.05f, 10.0f, "%.2fs")) {
-            // value updated
-        }
-        if (ImGui::IsItemActivated()) {
-            animDragPreSnapshot_.animation = editingAnimation_;
-            animDragPreSnapshot_.time = animEditorTime_;
-            animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
-            animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
-            animDragPreSnapshot_.description = "時間長変更";
-            hasAnimDragPreSnapshot_ = true;
-        }
-        if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
-            animUndoStack_.push_back(animDragPreSnapshot_);
-            if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
-            animRedoStack_.clear();
-            hasAnimDragPreSnapshot_ = false;
-        }
-
-        ImGui::SameLine();
-        ImGui::Text("FPS:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(45.0f);
-        ImGui::DragFloat("##FPS", &animEditorFps_, 1.0f, 10.0f, 120.0f, "%.0f");
-
-        ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-        ImGui::SameLine();
-
-        // キー挿入 / 削除
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 1.0f));
-        if (ImGui::Button("[+] キー挿入 (I)")) {
-            PushAnimUndoState("キー挿入 (I)");
-            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
-            Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
-            if (!nodeAnim.rotate.empty()) {
-                curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
-            }
-            KeyframeQuaternion newKf{ animEditorTime_, curQ };
-            
-            bool replaced = false;
-            for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
-                if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
-                    nodeAnim.rotate[idx].value = curQ;
-                    animEditorSelectedKeyIndex_ = static_cast<int>(idx);
-                    replaced = true;
-                    break;
-                }
-            }
-            if (!replaced) {
-                auto it = nodeAnim.rotate.begin();
-                while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
-                auto inserted = nodeAnim.rotate.insert(it, newKf);
-                animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
-            }
-            UpdateAnimationPosePreview(sceneManager);
-        }
-        ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("現在時刻にキーフレームを記録 (Iキー)");
-
-        ImGui::SameLine();
-        if (ImGui::Button("[-] 削除 (Del)")) {
-            PushAnimUndoState("キー削除 (Del)");
-            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
-            if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-                nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
-                animEditorSelectedKeyIndex_ = -1;
-                UpdateAnimationPosePreview(sceneManager);
-            }
-        }
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("選択中のキーフレームを削除 (Deleteキー)");
-
         ImGui::PopStyleVar(2);
 
         ImGui::Separator();
@@ -5032,16 +4995,55 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // ========================================================
         // 2. ドープシート タイムライン本体 (Canvas & Tracks)
         // ========================================================
-        if (currentJointList_.empty()) {
+        if (currentJointList_.empty() || animJointTreeNodes_.empty()) {
             RefreshAnimationJointList(sceneManager);
         }
 
-        const float trackListWidth = 180.0f;
+        // 可視トラックの収集 (開いている親の子孫のみ再帰的に追加)
+        struct VisibleAnimTrack {
+            std::string name;
+            int32_t jointIndex = -1;
+            int depth = 0;
+            bool hasChildren = false;
+            bool isOpen = false;
+        };
+        std::vector<VisibleAnimTrack> visibleTracks;
+
+        std::function<void(int32_t, int)> collectVisible = [&](int32_t nodeIdx, int depth) {
+            if (nodeIdx < 0 || nodeIdx >= static_cast<int32_t>(animJointTreeNodes_.size())) return;
+            const auto& node = animJointTreeNodes_[nodeIdx];
+            bool hasChildren = !node.children.empty();
+            bool isOpen = false;
+            if (hasChildren) {
+                auto it = animJointExpanded_.find(node.name);
+                isOpen = (it != animJointExpanded_.end() && it->second);
+            }
+
+            visibleTracks.push_back({ node.name, node.jointIndex, depth, hasChildren, isOpen });
+
+            if (hasChildren && isOpen) {
+                for (int32_t childIdx : node.children) {
+                    collectVisible(childIdx, depth + 1);
+                }
+            }
+        };
+
+        for (int32_t rootIdx : animJointRootIndices_) {
+            collectVisible(rootIdx, 0);
+        }
+
+        if (visibleTracks.empty()) {
+            for (const auto& name : currentJointList_) {
+                visibleTracks.push_back({ name, -1, 0, false, false });
+            }
+        }
+
+        const float trackListWidth = 220.0f;
         const float rulerHeight = 26.0f;
         const float trackHeight = 22.0f;
         const float summaryHeight = 24.0f;
-        int numJoints = static_cast<int>(currentJointList_.size());
-        float totalHeight = rulerHeight + summaryHeight + numJoints * trackHeight + 50.0f;
+        int numVisibleTracks = static_cast<int>(visibleTracks.size());
+        float totalHeight = rulerHeight + summaryHeight + numVisibleTracks * trackHeight + 50.0f;
 
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
@@ -5062,42 +5064,99 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImVec2 p0 = ImGui::GetCursorScreenPos();
         ImVec2 p1 = ImVec2(p0.x + canvasWidth, p0.y + totalHeight);
-
-        // 背景塗りつぶし
-        drawList->AddRectFilled(p0, p1, IM_COL32(30, 30, 32, 255));
-
-        // 左カラム（トラックリスト）の背景
-        drawList->AddRectFilled(p0, ImVec2(p0.x + trackListWidth, p1.y), IM_COL32(38, 38, 42, 255));
-        drawList->AddLine(ImVec2(p0.x + trackListWidth, p0.y), ImVec2(p0.x + trackListWidth, p1.y), IM_COL32(60, 60, 65, 255), 1.0f);
+        float contentBottomY = p0.y + totalHeight;
 
         // タイムライン描画領域
         float timelineStartX = p0.x + trackListWidth;
         float timelineEndX = p0.x + canvasWidth;
+        float summaryY = p0.y + rulerHeight;
 
         // ----------------------------------------------------
-        // A. ルーラー（上部目盛りバー）
+        // 1. 背景描画
         // ----------------------------------------------------
-        drawList->AddRectFilled(ImVec2(p0.x, p0.y), ImVec2(p1.x, p0.y + rulerHeight), IM_COL32(45, 45, 50, 255));
-        drawList->AddLine(ImVec2(p0.x, p0.y + rulerHeight), ImVec2(p1.x, p0.y + rulerHeight), IM_COL32(70, 70, 75, 255), 1.0f);
-        drawList->AddText(ImVec2(p0.x + 10, p0.y + 5), IM_COL32(200, 200, 200, 255), "チャネル / 関節");
+        // 全体背景
+        drawList->AddRectFilled(p0, p1, IM_COL32(26, 26, 30, 255));
 
-        // フレーム・秒数目盛り
+        // 各トラック行の背景（ストライプ＆選択ハイライト）
+        float curTrackY = summaryY + summaryHeight;
+        for (int i = 0; i < numVisibleTracks; ++i) {
+            const auto& item = visibleTracks[i];
+            bool isSelected = (animEditorSelectedJointName_ == item.name);
+            ImU32 rowBg = isSelected ? IM_COL32(38, 62, 92, 255) : (i % 2 == 0 ? IM_COL32(32, 32, 36, 255) : IM_COL32(26, 26, 30, 255));
+            drawList->AddRectFilled(ImVec2(timelineStartX, curTrackY), ImVec2(p1.x, curTrackY + trackHeight), rowBg);
+            drawList->AddLine(ImVec2(timelineStartX, curTrackY + trackHeight), ImVec2(p1.x, curTrackY + trackHeight), IM_COL32(45, 45, 52, 255), 1.0f);
+            curTrackY += trackHeight;
+        }
+
+        // サマリー行のタイムライン背景
+        drawList->AddRectFilled(ImVec2(timelineStartX, summaryY), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(46, 42, 36, 255));
+        drawList->AddLine(ImVec2(timelineStartX, summaryY + summaryHeight), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(70, 64, 55, 255), 1.0f);
+
+        // ----------------------------------------------------
+        // 2. タイムライン縦グリッド線（背景の上に描画して完全に貫通させる）
+        // ----------------------------------------------------
         float maxDuration = (std::max)(editingAnimation_.duration, 1.0f) + 1.0f;
         int maxFrames = static_cast<int>(std::ceil(maxDuration * animEditorFps_));
+        int fpsInt = static_cast<int>(std::round(animEditorFps_));
+        if (fpsInt <= 0) fpsInt = 60;
+        int stepF = (animTimelineZoom_ > 250.0f) ? 5 : (animTimelineZoom_ > 100.0f ? 10 : 30);
 
-        int frameStep = (animTimelineZoom_ > 250.0f) ? 5 : (animTimelineZoom_ > 100.0f ? 10 : 30);
+        // (a) マイナーグリッド線（1フレームごと、ズーム時）
+        if (animTimelineZoom_ > 140.0f) {
+            for (int f = 0; f <= maxFrames; ++f) {
+                if (f % 5 == 0) continue;
+                float t = f / animEditorFps_;
+                float x = timelineStartX + t * animTimelineZoom_ - animTimelineScrollX_;
+                if (x >= timelineStartX && x <= timelineEndX) {
+                    drawList->AddLine(ImVec2(x, p0.y + rulerHeight), ImVec2(x, contentBottomY), IM_COL32(40, 42, 48, 220), 1.0f);
+                }
+            }
+        }
 
-        for (int f = 0; f <= maxFrames; f += frameStep) {
+        // (b) 中グリッド線（5F / 10F / 30Fごと）
+        for (int f = 0; f <= maxFrames; f += stepF) {
+            if (f % fpsInt == 0) continue;
+            float t = f / animEditorFps_;
+            float x = timelineStartX + t * animTimelineZoom_ - animTimelineScrollX_;
+            if (x >= timelineStartX && x <= timelineEndX) {
+                drawList->AddLine(ImVec2(x, p0.y + rulerHeight), ImVec2(x, contentBottomY), IM_COL32(58, 62, 72, 230), 1.0f);
+            }
+        }
+
+        // (c) メジャーグリッド線（1秒ごと / FPSの倍数）
+        for (int f = 0; f <= maxFrames; f += fpsInt) {
+            float t = f / animEditorFps_;
+            float x = timelineStartX + t * animTimelineZoom_ - animTimelineScrollX_;
+            if (x >= timelineStartX && x <= timelineEndX) {
+                drawList->AddLine(ImVec2(x, p0.y + rulerHeight), ImVec2(x, contentBottomY), IM_COL32(90, 95, 110, 255), 1.5f);
+            }
+        }
+
+        // (d) アニメーション終了（Duration）境界線
+        float endX = timelineStartX + editingAnimation_.duration * animTimelineZoom_ - animTimelineScrollX_;
+        if (endX >= timelineStartX && endX <= timelineEndX) {
+            drawList->AddLine(ImVec2(endX, p0.y + rulerHeight), ImVec2(endX, contentBottomY), IM_COL32(235, 150, 40, 255), 2.0f);
+        }
+
+        // ----------------------------------------------------
+        // 3. ルーラー（上部目盛りバー）
+        // ----------------------------------------------------
+        drawList->AddRectFilled(ImVec2(timelineStartX, p0.y), ImVec2(p1.x, p0.y + rulerHeight), IM_COL32(42, 44, 50, 255));
+        drawList->AddLine(ImVec2(timelineStartX, p0.y + rulerHeight), ImVec2(p1.x, p0.y + rulerHeight), IM_COL32(70, 74, 84, 255), 1.0f);
+
+        for (int f = 0; f <= maxFrames; f += stepF) {
             float t = f / animEditorFps_;
             float x = timelineStartX + t * animTimelineZoom_ - animTimelineScrollX_;
             if (x < timelineStartX || x > timelineEndX) continue;
 
-            drawList->AddLine(ImVec2(x, p0.y + rulerHeight - 8), ImVec2(x, p0.y + rulerHeight), IM_COL32(160, 160, 160, 255));
-            drawList->AddLine(ImVec2(x, p0.y + rulerHeight), ImVec2(x, p1.y), IM_COL32(45, 45, 50, 255), 1.0f);
+            bool isSec = (f % fpsInt == 0);
+            float tickH = isSec ? 12.0f : 6.0f;
+            ImU32 tickCol = isSec ? IM_COL32(220, 225, 235, 255) : IM_COL32(160, 165, 175, 255);
+            drawList->AddLine(ImVec2(x, p0.y + rulerHeight - tickH), ImVec2(x, p0.y + rulerHeight), tickCol, isSec ? 1.5f : 1.0f);
 
             char fBuf[32];
             snprintf(fBuf, sizeof(fBuf), "%d", f);
-            drawList->AddText(ImVec2(x + 3, p0.y + 4), IM_COL32(180, 180, 180, 255), fBuf);
+            drawList->AddText(ImVec2(x + 3, p0.y + 4), isSec ? IM_COL32(230, 235, 245, 255) : IM_COL32(170, 175, 185, 255), fBuf);
         }
 
         // ルーラースクラブ（シーク）操作
@@ -5117,14 +5176,8 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         }
 
         // ----------------------------------------------------
-        // B. 概要（Summary）行
+        // 4. サマリーキー（概要）の描画 & 操作
         // ----------------------------------------------------
-        float summaryY = p0.y + rulerHeight;
-        drawList->AddRectFilled(ImVec2(p0.x, summaryY), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(50, 45, 40, 255));
-        drawList->AddLine(ImVec2(p0.x, summaryY + summaryHeight), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(70, 65, 60, 255), 1.0f);
-        drawList->AddText(ImVec2(p0.x + 10, summaryY + 4), IM_COL32(240, 180, 80, 255), "[Summary] 概要");
-
-        // サマリーキー時刻の収集
         std::set<float> summaryKeyTimes;
         for (const auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
             for (const auto& k : nAnim.rotate) {
@@ -5132,7 +5185,6 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             }
         }
 
-        // サマリーキーの描画 & 操作
         for (float sTime : summaryKeyTimes) {
             float sX = timelineStartX + sTime * animTimelineZoom_ - animTimelineScrollX_;
             if (sX >= timelineStartX && sX <= timelineEndX) {
@@ -5192,27 +5244,13 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         }
 
         // ----------------------------------------------------
-        // C. 各ジョイント（Joint）行
+        // 5. 各可視トラックのキーフレーム（◆）描画
         // ----------------------------------------------------
-        float curTrackY = summaryY + summaryHeight;
-        for (int i = 0; i < numJoints; ++i) {
-            const std::string& jointName = currentJointList_[i];
+        curTrackY = summaryY + summaryHeight;
+        for (int i = 0; i < numVisibleTracks; ++i) {
+            const auto& item = visibleTracks[i];
+            const std::string& jointName = item.name;
             bool isSelected = (animEditorSelectedJointName_ == jointName);
-
-            ImU32 rowBg = isSelected ? IM_COL32(40, 65, 95, 255) : (i % 2 == 0 ? IM_COL32(34, 34, 38, 255) : IM_COL32(28, 28, 32, 255));
-            drawList->AddRectFilled(ImVec2(p0.x, curTrackY), ImVec2(p1.x, curTrackY + trackHeight), rowBg);
-            drawList->AddLine(ImVec2(p0.x, curTrackY + trackHeight), ImVec2(p1.x, curTrackY + trackHeight), IM_COL32(50, 50, 55, 255), 1.0f);
-
-            ImU32 textCol = isSelected ? IM_COL32(100, 200, 255, 255) : IM_COL32(200, 200, 200, 255);
-            std::string dispTrackName = jointName + (isSelected && isAnimLocked_ ? " [Locked]" : "");
-            drawList->AddText(ImVec2(p0.x + 14, curTrackY + 3), textCol, dispTrackName.c_str());
-
-            if (!isAnimLocked_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                if (mousePos.x >= p0.x && mousePos.x <= timelineStartX && mousePos.y >= curTrackY && mousePos.y < curTrackY + trackHeight) {
-                    animEditorSelectedJointName_ = jointName;
-                    animEditorSelectedKeyIndex_ = -1;
-                }
-            }
 
             if (editingAnimation_.nodeAnimations.find(jointName) != editingAnimation_.nodeAnimations.end()) {
                 auto& nodeAnim = editingAnimation_.nodeAnimations[jointName];
@@ -5229,7 +5267,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                             ImVec2(kX, kCenterY + 4.5f),
                             ImVec2(kX - 4.5f, kCenterY)
                         };
-                        ImU32 kCol = isKfSelected ? IM_COL32(255, 210, 40, 255) : IM_COL32(220, 220, 220, 255);
+                        ImU32 kCol = isKfSelected ? IM_COL32(255, 215, 50, 255) : IM_COL32(225, 225, 230, 255);
                         drawList->AddConvexPolyFilled(kdP, 4, kCol);
                         drawList->AddPolyline(kdP, 4, IM_COL32(10, 10, 10, 255), ImDrawFlags_Closed, 1.0f);
 
@@ -5282,11 +5320,146 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         }
 
         // ----------------------------------------------------
-        // D. 垂直再生ヘッド（Playhead）
+        // 6. 左カラム（トラックリスト / 階層ツリー & 折りたたみ）の描画
+        // ----------------------------------------------------
+        // 左カラム全体背景
+        drawList->AddRectFilled(p0, ImVec2(p0.x + trackListWidth, contentBottomY), IM_COL32(32, 33, 37, 255));
+        // ルーラー部左カラム背景
+        drawList->AddRectFilled(p0, ImVec2(p0.x + trackListWidth, p0.y + rulerHeight), IM_COL32(40, 42, 48, 255));
+        drawList->AddLine(ImVec2(p0.x, p0.y + rulerHeight), ImVec2(p0.x + trackListWidth, p0.y + rulerHeight), IM_COL32(65, 68, 76, 255), 1.0f);
+        // サマリー行左カラム背景
+        drawList->AddRectFilled(ImVec2(p0.x, summaryY), ImVec2(p0.x + trackListWidth, summaryY + summaryHeight), IM_COL32(46, 42, 36, 255));
+        drawList->AddLine(ImVec2(p0.x, summaryY + summaryHeight), ImVec2(p0.x + trackListWidth, summaryY + summaryHeight), IM_COL32(70, 64, 55, 255), 1.0f);
+        
+        // 縦境界線
+        drawList->AddLine(ImVec2(p0.x + trackListWidth, p0.y), ImVec2(p0.x + trackListWidth, contentBottomY), IM_COL32(65, 68, 76, 255), 1.5f);
+
+        // ヘッダー行テキスト
+        drawList->AddText(ImVec2(p0.x + 8, p0.y + 5), IM_COL32(200, 205, 215, 255), "チャネル / 関節");
+
+        // [+] 全展開 / [-] 全閉じる ボタン
+        float btnY = p0.y + 3.0f;
+        float btnExpandX = p0.x + trackListWidth - 52.0f;
+        float btnCollapseX = p0.x + trackListWidth - 26.0f;
+
+        // 全展開ボタン [+]
+        ImVec2 expMin(btnExpandX, btnY);
+        ImVec2 expMax(btnExpandX + 22.0f, btnY + 19.0f);
+        bool hoverExp = (mousePos.x >= expMin.x && mousePos.x <= expMax.x && mousePos.y >= expMin.y && mousePos.y <= expMax.y);
+        drawList->AddRectFilled(expMin, expMax, hoverExp ? IM_COL32(70, 80, 100, 255) : IM_COL32(48, 52, 60, 255), 3.0f);
+        drawList->AddRect(expMin, expMax, IM_COL32(85, 92, 105, 255), 3.0f);
+        drawList->AddText(ImVec2(expMin.x + 4, expMin.y + 2), IM_COL32(220, 225, 235, 255), "[+]");
+        if (hoverExp) {
+            ImGui::SetTooltip("すべての階層を展開");
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                for (const auto& node : animJointTreeNodes_) {
+                    if (!node.children.empty()) {
+                        animJointExpanded_[node.name] = true;
+                    }
+                }
+            }
+        }
+
+        // 全閉じるボタン [-]
+        ImVec2 colMin(btnCollapseX, btnY);
+        ImVec2 colMax(btnCollapseX + 22.0f, btnY + 19.0f);
+        bool hoverCol = (mousePos.x >= colMin.x && mousePos.x <= colMax.x && mousePos.y >= colMin.y && mousePos.y <= colMax.y);
+        drawList->AddRectFilled(colMin, colMax, hoverCol ? IM_COL32(70, 80, 100, 255) : IM_COL32(48, 52, 60, 255), 3.0f);
+        drawList->AddRect(colMin, colMax, IM_COL32(85, 92, 105, 255), 3.0f);
+        drawList->AddText(ImVec2(colMin.x + 5, colMin.y + 2), IM_COL32(220, 225, 235, 255), "[-]");
+        if (hoverCol) {
+            ImGui::SetTooltip("すべての階層を閉じる");
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                for (const auto& node : animJointTreeNodes_) {
+                    animJointExpanded_[node.name] = false;
+                }
+            }
+        }
+
+        // サマリー行ラベル
+        drawList->AddText(ImVec2(p0.x + 8, summaryY + 4), IM_COL32(245, 185, 85, 255), "[Summary] 概要");
+
+        // 各可視トラック行（左カラム）のツリー描画
+        curTrackY = summaryY + summaryHeight;
+        for (int i = 0; i < numVisibleTracks; ++i) {
+            const auto& item = visibleTracks[i];
+            const std::string& jointName = item.name;
+            bool isSelected = (animEditorSelectedJointName_ == jointName);
+
+            // 行背景
+            ImU32 rowBg = isSelected ? IM_COL32(38, 62, 92, 255) : (i % 2 == 0 ? IM_COL32(34, 35, 39, 255) : IM_COL32(28, 29, 33, 255));
+            drawList->AddRectFilled(ImVec2(p0.x, curTrackY), ImVec2(p0.x + trackListWidth, curTrackY + trackHeight), rowBg);
+            drawList->AddLine(ImVec2(p0.x, curTrackY + trackHeight), ImVec2(p0.x + trackListWidth, curTrackY + trackHeight), IM_COL32(48, 50, 56, 255), 1.0f);
+
+            float indentX = p0.x + 8.0f + item.depth * 14.0f;
+            float rowMidY = curTrackY + trackHeight * 0.5f;
+
+            // 階層接続線（ツリー線）
+            if (item.depth > 0) {
+                float lineX = indentX - 7.0f;
+                drawList->AddLine(ImVec2(lineX, curTrackY), ImVec2(lineX, rowMidY), IM_COL32(80, 85, 95, 180), 1.0f);
+                drawList->AddLine(ImVec2(lineX, rowMidY), ImVec2(indentX - 1.0f, rowMidY), IM_COL32(80, 85, 95, 180), 1.0f);
+            }
+
+            // トグルアイコン（▶ / ▼）または葉マーカー
+            float iconW = 12.0f;
+            if (item.hasChildren) {
+                ImVec2 toggleMin(indentX, curTrackY + 2.0f);
+                ImVec2 toggleMax(indentX + iconW + 4.0f, curTrackY + trackHeight - 2.0f);
+                bool isHoverToggle = (mousePos.x >= toggleMin.x && mousePos.x <= toggleMax.x && mousePos.y >= toggleMin.y && mousePos.y <= toggleMax.y);
+
+                if (item.isOpen) {
+                    // 下向き三角 ▼
+                    ImVec2 tri[3] = {
+                        ImVec2(indentX + 2.0f, rowMidY - 3.0f),
+                        ImVec2(indentX + 10.0f, rowMidY - 3.0f),
+                        ImVec2(indentX + 6.0f, rowMidY + 3.0f)
+                    };
+                    drawList->AddTriangleFilled(tri[0], tri[1], tri[2], isHoverToggle ? IM_COL32(255, 230, 100, 255) : IM_COL32(200, 205, 220, 255));
+                } else {
+                    // 右向き三角 ▶
+                    ImVec2 tri[3] = {
+                        ImVec2(indentX + 3.0f, rowMidY - 5.0f),
+                        ImVec2(indentX + 9.0f, rowMidY),
+                        ImVec2(indentX + 3.0f, rowMidY + 5.0f)
+                    };
+                    drawList->AddTriangleFilled(tri[0], tri[1], tri[2], isHoverToggle ? IM_COL32(255, 230, 100, 255) : IM_COL32(170, 175, 190, 255));
+                }
+
+                if (isHoverToggle && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    animJointExpanded_[jointName] = !item.isOpen;
+                }
+            } else {
+                // 葉ノード（ドット •）
+                drawList->AddCircleFilled(ImVec2(indentX + 5.0f, rowMidY), 2.0f, IM_COL32(110, 115, 130, 255));
+            }
+
+            // ジョイント名テキスト
+            float textStartX = indentX + iconW + 4.0f;
+            ImU32 textCol = isSelected ? IM_COL32(110, 210, 255, 255) : (item.hasChildren ? IM_COL32(235, 240, 250, 255) : IM_COL32(185, 190, 200, 255));
+            std::string dispTrackName = jointName + (isSelected && isAnimLocked_ ? " [Locked]" : "");
+            drawList->AddText(ImVec2(textStartX, curTrackY + 3.0f), textCol, dispTrackName.c_str());
+
+            // 行クリックによるボーン選択（トグルアイコン以外の領域をクリック時）
+            if (!isAnimLocked_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                if (mousePos.x >= p0.x && mousePos.x <= p0.x + trackListWidth && mousePos.y >= curTrackY && mousePos.y < curTrackY + trackHeight) {
+                    bool clickedToggle = item.hasChildren && (mousePos.x >= indentX && mousePos.x <= indentX + iconW + 4.0f);
+                    if (!clickedToggle) {
+                        animEditorSelectedJointName_ = jointName;
+                        animEditorSelectedKeyIndex_ = -1;
+                    }
+                }
+            }
+
+            curTrackY += trackHeight;
+        }
+
+        // ----------------------------------------------------
+        // 7. 垂直再生ヘッド（Playhead）
         // ----------------------------------------------------
         float playheadX = timelineStartX + animEditorTime_ * animTimelineZoom_ - animTimelineScrollX_;
         if (playheadX >= timelineStartX && playheadX <= timelineEndX) {
-            drawList->AddLine(ImVec2(playheadX, p0.y), ImVec2(playheadX, p1.y), IM_COL32(50, 150, 255, 255), 2.0f);
+            drawList->AddLine(ImVec2(playheadX, p0.y), ImVec2(playheadX, contentBottomY), IM_COL32(50, 160, 255, 255), 2.0f);
 
             ImVec2 badgeP[4] = {
                 ImVec2(playheadX - 10.0f, p0.y),
@@ -5354,6 +5527,45 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lキーで選択ボーンを固定（誤選択防止）");
     }
 
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ----------------------------------------------------
+    // アニメーション全体設定 (Duration / FPS / 総フレーム数)
+    // ----------------------------------------------------
+    if (ImGui::CollapsingHeader("アニメーション全体設定 (Duration / FPS)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int totalFrames = static_cast<int>(std::round(editingAnimation_.duration * animEditorFps_));
+        int curFrame = static_cast<int>(std::round(animEditorTime_ * animEditorFps_));
+
+        ImGui::Text("フレーム情報: %d / %d F (%.3fs / %.3fs)", curFrame, totalFrames, animEditorTime_, editingAnimation_.duration);
+
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::DragFloat("最大時間 (Duration)", &editingAnimation_.duration, 0.01f, 0.05f, 10.0f, "%.2fs")) {
+            // updated
+        }
+        if (ImGui::IsItemActivated()) {
+            animDragPreSnapshot_.animation = editingAnimation_;
+            animDragPreSnapshot_.time = animEditorTime_;
+            animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+            animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+            animDragPreSnapshot_.description = "時間長変更";
+            hasAnimDragPreSnapshot_ = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
+            animUndoStack_.push_back(animDragPreSnapshot_);
+            if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+            animRedoStack_.clear();
+            hasAnimDragPreSnapshot_ = false;
+        }
+
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[最大フレーム: %d F]", totalFrames);
+
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::DragFloat("フレームレート (FPS)", &animEditorFps_, 1.0f, 10.0f, 120.0f, "%.0f fps");
+    }
+
+    ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
