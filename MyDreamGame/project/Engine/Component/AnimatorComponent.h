@@ -7,7 +7,12 @@
 #include <string>
 
 struct JointOverride {
-    Quaternion rotate;
+    Quaternion rotate = { 0.0f, 0.0f, 0.0f, 1.0f };
+    Vector3 translate = { 0.0f, 0.0f, 0.0f };
+    Vector3 scale = { 1.0f, 1.0f, 1.0f };
+    bool hasRotate = false;
+    bool hasTranslate = false;
+    bool hasScale = false;
     float weight = 1.0f;
 };
 
@@ -23,9 +28,50 @@ public:
     void SetTargetNodeName(const std::string& name) { targetNodeName_ = name; }
     void SetJointRotationOverride(const std::string& name, const std::optional<Quaternion>& rotation, float weight = 1.0f) {
         if (rotation) {
-            jointOverrides_[name] = JointOverride{ *rotation, weight };
+            auto& ov = jointOverrides_[name];
+            ov.rotate = *rotation;
+            ov.hasRotate = true;
+            ov.weight = weight;
         } else {
-            jointOverrides_.erase(name);
+            auto it = jointOverrides_.find(name);
+            if (it != jointOverrides_.end()) {
+                it->second.hasRotate = false;
+                if (!it->second.hasTranslate && !it->second.hasScale) {
+                    jointOverrides_.erase(it);
+                }
+            }
+        }
+    }
+    void SetJointTranslationOverride(const std::string& name, const std::optional<Vector3>& translation, float weight = 1.0f) {
+        if (translation) {
+            auto& ov = jointOverrides_[name];
+            ov.translate = *translation;
+            ov.hasTranslate = true;
+            ov.weight = weight;
+        } else {
+            auto it = jointOverrides_.find(name);
+            if (it != jointOverrides_.end()) {
+                it->second.hasTranslate = false;
+                if (!it->second.hasRotate && !it->second.hasScale) {
+                    jointOverrides_.erase(it);
+                }
+            }
+        }
+    }
+    void SetJointScaleOverride(const std::string& name, const std::optional<Vector3>& scale, float weight = 1.0f) {
+        if (scale) {
+            auto& ov = jointOverrides_[name];
+            ov.scale = *scale;
+            ov.hasScale = true;
+            ov.weight = weight;
+        } else {
+            auto it = jointOverrides_.find(name);
+            if (it != jointOverrides_.end()) {
+                it->second.hasScale = false;
+                if (!it->second.hasRotate && !it->second.hasTranslate) {
+                    jointOverrides_.erase(it);
+                }
+            }
         }
     }
     void ClearJointOverrides() { jointOverrides_.clear(); }

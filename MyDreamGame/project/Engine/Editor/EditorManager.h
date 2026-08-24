@@ -326,10 +326,12 @@ private:
     float animTimelineScrollX_ = 0.0f;
     
     Animation editingAnimation_;
-    Animation editingAnimationWallClimb_;
-    Animation editingAnimationAirDash_;
     bool animEditorInitialized_ = false;
     std::vector<std::string> currentJointList_;
+    std::vector<std::string> availableAnimationFiles_;
+    std::string currentAnimFilePath_ = "resources/json/shared/Player/wall_climb_animation.json";
+    char newAnimSaveNameBuf_[128] = "";
+    bool openSaveAnimModal_ = false;
 
     // カメラ軸スナップの線形補間用変数
     bool isCameraSnapLerping_ = false;
@@ -344,10 +346,44 @@ private:
     void DrawAnimationViewportGrid(const Matrix4x4& viewProjectionMatrix, ImVec2 vpPos, ImVec2 vpSize);
     void DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
     void DrawSkeletonJointsOverlay(class SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
+    void DrawBoneTransformGizmo(class SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
     void DrawAnimationDopeSheetUI(class SceneManager* sceneManager);
     void DrawAnimationInspectorUI(class SceneManager* sceneManager);
     void RefreshAnimationJointList(class SceneManager* sceneManager);
     void UpdateAnimationPosePreview(class SceneManager* sceneManager);
+    void ScanAnimationFiles();
+    class AnimatorComponent* GetTargetAnimator(class SceneManager* sceneManager);
+
+    // ボーン用 3D ギズモパラメータ
+    int animGizmoMode_ = 1; // 0: Translation (T), 1: Rotation (R), 2: Scale (S)
+    int animGizmoSpace_ = 0; // 0: Local, 1: World
+    int animGizmoActiveAxis_ = -1; // -1: None, 0: X, 1: Y, 2: Z, 3: Center/XYZ
+    bool isDraggingAnimGizmo_ = false;
+    bool isAnimLocked_ = false; // Lキーで切替可能な編集ロック状態フラグ
+    bool isAnimHudMinimized_ = false; // ビューポートHUDの縮小化・最小化フラグ (Hキーで切替)
+    ImVec2 animGizmoDragStartMouse_ = {};
+    Vector3 animGizmoStartTranslate_ = {};
+    Quaternion animGizmoStartRotate_ = {};
+    Vector3 animGizmoStartScale_ = { 1.0f, 1.0f, 1.0f };
+
+    // アニメーションエディター Undo / Redo
+    struct AnimEditorSnapshot {
+        Animation animation;
+        float time = 0.0f;
+        std::string selectedJointName;
+        int selectedKeyIndex = -1;
+        std::string description;
+    };
+
+    std::vector<AnimEditorSnapshot> animUndoStack_;
+    std::vector<AnimEditorSnapshot> animRedoStack_;
+    AnimEditorSnapshot animDragPreSnapshot_;
+    bool hasAnimDragPreSnapshot_ = false;
+
+    void PushAnimUndoState(const std::string& desc = "");
+    void PerformAnimUndo(class SceneManager* sceneManager);
+    void PerformAnimRedo(class SceneManager* sceneManager);
+    void ClearAnimUndoRedo();
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

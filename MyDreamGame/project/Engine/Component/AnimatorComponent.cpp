@@ -74,18 +74,43 @@ void AnimatorComponent::UpdateSkeletonAndSkinCluster() {
         ApplyAnimation(skeleton_, animation_, animationTime_);
     }
 
-    // ジョイントの回転角度のオーバーライドを適用
+    // ジョイントのSRTオーバーライドを適用
     for (const auto& [name, overrideInfo] : jointOverrides_) {
         auto it = skeleton_.jointMap.find(name);
         if (it != skeleton_.jointMap.end()) {
-            if (overrideInfo.weight >= 1.0f) {
-                skeleton_.joints[it->second].transform.rotate = overrideInfo.rotate;
-            } else if (overrideInfo.weight > 0.0f) {
-                skeleton_.joints[it->second].transform.rotate = Slerp(
-                    skeleton_.joints[it->second].transform.rotate,
-                    overrideInfo.rotate,
-                    overrideInfo.weight
-                );
+            Joint& joint = skeleton_.joints[it->second];
+            if (overrideInfo.hasRotate) {
+                if (overrideInfo.weight >= 1.0f) {
+                    joint.transform.rotate = overrideInfo.rotate;
+                } else if (overrideInfo.weight > 0.0f) {
+                    joint.transform.rotate = Slerp(
+                        joint.transform.rotate,
+                        overrideInfo.rotate,
+                        overrideInfo.weight
+                    );
+                }
+            }
+            if (overrideInfo.hasTranslate) {
+                if (overrideInfo.weight >= 1.0f) {
+                    joint.transform.translate = overrideInfo.translate;
+                } else if (overrideInfo.weight > 0.0f) {
+                    joint.transform.translate = TransformFunctions::Lerp(
+                        joint.transform.translate,
+                        overrideInfo.translate,
+                        overrideInfo.weight
+                    );
+                }
+            }
+            if (overrideInfo.hasScale) {
+                if (overrideInfo.weight >= 1.0f) {
+                    joint.transform.scale = overrideInfo.scale;
+                } else if (overrideInfo.weight > 0.0f) {
+                    joint.transform.scale = TransformFunctions::Lerp(
+                        joint.transform.scale,
+                        overrideInfo.scale,
+                        overrideInfo.weight
+                    );
+                }
             }
         } else {
 #ifdef _DEBUG

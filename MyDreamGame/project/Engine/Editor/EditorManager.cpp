@@ -3387,24 +3387,41 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     LogManager::GetInstance()->Draw();
 }
 
+AnimatorComponent* EditorManager::GetTargetAnimator(SceneManager* sceneManager) {
+    if (selectedGameObject_) {
+        auto* a = selectedGameObject_->GetComponent<AnimatorComponent>();
+        if (a) return a;
+    }
+    if (selectedObject_) {
+        auto* a = selectedObject_->GetAnimator();
+        if (a) return a;
+    }
+    if (sceneManager && sceneManager->GetCurrentScene()) {
+        auto* scene = sceneManager->GetCurrentScene();
+        for (auto& go : scene->GetGameObjects()) {
+            if (go) {
+                auto* a = go->GetComponent<AnimatorComponent>();
+                if (a && a->HasSkeleton()) return a;
+            }
+        }
+        for (auto* obj : scene->GetObjects()) {
+            if (obj && obj->GetAnimator() && obj->GetAnimator()->HasSkeleton()) {
+                return obj->GetAnimator();
+            }
+        }
+        auto* player = scene->GetPlayer();
+        if (player && player->GetAnimator()) {
+            return player->GetAnimator();
+        }
+    }
+    return nullptr;
+}
+
 void EditorManager::RefreshAnimationJointList(SceneManager* sceneManager) {
     currentJointList_.clear();
     
-    // 1. 選択中オブジェクトからのスケルトン検索
-    AnimatorComponent* animator = nullptr;
-    if (selectedGameObject_) {
-        animator = selectedGameObject_->GetComponent<AnimatorComponent>();
-    } else if (selectedObject_) {
-        animator = selectedObject_->GetAnimator();
-    }
-    
-    // 2. 選択がない場合、SceneのPlayerを検索
-    if (!animator && sceneManager && sceneManager->GetCurrentScene()) {
-        auto* player = sceneManager->GetCurrentScene()->GetPlayer();
-        if (player) {
-            animator = player->GetAnimator();
-        }
-    }
+    // 1. シーン内のスケルトンを持つAnimatorを検索
+    AnimatorComponent* animator = GetTargetAnimator(sceneManager);
     
     if (animator && animator->HasSkeleton()) {
         const auto& joints = animator->GetSkeleton().joints;
@@ -3446,33 +3463,64 @@ void EditorManager::RefreshAnimationJointList(SceneManager* sceneManager) {
     }
 }
 
+void EditorManager::ScanAnimationFiles() {
+    availableAnimationFiles_.clear();
+    const std::string animDir = "resources/json/shared/Player";
+    std::filesystem::create_directories(animDir);
+
+    // 既知の標準プリセットファイルが存在しなければ作成
+    std::string wallClimbPath = animDir + "/wall_climb_animation.json";
+    std::string airDashPath = animDir + "/air_dash_animation.json";
+
+    if (!std::filesystem::exists(wallClimbPath)) {
+        SaveAnimationToJsonFile(CreateDefaultWallClimbAnimation(), wallClimbPath);
+    }
+    if (!std::filesystem::exists(airDashPath)) {
+        SaveAnimationToJsonFile(CreateDefaultAirDashAnimation(), airDashPath);
+    }
+
+    // ディレクトリ内のすべての.jsonファイルを列挙
+    for (const auto& entry : std::filesystem::directory_iterator(animDir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            std::string filename = entry.path().filename().string();
+            if (filename == "player_parameters.json") continue;
+
+            std::string fullPath = entry.path().string();
+            std::replace(fullPath.begin(), fullPath.end(), '\\', '/');
+            availableAnimationFiles_.push_back(fullPath);
+        }
+    }
+
+    // ソート
+    std::sort(availableAnimationFiles_.begin(), availableAnimationFiles_.end());
+
+    // 現在のファイルパスがリストにない場合は先頭に設定
+    if (std::find(availableAnimationFiles_.begin(), availableAnimationFiles_.end(), currentAnimFilePath_) == availableAnimationFiles_.end()) {
+        if (!availableAnimationFiles_.empty()) {
+            currentAnimFilePath_ = availableAnimationFiles_[0];
+        } else {
+            currentAnimFilePath_ = wallClimbPath;
+            availableAnimationFiles_.push_back(wallClimbPath);
+        }
+    }
+}
+
 void EditorManager::UpdateAnimationPosePreview(SceneManager* sceneManager) {
     if (!sceneManager || !sceneManager->GetCurrentScene()) return;
     
     if (!animEditorInitialized_) {
-        if (!LoadAnimationFromJsonFile(editingAnimationWallClimb_, "resources/json/shared/Player/wall_climb_animation.json")) {
-            editingAnimationWallClimb_ = CreateDefaultWallClimbAnimation();
+        ScanAnimationFiles();
+        if (!LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_)) {
+            if (currentAnimFilePath_.find("wall_climb") != std::string::npos) {
+                editingAnimation_ = CreateDefaultWallClimbAnimation();
+            } else if (currentAnimFilePath_.find("air_dash") != std::string::npos) {
+                editingAnimation_ = CreateDefaultAirDashAnimation();
+            }
         }
-        if (!LoadAnimationFromJsonFile(editingAnimationAirDash_, "resources/json/shared/Player/air_dash_animation.json")) {
-            editingAnimationAirDash_ = CreateDefaultAirDashAnimation();
-        }
-        editingAnimation_ = (animEditorTargetAnim_ == 0) ? editingAnimationWallClimb_ : editingAnimationAirDash_;
         animEditorInitialized_ = true;
     }
 
-    AnimatorComponent* animator = nullptr;
-    if (selectedGameObject_) {
-        animator = selectedGameObject_->GetComponent<AnimatorComponent>();
-    } else if (selectedObject_) {
-        animator = selectedObject_->GetAnimator();
-    }
-    if (!animator) {
-        auto* player = sceneManager->GetCurrentScene()->GetPlayer();
-        if (player) {
-            animator = player->GetAnimator();
-        }
-    }
-    
+    AnimatorComponent* animator = GetTargetAnimator(sceneManager);
     if (!animator) return;
     
     // 再生中の時間更新
@@ -3492,16 +3540,93 @@ void EditorManager::UpdateAnimationPosePreview(SceneManager* sceneManager) {
     }
     
     // アニメーションをモデルに適用（アニメーションモード時または編集中）
-    if (currentMode_ == EditorMode::Animation || isPlaying_) {
+    if (currentMode_ == EditorMode::Animation || isPlaying_ || showAnimEditor_) {
         animator->ClearJointOverrides();
         for (const auto& [nodeName, nodeAnim] : editingAnimation_.nodeAnimations) {
             if (!nodeAnim.rotate.empty()) {
                 Quaternion rot = CalculateValue(nodeAnim.rotate, animEditorTime_);
                 animator->SetJointRotationOverride(nodeName, rot, 1.0f);
             }
+            if (!nodeAnim.translate.empty()) {
+                Vector3 trans = CalculateValue(nodeAnim.translate, animEditorTime_);
+                animator->SetJointTranslationOverride(nodeName, trans, 1.0f);
+            }
+            if (!nodeAnim.scale.empty()) {
+                Vector3 sc = CalculateValue(nodeAnim.scale, animEditorTime_);
+                animator->SetJointScaleOverride(nodeName, sc, 1.0f);
+            }
         }
         animator->UpdateSkeletonAndSkinCluster();
     }
+}
+
+void EditorManager::PushAnimUndoState(const std::string& desc) {
+    AnimEditorSnapshot snap;
+    snap.animation = editingAnimation_;
+    snap.time = animEditorTime_;
+    snap.selectedJointName = animEditorSelectedJointName_;
+    snap.selectedKeyIndex = animEditorSelectedKeyIndex_;
+    snap.description = desc;
+
+    animUndoStack_.push_back(snap);
+    if (animUndoStack_.size() > 64) {
+        animUndoStack_.erase(animUndoStack_.begin());
+    }
+    animRedoStack_.clear();
+}
+
+void EditorManager::PerformAnimUndo(SceneManager* sceneManager) {
+    if (animUndoStack_.empty()) return;
+
+    // 現在の状態をRedoスタックにプッシュ
+    AnimEditorSnapshot curSnap;
+    curSnap.animation = editingAnimation_;
+    curSnap.time = animEditorTime_;
+    curSnap.selectedJointName = animEditorSelectedJointName_;
+    curSnap.selectedKeyIndex = animEditorSelectedKeyIndex_;
+    curSnap.description = "Current";
+    animRedoStack_.push_back(curSnap);
+
+    // Undoスタックから最新のスナップショットを取り出して適用
+    AnimEditorSnapshot prevSnap = animUndoStack_.back();
+    animUndoStack_.pop_back();
+
+    editingAnimation_ = prevSnap.animation;
+    animEditorTime_ = prevSnap.time;
+    animEditorSelectedJointName_ = prevSnap.selectedJointName;
+    animEditorSelectedKeyIndex_ = prevSnap.selectedKeyIndex;
+
+    UpdateAnimationPosePreview(sceneManager);
+}
+
+void EditorManager::PerformAnimRedo(SceneManager* sceneManager) {
+    if (animRedoStack_.empty()) return;
+
+    // 現在の状態をUndoスタックにプッシュ
+    AnimEditorSnapshot curSnap;
+    curSnap.animation = editingAnimation_;
+    curSnap.time = animEditorTime_;
+    curSnap.selectedJointName = animEditorSelectedJointName_;
+    curSnap.selectedKeyIndex = animEditorSelectedKeyIndex_;
+    curSnap.description = "Current";
+    animUndoStack_.push_back(curSnap);
+
+    // Redoスタックから最新のスナップショットを取り出して適用
+    AnimEditorSnapshot nextSnap = animRedoStack_.back();
+    animRedoStack_.pop_back();
+
+    editingAnimation_ = nextSnap.animation;
+    animEditorTime_ = nextSnap.time;
+    animEditorSelectedJointName_ = nextSnap.selectedJointName;
+    animEditorSelectedKeyIndex_ = nextSnap.selectedKeyIndex;
+
+    UpdateAnimationPosePreview(sceneManager);
+}
+
+void EditorManager::ClearAnimUndoRedo() {
+    animUndoStack_.clear();
+    animRedoStack_.clear();
+    hasAnimDragPreSnapshot_ = false;
 }
 
 void EditorManager::DrawAnimationViewportGrid(const Matrix4x4& viewProjectionMatrix, ImVec2 vpPos, ImVec2 vpSize) {
@@ -3741,41 +3866,25 @@ void EditorManager::DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPo
 void EditorManager::DrawSkeletonJointsOverlay(SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize) {
     if (!sceneManager || !activeCamera) return;
 
-    AnimatorComponent* animator = nullptr;
+    AnimatorComponent* animator = GetTargetAnimator(sceneManager);
     Matrix4x4 worldMatrix = TransformFunctions::MakeIdentity4x4();
 
     if (selectedGameObject_) {
-        animator = selectedGameObject_->GetComponent<AnimatorComponent>();
         auto* tr = selectedGameObject_->GetComponent<TransformComponent>();
         if (tr) worldMatrix = tr->GetWorldMatrix();
     } else if (selectedObject_) {
-        animator = selectedObject_->GetAnimator();
         worldMatrix = TransformFunctions::MakeAffineMatrix(
             selectedObject_->GetScale(),
             selectedObject_->GetRotation(),
             selectedObject_->GetTranslation()
         );
-    }
-
-    if (!animator) {
+    } else if (sceneManager && sceneManager->GetCurrentScene()) {
         auto* scene = sceneManager->GetCurrentScene();
-        if (scene) {
-            for (auto& go : scene->GetGameObjects()) {
-                if (go) {
-                    auto* a = go->GetComponent<AnimatorComponent>();
-                    if (a && a->HasSkeleton()) {
-                        animator = a;
-                        auto* tr = go->GetComponent<TransformComponent>();
-                        if (tr) worldMatrix = tr->GetWorldMatrix();
-                        break;
-                    }
-                }
-            }
-            if (!animator) {
-                auto* player = scene->GetPlayer();
-                if (player) {
-                    animator = player->GetAnimator();
-                }
+        for (auto& go : scene->GetGameObjects()) {
+            if (go && go->GetComponent<AnimatorComponent>() == animator) {
+                auto* tr = go->GetComponent<TransformComponent>();
+                if (tr) worldMatrix = tr->GetWorldMatrix();
+                break;
             }
         }
     }
@@ -3872,14 +3981,14 @@ void EditorManager::DrawSkeletonJointsOverlay(SceneManager* sceneManager, Camera
         }
     }
 
-    // ホバー時のハイライトとクリック選択
-    if (hoveredJointIdx >= 0) {
+    // ホバー時のハイライトとクリック選択（ロック中でない場合のみ他ボーンを選択可能）
+    if (hoveredJointIdx >= 0 && !isDraggingAnimGizmo_ && !isAnimLocked_) {
         const auto& hJoint = skeleton.joints[hoveredJointIdx];
         if (hJoint.name != animEditorSelectedJointName_) {
             ImVec2 hp = screenJoints[hoveredJointIdx].screenPos;
             drawList->AddCircle(hp, 9.0f, IM_COL32(255, 255, 255, 230), 16, 2.0f);
         }
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && animGizmoActiveAxis_ < 0) {
             animEditorSelectedJointName_ = hJoint.name;
             animEditorSelectedKeyIndex_ = -1;
         }
@@ -3913,15 +4022,496 @@ void EditorManager::DrawSkeletonJointsOverlay(SceneManager* sceneManager, Camera
             drawList->AddCircle(sp, 8.0f, IM_COL32(180, 110, 0, 255), 20, 1.5f);
 
             // ボーン名のテキストラベル（右上に黒半透明背景付き）
-            std::string label = animEditorSelectedJointName_;
+            std::string label = animEditorSelectedJointName_ + (isAnimLocked_ ? " [Locked]" : "");
             ImVec2 txtSz = ImGui::CalcTextSize(label.c_str());
             ImVec2 boxMin = ImVec2(sp.x + 12.0f, sp.y - txtSz.y * 0.5f - 4.0f);
             ImVec2 boxMax = ImVec2(boxMin.x + txtSz.x + 10.0f, boxMin.y + txtSz.y + 8.0f);
 
             drawList->AddRectFilled(boxMin, boxMax, IM_COL32(15, 15, 20, 230), 4.0f);
-            drawList->AddRect(boxMin, boxMax, IM_COL32(255, 205, 40, 220), 4.0f, 0, 1.5f);
-            drawList->AddText(ImVec2(boxMin.x + 5.0f, boxMin.y + 4.0f), IM_COL32(255, 240, 120, 255), label.c_str());
+            drawList->AddRect(boxMin, boxMax, isAnimLocked_ ? IM_COL32(255, 90, 90, 220) : IM_COL32(255, 205, 40, 220), 4.0f, 0, 1.5f);
+            drawList->AddText(ImVec2(boxMin.x + 5.0f, boxMin.y + 4.0f), isAnimLocked_ ? IM_COL32(255, 140, 140, 255) : IM_COL32(255, 240, 120, 255), label.c_str());
         }
+    }
+
+    drawList->PopClipRect();
+}
+
+void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize) {
+    if (!sceneManager || !activeCamera) return;
+
+    AnimatorComponent* animator = GetTargetAnimator(sceneManager);
+    if (!animator || !animator->HasSkeleton()) return;
+
+    const Skeleton& skeleton = animator->GetSkeleton();
+    auto it = skeleton.jointMap.find(animEditorSelectedJointName_);
+    if (it == skeleton.jointMap.end()) return;
+
+    int32_t jointIdx = it->second;
+    if (jointIdx < 0 || jointIdx >= static_cast<int32_t>(skeleton.joints.size())) return;
+
+    const Joint& joint = skeleton.joints[jointIdx];
+
+    Matrix4x4 worldMatrix = TransformFunctions::MakeIdentity4x4();
+    if (selectedGameObject_) {
+        auto* tr = selectedGameObject_->GetComponent<TransformComponent>();
+        if (tr) worldMatrix = tr->GetWorldMatrix();
+    } else if (selectedObject_) {
+        worldMatrix = TransformFunctions::MakeAffineMatrix(
+            selectedObject_->GetScale(),
+            selectedObject_->GetRotation(),
+            selectedObject_->GetTranslation()
+        );
+    } else if (sceneManager && sceneManager->GetCurrentScene()) {
+        for (auto& go : sceneManager->GetCurrentScene()->GetGameObjects()) {
+            if (go && go->GetComponent<AnimatorComponent>() == animator) {
+                auto* tr = go->GetComponent<TransformComponent>();
+                if (tr) worldMatrix = tr->GetWorldMatrix();
+                break;
+            }
+        }
+    }
+
+    Matrix4x4 jointWorld = TransformFunctions::Multiply(joint.skeletonSpaceMatrix, worldMatrix);
+    Vector3 origin = { jointWorld.m[3][0], jointWorld.m[3][1], jointWorld.m[3][2] };
+
+    Matrix4x4 vpMat = TransformFunctions::Multiply(activeCamera->GetViewMatrix(), activeCamera->GetProjectionMatrix());
+
+    Vector4 clipOrigin;
+    clipOrigin.x = origin.x * vpMat.m[0][0] + origin.y * vpMat.m[1][0] + origin.z * vpMat.m[2][0] + vpMat.m[3][0];
+    clipOrigin.y = origin.x * vpMat.m[0][1] + origin.y * vpMat.m[1][1] + origin.z * vpMat.m[2][1] + vpMat.m[3][1];
+    clipOrigin.z = origin.x * vpMat.m[0][2] + origin.y * vpMat.m[1][2] + origin.z * vpMat.m[2][2] + vpMat.m[3][2];
+    clipOrigin.w = origin.x * vpMat.m[0][3] + origin.y * vpMat.m[1][3] + origin.z * vpMat.m[2][3] + vpMat.m[3][3];
+
+    if (clipOrigin.w <= 0.05f) return;
+
+    float ndcX = clipOrigin.x / clipOrigin.w;
+    float ndcY = clipOrigin.y / clipOrigin.w;
+    ImVec2 screenOrigin = ImVec2(
+        vpPos.x + (ndcX + 1.0f) * 0.5f * vpSize.x,
+        vpPos.y + (1.0f - ndcY) * 0.5f * vpSize.y
+    );
+
+    float gizmoRadius = clipOrigin.w * 0.18f;
+
+    Vector3 axes[3] = {
+        { 1.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 0.0f, 0.0f, 1.0f }
+    };
+
+    if (animGizmoSpace_ == 0) { // Local space
+        Vector3 lx = { jointWorld.m[0][0], jointWorld.m[0][1], jointWorld.m[0][2] };
+        Vector3 ly = { jointWorld.m[1][0], jointWorld.m[1][1], jointWorld.m[1][2] };
+        Vector3 lz = { jointWorld.m[2][0], jointWorld.m[2][1], jointWorld.m[2][2] };
+        float lenX = std::sqrt(lx.x * lx.x + lx.y * lx.y + lx.z * lx.z); if (lenX > 1e-5f) axes[0] = lx * (1.0f / lenX);
+        float lenY = std::sqrt(ly.x * ly.x + ly.y * ly.y + ly.z * ly.z); if (lenY > 1e-5f) axes[1] = ly * (1.0f / lenY);
+        float lenZ = std::sqrt(lz.x * lz.x + lz.y * lz.y + lz.z * lz.z); if (lenZ > 1e-5f) axes[2] = lz * (1.0f / lenZ);
+    }
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->PushClipRect(vpPos, ImVec2(vpPos.x + vpSize.x, vpPos.y + vpSize.y), true);
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mousePos = io.MousePos;
+
+    auto project = [&](const Vector3& p, ImVec2& outP, float& outW) -> bool {
+        Vector4 c;
+        c.x = p.x * vpMat.m[0][0] + p.y * vpMat.m[1][0] + p.z * vpMat.m[2][0] + vpMat.m[3][0];
+        c.y = p.x * vpMat.m[0][1] + p.y * vpMat.m[1][1] + p.z * vpMat.m[2][1] + vpMat.m[3][1];
+        c.z = p.x * vpMat.m[0][2] + p.y * vpMat.m[1][2] + p.z * vpMat.m[2][2] + vpMat.m[3][2];
+        c.w = p.x * vpMat.m[0][3] + p.y * vpMat.m[1][3] + p.z * vpMat.m[2][3] + vpMat.m[3][3];
+        outW = c.w;
+        if (c.w <= 0.05f) return false;
+        outP.x = vpPos.x + (c.x / c.w + 1.0f) * 0.5f * vpSize.x;
+        outP.y = vpPos.y + (1.0f - c.y / c.w) * 0.5f * vpSize.y;
+        return true;
+    };
+
+    auto distToSegment = [](ImVec2 p, ImVec2 a, ImVec2 b) -> float {
+        float l2 = (b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y);
+        if (l2 < 1e-4f) return std::sqrt((p.x - a.x) * (p.x - a.x) + (p.y - a.y) * (p.y - a.y));
+        float t = std::clamp(((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2, 0.0f, 1.0f);
+        ImVec2 proj = ImVec2(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y));
+        return std::sqrt((p.x - proj.x) * (p.x - proj.x) + (p.y - proj.y) * (p.y - proj.y));
+    };
+
+    const ImU32 axisColors[3] = {
+        IM_COL32(235, 60, 60, 240),
+        IM_COL32(60, 220, 60, 240),
+        IM_COL32(60, 140, 255, 240)
+    };
+    const ImU32 axisHoverColors[3] = {
+        IM_COL32(255, 140, 140, 255),
+        IM_COL32(140, 255, 140, 255),
+        IM_COL32(140, 200, 255, 255)
+    };
+
+    NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+
+    if (!isDraggingAnimGizmo_) {
+        animGizmoActiveAxis_ = -1;
+    }
+
+    // --------------------------------------------------------
+    // Mode 0: Translation (移動)
+    // --------------------------------------------------------
+    if (animGizmoMode_ == 0) {
+        ImVec2 screenTips[3];
+        bool tipsValid[3] = { false, false, false };
+        int hoveredAxis = -1;
+        float minD = 12.0f;
+
+        for (int i = 0; i < 3; ++i) {
+            Vector3 tipPos = origin + axes[i] * gizmoRadius;
+            float tipW;
+            if (project(tipPos, screenTips[i], tipW)) {
+                tipsValid[i] = true;
+                float d = distToSegment(mousePos, screenOrigin, screenTips[i]);
+                if (d < minD) {
+                    minD = d;
+                    hoveredAxis = i;
+                }
+            }
+        }
+
+        if (!isDraggingAnimGizmo_ && hoveredAxis >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            isDraggingAnimGizmo_ = true;
+            animGizmoActiveAxis_ = hoveredAxis;
+            animGizmoDragStartMouse_ = mousePos;
+            animDragPreSnapshot_.animation = editingAnimation_;
+            animDragPreSnapshot_.time = animEditorTime_;
+            animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+            animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+            animDragPreSnapshot_.description = "ギズモ移動";
+            hasAnimDragPreSnapshot_ = true;
+        }
+
+        // Draw axis lines and arrow tips (移動用矢印)
+        for (int i = 0; i < 3; ++i) {
+            if (!tipsValid[i]) continue;
+            bool isAct = (animGizmoActiveAxis_ == i) || (!isDraggingAnimGizmo_ && hoveredAxis == i);
+            ImU32 col = isAct ? axisHoverColors[i] : axisColors[i];
+            float thick = isAct ? 3.5f : 2.0f;
+
+            ImVec2 dir2D = ImVec2(screenTips[i].x - screenOrigin.x, screenTips[i].y - screenOrigin.y);
+            float len2D = std::sqrt(dir2D.x * dir2D.x + dir2D.y * dir2D.y);
+            if (len2D > 1.0f) {
+                dir2D.x /= len2D;
+                dir2D.y /= len2D;
+            } else {
+                dir2D = ImVec2(1.0f, 0.0f);
+            }
+            ImVec2 perp2D = ImVec2(-dir2D.y, dir2D.x);
+
+            float arrowLen = isAct ? 15.0f : 12.0f;
+            float arrowWidth = isAct ? 6.5f : 5.0f;
+
+            ImVec2 apex = screenTips[i];
+            ImVec2 baseCenter = ImVec2(apex.x - dir2D.x * arrowLen, apex.y - dir2D.y * arrowLen);
+            ImVec2 baseL = ImVec2(baseCenter.x + perp2D.x * arrowWidth, baseCenter.y + perp2D.y * arrowWidth);
+            ImVec2 baseR = ImVec2(baseCenter.x - perp2D.x * arrowWidth, baseCenter.y - perp2D.y * arrowWidth);
+
+            // 軸ラインの描画 (矢印の付け根まで)
+            drawList->AddLine(screenOrigin, baseCenter, col, thick);
+
+            // 矢印ヘッド（三角形）の描画
+            drawList->AddTriangleFilled(apex, baseL, baseR, col);
+            drawList->AddTriangle(apex, baseL, baseR, IM_COL32(20, 20, 20, 240), 1.2f);
+        }
+
+        // Handle Dragging Translation
+        if (isDraggingAnimGizmo_ && animGizmoActiveAxis_ >= 0 && animGizmoActiveAxis_ < 3) {
+            int a = animGizmoActiveAxis_;
+            if (tipsValid[a] && (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f)) {
+                ImVec2 dir2D = ImVec2(screenTips[a].x - screenOrigin.x, screenTips[a].y - screenOrigin.y);
+                float len2D = std::sqrt(dir2D.x * dir2D.x + dir2D.y * dir2D.y);
+                if (len2D > 1.0f) {
+                    dir2D.x /= len2D;
+                    dir2D.y /= len2D;
+                    float proj = io.MouseDelta.x * dir2D.x + io.MouseDelta.y * dir2D.y;
+                    float factor = gizmoRadius / (std::max)(len2D, 60.0f);
+                    float deltaAmount = proj * factor * 1.2f;
+
+                    Vector3 curT = { 0.0f, 0.0f, 0.0f };
+                    if (!nodeAnim.translate.empty()) {
+                        curT = CalculateValue(nodeAnim.translate, animEditorTime_);
+                    } else {
+                        curT = joint.transform.translate;
+                    }
+                    Vector3 newT = curT;
+                    if (a == 0) newT.x += deltaAmount;
+                    else if (a == 1) newT.y += deltaAmount;
+                    else if (a == 2) newT.z += deltaAmount;
+
+                    bool found = false;
+                    for (size_t idx = 0; idx < nodeAnim.translate.size(); ++idx) {
+                        if (std::abs(nodeAnim.translate[idx].time - animEditorTime_) < 0.005f) {
+                            nodeAnim.translate[idx].value = newT;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        KeyframeVector3 newKf{ animEditorTime_, newT };
+                        auto itK = nodeAnim.translate.begin();
+                        while (itK != nodeAnim.translate.end() && itK->time < newKf.time) ++itK;
+                        nodeAnim.translate.insert(itK, newKf);
+                    }
+                    UpdateAnimationPosePreview(sceneManager);
+                }
+            }
+        }
+    }
+    // --------------------------------------------------------
+    // Mode 1: Rotation (回転)
+    // --------------------------------------------------------
+    else if (animGizmoMode_ == 1) {
+        const int numSegments = 32;
+        int hoveredRing = -1;
+        float minD = 8.0f;
+
+        struct RingData {
+            std::vector<ImVec2> pts;
+            bool valid = false;
+        };
+        RingData rings[3];
+
+        for (int i = 0; i < 3; ++i) {
+            Vector3 uAxis = axes[(i + 1) % 3];
+            Vector3 vAxis = axes[(i + 2) % 3];
+            float ringR = gizmoRadius * 0.85f;
+
+            rings[i].pts.reserve(numSegments + 1);
+            for (int s = 0; s <= numSegments; ++s) {
+                float theta = (static_cast<float>(s) / numSegments) * 6.2831853f;
+                Vector3 p = origin + (uAxis * std::cos(theta) + vAxis * std::sin(theta)) * ringR;
+                ImVec2 sp;
+                float spW;
+                if (project(p, sp, spW)) {
+                    rings[i].pts.push_back(sp);
+                }
+            }
+            if (rings[i].pts.size() >= numSegments) {
+                rings[i].valid = true;
+                for (size_t s = 0; s + 1 < rings[i].pts.size(); ++s) {
+                    float d = distToSegment(mousePos, rings[i].pts[s], rings[i].pts[s + 1]);
+                    if (d < minD) {
+                        minD = d;
+                        hoveredRing = i;
+                    }
+                }
+            }
+        }
+
+        if (!isDraggingAnimGizmo_ && hoveredRing >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            isDraggingAnimGizmo_ = true;
+            animGizmoActiveAxis_ = hoveredRing;
+            animGizmoDragStartMouse_ = mousePos;
+            animDragPreSnapshot_.animation = editingAnimation_;
+            animDragPreSnapshot_.time = animEditorTime_;
+            animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+            animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+            animDragPreSnapshot_.description = "ギズモ回転";
+            hasAnimDragPreSnapshot_ = true;
+        }
+
+        // Draw rings
+        for (int i = 0; i < 3; ++i) {
+            if (!rings[i].valid) continue;
+            bool isAct = (animGizmoActiveAxis_ == i) || (!isDraggingAnimGizmo_ && hoveredRing == i);
+            ImU32 col = isAct ? axisHoverColors[i] : axisColors[i];
+            float thick = isAct ? 3.5f : 2.0f;
+
+            for (size_t s = 0; s + 1 < rings[i].pts.size(); ++s) {
+                drawList->AddLine(rings[i].pts[s], rings[i].pts[s + 1], col, thick);
+            }
+        }
+
+        // Handle Dragging Rotation
+        if (isDraggingAnimGizmo_ && animGizmoActiveAxis_ >= 0 && animGizmoActiveAxis_ < 3) {
+            int a = animGizmoActiveAxis_;
+            if (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f) {
+                float prevAng = std::atan2((mousePos.y - io.MouseDelta.y) - screenOrigin.y, (mousePos.x - io.MouseDelta.x) - screenOrigin.x);
+                float curAng = std::atan2(mousePos.y - screenOrigin.y, mousePos.x - screenOrigin.x);
+                float deltaAngle = curAng - prevAng;
+                while (deltaAngle > 3.14159f) deltaAngle -= 6.28318f;
+                while (deltaAngle < -3.14159f) deltaAngle += 6.28318f;
+
+                Vector3 toCam = activeCamera->GetTranslation() - origin;
+                float lenCam = std::sqrt(toCam.x * toCam.x + toCam.y * toCam.y + toCam.z * toCam.z);
+                if (lenCam > 1e-5f) toCam = toCam / lenCam;
+                float facing = axes[a].x * toCam.x + axes[a].y * toCam.y + axes[a].z * toCam.z;
+                if (facing < 0.0f) deltaAngle = -deltaAngle;
+
+                Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
+                if (!nodeAnim.rotate.empty()) {
+                    curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+                } else {
+                    curQ = joint.transform.rotate;
+                }
+
+                Quaternion qRotDelta = MakeRotHelper(axes[a], deltaAngle * 1.5f);
+                Quaternion newQ = qRotDelta * curQ;
+                float qLen = std::sqrt(newQ.x * newQ.x + newQ.y * newQ.y + newQ.z * newQ.z + newQ.w * newQ.w);
+                if (qLen > 1e-5f) {
+                    newQ.x /= qLen;
+                    newQ.y /= qLen;
+                    newQ.z /= qLen;
+                    newQ.w /= qLen;
+                }
+
+                if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+                    nodeAnim.rotate[animEditorSelectedKeyIndex_].value = newQ;
+                } else {
+                    KeyframeQuaternion newKf{ animEditorTime_, newQ };
+                    bool found = false;
+                    for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
+                        if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                            nodeAnim.rotate[idx].value = newQ;
+                            animEditorSelectedKeyIndex_ = static_cast<int>(idx);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        auto itK = nodeAnim.rotate.begin();
+                        while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
+                        auto ins = nodeAnim.rotate.insert(itK, newKf);
+                        animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), ins));
+                    }
+                }
+                UpdateAnimationPosePreview(sceneManager);
+            }
+        }
+    }
+    // --------------------------------------------------------
+    // Mode 2: Scale (拡大縮小)
+    // --------------------------------------------------------
+    else if (animGizmoMode_ == 2) {
+        ImVec2 screenTips[3];
+        bool tipsValid[3] = { false, false, false };
+        int hoveredAxis = -1;
+        float minD = 12.0f;
+
+        // Check center box (uniform scale)
+        float distCenter = std::sqrt((mousePos.x - screenOrigin.x) * (mousePos.x - screenOrigin.x) + (mousePos.y - screenOrigin.y) * (mousePos.y - screenOrigin.y));
+        if (distCenter <= 8.0f) {
+            hoveredAxis = 3;
+        } else {
+            for (int i = 0; i < 3; ++i) {
+                Vector3 tipPos = origin + axes[i] * gizmoRadius;
+                float tipW;
+                if (project(tipPos, screenTips[i], tipW)) {
+                    tipsValid[i] = true;
+                    float d = distToSegment(mousePos, screenOrigin, screenTips[i]);
+                    if (d < minD) {
+                        minD = d;
+                        hoveredAxis = i;
+                    }
+                }
+            }
+        }
+
+        if (!isDraggingAnimGizmo_ && hoveredAxis >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            isDraggingAnimGizmo_ = true;
+            animGizmoActiveAxis_ = hoveredAxis;
+            animGizmoDragStartMouse_ = mousePos;
+            animDragPreSnapshot_.animation = editingAnimation_;
+            animDragPreSnapshot_.time = animEditorTime_;
+            animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+            animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+            animDragPreSnapshot_.description = "ギズモ拡縮";
+            hasAnimDragPreSnapshot_ = true;
+        }
+
+        // Draw axis lines and boxes
+        for (int i = 0; i < 3; ++i) {
+            if (!tipsValid[i]) continue;
+            bool isAct = (animGizmoActiveAxis_ == i) || (!isDraggingAnimGizmo_ && hoveredAxis == i);
+            ImU32 col = isAct ? axisHoverColors[i] : axisColors[i];
+            float thick = isAct ? 3.5f : 2.0f;
+
+            drawList->AddLine(screenOrigin, screenTips[i], col, thick);
+
+            // Tip box
+            float bSz = isAct ? 7.0f : 5.0f;
+            drawList->AddRectFilled(ImVec2(screenTips[i].x - bSz, screenTips[i].y - bSz), ImVec2(screenTips[i].x + bSz, screenTips[i].y + bSz), col);
+            drawList->AddRect(ImVec2(screenTips[i].x - bSz, screenTips[i].y - bSz), ImVec2(screenTips[i].x + bSz, screenTips[i].y + bSz), IM_COL32(20, 20, 20, 240));
+        }
+
+        // Draw center box
+        bool centerAct = (animGizmoActiveAxis_ == 3) || (!isDraggingAnimGizmo_ && hoveredAxis == 3);
+        float cSz = centerAct ? 8.0f : 6.0f;
+        ImU32 cCol = centerAct ? IM_COL32(255, 255, 140, 255) : IM_COL32(240, 220, 80, 240);
+        drawList->AddRectFilled(ImVec2(screenOrigin.x - cSz, screenOrigin.y - cSz), ImVec2(screenOrigin.x + cSz, screenOrigin.y + cSz), cCol);
+        drawList->AddRect(ImVec2(screenOrigin.x - cSz, screenOrigin.y - cSz), ImVec2(screenOrigin.x + cSz, screenOrigin.y + cSz), IM_COL32(20, 20, 20, 255));
+
+        // Handle Dragging Scale
+        if (isDraggingAnimGizmo_ && animGizmoActiveAxis_ >= 0) {
+            Vector3 curS = { 1.0f, 1.0f, 1.0f };
+            if (!nodeAnim.scale.empty()) {
+                curS = CalculateValue(nodeAnim.scale, animEditorTime_);
+            } else {
+                curS = joint.transform.scale;
+            }
+
+            if (animGizmoActiveAxis_ == 3) {
+                // Uniform scale
+                float proj = io.MouseDelta.x - io.MouseDelta.y;
+                float factor = 1.0f + proj * 0.02f;
+                curS = curS * factor;
+            } else {
+                int a = animGizmoActiveAxis_;
+                if (tipsValid[a]) {
+                    ImVec2 dir2D = ImVec2(screenTips[a].x - screenOrigin.x, screenTips[a].y - screenOrigin.y);
+                    float len2D = std::sqrt(dir2D.x * dir2D.x + dir2D.y * dir2D.y);
+                    if (len2D > 1.0f) {
+                        dir2D.x /= len2D;
+                        dir2D.y /= len2D;
+                        float proj = io.MouseDelta.x * dir2D.x + io.MouseDelta.y * dir2D.y;
+                        float factor = 1.0f + proj * 0.02f;
+                        if (a == 0) curS.x *= factor;
+                        else if (a == 1) curS.y *= factor;
+                        else if (a == 2) curS.z *= factor;
+                    }
+                }
+            }
+
+            curS.x = (std::max)(0.001f, curS.x);
+            curS.y = (std::max)(0.001f, curS.y);
+            curS.z = (std::max)(0.001f, curS.z);
+
+            bool found = false;
+            for (size_t idx = 0; idx < nodeAnim.scale.size(); ++idx) {
+                if (std::abs(nodeAnim.scale[idx].time - animEditorTime_) < 0.005f) {
+                    nodeAnim.scale[idx].value = curS;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                KeyframeVector3 newKf{ animEditorTime_, curS };
+                auto itK = nodeAnim.scale.begin();
+                while (itK != nodeAnim.scale.end() && itK->time < newKf.time) ++itK;
+                nodeAnim.scale.insert(itK, newKf);
+            }
+            UpdateAnimationPosePreview(sceneManager);
+        }
+    }
+
+    if (isAnimLocked_) {
+        drawList->AddText(ImVec2(screenOrigin.x + 8, screenOrigin.y - 18), IM_COL32(255, 120, 120, 255), "[LOCKED (L)]");
+    }
+
+    if (!io.MouseDown[0]) {
+        if (isDraggingAnimGizmo_ && hasAnimDragPreSnapshot_) {
+            animUndoStack_.push_back(animDragPreSnapshot_);
+            if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+            animRedoStack_.clear();
+            hasAnimDragPreSnapshot_ = false;
+        }
+        isDraggingAnimGizmo_ = false;
+        animGizmoActiveAxis_ = -1;
     }
 
     drawList->PopClipRect();
@@ -3984,34 +4574,125 @@ void EditorManager::DrawAnimationEditorMainView(SceneManager* sceneManager, Came
         // ボーン（スケルトン）位置の可視化＆選択オーバーレイ描画
         DrawSkeletonJointsOverlay(sceneManager, cam, gameViewPos_, gameViewSize_);
 
+        // ボーン SRT ギズモ（マニピュレーター）の描画 & 操作
+        DrawBoneTransformGizmo(sceneManager, cam, gameViewPos_, gameViewSize_);
+
         // カメラ向きギズモ（スナップ対応）の描画
         DrawCameraOrientationGizmo(cam, gameViewPos_, gameViewSize_);
     }
 
-    // ビューポート左上にBlender風のHUD / 情報表示
+    // ビューポート左上にHUD / ギズモツールバー表示
     ImGui::SetCursorPos(ImVec2(currentPos.x + 10.0f, currentPos.y + 10.0f));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.65f));
-    ImGui::BeginChild("##AnimViewportHUD", ImVec2(340, 78), true, ImGuiWindowFlags_NoScrollbar);
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[3D Viewport] アニメーションビューポート");
-    int curF = static_cast<int>(std::round(animEditorTime_ * animEditorFps_));
-    int totF = static_cast<int>(std::round(editingAnimation_.duration * animEditorFps_));
-    ImGui::Text("フレーム: %d / %d  (%.3fs)", curF, totF, animEditorTime_);
-    ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.3f, 1.0f), "選択ボーン: %s", animEditorSelectedJointName_.c_str());
-    ImGui::TextDisabled("[Space] 再生/停止  [F3] デバッグカメラ");
-    ImGui::EndChild();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.70f));
+    
+    if (isAnimHudMinimized_) {
+        // 縮小化表示 (「拡大化」ボタンのみを表示)
+        ImGui::BeginChild("##AnimViewportHUD", ImVec2(96, 40), true, ImGuiWindowFlags_NoScrollbar);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+        if (ImGui::Button("拡大化", ImVec2(80, 24))) {
+            isAnimHudMinimized_ = false;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("HUDを展開 (Hキーで切替)");
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
+    } else {
+        // 通常（展開）表示
+        ImGui::BeginChild("##AnimViewportHUD", ImVec2(480, 115), true, ImGuiWindowFlags_NoScrollbar);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+
+        // 左上に縮小化ボタンを配置（拡大化ボタンと同じ位置）
+        if (ImGui::Button("縮小化", ImVec2(80, 24))) {
+            isAnimHudMinimized_ = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("HUDを縮小化 (Hキーで切替)");
+
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[3D Viewport] アニメーションビューポート");
+
+        int curF = static_cast<int>(std::round(animEditorTime_ * animEditorFps_));
+        int totF = static_cast<int>(std::round(editingAnimation_.duration * animEditorFps_));
+        ImGui::Text("フレーム: %d / %d  (%.3fs)", curF, totF, animEditorTime_);
+        ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.3f, 1.0f), "選択ボーン: %s%s", animEditorSelectedJointName_.c_str(), isAnimLocked_ ? " [固定中]" : "");
+
+        // ギズモツールバー (SRT / Local-World / Lock)
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
+        {
+            bool isTrans = (animGizmoMode_ == 0);
+            if (isTrans) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.3f, 0.3f, 1.0f));
+            if (ImGui::Button("[T] 移動", ImVec2(62, 20))) animGizmoMode_ = 0;
+            if (isTrans) ImGui::PopStyleColor();
+
+            ImGui::SameLine();
+            bool isRot = (animGizmoMode_ == 1);
+            if (isRot) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.75f, 0.3f, 1.0f));
+            if (ImGui::Button("[R] 回転", ImVec2(62, 20))) animGizmoMode_ = 1;
+            if (isRot) ImGui::PopStyleColor();
+
+            ImGui::SameLine();
+            bool isScale = (animGizmoMode_ == 2);
+            if (isScale) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.55f, 0.9f, 1.0f));
+            if (ImGui::Button("[S] 拡縮", ImVec2(62, 20))) animGizmoMode_ = 2;
+            if (isScale) ImGui::PopStyleColor();
+
+            ImGui::SameLine();
+            if (ImGui::Button(animGizmoSpace_ == 0 ? "Local" : "World", ImVec2(52, 20))) {
+                animGizmoSpace_ = (animGizmoSpace_ == 0) ? 1 : 0;
+            }
+
+            ImGui::SameLine();
+            if (isAnimLocked_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
+                if (ImGui::Button("[L] ロック中", ImVec2(88, 20))) isAnimLocked_ = false;
+                ImGui::PopStyleColor();
+            } else {
+                if (ImGui::Button("[L] ロック", ImVec2(75, 20))) isAnimLocked_ = true;
+            }
+        }
+        ImGui::PopStyleVar(); // ItemSpacing
+        ImGui::PopStyleVar(); // FrameRounding
+
+        ImGui::EndChild();
+    }
     ImGui::PopStyleColor();
+
+    // ショートカットキー判定 (Ctrl+Z: 元に戻す, Ctrl+Y: やり直す, T/R/S でギズモ切替, L でロック切替, H でHUD縮小/展開切替)
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantTextInput && ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+        if (io.KeyCtrl) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                if (io.KeyShift) {
+                    PerformAnimRedo(sceneManager);
+                } else {
+                    PerformAnimUndo(sceneManager);
+                }
+            } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+                PerformAnimRedo(sceneManager);
+            }
+        } else {
+            if (ImGui::IsKeyPressed(ImGuiKey_T, false)) animGizmoMode_ = 0; // Translate (移動)
+            if (ImGui::IsKeyPressed(ImGuiKey_R, false)) animGizmoMode_ = 1; // Rotate (回転)
+            if (ImGui::IsKeyPressed(ImGuiKey_S, false)) animGizmoMode_ = 2; // Scale (拡縮)
+            if (ImGui::IsKeyPressed(ImGuiKey_L, false)) isAnimLocked_ = !isAnimLocked_; // Lock (ロック)
+            if (ImGui::IsKeyPressed(ImGuiKey_H, false)) isAnimHudMinimized_ = !isAnimHudMinimized_; // HUD Minimize toggle
+        }
+    }
 }
 
 void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
     if (!animEditorInitialized_) {
-        if (!LoadAnimationFromJsonFile(editingAnimationWallClimb_, "resources/json/shared/Player/wall_climb_animation.json")) {
-            editingAnimationWallClimb_ = CreateDefaultWallClimbAnimation();
+        ScanAnimationFiles();
+        if (!LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_)) {
+            if (currentAnimFilePath_.find("wall_climb") != std::string::npos) {
+                editingAnimation_ = CreateDefaultWallClimbAnimation();
+            } else if (currentAnimFilePath_.find("air_dash") != std::string::npos) {
+                editingAnimation_ = CreateDefaultAirDashAnimation();
+            }
         }
-        if (!LoadAnimationFromJsonFile(editingAnimationAirDash_, "resources/json/shared/Player/air_dash_animation.json")) {
-            editingAnimationAirDash_ = CreateDefaultAirDashAnimation();
-        }
-        editingAnimation_ = (animEditorTargetAnim_ == 0) ? editingAnimationWallClimb_ : editingAnimationAirDash_;
         animEditorInitialized_ = true;
+    }
+
+    if (availableAnimationFiles_.empty()) {
+        ScanAnimationFiles();
     }
 
     if (ImGui::Begin("ドープシート (タイムライン)", &showAnimEditor_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
@@ -4035,54 +4716,114 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
         ImGui::SameLine();
 
-        // アクション / アニメーション切替
-        const char* animNames[] = { "壁つかまり移動 (WallClimb)", "空中ダッシュ (AirDash)", "カスタム (Custom)" };
-        int prevAnim = animEditorTargetAnim_;
+        // アクション / アニメーション切替 (ファイル一覧から選択 & 自動ロード)
+        std::string currentStem = std::filesystem::path(currentAnimFilePath_).stem().string();
+        std::string currentDisplay = currentStem;
+        if (currentStem == "wall_climb_animation") currentDisplay = "壁つかまり (wall_climb)";
+        else if (currentStem == "air_dash_animation") currentDisplay = "空中ダッシュ (air_dash)";
+
         ImGui::SetNextItemWidth(190.0f);
-        if (ImGui::Combo("##AnimSelect", &animEditorTargetAnim_, animNames, 3)) {
-            if (prevAnim != animEditorTargetAnim_) {
-                if (animEditorTargetAnim_ == 0) {
-                    editingAnimation_ = editingAnimationWallClimb_;
-                } else if (animEditorTargetAnim_ == 1) {
-                    editingAnimation_ = editingAnimationAirDash_;
+        if (ImGui::BeginCombo("##AnimSelectCombo", currentDisplay.c_str())) {
+            for (const auto& filePath : availableAnimationFiles_) {
+                std::string stem = std::filesystem::path(filePath).stem().string();
+                std::string displayName = stem;
+                if (stem == "wall_climb_animation") displayName = "壁つかまり (wall_climb)";
+                else if (stem == "air_dash_animation") displayName = "空中ダッシュ (air_dash)";
+
+                bool isSel = (currentAnimFilePath_ == filePath);
+                if (ImGui::Selectable(displayName.c_str(), isSel)) {
+                    if (currentAnimFilePath_ != filePath) {
+                        currentAnimFilePath_ = filePath;
+                        if (!LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_)) {
+                            if (currentAnimFilePath_.find("wall_climb") != std::string::npos) {
+                                editingAnimation_ = CreateDefaultWallClimbAnimation();
+                            } else if (currentAnimFilePath_.find("air_dash") != std::string::npos) {
+                                editingAnimation_ = CreateDefaultAirDashAnimation();
+                            }
+                        }
+                        animEditorTime_ = 0.0f;
+                        animEditorSelectedKeyIndex_ = -1;
+                        ClearAnimUndoRedo();
+                        UpdateAnimationPosePreview(sceneManager);
+                        LogManager::GetInstance()->AddLog(LogLevel::Info, "アニメーション読込: " + currentAnimFilePath_);
+                    }
                 }
-                animEditorTime_ = 0.0f;
-                animEditorSelectedKeyIndex_ = -1;
+                if (isSel) ImGui::SetItemDefaultFocus();
             }
+            ImGui::EndCombo();
         }
-
-        const std::string animPath = (animEditorTargetAnim_ == 0) 
-            ? "resources/json/shared/Player/wall_climb_animation.json"
-            : (animEditorTargetAnim_ == 1)
-                ? "resources/json/shared/Player/air_dash_animation.json"
-                : "resources/json/shared/Player/custom_animation.json";
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("編集対象のアニメーションを選択（切り替え時に自動読込）");
 
         ImGui::SameLine();
-        if (ImGui::Button("[Save] 保存")) {
-            SaveAnimationToJsonFile(editingAnimation_, animPath);
-            if (animEditorTargetAnim_ == 0) editingAnimationWallClimb_ = editingAnimation_;
-            else if (animEditorTargetAnim_ == 1) editingAnimationAirDash_ = editingAnimation_;
-            LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation saved: " + animPath);
+        // 上書き保存ボタン
+        if (ImGui::Button("[Save] 上書き保存")) {
+            SaveAnimationToJsonFile(editingAnimation_, currentAnimFilePath_);
+            LogManager::GetInstance()->AddLog(LogLevel::Info, "アニメーション上書き保存: " + currentAnimFilePath_);
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("JSONファイルに保存");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("現在のアニメーションファイル (%s) に上書き保存", currentAnimFilePath_.c_str());
 
         ImGui::SameLine();
-        if (ImGui::Button("[Reload] 読込")) {
-            if (LoadAnimationFromJsonFile(editingAnimation_, animPath)) {
-                if (animEditorTargetAnim_ == 0) editingAnimationWallClimb_ = editingAnimation_;
-                else if (animEditorTargetAnim_ == 1) editingAnimationAirDash_ = editingAnimation_;
-                LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation reloaded: " + animPath);
-            }
+        // 名前をつけて保存ボタン
+        if (ImGui::Button("[+] 名前をつけて保存")) {
+            snprintf(newAnimSaveNameBuf_, sizeof(newAnimSaveNameBuf_), "%s_copy", currentStem.c_str());
+            openSaveAnimModal_ = true;
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("JSONファイルから再読込");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("新しい名前をつけてJSONファイルとして新規保存");
+
+        // 名前をつけて保存モーダルダイアログ
+        if (openSaveAnimModal_) {
+            ImGui::OpenPopup("名前をつけて保存##AnimSaveModal");
+            openSaveAnimModal_ = false;
+        }
+
+        if (ImGui::BeginPopupModal("名前をつけて保存##AnimSaveModal", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("新しいアニメーションのファイル名を入力してください:");
+            ImGui::Spacing();
+            ImGui::SetNextItemWidth(260.0f);
+            ImGui::InputText("##NewAnimFileName", newAnimSaveNameBuf_, sizeof(newAnimSaveNameBuf_));
+            ImGui::TextDisabled("保存先: resources/json/shared/Player/%s.json", newAnimSaveNameBuf_);
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (ImGui::Button("保存", ImVec2(120, 0))) {
+                std::string inputName = newAnimSaveNameBuf_;
+                if (!inputName.empty()) {
+                    if (inputName.size() < 5 || inputName.substr(inputName.size() - 5) != ".json") {
+                        inputName += ".json";
+                    }
+                    std::string fullPath = "resources/json/shared/Player/" + inputName;
+                    SaveAnimationToJsonFile(editingAnimation_, fullPath);
+                    ScanAnimationFiles();
+                    currentAnimFilePath_ = fullPath;
+                    LogManager::GetInstance()->AddLog(LogLevel::Info, "新規アニメーション保存: " + fullPath);
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if (ImGui::Button("キャンセル", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
 
         ImGui::SameLine();
         if (ImGui::Button("[Reset] リセット")) {
-            if (animEditorTargetAnim_ == 0) editingAnimation_ = CreateDefaultWallClimbAnimation();
-            else if (animEditorTargetAnim_ == 1) editingAnimation_ = CreateDefaultAirDashAnimation();
-            SaveAnimationToJsonFile(editingAnimation_, animPath);
+            PushAnimUndoState("アニメーション初期化");
+            if (currentAnimFilePath_.find("wall_climb") != std::string::npos) {
+                editingAnimation_ = CreateDefaultWallClimbAnimation();
+            } else if (currentAnimFilePath_.find("air_dash") != std::string::npos) {
+                editingAnimation_ = CreateDefaultAirDashAnimation();
+            } else {
+                editingAnimation_.nodeAnimations.clear();
+                editingAnimation_.duration = 1.0f;
+            }
+            SaveAnimationToJsonFile(editingAnimation_, currentAnimFilePath_);
+            UpdateAnimationPosePreview(sceneManager);
+            LogManager::GetInstance()->AddLog(LogLevel::Info, "アニメーションを初期化しました: " + currentAnimFilePath_);
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("デフォルトアニメーションに復元");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("アニメーションを初期状態に戻して保存");
 
         ImGui::SameLine();
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -4093,6 +4834,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         if (ImGui::Button("|<<", ImVec2(32, 0))) {
             animEditorTime_ = 0.0f;
             animEditorPlaying_ = false;
+            UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("先頭フレームへ");
 
@@ -4100,6 +4842,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // 1フレーム戻る (<)
         if (ImGui::Button("<", ImVec2(28, 0))) {
             animEditorTime_ = (std::max)(0.0f, animEditorTime_ - 1.0f / animEditorFps_);
+            UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム戻る");
 
@@ -4124,6 +4867,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // 1フレーム進む (>)
         if (ImGui::Button(">", ImVec2(28, 0))) {
             animEditorTime_ = (std::min)(editingAnimation_.duration, animEditorTime_ + 1.0f / animEditorFps_);
+            UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム進む");
 
@@ -4132,6 +4876,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         if (ImGui::Button(">>|", ImVec2(32, 0))) {
             animEditorTime_ = editingAnimation_.duration;
             animEditorPlaying_ = false;
+            UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("末尾フレームへ");
 
@@ -4163,7 +4908,23 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         ImGui::Text("Duration:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(65.0f);
-        ImGui::DragFloat("##Duration", &editingAnimation_.duration, 0.01f, 0.05f, 10.0f, "%.2fs");
+        if (ImGui::DragFloat("##Duration", &editingAnimation_.duration, 0.01f, 0.05f, 10.0f, "%.2fs")) {
+            // value updated
+        }
+        if (ImGui::IsItemActivated()) {
+            animDragPreSnapshot_.animation = editingAnimation_;
+            animDragPreSnapshot_.time = animEditorTime_;
+            animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+            animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+            animDragPreSnapshot_.description = "時間長変更";
+            hasAnimDragPreSnapshot_ = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
+            animUndoStack_.push_back(animDragPreSnapshot_);
+            if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+            animRedoStack_.clear();
+            hasAnimDragPreSnapshot_ = false;
+        }
 
         ImGui::SameLine();
         ImGui::Text("FPS:");
@@ -4178,6 +4939,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // キー挿入 / 削除
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 1.0f));
         if (ImGui::Button("[+] キー挿入 (I)")) {
+            PushAnimUndoState("キー挿入 (I)");
             NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
             Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
             if (!nodeAnim.rotate.empty()) {
@@ -4200,19 +4962,22 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                 auto inserted = nodeAnim.rotate.insert(it, newKf);
                 animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
             }
+            UpdateAnimationPosePreview(sceneManager);
         }
         ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("現在時刻にキーフレームを記録 (Iキー)");
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("現在時刻にキーフレームを記録 (Iキー)");
 
         ImGui::SameLine();
         if (ImGui::Button("[-] 削除 (Del)")) {
+            PushAnimUndoState("キー削除 (Del)");
             NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
             if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
                 nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
                 animEditorSelectedKeyIndex_ = -1;
+                UpdateAnimationPosePreview(sceneManager);
             }
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("選択中のキーフレームを削除 (Deleteキー)");
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("選択中のキーフレームを削除 (Deleteキー)");
 
         ImGui::PopStyleVar(2);
 
@@ -4221,26 +4986,45 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // ショートカットキー判定
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
             auto io = ImGui::GetIO();
-            if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
-                animEditorPlaying_ = !animEditorPlaying_;
-            }
-            if (ImGui::IsKeyPressed(ImGuiKey_I, false)) {
-                NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
-                Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
-                if (!nodeAnim.rotate.empty()) {
-                    curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+            if (io.KeyCtrl && !io.WantTextInput) {
+                if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                    if (io.KeyShift) PerformAnimRedo(sceneManager);
+                    else PerformAnimUndo(sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+                    PerformAnimRedo(sceneManager);
                 }
-                KeyframeQuaternion newKf{ animEditorTime_, curQ };
-                auto it = nodeAnim.rotate.begin();
-                while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
-                auto inserted = nodeAnim.rotate.insert(it, newKf);
-                animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
-            }
-            if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
-                NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
-                if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-                    nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
-                    animEditorSelectedKeyIndex_ = -1;
+            } else if (!io.WantTextInput) {
+                if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
+                    animEditorPlaying_ = !animEditorPlaying_;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_T, false)) animGizmoMode_ = 0; // Translate (移動)
+                if (ImGui::IsKeyPressed(ImGuiKey_R, false)) animGizmoMode_ = 1; // Rotate (回転)
+                if (ImGui::IsKeyPressed(ImGuiKey_S, false)) animGizmoMode_ = 2; // Scale (拡縮)
+                if (ImGui::IsKeyPressed(ImGuiKey_L, false)) isAnimLocked_ = !isAnimLocked_; // Lock (ロック)
+                if (ImGui::IsKeyPressed(ImGuiKey_H, false)) isAnimHudMinimized_ = !isAnimHudMinimized_; // HUD Minimize toggle
+
+                if (ImGui::IsKeyPressed(ImGuiKey_I, false)) {
+                    PushAnimUndoState("キー挿入 (I)");
+                    NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                    Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
+                    if (!nodeAnim.rotate.empty()) {
+                        curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+                    }
+                    KeyframeQuaternion newKf{ animEditorTime_, curQ };
+                    auto it = nodeAnim.rotate.begin();
+                    while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
+                    auto inserted = nodeAnim.rotate.insert(it, newKf);
+                    animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+                    UpdateAnimationPosePreview(sceneManager);
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+                    PushAnimUndoState("キー削除 (Del)");
+                    NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                    if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+                        nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
+                        animEditorSelectedKeyIndex_ = -1;
+                        UpdateAnimationPosePreview(sceneManager);
+                    }
                 }
             }
         }
@@ -4326,6 +5110,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 float newTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
                 animEditorTime_ = std::clamp(newTime, 0.0f, editingAnimation_.duration);
+                UpdateAnimationPosePreview(sceneManager);
             } else {
                 isAnimRulerScrubbing_ = false;
             }
@@ -4337,7 +5122,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         float summaryY = p0.y + rulerHeight;
         drawList->AddRectFilled(ImVec2(p0.x, summaryY), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(50, 45, 40, 255));
         drawList->AddLine(ImVec2(p0.x, summaryY + summaryHeight), ImVec2(p1.x, summaryY + summaryHeight), IM_COL32(70, 65, 60, 255), 1.0f);
-        drawList->AddText(ImVec2(p0.x + 10, summaryY + 4), IM_COL32(240, 180, 80, 255), "▼ 概要 (Summary)");
+        drawList->AddText(ImVec2(p0.x + 10, summaryY + 4), IM_COL32(240, 180, 80, 255), "[Summary] 概要");
 
         // サマリーキー時刻の収集
         std::set<float> summaryKeyTimes;
@@ -4367,6 +5152,13 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                     animEditorTime_ = sTime;
                     isSummaryKeyDrag_ = true;
                     dragSummaryOriginalTime_ = sTime;
+                    animDragPreSnapshot_.animation = editingAnimation_;
+                    animDragPreSnapshot_.time = animEditorTime_;
+                    animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+                    animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+                    animDragPreSnapshot_.description = "サマリーキー移動";
+                    hasAnimDragPreSnapshot_ = true;
+                    UpdateAnimationPosePreview(sceneManager);
                 }
             }
         }
@@ -4386,8 +5178,15 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                     }
                     dragSummaryOriginalTime_ = newT;
                     animEditorTime_ = newT;
+                    UpdateAnimationPosePreview(sceneManager);
                 }
             } else {
+                if (hasAnimDragPreSnapshot_) {
+                    animUndoStack_.push_back(animDragPreSnapshot_);
+                    if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+                    animRedoStack_.clear();
+                    hasAnimDragPreSnapshot_ = false;
+                }
                 isSummaryKeyDrag_ = false;
             }
         }
@@ -4405,9 +5204,10 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             drawList->AddLine(ImVec2(p0.x, curTrackY + trackHeight), ImVec2(p1.x, curTrackY + trackHeight), IM_COL32(50, 50, 55, 255), 1.0f);
 
             ImU32 textCol = isSelected ? IM_COL32(100, 200, 255, 255) : IM_COL32(200, 200, 200, 255);
-            drawList->AddText(ImVec2(p0.x + 14, curTrackY + 3), textCol, jointName.c_str());
+            std::string dispTrackName = jointName + (isSelected && isAnimLocked_ ? " [Locked]" : "");
+            drawList->AddText(ImVec2(p0.x + 14, curTrackY + 3), textCol, dispTrackName.c_str());
 
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (!isAnimLocked_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 if (mousePos.x >= p0.x && mousePos.x <= timelineStartX && mousePos.y >= curTrackY && mousePos.y < curTrackY + trackHeight) {
                     animEditorSelectedJointName_ = jointName;
                     animEditorSelectedKeyIndex_ = -1;
@@ -4440,6 +5240,13 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                                 animEditorTime_ = kTime;
                                 isDraggingAnimKeyframe_ = true;
                                 dragAnimKeyOriginalTime_ = kTime;
+                                animDragPreSnapshot_.animation = editingAnimation_;
+                                animDragPreSnapshot_.time = animEditorTime_;
+                                animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+                                animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+                                animDragPreSnapshot_.description = "キーフレーム移動";
+                                hasAnimDragPreSnapshot_ = true;
+                                UpdateAnimationPosePreview(sceneManager);
                             }
                         }
                     }
@@ -4457,12 +5264,19 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                 if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
                     nodeAnim.rotate[animEditorSelectedKeyIndex_].time = newT;
                     animEditorTime_ = newT;
+                    UpdateAnimationPosePreview(sceneManager);
                 }
             } else {
                 auto& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
                 std::sort(nodeAnim.rotate.begin(), nodeAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) {
                     return a.time < b.time;
                 });
+                if (hasAnimDragPreSnapshot_) {
+                    animUndoStack_.push_back(animDragPreSnapshot_);
+                    if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+                    animRedoStack_.clear();
+                    hasAnimDragPreSnapshot_ = false;
+                }
                 isDraggingAnimKeyframe_ = false;
             }
         }
@@ -4494,6 +5308,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             if (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y > summaryY + summaryHeight && !isDraggingAnimKeyframe_ && !isSummaryKeyDrag_) {
                 float clickTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
                 animEditorTime_ = std::clamp(clickTime, 0.0f, editingAnimation_.duration);
+                UpdateAnimationPosePreview(sceneManager);
             }
         }
 
@@ -4504,7 +5319,41 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
 }
 
 void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
-    ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "[Animation Properties] ボーン プロパティ");
+    ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "[Animation Properties] ボーン SRT 設定");
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    bool canUndo = !animUndoStack_.empty();
+    bool canRedo = !animRedoStack_.empty();
+
+    if (!canUndo) ImGui::BeginDisabled();
+    if (ImGui::Button("戻る (Ctrl+Z)")) {
+        PerformAnimUndo(sceneManager);
+    }
+    if (!canUndo) ImGui::EndDisabled();
+
+    ImGui::SameLine();
+    if (!canRedo) ImGui::BeginDisabled();
+    if (ImGui::Button("進む (Ctrl+Y)")) {
+        PerformAnimRedo(sceneManager);
+    }
+    if (!canRedo) ImGui::EndDisabled();
+
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    if (isAnimLocked_) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
+        if (ImGui::Button("ロック中 (L)")) isAnimLocked_ = false;
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lキーでボーン選択固定を解除");
+    } else {
+        if (ImGui::Button("ロック (L)")) isAnimLocked_ = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Lキーで選択ボーンを固定（誤選択防止）");
+    }
+
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -4516,6 +5365,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     ImGui::Spacing();
     ImGui::Text("選択ボーン (Joint):");
     ImGui::SetNextItemWidth(-1.0f);
+    if (isAnimLocked_) ImGui::BeginDisabled();
     if (ImGui::BeginCombo("##SelectedJointCombo", animEditorSelectedJointName_.c_str())) {
         for (const auto& jName : currentJointList_) {
             bool isSel = (animEditorSelectedJointName_ == jName);
@@ -4526,35 +5376,186 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         }
         ImGui::EndCombo();
     }
+    if (isAnimLocked_) ImGui::EndDisabled();
+
+    ImGui::Spacing();
+
+    // ギズモ操作モード切替ボタン群 (SRT & Lock)
+    ImGui::Text("ギズモ操作モード:");
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+    {
+        bool isTrans = (animGizmoMode_ == 0);
+        if (isTrans) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.3f, 0.3f, 1.0f));
+        if (ImGui::Button("移動 (T)", ImVec2(65, 24))) animGizmoMode_ = 0;
+        if (isTrans) ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        bool isRot = (animGizmoMode_ == 1);
+        if (isRot) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.75f, 0.3f, 1.0f));
+        if (ImGui::Button("回転 (R)", ImVec2(65, 24))) animGizmoMode_ = 1;
+        if (isRot) ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        bool isScale = (animGizmoMode_ == 2);
+        if (isScale) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.55f, 0.9f, 1.0f));
+        if (ImGui::Button("拡縮 (S)", ImVec2(65, 24))) animGizmoMode_ = 2;
+        if (isScale) ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        if (ImGui::Button(animGizmoSpace_ == 0 ? "Local" : "World", ImVec2(55, 24))) {
+            animGizmoSpace_ = (animGizmoSpace_ == 0) ? 1 : 0;
+        }
+
+        ImGui::SameLine();
+        if (isAnimLocked_) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
+            if (ImGui::Button("ロック中", ImVec2(80, 24))) isAnimLocked_ = false;
+            ImGui::PopStyleColor();
+        } else {
+            if (ImGui::Button("ロック (L)", ImVec2(80, 24))) isAnimLocked_ = true;
+        }
+    }
+    ImGui::PopStyleVar();
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
+    if (isAnimLocked_) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+        ImGui::Text("[ボーン選択固定中] Lキーで解除");
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+    }
+
     NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
-    
+    AnimatorComponent* anim = GetTargetAnimator(sceneManager);
+
+    // ----------------------------------------------------
+    // 1. 平行移動 (Translation / T)
+    // ----------------------------------------------------
+    Vector3 curTrans = { 0.0f, 0.0f, 0.0f };
+    if (!nodeAnim.translate.empty()) {
+        curTrans = CalculateValue(nodeAnim.translate, animEditorTime_);
+    } else if (anim && anim->HasSkeleton()) {
+        const auto& skel = anim->GetSkeleton();
+        auto itJ = skel.jointMap.find(animEditorSelectedJointName_);
+        if (itJ != skel.jointMap.end()) {
+            curTrans = skel.joints[itJ->second].transform.translate;
+        }
+    }
+
+    float transArr[3] = { curTrans.x, curTrans.y, curTrans.z };
+    ImGui::TextColored(ImVec4(0.95f, 0.4f, 0.4f, 1.0f), "[T] 平行移動 (Translation):");
+    if (ImGui::DragFloat3("位置 (X, Y, Z)##Trans", transArr, 0.01f, -100.0f, 100.0f, "%.3f")) {
+        Vector3 newTrans{ transArr[0], transArr[1], transArr[2] };
+        bool found = false;
+        for (size_t idx = 0; idx < nodeAnim.translate.size(); ++idx) {
+            if (std::abs(nodeAnim.translate[idx].time - animEditorTime_) < 0.005f) {
+                nodeAnim.translate[idx].value = newTrans;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            KeyframeVector3 newKf{ animEditorTime_, newTrans };
+            auto itK = nodeAnim.translate.begin();
+            while (itK != nodeAnim.translate.end() && itK->time < newKf.time) ++itK;
+            nodeAnim.translate.insert(itK, newKf);
+        }
+        UpdateAnimationPosePreview(sceneManager);
+    }
+    if (ImGui::IsItemActivated()) {
+        animDragPreSnapshot_.animation = editingAnimation_;
+        animDragPreSnapshot_.time = animEditorTime_;
+        animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+        animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+        animDragPreSnapshot_.description = "位置変更";
+        hasAnimDragPreSnapshot_ = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
+        animUndoStack_.push_back(animDragPreSnapshot_);
+        if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+        animRedoStack_.clear();
+        hasAnimDragPreSnapshot_ = false;
+    }
+
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Reset##T")) {
+        PushAnimUndoState("位置リセット");
+        Vector3 defTrans = { 0.0f, 0.0f, 0.0f };
+        if (anim && anim->HasSkeleton()) {
+            const auto& skel = anim->GetSkeleton();
+            auto itJ = skel.jointMap.find(animEditorSelectedJointName_);
+            if (itJ != skel.jointMap.end()) defTrans = skel.joints[itJ->second].defaultTransform.translate;
+        }
+        KeyframeVector3 newKf{ animEditorTime_, defTrans };
+        nodeAnim.translate.push_back(newKf);
+        UpdateAnimationPosePreview(sceneManager);
+    }
+
+    ImGui::Spacing();
+
+    // ----------------------------------------------------
+    // 2. 回転 (Rotation / R)
+    // ----------------------------------------------------
     Quaternion curQuat = { 0.0f, 0.0f, 0.0f, 1.0f };
     if (!nodeAnim.rotate.empty()) {
         curQuat = CalculateValue(nodeAnim.rotate, animEditorTime_);
+    } else if (anim && anim->HasSkeleton()) {
+        const auto& skel = anim->GetSkeleton();
+        auto itJ = skel.jointMap.find(animEditorSelectedJointName_);
+        if (itJ != skel.jointMap.end()) {
+            curQuat = skel.joints[itJ->second].transform.rotate;
+        }
     }
 
     Vector3 euler = curQuat.ToEulerAngles();
     float eulerDeg[3] = { euler.x * 180.0f / 3.14159265f, euler.y * 180.0f / 3.14159265f, euler.z * 180.0f / 3.14159265f };
     float eulerRad[3] = { euler.x, euler.y, euler.z };
 
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "ボーン回転 (Transform Rotation):");
-    bool changed = false;
-    if (ImGui::SliderFloat3("回転 (度: X, Y, Z)", eulerDeg, -180.0f, 180.0f, "%.1f°")) {
-        changed = true;
+    ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "[R] 回転 (Rotation):");
+    bool rotChanged = false;
+    if (ImGui::DragFloat3("度 (Deg: X, Y, Z)##RotDeg", eulerDeg, 0.5f, -360.0f, 360.0f, "%.1f°")) {
+        rotChanged = true;
     }
-    if (ImGui::SliderFloat3("回転 (Rad: X, Y, Z)", eulerRad, -3.14159f, 3.14159f, "%.3f rad")) {
+    if (ImGui::IsItemActivated()) {
+        animDragPreSnapshot_.animation = editingAnimation_;
+        animDragPreSnapshot_.time = animEditorTime_;
+        animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+        animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+        animDragPreSnapshot_.description = "回転変更";
+        hasAnimDragPreSnapshot_ = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
+        animUndoStack_.push_back(animDragPreSnapshot_);
+        if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+        animRedoStack_.clear();
+        hasAnimDragPreSnapshot_ = false;
+    }
+
+    if (ImGui::DragFloat3("ラジアン (Rad)##RotRad", eulerRad, 0.01f, -6.283f, 6.283f, "%.3f rad")) {
         eulerDeg[0] = eulerRad[0] * 180.0f / 3.14159265f;
         eulerDeg[1] = eulerRad[1] * 180.0f / 3.14159265f;
         eulerDeg[2] = eulerRad[2] * 180.0f / 3.14159265f;
-        changed = true;
+        rotChanged = true;
+    }
+    if (ImGui::IsItemActivated()) {
+        animDragPreSnapshot_.animation = editingAnimation_;
+        animDragPreSnapshot_.time = animEditorTime_;
+        animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+        animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+        animDragPreSnapshot_.description = "回転変更";
+        hasAnimDragPreSnapshot_ = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
+        animUndoStack_.push_back(animDragPreSnapshot_);
+        if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+        animRedoStack_.clear();
+        hasAnimDragPreSnapshot_ = false;
     }
 
-    if (changed) {
+    if (rotChanged) {
         float rx = eulerDeg[0] * 3.14159265f / 180.0f;
         float ry = eulerDeg[1] * 3.14159265f / 180.0f;
         float rz = eulerDeg[2] * 3.14159265f / 180.0f;
@@ -4574,55 +5575,165 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
                 }
             }
             if (!foundKey) {
-                auto it = nodeAnim.rotate.begin();
-                while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
-                auto ins = nodeAnim.rotate.insert(it, newKf);
+                auto itK = nodeAnim.rotate.begin();
+                while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
+                auto ins = nodeAnim.rotate.insert(itK, newKf);
                 animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), ins));
             }
         }
+        UpdateAnimationPosePreview(sceneManager);
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Reset##R")) {
+        PushAnimUndoState("回転リセット");
+        Quaternion defRot{ 0.0f, 0.0f, 0.0f, 1.0f };
+        if (anim && anim->HasSkeleton()) {
+            const auto& skel = anim->GetSkeleton();
+            auto itJ = skel.jointMap.find(animEditorSelectedJointName_);
+            if (itJ != skel.jointMap.end()) defRot = skel.joints[itJ->second].defaultTransform.rotate;
+        }
+        KeyframeQuaternion newKf{ animEditorTime_, defRot };
+        nodeAnim.rotate.push_back(newKf);
+        UpdateAnimationPosePreview(sceneManager);
     }
 
     ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 1.0f));
-    if (ImGui::Button("[+] 現在ポーズをキー挿入 (I)", ImVec2(-1, 28))) {
-        float rx = eulerDeg[0] * 3.14159265f / 180.0f;
-        float ry = eulerDeg[1] * 3.14159265f / 180.0f;
-        float rz = eulerDeg[2] * 3.14159265f / 180.0f;
-        KeyframeQuaternion newKf{ animEditorTime_, MakeEulerQuat(rx, ry, rz) };
-        auto it = nodeAnim.rotate.begin();
-        while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
-        auto inserted = nodeAnim.rotate.insert(it, newKf);
-        animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
-    }
-    ImGui::PopStyleColor();
 
-    ImGui::Spacing();
-    if (ImGui::Button("[T-Pose] 選択ボーンをTポーズ(0)に", ImVec2(-1, 24))) {
-        Quaternion identityQ{ 0.0f, 0.0f, 0.0f, 1.0f };
-        if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-            nodeAnim.rotate[animEditorSelectedKeyIndex_].value = identityQ;
-        } else {
-            KeyframeQuaternion newKf{ animEditorTime_, identityQ };
-            auto it = nodeAnim.rotate.begin();
-            while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
-            auto inserted = nodeAnim.rotate.insert(it, newKf);
-            animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+    // ----------------------------------------------------
+    // 3. 拡大縮小 (Scale / S)
+    // ----------------------------------------------------
+    Vector3 curScale = { 1.0f, 1.0f, 1.0f };
+    if (!nodeAnim.scale.empty()) {
+        curScale = CalculateValue(nodeAnim.scale, animEditorTime_);
+    } else if (anim && anim->HasSkeleton()) {
+        const auto& skel = anim->GetSkeleton();
+        auto itJ = skel.jointMap.find(animEditorSelectedJointName_);
+        if (itJ != skel.jointMap.end()) {
+            curScale = skel.joints[itJ->second].transform.scale;
         }
     }
-    if (ImGui::Button("[Reset] 全ボーンをTポーズに初期化", ImVec2(-1, 24))) {
-        for (auto& [jName, nAnim] : editingAnimation_.nodeAnimations) {
-            nAnim.rotate.clear();
+
+    float scaleArr[3] = { curScale.x, curScale.y, curScale.z };
+    ImGui::TextColored(ImVec4(0.4f, 0.65f, 0.95f, 1.0f), "[S] 拡大縮小 (Scale):");
+    if (ImGui::DragFloat3("スケール (X, Y, Z)##Scale", scaleArr, 0.01f, 0.001f, 20.0f, "%.3f")) {
+        Vector3 newSc{ scaleArr[0], scaleArr[1], scaleArr[2] };
+        bool found = false;
+        for (size_t idx = 0; idx < nodeAnim.scale.size(); ++idx) {
+            if (std::abs(nodeAnim.scale[idx].time - animEditorTime_) < 0.005f) {
+                nodeAnim.scale[idx].value = newSc;
+                found = true;
+                break;
+            }
         }
-        animEditorSelectedKeyIndex_ = -1;
+        if (!found) {
+            KeyframeVector3 newKf{ animEditorTime_, newSc };
+            auto itK = nodeAnim.scale.begin();
+            while (itK != nodeAnim.scale.end() && itK->time < newKf.time) ++itK;
+            nodeAnim.scale.insert(itK, newKf);
+        }
+        UpdateAnimationPosePreview(sceneManager);
+    }
+    if (ImGui::IsItemActivated()) {
+        animDragPreSnapshot_.animation = editingAnimation_;
+        animDragPreSnapshot_.time = animEditorTime_;
+        animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+        animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+        animDragPreSnapshot_.description = "スケール変更";
+        hasAnimDragPreSnapshot_ = true;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
+        animUndoStack_.push_back(animDragPreSnapshot_);
+        if (animUndoStack_.size() > 64) animUndoStack_.erase(animUndoStack_.begin());
+        animRedoStack_.clear();
+        hasAnimDragPreSnapshot_ = false;
+    }
+
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Reset##S")) {
+        PushAnimUndoState("スケールリセット");
+        Vector3 defSc = { 1.0f, 1.0f, 1.0f };
+        if (anim && anim->HasSkeleton()) {
+            const auto& skel = anim->GetSkeleton();
+            auto itJ = skel.jointMap.find(animEditorSelectedJointName_);
+            if (itJ != skel.jointMap.end()) defSc = skel.joints[itJ->second].defaultTransform.scale;
+        }
+        KeyframeVector3 newKf{ animEditorTime_, defSc };
+        nodeAnim.scale.push_back(newKf);
+        UpdateAnimationPosePreview(sceneManager);
     }
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
+    // ----------------------------------------------------
+    // キー挿入・リセット ボタン群
+    // ----------------------------------------------------
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 1.0f));
+    if (ImGui::Button("[+] 全SRTをキー挿入 (I)", ImVec2(-1, 28))) {
+        PushAnimUndoState("全SRTキー挿入");
+        // Translation
+        KeyframeVector3 newKfT{ animEditorTime_, Vector3{ transArr[0], transArr[1], transArr[2] } };
+        auto itT = nodeAnim.translate.begin();
+        while (itT != nodeAnim.translate.end() && itT->time < newKfT.time) ++itT;
+        nodeAnim.translate.insert(itT, newKfT);
+
+        // Rotation
+        float rx = eulerDeg[0] * 3.14159265f / 180.0f;
+        float ry = eulerDeg[1] * 3.14159265f / 180.0f;
+        float rz = eulerDeg[2] * 3.14159265f / 180.0f;
+        KeyframeQuaternion newKfR{ animEditorTime_, MakeEulerQuat(rx, ry, rz) };
+        auto itR = nodeAnim.rotate.begin();
+        while (itR != nodeAnim.rotate.end() && itR->time < newKfR.time) ++itR;
+        auto inserted = nodeAnim.rotate.insert(itR, newKfR);
+        animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+
+        // Scale
+        KeyframeVector3 newKfS{ animEditorTime_, Vector3{ scaleArr[0], scaleArr[1], scaleArr[2] } };
+        auto itS = nodeAnim.scale.begin();
+        while (itS != nodeAnim.scale.end() && itS->time < newKfS.time) ++itS;
+        nodeAnim.scale.insert(itS, newKfS);
+
+        UpdateAnimationPosePreview(sceneManager);
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    if (ImGui::Button("[T-Pose] 選択ボーンをTポーズ(0)に", ImVec2(-1, 24))) {
+        PushAnimUndoState("Tポーズ設定");
+        Quaternion identityQ{ 0.0f, 0.0f, 0.0f, 1.0f };
+        if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+            nodeAnim.rotate[animEditorSelectedKeyIndex_].value = identityQ;
+        } else {
+            KeyframeQuaternion newKf{ animEditorTime_, identityQ };
+            auto itK = nodeAnim.rotate.begin();
+            while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
+            auto inserted = nodeAnim.rotate.insert(itK, newKf);
+            animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+        }
+        UpdateAnimationPosePreview(sceneManager);
+    }
+    if (ImGui::Button("[Reset] 全ボーン初期化", ImVec2(-1, 24))) {
+        PushAnimUndoState("全ボーン初期化");
+        for (auto& [jName, nAnim] : editingAnimation_.nodeAnimations) {
+            nAnim.rotate.clear();
+            nAnim.translate.clear();
+            nAnim.scale.clear();
+        }
+        animEditorSelectedKeyIndex_ = -1;
+        UpdateAnimationPosePreview(sceneManager);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ----------------------------------------------------
+    // キーフレーム一覧
+    // ----------------------------------------------------
     ImGui::Text("登録キーフレーム一覧 (%zu 個):", nodeAnim.rotate.size());
     if (nodeAnim.rotate.empty()) {
-        ImGui::TextDisabled("キーフレームがありません。");
+        ImGui::TextDisabled("回転キーフレームがありません。");
     } else {
         for (size_t k = 0; k < nodeAnim.rotate.size(); ++k) {
             char kBuf[64];
@@ -4632,14 +5743,38 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
             if (ImGui::Selectable(kBuf, isSel)) {
                 animEditorSelectedKeyIndex_ = static_cast<int>(k);
                 animEditorTime_ = nodeAnim.rotate[k].time;
+                UpdateAnimationPosePreview(sceneManager);
             }
             ImGui::SameLine(ImGui::GetWindowWidth() - 70);
             char delBuf[32];
             snprintf(delBuf, sizeof(delBuf), "削除##K%zu", k);
             if (ImGui::SmallButton(delBuf)) {
+                PushAnimUndoState("キーフレーム削除");
                 nodeAnim.rotate.erase(nodeAnim.rotate.begin() + k);
                 if (animEditorSelectedKeyIndex_ == static_cast<int>(k)) animEditorSelectedKeyIndex_ = -1;
+                UpdateAnimationPosePreview(sceneManager);
                 break;
+            }
+        }
+    }
+
+    // ショートカットキー判定 (Ctrl+Z: 元に戻す, Ctrl+Y: やり直す, T/R/S: ギズモ切替, L: ロック切替)
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (!io.WantTextInput) {
+            if (io.KeyCtrl) {
+                if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                    if (io.KeyShift) PerformAnimRedo(sceneManager);
+                    else PerformAnimUndo(sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+                    PerformAnimRedo(sceneManager);
+                }
+            } else {
+                if (ImGui::IsKeyPressed(ImGuiKey_T, false)) animGizmoMode_ = 0; // Translate (移動)
+                if (ImGui::IsKeyPressed(ImGuiKey_R, false)) animGizmoMode_ = 1; // Rotate (回転)
+                if (ImGui::IsKeyPressed(ImGuiKey_S, false)) animGizmoMode_ = 2; // Scale (拡縮)
+                if (ImGui::IsKeyPressed(ImGuiKey_L, false)) isAnimLocked_ = !isAnimLocked_; // Lock (ロック)
+                if (ImGui::IsKeyPressed(ImGuiKey_H, false)) isAnimHudMinimized_ = !isAnimHudMinimized_; // HUD Minimize toggle
             }
         }
     }
@@ -4664,6 +5799,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         selectedObject_->DisplayImGui("3Dオブジェクト プロパティ");
     }
 }
+
 
 void EditorManager::Draw() {
     ImGui::Render();
