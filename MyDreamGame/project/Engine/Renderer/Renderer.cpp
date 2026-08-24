@@ -480,7 +480,7 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         
 
 
-        comp->GetModel()->Draw(&skinCluster.influenceBufferView);
+        comp->GetModel()->Draw(&skinCluster.influenceBufferView, comp->GetTextureHandle());
     } else {
         commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
 
@@ -510,12 +510,12 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
             commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
         }
 
-        comp->GetModel()->Draw();
+        comp->GetModel()->Draw(nullptr, comp->GetTextureHandle());
 
         if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
             commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
-            comp->GetModel()->Draw();
+            comp->GetModel()->Draw(nullptr, comp->GetTextureHandle());
         }
     }
 }

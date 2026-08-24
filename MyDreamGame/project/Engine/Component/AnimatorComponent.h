@@ -31,6 +31,7 @@ public:
     void ClearJointOverrides() { jointOverrides_.clear(); }
 
     void SetModelData(const ModelData& modelData);
+    void UpdateSkeletonAndSkinCluster();
     void DrawDebug(const Matrix4x4& worldMatrix);
 
     const Skeleton& GetSkeleton() const { return skeleton_; }

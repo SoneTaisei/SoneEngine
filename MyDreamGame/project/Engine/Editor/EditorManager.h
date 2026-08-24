@@ -343,6 +343,7 @@ private:
     void DrawAnimationEditorMainView(class SceneManager* sceneManager, Camera** activeCamera, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle);
     void DrawAnimationViewportGrid(const Matrix4x4& viewProjectionMatrix, ImVec2 vpPos, ImVec2 vpSize);
     void DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
+    void DrawSkeletonJointsOverlay(class SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
     void DrawAnimationDopeSheetUI(class SceneManager* sceneManager);
     void DrawAnimationInspectorUI(class SceneManager* sceneManager);
     void RefreshAnimationJointList(class SceneManager* sceneManager);

@@ -3500,6 +3500,7 @@ void EditorManager::UpdateAnimationPosePreview(SceneManager* sceneManager) {
                 animator->SetJointRotationOverride(nodeName, rot, 1.0f);
             }
         }
+        animator->UpdateSkeletonAndSkinCluster();
     }
 }
 
@@ -3737,6 +3738,195 @@ void EditorManager::DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPo
     }
 }
 
+void EditorManager::DrawSkeletonJointsOverlay(SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize) {
+    if (!sceneManager || !activeCamera) return;
+
+    AnimatorComponent* animator = nullptr;
+    Matrix4x4 worldMatrix = TransformFunctions::MakeIdentity4x4();
+
+    if (selectedGameObject_) {
+        animator = selectedGameObject_->GetComponent<AnimatorComponent>();
+        auto* tr = selectedGameObject_->GetComponent<TransformComponent>();
+        if (tr) worldMatrix = tr->GetWorldMatrix();
+    } else if (selectedObject_) {
+        animator = selectedObject_->GetAnimator();
+        worldMatrix = TransformFunctions::MakeAffineMatrix(
+            selectedObject_->GetScale(),
+            selectedObject_->GetRotation(),
+            selectedObject_->GetTranslation()
+        );
+    }
+
+    if (!animator) {
+        auto* scene = sceneManager->GetCurrentScene();
+        if (scene) {
+            for (auto& go : scene->GetGameObjects()) {
+                if (go) {
+                    auto* a = go->GetComponent<AnimatorComponent>();
+                    if (a && a->HasSkeleton()) {
+                        animator = a;
+                        auto* tr = go->GetComponent<TransformComponent>();
+                        if (tr) worldMatrix = tr->GetWorldMatrix();
+                        break;
+                    }
+                }
+            }
+            if (!animator) {
+                auto* player = scene->GetPlayer();
+                if (player) {
+                    animator = player->GetAnimator();
+                }
+            }
+        }
+    }
+
+    if (!animator || !animator->HasSkeleton()) return;
+
+    const Skeleton& skeleton = animator->GetSkeleton();
+    if (skeleton.joints.empty()) return;
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->PushClipRect(vpPos, ImVec2(vpPos.x + vpSize.x, vpPos.y + vpSize.y), true);
+
+    Matrix4x4 vpMat = TransformFunctions::Multiply(activeCamera->GetViewMatrix(), activeCamera->GetProjectionMatrix());
+
+    // 各ジョイントのスクリーン座標を事前計算
+    struct JointScreenInfo {
+        Vector3 worldPos;
+        ImVec2 screenPos;
+        bool isVisible;
+        float depth;
+    };
+    std::vector<JointScreenInfo> screenJoints(skeleton.joints.size());
+
+    for (size_t i = 0; i < skeleton.joints.size(); ++i) {
+        const auto& joint = skeleton.joints[i];
+        // 親階層の回転・平行移動を含む完全なワールド変換行列
+        Matrix4x4 jointWorld = TransformFunctions::Multiply(joint.skeletonSpaceMatrix, worldMatrix);
+        Vector3 worldPos = { jointWorld.m[3][0], jointWorld.m[3][1], jointWorld.m[3][2] };
+
+        screenJoints[i].worldPos = worldPos;
+
+        Vector4 clip;
+        clip.x = worldPos.x * vpMat.m[0][0] + worldPos.y * vpMat.m[1][0] + worldPos.z * vpMat.m[2][0] + vpMat.m[3][0];
+        clip.y = worldPos.x * vpMat.m[0][1] + worldPos.y * vpMat.m[1][1] + worldPos.z * vpMat.m[2][1] + vpMat.m[3][1];
+        clip.z = worldPos.x * vpMat.m[0][2] + worldPos.y * vpMat.m[1][2] + worldPos.z * vpMat.m[2][2] + vpMat.m[3][2];
+        clip.w = worldPos.x * vpMat.m[0][3] + worldPos.y * vpMat.m[1][3] + worldPos.z * vpMat.m[2][3] + vpMat.m[3][3];
+
+        if (clip.w > 0.05f) {
+            float ndcX = clip.x / clip.w;
+            float ndcY = clip.y / clip.w;
+            screenJoints[i].screenPos = ImVec2(
+                vpPos.x + (ndcX + 1.0f) * 0.5f * vpSize.x,
+                vpPos.y + (1.0f - ndcY) * 0.5f * vpSize.y
+            );
+            screenJoints[i].isVisible = true;
+            screenJoints[i].depth = clip.w;
+        } else {
+            screenJoints[i].isVisible = false;
+        }
+    }
+
+    // 1. 親子間のボーン接続線を描画
+    for (size_t i = 0; i < skeleton.joints.size(); ++i) {
+        const auto& joint = skeleton.joints[i];
+        if (joint.parent.has_value()) {
+            int32_t pIdx = joint.parent.value();
+            if (pIdx >= 0 && pIdx < static_cast<int32_t>(screenJoints.size())) {
+                if (screenJoints[i].isVisible && screenJoints[pIdx].isVisible) {
+                    bool isConnectedToSelected = (joint.name == animEditorSelectedJointName_ || skeleton.joints[pIdx].name == animEditorSelectedJointName_);
+                    ImU32 boneCol = isConnectedToSelected ? IM_COL32(255, 220, 80, 230) : IM_COL32(140, 210, 255, 150);
+                    float thickness = isConnectedToSelected ? 3.0f : 1.8f;
+                    drawList->AddLine(screenJoints[pIdx].screenPos, screenJoints[i].screenPos, boneCol, thickness);
+                }
+            }
+        }
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mousePos = io.MousePos;
+    int hoveredJointIdx = -1;
+    float closestDistSq = 20.0f * 20.0f; // クリック判定半径
+
+    // 2. 非選択ジョイントの丸を描画 & ホバー判定
+    for (size_t i = 0; i < skeleton.joints.size(); ++i) {
+        if (!screenJoints[i].isVisible) continue;
+        const auto& joint = skeleton.joints[i];
+        bool isSelected = (joint.name == animEditorSelectedJointName_);
+
+        ImVec2 p = screenJoints[i].screenPos;
+        float dx = mousePos.x - p.x;
+        float dy = mousePos.y - p.y;
+        float dSq = dx * dx + dy * dy;
+
+        if (dSq < closestDistSq) {
+            closestDistSq = dSq;
+            hoveredJointIdx = static_cast<int>(i);
+        }
+
+        if (!isSelected) {
+            // パキッとした水色サークル＋白い核＋濃い縁取り
+            drawList->AddCircleFilled(p, 5.0f, IM_COL32(60, 170, 255, 230), 16);
+            drawList->AddCircleFilled(p, 2.0f, IM_COL32(255, 255, 255, 255), 10);
+            drawList->AddCircle(p, 5.0f, IM_COL32(20, 50, 100, 240), 16, 1.2f);
+        }
+    }
+
+    // ホバー時のハイライトとクリック選択
+    if (hoveredJointIdx >= 0) {
+        const auto& hJoint = skeleton.joints[hoveredJointIdx];
+        if (hJoint.name != animEditorSelectedJointName_) {
+            ImVec2 hp = screenJoints[hoveredJointIdx].screenPos;
+            drawList->AddCircle(hp, 9.0f, IM_COL32(255, 255, 255, 230), 16, 2.0f);
+        }
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            animEditorSelectedJointName_ = hJoint.name;
+            animEditorSelectedKeyIndex_ = -1;
+        }
+    }
+
+    // 3. 選択中のジョイントを最前面に強調描画
+    auto it = skeleton.jointMap.find(animEditorSelectedJointName_);
+    if (it == skeleton.jointMap.end() && !skeleton.joints.empty()) {
+        // 見つからない場合は先頭のボーンにフォールバック
+        animEditorSelectedJointName_ = skeleton.joints[0].name;
+        it = skeleton.jointMap.find(animEditorSelectedJointName_);
+    }
+
+    if (it != skeleton.jointMap.end() && it->second < screenJoints.size()) {
+        int selIdx = it->second;
+        if (screenJoints[selIdx].isVisible) {
+            ImVec2 sp = screenJoints[selIdx].screenPos;
+
+            // パルスアニメーション効果
+            static float pulseTimer = 0.0f;
+            pulseTimer += (io.DeltaTime > 0.0f ? io.DeltaTime : 0.016f) * 5.0f;
+            float pulseOffset = std::sin(pulseTimer) * 2.0f;
+
+            // 外側の強調リング
+            drawList->AddCircle(sp, 12.0f + pulseOffset, IM_COL32(255, 255, 255, 240), 24, 2.5f);
+            drawList->AddCircle(sp, 15.5f + pulseOffset, IM_COL32(255, 200, 30, 160), 24, 1.2f);
+
+            // 中心の黄色い丸
+            drawList->AddCircleFilled(sp, 8.0f, IM_COL32(255, 200, 30, 255), 20);
+            drawList->AddCircleFilled(sp, 3.5f, IM_COL32(255, 255, 255, 255), 12);
+            drawList->AddCircle(sp, 8.0f, IM_COL32(180, 110, 0, 255), 20, 1.5f);
+
+            // ボーン名のテキストラベル（右上に黒半透明背景付き）
+            std::string label = animEditorSelectedJointName_;
+            ImVec2 txtSz = ImGui::CalcTextSize(label.c_str());
+            ImVec2 boxMin = ImVec2(sp.x + 12.0f, sp.y - txtSz.y * 0.5f - 4.0f);
+            ImVec2 boxMax = ImVec2(boxMin.x + txtSz.x + 10.0f, boxMin.y + txtSz.y + 8.0f);
+
+            drawList->AddRectFilled(boxMin, boxMax, IM_COL32(15, 15, 20, 230), 4.0f);
+            drawList->AddRect(boxMin, boxMax, IM_COL32(255, 205, 40, 220), 4.0f, 0, 1.5f);
+            drawList->AddText(ImVec2(boxMin.x + 5.0f, boxMin.y + 4.0f), IM_COL32(255, 240, 120, 255), label.c_str());
+        }
+    }
+
+    drawList->PopClipRect();
+}
+
 void EditorManager::DrawAnimationEditorMainView(SceneManager* sceneManager, Camera** activeCamera, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle) {
     // 3Dレンダリング結果のプレビュー表示
     ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -3791,9 +3981,10 @@ void EditorManager::DrawAnimationEditorMainView(SceneManager* sceneManager, Came
             }
         }
 
-        // 3Dグリッド網 (XZ平面 & 0軸強調) の描画
-        Matrix4x4 vpMat = TransformFunctions::Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
-        DrawAnimationViewportGrid(vpMat, gameViewPos_, gameViewSize_);
+        // ボーン（スケルトン）位置の可視化＆選択オーバーレイ描画
+        DrawSkeletonJointsOverlay(sceneManager, cam, gameViewPos_, gameViewSize_);
+
+        // カメラ向きギズモ（スナップ対応）の描画
         DrawCameraOrientationGizmo(cam, gameViewPos_, gameViewSize_);
     }
 
@@ -4451,6 +4642,26 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
                 break;
             }
         }
+    }
+
+    // 選択オブジェクト固有のインスペクター（Transform / Material 等）も下部に表示
+    if (selectedGameObject_) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("オブジェクト コンポーネント", ImGuiTreeNodeFlags_DefaultOpen)) {
+            selectedGameObject_->DisplayImGui();
+        }
+    } else if (selectedPrimitive_) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        selectedPrimitive_->DisplayImGui("プリミティブ プロパティ");
+    } else if (selectedObject_) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        selectedObject_->DisplayImGui("3Dオブジェクト プロパティ");
     }
 }
 

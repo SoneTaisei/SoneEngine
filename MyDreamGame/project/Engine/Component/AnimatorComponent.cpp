@@ -17,8 +17,6 @@ void AnimatorComponent::Initialize() {
 }
 
 void AnimatorComponent::Update() {
-    if (!isPlaying_ || animation_.duration <= 0.0f) return;
-
     bool isPlayingOrReplaying = false;
 #ifdef USE_IMGUI
     if (EditorManager::IsPlaying()) {
@@ -34,43 +32,16 @@ void AnimatorComponent::Update() {
     bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
     float animDeltaTime = isAnimActive ? TimeManager::GetInstance().GetDeltaTime() : 0.0f;
 
-    animationTime_ += animDeltaTime;
-    animationTime_ = std::fmod(animationTime_, animation_.duration); // Loop playback
+    if (isPlaying_ && animation_.duration > 0.0f) {
+        animationTime_ += animDeltaTime;
+        animationTime_ = std::fmod(animationTime_, animation_.duration); // Loop playback
+    }
 
     if (hasSkeleton_) {
-        // アニメーション適用前に、全ジョイントの回転を初期ポーズ（バインドポーズ）にリセット
-        for (Joint& joint : skeleton_.joints) {
-            joint.transform.rotate = joint.defaultTransform.rotate;
-        }
-
-        // Skeletonベースのアニメーション
-        ApplyAnimation(skeleton_, animation_, animationTime_);
-
-        // ジョイントの回転角度のオーバーライドを適用
-        for (const auto& [name, overrideInfo] : jointOverrides_) {
-            auto it = skeleton_.jointMap.find(name);
-            if (it != skeleton_.jointMap.end()) {
-                if (overrideInfo.weight >= 1.0f) {
-                    skeleton_.joints[it->second].transform.rotate = overrideInfo.rotate;
-                } else if (overrideInfo.weight > 0.0f) {
-                    skeleton_.joints[it->second].transform.rotate = Slerp(
-                        skeleton_.joints[it->second].transform.rotate,
-                        overrideInfo.rotate,
-                        overrideInfo.weight
-                    );
-                }
-            } else {
-#ifdef _DEBUG
-                OutputDebugStringA(("Joint not found for override: " + name + "\n").c_str());
-#endif
-            }
-        }
-
-        ::Update(skeleton_); // 骨格空間のローカル・ワールド行列を計算
-        ::Update(skinCluster_, skeleton_); // 今回はGPUスキニングは保留
+        UpdateSkeletonAndSkinCluster();
     } else {
         // 単一ノード（旧方式）のアニメーション
-        if (animation_.nodeAnimations.find(targetNodeName_) != animation_.nodeAnimations.end()) {
+        if (animation_.duration > 0.0f && animation_.nodeAnimations.find(targetNodeName_) != animation_.nodeAnimations.end()) {
             const NodeAnimation& nodeAnim = animation_.nodeAnimations.at(targetNodeName_);
 
             Vector3 currentTranslate = nodeAnim.translate.empty() ? Vector3{0.0f, 0.0f, 0.0f} : CalculateValue(nodeAnim.translate, animationTime_);
@@ -88,6 +59,43 @@ void AnimatorComponent::Update() {
             }
         }
     }
+}
+
+void AnimatorComponent::UpdateSkeletonAndSkinCluster() {
+    if (!hasSkeleton_) return;
+
+    // アニメーション適用前に、全ジョイントの回転・位置・スケールを初期ポーズ（バインドポーズ）にリセット
+    for (Joint& joint : skeleton_.joints) {
+        joint.transform = joint.defaultTransform;
+    }
+
+    // Skeletonベースのアニメーションが設定されている場合は適用
+    if (animation_.duration > 0.0f) {
+        ApplyAnimation(skeleton_, animation_, animationTime_);
+    }
+
+    // ジョイントの回転角度のオーバーライドを適用
+    for (const auto& [name, overrideInfo] : jointOverrides_) {
+        auto it = skeleton_.jointMap.find(name);
+        if (it != skeleton_.jointMap.end()) {
+            if (overrideInfo.weight >= 1.0f) {
+                skeleton_.joints[it->second].transform.rotate = overrideInfo.rotate;
+            } else if (overrideInfo.weight > 0.0f) {
+                skeleton_.joints[it->second].transform.rotate = Slerp(
+                    skeleton_.joints[it->second].transform.rotate,
+                    overrideInfo.rotate,
+                    overrideInfo.weight
+                );
+            }
+        } else {
+#ifdef _DEBUG
+            OutputDebugStringA(("Joint not found for override: " + name + "\n").c_str());
+#endif
+        }
+    }
+
+    ::Update(skeleton_); // 骨格空間のローカル・ワールド行列を計算
+    ::Update(skinCluster_, skeleton_); // スキニングパレット行列をGPU用バッファに書き込み
 }
 
 
@@ -109,6 +117,9 @@ void AnimatorComponent::SetModelData(const ModelData& modelData) {
     debugRenderer_->Initialize();
     
     skinCluster_ = CreateSkinCluster(DirectXCommon::GetInstance()->GetDevice(), skeleton_, modelData);
+
+    // 初期化直後にバインドポーズのスキニングパレットをGPUバッファに書き込む
+    UpdateSkeletonAndSkinCluster();
 }
 
 void AnimatorComponent::DrawDebug(const Matrix4x4& worldMatrix) {

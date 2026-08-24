@@ -28,6 +28,7 @@ void AnimationPreviewScene::Initialize() {
         gridFloorObj_->SetIsDoubleSided(true);
         gridFloorObj_->GetMaterial().lightingType = 0; // 均一ライティングでどの角度からも一定の明るさを維持
         gridFloorObj_->GetMaterial().color = { 0.18f, 0.18f, 0.20f, 1.0f };
+        gridFloorObj_->GetMaterial().enableBoxMapping = 2.0f; // プロシージャル3D床グリッドを有効化
         gridFloorObj_->Update();
     }
 
@@ -47,6 +48,9 @@ void AnimationPreviewScene::Initialize() {
         playerRenderer->Initialize(device, playerModel);
         playerRenderer->SetTextureHandle(playerTH);
         playerModel->SetTextureHandle(playerTH);
+        playerRenderer->GetMaterial().color = { 0.85f, 0.85f, 0.88f, 1.0f };
+        playerRenderer->GetMaterial().lightingType = 1;
+        playerRenderer->GetMaterial().shininess = 40.0f;
 
         auto animator = playerObject_->AddComponent<AnimatorComponent>();
         animator->Initialize();
@@ -58,19 +62,19 @@ void AnimationPreviewScene::Initialize() {
         gameObjects_.push_back(playerObject_);
     }
 
-    // 4. 平面・平行ライティングを座標中心 (0, 0, 0) に設定
+    // 4. スタジオライティングを自然なスタジオ照明（キーライト・フィルライト）に設定
     if (auto* mc = ModelManager::GetInstance()->GetModelCommon()) {
         if (auto* d = mc->GetDirectionalLight()) {
             d->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            d->direction = TransformFunctions::Normalize({ 0.25f, -0.90f, 0.35f });
-            d->intensity = 1.0f;
+            d->direction = TransformFunctions::Normalize({ -0.35f, -0.55f, 0.70f });
+            d->intensity = 0.70f;
             d->enableFlatShading = 0;
         }
         if (auto* p = mc->GetPointLight()) {
             p->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            p->position = { 0.0f, 3.5f, 0.0f };
+            p->position = { -1.5f, 2.5f, 2.0f };
             p->radius = 15.0f;
-            p->intensity = 0.5f;
+            p->intensity = 0.25f;
             p->decay = 1.0f;
         }
         if (auto* s = mc->GetSpotLight()) {
@@ -78,7 +82,7 @@ void AnimationPreviewScene::Initialize() {
             s->position = { 0.0f, 4.0f, 3.5f };
             s->direction = TransformFunctions::Normalize({ 0.0f, -3.0f, -3.5f });
             s->distance = 12.0f;
-            s->intensity = 0.0f; // スタジオ全体を均一に明るくするためスポットはオフ
+            s->intensity = 0.0f;
         }
     }
 }
@@ -87,19 +91,19 @@ void AnimationPreviewScene::OnEnter(SceneManager *sceneManager) {
     if (gridFloorObj_) gridFloorObj_->Update();
     if (playerObject_) playerObject_->Update();
 
-    // シーン進入時にもライティングを均一なスタジオ照明にセット
+    // シーン進入時にもライティングを自然なスタジオ照明にセット
     if (auto* mc = ModelManager::GetInstance()->GetModelCommon()) {
         if (auto* d = mc->GetDirectionalLight()) {
             d->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            d->direction = TransformFunctions::Normalize({ 0.25f, -0.90f, 0.35f });
-            d->intensity = 1.0f;
+            d->direction = TransformFunctions::Normalize({ -0.35f, -0.55f, 0.70f });
+            d->intensity = 0.70f;
             d->enableFlatShading = 0;
         }
         if (auto* p = mc->GetPointLight()) {
             p->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            p->position = { 0.0f, 3.5f, 0.0f };
+            p->position = { -1.5f, 2.5f, 2.0f };
             p->radius = 15.0f;
-            p->intensity = 0.5f;
+            p->intensity = 0.25f;
             p->decay = 1.0f;
         }
         if (auto* s = mc->GetSpotLight()) {
