@@ -34,6 +34,7 @@
 #include <numbers>
 #include <string>
 #include <functional>
+#include <nlohmann/json.hpp>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
@@ -54,6 +55,7 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
     ScanAvailableModels();
     ScanAvailableTextures();
+    ScanLayoutPresets();
 
     // 1. ImGuiコンテキストの作成
     IMGUI_CHECKVERSION();
@@ -493,6 +495,40 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("リプレイエディター", nullptr, &showReplayEditor_);
             ImGui::MenuItem("アニメーションエディター", nullptr, &showAnimEditor_);
             ImGui::Separator();
+            if (ImGui::BeginMenu("レイアウトプリセット")) {
+                if (layoutPresets_.empty()) {
+                    ImGui::TextDisabled("  (保存されたプリセットはありません)");
+                } else {
+                    for (const auto& preset : layoutPresets_) {
+                        if (ImGui::MenuItem(preset.name.c_str())) {
+                            ApplyLayoutPreset(preset.name);
+                        }
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("現在のレイアウトを保存...")) {
+                    showSavePresetWindow_ = true;
+                    strcpy_s(newPresetNameBuf_, "");
+                }
+                if (ImGui::BeginMenu("プリセットを削除")) {
+                    if (layoutPresets_.empty()) {
+                        ImGui::TextDisabled("  (削除できるプリセットはありません)");
+                    } else {
+                        std::string toDeleteFromMenu = "";
+                        for (const auto& preset : layoutPresets_) {
+                            std::string delLabel = "削除: " + preset.name;
+                            if (ImGui::MenuItem(delLabel.c_str())) {
+                                toDeleteFromMenu = preset.name;
+                            }
+                        }
+                        if (!toDeleteFromMenu.empty()) {
+                            DeleteLayoutPreset(toDeleteFromMenu);
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::MenuItem("レイアウトをリセット")) {
                 resetLayout = true;
             }
@@ -509,6 +545,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 showInspector_ = true;
             }
             ImGui::PopStyleColor(3);
+        }
+
+        // ステータスメッセージ表示（あれば右側に通知）
+        if (presetStatusMessageTimer_ > 0.0f && !presetStatusMessage_.empty()) {
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "%s", presetStatusMessage_.c_str());
+            float dt = ImGui::GetIO().DeltaTime > 0.0f ? ImGui::GetIO().DeltaTime : 0.016f;
+            presetStatusMessageTimer_ -= dt;
+            if (presetStatusMessageTimer_ <= 0.0f) {
+                presetStatusMessage_.clear();
+            }
         }
 
         ImGui::EndMainMenuBar();
@@ -554,6 +601,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
         if (resetLayout || !hasIniFile) {
             resetLayout = false;
+
+            showInspector_ = true;
+            showHierarchy_ = true;
+            showGameView_ = true;
+            showPostEffect_ = true;
+            showMapEditor_ = true;
+            showMapSettings_ = true;
+            showReplayEditor_ = true;
+            showAnimEditor_ = true;
 
             // 一度ノードをクリアして再構築
             ImGui::DockBuilderRemoveNode(dockspace_id);
@@ -3384,6 +3440,41 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     UpdateAnimationPosePreview(sceneManager);
 
     LogManager::GetInstance()->Draw();
+
+    // --- レイアウトプリセット保存ウィンドウ ---
+    if (showSavePresetWindow_) {
+        ImGui::SetNextWindowSize(ImVec2(360, 150), ImGuiCond_Appearing);
+        ImGuiViewport* vp = ImGui::GetMainViewport();
+        if (vp) {
+            ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f - 180.0f, vp->Pos.y + vp->Size.y * 0.5f - 75.0f), ImGuiCond_Appearing);
+        }
+        ImGui::SetNextWindowFocus();
+        if (ImGui::Begin("レイアウトプリセットの保存", &showSavePresetWindow_, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("現在の配置をプリセットとして保存します。");
+            ImGui::Spacing();
+            ImGui::Text("プリセット名:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(200.0f);
+            bool enterPressed = ImGui::InputText("##PresetNameDialogInput", newPresetNameBuf_, sizeof(newPresetNameBuf_), ImGuiInputTextFlags_EnterReturnsTrue);
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (ImGui::Button("保存", ImVec2(100, 0)) || (enterPressed && strlen(newPresetNameBuf_) > 0)) {
+                if (strlen(newPresetNameBuf_) > 0) {
+                    SaveLayoutPreset(newPresetNameBuf_);
+                    newPresetNameBuf_[0] = '\0';
+                    showSavePresetWindow_ = false;
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("キャンセル", ImVec2(100, 0))) {
+                showSavePresetWindow_ = false;
+            }
+        }
+        ImGui::End();
+    }
 }
 
 AnimatorComponent* EditorManager::GetTargetAnimator(SceneManager* sceneManager) {
@@ -6994,6 +7085,280 @@ void EditorManager::UpdateAStarPositionsFromMap(MapChip2D* mapChip, SceneManager
             }
         }
         if (foundGoal) break;
+    }
+}
+
+void EditorManager::ApplyDefaultLayout() {
+    showInspector_ = true;
+    showHierarchy_ = true;
+    showGameView_ = true;
+    showPostEffect_ = true;
+    showMapEditor_ = true;
+    showMapSettings_ = true;
+    showReplayEditor_ = true;
+    showAnimEditor_ = true;
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport) return;
+
+    ImGuiID dockspace_id = ImGui::GetID("##DockSpaceOverViewport_0");
+    if (dockspace_id == 0) {
+        dockspace_id = ImGui::DockSpaceOverViewport(0, viewport);
+    }
+
+    ImGui::DockBuilderRemoveNode(dockspace_id);
+    ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+
+    ImGuiID dock_id_main = dockspace_id;
+    // 左側に「ヒエラルキー」
+    ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
+    // 右側に「インスペクター」
+    ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
+    // メインの下側に「マップチップ画面」「リプレイマネージャー」など
+    ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down, 0.35f, NULL, &dock_id_main);
+
+    // 各ウィンドウを各ノードに割り当てる
+    ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
+    ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
+    ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
+    ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
+
+    // 左側
+    ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
+    ImGui::DockBuilderDockWindow("マイメディア (リプレイ履歴)", dock_id_left);
+
+    // 右側
+    ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
+    ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+
+    // 下側
+    ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
+
+    ImGui::DockBuilderFinish(dockspace_id);
+
+    presetStatusMessage_ = "標準レイアウトにリセットしました";
+    presetStatusMessageTimer_ = 3.0f;
+}
+
+void EditorManager::ScanLayoutPresets() {
+    layoutPresets_.clear();
+    std::filesystem::path dirPath("resources/json/local/layout_presets");
+    if (!std::filesystem::exists(dirPath)) {
+        std::filesystem::create_directories(dirPath);
+        return;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            std::ifstream ifs(entry.path());
+            if (!ifs.is_open()) continue;
+            try {
+                nlohmann::json j;
+                ifs >> j;
+                WindowLayoutPreset preset;
+                preset.name = j.value("name", entry.path().stem().string());
+                preset.iniData = j.value("iniData", "");
+                preset.showInspector = j.value("showInspector", true);
+                preset.showHierarchy = j.value("showHierarchy", true);
+                preset.showGameView = j.value("showGameView", true);
+                preset.showPostEffect = j.value("showPostEffect", true);
+                preset.showMapEditor = j.value("showMapEditor", true);
+                preset.showMapSettings = j.value("showMapSettings", true);
+                preset.showReplayEditor = j.value("showReplayEditor", true);
+                preset.showAnimEditor = j.value("showAnimEditor", true);
+
+                layoutPresets_.push_back(preset);
+            } catch (...) {
+                // パース失敗時はスキップ
+            }
+        }
+    }
+}
+
+void EditorManager::SaveLayoutPreset(const std::string& name) {
+    if (name.empty()) return;
+
+    std::filesystem::path dirPath("resources/json/local/layout_presets");
+    if (!std::filesystem::exists(dirPath)) {
+        std::filesystem::create_directories(dirPath);
+    }
+
+    size_t iniSize = 0;
+    const char* iniStr = ImGui::SaveIniSettingsToMemory(&iniSize);
+
+    WindowLayoutPreset preset;
+    preset.name = name;
+    preset.iniData = (iniStr && iniSize > 0) ? std::string(iniStr, iniSize) : "";
+    preset.showInspector = showInspector_;
+    preset.showHierarchy = showHierarchy_;
+    preset.showGameView = showGameView_;
+    preset.showPostEffect = showPostEffect_;
+    preset.showMapEditor = showMapEditor_;
+    preset.showMapSettings = showMapSettings_;
+    preset.showReplayEditor = showReplayEditor_;
+    preset.showAnimEditor = showAnimEditor_;
+
+    nlohmann::json j;
+    j["name"] = preset.name;
+    j["iniData"] = preset.iniData;
+    j["showInspector"] = preset.showInspector;
+    j["showHierarchy"] = preset.showHierarchy;
+    j["showGameView"] = preset.showGameView;
+    j["showPostEffect"] = preset.showPostEffect;
+    j["showMapEditor"] = preset.showMapEditor;
+    j["showMapSettings"] = preset.showMapSettings;
+    j["showReplayEditor"] = preset.showReplayEditor;
+    j["showAnimEditor"] = preset.showAnimEditor;
+
+    std::filesystem::path filePath = dirPath / (name + ".json");
+    std::ofstream ofs(filePath);
+    if (ofs.is_open()) {
+        ofs << j.dump(4);
+    }
+
+    bool found = false;
+    for (auto& p : layoutPresets_) {
+        if (p.name == name) {
+            p = preset;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        layoutPresets_.push_back(preset);
+    }
+
+    presetStatusMessage_ = "プリセット「" + name + "」を保存しました";
+    presetStatusMessageTimer_ = 3.0f;
+}
+
+bool EditorManager::ApplyLayoutPreset(const std::string& name) {
+    for (const auto& preset : layoutPresets_) {
+        if (preset.name == name) {
+            showInspector_ = preset.showInspector;
+            showHierarchy_ = preset.showHierarchy;
+            showGameView_ = preset.showGameView;
+            showPostEffect_ = preset.showPostEffect;
+            showMapEditor_ = preset.showMapEditor;
+            showMapSettings_ = preset.showMapSettings;
+            showReplayEditor_ = preset.showReplayEditor;
+            showAnimEditor_ = preset.showAnimEditor;
+
+            if (!preset.iniData.empty()) {
+                ImGui::LoadIniSettingsFromMemory(preset.iniData.c_str(), preset.iniData.size());
+            }
+            presetStatusMessage_ = "プリセット「" + name + "」を適用しました";
+            presetStatusMessageTimer_ = 3.0f;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool EditorManager::DeleteLayoutPreset(const std::string& name) {
+    std::filesystem::path filePath = std::filesystem::path("resources/json/local/layout_presets") / (name + ".json");
+    if (std::filesystem::exists(filePath)) {
+        std::filesystem::remove(filePath);
+    }
+
+    auto it = std::remove_if(layoutPresets_.begin(), layoutPresets_.end(), [&](const WindowLayoutPreset& p) {
+        return p.name == name;
+    });
+    if (it != layoutPresets_.end()) {
+        layoutPresets_.erase(it, layoutPresets_.end());
+        presetStatusMessage_ = "プリセット「" + name + "」を削除しました";
+        presetStatusMessageTimer_ = 3.0f;
+        return true;
+    }
+    return false;
+}
+
+bool EditorManager::ExportLayoutPresetToFile(const std::string& name, const std::string& filePath) {
+    for (const auto& preset : layoutPresets_) {
+        if (preset.name == name) {
+            nlohmann::json j;
+            j["name"] = preset.name;
+            j["iniData"] = preset.iniData;
+            j["showInspector"] = preset.showInspector;
+            j["showHierarchy"] = preset.showHierarchy;
+            j["showGameView"] = preset.showGameView;
+            j["showPostEffect"] = preset.showPostEffect;
+            j["showMapEditor"] = preset.showMapEditor;
+            j["showMapSettings"] = preset.showMapSettings;
+            j["showReplayEditor"] = preset.showReplayEditor;
+            j["showAnimEditor"] = preset.showAnimEditor;
+
+            std::filesystem::path outPath(filePath);
+            if (outPath.has_parent_path()) {
+                std::filesystem::create_directories(outPath.parent_path());
+            }
+            std::ofstream ofs(outPath);
+            if (ofs.is_open()) {
+                ofs << j.dump(4);
+                presetStatusMessage_ = "ファイル「" + outPath.string() + "」へ出力しました";
+                presetStatusMessageTimer_ = 3.0f;
+                return true;
+            }
+            break;
+        }
+    }
+    presetStatusMessage_ = "出力に失敗しました";
+    presetStatusMessageTimer_ = 3.0f;
+    return false;
+}
+
+bool EditorManager::ImportLayoutPresetFromFile(const std::string& filePath) {
+    std::ifstream ifs(filePath);
+    if (!ifs.is_open()) {
+        presetStatusMessage_ = "ファイルが開けませんでした: " + filePath;
+        presetStatusMessageTimer_ = 3.0f;
+        return false;
+    }
+    try {
+        nlohmann::json j;
+        ifs >> j;
+        WindowLayoutPreset preset;
+        preset.name = j.value("name", std::filesystem::path(filePath).stem().string());
+        preset.iniData = j.value("iniData", "");
+        preset.showInspector = j.value("showInspector", true);
+        preset.showHierarchy = j.value("showHierarchy", true);
+        preset.showGameView = j.value("showGameView", true);
+        preset.showPostEffect = j.value("showPostEffect", true);
+        preset.showMapEditor = j.value("showMapEditor", true);
+        preset.showMapSettings = j.value("showMapSettings", true);
+        preset.showReplayEditor = j.value("showReplayEditor", true);
+        preset.showAnimEditor = j.value("showAnimEditor", true);
+
+        std::filesystem::path dirPath("resources/json/local/layout_presets");
+        std::filesystem::create_directories(dirPath);
+        std::ofstream ofs(dirPath / (preset.name + ".json"));
+        if (ofs.is_open()) {
+            ofs << j.dump(4);
+        }
+
+        bool found = false;
+        for (auto& p : layoutPresets_) {
+            if (p.name == preset.name) {
+                p = preset;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            layoutPresets_.push_back(preset);
+        }
+        presetStatusMessage_ = "プリセット「" + preset.name + "」をインポートしました";
+        presetStatusMessageTimer_ = 3.0f;
+        return true;
+    } catch (...) {
+        presetStatusMessage_ = "JSONの解析に失敗しました";
+        presetStatusMessageTimer_ = 3.0f;
+        return false;
     }
 }
 #endif

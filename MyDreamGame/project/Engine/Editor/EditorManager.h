@@ -66,6 +66,30 @@ public:
 
     bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
 
+    // ウィンドウレイアウトプリセット構造体
+    struct WindowLayoutPreset {
+        std::string name;
+        std::string iniData; // ImGui の INI 文字列
+        bool showInspector = true;
+        bool showHierarchy = true;
+        bool showGameView = true;
+        bool showPostEffect = true;
+        bool showMapEditor = true;
+        bool showMapSettings = true;
+        bool showReplayEditor = true;
+        bool showAnimEditor = true;
+    };
+
+    // レイアウトプリセットの保存・読込み・管理
+    void ScanLayoutPresets();
+    void SaveLayoutPreset(const std::string& name);
+    bool ApplyLayoutPreset(const std::string& name);
+    bool DeleteLayoutPreset(const std::string& name);
+    bool ExportLayoutPresetToFile(const std::string& name, const std::string& filePath);
+    bool ImportLayoutPresetFromFile(const std::string& filePath);
+    void ApplyDefaultLayout();
+    const std::vector<WindowLayoutPreset>& GetLayoutPresets() const { return layoutPresets_; }
+
     // シーン設定のJSON保存・読込み
     void SaveSceneConfig();
     void LoadSceneConfig();
@@ -431,6 +455,13 @@ private:
     float aStarStartPos_[2] = { 0.0f, 0.0f };
     float aStarGoalPos_[2] = { 30.0f, 0.0f };
     bool isAStarPosInitialized_ = false;
+
+    // レイアウトプリセット用メンバ変数
+    std::vector<WindowLayoutPreset> layoutPresets_;
+    bool showSavePresetWindow_ = false;
+    char newPresetNameBuf_[128] = "";
+    std::string presetStatusMessage_ = "";
+    float presetStatusMessageTimer_ = 0.0f;
 
     static bool showObjects_;
     static bool showEffects_;
