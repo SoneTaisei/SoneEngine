@@ -400,9 +400,11 @@ private:
 
     // アニメーション対称編集（ミラー編集）
     bool animSymmetryMode_ = true; // デフォルトで対称編集ON
-    int animSymmetryAxis_ = 0;     // 0: X軸 (左右), 1: Y軸 (上下), 2: Z軸 (前後)
+    bool animSymmetryAxisX_ = true;  // X軸 (左右対称)
+    bool animSymmetryAxisY_ = false; // Y軸 (上下対称)
+    bool animSymmetryAxisZ_ = false; // Z軸 (前後対称)
     std::map<std::string, std::string> customSymmetryMap_; // ユーザー手動指定マッピング
-    std::string FindOppositeJointName(const std::string& jointName, int axis = -1, const struct Skeleton* skeleton = nullptr);
+    std::string FindOppositeJointName(const std::string& jointName, bool axisX = true, bool axisY = false, bool axisZ = false, const struct Skeleton* skeleton = nullptr);
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

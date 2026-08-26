@@ -4177,7 +4177,9 @@ inline bool ComputeBlenderSymmetrySRT(
     const Vector3& srcScale,
     const Quaternion& srcRot,
     const Vector3& srcTrans,
-    int symmetryAxis,
+    bool axisX,
+    bool axisY,
+    bool axisZ,
     Vector3& outOppScale,
     Quaternion& outOppRot,
     Vector3& outOppTrans)
@@ -4207,9 +4209,9 @@ inline bool ComputeBlenderSymmetrySRT(
 
     // 4. 反射行列 Sx
     Vector3 reflScale = { 1.0f, 1.0f, 1.0f };
-    if (symmetryAxis == 0) reflScale.x = -1.0f;      // X軸対称 (YZ平面反射)
-    else if (symmetryAxis == 1) reflScale.y = -1.0f; // Y軸対称 (XZ平面反射)
-    else if (symmetryAxis == 2) reflScale.z = -1.0f; // Z軸対称 (XY平面反射)
+    if (axisX) reflScale.x = -1.0f; // X軸対称 (YZ平面反射)
+    if (axisY) reflScale.y = -1.0f; // Y軸対称 (XZ平面反射)
+    if (axisZ) reflScale.z = -1.0f; // Z軸対称 (XY平面反射)
     Matrix4x4 mSx = TransformFunctions::MakeScaleMatrix(reflScale);
 
     // 5. 鏡映変位 DeltaB = Sx * DeltaA * Sx
@@ -4343,9 +4345,10 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
 
     NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
 
-    std::string gizmoOppJoint = animSymmetryMode_ ? FindOppositeJointName(animEditorSelectedJointName_, animSymmetryAxis_, &skeleton) : "";
+    bool hasAnySymmetryAxis = animSymmetryAxisX_ || animSymmetryAxisY_ || animSymmetryAxisZ_;
+    std::string gizmoOppJoint = (animSymmetryMode_ && hasAnySymmetryAxis) ? FindOppositeJointName(animEditorSelectedJointName_, animSymmetryAxisX_, animSymmetryAxisY_, animSymmetryAxisZ_, &skeleton) : "";
     auto syncGizmoOppositeSRT = [&](const Vector3* newT, const Quaternion* newR, const Vector3* newS) {
-        if (!animSymmetryMode_ || gizmoOppJoint.empty() || gizmoOppJoint == animEditorSelectedJointName_) return;
+        if (!animSymmetryMode_ || !hasAnySymmetryAxis || gizmoOppJoint.empty() || gizmoOppJoint == animEditorSelectedJointName_) return;
 
         Vector3 curS = nodeAnim.scale.empty() ? Vector3{ 1.0f, 1.0f, 1.0f } : CalculateValue(nodeAnim.scale, animEditorTime_);
         Quaternion curR = nodeAnim.rotate.empty() ? Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f } : CalculateValue(nodeAnim.rotate, animEditorTime_);
@@ -4357,7 +4360,7 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
 
         Vector3 oppS, oppT;
         Quaternion oppQ;
-        if (!ComputeBlenderSymmetrySRT(skeleton, animEditorSelectedJointName_, gizmoOppJoint, curS, curR, curT, animSymmetryAxis_, oppS, oppQ, oppT)) {
+        if (!ComputeBlenderSymmetrySRT(skeleton, animEditorSelectedJointName_, gizmoOppJoint, curS, curR, curT, animSymmetryAxisX_, animSymmetryAxisY_, animSymmetryAxisZ_, oppS, oppQ, oppT)) {
             return;
         }
 
@@ -5710,7 +5713,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
     ImGui::End();
 }
 
-std::string EditorManager::FindOppositeJointName(const std::string& jointName, int axis, const Skeleton* skeleton) {
+std::string EditorManager::FindOppositeJointName(const std::string& jointName, bool axisX, bool axisY, bool axisZ, const Skeleton* skeleton) {
     if (jointName.empty()) return "";
 
     // 0. ユーザー手動指定マッピングがあれば最優先で適用
@@ -5719,7 +5722,7 @@ std::string EditorManager::FindOppositeJointName(const std::string& jointName, i
         return itCustom->second;
     }
 
-    int ax = (axis >= 0) ? axis : animSymmetryAxis_;
+    if (!axisX && !axisY && !axisZ) return "";
 
     auto startsWith = [](const std::string& str, const std::string& prefix) -> bool {
         return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
@@ -5765,20 +5768,21 @@ std::string EditorManager::FindOppositeJointName(const std::string& jointName, i
                         Vector3 posB = { jointB.skeletonSpaceMatrix.m[3][0], jointB.skeletonSpaceMatrix.m[3][1], jointB.skeletonSpaceMatrix.m[3][2] };
 
                         float score = 0.0f;
-                        // 座標の対称性スコア (X軸対称なら posB.x ≈ -posA.x, posB.y ≈ posA.y, posB.z ≈ posA.z)
-                        if (ax == 0) {
-                            float diff = std::abs(posB.x + posA.x) + std::abs(posB.y - posA.y) + std::abs(posB.z - posA.z);
-                            score -= diff * 10.0f;
-                        } else if (ax == 1) {
-                            float diff = std::abs(posB.x - posA.x) + std::abs(posB.y + posA.y) + std::abs(posB.z - posA.z);
-                            score -= diff * 10.0f;
-                        } else if (ax == 2) {
-                            float diff = std::abs(posB.x - posA.x) + std::abs(posB.y - posA.y) + std::abs(posB.z + posA.z);
-                            score -= diff * 10.0f;
-                        }
+                        // 座標の対称性スコア
+                        float diff = 0.0f;
+                        if (axisX) diff += std::abs(posB.x + posA.x);
+                        else       diff += std::abs(posB.x - posA.x);
 
-                        // 名前のLeft/Right対称性ボーナス
-                        if (ax == 0) {
+                        if (axisY) diff += std::abs(posB.y + posA.y);
+                        else       diff += std::abs(posB.y - posA.y);
+
+                        if (axisZ) diff += std::abs(posB.z + posA.z);
+                        else       diff += std::abs(posB.z - posA.z);
+
+                        score -= diff * 10.0f;
+
+                        // 名前のLeft/Right等 対称性ボーナス
+                        if (axisX) {
                             if ((jointA.name.find("Left") != std::string::npos && jointB.name.find("Right") != std::string::npos) ||
                                 (jointA.name.find("Right") != std::string::npos && jointB.name.find("Left") != std::string::npos) ||
                                 (jointA.name.find("_L") != std::string::npos && jointB.name.find("_R") != std::string::npos) ||
@@ -5787,6 +5791,22 @@ std::string EditorManager::FindOppositeJointName(const std::string& jointName, i
                                 (jointA.name.find(".R") != std::string::npos && jointB.name.find(".L") != std::string::npos) ||
                                 (jointA.name.find("left") != std::string::npos && jointB.name.find("right") != std::string::npos) ||
                                 (jointA.name.find("right") != std::string::npos && jointB.name.find("left") != std::string::npos)) {
+                                score += 100.0f;
+                            }
+                        }
+                        if (axisY) {
+                            if ((jointA.name.find("Up") != std::string::npos && jointB.name.find("Down") != std::string::npos) ||
+                                (jointA.name.find("Down") != std::string::npos && jointB.name.find("Up") != std::string::npos) ||
+                                (jointA.name.find("Top") != std::string::npos && jointB.name.find("Bottom") != std::string::npos) ||
+                                (jointA.name.find("Bottom") != std::string::npos && jointB.name.find("Top") != std::string::npos)) {
+                                score += 100.0f;
+                            }
+                        }
+                        if (axisZ) {
+                            if ((jointA.name.find("Front") != std::string::npos && jointB.name.find("Back") != std::string::npos) ||
+                                (jointA.name.find("Back") != std::string::npos && jointB.name.find("Front") != std::string::npos) ||
+                                (jointA.name.find("Forward") != std::string::npos && jointB.name.find("Backward") != std::string::npos) ||
+                                (jointA.name.find("Backward") != std::string::npos && jointB.name.find("Forward") != std::string::npos)) {
                                 score += 100.0f;
                             }
                         }
@@ -5841,7 +5861,7 @@ std::string EditorManager::FindOppositeJointName(const std::string& jointName, i
 
     // 2. 階層から見つからなかった場合のフォールバック（文字列置換パターン）
     if (!currentJointList_.empty()) {
-        if (ax == 0) { // X軸対称 (左右: Left <-> Right)
+        if (axisX) { // X軸対称 (左右: Left <-> Right)
             std::vector<std::pair<std::string, std::string>> patterns = {
                 { "Left", "Right" }, { "left", "right" }, { "LEFT", "RIGHT" },
                 { "_L", "_R" }, { "_l", "_r" },
@@ -5876,7 +5896,8 @@ std::string EditorManager::FindOppositeJointName(const std::string& jointName, i
                     }
                 }
             }
-        } else if (ax == 1) { // Y軸対称 (上下: Up <-> Down, Top <-> Bottom)
+        }
+        if (axisY) { // Y軸対称 (上下: Up <-> Down, Top <-> Bottom)
             std::vector<std::pair<std::string, std::string>> patterns = {
                 { "Up", "Down" }, { "up", "down" }, { "UP", "DOWN" },
                 { "Top", "Bottom" }, { "top", "bottom" },
@@ -5900,7 +5921,8 @@ std::string EditorManager::FindOppositeJointName(const std::string& jointName, i
                     for (const auto& j : currentJointList_) if (startsWith(j, prefix) && j != jointName) return j;
                 }
             }
-        } else if (ax == 2) { // Z軸対称 (前後: Front <-> Back)
+        }
+        if (axisZ) { // Z軸対称 (前後: Front <-> Back)
             std::vector<std::pair<std::string, std::string>> patterns = {
                 { "Front", "Back" }, { "front", "back" }, { "FRONT", "BACK" },
                 { "Forward", "Backward" }, { "forward", "backward" }
@@ -6085,18 +6107,54 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     // 対称編集モード (Symmetry Mode) 設定UI
     // ----------------------------------------------------
     ImGui::TextColored(ImVec4(0.85f, 0.45f, 0.95f, 1.0f), "[Symmetry] リアルタイム対称編集 (ミラー編集):");
-    ImGui::Checkbox("対称編集を有効化 (Mirror Mode)", &animSymmetryMode_);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("有効にすると、右腕などを操作した際に対となる左腕なども対称的に連動して更新されます");
+    ImGui::Checkbox("対称編集を有効化", &animSymmetryMode_);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("有効にすると、操作したボーンに対となるボーンが対称的に連動してリアルタイム更新されます");
 
-    std::string oppJointName = animSymmetryMode_ ? FindOppositeJointName(animEditorSelectedJointName_, animSymmetryAxis_) : "";
+    bool hasAnySymmetryAxis = animSymmetryAxisX_ || animSymmetryAxisY_ || animSymmetryAxisZ_;
+    std::string oppJointName = (animSymmetryMode_ && hasAnySymmetryAxis) ? FindOppositeJointName(animEditorSelectedJointName_, animSymmetryAxisX_, animSymmetryAxisY_, animSymmetryAxisZ_, anim ? &anim->GetSkeleton() : nullptr) : "";
 
     if (animSymmetryMode_) {
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(140.0f);
-        const char* symAxisNames[] = { "X軸 (左右対称)", "Y軸 (上下対称)", "Z軸 (前後対称)" };
-        ImGui::Combo("##SymAxisCombo", &animSymmetryAxis_, symAxisNames, 3);
+        ImGui::Text("  対称軸:");
+        ImGui::SameLine();
 
-        if (!oppJointName.empty()) {
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+
+        // X ボタン
+        if (animSymmetryAxisX_) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
+        else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.25f, 0.28f, 1.0f));
+        if (ImGui::Button("X", ImVec2(28, 22))) {
+            animSymmetryAxisX_ = !animSymmetryAxisX_;
+        }
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("X軸対称 (左右ミラー): %s", animSymmetryAxisX_ ? "ON" : "OFF");
+
+        ImGui::SameLine();
+        // Y ボタン
+        if (animSymmetryAxisY_) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.75f, 0.25f, 1.0f));
+        else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.25f, 0.28f, 1.0f));
+        if (ImGui::Button("Y", ImVec2(28, 22))) {
+            animSymmetryAxisY_ = !animSymmetryAxisY_;
+        }
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Y軸対称 (上下ミラー): %s", animSymmetryAxisY_ ? "ON" : "OFF");
+
+        ImGui::SameLine();
+        // Z ボタン
+        if (animSymmetryAxisZ_) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.85f, 1.0f));
+        else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.25f, 0.28f, 1.0f));
+        if (ImGui::Button("Z", ImVec2(28, 22))) {
+            animSymmetryAxisZ_ = !animSymmetryAxisZ_;
+        }
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Z軸対称 (前後ミラー): %s", animSymmetryAxisZ_ ? "ON" : "OFF");
+
+        ImGui::PopStyleVar(2);
+
+        if (!hasAnySymmetryAxis) {
+            ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "  -> (対称軸が選択されていません: XYZボタンをクリックして選択)");
+        } else if (!oppJointName.empty()) {
             ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "  -> 対称ボーン: %s (連動中)", oppJointName.c_str());
         } else {
             ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "  -> (単一/中央ボーン: 対称先なし)");
@@ -6109,7 +6167,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
 
     // 対称ボーンへのリアルタイム連動更新ヘルパー
     auto syncOppositeBoneSRT = [&](const Vector3* newTrans, const Quaternion* newRot, const Vector3* newScale) {
-        if (!animSymmetryMode_ || oppJointName.empty() || oppJointName == animEditorSelectedJointName_) return;
+        if (!animSymmetryMode_ || !hasAnySymmetryAxis || oppJointName.empty() || oppJointName == animEditorSelectedJointName_) return;
         if (!anim || !anim->HasSkeleton()) return;
 
         const Skeleton& skeleton = anim->GetSkeleton();
@@ -6124,7 +6182,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
 
         Vector3 oppS, oppT;
         Quaternion oppQ;
-        if (!ComputeBlenderSymmetrySRT(skeleton, animEditorSelectedJointName_, oppJointName, curS, curR, curT, animSymmetryAxis_, oppS, oppQ, oppT)) {
+        if (!ComputeBlenderSymmetrySRT(skeleton, animEditorSelectedJointName_, oppJointName, curS, curR, curT, animSymmetryAxisX_, animSymmetryAxisY_, animSymmetryAxisZ_, oppS, oppQ, oppT)) {
             return;
         }
 
