@@ -398,6 +398,12 @@ private:
     void PerformAnimRedo(class SceneManager* sceneManager);
     void ClearAnimUndoRedo();
 
+    // アニメーション対称編集（ミラー編集）
+    bool animSymmetryMode_ = true; // デフォルトで対称編集ON
+    int animSymmetryAxis_ = 0;     // 0: X軸 (左右), 1: Y軸 (上下), 2: Z軸 (前後)
+    std::map<std::string, std::string> customSymmetryMap_; // ユーザー手動指定マッピング
+    std::string FindOppositeJointName(const std::string& jointName, int axis = -1, const struct Skeleton* skeleton = nullptr);
+
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅
     float timelineScrollX_ = 0.0f;  // タイムライン横スクロール位置
