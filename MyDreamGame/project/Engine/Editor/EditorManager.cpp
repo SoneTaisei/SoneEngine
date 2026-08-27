@@ -3675,6 +3675,7 @@ void EditorManager::UpdateAnimationPosePreview(SceneManager* sceneManager) {
     
     // 再生中の時間更新
     if (animEditorPlaying_) {
+        animTempOverrides_.clear();
         float dt = TimeManager::GetInstance().GetDeltaTime();
         animEditorTime_ += dt;
         if (editingAnimation_.duration > 0.0f) {
@@ -3705,6 +3706,12 @@ void EditorManager::UpdateAnimationPosePreview(SceneManager* sceneManager) {
                 Vector3 sc = CalculateValue(nodeAnim.scale, animEditorTime_);
                 animator->SetJointScaleOverride(nodeName, sc, 1.0f);
             }
+        }
+        // 未挿入時の一時プレビュー値を上書き反映（キー未登録でも画面上で動く）
+        for (const auto& [nodeName, ov] : animTempOverrides_) {
+            if (ov.rotate) animator->SetJointRotationOverride(nodeName, *ov.rotate, 1.0f);
+            if (ov.translate) animator->SetJointTranslationOverride(nodeName, *ov.translate, 1.0f);
+            if (ov.scale) animator->SetJointScaleOverride(nodeName, *ov.scale, 1.0f);
         }
         animator->UpdateSkeletonAndSkinCluster();
     }
@@ -3746,6 +3753,7 @@ void EditorManager::PerformAnimUndo(SceneManager* sceneManager) {
     animEditorSelectedJointName_ = prevSnap.selectedJointName;
     animEditorSelectedKeyIndex_ = prevSnap.selectedKeyIndex;
 
+    animTempOverrides_.clear();
     UpdateAnimationPosePreview(sceneManager);
 }
 
@@ -3770,6 +3778,7 @@ void EditorManager::PerformAnimRedo(SceneManager* sceneManager) {
     animEditorSelectedJointName_ = nextSnap.selectedJointName;
     animEditorSelectedKeyIndex_ = nextSnap.selectedKeyIndex;
 
+    animTempOverrides_.clear();
     UpdateAnimationPosePreview(sceneManager);
 }
 
@@ -4441,9 +4450,20 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
     auto syncGizmoOppositeSRT = [&](const Vector3* newT, const Quaternion* newR, const Vector3* newS) {
         if (!animSymmetryMode_ || !hasAnySymmetryAxis || gizmoOppJoint.empty() || gizmoOppJoint == animEditorSelectedJointName_) return;
 
-        Vector3 curS = nodeAnim.scale.empty() ? Vector3{ 1.0f, 1.0f, 1.0f } : CalculateValue(nodeAnim.scale, animEditorTime_);
-        Quaternion curR = nodeAnim.rotate.empty() ? Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f } : CalculateValue(nodeAnim.rotate, animEditorTime_);
-        Vector3 curT = nodeAnim.translate.empty() ? Vector3{ 0.0f, 0.0f, 0.0f } : CalculateValue(nodeAnim.translate, animEditorTime_);
+        Vector3 curS = joint.defaultTransform.scale;
+        if (!nodeAnim.scale.empty()) curS = CalculateValue(nodeAnim.scale, animEditorTime_);
+        auto itS = animTempOverrides_.find(animEditorSelectedJointName_);
+        if (itS != animTempOverrides_.end() && itS->second.scale) curS = *itS->second.scale;
+
+        Quaternion curR = joint.defaultTransform.rotate;
+        if (!nodeAnim.rotate.empty()) curR = CalculateValue(nodeAnim.rotate, animEditorTime_);
+        auto itR = animTempOverrides_.find(animEditorSelectedJointName_);
+        if (itR != animTempOverrides_.end() && itR->second.rotate) curR = *itR->second.rotate;
+
+        Vector3 curT = joint.defaultTransform.translate;
+        if (!nodeAnim.translate.empty()) curT = CalculateValue(nodeAnim.translate, animEditorTime_);
+        auto itT = animTempOverrides_.find(animEditorSelectedJointName_);
+        if (itT != animTempOverrides_.end() && itT->second.translate) curT = *itT->second.translate;
 
         if (newT) curT = *newT;
         if (newR) curR = *newR;
@@ -4466,12 +4486,7 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                     break;
                 }
             }
-            if (!found) {
-                KeyframeVector3 newKf{ animEditorTime_, oppT };
-                auto itK = oppNode.translate.begin();
-                while (itK != oppNode.translate.end() && itK->time < newKf.time) ++itK;
-                oppNode.translate.insert(itK, newKf);
-            }
+            if (!found) animTempOverrides_[gizmoOppJoint].translate = oppT;
         }
         if (newR) {
             bool found = false;
@@ -4482,12 +4497,7 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                     break;
                 }
             }
-            if (!found) {
-                KeyframeQuaternion newKf{ animEditorTime_, oppQ };
-                auto itK = oppNode.rotate.begin();
-                while (itK != oppNode.rotate.end() && itK->time < newKf.time) ++itK;
-                oppNode.rotate.insert(itK, newKf);
-            }
+            if (!found) animTempOverrides_[gizmoOppJoint].rotate = oppQ;
         }
         if (newS) {
             bool found = false;
@@ -4498,12 +4508,7 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                     break;
                 }
             }
-            if (!found) {
-                KeyframeVector3 newKf{ animEditorTime_, oppS };
-                auto itK = oppNode.scale.begin();
-                while (itK != oppNode.scale.end() && itK->time < newKf.time) ++itK;
-                oppNode.scale.insert(itK, newKf);
-            }
+            if (!found) animTempOverrides_[gizmoOppJoint].scale = oppS;
         }
     };
 
@@ -4591,12 +4596,15 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                     float factor = gizmoRadius / (std::max)(len2D, 60.0f);
                     float deltaAmount = proj * factor * 1.2f;
 
-                    Vector3 curT = { 0.0f, 0.0f, 0.0f };
+                    Vector3 curT = joint.defaultTransform.translate;
                     if (!nodeAnim.translate.empty()) {
                         curT = CalculateValue(nodeAnim.translate, animEditorTime_);
-                    } else {
-                        curT = joint.transform.translate;
                     }
+                    auto itTempT = animTempOverrides_.find(animEditorSelectedJointName_);
+                    if (itTempT != animTempOverrides_.end() && itTempT->second.translate) {
+                        curT = *itTempT->second.translate;
+                    }
+
                     Vector3 newT = curT;
                     if (a == 0) newT.x += deltaAmount;
                     else if (a == 1) newT.y += deltaAmount;
@@ -4611,10 +4619,7 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                         }
                     }
                     if (!found) {
-                        KeyframeVector3 newKf{ animEditorTime_, newT };
-                        auto itK = nodeAnim.translate.begin();
-                        while (itK != nodeAnim.translate.end() && itK->time < newKf.time) ++itK;
-                        nodeAnim.translate.insert(itK, newKf);
+                        animTempOverrides_[animEditorSelectedJointName_].translate = newT;
                     }
                     syncGizmoOppositeSRT(&newT, nullptr, nullptr);
                     UpdateAnimationPosePreview(sceneManager);
@@ -4703,11 +4708,13 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                 float facing = axes[a].x * toCam.x + axes[a].y * toCam.y + axes[a].z * toCam.z;
                 if (facing < 0.0f) deltaAngle = -deltaAngle;
 
-                Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
+                Quaternion curQ = joint.defaultTransform.rotate;
                 if (!nodeAnim.rotate.empty()) {
                     curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
-                } else {
-                    curQ = joint.transform.rotate;
+                }
+                auto itTempR = animTempOverrides_.find(animEditorSelectedJointName_);
+                if (itTempR != animTempOverrides_.end() && itTempR->second.rotate) {
+                    curQ = *itTempR->second.rotate;
                 }
 
                 // ワールド固定軸 axes[a] を親の空間に逆変換してローカル回転軸を得る
@@ -4731,25 +4738,17 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                     newQ.w /= qLen;
                 }
 
-                if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-                    nodeAnim.rotate[animEditorSelectedKeyIndex_].value = newQ;
-                } else {
-                    KeyframeQuaternion newKf{ animEditorTime_, newQ };
-                    bool found = false;
-                    for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
-                        if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
-                            nodeAnim.rotate[idx].value = newQ;
-                            animEditorSelectedKeyIndex_ = static_cast<int>(idx);
-                            found = true;
-                            break;
-                        }
+                bool found = false;
+                for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
+                    if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                        nodeAnim.rotate[idx].value = newQ;
+                        animEditorSelectedKeyIndex_ = static_cast<int>(idx);
+                        found = true;
+                        break;
                     }
-                    if (!found) {
-                        auto itK = nodeAnim.rotate.begin();
-                        while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
-                        auto ins = nodeAnim.rotate.insert(itK, newKf);
-                        animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), ins));
-                    }
+                }
+                if (!found) {
+                    animTempOverrides_[animEditorSelectedJointName_].rotate = newQ;
                 }
                 syncGizmoOppositeSRT(nullptr, &newQ, nullptr);
                 UpdateAnimationPosePreview(sceneManager);
@@ -4820,11 +4819,13 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
 
         // Handle Dragging Scale
         if (isDraggingAnimGizmo_ && animGizmoActiveAxis_ >= 0) {
-            Vector3 curS = { 1.0f, 1.0f, 1.0f };
+            Vector3 curS = joint.defaultTransform.scale;
             if (!nodeAnim.scale.empty()) {
                 curS = CalculateValue(nodeAnim.scale, animEditorTime_);
-            } else {
-                curS = joint.transform.scale;
+            }
+            auto itTempS = animTempOverrides_.find(animEditorSelectedJointName_);
+            if (itTempS != animTempOverrides_.end() && itTempS->second.scale) {
+                curS = *itTempS->second.scale;
             }
 
             if (animGizmoActiveAxis_ == 3) {
@@ -4862,10 +4863,7 @@ void EditorManager::DrawBoneTransformGizmo(SceneManager* sceneManager, Camera* a
                 }
             }
             if (!found) {
-                KeyframeVector3 newKf{ animEditorTime_, curS };
-                auto itK = nodeAnim.scale.begin();
-                while (itK != nodeAnim.scale.end() && itK->time < newKf.time) ++itK;
-                nodeAnim.scale.insert(itK, newKf);
+                animTempOverrides_[animEditorSelectedJointName_].scale = curS;
             }
             syncGizmoOppositeSRT(nullptr, nullptr, &curS);
             UpdateAnimationPosePreview(sceneManager);
@@ -5177,6 +5175,76 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         }
 
         ImGui::SameLine();
+        // 削除ボタン
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.15f, 0.15f, 1.0f));
+        if (ImGui::Button("[-] 削除")) {
+            openDeleteAnimModal_ = true;
+        }
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("現在選択されているアニメーションファイル (%s) を削除", currentAnimFilePath_.c_str());
+
+        // アニメーション削除確認モーダルダイアログ
+        if (openDeleteAnimModal_) {
+            ImGui::OpenPopup("アニメーションの削除確認##AnimDeleteModal");
+            openDeleteAnimModal_ = false;
+        }
+
+        if (ImGui::BeginPopupModal("アニメーションの削除確認##AnimDeleteModal", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("本当にこのアニメーションを削除しますか？");
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "ファイル: %s", currentAnimFilePath_.c_str());
+            ImGui::TextDisabled("※ 削除したファイルは元に戻せません。");
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.55f, 0.15f, 0.15f, 1.0f));
+            if (ImGui::Button("削除", ImVec2(120, 0))) {
+                std::string deletedFilePath = currentAnimFilePath_;
+                if (std::filesystem::exists(deletedFilePath)) {
+                    std::error_code ec;
+                    std::filesystem::remove(deletedFilePath, ec);
+                }
+                LogManager::GetInstance()->AddLog(LogLevel::Info, "アニメーション削除: " + deletedFilePath);
+
+                ScanAnimationFiles();
+
+                // 新しく利用可能なファイルから読み込み
+                if (!availableAnimationFiles_.empty()) {
+                    currentAnimFilePath_ = availableAnimationFiles_[0];
+                    if (!LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_)) {
+                        if (currentAnimFilePath_.find("wall_climb") != std::string::npos) {
+                            editingAnimation_ = CreateDefaultWallClimbAnimation();
+                        } else if (currentAnimFilePath_.find("air_dash") != std::string::npos) {
+                            editingAnimation_ = CreateDefaultAirDashAnimation();
+                        }
+                    }
+                } else {
+                    editingAnimation_ = Animation{};
+                }
+
+                animEditorTime_ = 0.0f;
+                animEditorSelectedKeyIndex_ = -1;
+                ClearAnimUndoRedo();
+                UpdateAnimationPosePreview(sceneManager);
+
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::PopStyleColor(3);
+
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if (ImGui::Button("キャンセル", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
         ImGui::SameLine();
 
@@ -5185,6 +5253,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         if (ImGui::Button("|<<", ImVec2(32, 0))) {
             animEditorTime_ = 0.0f;
             animEditorPlaying_ = false;
+            animTempOverrides_.clear();
             UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("先頭フレームへ");
@@ -5193,6 +5262,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // 1フレーム戻る (<)
         if (ImGui::Button("<", ImVec2(28, 0))) {
             animEditorTime_ = (std::max)(0.0f, animEditorTime_ - 1.0f / animEditorFps_);
+            animTempOverrides_.clear();
             UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム戻る");
@@ -5209,6 +5279,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.3f, 1.0f));
             if (ImGui::Button("[>] 再生", ImVec2(68, 0))) {
                 animEditorPlaying_ = true;
+                animTempOverrides_.clear();
             }
             ImGui::PopStyleColor();
         }
@@ -5218,6 +5289,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // 1フレーム進む (>)
         if (ImGui::Button(">", ImVec2(28, 0))) {
             animEditorTime_ = (std::min)(editingAnimation_.duration, animEditorTime_ + 1.0f / animEditorFps_);
+            animTempOverrides_.clear();
             UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム進む");
@@ -5227,6 +5299,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         if (ImGui::Button(">>|", ImVec2(32, 0))) {
             animEditorTime_ = editingAnimation_.duration;
             animEditorPlaying_ = false;
+            animTempOverrides_.clear();
             UpdateAnimationPosePreview(sceneManager);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("末尾フレームへ");
@@ -5272,6 +5345,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             } else if (!io.WantTextInput) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
                     animEditorPlaying_ = !animEditorPlaying_;
+                    if (animEditorPlaying_) animTempOverrides_.clear();
                 }
                 if (ImGui::IsKeyPressed(ImGuiKey_T, false)) animGizmoMode_ = 0; // Translate (移動)
                 if (ImGui::IsKeyPressed(ImGuiKey_R, false)) animGizmoMode_ = 1; // Rotate (回転)
@@ -5282,22 +5356,193 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                 if (ImGui::IsKeyPressed(ImGuiKey_I, false)) {
                     PushAnimUndoState("キー挿入 (I)");
                     NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                    AnimatorComponent* anim = GetTargetAnimator(sceneManager);
+                    const Skeleton* skel = (anim && anim->HasSkeleton()) ? &anim->GetSkeleton() : nullptr;
+
                     Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
-                    if (!nodeAnim.rotate.empty()) {
-                        curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+                    Vector3 curT = { 0.0f, 0.0f, 0.0f };
+                    Vector3 curS = { 1.0f, 1.0f, 1.0f };
+
+                    if (skel) {
+                        auto itJ = skel->jointMap.find(animEditorSelectedJointName_);
+                        if (itJ != skel->jointMap.end()) {
+                            curQ = skel->joints[itJ->second].transform.rotate;
+                            curT = skel->joints[itJ->second].transform.translate;
+                            curS = skel->joints[itJ->second].transform.scale;
+                        }
                     }
-                    KeyframeQuaternion newKf{ animEditorTime_, curQ };
-                    auto it = nodeAnim.rotate.begin();
-                    while (it != nodeAnim.rotate.end() && it->time < newKf.time) ++it;
-                    auto inserted = nodeAnim.rotate.insert(it, newKf);
-                    animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+                    if (!nodeAnim.rotate.empty()) curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+                    if (!nodeAnim.translate.empty()) curT = CalculateValue(nodeAnim.translate, animEditorTime_);
+                    if (!nodeAnim.scale.empty()) curS = CalculateValue(nodeAnim.scale, animEditorTime_);
+
+                    auto itTemp = animTempOverrides_.find(animEditorSelectedJointName_);
+                    if (itTemp != animTempOverrides_.end()) {
+                        if (itTemp->second.translate) curT = *itTemp->second.translate;
+                        if (itTemp->second.rotate) curQ = *itTemp->second.rotate;
+                        if (itTemp->second.scale) curS = *itTemp->second.scale;
+                    }
+
+                    // Rotation
+                    bool foundR = false;
+                    for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
+                        if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                            nodeAnim.rotate[idx].value = curQ;
+                            animEditorSelectedKeyIndex_ = static_cast<int>(idx);
+                            foundR = true;
+                            break;
+                        }
+                    }
+                    if (!foundR) {
+                        KeyframeQuaternion newKf{ animEditorTime_, curQ };
+                        auto itK = nodeAnim.rotate.begin();
+                        while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
+                        auto ins = nodeAnim.rotate.insert(itK, newKf);
+                        animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), ins));
+                    }
+
+                    // Translation
+                    bool foundT = false;
+                    for (size_t idx = 0; idx < nodeAnim.translate.size(); ++idx) {
+                        if (std::abs(nodeAnim.translate[idx].time - animEditorTime_) < 0.005f) {
+                            nodeAnim.translate[idx].value = curT;
+                            foundT = true;
+                            break;
+                        }
+                    }
+                    if (!foundT) {
+                        KeyframeVector3 newKf{ animEditorTime_, curT };
+                        auto itK = nodeAnim.translate.begin();
+                        while (itK != nodeAnim.translate.end() && itK->time < newKf.time) ++itK;
+                        nodeAnim.translate.insert(itK, newKf);
+                    }
+
+                    // Scale
+                    bool foundS = false;
+                    for (size_t idx = 0; idx < nodeAnim.scale.size(); ++idx) {
+                        if (std::abs(nodeAnim.scale[idx].time - animEditorTime_) < 0.005f) {
+                            nodeAnim.scale[idx].value = curS;
+                            foundS = true;
+                            break;
+                        }
+                    }
+                    if (!foundS) {
+                        KeyframeVector3 newKf{ animEditorTime_, curS };
+                        auto itK = nodeAnim.scale.begin();
+                        while (itK != nodeAnim.scale.end() && itK->time < newKf.time) ++itK;
+                        nodeAnim.scale.insert(itK, newKf);
+                    }
+
+                    // 対称ボーンへのキー挿入連携
+                    std::string oppJointName = FindOppositeJointName(animEditorSelectedJointName_, animSymmetryAxisX_, animSymmetryAxisY_, animSymmetryAxisZ_, skel);
+                    bool hasAnySymmetryAxis = animSymmetryAxisX_ || animSymmetryAxisY_ || animSymmetryAxisZ_;
+                    if (animSymmetryMode_ && hasAnySymmetryAxis && !oppJointName.empty() && oppJointName != animEditorSelectedJointName_ && skel) {
+                        Vector3 oppS, oppT;
+                        Quaternion oppQ;
+                        if (ComputeBlenderSymmetrySRT(*skel, animEditorSelectedJointName_, oppJointName, curS, curQ, curT, animSymmetryAxisX_, animSymmetryAxisY_, animSymmetryAxisZ_, oppS, oppQ, oppT)) {
+                            NodeAnimation& oppNodeAnim = editingAnimation_.nodeAnimations[oppJointName];
+                            // Translate
+                            bool foundOppT = false;
+                            for (size_t idx = 0; idx < oppNodeAnim.translate.size(); ++idx) {
+                                if (std::abs(oppNodeAnim.translate[idx].time - animEditorTime_) < 0.005f) {
+                                    oppNodeAnim.translate[idx].value = oppT;
+                                    foundOppT = true;
+                                    break;
+                                }
+                            }
+                            if (!foundOppT) {
+                                KeyframeVector3 newKf{ animEditorTime_, oppT };
+                                auto itK = oppNodeAnim.translate.begin();
+                                while (itK != oppNodeAnim.translate.end() && itK->time < newKf.time) ++itK;
+                                oppNodeAnim.translate.insert(itK, newKf);
+                            }
+                            // Rotate
+                            bool foundOppR = false;
+                            for (size_t idx = 0; idx < oppNodeAnim.rotate.size(); ++idx) {
+                                if (std::abs(oppNodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                                    oppNodeAnim.rotate[idx].value = oppQ;
+                                    foundOppR = true;
+                                    break;
+                                }
+                            }
+                            if (!foundOppR) {
+                                KeyframeQuaternion newKf{ animEditorTime_, oppQ };
+                                auto itK = oppNodeAnim.rotate.begin();
+                                while (itK != oppNodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
+                                oppNodeAnim.rotate.insert(itK, newKf);
+                            }
+                            // Scale
+                            bool foundOppS = false;
+                            for (size_t idx = 0; idx < oppNodeAnim.scale.size(); ++idx) {
+                                if (std::abs(oppNodeAnim.scale[idx].time - animEditorTime_) < 0.005f) {
+                                    oppNodeAnim.scale[idx].value = oppS;
+                                    foundOppS = true;
+                                    break;
+                                }
+                            }
+                            if (!foundOppS) {
+                                KeyframeVector3 newKf{ animEditorTime_, oppS };
+                                auto itK = oppNodeAnim.scale.begin();
+                                while (itK != oppNodeAnim.scale.end() && itK->time < newKf.time) ++itK;
+                                oppNodeAnim.scale.insert(itK, newKf);
+                            }
+                            animTempOverrides_.erase(oppJointName);
+                        }
+                    }
+
+                    animTempOverrides_.erase(animEditorSelectedJointName_);
                     UpdateAnimationPosePreview(sceneManager);
                 }
                 if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
-                    PushAnimUndoState("キー削除 (Del)");
-                    NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
-                    if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-                        nodeAnim.rotate.erase(nodeAnim.rotate.begin() + animEditorSelectedKeyIndex_);
+                    if (io.KeyShift || animEditorSelectedKeyIndex_ < 0) {
+                        // Shift+Del または サマリー/全体選択時は全ボーンのキーを一括削除
+                        PushAnimUndoState("全ボーンキー削除 (Del)");
+                        float delTime = animEditorTime_;
+                        for (auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
+                            nAnim.rotate.erase(
+                                std::remove_if(nAnim.rotate.begin(), nAnim.rotate.end(),
+                                    [delTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - delTime) < 0.005f; }),
+                                nAnim.rotate.end()
+                            );
+                            nAnim.translate.erase(
+                                std::remove_if(nAnim.translate.begin(), nAnim.translate.end(),
+                                    [delTime](const KeyframeVector3& kf) { return std::abs(kf.time - delTime) < 0.005f; }),
+                                nAnim.translate.end()
+                            );
+                            nAnim.scale.erase(
+                                std::remove_if(nAnim.scale.begin(), nAnim.scale.end(),
+                                    [delTime](const KeyframeVector3& kf) { return std::abs(kf.time - delTime) < 0.005f; }),
+                                nAnim.scale.end()
+                            );
+                        }
+                        animEditorSelectedKeyIndex_ = -1;
+                        UpdateAnimationPosePreview(sceneManager);
+                    } else {
+                        // 選択中ボーンの個別キー削除
+                        PushAnimUndoState("キー削除 (Del)");
+                        NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
+                        float delTime = animEditorTime_;
+                        if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+                            delTime = nodeAnim.rotate[animEditorSelectedKeyIndex_].time;
+                        }
+
+                        nodeAnim.rotate.erase(
+                            std::remove_if(nodeAnim.rotate.begin(), nodeAnim.rotate.end(),
+                                [delTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - delTime) < 0.005f; }),
+                            nodeAnim.rotate.end()
+                        );
+
+                        nodeAnim.translate.erase(
+                            std::remove_if(nodeAnim.translate.begin(), nodeAnim.translate.end(),
+                                [delTime](const KeyframeVector3& kf) { return std::abs(kf.time - delTime) < 0.005f; }),
+                            nodeAnim.translate.end()
+                        );
+
+                        nodeAnim.scale.erase(
+                            std::remove_if(nodeAnim.scale.begin(), nodeAnim.scale.end(),
+                                [delTime](const KeyframeVector3& kf) { return std::abs(kf.time - delTime) < 0.005f; }),
+                            nodeAnim.scale.end()
+                        );
+
                         animEditorSelectedKeyIndex_ = -1;
                         UpdateAnimationPosePreview(sceneManager);
                     }
@@ -5472,11 +5717,13 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             drawList->AddText(ImVec2(x + 3, p0.y + 4), isSec ? IM_COL32(230, 235, 245, 255) : IM_COL32(170, 175, 185, 255), fBuf);
         }
 
-        // ルーラースクラブ（シーク）操作
+        // ルーラーおよびタイムライン全領域でのスクラブ（時間シーク）操作
         ImVec2 mousePos = io.MousePos;
-        bool isHoverRuler = (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y >= p0.y && mousePos.y <= p0.y + rulerHeight);
-        if (isHoverRuler && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        bool isHoverTimeline = (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y >= p0.y && mousePos.y <= contentBottomY);
+
+        if (isHoverTimeline && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyCtrl) {
             isAnimRulerScrubbing_ = true;
+            animTempOverrides_.clear();
         }
         if (isAnimRulerScrubbing_) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -5493,11 +5740,12 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
         // ----------------------------------------------------
         std::set<float> summaryKeyTimes;
         for (const auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
-            for (const auto& k : nAnim.rotate) {
-                summaryKeyTimes.insert(k.time);
-            }
+            for (const auto& k : nAnim.rotate) summaryKeyTimes.insert(k.time);
+            for (const auto& k : nAnim.translate) summaryKeyTimes.insert(k.time);
+            for (const auto& k : nAnim.scale) summaryKeyTimes.insert(k.time);
         }
 
+        float deleteSummaryTime = -1.0f;
         for (float sTime : summaryKeyTimes) {
             float sX = timelineStartX + sTime * animTimelineZoom_ - animTimelineScrollX_;
             if (sX >= timelineStartX && sX <= timelineEndX) {
@@ -5513,19 +5761,56 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                 drawList->AddConvexPolyFilled(dP, 4, dCol);
                 drawList->AddPolyline(dP, 4, IM_COL32(20, 20, 20, 255), ImDrawFlags_Closed, 1.0f);
 
+                // 左クリックでサマリーキー選択 & 時間シーク
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && std::abs(mousePos.x - sX) <= 6.0f && std::abs(mousePos.y - sCenterY) <= 6.0f) {
                     animEditorTime_ = sTime;
-                    isSummaryKeyDrag_ = true;
-                    dragSummaryOriginalTime_ = sTime;
-                    animDragPreSnapshot_.animation = editingAnimation_;
-                    animDragPreSnapshot_.time = animEditorTime_;
-                    animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
-                    animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
-                    animDragPreSnapshot_.description = "サマリーキー移動";
-                    hasAnimDragPreSnapshot_ = true;
+                    animEditorSelectedKeyIndex_ = -1;
+                    animTempOverrides_.clear();
                     UpdateAnimationPosePreview(sceneManager);
                 }
+
+                // Ctrlキーを押しながらドラッグした場合のみキー移動を許可（通常ドラッグでの誤移動を完全防止）
+                if (io.KeyCtrl && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f) && std::abs(io.MouseClickedPos[0].x - sX) <= 6.0f && std::abs(io.MouseClickedPos[0].y - sCenterY) <= 6.0f) {
+                    if (!isSummaryKeyDrag_) {
+                        isSummaryKeyDrag_ = true;
+                        dragSummaryOriginalTime_ = sTime;
+                        animDragPreSnapshot_.animation = editingAnimation_;
+                        animDragPreSnapshot_.time = animEditorTime_;
+                        animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+                        animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+                        animDragPreSnapshot_.description = "サマリーキー移動";
+                        hasAnimDragPreSnapshot_ = true;
+                    }
+                }
+
+                // 右クリックでサマリーキー（全ボーンの該当フレームキー）を一括削除
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && std::abs(mousePos.x - sX) <= 6.0f && std::abs(mousePos.y - sCenterY) <= 6.0f) {
+                    deleteSummaryTime = sTime;
+                }
             }
+        }
+
+        if (deleteSummaryTime >= 0.0f) {
+            PushAnimUndoState("全ボーンキー削除");
+            for (auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
+                nAnim.rotate.erase(
+                    std::remove_if(nAnim.rotate.begin(), nAnim.rotate.end(),
+                        [deleteSummaryTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - deleteSummaryTime) < 0.005f; }),
+                    nAnim.rotate.end()
+                );
+                nAnim.translate.erase(
+                    std::remove_if(nAnim.translate.begin(), nAnim.translate.end(),
+                        [deleteSummaryTime](const KeyframeVector3& kf) { return std::abs(kf.time - deleteSummaryTime) < 0.005f; }),
+                    nAnim.translate.end()
+                );
+                nAnim.scale.erase(
+                    std::remove_if(nAnim.scale.begin(), nAnim.scale.end(),
+                        [deleteSummaryTime](const KeyframeVector3& kf) { return std::abs(kf.time - deleteSummaryTime) < 0.005f; }),
+                    nAnim.scale.end()
+                );
+            }
+            animEditorSelectedKeyIndex_ = -1;
+            UpdateAnimationPosePreview(sceneManager);
         }
 
         if (isSummaryKeyDrag_) {
@@ -5536,6 +5821,16 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                 if (std::abs(dt) > 0.001f) {
                     for (auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
                         for (auto& k : nAnim.rotate) {
+                            if (std::abs(k.time - dragSummaryOriginalTime_) < 0.005f) {
+                                k.time = newT;
+                            }
+                        }
+                        for (auto& k : nAnim.translate) {
+                            if (std::abs(k.time - dragSummaryOriginalTime_) < 0.005f) {
+                                k.time = newT;
+                            }
+                        }
+                        for (auto& k : nAnim.scale) {
                             if (std::abs(k.time - dragSummaryOriginalTime_) < 0.005f) {
                                 k.time = newT;
                             }
@@ -5584,20 +5879,32 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                         drawList->AddConvexPolyFilled(kdP, 4, kCol);
                         drawList->AddPolyline(kdP, 4, IM_COL32(10, 10, 10, 255), ImDrawFlags_Closed, 1.0f);
 
+                        // 左クリックでキーフレーム選択 & 時間シーク
                         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                             if (std::abs(mousePos.x - kX) <= 6.0f && std::abs(mousePos.y - kCenterY) <= 6.0f) {
                                 animEditorSelectedJointName_ = jointName;
                                 animEditorSelectedKeyIndex_ = static_cast<int>(k);
                                 animEditorTime_ = kTime;
-                                isDraggingAnimKeyframe_ = true;
-                                dragAnimKeyOriginalTime_ = kTime;
-                                animDragPreSnapshot_.animation = editingAnimation_;
-                                animDragPreSnapshot_.time = animEditorTime_;
-                                animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
-                                animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
-                                animDragPreSnapshot_.description = "キーフレーム移動";
-                                hasAnimDragPreSnapshot_ = true;
+                                animTempOverrides_.clear();
                                 UpdateAnimationPosePreview(sceneManager);
+                            }
+                        }
+
+                        // Ctrlキーを押しながらドラッグした場合のみキー移動を許可（通常ドラッグでの誤移動を完全防止）
+                        if (io.KeyCtrl && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f) && isSelected) {
+                            if (std::abs(io.MouseClickedPos[0].x - kX) <= 6.0f && std::abs(io.MouseClickedPos[0].y - kCenterY) <= 6.0f) {
+                                if (!isDraggingAnimKeyframe_) {
+                                    isDraggingAnimKeyframe_ = true;
+                                    animEditorSelectedJointName_ = jointName;
+                                    animEditorSelectedKeyIndex_ = static_cast<int>(k);
+                                    dragAnimKeyOriginalTime_ = kTime;
+                                    animDragPreSnapshot_.animation = editingAnimation_;
+                                    animDragPreSnapshot_.time = animEditorTime_;
+                                    animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
+                                    animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
+                                    animDragPreSnapshot_.description = "キーフレーム移動";
+                                    hasAnimDragPreSnapshot_ = true;
+                                }
                             }
                         }
                     }
@@ -5613,7 +5920,14 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                 newT = std::clamp(newT, 0.0f, editingAnimation_.duration);
                 auto& nodeAnim = editingAnimation_.nodeAnimations[animEditorSelectedJointName_];
                 if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
+                    float oldT = nodeAnim.rotate[animEditorSelectedKeyIndex_].time;
                     nodeAnim.rotate[animEditorSelectedKeyIndex_].time = newT;
+                    for (auto& kf : nodeAnim.translate) {
+                        if (std::abs(kf.time - oldT) < 0.005f) kf.time = newT;
+                    }
+                    for (auto& kf : nodeAnim.scale) {
+                        if (std::abs(kf.time - oldT) < 0.005f) kf.time = newT;
+                    }
                     animEditorTime_ = newT;
                     UpdateAnimationPosePreview(sceneManager);
                 }
@@ -5760,6 +6074,8 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
                     if (!clickedToggle) {
                         animEditorSelectedJointName_ = jointName;
                         animEditorSelectedKeyIndex_ = -1;
+                        animTempOverrides_.clear();
+                        UpdateAnimationPosePreview(sceneManager);
                     }
                 }
             }
@@ -5794,6 +6110,7 @@ void EditorManager::DrawAnimationDopeSheetUI(SceneManager* sceneManager) {
             if (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y > summaryY + summaryHeight && !isDraggingAnimKeyframe_ && !isSummaryKeyDrag_) {
                 float clickTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
                 animEditorTime_ = std::clamp(clickTime, 0.0f, editingAnimation_.duration);
+                animTempOverrides_.clear();
                 UpdateAnimationPosePreview(sceneManager);
             }
         }
@@ -6091,15 +6408,25 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         ImGui::Text("フレーム情報: %d / %d F (%.3fs / %.3fs)", curFrame, totalFrames, animEditorTime_, editingAnimation_.duration);
 
         ImGui::SetNextItemWidth(120.0f);
-        if (ImGui::DragFloat("最大時間 (Duration)", &editingAnimation_.duration, 0.01f, 0.05f, 10.0f, "%.2fs")) {
-            // updated
+        if (ImGui::DragInt("現在フレーム (Current F)", &curFrame, 1.0f, 0, totalFrames, "%d F")) {
+            if (curFrame < 0) curFrame = 0;
+            if (curFrame > totalFrames) curFrame = totalFrames;
+            animEditorTime_ = static_cast<float>(curFrame) / (animEditorFps_ > 0.0f ? animEditorFps_ : 60.0f);
+            animTempOverrides_.clear();
+            UpdateAnimationPosePreview(sceneManager);
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::DragInt("最大フレーム数 (Duration)", &totalFrames, 1.0f, 1, 6000, "%d F")) {
+            if (totalFrames < 1) totalFrames = 1;
+            editingAnimation_.duration = static_cast<float>(totalFrames) / (animEditorFps_ > 0.0f ? animEditorFps_ : 60.0f);
         }
         if (ImGui::IsItemActivated()) {
             animDragPreSnapshot_.animation = editingAnimation_;
             animDragPreSnapshot_.time = animEditorTime_;
             animDragPreSnapshot_.selectedJointName = animEditorSelectedJointName_;
             animDragPreSnapshot_.selectedKeyIndex = animEditorSelectedKeyIndex_;
-            animDragPreSnapshot_.description = "時間長変更";
+            animDragPreSnapshot_.description = "フレーム数変更";
             hasAnimDragPreSnapshot_ = true;
         }
         if (ImGui::IsItemDeactivatedAfterEdit() && hasAnimDragPreSnapshot_) {
@@ -6110,7 +6437,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         }
 
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[最大フレーム: %d F]", totalFrames);
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[%.2f 秒]", editingAnimation_.duration);
 
         ImGui::SetNextItemWidth(120.0f);
         ImGui::DragFloat("フレームレート (FPS)", &animEditorFps_, 1.0f, 10.0f, 120.0f, "%.0f fps");
@@ -6135,6 +6462,8 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
             if (ImGui::Selectable(jName.c_str(), isSel)) {
                 animEditorSelectedJointName_ = jName;
                 animEditorSelectedKeyIndex_ = -1;
+                animTempOverrides_.clear();
+                UpdateAnimationPosePreview(sceneManager);
             }
         }
         ImGui::EndCombo();
@@ -6257,7 +6586,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     ImGui::Spacing();
 
     // 対称ボーンへのリアルタイム連動更新ヘルパー
-    auto syncOppositeBoneSRT = [&](const Vector3* newTrans, const Quaternion* newRot, const Vector3* newScale) {
+    auto syncOppositeBoneSRT = [&](const Vector3* newTrans, const Quaternion* newRot, const Vector3* newScale, bool isExplicitInsert = false) {
         if (!animSymmetryMode_ || !hasAnySymmetryAxis || oppJointName.empty() || oppJointName == animEditorSelectedJointName_) return;
         if (!anim || !anim->HasSkeleton()) return;
 
@@ -6266,6 +6595,13 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         Vector3 curS = nodeAnim.scale.empty() ? Vector3{ 1.0f, 1.0f, 1.0f } : CalculateValue(nodeAnim.scale, animEditorTime_);
         Quaternion curR = nodeAnim.rotate.empty() ? Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f } : CalculateValue(nodeAnim.rotate, animEditorTime_);
         Vector3 curT = nodeAnim.translate.empty() ? Vector3{ 0.0f, 0.0f, 0.0f } : CalculateValue(nodeAnim.translate, animEditorTime_);
+
+        auto itTemp = animTempOverrides_.find(animEditorSelectedJointName_);
+        if (itTemp != animTempOverrides_.end()) {
+            if (itTemp->second.translate) curT = *itTemp->second.translate;
+            if (itTemp->second.rotate) curR = *itTemp->second.rotate;
+            if (itTemp->second.scale) curS = *itTemp->second.scale;
+        }
 
         if (newTrans) curT = *newTrans;
         if (newRot) curR = *newRot;
@@ -6289,10 +6625,14 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
                 }
             }
             if (!found) {
-                KeyframeVector3 newKf{ animEditorTime_, oppT };
-                auto itK = oppNodeAnim.translate.begin();
-                while (itK != oppNodeAnim.translate.end() && itK->time < newKf.time) ++itK;
-                oppNodeAnim.translate.insert(itK, newKf);
+                if (isExplicitInsert) {
+                    KeyframeVector3 newKf{ animEditorTime_, oppT };
+                    auto itK = oppNodeAnim.translate.begin();
+                    while (itK != oppNodeAnim.translate.end() && itK->time < newKf.time) ++itK;
+                    oppNodeAnim.translate.insert(itK, newKf);
+                } else {
+                    animTempOverrides_[oppJointName].translate = oppT;
+                }
             }
         }
 
@@ -6306,10 +6646,14 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
                 }
             }
             if (!found) {
-                KeyframeQuaternion newKf{ animEditorTime_, oppQ };
-                auto itK = oppNodeAnim.rotate.begin();
-                while (itK != oppNodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
-                oppNodeAnim.rotate.insert(itK, newKf);
+                if (isExplicitInsert) {
+                    KeyframeQuaternion newKf{ animEditorTime_, oppQ };
+                    auto itK = oppNodeAnim.rotate.begin();
+                    while (itK != oppNodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
+                    oppNodeAnim.rotate.insert(itK, newKf);
+                } else {
+                    animTempOverrides_[oppJointName].rotate = oppQ;
+                }
             }
         }
 
@@ -6323,10 +6667,14 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
                 }
             }
             if (!found) {
-                KeyframeVector3 newKf{ animEditorTime_, oppS };
-                auto itK = oppNodeAnim.scale.begin();
-                while (itK != oppNodeAnim.scale.end() && itK->time < newKf.time) ++itK;
-                oppNodeAnim.scale.insert(itK, newKf);
+                if (isExplicitInsert) {
+                    KeyframeVector3 newKf{ animEditorTime_, oppS };
+                    auto itK = oppNodeAnim.scale.begin();
+                    while (itK != oppNodeAnim.scale.end() && itK->time < newKf.time) ++itK;
+                    oppNodeAnim.scale.insert(itK, newKf);
+                } else {
+                    animTempOverrides_[oppJointName].scale = oppS;
+                }
             }
         }
     };
@@ -6335,7 +6683,10 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     // 1. 平行移動 (Translation / T)
     // ----------------------------------------------------
     Vector3 curTrans = { 0.0f, 0.0f, 0.0f };
-    if (!nodeAnim.translate.empty()) {
+    auto itTempT = animTempOverrides_.find(animEditorSelectedJointName_);
+    if (itTempT != animTempOverrides_.end() && itTempT->second.translate) {
+        curTrans = *itTempT->second.translate;
+    } else if (!nodeAnim.translate.empty()) {
         curTrans = CalculateValue(nodeAnim.translate, animEditorTime_);
     } else if (anim && anim->HasSkeleton()) {
         const auto& skel = anim->GetSkeleton();
@@ -6358,10 +6709,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
             }
         }
         if (!found) {
-            KeyframeVector3 newKf{ animEditorTime_, newTrans };
-            auto itK = nodeAnim.translate.begin();
-            while (itK != nodeAnim.translate.end() && itK->time < newKf.time) ++itK;
-            nodeAnim.translate.insert(itK, newKf);
+            animTempOverrides_[animEditorSelectedJointName_].translate = newTrans;
         }
         syncOppositeBoneSRT(&newTrans, nullptr, nullptr);
         UpdateAnimationPosePreview(sceneManager);
@@ -6393,6 +6741,8 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         KeyframeVector3 newKf{ animEditorTime_, defTrans };
         nodeAnim.translate.push_back(newKf);
         syncOppositeBoneSRT(&defTrans, nullptr, nullptr);
+        animTempOverrides_[animEditorSelectedJointName_].translate.reset();
+        if (!oppJointName.empty()) animTempOverrides_[oppJointName].translate.reset();
         UpdateAnimationPosePreview(sceneManager);
     }
 
@@ -6402,7 +6752,10 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     // 2. 回転 (Rotation / R)
     // ----------------------------------------------------
     Quaternion curQuat = { 0.0f, 0.0f, 0.0f, 1.0f };
-    if (!nodeAnim.rotate.empty()) {
+    auto itTempR = animTempOverrides_.find(animEditorSelectedJointName_);
+    if (itTempR != animTempOverrides_.end() && itTempR->second.rotate) {
+        curQuat = *itTempR->second.rotate;
+    } else if (!nodeAnim.rotate.empty()) {
         curQuat = CalculateValue(nodeAnim.rotate, animEditorTime_);
     } else if (anim && anim->HasSkeleton()) {
         const auto& skel = anim->GetSkeleton();
@@ -6463,25 +6816,17 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         float rz = eulerDeg[2] * 3.14159265f / 180.0f;
         Quaternion newQ = MakeEulerQuat(rx, ry, rz);
 
-        if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-            nodeAnim.rotate[animEditorSelectedKeyIndex_].value = newQ;
-        } else {
-            KeyframeQuaternion newKf{ animEditorTime_, newQ };
-            bool foundKey = false;
-            for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
-                if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
-                    nodeAnim.rotate[idx].value = newQ;
-                    animEditorSelectedKeyIndex_ = static_cast<int>(idx);
-                    foundKey = true;
-                    break;
-                }
+        bool foundKey = false;
+        for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
+            if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                nodeAnim.rotate[idx].value = newQ;
+                animEditorSelectedKeyIndex_ = static_cast<int>(idx);
+                foundKey = true;
+                break;
             }
-            if (!foundKey) {
-                auto itK = nodeAnim.rotate.begin();
-                while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
-                auto ins = nodeAnim.rotate.insert(itK, newKf);
-                animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), ins));
-            }
+        }
+        if (!foundKey) {
+            animTempOverrides_[animEditorSelectedJointName_].rotate = newQ;
         }
         syncOppositeBoneSRT(nullptr, &newQ, nullptr);
         UpdateAnimationPosePreview(sceneManager);
@@ -6498,6 +6843,8 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         KeyframeQuaternion newKf{ animEditorTime_, defRot };
         nodeAnim.rotate.push_back(newKf);
         syncOppositeBoneSRT(nullptr, &defRot, nullptr);
+        animTempOverrides_[animEditorSelectedJointName_].rotate.reset();
+        if (!oppJointName.empty()) animTempOverrides_[oppJointName].rotate.reset();
         UpdateAnimationPosePreview(sceneManager);
     }
 
@@ -6507,7 +6854,10 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     // 3. 拡大縮小 (Scale / S)
     // ----------------------------------------------------
     Vector3 curScale = { 1.0f, 1.0f, 1.0f };
-    if (!nodeAnim.scale.empty()) {
+    auto itTempS = animTempOverrides_.find(animEditorSelectedJointName_);
+    if (itTempS != animTempOverrides_.end() && itTempS->second.scale) {
+        curScale = *itTempS->second.scale;
+    } else if (!nodeAnim.scale.empty()) {
         curScale = CalculateValue(nodeAnim.scale, animEditorTime_);
     } else if (anim && anim->HasSkeleton()) {
         const auto& skel = anim->GetSkeleton();
@@ -6530,10 +6880,7 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
             }
         }
         if (!found) {
-            KeyframeVector3 newKf{ animEditorTime_, newSc };
-            auto itK = nodeAnim.scale.begin();
-            while (itK != nodeAnim.scale.end() && itK->time < newKf.time) ++itK;
-            nodeAnim.scale.insert(itK, newKf);
+            animTempOverrides_[animEditorSelectedJointName_].scale = newSc;
         }
         syncOppositeBoneSRT(nullptr, nullptr, &newSc);
         UpdateAnimationPosePreview(sceneManager);
@@ -6565,6 +6912,8 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
         KeyframeVector3 newKf{ animEditorTime_, defSc };
         nodeAnim.scale.push_back(newKf);
         syncOppositeBoneSRT(nullptr, nullptr, &defSc);
+        animTempOverrides_[animEditorSelectedJointName_].scale.reset();
+        if (!oppJointName.empty()) animTempOverrides_[oppJointName].scale.reset();
         UpdateAnimationPosePreview(sceneManager);
     }
 
@@ -6578,55 +6927,255 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.1f, 1.0f));
     if (ImGui::Button("[+] 全SRTをキー挿入 (I)", ImVec2(-1, 28))) {
         PushAnimUndoState("全SRTキー挿入");
-        // Translation
-        KeyframeVector3 newKfT{ animEditorTime_, Vector3{ transArr[0], transArr[1], transArr[2] } };
-        auto itT = nodeAnim.translate.begin();
-        while (itT != nodeAnim.translate.end() && itT->time < newKfT.time) ++itT;
-        nodeAnim.translate.insert(itT, newKfT);
 
-        // Rotation
-        float rx = eulerDeg[0] * 3.14159265f / 180.0f;
-        float ry = eulerDeg[1] * 3.14159265f / 180.0f;
-        float rz = eulerDeg[2] * 3.14159265f / 180.0f;
-        KeyframeQuaternion newKfR{ animEditorTime_, MakeEulerQuat(rx, ry, rz) };
-        auto itR = nodeAnim.rotate.begin();
-        while (itR != nodeAnim.rotate.end() && itR->time < newKfR.time) ++itR;
-        auto inserted = nodeAnim.rotate.insert(itR, newKfR);
-        animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+        // Translation (重複チェック & 上書き)
+        Vector3 targetTrans{ transArr[0], transArr[1], transArr[2] };
+        bool foundT = false;
+        for (size_t idx = 0; idx < nodeAnim.translate.size(); ++idx) {
+            if (std::abs(nodeAnim.translate[idx].time - animEditorTime_) < 0.005f) {
+                nodeAnim.translate[idx].value = targetTrans;
+                foundT = true;
+                break;
+            }
+        }
+        if (!foundT) {
+            KeyframeVector3 newKfT{ animEditorTime_, targetTrans };
+            auto itT = nodeAnim.translate.begin();
+            while (itT != nodeAnim.translate.end() && itT->time < newKfT.time) ++itT;
+            nodeAnim.translate.insert(itT, newKfT);
+        }
 
-        // Scale
-        KeyframeVector3 newKfS{ animEditorTime_, Vector3{ scaleArr[0], scaleArr[1], scaleArr[2] } };
-        auto itS = nodeAnim.scale.begin();
-        while (itS != nodeAnim.scale.end() && itS->time < newKfS.time) ++itS;
-        nodeAnim.scale.insert(itS, newKfS);
+        // Rotation (curQuatを直接使用し、重複チェック & 上書き)
+        Quaternion targetRot = curQuat;
+        bool foundR = false;
+        for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
+            if (std::abs(nodeAnim.rotate[idx].time - animEditorTime_) < 0.005f) {
+                nodeAnim.rotate[idx].value = targetRot;
+                animEditorSelectedKeyIndex_ = static_cast<int>(idx);
+                foundR = true;
+                break;
+            }
+        }
+        if (!foundR) {
+            KeyframeQuaternion newKfR{ animEditorTime_, targetRot };
+            auto itR = nodeAnim.rotate.begin();
+            while (itR != nodeAnim.rotate.end() && itR->time < newKfR.time) ++itR;
+            auto inserted = nodeAnim.rotate.insert(itR, newKfR);
+            animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+        }
 
+        // Scale (重複チェック & 上書き)
+        Vector3 targetScale{ scaleArr[0], scaleArr[1], scaleArr[2] };
+        bool foundS = false;
+        for (size_t idx = 0; idx < nodeAnim.scale.size(); ++idx) {
+            if (std::abs(nodeAnim.scale[idx].time - animEditorTime_) < 0.005f) {
+                nodeAnim.scale[idx].value = targetScale;
+                foundS = true;
+                break;
+            }
+        }
+        if (!foundS) {
+            KeyframeVector3 newKfS{ animEditorTime_, targetScale };
+            auto itS = nodeAnim.scale.begin();
+            while (itS != nodeAnim.scale.end() && itS->time < newKfS.time) ++itS;
+            nodeAnim.scale.insert(itS, newKfS);
+        }
+
+        syncOppositeBoneSRT(&targetTrans, &targetRot, &targetScale, true);
+        animTempOverrides_.erase(animEditorSelectedJointName_);
+        if (!oppJointName.empty()) animTempOverrides_.erase(oppJointName);
         UpdateAnimationPosePreview(sceneManager);
     }
     ImGui::PopStyleColor();
 
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.25f, 0.25f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.3f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.2f, 0.2f, 1.0f));
+    if (ImGui::Button("[-] 選択ボーンの現在キー削除 (Del)", ImVec2(-1, 24))) {
+        PushAnimUndoState("現在キー削除");
+        float curT = animEditorTime_;
+        nodeAnim.rotate.erase(
+            std::remove_if(nodeAnim.rotate.begin(), nodeAnim.rotate.end(),
+                [curT](const KeyframeQuaternion& kf) { return std::abs(kf.time - curT) < 0.005f; }),
+            nodeAnim.rotate.end()
+        );
+        nodeAnim.translate.erase(
+            std::remove_if(nodeAnim.translate.begin(), nodeAnim.translate.end(),
+                [curT](const KeyframeVector3& kf) { return std::abs(kf.time - curT) < 0.005f; }),
+            nodeAnim.translate.end()
+        );
+        nodeAnim.scale.erase(
+            std::remove_if(nodeAnim.scale.begin(), nodeAnim.scale.end(),
+                [curT](const KeyframeVector3& kf) { return std::abs(kf.time - curT) < 0.005f; }),
+            nodeAnim.scale.end()
+        );
+        animEditorSelectedKeyIndex_ = -1;
+        animTempOverrides_.erase(animEditorSelectedJointName_);
+        if (!oppJointName.empty()) animTempOverrides_.erase(oppJointName);
+        UpdateAnimationPosePreview(sceneManager);
+    }
+
+    if (ImGui::Button("[-] 全ボーンの現在キー削除 (Shift+Del)", ImVec2(-1, 24))) {
+        PushAnimUndoState("全ボーン現在キー削除");
+        float curT = animEditorTime_;
+        for (auto& [nName, nAnim] : editingAnimation_.nodeAnimations) {
+            nAnim.rotate.erase(
+                std::remove_if(nAnim.rotate.begin(), nAnim.rotate.end(),
+                    [curT](const KeyframeQuaternion& kf) { return std::abs(kf.time - curT) < 0.005f; }),
+                nAnim.rotate.end()
+            );
+            nAnim.translate.erase(
+                std::remove_if(nAnim.translate.begin(), nAnim.translate.end(),
+                    [curT](const KeyframeVector3& kf) { return std::abs(kf.time - curT) < 0.005f; }),
+                nAnim.translate.end()
+            );
+            nAnim.scale.erase(
+                std::remove_if(nAnim.scale.begin(), nAnim.scale.end(),
+                    [curT](const KeyframeVector3& kf) { return std::abs(kf.time - curT) < 0.005f; }),
+                nAnim.scale.end()
+            );
+        }
+        animEditorSelectedKeyIndex_ = -1;
+        animTempOverrides_.clear();
+        UpdateAnimationPosePreview(sceneManager);
+    }
+    ImGui::PopStyleColor(3);
+
     ImGui::Spacing();
     if (ImGui::Button("[T-Pose] 選択ボーンをTポーズ(0)に", ImVec2(-1, 24))) {
         PushAnimUndoState("Tポーズ設定");
-        Quaternion identityQ{ 0.0f, 0.0f, 0.0f, 1.0f };
-        if (animEditorSelectedKeyIndex_ >= 0 && animEditorSelectedKeyIndex_ < static_cast<int>(nodeAnim.rotate.size())) {
-            nodeAnim.rotate[animEditorSelectedKeyIndex_].value = identityQ;
-        } else {
-            KeyframeQuaternion newKf{ animEditorTime_, identityQ };
+        Quaternion defRot{ 0.0f, 0.0f, 0.0f, 1.0f };
+        if (anim && anim->HasSkeleton()) {
+            const auto& skel = anim->GetSkeleton();
+            auto itJ = skel.jointMap.find(animEditorSelectedJointName_);
+            if (itJ != skel.jointMap.end()) defRot = skel.joints[itJ->second].defaultTransform.rotate;
+        }
+
+        bool foundR = false;
+        for (auto& kf : nodeAnim.rotate) {
+            if (std::abs(kf.time - animEditorTime_) < 0.005f) {
+                kf.value = defRot;
+                foundR = true;
+                break;
+            }
+        }
+        if (!foundR) {
+            KeyframeQuaternion newKf{ animEditorTime_, defRot };
             auto itK = nodeAnim.rotate.begin();
             while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
             auto inserted = nodeAnim.rotate.insert(itK, newKf);
             animEditorSelectedKeyIndex_ = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
         }
+        animTempOverrides_.erase(animEditorSelectedJointName_);
+        if (!oppJointName.empty()) animTempOverrides_.erase(oppJointName);
         UpdateAnimationPosePreview(sceneManager);
     }
-    if (ImGui::Button("[Reset] 全ボーン初期化", ImVec2(-1, 24))) {
-        PushAnimUndoState("全ボーン初期化");
-        for (auto& [jName, nAnim] : editingAnimation_.nodeAnimations) {
+    if (ImGui::Button("[T-Pose] 全ボーンをTポーズに (現在フレーム)", ImVec2(-1, 24))) {
+        PushAnimUndoState("全ボーンTポーズ設定");
+        const Skeleton* skelPtr = (anim && anim->HasSkeleton()) ? &anim->GetSkeleton() : nullptr;
+
+        for (const auto& jName : currentJointList_) {
+            NodeAnimation& nAnim = editingAnimation_.nodeAnimations[jName];
+
+            Quaternion defRot{ 0.0f, 0.0f, 0.0f, 1.0f };
+            Vector3 defTrans{ 0.0f, 0.0f, 0.0f };
+            Vector3 defScale{ 1.0f, 1.0f, 1.0f };
+
+            if (skelPtr) {
+                auto itJ = skelPtr->jointMap.find(jName);
+                if (itJ != skelPtr->jointMap.end()) {
+                    const auto& j = skelPtr->joints[itJ->second];
+                    defRot = j.defaultTransform.rotate;
+                    defTrans = j.defaultTransform.translate;
+                    defScale = j.defaultTransform.scale;
+                }
+            }
+
+            // 1. 回転をTポーズ(defaultTransform.rotate)に設定
+            bool foundR = false;
+            for (auto& kf : nAnim.rotate) {
+                if (std::abs(kf.time - animEditorTime_) < 0.005f) {
+                    kf.value = defRot;
+                    foundR = true;
+                    break;
+                }
+            }
+            if (!foundR) {
+                KeyframeQuaternion newKfR{ animEditorTime_, defRot };
+                auto itR = nAnim.rotate.begin();
+                while (itR != nAnim.rotate.end() && itR->time < newKfR.time) ++itR;
+                nAnim.rotate.insert(itR, newKfR);
+            }
+
+            // 2. 移動 (すでに移動キーが存在する場合のみ、defaultTransform.translate に復帰)
+            if (!nAnim.translate.empty()) {
+                bool foundT = false;
+                for (auto& kf : nAnim.translate) {
+                    if (std::abs(kf.time - animEditorTime_) < 0.005f) {
+                        kf.value = defTrans;
+                        foundT = true;
+                        break;
+                    }
+                }
+                if (!foundT) {
+                    KeyframeVector3 newKfT{ animEditorTime_, defTrans };
+                    auto itT = nAnim.translate.begin();
+                    while (itT != nAnim.translate.end() && itT->time < newKfT.time) ++itT;
+                    nAnim.translate.insert(itT, newKfT);
+                }
+            }
+
+            // 3. 拡縮 (すでに拡縮キーが存在する場合のみ、defaultTransform.scale に復帰)
+            if (!nAnim.scale.empty()) {
+                bool foundS = false;
+                for (auto& kf : nAnim.scale) {
+                    if (std::abs(kf.time - animEditorTime_) < 0.005f) {
+                        kf.value = defScale;
+                        foundS = true;
+                        break;
+                    }
+                }
+                if (!foundS) {
+                    KeyframeVector3 newKfS{ animEditorTime_, defScale };
+                    auto itS = nAnim.scale.begin();
+                    while (itS != nAnim.scale.end() && itS->time < newKfS.time) ++itS;
+                    nAnim.scale.insert(itS, newKfS);
+                }
+            }
+        }
+        animTempOverrides_.clear();
+        UpdateAnimationPosePreview(sceneManager);
+    }
+    if (ImGui::Button("[T-Pose] 全キーフレームをTポーズに初期化", ImVec2(-1, 24))) {
+        PushAnimUndoState("全キーフレームTポーズ初期化");
+        const Skeleton* skelPtr = (anim && anim->HasSkeleton()) ? &anim->GetSkeleton() : nullptr;
+
+        for (const auto& jName : currentJointList_) {
+            NodeAnimation& nAnim = editingAnimation_.nodeAnimations[jName];
             nAnim.rotate.clear();
             nAnim.translate.clear();
             nAnim.scale.clear();
+
+            Quaternion defRot{ 0.0f, 0.0f, 0.0f, 1.0f };
+            Vector3 defTrans{ 0.0f, 0.0f, 0.0f };
+            Vector3 defScale{ 1.0f, 1.0f, 1.0f };
+
+            if (skelPtr) {
+                auto itJ = skelPtr->jointMap.find(jName);
+                if (itJ != skelPtr->jointMap.end()) {
+                    const auto& j = skelPtr->joints[itJ->second];
+                    defRot = j.defaultTransform.rotate;
+                    defTrans = j.defaultTransform.translate;
+                    defScale = j.defaultTransform.scale;
+                }
+            }
+
+            nAnim.rotate.push_back({ 0.0f, defRot });
+            nAnim.translate.push_back({ 0.0f, defTrans });
+            nAnim.scale.push_back({ 0.0f, defScale });
         }
         animEditorSelectedKeyIndex_ = -1;
+        animTempOverrides_.clear();
         UpdateAnimationPosePreview(sceneManager);
     }
 
@@ -6637,29 +7186,87 @@ void EditorManager::DrawAnimationInspectorUI(SceneManager* sceneManager) {
     // ----------------------------------------------------
     // キーフレーム一覧
     // ----------------------------------------------------
-    ImGui::Text("登録キーフレーム一覧 (%zu 個):", nodeAnim.rotate.size());
-    if (nodeAnim.rotate.empty()) {
-        ImGui::TextDisabled("回転キーフレームがありません。");
+    std::vector<float> boneKeyTimes;
+    {
+        std::set<float> timeSet;
+        for (const auto& k : nodeAnim.rotate) timeSet.insert(k.time);
+        for (const auto& k : nodeAnim.translate) timeSet.insert(k.time);
+        for (const auto& k : nodeAnim.scale) timeSet.insert(k.time);
+        boneKeyTimes.assign(timeSet.begin(), timeSet.end());
+        std::sort(boneKeyTimes.begin(), boneKeyTimes.end());
+    }
+
+    ImGui::Text("登録キーフレーム一覧 (%zu 個):", boneKeyTimes.size());
+    if (boneKeyTimes.empty()) {
+        ImGui::TextDisabled("キーフレームがありません。");
     } else {
-        for (size_t k = 0; k < nodeAnim.rotate.size(); ++k) {
-            char kBuf[64];
-            int kFrame = static_cast<int>(std::round(nodeAnim.rotate[k].time * animEditorFps_));
-            snprintf(kBuf, sizeof(kBuf), "Key %zu: %d F (%.3fs)##%zu", k, kFrame, nodeAnim.rotate[k].time, k);
-            bool isSel = (animEditorSelectedKeyIndex_ == static_cast<int>(k));
-            if (ImGui::Selectable(kBuf, isSel)) {
-                animEditorSelectedKeyIndex_ = static_cast<int>(k);
-                animEditorTime_ = nodeAnim.rotate[k].time;
-                UpdateAnimationPosePreview(sceneManager);
+        if (ImGui::BeginTable("##KeyframeListTable", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("フレーム / 時間", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("操作", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+
+            int toDeleteIndex = -1;
+            float toDeleteTime = -1.0f;
+
+            for (size_t k = 0; k < boneKeyTimes.size(); ++k) {
+                float kTime = boneKeyTimes[k];
+                int kFrame = static_cast<int>(std::round(kTime * animEditorFps_));
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+
+                char kBuf[64];
+                snprintf(kBuf, sizeof(kBuf), "Key %zu: %d F (%.3fs)##KeyRow%zu", k, kFrame, kTime, k);
+                bool isCurTime = (std::abs(animEditorTime_ - kTime) < 0.005f);
+
+                if (ImGui::Selectable(kBuf, isCurTime)) {
+                    animEditorTime_ = kTime;
+                    animEditorSelectedKeyIndex_ = -1;
+                    for (size_t ri = 0; ri < nodeAnim.rotate.size(); ++ri) {
+                        if (std::abs(nodeAnim.rotate[ri].time - kTime) < 0.005f) {
+                            animEditorSelectedKeyIndex_ = static_cast<int>(ri);
+                            break;
+                        }
+                    }
+                    UpdateAnimationPosePreview(sceneManager);
+                }
+
+                ImGui::TableSetColumnIndex(1);
+                char delBuf[32];
+                snprintf(delBuf, sizeof(delBuf), "削除##KBtn%zu", k);
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.25f, 0.25f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.15f, 0.15f, 1.0f));
+                if (ImGui::SmallButton(delBuf)) {
+                    toDeleteIndex = static_cast<int>(k);
+                    toDeleteTime = kTime;
+                }
+                ImGui::PopStyleColor(3);
             }
-            ImGui::SameLine(ImGui::GetWindowWidth() - 70);
-            char delBuf[32];
-            snprintf(delBuf, sizeof(delBuf), "削除##K%zu", k);
-            if (ImGui::SmallButton(delBuf)) {
+            ImGui::EndTable();
+
+            if (toDeleteIndex >= 0) {
                 PushAnimUndoState("キーフレーム削除");
-                nodeAnim.rotate.erase(nodeAnim.rotate.begin() + k);
-                if (animEditorSelectedKeyIndex_ == static_cast<int>(k)) animEditorSelectedKeyIndex_ = -1;
+
+                nodeAnim.rotate.erase(
+                    std::remove_if(nodeAnim.rotate.begin(), nodeAnim.rotate.end(),
+                        [toDeleteTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - toDeleteTime) < 0.005f; }),
+                    nodeAnim.rotate.end()
+                );
+
+                nodeAnim.translate.erase(
+                    std::remove_if(nodeAnim.translate.begin(), nodeAnim.translate.end(),
+                        [toDeleteTime](const KeyframeVector3& kf) { return std::abs(kf.time - toDeleteTime) < 0.005f; }),
+                    nodeAnim.translate.end()
+                );
+
+                nodeAnim.scale.erase(
+                    std::remove_if(nodeAnim.scale.begin(), nodeAnim.scale.end(),
+                        [toDeleteTime](const KeyframeVector3& kf) { return std::abs(kf.time - toDeleteTime) < 0.005f; }),
+                    nodeAnim.scale.end()
+                );
+
+                animEditorSelectedKeyIndex_ = -1;
                 UpdateAnimationPosePreview(sceneManager);
-                break;
             }
         }
     }

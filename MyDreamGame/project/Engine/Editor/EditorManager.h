@@ -369,6 +369,7 @@ private:
     std::string currentAnimFilePath_ = "resources/json/shared/Player/wall_climb_animation.json";
     char newAnimSaveNameBuf_[128] = "";
     bool openSaveAnimModal_ = false;
+    bool openDeleteAnimModal_ = false;
 
     // カメラ軸スナップの線形補間用変数
     bool isCameraSnapLerping_ = false;
@@ -390,6 +391,14 @@ private:
     void UpdateAnimationPosePreview(class SceneManager* sceneManager);
     void ScanAnimationFiles();
     class AnimatorComponent* GetTargetAnimator(class SceneManager* sceneManager);
+
+    // 未挿入時の一時プレビューポーズ用バッファ
+    struct TempBoneOverride {
+        std::optional<Vector3> translate;
+        std::optional<Quaternion> rotate;
+        std::optional<Vector3> scale;
+    };
+    std::unordered_map<std::string, TempBoneOverride> animTempOverrides_;
 
     // ボーン用 3D ギズモパラメータ
     int animGizmoMode_ = 1; // 0: Translation (T), 1: Rotation (R), 2: Scale (S)

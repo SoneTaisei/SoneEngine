@@ -13,8 +13,13 @@ Vector3 CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time
     for (size_t index = 0; index < keyframes.size() - 1; ++index) {
         size_t nextIndex = index + 1;
         if (keyframes[index].time <= time && time <= keyframes[nextIndex].time) {
-            float t = (time - keyframes[index].time) / (keyframes[nextIndex].time - keyframes[index].time);
-            return TransformFunctions::Lerp(keyframes[index].value, keyframes[nextIndex].value, t);
+            float dt = keyframes[nextIndex].time - keyframes[index].time;
+            if (dt > 1e-5f) {
+                float t = (time - keyframes[index].time) / dt;
+                return TransformFunctions::Lerp(keyframes[index].value, keyframes[nextIndex].value, t);
+            } else {
+                return keyframes[index].value;
+            }
         }
     }
     return (*keyframes.rbegin()).value;
@@ -31,8 +36,13 @@ Quaternion CalculateValue(const std::vector<KeyframeQuaternion>& keyframes, floa
     for (size_t index = 0; index < keyframes.size() - 1; ++index) {
         size_t nextIndex = index + 1;
         if (keyframes[index].time <= time && time <= keyframes[nextIndex].time) {
-            float t = (time - keyframes[index].time) / (keyframes[nextIndex].time - keyframes[index].time);
-            return Slerp(keyframes[index].value, keyframes[nextIndex].value, t);
+            float dt = keyframes[nextIndex].time - keyframes[index].time;
+            if (dt > 1e-5f) {
+                float t = (time - keyframes[index].time) / dt;
+                return Slerp(keyframes[index].value, keyframes[nextIndex].value, t);
+            } else {
+                return keyframes[index].value;
+            }
         }
     }
     return (*keyframes.rbegin()).value;
