@@ -208,8 +208,12 @@ public:
     bool GetAnimEditorPlaying() const { return animEditorPlaying_; }
     void SetAnimEditorPlaying(bool p) { animEditorPlaying_ = p; }
 
-    bool& GetAnimEditorLoop() { return animEditorLoop_; }
-    bool GetAnimEditorLoop() const { return animEditorLoop_; }
+    AnimationWrapMode& GetAnimEditorWrapMode() { return animEditorWrapMode_; }
+    AnimationWrapMode GetAnimEditorWrapMode() const { return animEditorWrapMode_; }
+    void SetAnimEditorWrapMode(AnimationWrapMode mode) { animEditorWrapMode_ = mode; }
+
+    bool GetAnimEditorLoop() const { return animEditorWrapMode_ == AnimationWrapMode::Loop; }
+    void SetAnimEditorLoop(bool loop) { animEditorWrapMode_ = loop ? AnimationWrapMode::Loop : AnimationWrapMode::Once; }
 
     float& GetAnimEditorFps() { return animEditorFps_; }
     float GetAnimEditorFps() const { return animEditorFps_; }
@@ -298,7 +302,7 @@ private:
     int animEditorTargetAnim_ = 0;
     float animEditorTime_ = 0.0f;
     bool animEditorPlaying_ = false;
-    bool animEditorLoop_ = true;
+    AnimationWrapMode animEditorWrapMode_ = AnimationWrapMode::Loop;
     float animEditorFps_ = 60.0f;
     std::string animEditorSelectedJointName_ = "Hips_01";
     int animEditorSelectedProperty_ = 0;

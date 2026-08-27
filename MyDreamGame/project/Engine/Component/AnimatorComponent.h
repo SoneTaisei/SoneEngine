@@ -22,9 +22,14 @@ public:
     void Update() override;
 
     void SetAnimation(const Animation& animation) { animation_ = animation; }
-    void Play() { isPlaying_ = true; }
+    void Play() { isPlaying_ = true; isFinished_ = false; }
     void Stop() { isPlaying_ = false; }
     void SetTime(float time) { animationTime_ = time; }
+    float GetTime() const { return animationTime_; }
+    void SetWrapMode(AnimationWrapMode mode) { wrapMode_ = mode; }
+    AnimationWrapMode GetWrapMode() const { return wrapMode_; }
+    bool IsFinished() const { return isFinished_; }
+    bool IsPlaying() const { return isPlaying_; }
     void SetTargetNodeName(const std::string& name) { targetNodeName_ = name; }
     void SetJointRotationOverride(const std::string& name, const std::optional<Quaternion>& rotation, float weight = 1.0f) {
         if (rotation) {
@@ -88,6 +93,8 @@ private:
     Animation animation_;
     float animationTime_ = 0.0f;
     bool isPlaying_ = true;
+    bool isFinished_ = false;
+    AnimationWrapMode wrapMode_ = AnimationWrapMode::Loop;
     std::string targetNodeName_ = "Cube";
 
     Skeleton skeleton_;

@@ -28,6 +28,9 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
         if (!LoadAnimationFromJsonFile(wallClimbAnimation_, "resources/json/shared/Player/wall_climb_animation.json")) {
             wallClimbAnimation_ = CreateDefaultWallClimbAnimation();
         }
+        if (!LoadAnimationFromJsonFile(holdingWallAnimation_, "resources/json/shared/Player/holding_wall.json")) {
+            holdingWallAnimation_ = idleAnimation_;
+        }
         if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
             airDashAnimation_ = CreateDefaultAirDashAnimation();
         }
@@ -114,13 +117,11 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         if (animator_) {
             if (state.isDashing_) {
                 // 空中ダッシュアニメーションの再生
-                airDashAnimTime_ += deltaTime;
-                if (airDashAnimation_.duration > 0.0f && airDashAnimTime_ >= airDashAnimation_.duration) {
-                    airDashAnimTime_ = std::fmod(airDashAnimTime_, airDashAnimation_.duration);
-                }
+                airDashAnimTime_ = AdvanceAnimationTime(airDashAnimTime_, airDashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
                 animator_->ClearJointOverrides();
                 animator_->SetAnimation(airDashAnimation_);
                 animator_->SetTime(airDashAnimTime_);
+                animator_->Stop(); // 手動で時間を制御するため自動更新を停止
             } else {
                 airDashAnimTime_ = 0.0f;
 
@@ -129,109 +130,34 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 if (isClinging) {
                     climbBlendFactor_ += deltaTime * 5.0f; // 約0.2秒で最大値1.0fへ遷移
                     if (climbBlendFactor_ > 1.0f) climbBlendFactor_ = 1.0f;
+
+                    // 壁つかまり移動（登り・降り）のアニメーション判定
+                    bool isClimbMoving = (std::abs(state.velocity_.y) > 0.1f);
+                    if (isClimbMoving) {
+                        // 上下移動に合わせてアニメーション時間を進行
+                        float speedFactor = std::clamp(std::abs(state.velocity_.y) / 5.0f, 0.5f, 2.0f);
+                        wallClimbAnimTime_ = AdvanceAnimationTime(wallClimbAnimTime_, wallClimbAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
+                        animator_->ClearJointOverrides();
+                        animator_->SetAnimation(wallClimbAnimation_);
+                        animator_->SetTime(wallClimbAnimTime_);
+                        animator_->Stop(); // 手動で時間を制御
+                    } else {
+                        // 静止した崖つかまり・壁つかまり時は holding_wall アニメーションを再生（最後のフレームで停止）
+                        holdingWallAnimTime_ = AdvanceAnimationTime(holdingWallAnimTime_, holdingWallAnimation_.duration, deltaTime, AnimationWrapMode::HoldLastFrame);
+                        animator_->ClearJointOverrides();
+                        animator_->SetAnimation(holdingWallAnimation_);
+                        animator_->SetTime(holdingWallAnimTime_);
+                        animator_->Stop(); // 手動で時間を制御（最後のフレームの姿勢を維持）
+                    }
                 } else {
                     climbBlendFactor_ -= deltaTime * 5.0f;
                     if (climbBlendFactor_ < 0.0f) climbBlendFactor_ = 0.0f;
-                }
+                    wallClimbAnimTime_ = 0.0f;
+                    holdingWallAnimTime_ = 0.0f;
 
-                // 壁つかまり移動（登り・降り）のアニメーション判定
-                bool isClimbMoving = isClinging && (std::abs(state.velocity_.y) > 0.1f);
-                if (isClimbMoving) {
-                    // 上下移動に合わせてアニメーション時間を進行
-                    float speedFactor = std::clamp(std::abs(state.velocity_.y) / 5.0f, 0.5f, 2.0f);
-                    wallClimbAnimTime_ += deltaTime * speedFactor;
-                    if (wallClimbAnimation_.duration > 0.0f && wallClimbAnimTime_ >= wallClimbAnimation_.duration) {
-                        wallClimbAnimTime_ = std::fmod(wallClimbAnimTime_, wallClimbAnimation_.duration);
-                    }
                     animator_->ClearJointOverrides();
-                    animator_->SetAnimation(wallClimbAnimation_);
-                    animator_->SetTime(wallClimbAnimTime_);
-                } else if (climbBlendFactor_ > 0.0f) {
-                    // 静止しがみつき姿勢をブレンド適用
-                    if (isClinging) {
-                        animator_->SetAnimation(idleAnimation_);
-                    } else {
-                        if (!state.isOnGround_) {
-                            animator_->SetAnimation(jumpAnimation_);
-                        } else if (std::abs(state.velocity_.x) > 0.1f) {
-                            animator_->SetAnimation(walkAnimation_);
-                        } else {
-                            animator_->SetAnimation(idleAnimation_);
-                        }
-                    }
-
-                    const auto& joints = animator_->GetSkeleton().joints;
-                    const auto& jointMap = animator_->GetSkeleton().jointMap;
-                    auto getInitialRot = [&](const std::string& name) -> Quaternion {
-                        auto it = jointMap.find(name);
-                        if (it != jointMap.end() && it->second < joints.size()) {
-                            return joints[it->second].defaultTransform.rotate;
-                        }
-                        return Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f };
-                    };
-
-                    auto makeRot = [](const Vector3& axis, float angle) -> Quaternion {
-                        float sinH = std::sin(angle / 2.0f);
-                        float cosH = std::cos(angle / 2.0f);
-                        return Quaternion{ axis.x * sinH, axis.y * sinH, axis.z * sinH, cosH };
-                    };
-
-                    Quaternion lArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugLArmRot_[0]) *
-                                         makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugLArmRot_[1]) *
-                                         makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugLArmRot_[2]);
-
-                    Quaternion rArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugRArmRot_[0]) *
-                                         makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugRArmRot_[1]) *
-                                         makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugRArmRot_[2]);
-
-                    Quaternion lForeArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugLForeArmRot_[0]) *
-                                             makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugLForeArmRot_[1]) *
-                                             makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugLForeArmRot_[2]);
-
-                    Quaternion rForeArmAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugRForeArmRot_[0]) *
-                                             makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugRForeArmRot_[1]) *
-                                             makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugRForeArmRot_[2]);
-
-                    Quaternion lArmRot = lArmAdd * getInitialRot("LeftArm_09");
-                    Quaternion rArmRot = rArmAdd * getInitialRot("RightArm_014");
-                    Quaternion lForeArmRot = lForeArmAdd * getInitialRot("LeftForeArm_010");
-                    Quaternion rForeArmRot = rForeArmAdd * getInitialRot("RightForeArm_015");
-
-                    Quaternion hipsAdd = makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, debugHipsRot_[0]) *
-                                         makeRot(Vector3{ 0.0f, 1.0f, 0.0f }, debugHipsRot_[1]) *
-                                         makeRot(Vector3{ 0.0f, 0.0f, 1.0f }, debugHipsRot_[2]);
-                    Quaternion hipsRot = hipsAdd * getInitialRot("Hips_01");
-
-                    Quaternion lHandRot = getInitialRot("LeftHand_011");
-                    Quaternion rHandRot = getInitialRot("RightHand_016");
-                    Quaternion lHandDummyRot = getInitialRot("LeftHand_Dummy_012");
-                    Quaternion rHandDummyRot = getInitialRot("RightHand_Dummy_017");
-
-                    Quaternion lUpLegRot = getInitialRot("LeftUpLeg_019") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f);
-                    Quaternion rUpLegRot = getInitialRot("RightUpLeg_024") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, -1.0f);
-                    Quaternion lLegRot = getInitialRot("LeftLeg_020") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);
-                    Quaternion rLegRot = getInitialRot("RightLeg_025") * makeRot(Vector3{ 1.0f, 0.0f, 0.0f }, 1.2f);
-
-                    Quaternion lFootRot = getInitialRot("LeftFoot_021");
-                    Quaternion rFootRot = getInitialRot("RightFoot_026");
-
-                    animator_->SetJointRotationOverride("Hips_01", hipsRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("LeftArm_09", lArmRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("RightArm_014", rArmRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("LeftForeArm_010", lForeArmRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("RightForeArm_015", rForeArmRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("LeftHand_011", lHandRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("RightHand_016", rHandRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("LeftHand_Dummy_012", lHandDummyRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("RightHand_Dummy_017", rHandDummyRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("LeftUpLeg_019", lUpLegRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("RightUpLeg_024", rUpLegRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("LeftLeg_020", lLegRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("RightLeg_025", rLegRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("LeftFoot_021", lFootRot, climbBlendFactor_);
-                    animator_->SetJointRotationOverride("RightFoot_026", rFootRot, climbBlendFactor_);
-                } else {
-                    animator_->ClearJointOverrides();
+                    animator_->Play(); // 通常アニメーションは自動再生
+                    animator_->SetWrapMode(AnimationWrapMode::Loop);
 
                     if (!state.isOnGround_) {
                         animator_->SetAnimation(jumpAnimation_);

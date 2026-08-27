@@ -290,19 +290,27 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("末尾フレームへ");
 
         ImGui::SameLine();
-        // ループ再生トグル
-        if (context->GetAnimEditorLoop()) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 1.0f));
-            if (ImGui::Button("Loop: ON")) {
-                context->GetAnimEditorLoop() = false;
+        // 再生モード選択（ループ / 1回再生 / 最後のフレームで停止）
+        const char* wrapModeLabels[] = {
+            "再生: Loop (ループ)",
+            "再生: Once (1回で停止)",
+            "再生: Hold (末尾で停止)"
+        };
+        int currentWrapIdx = static_cast<int>(context->GetAnimEditorWrapMode());
+        if (currentWrapIdx < 0 || currentWrapIdx > 2) currentWrapIdx = 0;
+
+        ImGui::SetNextItemWidth(175.0f);
+        if (ImGui::BeginCombo("##AnimWrapModeCombo", wrapModeLabels[currentWrapIdx])) {
+            for (int i = 0; i < 3; ++i) {
+                bool isSel = (currentWrapIdx == i);
+                if (ImGui::Selectable(wrapModeLabels[i], isSel)) {
+                    context->SetAnimEditorWrapMode(static_cast<AnimationWrapMode>(i));
+                }
+                if (isSel) ImGui::SetItemDefaultFocus();
             }
-            ImGui::PopStyleColor();
-        } else {
-            if (ImGui::Button("Loop: OFF")) {
-                context->GetAnimEditorLoop() = true;
-            }
+            ImGui::EndCombo();
         }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("ループ再生の切り替え");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生終了時の挙動:\n- Loop: 末尾到達時に先頭からループ再生\n- Once: 末尾到達時に先頭に戻り停止\n- Hold: 末尾到達時に最後のフレームの姿勢を維持して停止");
 
         ImGui::SameLine();
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);

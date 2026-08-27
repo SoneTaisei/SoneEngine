@@ -237,15 +237,11 @@ void AnimationEditorContext::UpdateAnimationPosePreview(SceneManager* sceneManag
     if (animEditorPlaying_) {
         animTempOverrides_.clear();
         float dt = TimeManager::GetInstance().GetDeltaTime();
-        animEditorTime_ += dt;
         if (editingAnimation_.duration > 0.0f) {
-            if (animEditorTime_ >= editingAnimation_.duration) {
-                if (animEditorLoop_) {
-                    animEditorTime_ = std::fmod(animEditorTime_, editingAnimation_.duration);
-                } else {
-                    animEditorTime_ = editingAnimation_.duration;
-                    animEditorPlaying_ = false;
-                }
+            bool finished = false;
+            animEditorTime_ = AdvanceAnimationTime(animEditorTime_, editingAnimation_.duration, dt, animEditorWrapMode_, &finished);
+            if (finished && animEditorWrapMode_ != AnimationWrapMode::Loop) {
+                animEditorPlaying_ = false;
             }
         }
     }

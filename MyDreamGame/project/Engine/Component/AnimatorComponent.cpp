@@ -14,6 +14,7 @@
 
 void AnimatorComponent::Initialize() {
     animationTime_ = 0.0f;
+    isFinished_ = false;
 }
 
 void AnimatorComponent::Update() {
@@ -33,8 +34,12 @@ void AnimatorComponent::Update() {
     float animDeltaTime = isAnimActive ? TimeManager::GetInstance().GetDeltaTime() : 0.0f;
 
     if (isPlaying_ && animation_.duration > 0.0f) {
-        animationTime_ += animDeltaTime;
-        animationTime_ = std::fmod(animationTime_, animation_.duration); // Loop playback
+        bool finished = false;
+        animationTime_ = AdvanceAnimationTime(animationTime_, animation_.duration, animDeltaTime, wrapMode_, &finished);
+        if (finished && wrapMode_ != AnimationWrapMode::Loop) {
+            isFinished_ = true;
+            isPlaying_ = false;
+        }
     }
 
     if (hasSkeleton_) {
