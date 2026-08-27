@@ -148,10 +148,16 @@ bool LoadAnimationFromJsonFile(Animation& outAnimation, const std::string& filep
                     for (const auto& k : n["rotate"]) {
                         KeyframeQuaternion kf;
                         kf.time = k.value("time", 0.0f);
-                        if (k.contains("eulerX") && k.contains("eulerY") && k.contains("eulerZ")) {
+                        if (k.contains("x") && k.contains("y") && k.contains("z") && k.contains("w")) {
+                            kf.value = { k.value("x", 0.0f), k.value("y", 0.0f), k.value("z", 0.0f), k.value("w", 1.0f) };
+                            float len = std::sqrt(kf.value.x * kf.value.x + kf.value.y * kf.value.y + kf.value.z * kf.value.z + kf.value.w * kf.value.w);
+                            if (len > 1e-6f) {
+                                kf.value.x /= len; kf.value.y /= len; kf.value.z /= len; kf.value.w /= len;
+                            }
+                        } else if (k.contains("eulerX") && k.contains("eulerY") && k.contains("eulerZ")) {
                             kf.value = MakeEulerQuat(k.value("eulerX", 0.0f), k.value("eulerY", 0.0f), k.value("eulerZ", 0.0f));
                         } else {
-                            kf.value = { k.value("x", 0.0f), k.value("y", 0.0f), k.value("z", 0.0f), k.value("w", 1.0f) };
+                            kf.value = { 0.0f, 0.0f, 0.0f, 1.0f };
                         }
                         nodeAnim.rotate.push_back(kf);
                     }

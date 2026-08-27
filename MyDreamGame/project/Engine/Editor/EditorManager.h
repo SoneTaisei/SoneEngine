@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <memory>
 #include <functional>
+#include <vector>
+#include <string>
 
 // UIから操作したいクラスのヘッダーをインクルード
 #include "Graphics/DebugCamera.h"
@@ -15,6 +17,7 @@
 #include "Scene/SceneFactory.h"
 #include "Core/Utility/Structs.h"
 #include "Replay/ReplayManager.h"
+#include "Animation/AnimationEditor.h"
 
 class SceneManager;
 class ParticleManager;
@@ -53,7 +56,7 @@ public:
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
-    bool IsAnimationEditorHovered() const { return isAnimationEditorHovered_; }
+    bool IsAnimationEditorHovered() const { return animationEditor_ ? animationEditor_->IsHovered() : false; }
     bool IsMapEditorVisible() const { return isMapEditorVisible_; }
     bool IsMapEditorHovered() const { return isMapEditorHovered_; }
     bool IsRoomDragging() const { return draggingRoomIndex_ != -1; }
@@ -65,6 +68,8 @@ public:
     void SetUseDebugCamera(bool use) { useDebugCamera_ = use; }
 
     bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
+
+    AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -138,6 +143,9 @@ public:
         selectedParticle_ = nullptr;
         selectedPrimitive_ = nullptr;
         selectedReplayBlock_.Clear();
+        if (animationEditor_) {
+            animationEditor_->SetSelectedTargets(nullptr, nullptr, nullptr);
+        }
         sceneJustReset_ = true; // シーンリセットのフラグを立てる
         ClearHistory();
     }
@@ -239,8 +247,6 @@ private:
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
     bool isReplayEditorHovered_ = false; // リプレイエディタがホバーされているか
-    bool isAnimationEditorHovered_ = false; // アニメーションエディタがホバーされているか
-    bool isAnimationScenePushed_ = false; // アニメーション専用シーンがスタックにプッシュされているか
     bool isMapEditorVisible_ = false; // マップエディタがアクティブタブとして表示されているか
     bool wasMapEditorVisible_ = false; // 前フレームの表示状態
     bool isMapEditorHovered_ = false; // マップエディタがホバーされているか
@@ -333,111 +339,8 @@ private:
     bool showMapSettings_ = true;
     bool showAnimEditor_ = true;
 
-    // アニメーションエディター（Blender風ドープシート）用変数
-    int animEditorTargetAnim_ = 0; // 0: WallClimb, 1: AirDash, 2: Custom...
-    float animEditorTime_ = 0.0f;
-    bool animEditorPlaying_ = false;
-    bool animEditorLoop_ = true;
-    float animEditorFps_ = 60.0f;
-    std::string animEditorSelectedJointName_ = "Hips_01";
-    int animEditorSelectedProperty_ = 0; // 0: Rotation, 1: Translation, 2: Scale
-    int animEditorSelectedKeyIndex_ = -1;
-    bool isDraggingAnimKeyframe_ = false;
-    float dragAnimKeyOriginalTime_ = 0.0f;
-    bool isSummaryKeyDrag_ = false;
-    float dragSummaryOriginalTime_ = 0.0f;
-    bool isAnimRulerScrubbing_ = false;
-    float animTimelineZoom_ = 200.0f; // 1秒あたりのピクセル幅
-    float animTimelineScrollX_ = 0.0f;
-    
-    // ボーン階層ツリー構造用
-    struct AnimJointTreeNode {
-        std::string name;
-        int32_t jointIndex = -1;
-        int32_t parentIndex = -1;
-        std::vector<int32_t> children;
-        int depth = 0;
-    };
-
-    Animation editingAnimation_;
-    bool animEditorInitialized_ = false;
-    std::vector<std::string> currentJointList_;
-    std::vector<AnimJointTreeNode> animJointTreeNodes_;
-    std::vector<int32_t> animJointRootIndices_;
-    std::unordered_map<std::string, bool> animJointExpanded_;
-    std::vector<std::string> availableAnimationFiles_;
-    std::string currentAnimFilePath_ = "resources/json/shared/Player/wall_climb_animation.json";
-    char newAnimSaveNameBuf_[128] = "";
-    bool openSaveAnimModal_ = false;
-    bool openDeleteAnimModal_ = false;
-
-    // カメラ軸スナップの線形補間用変数
-    bool isCameraSnapLerping_ = false;
-    float cameraSnapLerpTimer_ = 0.0f;
-    float cameraSnapLerpDuration_ = 0.25f;
-    Vector3 cameraSnapStartRot_ = {};
-    Vector3 cameraSnapEndRot_ = {};
-    Vector3 cameraSnapStartPos_ = {};
-    Vector3 cameraSnapEndPos_ = {};
-    
-    void DrawAnimationEditorMainView(class SceneManager* sceneManager, Camera** activeCamera, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle);
-    void DrawAnimationViewportGrid(const Matrix4x4& viewProjectionMatrix, ImVec2 vpPos, ImVec2 vpSize);
-    void DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
-    void DrawSkeletonJointsOverlay(class SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
-    void DrawBoneTransformGizmo(class SceneManager* sceneManager, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
-    void DrawAnimationDopeSheetUI(class SceneManager* sceneManager);
-    void DrawAnimationInspectorUI(class SceneManager* sceneManager);
-    void RefreshAnimationJointList(class SceneManager* sceneManager);
-    void UpdateAnimationPosePreview(class SceneManager* sceneManager);
-    void ScanAnimationFiles();
-    class AnimatorComponent* GetTargetAnimator(class SceneManager* sceneManager);
-
-    // 未挿入時の一時プレビューポーズ用バッファ
-    struct TempBoneOverride {
-        std::optional<Vector3> translate;
-        std::optional<Quaternion> rotate;
-        std::optional<Vector3> scale;
-    };
-    std::unordered_map<std::string, TempBoneOverride> animTempOverrides_;
-
-    // ボーン用 3D ギズモパラメータ
-    int animGizmoMode_ = 1; // 0: Translation (T), 1: Rotation (R), 2: Scale (S)
-    int animGizmoSpace_ = 0; // 0: Local, 1: World
-    int animGizmoActiveAxis_ = -1; // -1: None, 0: X, 1: Y, 2: Z, 3: Center/XYZ
-    bool isDraggingAnimGizmo_ = false;
-    bool isAnimLocked_ = false; // Lキーで切替可能な編集ロック状態フラグ
-    bool isAnimHudMinimized_ = false; // ビューポートHUDの縮小化・最小化フラグ (Hキーで切替)
-    ImVec2 animGizmoDragStartMouse_ = {};
-    Vector3 animGizmoStartTranslate_ = {};
-    Quaternion animGizmoStartRotate_ = {};
-    Vector3 animGizmoStartScale_ = { 1.0f, 1.0f, 1.0f };
-
-    // アニメーションエディター Undo / Redo
-    struct AnimEditorSnapshot {
-        Animation animation;
-        float time = 0.0f;
-        std::string selectedJointName;
-        int selectedKeyIndex = -1;
-        std::string description;
-    };
-
-    std::vector<AnimEditorSnapshot> animUndoStack_;
-    std::vector<AnimEditorSnapshot> animRedoStack_;
-    AnimEditorSnapshot animDragPreSnapshot_;
-    bool hasAnimDragPreSnapshot_ = false;
-
-    void PushAnimUndoState(const std::string& desc = "");
-    void PerformAnimUndo(class SceneManager* sceneManager);
-    void PerformAnimRedo(class SceneManager* sceneManager);
-    void ClearAnimUndoRedo();
-
-    // アニメーション対称編集（ミラー編集）
-    bool animSymmetryMode_ = true; // デフォルトで対称編集ON
-    bool animSymmetryAxisX_ = true;  // X軸 (左右対称)
-    bool animSymmetryAxisY_ = false; // Y軸 (上下対称)
-    bool animSymmetryAxisZ_ = false; // Z軸 (前後対称)
-    std::map<std::string, std::string> customSymmetryMap_; // ユーザー手動指定マッピング
-    std::string FindOppositeJointName(const std::string& jointName, bool axisX = true, bool axisY = false, bool axisZ = false, const struct Skeleton* skeleton = nullptr);
+    // アニメーションエディター専用インスタンス
+    std::unique_ptr<AnimationEditor> animationEditor_;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

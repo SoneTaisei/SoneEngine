@@ -257,6 +257,11 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationDopeSheet.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationInspector.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
     <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
     <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
@@ -472,6 +477,11 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTimelineEditor.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationEditor.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationEditorContext.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationDopeSheet.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationInspector.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />
