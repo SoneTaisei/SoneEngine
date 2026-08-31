@@ -76,7 +76,6 @@ void Skybox::Update() {
 #include <Windows.h>
 
 void Skybox::Draw() {
-    OutputDebugStringA("[DEBUG] Skybox::Draw Start\n");
     auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // 1. DirectXCommonから専用のルール（PSO・RootSignature）を取得してセット
     DirectXCommon *dxCommon = DirectXCommon::GetInstance();
@@ -90,7 +89,6 @@ void Skybox::Draw() {
 
     // 3. 定数バッファをセット（シェーダーの register(b0), register(b1) に対応）
     if (!transformBuffer_ || !materialBuffer_) {
-        OutputDebugStringA("[DEBUG] Skybox::Draw Aborted: transformBuffer_ or materialBuffer_ is null\n");
         return;
     }
 
@@ -108,5 +106,4 @@ void Skybox::Draw() {
 
     // ★ Skybox描画後に標準の RootSignature に戻す
     commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-    OutputDebugStringA("[DEBUG] Skybox::Draw End\n");
 }

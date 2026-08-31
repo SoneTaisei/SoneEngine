@@ -117,6 +117,10 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         if (animator_) {
             if (state.isDashing_) {
                 // 空中ダッシュアニメーションの再生
+                if (currentAnimType_ != PlayerAnimType::AirDash) {
+                    currentAnimType_ = PlayerAnimType::AirDash;
+                    airDashAnimTime_ = 0.0f;
+                }
                 airDashAnimTime_ = AdvanceAnimationTime(airDashAnimTime_, airDashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
                 animator_->ClearJointOverrides();
                 animator_->SetAnimation(airDashAnimation_);
@@ -134,6 +138,10 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     // 壁つかまり移動（登り・降り）のアニメーション判定
                     bool isClimbMoving = (std::abs(state.velocity_.y) > 0.1f);
                     if (isClimbMoving) {
+                        if (currentAnimType_ != PlayerAnimType::WallClimb) {
+                            currentAnimType_ = PlayerAnimType::WallClimb;
+                            wallClimbAnimTime_ = 0.0f;
+                        }
                         // 上下移動に合わせてアニメーション時間を進行
                         float speedFactor = std::clamp(std::abs(state.velocity_.y) / 5.0f, 0.5f, 2.0f);
                         wallClimbAnimTime_ = AdvanceAnimationTime(wallClimbAnimTime_, wallClimbAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
@@ -142,6 +150,10 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                         animator_->SetTime(wallClimbAnimTime_);
                         animator_->Stop(); // 手動で時間を制御
                     } else {
+                        if (currentAnimType_ != PlayerAnimType::HoldingWall) {
+                            currentAnimType_ = PlayerAnimType::HoldingWall;
+                            holdingWallAnimTime_ = 0.0f;
+                        }
                         // 静止した崖つかまり・壁つかまり時は holding_wall アニメーションを再生（最後のフレームで停止）
                         holdingWallAnimTime_ = AdvanceAnimationTime(holdingWallAnimTime_, holdingWallAnimation_.duration, deltaTime, AnimationWrapMode::HoldLastFrame);
                         animator_->ClearJointOverrides();
@@ -159,12 +171,33 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     animator_->Play(); // 通常アニメーションは自動再生
                     animator_->SetWrapMode(AnimationWrapMode::Loop);
 
+                    PlayerAnimType targetType = PlayerAnimType::Idle;
                     if (!state.isOnGround_) {
-                        animator_->SetAnimation(jumpAnimation_);
+                        targetType = PlayerAnimType::Jump; // 空中・落下
                     } else if (std::abs(state.velocity_.x) > 0.1f) {
-                        animator_->SetAnimation(walkAnimation_);
+                        targetType = PlayerAnimType::Walk;
                     } else {
-                        animator_->SetAnimation(idleAnimation_);
+                        targetType = PlayerAnimType::Idle;
+                    }
+
+                    // アニメーションが切り替わった場合（落下開始時など）に毎回時間を0.0fにリセット
+                    if (currentAnimType_ != targetType) {
+                        currentAnimType_ = targetType;
+                        animator_->SetTime(0.0f);
+
+                        switch (targetType) {
+                        case PlayerAnimType::Jump:
+                            animator_->SetAnimation(jumpAnimation_);
+                            break;
+                        case PlayerAnimType::Walk:
+                            animator_->SetAnimation(walkAnimation_);
+                            break;
+                        case PlayerAnimType::Idle:
+                            animator_->SetAnimation(idleAnimation_);
+                            break;
+                        default:
+                            break;
+                        }
                     }
                 }
             }
@@ -559,6 +592,7 @@ void PlayerVisuals::ClearEffects() {
     dustParticles_.clear();
     confettiParticles_.clear();
     dashRingParticles_.clear();
+    currentAnimType_ = PlayerAnimType::None;
 }
 
 #ifdef USE_IMGUI

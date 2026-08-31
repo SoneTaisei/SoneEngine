@@ -75,6 +75,18 @@ private:
     std::vector<ConfettiParticle> confettiParticles_;
     std::vector<DashRingParticle> dashRingParticles_;
 
+    enum class PlayerAnimType {
+        None,
+        Idle,
+        Walk,
+        Jump,
+        WallClimb,
+        HoldingWall,
+        AirDash
+    };
+
+    PlayerAnimType currentAnimType_ = PlayerAnimType::None;
+
     float visualTime_ = 0.0f;
     float climbBlendFactor_ = 0.0f;
     float wallClimbAnimTime_ = 0.0f;

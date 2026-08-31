@@ -85,11 +85,8 @@ void ModelCommon::PreDraw() {
     assert(commandList);
     commandList_ = commandList;
 
-    OutputDebugStringA(std::format("[DEBUG] ModelCommon::PreDraw Start - this: {}, commandList: {}\n", (void*)this, (void*)commandList_).c_str());
-
     // ★ Skybox等の後でも安全に3Dモデルが描画できるよう、RootSignatureを明示的にセット
     auto* rootSig = DirectXCommon::GetInstance()->GetRootSignature();
-    OutputDebugStringA(std::format("[DEBUG] ModelCommon::PreDraw Setting RootSig: {}\n", (void*)rootSig).c_str());
     commandList_->SetGraphicsRootSignature(rootSig);
 
     // ヒープとトポロジの設定
@@ -102,7 +99,6 @@ void ModelCommon::PreDraw() {
     // 0: Material (register b0)
     if (materialResource_) {
         D3D12_GPU_VIRTUAL_ADDRESS addr = materialResource_->GetGPUVirtualAddress();
-        OutputDebugStringA(std::format("[DEBUG] ModelCommon::PreDraw Setting Material(0): GPUAddr=0x{:X}\n", addr).c_str());
         if (addr != 0) {
             commandList_->SetGraphicsRootConstantBufferView(0, addr);
         }
@@ -111,7 +107,6 @@ void ModelCommon::PreDraw() {
     // 3: Camera (register b3)
     if (cameraResource_) {
         D3D12_GPU_VIRTUAL_ADDRESS addr = cameraResource_->GetGPUVirtualAddress();
-        OutputDebugStringA(std::format("[DEBUG] ModelCommon::PreDraw Setting Camera(3): GPUAddr=0x{:X}\n", addr).c_str());
         if (addr != 0) {
             commandList_->SetGraphicsRootConstantBufferView(3, addr);
         }
@@ -120,7 +115,6 @@ void ModelCommon::PreDraw() {
     // 4: DirectionalLight (register b1)
     if (directionalLightResource_) {
         D3D12_GPU_VIRTUAL_ADDRESS addr = directionalLightResource_->GetGPUVirtualAddress();
-        OutputDebugStringA(std::format("[DEBUG] ModelCommon::PreDraw Setting DirectionalLight(4): GPUAddr=0x{:X}\n", addr).c_str());
         if (addr != 0) {
             commandList_->SetGraphicsRootConstantBufferView(4, addr);
         }
@@ -129,7 +123,6 @@ void ModelCommon::PreDraw() {
     // 5: PointLight (register b2)
     if (pointLightResource_) {
         D3D12_GPU_VIRTUAL_ADDRESS addr = pointLightResource_->GetGPUVirtualAddress();
-        OutputDebugStringA(std::format("[DEBUG] ModelCommon::PreDraw Setting PointLight(5): GPUAddr=0x{:X}\n", addr).c_str());
         if (addr != 0) {
             commandList_->SetGraphicsRootConstantBufferView(5, addr);
         }
@@ -138,13 +131,10 @@ void ModelCommon::PreDraw() {
     // 6: SpotLight (register b3)
     if (spotLightResource_) {
         D3D12_GPU_VIRTUAL_ADDRESS addr = spotLightResource_->GetGPUVirtualAddress();
-        OutputDebugStringA(std::format("[DEBUG] ModelCommon::PreDraw Setting SpotLight(6): GPUAddr=0x{:X}\n", addr).c_str());
         if (addr != 0) {
             commandList_->SetGraphicsRootConstantBufferView(6, addr);
         }
     }
-
-    OutputDebugStringA("[DEBUG] ModelCommon::PreDraw End\n");
 }
 
 void ModelCommon::AddModel(Model *model) {

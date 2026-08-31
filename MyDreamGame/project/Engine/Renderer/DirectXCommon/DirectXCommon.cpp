@@ -217,7 +217,7 @@ void DirectXCommon::CreateDxInstance() {
     Microsoft::WRL::ComPtr<ID3D12Debug1> debugController;
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
         debugController->EnableDebugLayer();
-        debugController->SetEnableGPUBasedValidation(TRUE);
+        // debugController->SetEnableGPUBasedValidation(TRUE); // GBVは非常に重いため通常は無効化
     }
 #endif
 

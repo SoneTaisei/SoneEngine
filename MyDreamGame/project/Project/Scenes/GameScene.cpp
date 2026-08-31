@@ -434,20 +434,14 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    OutputDebugStringA("[DEBUG] GameScene::Draw Start\n");
-
     // 1. Skyboxの描画
     if (skybox_) {
-        OutputDebugStringA("[DEBUG] GameScene::Draw Skybox Start\n");
         skybox_->Draw();
-        OutputDebugStringA("[DEBUG] GameScene::Draw Skybox End\n");
     }
 
     // 2. 3Dモデル（マップ・プレイヤー）の描画準備
     if (modelCommon_) {
-        OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw Start\n");
         modelCommon_->PreDraw();
-        OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw End\n");
     }
 
     // マップの描画
