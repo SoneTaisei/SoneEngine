@@ -480,12 +480,10 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
     ofs << data;
     ofs.close();
 
-    // 境界線メタデータの保存
-    std::string boundsPath = filepath;
-    size_t extPos = boundsPath.find_last_of('.');
-    if (extPos != std::string::npos) {
-        boundsPath = boundsPath.substr(0, extPos) + "_bounds.txt";
-    }
+    // 境界線メタデータの保存 (MapBoundsディレクトリに保存)
+    std::filesystem::path mapPath(filepath);
+    std::string stem = mapPath.stem().string();
+    std::string boundsPath = "resources/json/shared/MapBounds/" + stem + "_bounds.txt";
     SaveRoomsToFile(boundsPath);
 
     return true;
@@ -533,16 +531,30 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
 
     if (result) {
         currentFilePath_ = filepath;
-        // 境界線メタデータの読み込み
-        std::string boundsPath = filepath;
-        size_t lastDot = boundsPath.find_last_of(".");
-        if (lastDot != std::string::npos) {
-            boundsPath = boundsPath.substr(0, lastDot) + "_bounds.txt";
-        } else {
-            boundsPath += "_bounds.txt";
+        // 境界線メタデータの読み込み (MapBounds優先、なければ旧パス)
+        std::filesystem::path mapPath(filepath);
+        std::string stem = mapPath.stem().string();
+        std::string boundsPath = "resources/json/shared/MapBounds/" + stem + "_bounds.txt";
+        
+        bool loadedRooms = false;
+        if (std::filesystem::exists(boundsPath)) {
+            loadedRooms = LoadRoomsFromFile(boundsPath);
+        }
+        if (!loadedRooms) {
+            // 旧パス（マップファイルと同階層）の後方互換チェック
+            std::string oldBoundsPath = filepath;
+            size_t lastDot = oldBoundsPath.find_last_of(".");
+            if (lastDot != std::string::npos) {
+                oldBoundsPath = oldBoundsPath.substr(0, lastDot) + "_bounds.txt";
+            } else {
+                oldBoundsPath += "_bounds.txt";
+            }
+            if (std::filesystem::exists(oldBoundsPath)) {
+                loadedRooms = LoadRoomsFromFile(oldBoundsPath);
+            }
         }
         
-        if (!LoadRoomsFromFile(boundsPath)) {
+        if (!loadedRooms) {
             // ファイルがなければデフォルトを生成
             GenerateDefaultRooms();
         }
@@ -732,6 +744,11 @@ void MapChip2D::GenerateDefaultRooms() {
 }
 
 bool MapChip2D::SaveRoomsToFile(const std::string& filepath) {
+    std::filesystem::path path(filepath);
+    if (path.has_parent_path()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
+
     std::ofstream ofs(filepath);
     if (!ofs.is_open()) return false;
 

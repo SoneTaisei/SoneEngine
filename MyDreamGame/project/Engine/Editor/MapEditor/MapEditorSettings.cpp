@@ -40,7 +40,10 @@ void MapEditorSettings::Draw(
                                 if (filename.length() >= 4) {
                                     std::string ext = filename.substr(filename.length() - 4);
                                     if (ext == ".txt" || ext == ".TXT") {
-                                        stageFiles.push_back(filename);
+                                        // _bounds.txt は除外
+                                        if (filename.length() < 11 || (filename.substr(filename.length() - 11) != "_bounds.txt" && filename.substr(filename.length() - 11) != "_bounds.TXT")) {
+                                            stageFiles.push_back(filename);
+                                        }
                                     }
                                 }
                             }
@@ -175,14 +178,20 @@ void MapEditorSettings::Draw(
                         std::error_code ec;
                         std::filesystem::remove(targetFilePath, ec);
 
-                        std::string boundsPath = targetFilePath;
-                        size_t lastDot = boundsPath.find_last_of(".");
-                        if (lastDot != std::string::npos) {
-                            boundsPath = boundsPath.substr(0, lastDot) + "_bounds.txt";
-                        } else {
-                            boundsPath += "_bounds.txt";
-                        }
+                        std::filesystem::path mapPath(targetFilePath);
+                        std::string stem = mapPath.stem().string();
+                        std::string boundsPath = "resources/json/shared/MapBounds/" + stem + "_bounds.txt";
                         std::filesystem::remove(boundsPath, ec);
+
+                        // 旧パスの bounds ファイルも存在すれば削除
+                        std::string oldBoundsPath = targetFilePath;
+                        size_t lastDot = oldBoundsPath.find_last_of(".");
+                        if (lastDot != std::string::npos) {
+                            oldBoundsPath = oldBoundsPath.substr(0, lastDot) + "_bounds.txt";
+                        } else {
+                            oldBoundsPath += "_bounds.txt";
+                        }
+                        std::filesystem::remove(oldBoundsPath, ec);
 
                         context_->SetStageFilename("map_data.txt");
                         if (!mapChip->LoadFromStageName(context_->GetStageFilename())) {
