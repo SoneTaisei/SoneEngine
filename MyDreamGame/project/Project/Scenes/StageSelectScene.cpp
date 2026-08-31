@@ -60,33 +60,24 @@ void StageSelectScene::Initialize() {
 
     // gameObjects_.push_back(skydomeObject);
 
-    // AnimatedCubeの追加
-    Model* animatedCubeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/human", "walk.gltf");
-    Animation cubeAnimation = LoadAnimationFile("resources/Object/School/human", "walk.gltf");
+    // プレイヤーモデルの追加
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
     
-    auto animatedCubeObject = std::make_shared<GameObject>("human_walk");
-    auto cubeTransform = animatedCubeObject->AddComponent<TransformComponent>();
-    // プログラムのロード時にスケール等を調整するようにしたため、ここでは完全に基準値を設定する
-    cubeTransform->SetPosition({0.0f, 0.0f, 0.0f});
-    cubeTransform->SetScale({1.0f, 1.0f, 1.0f});
-    cubeTransform->SetRotation({0.0f, 0.0f, 0.0f}); // ローテーションも完全に0にする
+    auto playerObject = std::make_shared<GameObject>("player_model");
+    auto playerTransform = playerObject->AddComponent<TransformComponent>();
+    playerTransform->SetPosition({0.0f, -1.0f, 0.0f});
+    playerTransform->SetScale({2.0f, 2.0f, 2.0f});
+    playerTransform->SetRotation({0.0f, 3.14159265f, 0.0f}); // 正面（手前）を向かせる
     
-    uint32_t cubeTexIndex = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
-    D3D12_GPU_DESCRIPTOR_HANDLE cubeTH = TextureManager::GetInstance()->GetGpuHandle(cubeTexIndex);
+    uint32_t playerTexIndex = TextureManager::GetInstance()->Load("resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png");
+    D3D12_GPU_DESCRIPTOR_HANDLE playerTH = TextureManager::GetInstance()->GetGpuHandle(playerTexIndex);
     
-    auto cubeRenderer = animatedCubeObject->AddComponent<MeshRendererComponent>();
-    cubeRenderer->Initialize(device.Get(), animatedCubeModel);
-    cubeRenderer->SetTextureHandle(cubeTH);
-    animatedCubeModel->SetTextureHandle(cubeTH); // Modelの内部テクスチャハンドルを上書き
+    auto playerRenderer = playerObject->AddComponent<MeshRendererComponent>();
+    playerRenderer->Initialize(device.Get(), playerModel);
+    playerRenderer->SetTextureHandle(playerTH);
+    playerModel->SetTextureHandle(playerTH);
     
-    auto cubeAnimator = animatedCubeObject->AddComponent<AnimatorComponent>();
-    cubeAnimator->Initialize();
-    cubeAnimator->SetModelData(animatedCubeModel->GetModelData()); // Skeletonの生成
-    cubeAnimator->SetAnimation(cubeAnimation);
-    cubeAnimator->SetTargetNodeName("AnimatedCube");
-    cubeAnimator->Play();
-    
-    gameObjects_.push_back(animatedCubeObject);
+    gameObjects_.push_back(playerObject);
 
     // Skyboxの初期化
     uint32_t skyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
@@ -139,7 +130,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 
     if (keyboard->IsKeyPressed(DIK_SPACE)) {
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
-            GameScene::s_TargetMapFilePath = "resources/json/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
+            GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }
         sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
         return;
@@ -242,7 +233,7 @@ void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
 void StageSelectScene::RefreshAvailableMapFiles() {
     availableMapFiles_.clear();
-    std::string path = "resources/json/MapData";
+    std::string path = "resources/json/shared/MapData";
     if (std::filesystem::exists(path) && std::filesystem::is_directory(path)) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
             if (entry.is_regular_file()) {
@@ -257,7 +248,8 @@ void StageSelectScene::RefreshAvailableMapFiles() {
 }
 
 void StageSelectScene::SaveConfig() {
-    std::ofstream ofs("resources/json/stage_config.txt");
+    std::filesystem::create_directories("resources/json/shared");
+    std::ofstream ofs("resources/json/shared/stage_config.txt");
     if (!ofs.is_open()) return;
     ofs << stageCount_ << "\n";
     for (int i = 0; i < stageCount_; ++i) {
@@ -268,7 +260,7 @@ void StageSelectScene::SaveConfig() {
 }
 
 void StageSelectScene::LoadConfig() {
-    std::ifstream ifs("resources/json/stage_config.txt");
+    std::ifstream ifs("resources/json/shared/stage_config.txt");
     if (!ifs.is_open()) {
         stageCount_ = 1;
         stageConfigs_.resize(1);

@@ -1,0 +1,187 @@
+{
+    "templates": [
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.3019607961177826,
+                "g": 0.7019608020782471,
+                "r": 0.3019607961177826
+            },
+            "id": 1,
+            "modelName": "",
+            "name": "Block",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 3.0
+            },
+            "textureName": "",
+            "type": "NormalBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.20000000298023224,
+                "g": 0.20000000298023224,
+                "r": 1.0
+            },
+            "id": 2,
+            "modelName": "",
+            "name": "Death",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 3.0
+            },
+            "textureName": "",
+            "type": "DeathBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.800000011920929,
+                "g": 0.20000000298023224,
+                "r": 0.800000011920929
+            },
+            "id": 3,
+            "modelName": "",
+            "name": "Goal",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "GoalBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.0,
+                "g": 0.800000011920929,
+                "r": 1.0
+            },
+            "id": 4,
+            "modelName": "",
+            "name": "Coin",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "CoinBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.800000011920929,
+                "g": 0.800000011920929,
+                "r": 0.4000000059604645
+            },
+            "id": 5,
+            "modelName": "",
+            "name": "OneWay",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "OneWayBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.10000000149011612,
+                "g": 0.6000000238418579,
+                "r": 0.8999999761581421
+            },
+            "id": 7,
+            "modelName": "",
+            "name": "Lift",
+            "properties": {
+                "acceleration": 15.0,
+                "maxSpeedBackward": 2.5,
+                "maxSpeedForward": 10.0,
+                "speedBackward": 0.5,
+                "speedForward": 6.0,
+                "waitTime": 1.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "LiftBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.699999988079071,
+                "g": 0.699999988079071,
+                "r": 0.699999988079071
+            },
+            "id": 8,
+            "modelName": "",
+            "name": "Rail",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "RailBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.0,
+                "g": 0.5,
+                "r": 1.0
+            },
+            "id": 9,
+            "modelName": "",
+            "name": "Jump",
+            "properties": {
+                "jumpVelocityHorizontal": 15.0,
+                "jumpVelocityVertical": 27.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "JumpBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 1.0,
+                "g": 1.0,
+                "r": 1.0
+            },
+            "id": 12,
+            "modelName": "",
+            "name": "Enemy",
+            "properties": {
+                "moveSpeed": 2.5
+            },
+            "scale": {
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
+            },
+            "textureName": "Object/Original/enemy/monsterBall.png",
+            "type": "PatrolEnemyBlock"
+        }
+    ]
+}

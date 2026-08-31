@@ -39,9 +39,9 @@ public:
     SpotLight *GetSpotLight() { return mappedSpotLight_; }
     CameraForGPU *GetCamera() { return mappedCamera_; }
     
-    D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const { return directionalLightResource_->GetGPUVirtualAddress(); }
-    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightGPUAddress() const { return pointLightResource_->GetGPUVirtualAddress(); }
-    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_->GetGPUVirtualAddress(); }
+    D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const { return directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightGPUAddress() const { return pointLightResource_ ? pointLightResource_->GetGPUVirtualAddress() : 0; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_ ? spotLightResource_->GetGPUVirtualAddress() : 0; }
 
     // 設定ファイルからの読み込み
     void LoadLightingConfig();

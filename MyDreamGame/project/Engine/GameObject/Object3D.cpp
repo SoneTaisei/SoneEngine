@@ -11,6 +11,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
 
 void Object3D::Initialize(ID3D12Device *device, Model *model) {
     model_ = model; // 共有されているモデルをセット
+    animator_ = nullptr;
     transform_ = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 
     // マテリアルが透明にならないよう初期値を設定する

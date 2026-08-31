@@ -1,6 +1,5 @@
 #ifdef USE_IMGUI
 #include "EditorManager.h"
-#include "imgui_internal.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
@@ -19,6 +18,9 @@
 #include "Core/Utility/LogManager.h"
 #include "GameObject/MapObject2D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
+#include "Game2D/Player/Player2D.h"
+#include "Component/TransformComponent.h"
+#include "Scenes/AnimationPreviewScene.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -32,6 +34,7 @@
 #include <numbers>
 #include <string>
 #include <functional>
+#include <nlohmann/json.hpp>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)
 static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle) {
@@ -50,8 +53,10 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 }
 
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
+    animationEditor_ = std::make_unique<AnimationEditor>();
     ScanAvailableModels();
     ScanAvailableTextures();
+    ScanLayoutPresets();
 
     // 1. ImGuiコンテキストの作成
     IMGUI_CHECKVERSION();
@@ -249,6 +254,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
     ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
 
+    // --- 初回起動時 / マップロード時のA*座標初期化 ---
+    if (!isAStarPosInitialized_) {
+        IScene* activeScene = sceneManager->GetCurrentScene();
+        if (activeScene && activeScene->GetMapChip()) {
+            UpdateAStarPositionsFromMap(activeScene->GetMapChip(), sceneManager);
+            isAStarPosInitialized_ = true;
+        }
+    }
+
     // --- シーンリセット直後のマップ復元処理 ---
     if (sceneJustReset_) {
         IScene* activeScene = sceneManager->GetCurrentScene();
@@ -262,6 +276,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 } else {
                     mapChip->LoadFromStageName(stageFilename_);
                 }
+                UpdateAStarPositionsFromMap(mapChip, sceneManager);
             }
         }
         sceneJustReset_ = false;
@@ -361,6 +376,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (mapChip) {
                         mapDataStrToLoad_ = mapChip->GetMapDataAsString();
                         savedRoomsForPlay_ = mapChip->GetRooms();
+                        mapChip->ResetBlocks();
                     }
                 }
             }
@@ -378,6 +394,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // リプレイ再生中であればそれも同時に停止させる
                 if (ReplayManager::GetInstance()->IsPlaying()) {
                     ReplayManager::GetInstance()->StopPlayback();
+                }
+
+                if (sceneManager && sceneManager->GetCurrentScene()) {
+                    MapChip2D* mapChip = sceneManager->GetCurrentScene()->GetMapChip();
+                    if (mapChip) {
+                        mapChip->ResetBlocks();
+                    }
                 }
                 
                 ImGui::SetWindowFocus("マップチップ画面");
@@ -471,7 +494,42 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_);
             ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_);
             ImGui::MenuItem("リプレイエディター", nullptr, &showReplayEditor_);
+            ImGui::MenuItem("アニメーションエディター", nullptr, &showAnimEditor_);
             ImGui::Separator();
+            if (ImGui::BeginMenu("レイアウトプリセット")) {
+                if (layoutPresets_.empty()) {
+                    ImGui::TextDisabled("  (保存されたプリセットはありません)");
+                } else {
+                    for (const auto& preset : layoutPresets_) {
+                        if (ImGui::MenuItem(preset.name.c_str())) {
+                            ApplyLayoutPreset(preset.name);
+                        }
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("現在のレイアウトを保存...")) {
+                    showSavePresetWindow_ = true;
+                    strcpy_s(newPresetNameBuf_, "");
+                }
+                if (ImGui::BeginMenu("プリセットを削除")) {
+                    if (layoutPresets_.empty()) {
+                        ImGui::TextDisabled("  (削除できるプリセットはありません)");
+                    } else {
+                        std::string toDeleteFromMenu = "";
+                        for (const auto& preset : layoutPresets_) {
+                            std::string delLabel = "削除: " + preset.name;
+                            if (ImGui::MenuItem(delLabel.c_str())) {
+                                toDeleteFromMenu = preset.name;
+                            }
+                        }
+                        if (!toDeleteFromMenu.empty()) {
+                            DeleteLayoutPreset(toDeleteFromMenu);
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::MenuItem("レイアウトをリセット")) {
                 resetLayout = true;
             }
@@ -488,6 +546,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 showInspector_ = true;
             }
             ImGui::PopStyleColor(3);
+        }
+
+        // ステータスメッセージ表示（あれば右側に通知）
+        if (presetStatusMessageTimer_ > 0.0f && !presetStatusMessage_.empty()) {
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), "%s", presetStatusMessage_.c_str());
+            float dt = ImGui::GetIO().DeltaTime > 0.0f ? ImGui::GetIO().DeltaTime : 0.016f;
+            presetStatusMessageTimer_ -= dt;
+            if (presetStatusMessageTimer_ <= 0.0f) {
+                presetStatusMessage_.clear();
+            }
         }
 
         ImGui::EndMainMenuBar();
@@ -511,6 +580,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // 古いiniファイルからレイアウトが崩れるのを防ぐため、新しいウィンドウが無い場合は強制リセット
                 bool hasReplayEditor = false;
                 bool hasStageSelectEditor = false;
+                bool hasDopeSheet = false;
                 char buffer[256];
                 while (fgets(buffer, sizeof(buffer), f)) {
                     if (strstr(buffer, "マイメディア")) {
@@ -519,8 +589,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (strstr(buffer, "ステージセレクトエディター")) {
                         hasStageSelectEditor = true;
                     }
+                    if (strstr(buffer, "ドープシート")) {
+                        hasDopeSheet = true;
+                    }
                 }
-                if (!hasReplayEditor || !hasStageSelectEditor) {
+                if (!hasReplayEditor || !hasStageSelectEditor || !hasDopeSheet) {
                     resetLayout = true;
                 }
                 fclose(f);
@@ -529,6 +602,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
         if (resetLayout || !hasIniFile) {
             resetLayout = false;
+
+            showInspector_ = true;
+            showHierarchy_ = true;
+            showGameView_ = true;
+            showPostEffect_ = true;
+            showMapEditor_ = true;
+            showMapSettings_ = true;
+            showReplayEditor_ = true;
+            showAnimEditor_ = true;
 
             // 一度ノードをクリアして再構築
             ImGui::DockBuilderRemoveNode(dockspace_id);
@@ -547,6 +629,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
             ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
             ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
+            ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
 
             // 左側
             ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
@@ -560,6 +643,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
             ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
 
             ImGui::DockBuilderFinish(dockspace_id);
@@ -572,6 +656,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
                 currentMode_ = EditorMode::Normal;
                 selectedReplaySeekbar_ = false;
+                if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+                    sceneManager->PopScene();
+                    if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
             }
             isGameViewHovered_ = ImGui::IsWindowHovered();
             {
@@ -604,6 +692,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::Begin("リプレイエディター", &showReplayEditor_)) {
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
                 currentMode_ = EditorMode::Replay;
+                if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+                    sceneManager->PopScene();
+                    if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
             }
             isReplayEditorHovered_ = ImGui::IsWindowHovered();
             
@@ -621,7 +713,38 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             ImVec2 currentPos = ImGui::GetCursorPos();
             ImGui::SetCursorPos(ImVec2(currentPos.x + (contentSize.x - imageSize.x) * 0.5f, currentPos.y + (contentSize.y - imageSize.y) * 0.5f));
+            gameViewPos_ = ImGui::GetCursorScreenPos();
+            gameViewSize_ = imageSize;
             ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
+
+            // 2D軌跡・AI探索ルートのオーバーレイ描画
+            IScene* activeScene = sceneManager->GetCurrentScene();
+            if (activeScene) {
+                Camera* camera = *activeCamera;
+                if (camera) {
+                    Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+                    activeScene->DrawEditorOverlay(viewProj);
+                }
+            }
+        }
+        ImGui::End();
+    }
+
+    // --- Animation Editor メインウィンドウ (dock_id_main) ---
+    if (animationEditor_) animationEditor_->SetHovered(false);
+    if (showAnimEditor_) {
+        if (ImGui::Begin("アニメーションエディター", &showAnimEditor_)) {
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
+                currentMode_ = EditorMode::Animation;
+                if (animationEditor_ && !animationEditor_->IsAnimScenePushed()) {
+                    sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
+                    animationEditor_->SetAnimScenePushed(true);
+                    animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
+                    animationEditor_->RefreshAnimationJointList(sceneManager);
+                }
+            }
+            if (animationEditor_) animationEditor_->SetHovered(ImGui::IsWindowHovered());
+            if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawMainView(sceneManager, activeCamera, renderTextureSrvHandle); }
         }
         ImGui::End();
     }
@@ -741,11 +864,24 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         ImGui::End();
     } else {
-        // 通常モード時: 「ヒエラルキー」を表示
+        // 通常・アニメーションモード時: 「ヒエラルキー」を表示
         if (showHierarchy_) {
             if (ImGui::Begin("ヒエラルキー", &showHierarchy_)) {
                 IScene *activeScene = sceneManager->GetCurrentScene();
                 if (activeScene) {
+                    // 1. プレイヤー（存在する場合）
+                    if (activeScene->GetPlayer()) {
+                        auto* player = activeScene->GetPlayer();
+                        bool isSelected = (selectedPrimitive_ == player->GetPrimitiveObject() || (selectedObject_ && selectedObject_ == player->GetModelObject()));
+                        if (ImGui::Selectable("[Player] プレイヤー", isSelected)) {
+                            selectedGameObject_ = nullptr;
+                            selectedParticle_ = nullptr;
+                            selectedPrimitive_ = player->GetPrimitiveObject();
+                            selectedObject_ = player->GetModelObject();
+                            if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
+                        }
+                    }
+
                     if (ImGui::CollapsingHeader("GameObjects", ImGuiTreeNodeFlags_DefaultOpen)) {
                         for (auto &obj : activeScene->GetGameObjects()) {
                             bool isSelected = (selectedGameObject_ == obj);
@@ -754,6 +890,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 selectedObject_ = nullptr;
                                 selectedParticle_ = nullptr;
                                 selectedPrimitive_ = nullptr;
+                                if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
                             }
                         }
                     }
@@ -765,6 +902,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 selectedObject_ = obj;
                                 selectedParticle_ = nullptr;
                                 selectedPrimitive_ = nullptr;
+                                if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
                             }
                         }
                     }
@@ -790,6 +928,21 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                         }
                     }
+
+                    // 選択中オブジェクトのスケルトンボーン一覧
+                    if (animationEditor_ && !animationEditor_->GetCurrentJointList().empty()) {
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        if (ImGui::TreeNodeEx("[Bones] ボーン / 関節", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            for (const auto& jointName : animationEditor_->GetCurrentJointList()) {
+                                bool isJointSelected = (animationEditor_->GetSelectedJointName() == jointName);
+                                if (ImGui::Selectable(("  " + jointName).c_str(), isJointSelected)) {
+                                    animationEditor_->SetSelectedJointName(jointName);
+                                }
+                            }
+                            ImGui::TreePop();
+                        }
+                    }
                 }
             }
             ImGui::End();
@@ -808,7 +961,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Inspector ウィンドウ ---
     if (showInspector_) {
         if (ImGui::Begin("インスペクター", &showInspector_)) {
-            bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9));
+            bool isMapChipSelected = (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 12));
             if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected || selectedReplayBlock_.IsValid()) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
@@ -828,7 +981,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Spacing();
             }
 
-            if (selectedReplayBlock_.IsValid()) {
+            if (currentMode_ == EditorMode::Animation) {
+                if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawInspectorUI(sceneManager); }
+            } else if (selectedReplayBlock_.IsValid()) {
                 ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "キー入力ノード プロパティ");
                 ImGui::Separator();
                 ImGui::Spacing();
@@ -1014,13 +1169,25 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     auto replayMgrInst = ReplayManager::GetInstance();
 
-                    // --- 1. 手振れ補正設定 ---
-                    if (ImGui::CollapsingHeader("手振れ補正設定", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    // --- 1. 再生・補正設定 ---
+                    if (ImGui::CollapsingHeader("再生・補正設定", ImGuiTreeNodeFlags_DefaultOpen)) {
                         bool isSnap = replayMgrInst->IsSnapEnabled();
                         if (ImGui::Checkbox("位置補正 (手振れ補正/スナップ)", &isSnap)) {
                             replayMgrInst->SetSnapEnabled(isSnap);
                         }
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生時の位置ズレを強制スナップ補正するON/OFF");
+
+                        bool isLoop = replayMgrInst->IsLoopPlay();
+                        if (ImGui::Checkbox("ループ再生", &isLoop)) {
+                            replayMgrInst->SetLoopPlay(isLoop);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("リプレイ再生をループさせるON/OFF");
+
+                        bool isInterpolation = replayMgrInst->IsInterpolationEnabled();
+                        if (ImGui::Checkbox("座標補間 (スムーズ再生)", &isInterpolation)) {
+                            replayMgrInst->SetInterpolationEnabled(isInterpolation);
+                        }
+                        if (ImGui::IsItemHovered()) ImGui::SetTooltip("フレーム間のプレイヤー座標を補間してスムーズに描画するON/OFF");
                     }
 
                     // --- 2. 第1章 完全決定論的デバッグ & 高速自動モンキーテスト ---
@@ -1125,41 +1292,27 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                     // --- 4. 第4章 物理ベースA* (詰みチェック & AIルート表示) ---
                     if (ImGui::CollapsingHeader("物理ベースA* (詰みチェック & AIルート表示)", ImGuiTreeNodeFlags_DefaultOpen)) {
-                        static float startPos[2] = { 0.0f, 0.0f };
-                        static float goalPos[2] = { 30.0f, 0.0f };
-                        static int maxAStarNodes = 8000;
+                        static int maxAStarNodes = 30000;
 
-                        ImGui::DragFloat2("スタート座標 (X, Y)", startPos, 0.5f);
-                        if (ImGui::Button("自キャラ初期位置から自動取得", ImVec2(-1, 0))) {
-                            const auto& currentReplay = replayMgrInst->GetCurrentReplay();
-                            startPos[0] = currentReplay.playerInitPos.x;
-                            startPos[1] = currentReplay.playerInitPos.y;
-                        }
-                        ImGui::Spacing();
-
-                        ImGui::DragFloat2("ゴール座標 (X, Y)", goalPos, 0.5f);
-                        if (ImGui::Button("マップのゴールブロック位置から自動取得", ImVec2(-1, 0))) {
+                        ImGui::DragFloat2("スタート座標 (X, Y)", aStarStartPos_, 0.5f);
+                        if (ImGui::Button("マップのスタート位置から自動取得", ImVec2(-1, 0))) {
                             IScene* activeScene = sceneManager->GetCurrentScene();
                             if (activeScene && activeScene->GetMapChip()) {
-                                auto* mapChip = activeScene->GetMapChip();
-                                bool foundGoal = false;
-                                for (int y = 0; y < mapChip->GetHeight(); ++y) {
-                                    for (int x = 0; x < mapChip->GetWidth(); ++x) {
-                                        if (mapChip->GetChipType(x, y) == MapChip2D::ChipType::kGoal) {
-                                            float halfChip = mapChip->GetChipSize() * 0.5f;
-                                            goalPos[0] = mapChip->ChipToWorldX(x) + halfChip;
-                                            goalPos[1] = mapChip->ChipToWorldY(y) + halfChip;
-                                            foundGoal = true;
-                                            break;
-                                        }
-                                    }
-                                    if (foundGoal) break;
-                                }
+                                UpdateAStarPositionsFromMap(activeScene->GetMapChip(), sceneManager);
                             }
                         }
                         ImGui::Spacing();
 
-                        ImGui::DragInt("探索上限ノード数", &maxAStarNodes, 500, 1000, 50000);
+                        ImGui::DragFloat2("ゴール座標 (X, Y)", aStarGoalPos_, 0.5f);
+                        if (ImGui::Button("マップのゴールブロック位置から自動取得", ImVec2(-1, 0))) {
+                            IScene* activeScene = sceneManager->GetCurrentScene();
+                            if (activeScene && activeScene->GetMapChip()) {
+                                UpdateAStarPositionsFromMap(activeScene->GetMapChip(), sceneManager);
+                            }
+                        }
+                        ImGui::Spacing();
+
+                        ImGui::DragInt("探索上限ノード数", &maxAStarNodes, 1000, 1000, 150000);
 
                         bool showAI = replayMgrInst->IsShowAIGhost();
                         if (ImGui::Checkbox("AIルートをゴースト表示", &showAI)) {
@@ -1175,10 +1328,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (ImGui::Button(btnText.c_str(), ImVec2(-1, 30))) {
                             IScene* activeScene = sceneManager->GetCurrentScene();
                             MapChip2D* mapChip = activeScene ? activeScene->GetMapChip() : nullptr;
-                            Vector3 sPos = { startPos[0], startPos[1], 0.0f };
-                            Vector3 gPos = { goalPos[0], goalPos[1], 0.0f };
+                            Vector3 sPos = { aStarStartPos_[0], aStarStartPos_[1], 0.0f };
+                            Vector3 gPos = { aStarGoalPos_[0], aStarGoalPos_[1], 0.0f };
 
-                            replayMgrInst->ExecuteAStarAsync(sPos, gPos, mapChip, maxAStarNodes);
+                            PlayerParams params{};
+                            if (activeScene && activeScene->GetPlayer()) {
+                                params = activeScene->GetPlayer()->GetParams();
+                            }
+                            replayMgrInst->ExecuteAStarAsync(sPos, gPos, mapChip, params, maxAStarNodes);
                         }
                         ImGui::PopStyleColor();
                         if (isSearching) {
@@ -1200,7 +1357,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     bool handled = false;
                     if (activeScene) {
                     MapChip2D* mapChip = activeScene->GetMapChip();
-                    if (mapChip && (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 9))) {
+                    if (mapChip && (mapEditorSelectedTool_ >= 100 || (mapEditorSelectedTool_ >= 1 && mapEditorSelectedTool_ <= 12))) {
                         // ブロックの設定を表示
                         MapChip2D::CustomBlockDef* targetDef = nullptr;
                         bool isTemplate = false;
@@ -1240,15 +1397,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 changed = true;
                             }
 
-                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock" };
+                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock", "PatrolEnemyBlock" };
                             int currentType = -1;
-                            for (int i = 0; i < 8; ++i) {
+                            for (int i = 0; i < 9; ++i) {
                                 if (targetDef->type == types[i]) {
                                     currentType = i;
                                     break;
                                 }
                             }
-                            if (ImGui::Combo("種類 (Type)", &currentType, types, 8)) {
+                            if (ImGui::Combo("種類 (Type)", &currentType, types, 9)) {
                                 targetDef->type = types[currentType];
                                 changed = true;
                                 // デフォルトプロパティを設定 (BasicToolsのテンプレートに合わせる)
@@ -1337,6 +1494,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 if (k == "range") return std::string("移動距離 (range)");
                                 if (k == "jumpVelocityVertical") return std::string("縦ジャンプ力 (jumpVelocityVertical)");
                                 if (k == "jumpVelocityHorizontal") return std::string("横ジャンプ力 (jumpVelocityHorizontal)");
+                                if (k == "moveSpeed") return std::string("移動速度 (moveSpeed)");
                                 return k;
                             };
                             for (auto& [key, value] : targetDef->properties.items()) {
@@ -1404,11 +1562,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                             if (ImGui::Button("変更を適用 (Apply & Rebuild)") || (autoApply && changed)) {
                                 if (isTemplate) {
-                                    mapChip->SaveTemplatesToFile("resources/json/templates_config.json");
+                                    mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
                                 } else {
                                     std::string name = stageFilename_;
                                     if (name.length() < 4 || name.substr(name.length() - 4) != ".txt") name += ".txt";
-                                    mapChip->SaveToFile("resources/json/MapData/" + name);
+                                    mapChip->SaveToFile("resources/json/shared/MapData/" + name);
                                 }
                                 mapChip->RebuildChipObjects();
                             }
@@ -1603,30 +1761,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             auto dxCommon = DirectXCommon::GetInstance();
 
-            // ポストエフェクト選択Combo
-            const char *effectNames[] = {
-                "なし (None)",
-                "コンポジット (統合エフェクト)",
-                "深度ベース・アウトライン"};
-
-            int currentComboIndex = 0;
-            auto activeEffect = dxCommon->GetPostEffect();
-            if (activeEffect == DirectXCommon::PostEffect::kComposite) {
-                currentComboIndex = 1;
-            } else if (activeEffect == DirectXCommon::PostEffect::kDepthBasedOutline) {
-                currentComboIndex = 2;
-            }
-
-            ImGui::Text("アクティブなエフェクト");
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-            if (ImGui::Combo("##ActiveEffect", &currentComboIndex, effectNames, IM_ARRAYSIZE(effectNames))) {
-                if (currentComboIndex == 0) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kNone);
-                } else if (currentComboIndex == 1) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kComposite);
-                } else if (currentComboIndex == 2) {
-                    dxCommon->SetPostEffect(DirectXCommon::PostEffect::kDepthBasedOutline);
-                }
+            bool enablePost = dxCommon->IsPostEffectEnabled();
+            if (ImGui::Checkbox("ポストエフェクトを有効化", &enablePost)) {
+                dxCommon->SetPostEffectEnabled(enablePost);
+                SaveSceneConfig();
             }
             ImGui::Spacing();
             ImGui::Separator();
@@ -1729,7 +1867,18 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             };
 
             auto params = dxCommon->GetCompositeParamsData();
-            if (params && dxCommon->GetPostEffect() == DirectXCommon::PostEffect::kComposite) {
+            if (params && dxCommon->IsPostEffectEnabled()) {
+                if (ImGui::CollapsingHeader("深度ベース・アウトライン設定 (Outline)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Spacing();
+                    bool enableOutline = dxCommon->IsDepthBasedOutlineEnabled();
+                    if (ImGui::Checkbox("アウトラインを有効化", &enableOutline)) {
+                        dxCommon->SetDepthBasedOutlineEnabled(enableOutline);
+                        SaveSceneConfig();
+                    }
+                    ImGui::Spacing();
+                }
+                ImGui::Spacing();
+
                 if (ImGui::CollapsingHeader("グレースケール設定 (Grayscale)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Spacing();
                     DrawFloatControl("グレースケール強度", &params->grayscaleStrength, 0.0f, 1.0f);
@@ -2131,7 +2280,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 int gridY = mapChip->WorldToChipY(worldPos.y);
 
                                 bool inBounds = (gridX >= 0 && gridX < mapWidth && gridY >= 0 && gridY < mapHeight);
-                                bool isSelectableTool = (mapEditorSelectedTool_ == 0 || mapEditorSelectedTool_ == 6 || mapEditorSelectedTool_ == 10 || mapEditorSelectedTool_ >= 100);
+                                bool isSelectableTool = (mapEditorSelectedTool_ >= 0);
                                 
                                 if (mapEditMode_ == MapEditMode::Normal) {
                                     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && isSelectableTool) {
@@ -2333,9 +2482,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::End();
     }
 
-    // --- 下部ペイン (通常: マップ設定 / リプレイ時: タイムライン) ---
-    if (showMapSettings_) {
-        if (currentMode_ == EditorMode::Replay) {
+    // --- 下部ペイン (通常: マップ設定 / リプレイ時: タイムライン / アニメーション時: ドープシート) ---
+    if (showMapSettings_ || currentMode_ == EditorMode::Animation) {
+        if (currentMode_ == EditorMode::Animation) {
+            if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawDopeSheetUI(sceneManager); }
+        } else if (currentMode_ == EditorMode::Replay) {
             if (ImGui::Begin("タイムライン", &showMapSettings_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 auto replayMgr = ReplayManager::GetInstance();
                 const auto& currentReplay = replayMgr->GetCurrentReplay();
@@ -2357,7 +2508,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("1フレーム戻る");
                 ImGui::SameLine();
 
-                // 再生 / 一時停止 (Clipchamp風パープルボタン)
+                // 再生 / 一時停止 (Clipchamp風パープルボタン: 保存されている元データを再生)
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.90f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.32f, 1.00f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.15f, 0.80f, 1.0f));
@@ -2367,26 +2518,25 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     }
                 } else {
                     if (ImGui::Button("再生", ImVec2(90, 28))) {
-                        if (replayMgr->IsPaused()) {
-                            replayMgr->ResumePlayback();
+                        replayMgr->SetSnapEnabled(true);
+                        replayMgr->SetInterpolationEnabled(true);
+                        const auto& history = replayMgr->GetHistory();
+                        if (!history.empty()) {
+                            replayMgr->StartPlayback(0);
+                            if (history[0].mapDataStr != "") {
+                                this->mapDataStrToLoad_ = history[0].mapDataStr;
+                                this->loadMapDataStrNextFrame_ = true;
+                            }
                         } else {
-                            const auto& history = replayMgr->GetHistory();
-                            if (!history.empty()) {
-                                replayMgr->StartPlayback(0);
-                                if (history[0].mapDataStr != "") {
-                                    this->mapDataStrToLoad_ = history[0].mapDataStr;
-                                    this->loadMapDataStrNextFrame_ = true;
-                                }
-                            } else {
-                                const auto& saved = replayMgr->GetSavedList();
-                                if (!saved.empty()) {
-                                    replayMgr->StartPlayback(-1, saved[0]);
-                                }
+                            const auto& saved = replayMgr->GetSavedList();
+                            if (!saved.empty()) {
+                                replayMgr->StartPlayback(-1, saved[0]);
                             }
                         }
                     }
                 }
                 ImGui::PopStyleColor(3);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("保存されている元のリプレイデータを再生します (位置補正・補間ON)");
                 ImGui::SameLine();
 
                 // コマ送り (1F)
@@ -2402,6 +2552,29 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (ImGui::Button("停止", ImVec2(65, 28))) {
                     replayMgr->StopPlayback();
                 }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生を停止します");
+                ImGui::SameLine();
+
+                // 変更内容を再生 (グリーン系ボタン: 編集されたcurrentReplay_を再生)
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.34f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.68f, 0.42f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.14f, 0.45f, 0.27f, 1.0f));
+                if (ImGui::Button("変更内容を再生", ImVec2(130, 28))) {
+                    replayMgr->SetSnapEnabled(false);
+                    replayMgr->SetInterpolationEnabled(false);
+                    if (replayMgr->IsPaused()) {
+                        replayMgr->ResumePlayback();
+                    } else {
+                        replayMgr->StartPlayback(-1, "");
+                        const auto& currentReplay = replayMgr->GetCurrentReplay();
+                        if (currentReplay.mapDataStr != "") {
+                            this->mapDataStrToLoad_ = currentReplay.mapDataStr;
+                            this->loadMapDataStrNextFrame_ = true;
+                        }
+                    }
+                }
+                ImGui::PopStyleColor(3);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("タイムラインで変更した内容（移動の長さ変更等）を適用して再生します（位置補正・補間OFF）");
                 ImGui::SameLine();
                 ImGui::Spacing();
                 ImGui::SameLine();
@@ -2864,8 +3037,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // json ディレクトリ内の .txt ファイルを自動走査
                     std::vector<std::string> stageFiles;
                     try {
-                        if (std::filesystem::exists("resources/json/MapData")) {
-                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/MapData")) {
+                        if (std::filesystem::exists("resources/json/shared/MapData")) {
+                            for (const auto& entry : std::filesystem::directory_iterator("resources/json/shared/MapData")) {
                                 if (entry.is_regular_file()) {
                                     std::string filename = entry.path().filename().string();
                                     if (filename.length() >= 4) {
@@ -2894,7 +3067,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (!hasExt) {
                             name += ".txt";
                         }
-                        return std::string("resources/json/MapData/") + name;
+                        return std::string("resources/json/shared/MapData/") + name;
                     };
 
                     // 既存のマップファイルを選択するコンボボックス
@@ -2925,6 +3098,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
                                         mapEditorInputWidth_ = mapChip->GetWidth();
                                         mapEditorInputHeight_ = mapChip->GetHeight();
+                                        UpdateAStarPositionsFromMap(mapChip, sceneManager);
                                     }
                                 }
                                 if (isSelected) {
@@ -2940,6 +3114,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (mapChip->LoadFromFile(GetFullFilePath(stageFilename_))) {
                             mapEditorInputWidth_ = mapChip->GetWidth();
                             mapEditorInputHeight_ = mapChip->GetHeight();
+                            UpdateAStarPositionsFromMap(mapChip, sceneManager);
                         }
                     }
 
@@ -2988,6 +3163,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         mapChip->ResetMap();
                         mapEditorInputWidth_ = mapChip->GetWidth();
                         mapEditorInputHeight_ = mapChip->GetHeight();
+                        UpdateAStarPositionsFromMap(mapChip, sceneManager);
                     }
 
                     ImGui::Spacing();
@@ -3022,7 +3198,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f },
                         { 7, "Lift",  ImVec4(0.9f, 0.6f, 0.1f, 1.0f), 1.0f },
                         { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f },
-                        { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f }
+                        { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f },
+                        { 12, "Enemy", ImVec4(0.9f, 0.2f, 0.2f, 1.0f), 1.0f }
                     };
 
                     std::set<std::string> availableTypes;
@@ -3058,6 +3235,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             ImGui::PushID(sectionType * 1000 + i);
                             
                             ImVec2 p = ImGui::GetCursorScreenPos();
+                            float lastButtonX2 = 0.0f;
                             
                             if (i < numTools) {
                                 const ToolIcon& tool = tools[i];
@@ -3072,6 +3250,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = nullptr;
                                 }
+                                
+                                lastButtonX2 = ImGui::GetItemRectMax().x;
+                                ImVec2 backupCursorPos = ImGui::GetCursorScreenPos();
 
                                 bool isHovered = ImGui::IsItemHovered();
                                 ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -3144,6 +3325,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     }
                                     ImGui::PopStyleVar();
                                     ImGui::PopStyleColor();
+                                    
+                                    // カーソル位置を元の正しい位置に復帰させる
+                                    ImGui::SetCursorScreenPos(backupCursorPos);
                                 }
                             } else if (sectionType == 2) {
                                 // "＋ 追加" ボタン
@@ -3163,12 +3347,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedPrimitive_ = nullptr;
                                     mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                                 }
+                                lastButtonX2 = ImGui::GetItemRectMax().x;
                             }
 
                             ImGui::PopID();
 
                             // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
-                            float lastButtonX2 = ImGui::GetItemRectMax().x;
                             float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
                             if (nextButtonX2 < windowVisibleX && i + 1 < maxIter) {
                                 ImGui::SameLine();
@@ -3254,7 +3438,44 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
     }
 
-LogManager::GetInstance()->Draw();
+    if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->UpdateAnimationPosePreview(sceneManager); }
+
+    LogManager::GetInstance()->Draw();
+
+    // --- レイアウトプリセット保存ウィンドウ ---
+    if (showSavePresetWindow_) {
+        ImGui::SetNextWindowSize(ImVec2(360, 150), ImGuiCond_Appearing);
+        ImGuiViewport* vp = ImGui::GetMainViewport();
+        if (vp) {
+            ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f - 180.0f, vp->Pos.y + vp->Size.y * 0.5f - 75.0f), ImGuiCond_Appearing);
+        }
+        ImGui::SetNextWindowFocus();
+        if (ImGui::Begin("レイアウトプリセットの保存", &showSavePresetWindow_, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("現在の配置をプリセットとして保存します。");
+            ImGui::Spacing();
+            ImGui::Text("プリセット名:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(200.0f);
+            bool enterPressed = ImGui::InputText("##PresetNameDialogInput", newPresetNameBuf_, sizeof(newPresetNameBuf_), ImGuiInputTextFlags_EnterReturnsTrue);
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            if (ImGui::Button("保存", ImVec2(100, 0)) || (enterPressed && strlen(newPresetNameBuf_) > 0)) {
+                if (strlen(newPresetNameBuf_) > 0) {
+                    SaveLayoutPreset(newPresetNameBuf_);
+                    newPresetNameBuf_[0] = '\0';
+                    showSavePresetWindow_ = false;
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("キャンセル", ImVec2(100, 0))) {
+                showSavePresetWindow_ = false;
+            }
+        }
+        ImGui::End();
+    }
 }
 
 void EditorManager::Draw() {
@@ -3270,7 +3491,8 @@ void EditorManager::Finalize() {
 
 void EditorManager::SaveSceneConfig() {
 
-    std::ofstream ofs("resources/json/editor_config.json");
+    std::filesystem::create_directories("resources/json/local");
+    std::ofstream ofs("resources/json/local/editor_config.json");
     if (ofs.is_open()) {
         auto dxCommon = DirectXCommon::GetInstance();
         ofs << "{" << std::endl;
@@ -3283,7 +3505,7 @@ void EditorManager::SaveSceneConfig() {
 }
 
 void EditorManager::LoadSceneConfig() {
-    std::ifstream ifs("resources/json/editor_config.json");
+    std::ifstream ifs("resources/json/local/editor_config.json");
     if (!ifs.is_open()) {
         return;
     }
@@ -3356,8 +3578,8 @@ void EditorManager::LoadSceneConfig() {
 }
 
 void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
-    std::filesystem::create_directories("resources/json");
-    std::ofstream ofs("resources/json/lighting_config.json");
+    std::filesystem::create_directories("resources/json/shared");
+    std::ofstream ofs("resources/json/shared/lighting_config.json");
     if (ofs.is_open()) {
         nlohmann::json j;
         j["activeLightType"] = activeLightType_;
@@ -3394,7 +3616,7 @@ void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
 }
 
 void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
-    std::ifstream ifs("resources/json/lighting_config.json");
+    std::ifstream ifs("resources/json/shared/lighting_config.json");
     if (!ifs.is_open()) return;
 
     try {
@@ -3567,6 +3789,347 @@ void EditorManager::EndRoomHistoryCapture(MapChip2D* mapChip) {
     }
     if (changed) {
         PushCommand(std::make_shared<RoomEditCommand>(mapChip, oldRoomState_, newState));
+    }
+}
+
+void EditorManager::UpdateAStarPositionsFromMap(MapChip2D* mapChip, SceneManager* sceneManager) {
+    if (!mapChip) return;
+
+    float halfChip = mapChip->GetChipSize() * 0.5f;
+    bool foundSpawn = false;
+
+    // 1. 最優先: シーンの GetPlayer() から Player2D の位置を取得
+    IScene* activeScene = sceneManager ? sceneManager->GetCurrentScene() : nullptr;
+
+    if (activeScene) {
+        Player2D* player = activeScene->GetPlayer();
+        if (player) {
+            Vector3 pos = player->GetStartPosition();
+            if (pos.x != 0.0f || pos.y != 0.0f) {
+                aStarStartPos_[0] = pos.x;
+                aStarStartPos_[1] = pos.y;
+                foundSpawn = true;
+            } else {
+                pos = player->GetPosition();
+                if (pos.x != 0.0f || pos.y != 0.0f) {
+                    aStarStartPos_[0] = pos.x;
+                    aStarStartPos_[1] = pos.y;
+                    foundSpawn = true;
+                }
+            }
+        }
+    }
+
+    // 2. もし Player2D オブジェクトが見つからない場合、MapChip2D 上の kPlayerSpawn (スポーンブロック) を検索
+    if (!foundSpawn && mapChip->HasPlayerSpawn()) {
+        Vector3 spawnWorldPos = mapChip->GetPlayerSpawnWorldPosition();
+        aStarStartPos_[0] = spawnWorldPos.x;
+        aStarStartPos_[1] = spawnWorldPos.y;
+        foundSpawn = true;
+    }
+
+    // 3. それでも見つからない場合、ReplayManager の playerInitPos を参照（0,0でない場合）
+    if (!foundSpawn) {
+        const auto& currentReplay = ReplayManager::GetInstance()->GetCurrentReplay();
+        if (currentReplay.playerInitPos.x != 0.0f || currentReplay.playerInitPos.y != 0.0f) {
+            aStarStartPos_[0] = currentReplay.playerInitPos.x;
+            aStarStartPos_[1] = currentReplay.playerInitPos.y;
+            foundSpawn = true;
+        }
+    }
+
+    // 4. デフォルト位置へのフォールバック (2.0, 5.0)
+    if (!foundSpawn) {
+        aStarStartPos_[0] = 2.0f;
+        aStarStartPos_[1] = 5.0f;
+    }
+
+    // 5. ゴール座標 (kGoal) の検索
+    bool foundGoal = false;
+    for (int y = 0; y < mapChip->GetHeight(); ++y) {
+        for (int x = 0; x < mapChip->GetWidth(); ++x) {
+            if (mapChip->GetChipType(x, y) == MapChip2D::ChipType::kGoal) {
+                aStarGoalPos_[0] = mapChip->ChipToWorldX(x) + halfChip;
+                aStarGoalPos_[1] = mapChip->ChipToWorldY(y) + halfChip;
+                foundGoal = true;
+                break;
+            }
+        }
+        if (foundGoal) break;
+    }
+}
+
+void EditorManager::ApplyDefaultLayout() {
+    showInspector_ = true;
+    showHierarchy_ = true;
+    showGameView_ = true;
+    showPostEffect_ = true;
+    showMapEditor_ = true;
+    showMapSettings_ = true;
+    showReplayEditor_ = true;
+    showAnimEditor_ = true;
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport) return;
+
+    ImGuiID dockspace_id = ImGui::GetID("##DockSpaceOverViewport_0");
+    if (dockspace_id == 0) {
+        dockspace_id = ImGui::DockSpaceOverViewport(0, viewport);
+    }
+
+    ImGui::DockBuilderRemoveNode(dockspace_id);
+    ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+
+    ImGuiID dock_id_main = dockspace_id;
+    // 左側に「ヒエラルキー」
+    ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Left, 0.20f, NULL, &dock_id_main);
+    // 右側に「インスペクター」
+    ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Right, 0.25f, NULL, &dock_id_main);
+    // メインの下側に「マップチップ画面」「リプレイマネージャー」など
+    ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_id_main, ImGuiDir_Down, 0.35f, NULL, &dock_id_main);
+
+    // 各ウィンドウを各ノードに割り当てる
+    ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
+    ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
+    ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
+    ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
+
+    // 左側
+    ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
+    ImGui::DockBuilderDockWindow("マイメディア (リプレイ履歴)", dock_id_left);
+
+    // 右側
+    ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
+    ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+
+    // 下側
+    ImGui::DockBuilderDockWindow("マップ設定", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
+
+    ImGui::DockBuilderFinish(dockspace_id);
+
+    presetStatusMessage_ = "標準レイアウトにリセットしました";
+    presetStatusMessageTimer_ = 3.0f;
+}
+
+void EditorManager::ScanLayoutPresets() {
+    layoutPresets_.clear();
+    std::filesystem::path dirPath("resources/json/local/layout_presets");
+    if (!std::filesystem::exists(dirPath)) {
+        std::filesystem::create_directories(dirPath);
+        return;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            std::ifstream ifs(entry.path());
+            if (!ifs.is_open()) continue;
+            try {
+                nlohmann::json j;
+                ifs >> j;
+                WindowLayoutPreset preset;
+                preset.name = j.value("name", entry.path().stem().string());
+                preset.iniData = j.value("iniData", "");
+                preset.showInspector = j.value("showInspector", true);
+                preset.showHierarchy = j.value("showHierarchy", true);
+                preset.showGameView = j.value("showGameView", true);
+                preset.showPostEffect = j.value("showPostEffect", true);
+                preset.showMapEditor = j.value("showMapEditor", true);
+                preset.showMapSettings = j.value("showMapSettings", true);
+                preset.showReplayEditor = j.value("showReplayEditor", true);
+                preset.showAnimEditor = j.value("showAnimEditor", true);
+
+                layoutPresets_.push_back(preset);
+            } catch (...) {
+                // パース失敗時はスキップ
+            }
+        }
+    }
+}
+
+void EditorManager::SaveLayoutPreset(const std::string& name) {
+    if (name.empty()) return;
+
+    std::filesystem::path dirPath("resources/json/local/layout_presets");
+    if (!std::filesystem::exists(dirPath)) {
+        std::filesystem::create_directories(dirPath);
+    }
+
+    size_t iniSize = 0;
+    const char* iniStr = ImGui::SaveIniSettingsToMemory(&iniSize);
+
+    WindowLayoutPreset preset;
+    preset.name = name;
+    preset.iniData = (iniStr && iniSize > 0) ? std::string(iniStr, iniSize) : "";
+    preset.showInspector = showInspector_;
+    preset.showHierarchy = showHierarchy_;
+    preset.showGameView = showGameView_;
+    preset.showPostEffect = showPostEffect_;
+    preset.showMapEditor = showMapEditor_;
+    preset.showMapSettings = showMapSettings_;
+    preset.showReplayEditor = showReplayEditor_;
+    preset.showAnimEditor = showAnimEditor_;
+
+    nlohmann::json j;
+    j["name"] = preset.name;
+    j["iniData"] = preset.iniData;
+    j["showInspector"] = preset.showInspector;
+    j["showHierarchy"] = preset.showHierarchy;
+    j["showGameView"] = preset.showGameView;
+    j["showPostEffect"] = preset.showPostEffect;
+    j["showMapEditor"] = preset.showMapEditor;
+    j["showMapSettings"] = preset.showMapSettings;
+    j["showReplayEditor"] = preset.showReplayEditor;
+    j["showAnimEditor"] = preset.showAnimEditor;
+
+    std::filesystem::path filePath = dirPath / (name + ".json");
+    std::ofstream ofs(filePath);
+    if (ofs.is_open()) {
+        ofs << j.dump(4);
+    }
+
+    bool found = false;
+    for (auto& p : layoutPresets_) {
+        if (p.name == name) {
+            p = preset;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        layoutPresets_.push_back(preset);
+    }
+
+    presetStatusMessage_ = "プリセット「" + name + "」を保存しました";
+    presetStatusMessageTimer_ = 3.0f;
+}
+
+bool EditorManager::ApplyLayoutPreset(const std::string& name) {
+    for (const auto& preset : layoutPresets_) {
+        if (preset.name == name) {
+            showInspector_ = preset.showInspector;
+            showHierarchy_ = preset.showHierarchy;
+            showGameView_ = preset.showGameView;
+            showPostEffect_ = preset.showPostEffect;
+            showMapEditor_ = preset.showMapEditor;
+            showMapSettings_ = preset.showMapSettings;
+            showReplayEditor_ = preset.showReplayEditor;
+            showAnimEditor_ = preset.showAnimEditor;
+
+            if (!preset.iniData.empty()) {
+                ImGui::LoadIniSettingsFromMemory(preset.iniData.c_str(), preset.iniData.size());
+            }
+            presetStatusMessage_ = "プリセット「" + name + "」を適用しました";
+            presetStatusMessageTimer_ = 3.0f;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool EditorManager::DeleteLayoutPreset(const std::string& name) {
+    std::filesystem::path filePath = std::filesystem::path("resources/json/local/layout_presets") / (name + ".json");
+    if (std::filesystem::exists(filePath)) {
+        std::filesystem::remove(filePath);
+    }
+
+    auto it = std::remove_if(layoutPresets_.begin(), layoutPresets_.end(), [&](const WindowLayoutPreset& p) {
+        return p.name == name;
+    });
+    if (it != layoutPresets_.end()) {
+        layoutPresets_.erase(it, layoutPresets_.end());
+        presetStatusMessage_ = "プリセット「" + name + "」を削除しました";
+        presetStatusMessageTimer_ = 3.0f;
+        return true;
+    }
+    return false;
+}
+
+bool EditorManager::ExportLayoutPresetToFile(const std::string& name, const std::string& filePath) {
+    for (const auto& preset : layoutPresets_) {
+        if (preset.name == name) {
+            nlohmann::json j;
+            j["name"] = preset.name;
+            j["iniData"] = preset.iniData;
+            j["showInspector"] = preset.showInspector;
+            j["showHierarchy"] = preset.showHierarchy;
+            j["showGameView"] = preset.showGameView;
+            j["showPostEffect"] = preset.showPostEffect;
+            j["showMapEditor"] = preset.showMapEditor;
+            j["showMapSettings"] = preset.showMapSettings;
+            j["showReplayEditor"] = preset.showReplayEditor;
+            j["showAnimEditor"] = preset.showAnimEditor;
+
+            std::filesystem::path outPath(filePath);
+            if (outPath.has_parent_path()) {
+                std::filesystem::create_directories(outPath.parent_path());
+            }
+            std::ofstream ofs(outPath);
+            if (ofs.is_open()) {
+                ofs << j.dump(4);
+                presetStatusMessage_ = "ファイル「" + outPath.string() + "」へ出力しました";
+                presetStatusMessageTimer_ = 3.0f;
+                return true;
+            }
+            break;
+        }
+    }
+    presetStatusMessage_ = "出力に失敗しました";
+    presetStatusMessageTimer_ = 3.0f;
+    return false;
+}
+
+bool EditorManager::ImportLayoutPresetFromFile(const std::string& filePath) {
+    std::ifstream ifs(filePath);
+    if (!ifs.is_open()) {
+        presetStatusMessage_ = "ファイルが開けませんでした: " + filePath;
+        presetStatusMessageTimer_ = 3.0f;
+        return false;
+    }
+    try {
+        nlohmann::json j;
+        ifs >> j;
+        WindowLayoutPreset preset;
+        preset.name = j.value("name", std::filesystem::path(filePath).stem().string());
+        preset.iniData = j.value("iniData", "");
+        preset.showInspector = j.value("showInspector", true);
+        preset.showHierarchy = j.value("showHierarchy", true);
+        preset.showGameView = j.value("showGameView", true);
+        preset.showPostEffect = j.value("showPostEffect", true);
+        preset.showMapEditor = j.value("showMapEditor", true);
+        preset.showMapSettings = j.value("showMapSettings", true);
+        preset.showReplayEditor = j.value("showReplayEditor", true);
+        preset.showAnimEditor = j.value("showAnimEditor", true);
+
+        std::filesystem::path dirPath("resources/json/local/layout_presets");
+        std::filesystem::create_directories(dirPath);
+        std::ofstream ofs(dirPath / (preset.name + ".json"));
+        if (ofs.is_open()) {
+            ofs << j.dump(4);
+        }
+
+        bool found = false;
+        for (auto& p : layoutPresets_) {
+            if (p.name == preset.name) {
+                p = preset;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            layoutPresets_.push_back(preset);
+        }
+        presetStatusMessage_ = "プリセット「" + preset.name + "」をインポートしました";
+        presetStatusMessageTimer_ = 3.0f;
+        return true;
+    } catch (...) {
+        presetStatusMessage_ = "JSONの解析に失敗しました";
+        presetStatusMessageTimer_ = 3.0f;
+        return false;
     }
 }
 #endif

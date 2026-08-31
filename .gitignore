@@ -1,3 +1,2 @@
 .aider*
-/MyDreamGame/project/resources/json/editor_config.json
-*.json
+/MyDreamGame/project/resources/json/local/

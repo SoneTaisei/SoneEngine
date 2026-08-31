@@ -23,9 +23,13 @@ void MeshRendererComponent::Initialize(ID3D12Device* device, Model* model) {
     // デフォルトマテリアル設定
     material_.color = { 1.0f, 1.0f, 1.0f, 1.0f };
     material_.lightingType = 1; // Meshは通常ライティング有効
-    material_.environmentCoefficient = 1.0f;
+    material_.enableBlinnPhong = 1;
     material_.enableEnvironmentMap = 0;
+    material_.alphaReference = 0.0f;
     material_.uvTransform = TransformFunctions::MakeIdentity4x4();
+    material_.shininess = 50.0f;
+    material_.environmentCoefficient = 1.0f;
+    material_.dissolveThreshold = 0.0f;
     material_.enableBoxMapping = 0.0f;
     *mappedMaterial_ = material_;
 

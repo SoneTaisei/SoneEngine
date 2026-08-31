@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include <Windows.h>
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
@@ -17,7 +18,7 @@
 #include "Graphics/Skybox.h"
 #include "Core/Utility/ParameterManager.h"
 
-std::string GameScene::s_TargetMapFilePath = "resources/json/Map/map_data.json";
+std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
 void GameScene::OnEnter(SceneManager* sceneManager) {
     // StageSelectSceneから選択されたステージのパスを受け取る
@@ -82,6 +83,7 @@ void GameScene::Initialize() {
     playerObj_ = std::make_unique<GameObject>("Player");
     playerObj_->AddComponent<TransformComponent>();
     player_ = playerObj_->AddComponent<Player2D>();
+    player_->SetCamera(gameCamera_); // 画面揺れ連携用にカメラを渡す
     Log("GameScene::Initialize: Player Initialized\n");
     
     player_->FindSpawnPoint(*map_);
@@ -97,18 +99,36 @@ void GameScene::Initialize() {
         gameCamera_->SetFollowTarget(&player_->GetPosition());
         Log("GameScene::Initialize: Camera configured\n");
     }
+
+
     Log("GameScene::Initialize: Finish\n");
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
-    if (coinEffect_) {
-        coinEffect_->Update(1.0f / 60.0f);
+    bool isPlayingOrReplaying = false;
+#ifdef USE_IMGUI
+    if (EditorManager::IsPlaying()) {
+        isPlayingOrReplaying = true;
     }
-    if (ringEffect_) {
-        ringEffect_->Update(1.0f / 60.0f);
+#else
+    isPlayingOrReplaying = true;
+#endif
+    if (ReplayManager::GetInstance()->IsPlaying()) {
+        isPlayingOrReplaying = true;
     }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(1.0f / 60.0f);
+
+    bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+
+    if (isGameActive) {
+        if (coinEffect_) {
+            coinEffect_->Update(1.0f / 60.0f);
+        }
+        if (ringEffect_) {
+            ringEffect_->Update(1.0f / 60.0f);
+        }
+        if (cylinderEffect_) {
+            cylinderEffect_->Update(1.0f / 60.0f);
+        }
     }
 
     if (skybox_) {
@@ -227,6 +247,8 @@ void GameScene::Update(SceneManager *sceneManager) {
                     
                     // 2. プレイヤー状態(速度含む)とスコアをリセット
                     player_->ResetState(replayData.playerInitPos);
+                    player_->ClearEffects();
+                    if (coinEffect_) coinEffect_->Clear();
                     
                     // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
                     for (int i = 0; i <= curFrame; ++i) {
@@ -240,6 +262,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                     } else {
                         player_->SetPosition(replayData.frames[curFrame - 1].position);
                     }
+                    previousScore_ = player_->GetScore();
                 }
 
                 if (!wasPlayingLastFrame_) {
@@ -281,6 +304,14 @@ void GameScene::Update(SceneManager *sceneManager) {
                 wasPlayingLastFrame_ = false;
 
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
+            }
+
+            if (gameCamera_ && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding) {
+                if (player_->IsDead()) {
+                    gameCamera_->SetFollowTarget(nullptr);
+                } else {
+                    gameCamera_->SetFollowTarget(&player_->GetPosition());
+                }
             }
 
             if (gameCamera_ && map_) {
@@ -344,10 +375,12 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
     }
+
 }
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
+
     if (player_ && player_->GetPrimitiveObject() == selectedPrimitive) {
         player_->DisplayImGui();
     }
@@ -460,26 +493,21 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
-    if (modelCommon_) {
-        modelCommon_->PreDraw();
-    }
+    OutputDebugStringA("[DEBUG] GameScene::Draw Start\n");
 
+    // 1. Skyboxの描画
     if (skybox_) {
+        OutputDebugStringA("[DEBUG] GameScene::Draw Skybox Start\n");
         skybox_->Draw();
-        
-        auto dxCommon = DirectXCommon::GetInstance();
-        DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-        DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
-
-        if (modelCommon_) {
-            modelCommon_->PreDraw();
-        }
+        OutputDebugStringA("[DEBUG] GameScene::Draw Skybox End\n");
     }
 
-    // 2. 2Dオブジェクト（マップ・プレイヤー）の描画
-    // ModelCommonの描画前処理
-    modelCommon_->PreDraw();
+    // 2. 3Dモデル（マップ・プレイヤー）の描画準備
+    if (modelCommon_) {
+        OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw Start\n");
+        modelCommon_->PreDraw();
+        OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw End\n");
+    }
 
     // マップの描画
     if (map_) {
@@ -491,12 +519,13 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         player_->Draw();
     }
 
+
     // コンポーネントの描画を実行
     Renderer::GetInstance()->RenderComponents();
 
     if (coinEffect_) {
 #ifdef USE_IMGUI
-        if (EditorManager::IsShowEffects()) {
+        if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
             coinEffect_->Draw();
         }
 #else
@@ -513,29 +542,97 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             ReplayData& currentReplay = replayManager->GetCurrentReplay();
             if (!currentReplay.frames.empty()) {
                 const float GHOST_ALPHA = 0.5f;
-                // 全フレーム描画すると線のように繋がってしまうため、一定間隔（例：10フレーム毎）で描画して軌跡を表現
                 const int FRAME_STEP = 10;
-
                 auto* playerPrim = player_->GetPrimitiveObject();
-                // エディターの「Show Trail」がONのときだけ残像を描画する
                 if (playerPrim && playerPrim->GetShowTrail()) {
-                    // クリップ矩形を設定して、GameViewの外に線や点がはみ出ないようにする
-                    ImVec2 gameViewPos = EditorManager::GetGameViewPos();
-                    ImVec2 gameViewSize = EditorManager::GetGameViewSize();
-                    ImDrawList* drawList = ImGui::GetForegroundDrawList();
-                    drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
-
-                    // 描画前にゴースト用のインデックスをリセット
                     playerPrim->ResetGhostIndex();
-
-                    // ベースとなるプレイヤーのTransformと色を取得
-                    Vector4 baseColor = playerPrim->GetMaterial().color;
-
-                    // 選択されているリプレイの全フレームを通して軌跡を描画
                     for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
                         const FrameData& frameData = currentReplay.frames[i];
+                        if (i >= FRAME_STEP) {
+                            int prevIndex = i - FRAME_STEP;
+                            if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
+                                Vector3 diff;
+                                diff.x = frameData.position.x - currentReplay.frames[prevIndex].position.x;
+                                diff.y = frameData.position.y - currentReplay.frames[prevIndex].position.y;
+                                diff.z = frameData.position.z - currentReplay.frames[prevIndex].position.z;
+                                float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+                                if (distSq < 0.0001f) {
+                                    continue;
+                                }
+                            }
+                        }
+                        EulerTransform ghostTransform = playerPrim->GetTransform();
+                        ghostTransform.translate = frameData.position;
+                        ghostTransform.scale = frameData.scale;
+                        ghostTransform.rotate = frameData.rotation;
 
-                        // 直前に描画したゴーストと座標がほぼ同じならスキップ(立ち止まっている時のZファイティング/濃くなりすぎ防止)
+                        Material ghostMaterial = playerPrim->GetMaterial();
+                        Vector4 ghostColor = frameData.color;
+                        ghostColor.w *= GHOST_ALPHA;
+                        ghostMaterial.color = ghostColor;
+
+                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
+                    }
+                }
+            }
+
+            // --- 物理ベースA* 探索ルート（AIゴースト）の描画 ---
+            const auto& aiPath = replayManager->GetAIPathPositions();
+            if (replayManager->IsShowAIGhost() && !aiPath.empty()) {
+                auto* playerPrim = player_->GetPrimitiveObject();
+                if (playerPrim) {
+                    const int AI_STEP = 5;
+                    const float GHOST_ALPHA = 0.6f;
+                    for (int i = 0; i < static_cast<int>(aiPath.size()); i += AI_STEP) {
+                        const Vector3& pos = aiPath[i];
+                        EulerTransform ghostTransform = playerPrim->GetTransform();
+                        ghostTransform.translate = pos;
+
+                        Material ghostMaterial = playerPrim->GetMaterial();
+                        ghostMaterial.color = Vector4{ 0.0f, 0.9f, 1.0f, GHOST_ALPHA };
+
+                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
+                    }
+                }
+            }
+        }
+    }
+#endif
+
+    // 3. パーティクルの描画
+    // 描画前処理
+    particleCommon_->PreDraw();
+
+    // パーティクルの描画
+#ifdef USE_IMGUI
+    if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
+#endif
+        particleCommon_->DrawAll(viewProjectionMatrix);
+#ifdef USE_IMGUI
+    }
+#endif
+}
+
+
+void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
+#ifdef USE_IMGUI
+    if (!EditorManager::IsPlaying() && player_) {
+        ReplayManager* replayManager = ReplayManager::GetInstance();
+        if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
+            auto* playerPrim = player_->GetPrimitiveObject();
+            ImVec2 gameViewPos = EditorManager::GetGameViewPos();
+            ImVec2 gameViewSize = EditorManager::GetGameViewSize();
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+            // 1. プレイヤー残像の2D軌跡描画
+            if (playerPrim && playerPrim->GetShowTrail()) {
+                ReplayData& currentReplay = replayManager->GetCurrentReplay();
+                if (!currentReplay.frames.empty()) {
+                    const int FRAME_STEP = 10;
+                    drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
+
+                    for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
+                        const FrameData& frameData = currentReplay.frames[i];
                         if (i >= FRAME_STEP) {
                             int prevIndex = i - FRAME_STEP;
                             if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
@@ -550,93 +647,46 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
                             }
                         }
 
-                        // ゴースト用のTransformとMaterialを作成
-                        EulerTransform ghostTransform = playerPrim->GetTransform();
-                        ghostTransform.translate = frameData.position;
-                        ghostTransform.scale = frameData.scale;
-                        ghostTransform.rotate = frameData.rotation;
-
-                        Material ghostMaterial = playerPrim->GetMaterial();
-                        // 記録されていた色（スプライト/モデルのカラー情報）を取り出し、アルファ値をかけて半透明にする
-                        Vector4 ghostColor = frameData.color;
-                        ghostColor.w *= GHOST_ALPHA; // 元のアルファ値に掛け算する
-                        ghostMaterial.color = ghostColor;
-
-                        // プレイヤーのPrimitiveを使って残像(ゴースト)を描画
-                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
-
-                        // 3D -> NDC Conversion for the current frame's position
                         Vector3 ndcCurr = TransformFunctions::EulerTransform(frameData.position, viewProjectionMatrix);
-
                         ImVec2 pCurr;
                         bool isCurrVisible = false;
 
-                        // Check if the point is in front of the camera
                         if (ndcCurr.z >= 0.0f && ndcCurr.z <= 1.0f) {
                             isCurrVisible = true;
-                            float screenWidth = gameViewSize.x;
-                            float screenHeight = gameViewSize.y;
-
                             pCurr = ImVec2(
-                                gameViewPos.x + (ndcCurr.x + 1.0f) * 0.5f * screenWidth,
-                                gameViewPos.y + (1.0f - ndcCurr.y) * 0.5f * screenHeight
+                                gameViewPos.x + (ndcCurr.x + 1.0f) * 0.5f * gameViewSize.x,
+                                gameViewPos.y + (1.0f - ndcCurr.y) * 0.5f * gameViewSize.y
                             );
-
-                            // Draw a dot at the afterimage position
                             drawList->AddCircleFilled(pCurr, 4.0f, IM_COL32(255, 50, 50, 255));
                         }
 
-                        // Draw orbital line between the current and previous afterimage
                         if (i >= FRAME_STEP) {
                             int prevIndex = i - FRAME_STEP;
                             if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
                                 Vector3 ndcPrev = TransformFunctions::EulerTransform(currentReplay.frames[prevIndex].position, viewProjectionMatrix);
-
-                                // Draw only if both current and previous points are visible
                                 if (isCurrVisible && ndcPrev.z >= 0.0f && ndcPrev.z <= 1.0f) {
-                                    float screenWidth = gameViewSize.x;
-                                    float screenHeight = gameViewSize.y;
-
                                     ImVec2 pPrev(
-                                        gameViewPos.x + (ndcPrev.x + 1.0f) * 0.5f * screenWidth,
-                                        gameViewPos.y + (1.0f - ndcPrev.y) * 0.5f * screenHeight
+                                        gameViewPos.x + (ndcPrev.x + 1.0f) * 0.5f * gameViewSize.x,
+                                        gameViewPos.y + (1.0f - ndcPrev.y) * 0.5f * gameViewSize.y
                                     );
-
                                     drawList->AddLine(pPrev, pCurr, IM_COL32(255, 200, 0, 255), 2.0f);
                                 }
                             }
                         }
                     }
-
-                    // クリップ矩形を解除
                     drawList->PopClipRect();
                 }
             }
 
-            // --- 物理ベースA* 探索ルート（AIゴースト）の描画 ---
+            // 2. 物理ベースA* AIゴーストの2D軌跡描画
             const auto& aiPath = replayManager->GetAIPathPositions();
             if (replayManager->IsShowAIGhost() && !aiPath.empty()) {
-                auto* playerPrim = player_->GetPrimitiveObject();
                 if (playerPrim) {
-                    ImVec2 gameViewPos = EditorManager::GetGameViewPos();
-                    ImVec2 gameViewSize = EditorManager::GetGameViewSize();
-                    ImDrawList* drawList = ImGui::GetForegroundDrawList();
                     drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
-
-                    const int AI_STEP = 5; // 5フレームごとに描画
-                    const float GHOST_ALPHA = 0.6f;
+                    const int AI_STEP = 5;
 
                     for (int i = 0; i < static_cast<int>(aiPath.size()); i += AI_STEP) {
                         const Vector3& pos = aiPath[i];
-
-                        EulerTransform ghostTransform = playerPrim->GetTransform();
-                        ghostTransform.translate = pos;
-
-                        Material ghostMaterial = playerPrim->GetMaterial();
-                        ghostMaterial.color = Vector4{ 0.0f, 0.9f, 1.0f, GHOST_ALPHA }; // シアンブルー
-
-                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
-
                         Vector3 ndcCurr = TransformFunctions::EulerTransform(pos, viewProjectionMatrix);
                         if (ndcCurr.z >= 0.0f && ndcCurr.z <= 1.0f) {
                             ImVec2 pCurr(
@@ -663,23 +713,15 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         }
     }
 #endif
-
-    // 3. パーティクルの描画
-    // 描画前処理
-    particleCommon_->PreDraw();
-
-    // パーティクルの描画
-#ifdef USE_IMGUI
-    if (EditorManager::IsShowEffects()) {
-#endif
-        particleCommon_->DrawAll(viewProjectionMatrix);
-#ifdef USE_IMGUI
-    }
-#endif
 }
 
 std::vector<ParticleManager *> GameScene::GetParticles() {
     std::vector<ParticleManager *> result;
+    return result;
+}
+
+std::vector<Object3D *> GameScene::GetObjects() {
+    std::vector<Object3D *> result;
     return result;
 }
 
@@ -726,19 +768,11 @@ void GameScene::UpdateEditor() {
         ReplayManager::GetInstance()->StopRecord();
     }
 
-    if (skybox_) {
-        skybox_->Update();
+    // エディタ停止中もマップの変更（isDirty_時の再構築など）に追従させる
+    if (map_) {
+        map_->Update();
     }
-    if (coinEffect_) {
-        // ImGui更新（もしあれば）
-        coinEffect_->Update(1.0f / 60.0f);
-    }
-    if (ringEffect_) {
-        ringEffect_->Update(1.0f / 60.0f);
-    }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(1.0f / 60.0f);
-    }
+
     // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
     if (player_) {
         if (map_) {
@@ -750,12 +784,8 @@ void GameScene::UpdateEditor() {
             playerPrim->Update();
         }
     }
-    if (map_) {
-        map_->Update();
-        for (auto* mapPrim : map_->GetPrimitiveObjects()) {
-            if (mapPrim) {
-                mapPrim->Update();
-            }
-        }
+
+    if (skybox_) {
+        skybox_->Update();
     }
 }

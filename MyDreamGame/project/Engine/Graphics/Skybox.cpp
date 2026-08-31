@@ -53,23 +53,30 @@ void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {
 void Skybox::Update() {
     // マネージャから勝手に取ってくる
     CameraManager *cameraMgr = CameraManager::GetInstance();
-    Vector3 cameraPos = cameraMgr->GetCameraPos();
     Matrix4x4 view = cameraMgr->GetViewMatrix();
+    
+    // Skybox is drawn at infinity, so we ignore camera translation.
+    // Clear the translation components (4th row) from the view matrix.
+    view.m[3][0] = 0.0f;
+    view.m[3][1] = 0.0f;
+    view.m[3][2] = 0.0f;
     
     // Skyboxは常に遠景を描画するため、カメラの投影方式（平行投影など）に関わらず
     // 透視投影（Perspective）行列を使用して、画面全体を覆うようにする。
     Matrix4x4 projection = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
 
-
-    // あとはこれを使って WVP を計算するだけ
-    Matrix4x4 worldMatrix = TransformFunctions::MakeTranslateMatrix(cameraPos);
+    // Keep the world matrix at the origin since we cleared translation in the view matrix.
+    Matrix4x4 worldMatrix = TransformFunctions::MakeIdentity4x4();
 
     // LaTeX表記での行列合成: $$WVP = World \times View \times Projection$$
     mappedTransform_->WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(view, projection));
     mappedTransform_->World = worldMatrix;
 }
 
+#include <Windows.h>
+
 void Skybox::Draw() {
+    OutputDebugStringA("[DEBUG] Skybox::Draw Start\n");
     auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // 1. DirectXCommonから専用のルール（PSO・RootSignature）を取得してセット
     DirectXCommon *dxCommon = DirectXCommon::GetInstance();
@@ -82,13 +89,24 @@ void Skybox::Draw() {
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // 3. 定数バッファをセット（シェーダーの register(b0), register(b1) に対応）
+    if (!transformBuffer_ || !materialBuffer_) {
+        OutputDebugStringA("[DEBUG] Skybox::Draw Aborted: transformBuffer_ or materialBuffer_ is null\n");
+        return;
+    }
+
     commandList->SetGraphicsRootConstantBufferView(0, transformBuffer_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(1, materialBuffer_->GetGPUVirtualAddress());
 
     // 4. テクスチャ(CubeMap)のSRVをセット（t0 に対応）
     D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = TextureManager::GetInstance()->GetSrvHandleGPU(textureHandle_);
-    commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    if (srvHandle.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+    }
 
     // 5. 描画！（インデックス描画）
     commandList->DrawIndexedInstanced(indexCount_, 1, 0, 0, 0);
+
+    // ★ Skybox描画後に標準の RootSignature に戻す
+    commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
+    OutputDebugStringA("[DEBUG] Skybox::Draw End\n");
 }

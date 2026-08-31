@@ -2,6 +2,7 @@
 #include "Scenes/TitleScene.h"
 #include "Scenes/StageSelectScene.h"
 #include "Scenes/GameScene.h"
+#include "Scenes/BlenderLevelTestScene.h"
 
 std::unique_ptr<IScene> SceneFactory::CreateScene(SceneType type) {
     switch (type) {
@@ -11,6 +12,8 @@ std::unique_ptr<IScene> SceneFactory::CreateScene(SceneType type) {
         return std::make_unique<StageSelectScene>();
     case SceneType::kGame:
         return std::make_unique<GameScene>();
+    case SceneType::kBlenderLevelTest:
+        return std::make_unique<BlenderLevelTestScene>();
     default:
         return std::make_unique<TitleScene>();
     }

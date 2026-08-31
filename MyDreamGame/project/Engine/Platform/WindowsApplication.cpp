@@ -261,7 +261,7 @@ void WindowsApplication::Update() {
                 if (sceneManager_->GetCurrentScene()) {
                     auto* map = sceneManager_->GetCurrentScene()->GetMapChip();
                     if (map) {
-                        map->SaveToFile("resources/json/MapData/temp_play_map.txt");
+                        map->SaveToFile("resources/json/shared/MapData/temp_play_map.txt");
                     }
                 }
             }
@@ -281,7 +281,7 @@ void WindowsApplication::Update() {
                 
                 // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
                 std::string originalPath = GameScene::s_TargetMapFilePath;
-                GameScene::s_TargetMapFilePath = "resources/json/MapData/temp_play_map.txt";
+                GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/temp_play_map.txt";
                 
                 sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
                 
@@ -329,7 +329,10 @@ void WindowsApplication::Update() {
                 CameraManager::GetInstance()->ClearCullingCameraInfo();
             }
             
-            bool allowCameraInput = editorManager_->IsGameViewHovered() || editorManager_->IsReplayEditorHovered() || !ImGui::GetIO().WantCaptureMouse;
+            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
+                                    editorManager_->IsReplayEditorHovered() || 
+                                    editorManager_->IsAnimationEditorHovered() || 
+                                    !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {
             activeCamera_ = gameCamera_.get();
@@ -455,7 +458,7 @@ void WindowsApplication::Finalize() {
 }
 
 void WindowsApplication::LoadWindowConfig() {
-    std::ifstream ifs("resources/json/window_config.json");
+    std::ifstream ifs("resources/json/shared/window_config.json");
     if (!ifs.is_open()) {
         return;
     }
@@ -488,9 +491,8 @@ void WindowsApplication::LoadWindowConfig() {
 }
 
 void WindowsApplication::SaveWindowConfig() {
-    std::filesystem::create_directories("json");
-
-    std::ofstream ofs("resources/json/window_config.json");
+    std::filesystem::create_directories("resources/json/shared");
+    std::ofstream ofs("resources/json/shared/window_config.json");
     if (ofs.is_open()) {
         ofs << "{" << std::endl;
         ofs << "  \"isFullscreen\": " << (window_->IsFullscreen() ? "true" : "false") << "," << std::endl;

@@ -78,6 +78,10 @@ void CoinEffect::Emit(const Vector3& position) {
     }
 }
 
+void CoinEffect::Clear() {
+    particles_.clear();
+}
+
 std::vector<PrimitiveObject*> CoinEffect::GetParticles() {
     std::vector<PrimitiveObject*> result;
     for (auto& p : particles_) {

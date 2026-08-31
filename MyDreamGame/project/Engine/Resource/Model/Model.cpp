@@ -2,6 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Graphics/TextureManager.h"
 #include <cassert>
+#include <filesystem>
 
 // 必要に応じてextern宣言など
 extern ModelData LoadModelFile(const std::string &directoryPath, const std::string &filename);
@@ -14,13 +15,18 @@ Model::~Model() {
     }
 }
 
-// ★OBJ読み込み用初期化
 void Model::Initialize(ModelCommon *modelCommon, const std::string &directoryPath, const std::string &filename) {
     // 1. Commonをセット
     modelCommon_ = modelCommon;
 
     // 2. データ読み込み
     modelData_ = LoadModelFile(directoryPath, filename);
+
+    // モデル自体のマテリアルにテクスチャファイルが存在する場合のみ TextureManager からロードして GPU デスクリプタをセット
+    if (!modelData_.material.textureFilePath.empty() && std::filesystem::exists(modelData_.material.textureFilePath)) {
+        uint32_t texIndex = TextureManager::GetInstance()->Load(modelData_.material.textureFilePath);
+        textureHandle_ = TextureManager::GetInstance()->GetGpuHandle(texIndex);
+    }
 
     // 3. バッファ生成
     CreateBuffers();
@@ -82,10 +88,13 @@ void Model::CreateBuffers() {
     indexResource_->Unmap(0, nullptr);
 }
 
-void Model::Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView) {
+void Model::Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView, D3D12_GPU_DESCRIPTOR_HANDLE overrideTexture) {
     auto commandList = DirectXCommon::GetInstance()->GetCommandList();
 
-    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = textureHandle_;
+    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = overrideTexture;
+    if (activeTexture.ptr == 0) {
+        activeTexture = textureHandle_;
+    }
     if (activeTexture.ptr == 0) {
         uint32_t defaultWhite = TextureManager::GetInstance()->Load("white");
         activeTexture = TextureManager::GetInstance()->GetGpuHandle(defaultWhite);

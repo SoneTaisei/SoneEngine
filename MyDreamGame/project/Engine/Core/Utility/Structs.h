@@ -187,6 +187,7 @@ struct Node {
 
 struct Joint {
     QuaternionTransform transform; // Transform情報
+    QuaternionTransform defaultTransform; // 初期ポーズ（バインドポーズ）
     Matrix4x4 localMatrix; // localMatrix
     Matrix4x4 skeletonSpaceMatrix; // skeletonSpaceでの変換行列
     std::string name; // 名前

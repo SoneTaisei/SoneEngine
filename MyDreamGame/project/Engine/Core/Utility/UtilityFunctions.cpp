@@ -1,4 +1,4 @@
-﻿#include "Core/Utility/LogManager.h"
+#include "Core/Utility/LogManager.h"
 #pragma warning(disable: 4828)
 #include "UtilityFunctions.h"
 #include <map>
@@ -614,12 +614,15 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         }
     }
 
-    // 3. マテリアルの解析（備考に基づき、Diffuseテクスチャを取得）
+    // 3. マテリアルの解析（Diffuse / BaseColor テクスチャを取得）
     for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
         aiMaterial *material = scene->mMaterials[materialIndex];
+        aiString textureFilePath;
         if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
-            aiString textureFilePath;
             material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
+            modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
+        } else if (material->GetTextureCount(aiTextureType_BASE_COLOR) != 0) {
+            material->GetTexture(aiTextureType_BASE_COLOR, 0, &textureFilePath);
             modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
         }
     }
@@ -924,6 +927,9 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
 }
 
 
+#include "LogManager.h"
+#include <set>
+
 Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename) {
     Animation animation; // create animation
     Assimp::Importer importer;
@@ -968,6 +974,66 @@ Animation LoadAnimationFile(const std::string& directoryPath, const std::string&
     return animation;
 }
 
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename, const std::string& animationName) {
+    Animation animation;
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
+    const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
+    assert(scene && scene->mNumAnimations != 0);
+
+    aiAnimation* animationAssimp = nullptr;
+    for (uint32_t i = 0; i < scene->mNumAnimations; ++i) {
+        if (std::string(scene->mAnimations[i]->mName.C_Str()) == animationName) {
+            animationAssimp = scene->mAnimations[i];
+            break;
+        }
+    }
+
+    if (!animationAssimp) {
+        animationAssimp = scene->mAnimations[0]; // Fallback to first animation if name not found
+    }
+
+    animation.duration = float(animationAssimp->mDuration / animationAssimp->mTicksPerSecond);
+
+    for (uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex) {
+        aiNodeAnim* nodeAnimationAssimp = animationAssimp->mChannels[channelIndex];
+        NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimationAssimp->mNodeName.C_Str()];
+        
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumPositionKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mPositionKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.translate.push_back(keyframe);
+        }
+
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumRotationKeys; ++keyIndex) {
+            aiQuatKey& keyAssimp = nodeAnimationAssimp->mRotationKeys[keyIndex];
+            KeyframeQuaternion keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z, keyAssimp.mValue.w};
+            nodeAnimation.rotate.push_back(keyframe);
+        }
+
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumScalingKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.scale.push_back(keyframe);
+        }
+    }
+
+    // デバッグログ: ロードされたチャンネル名を出力
+    std::string keysLog = "Loaded animation [" + animationName + "] channels: ";
+    for (const auto& [key, val] : animation.nodeAnimations) {
+        keysLog += key + ", ";
+    }
+    LogManager::GetInstance()->AddLog(LogLevel::Info, keysLog);
+
+    return animation;
+}
+
 
 int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints) {
     Joint joint;
@@ -975,6 +1041,7 @@ int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std:
     joint.localMatrix = node.localMatrix;
     joint.skeletonSpaceMatrix = TransformFunctions::MakeIdentity4x4();
     joint.transform = node.transform;
+    joint.defaultTransform = node.transform;
     joint.index = int32_t(joints.size());
     joint.parent = parent;
     joints.push_back(joint);
@@ -1013,12 +1080,33 @@ void Update(Skeleton& skeleton) {
 }
 
 void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime) {
+    static std::set<std::string> reportedMissingNodes;
     for (Joint& joint : skeleton.joints) {
         if (auto it = animation.nodeAnimations.find(joint.name); it != animation.nodeAnimations.end()) {
             const NodeAnimation& rootNodeAnimation = (*it).second;
-            joint.transform.translate = CalculateValue(rootNodeAnimation.translate, animationTime);
-            joint.transform.rotate = CalculateValue(rootNodeAnimation.rotate, animationTime);
-            joint.transform.scale = CalculateValue(rootNodeAnimation.scale, animationTime);
+            if (!rootNodeAnimation.translate.empty()) {
+                joint.transform.translate = CalculateValue(rootNodeAnimation.translate, animationTime);
+            } else {
+                joint.transform.translate = joint.defaultTransform.translate;
+            }
+
+            if (!rootNodeAnimation.rotate.empty()) {
+                joint.transform.rotate = CalculateValue(rootNodeAnimation.rotate, animationTime);
+            } else {
+                joint.transform.rotate = joint.defaultTransform.rotate;
+            }
+
+            if (!rootNodeAnimation.scale.empty()) {
+                joint.transform.scale = CalculateValue(rootNodeAnimation.scale, animationTime);
+            } else {
+                joint.transform.scale = joint.defaultTransform.scale;
+            }
+        } else {
+            joint.transform = joint.defaultTransform;
+            if (reportedMissingNodes.find(joint.name) == reportedMissingNodes.end()) {
+                reportedMissingNodes.insert(joint.name);
+                LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation channel not found for joint: " + joint.name);
+            }
         }
     }
 }

@@ -107,8 +107,8 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
     frame.keys[0] = (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) ? 'L' : '-';
     frame.keys[1] = (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) ? 'R' : '-';
     frame.keys[2] = keyboard->IsKeyDown(DIK_SPACE) ? 'J' : '-';
-    frame.keys[3] = (keyboard->IsKeyDown(DIK_LSHIFT) || keyboard->IsKeyDown(DIK_RSHIFT)) ? 'D' : '-';
-    frame.keys[4] = (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) ? 'C' : '-';
+    frame.keys[3] = (keyboard->IsKeyDown(DIK_J) || keyboard->IsKeyDown(DIK_LSHIFT) || keyboard->IsKeyDown(DIK_RSHIFT)) ? 'D' : '-';
+    frame.keys[4] = (keyboard->IsKeyDown(DIK_K) || keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) ? 'C' : '-';
     frame.keys[5] = (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) ? 'W' : '-';
     frame.keys[6] = (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) ? 'S' : '-';
     frame.keys[7] = '\0';
@@ -258,7 +258,10 @@ void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath)
             return;
         }
     } else {
-        return; // 再生対象がない
+        // 引数が指定されていない場合は、現在の編集中のリプレイ（currentReplay_）をそのまま使う
+        if (currentReplay_.totalFrames == 0) {
+            return;
+        }
     }
 
     if (currentReplay_.totalFrames == 0) return;
@@ -344,8 +347,6 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
             StopPlayback(); // ループOFF：完全に停止
             return;
         }
-        StopPlayback();
-        return;
     }
 
     const FrameData& currentFrame = currentReplay_.frames[currentFrame_];
@@ -361,8 +362,8 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
         if (currentKeys[0] == 'L') { keys[DIK_A] = 0x80; keys[DIK_LEFT] = 0x80; }
         if (currentKeys[1] == 'R') { keys[DIK_D] = 0x80; keys[DIK_RIGHT] = 0x80; }
         if (currentKeys[2] == 'J') { keys[DIK_SPACE] = 0x80; }
-        if (currentKeys[3] == 'D') { keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
-        if (currentKeys[4] == 'C') { keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
+        if (currentKeys[3] == 'D') { keys[DIK_J] = 0x80; keys[DIK_LSHIFT] = 0x80; keys[DIK_RSHIFT] = 0x80; }
+        if (currentKeys[4] == 'C') { keys[DIK_K] = 0x80; keys[DIK_LCONTROL] = 0x80; keys[DIK_RCONTROL] = 0x80; }
         if (currentKeys[5] == 'W') { keys[DIK_W] = 0x80; keys[DIK_UP] = 0x80; }
         if (currentKeys[6] == 'S') { keys[DIK_S] = 0x80; keys[DIK_DOWN] = 0x80; }
 
@@ -372,8 +373,8 @@ void ReplayManager::UpdatePlayback(Vector3& playerPos, Vector3& cameraPos) {
             if (prevKeys[0] == 'L') { preKeys[DIK_A] = 0x80; preKeys[DIK_LEFT] = 0x80; }
             if (prevKeys[1] == 'R') { preKeys[DIK_D] = 0x80; preKeys[DIK_RIGHT] = 0x80; }
             if (prevKeys[2] == 'J') { preKeys[DIK_SPACE] = 0x80; }
-            if (prevKeys[3] == 'D') { preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
-            if (prevKeys[4] == 'C') { preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
+            if (prevKeys[3] == 'D') { preKeys[DIK_J] = 0x80; preKeys[DIK_LSHIFT] = 0x80; preKeys[DIK_RSHIFT] = 0x80; }
+            if (prevKeys[4] == 'C') { preKeys[DIK_K] = 0x80; preKeys[DIK_LCONTROL] = 0x80; preKeys[DIK_RCONTROL] = 0x80; }
             if (prevKeys[5] == 'W') { preKeys[DIK_W] = 0x80; preKeys[DIK_UP] = 0x80; }
             if (prevKeys[6] == 'S') { preKeys[DIK_S] = 0x80; preKeys[DIK_DOWN] = 0x80; }
         }
@@ -691,7 +692,7 @@ std::vector<FrameData> ReplayManager::SimulateMacro(const std::vector<FrameData>
     return result;
 }
 
-void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, int maxNodes) {
+void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, const PlayerParams& params, int maxNodes) {
     if (isAISearching_.load()) return; // 既に探索中ならスキップ
 
     if (aiSearchThread_.joinable()) {
@@ -701,10 +702,10 @@ void ReplayManager::ExecuteAStarAsync(const Vector3& startPos, const Vector3& go
     isAISearching_.store(true);
     aiPathStatusMsg_ = "AI探索中... (バックグラウンド計算中)";
 
-    aiSearchThread_ = std::thread([this, startPos, goalPos, mapChip, maxNodes]() {
+    aiSearchThread_ = std::thread([this, startPos, goalPos, mapChip, params, maxNodes]() {
         PhysicsAStar astar;
         std::vector<Vector3> path;
-        bool success = astar.FindValidPath(startPos, goalPos, mapChip, path, maxNodes);
+        bool success = astar.FindValidPath(startPos, goalPos, mapChip, path, params, maxNodes);
 
         if (success) {
             aiPathPositions_ = path;

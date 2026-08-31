@@ -4,8 +4,11 @@
 #include <d3d12.h>
 #include <cstdint>
 #include <set>
+#include <unordered_map>
 #include <memory>
 #include <functional>
+#include <vector>
+#include <string>
 
 // UIから操作したいクラスのヘッダーをインクルード
 #include "Graphics/DebugCamera.h"
@@ -14,6 +17,7 @@
 #include "Scene/SceneFactory.h"
 #include "Core/Utility/Structs.h"
 #include "Replay/ReplayManager.h"
+#include "Animation/AnimationEditor.h"
 
 class SceneManager;
 class ParticleManager;
@@ -52,6 +56,7 @@ public:
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
+    bool IsAnimationEditorHovered() const { return animationEditor_ ? animationEditor_->IsHovered() : false; }
     bool IsMapEditorVisible() const { return isMapEditorVisible_; }
     bool IsMapEditorHovered() const { return isMapEditorHovered_; }
     bool IsRoomDragging() const { return draggingRoomIndex_ != -1; }
@@ -64,6 +69,32 @@ public:
 
     bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
 
+    AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
+
+    // ウィンドウレイアウトプリセット構造体
+    struct WindowLayoutPreset {
+        std::string name;
+        std::string iniData; // ImGui の INI 文字列
+        bool showInspector = true;
+        bool showHierarchy = true;
+        bool showGameView = true;
+        bool showPostEffect = true;
+        bool showMapEditor = true;
+        bool showMapSettings = true;
+        bool showReplayEditor = true;
+        bool showAnimEditor = true;
+    };
+
+    // レイアウトプリセットの保存・読込み・管理
+    void ScanLayoutPresets();
+    void SaveLayoutPreset(const std::string& name);
+    bool ApplyLayoutPreset(const std::string& name);
+    bool DeleteLayoutPreset(const std::string& name);
+    bool ExportLayoutPresetToFile(const std::string& name, const std::string& filePath);
+    bool ImportLayoutPresetFromFile(const std::string& filePath);
+    void ApplyDefaultLayout();
+    const std::vector<WindowLayoutPreset>& GetLayoutPresets() const { return layoutPresets_; }
+
     // シーン設定のJSON保存・読込み
     void SaveSceneConfig();
     void LoadSceneConfig();
@@ -74,6 +105,10 @@ public:
 
     // 現在選択中のシーンタイプを取得
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
+
+    // 今読み込んでいるマップから物理A* (詰みチェック)のスタート・ゴール座標を自動更新
+    void UpdateAStarPositionsFromMap(class MapChip2D* mapChip, class SceneManager* sceneManager = nullptr);
+
 
     // リプレイノード（キー入力ブロック）選択構造体
     struct SelectedReplayBlock {
@@ -108,6 +143,9 @@ public:
         selectedParticle_ = nullptr;
         selectedPrimitive_ = nullptr;
         selectedReplayBlock_.Clear();
+        if (animationEditor_) {
+            animationEditor_->SetSelectedTargets(nullptr, nullptr, nullptr);
+        }
         sceneJustReset_ = true; // シーンリセットのフラグを立てる
         ClearHistory();
     }
@@ -286,7 +324,8 @@ private:
 
     enum class EditorMode {
         Normal,
-        Replay
+        Replay,
+        Animation
     };
     EditorMode currentMode_ = EditorMode::Normal;
 
@@ -298,6 +337,10 @@ private:
     bool showReplayEditor_ = true;
     bool showMapEditor_ = true;
     bool showMapSettings_ = true;
+    bool showAnimEditor_ = true;
+
+    // アニメーションエディター専用インスタンス
+    std::unique_ptr<AnimationEditor> animationEditor_;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅
@@ -319,6 +362,18 @@ private:
     // リプレイ保存ダイアログ用
     int saveTargetHistoryIdx_ = -1;
     char saveFileNameBuf_[128] = "replay_1";
+
+    // 物理A* (詰みチェック)用座標
+    float aStarStartPos_[2] = { 0.0f, 0.0f };
+    float aStarGoalPos_[2] = { 30.0f, 0.0f };
+    bool isAStarPosInitialized_ = false;
+
+    // レイアウトプリセット用メンバ変数
+    std::vector<WindowLayoutPreset> layoutPresets_;
+    bool showSavePresetWindow_ = false;
+    char newPresetNameBuf_[128] = "";
+    std::string presetStatusMessage_ = "";
+    float presetStatusMessageTimer_ = 0.0f;
 
     static bool showObjects_;
     static bool showEffects_;

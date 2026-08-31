@@ -13,6 +13,7 @@
 #include "Blocks/LiftBlock.h"
 #include "Blocks/RailBlock.h"
 #include "Blocks/JumpBlock.h"
+#include "Blocks/PatrolEnemyBlock.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -21,6 +22,10 @@
 #include "Graphics/CameraManager.h"
 #include "Component/ColliderComponent.h"
 #include "Collision/CollisionManager.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#endif
+#include "Editor/Replay/ReplayManager.h"
 
 void MapChip2D::Initialize(const std::string& mapFilePath) {
     device_ = DirectXCommon::GetInstance()->GetDevice();
@@ -32,15 +37,16 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
 
     // テンプレートの読み込み（なければデフォルト生成して保存）
-    if (!LoadTemplatesFromFile("resources/json/templates_config.json") || templatePalette_.empty()) {
+    if (!LoadTemplatesFromFile("resources/json/shared/templates_config.json") || templatePalette_.empty()) {
         templatePalette_.clear();
-        auto addTemplate = [&](int id, const std::string& name, const std::string& type, Vector4 color, nlohmann::json props) {
+        auto addTemplate = [&](int id, const std::string& name, const std::string& type, Vector4 color, nlohmann::json props, const std::string& tex = "") {
             CustomBlockDef def;
             def.id = id;
             def.name = name;
             def.type = type;
             def.color = color;
             def.properties = props;
+            def.textureName = tex;
             templatePalette_.push_back(def);
         };
         addTemplate(1, "Block", "NormalBlock", {0.3f, 0.7f, 0.3f, 1.0f}, nlohmann::json::object());
@@ -63,7 +69,11 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         jumpProps["jumpVelocityHorizontal"] = 15.0f;
         addTemplate(9, "Jump", "JumpBlock", {1.0f, 0.5f, 0.0f, 1.0f}, jumpProps);
 
-        SaveTemplatesToFile("resources/json/templates_config.json");
+        nlohmann::json enemyProps;
+        enemyProps["moveSpeed"] = 2.5f;
+        addTemplate(12, "Enemy", "PatrolEnemyBlock", {1.0f, 1.0f, 1.0f, 1.0f}, enemyProps, "Object/Original/enemy/monsterBall.png");
+
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
     // 保存ファイルがあれば読込み、なければ初期構築して保存する
@@ -171,6 +181,36 @@ float MapChip2D::ChipToWorldX(int chipX) const {
 
 float MapChip2D::ChipToWorldY(int chipY) const {
     return static_cast<float>(chipY) * chipSize_;
+}
+
+bool MapChip2D::HasPlayerSpawn() const {
+    int x, y;
+    return GetPlayerSpawnChipPosition(x, y);
+}
+
+bool MapChip2D::GetPlayerSpawnChipPosition(int& outX, int& outY) const {
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            if (mapData_[y][x] == ChipType::kPlayerSpawn) {
+                outX = x;
+                outY = y;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+Vector3 MapChip2D::GetPlayerSpawnWorldPosition(const Vector3& defaultPos) const {
+    int x, y;
+    if (GetPlayerSpawnChipPosition(x, y)) {
+        return Vector3{
+            ChipToWorldX(x) + chipSize_ * 0.5f,
+            ChipToWorldY(y) + chipSize_ * 0.5f,
+            0.0f
+        };
+    }
+    return defaultPos;
 }
 
 std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
@@ -485,7 +525,7 @@ bool MapChip2D::LoadFromStageName(const std::string& stageName) {
         if (ext == ".txt" || ext == ".TXT") hasExt = true;
     }
     if (!hasExt) name += ".txt";
-    std::string filepath = "resources/json/MapData/" + name;
+    std::string filepath = "resources/json/shared/MapData/" + name;
     return LoadFromFile(filepath);
 }
 
@@ -818,6 +858,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = std::make_shared<RailBlock>(this, x, y);
     } else if (type == ChipType::kJumpBlock) {
         newBlock = std::make_shared<JumpBlock>(this, x, y);
+    } else if (type == ChipType::kEnemy) {
+        newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {
@@ -832,6 +874,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             else if (def->type == "LiftBlock") newBlock = std::make_shared<LiftBlock>(this, x, y);
             else if (def->type == "RailBlock") newBlock = std::make_shared<RailBlock>(this, x, y);
             else if (def->type == "JumpBlock") newBlock = std::make_shared<JumpBlock>(this, x, y);
+            else if (def->type == "PatrolEnemyBlock") newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
         }
     }
 
@@ -916,16 +959,29 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         if (newBlock->GetGameObject()) {
             newBlock->GetGameObject()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
             if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
-                    float tileX = tc->GetScale().x / chipSize_;
-                    float tileY = tc->GetScale().y / chipSize_;
-                    float tileZ = tc->GetScale().z / chipSize_;
-                    Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
-                    prc->GetMaterial().uvTransform = uvTrans;
-                    prc->GetMaterial().enableBoxMapping = 1.0f;
+                if (type != ChipType::kEnemy && (def == nullptr || def->type != "PatrolEnemyBlock")) {
+                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        float tileX = tc->GetScale().x / chipSize_;
+                        float tileY = tc->GetScale().y / chipSize_;
+                        float tileZ = tc->GetScale().z / chipSize_;
+                        Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
+                        prc->GetMaterial().uvTransform = uvTrans;
+                        prc->GetMaterial().enableBoxMapping = 1.0f;
+                    }
+                } else {
+                    prc->GetMaterial().uvTransform = TransformFunctions::MakeIdentity4x4();
+                    prc->GetMaterial().enableBoxMapping = 0.0f;
                 }
             }
         }
     }
     return newBlock;
+}
+
+void MapChip2D::ResetBlocks() {
+    for (auto& block : updateBlocks_) {
+        if (block) {
+            block->Reset();
+        }
+    }
 }

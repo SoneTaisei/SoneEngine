@@ -15,6 +15,32 @@ struct PixelShaderOutput {
 };
 
 float4 main(VertexShaderOutput input) : SV_TARGET {
+    // 3D Procedural Floor Grid (enableBoxMapping == 2.0)
+    if (gMaterial.enableBoxMapping > 1.5f) {
+        float2 coord = input.worldPosition.xz;
+        float2 deriv = max(fwidth(coord), 0.0001f);
+        float2 grid = abs(frac(coord - 0.5f) - 0.5f) / deriv;
+        float lineVal = min(grid.x, grid.y);
+        float lineWeight = 1.0f - min(lineVal, 1.0f);
+        
+        // Base floor color
+        float4 baseColor = gMaterial.color;
+        
+        // Subtle grid line color
+        float4 gridColor = float4(0.28f, 0.28f, 0.32f, 1.0f);
+        
+        // Axis lines: X-axis (z ~ 0: Red) and Z-axis (x ~ 0: Blue)
+        float2 axisDist = abs(coord) / deriv;
+        float xAxisWeight = 1.0f - min(axisDist.y, 1.0f);
+        float zAxisWeight = 1.0f - min(axisDist.x, 1.0f);
+        
+        float4 finalColor = lerp(baseColor, gridColor, lineWeight * 0.70f);
+        finalColor = lerp(finalColor, float4(0.85f, 0.25f, 0.30f, 1.0f), xAxisWeight * 0.85f);
+        finalColor = lerp(finalColor, float4(0.25f, 0.55f, 0.90f, 1.0f), zAxisWeight * 0.85f);
+        
+        return finalColor;
+    }
+
     float4 outputColor;
     
     float4 transformedUV;
@@ -75,68 +101,74 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         }
         float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
         
+        // 1. Directional Light (Smooth Half-Lambert diffuse and guarded Blinn-Phong specular)
         float3 directionalLightDir = normalize(-gDirectionalLight.direction);
         float directionalNdotL = dot(normal, directionalLightDir);
-        float directionalCos = saturate(directionalNdotL);
+        float directionalHalfLambert = directionalNdotL * 0.5f + 0.5f;
+        float directionalCos = directionalHalfLambert * directionalHalfLambert;
         float3 diffuseDirectional = gMaterial.color.rgb * textureColor.rgb * gDirectionalLight.color.rgb * directionalCos * gDirectionalLight.intensity;
         
         float3 directionalHalfVector = normalize(directionalLightDir + toEye);
         float directionalNdotH = dot(normal, directionalHalfVector);
-        float directionalSpecularPow = pow(saturate(directionalNdotH), gMaterial.shininess);
-        float3 specularDirectional = gDirectionalLight.color.rgb * gDirectionalLight.intensity * directionalSpecularPow * float3(1.0f, 1.0f, 1.0f);
+        float directionalSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(directionalNdotH), gMaterial.shininess) : 0.0f;
+        float directionalSpecularMask = saturate(directionalNdotL * 2.0f);
+        float3 specularDirectional = gDirectionalLight.color.rgb * gDirectionalLight.intensity * (directionalSpecularPow * directionalSpecularMask) * float3(1.0f, 1.0f, 1.0f);
         
-        
+        // 2. Point Light (Soft Half-Lambert diffuse and guarded specular)
         float distance = length(gPointLight.position - input.worldPosition);
-        float factor = pow(saturate(-distance/gPointLight.radius+1.0),gPointLight.decay);
+        float factor = pow(saturate(-distance / max(0.0001f, gPointLight.radius) + 1.0f), gPointLight.decay);
         
         float3 pointLightDir = normalize(input.worldPosition - gPointLight.position);
         float pointNdotL = dot(normal, -pointLightDir);
-        float pointCos = saturate(pointNdotL);
-        
+        float pointHalfLambert = pointNdotL * 0.5f + 0.5f;
+        float pointCos = pointHalfLambert * pointHalfLambert;
         float3 diffusePoint = gMaterial.color.rgb * textureColor.rgb * gPointLight.color.rgb * pointCos * gPointLight.intensity * factor;
         
         float3 pointHalfVector = normalize(-pointLightDir + toEye);
         float pointNdotH = dot(normal, pointHalfVector);
-        float pointSpecularPow = pow(saturate(pointNdotH), gMaterial.shininess);
+        float pointSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(pointNdotH), gMaterial.shininess) : 0.0f;
+        float pointSpecularMask = saturate(pointNdotL * 2.0f);
+        float3 specularPoint = gPointLight.color.rgb * gPointLight.intensity * (pointSpecularPow * pointSpecularMask) * float3(1.0f, 1.0f, 1.0f) * factor;
         
-        float3 specularPoint = gPointLight.color.rgb * gPointLight.intensity * pointSpecularPow * float3(1.0f, 1.0f, 1.0f) * factor;
-        
+        // 3. Spot Light (Soft Half-Lambert diffuse and guarded specular)
         float3 spotLightDirOnSurface = normalize(input.worldPosition - gSpotLight.position);
-        
         float spotDistance = length(gSpotLight.position - input.worldPosition);
-        float spotAttenuation = pow(saturate(1.0f - (spotDistance / gSpotLight.distance)), gSpotLight.decay);
+        float spotAttenuation = pow(saturate(1.0f - (spotDistance / max(0.0001f, gSpotLight.distance))), gSpotLight.decay);
         
         float cosTheta = dot(spotLightDirOnSurface, normalize(gSpotLight.direction));
         float falloffRange = gSpotLight.cosFalloffStart - gSpotLight.cosAngle;
         float falloffFactor = saturate((cosTheta - gSpotLight.cosAngle) / max(0.001f, falloffRange));
         
-        float spotCos = saturate(dot(normal, -spotLightDirOnSurface));
+        float spotNdotL = dot(normal, -spotLightDirOnSurface);
+        float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
+        float spotCos = spotHalfLambert * spotHalfLambert;
         float3 diffuseSpot = gMaterial.color.rgb * textureColor.rgb * gSpotLight.color.rgb * spotCos * gSpotLight.intensity * spotAttenuation * falloffFactor;
         
         float3 spotHalfVector = normalize(-spotLightDirOnSurface + toEye);
         float spotNdotH = dot(normal, spotHalfVector);
-        float spotSpecularPow = pow(saturate(spotNdotH), gMaterial.shininess);
-        float3 specularSpot = gSpotLight.color.rgb * gSpotLight.intensity * spotSpecularPow * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor;
+        float spotSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(spotNdotH), gMaterial.shininess) : 0.0f;
+        float spotSpecularMask = saturate(spotNdotL * 2.0f);
+        float3 specularSpot = gSpotLight.color.rgb * gSpotLight.intensity * (spotSpecularPow * spotSpecularMask) * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor;
         
         float3 cameraToPosition = normalize(input.worldPosition - gCamera.worldPosition);
         float3 reflectedVector = reflect(cameraToPosition, normalize(input.normal));
         float4 environmentColor = gEnvironmentMap.Sample(gSampler, reflectedVector);
 
-        // --- 3. 最終色の合成 ---
+        // 4. Final color composition
         float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpot) * input.color.rgb;
         float3 specularTotal = (specularDirectional + specularPoint + specularSpot) * input.color.rgb;
-        float3 ambient = gMaterial.color.rgb * textureColor.rgb * 0.1f;
+        // Ambient light for uniform visibility and smooth shading without pitch black shadows
+        float3 ambient = gMaterial.color.rgb * textureColor.rgb * 0.35f;
 
-        // 環境マップによるLightingを追加する（置き換えるのではなく、そのまま足す）
+        // Add environment map lighting if enabled
         if (gMaterial.enableEnvironmentMap != 0) {
             specularTotal += environmentColor.rgb * gMaterial.environmentCoefficient;
         }
 
-        // アルファ値の設定
+        // Calculate final alpha
         float alpha = gMaterial.color.a * textureColor.a * input.color.a;
 
-        // 半透明ブレンド環境下でも鏡面反射が薄くならないように補正
-        // (描画時の SRC_ALPHA 乗算を相殺するためにアルファで割る)
+        // Compensate specular intensity under alpha blending
         if (alpha > 0.0f && alpha < 1.0f) {
             float safeAlpha = max(alpha, 0.01f);
             specularTotal /= safeAlpha;

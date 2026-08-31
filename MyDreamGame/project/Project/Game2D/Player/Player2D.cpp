@@ -6,6 +6,7 @@
 #include "Core/TimeManager.h"
 #include "Input/KeyboardInput.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Resource/Model/ModelManager.h"
 #include <cmath>
 #include <algorithm>
 #include <fstream>
@@ -17,7 +18,7 @@
 
 void Player2D::Initialize() {
     Log("Player2D::Initialize: Start\n");
-    PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
+    PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
     Log("Player2D::Initialize: Config loaded\n");
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
@@ -30,25 +31,25 @@ void Player2D::Initialize() {
     Log("Player2D::Initialize: Getting Ring Primitive\n");
     Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);
     
+    Log("Player2D::Initialize: Loading Player 3D Model\n");
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
+    if (playerModel) {
+        uint32_t playerTexIndex = TextureManager::GetInstance()->Load("resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png");
+        playerModel->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(playerTexIndex));
+    }
+
     Log("Player2D::Initialize: Init Visuals\n");
-    visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle);
+    visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle, playerModel);
     Log("Player2D::Initialize: Finish\n");
 }
 
 void Player2D::FindSpawnPoint(const MapChip2D& map) {
-    for (int y = 0; y < map.GetHeight(); ++y) {
-        for (int x = 0; x < map.GetWidth(); ++x) {
-            if (map.GetChipType(x, y) == MapChip2D::ChipType::kPlayerSpawn) {
-                // スポーン地点の中心座標を計算
-                state_.startPosition_.x = map.ChipToWorldX(x) + map.GetChipSize() * 0.5f;
-                state_.startPosition_.y = map.ChipToWorldY(y) + map.GetChipSize() * 0.5f;
-                state_.position_ = state_.startPosition_;
-                if (gameObject_) {
-                    if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
-                        tc->SetPosition(state_.position_);
-                    }
-                }
-                return;
+    if (map.HasPlayerSpawn()) {
+        state_.startPosition_ = map.GetPlayerSpawnWorldPosition(state_.startPosition_);
+        state_.position_ = state_.startPosition_;
+        if (gameObject_) {
+            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+                tc->SetPosition(state_.position_);
             }
         }
     }
@@ -59,6 +60,22 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
     // パラメータに基づいてPrimitiveObjectのスケールを常に反映させる（JSONロード時のバグ対策）
     if (!state_.isRespawning_ && visuals_.GetPrimitiveObject()) {
         visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
+    }
+
+    // リプレイ再生中でかつ一時停止中の場合、物理演算や各種タイマー進行を停止する
+    if (ReplayManager::GetInstance()->IsPlaying() && ReplayManager::GetInstance()->IsPaused()) {
+        state_.stuckTimer_ = 0.0f;
+        state_.prevPositionForBugCheck_ = state_.position_;
+        if (visuals_.GetPrimitiveObject()) {
+            visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
+            visuals_.GetPrimitiveObject()->Update();
+        }
+        if (gameObject_) {
+            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+                tc->SetPosition(state_.position_);
+            }
+        }
+        return;
     }
 
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
@@ -144,6 +161,9 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
             visuals_.GetPrimitiveObject()->GetMaterial().dissolveThreshold = 0.0f;
             TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
             
+            // ステージ内の動的オブジェクト（敵やギミック等）を初期位置・状態にリセット
+            map.ResetBlocks();
+
             // リスポーン演出の開始
             state_.isRespawning_ = true;
             state_.respawnTimer_ = 0.0f;
@@ -202,23 +222,32 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
 
     // 現在のルームを特定する
     const auto& rooms = map.GetRooms();
-    for (int i = 0; i < rooms.size(); ++i) {
+    bool isInAnyRoom = false;
+    for (int i = 0; i < (int)rooms.size(); ++i) {
         if (state_.position_.x >= rooms[i].x && state_.position_.x <= rooms[i].x + rooms[i].width &&
             state_.position_.y >= rooms[i].y && state_.position_.y <= rooms[i].y + rooms[i].height) {
             state_.currentRoomIndex_ = i;
+            isInAnyRoom = true;
             break;
         }
     }
 
+    // 完全にルームから逸脱している場合は死亡する
+    // ただし、トランジション中は isTransitioning = true でUpdateWithMapの先頭で早期リターンされるため、ここには来ない。
+    // また、roomsが設定されていない（空）の場合は無視する。
+    if (!rooms.empty() && !isInAnyRoom && !state_.isDead_) {
+        Kill(true);
+    }
+
     float deathY = -10.0f;
-    if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < rooms.size()) {
+    if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < (int)rooms.size()) {
         // ルームの下端から少し余裕をもたせた高さをデスマッチラインとする
         deathY = rooms[state_.currentRoomIndex_].y - 2.0f;
     }
 
     // 画面外落下時のリスポーン演出移行
     if (state_.position_.y < deathY) {
-        Kill();
+        Kill(true);
     }
 
     // 色の更新
@@ -239,26 +268,30 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
 
     // 砂埃パーティクルの更新
 
-    // --- バグ検知処理 ---
-    // 1. 亜空間への落下、または座標の破綻
-    if (state_.position_.y < (deathY - 50.0f) || std::isnan(state_.position_.x) || std::isnan(state_.position_.y)) {
-        ReplayManager::GetInstance()->TriggerBugReport("プレイヤーの座標が破綻、またはマップ外に落下しました。");
-        // 安全処理
-        state_.position_ = state_.startPosition_;
-        state_.velocity_ = { 0.0f, 0.0f, 0.0f };
-        state_.isDead_ = true;
-    }
-    
-    // 2. スタック検知（入力があるのに動いていない）
-    if ((std::abs(state_.velocity_.x) > 0.1f || std::abs(state_.velocity_.y) > 0.1f) && 
-        std::abs(state_.position_.x - state_.prevPositionForBugCheck_.x) < 0.001f && 
-        std::abs(state_.position_.y - state_.prevPositionForBugCheck_.y) < 0.001f) {
+    // --- バグ検知処理（リプレイ再生中は無効化） ---
+    if (!ReplayManager::GetInstance()->IsPlaying()) {
+        // 1. 亜空間への落下、または座標の破綻
+        if (state_.position_.y < (deathY - 50.0f) || std::isnan(state_.position_.x) || std::isnan(state_.position_.y)) {
+            ReplayManager::GetInstance()->TriggerBugReport("プレイヤーの座標が破綻、またはマップ外に落下しました。");
+            // 安全処理
+            state_.position_ = state_.startPosition_;
+            state_.velocity_ = { 0.0f, 0.0f, 0.0f };
+            state_.isDead_ = true;
+        }
         
-        state_.stuckTimer_ += deltaTime;
-        if (state_.stuckTimer_ > 2.0f) { // 2秒間スタック
-            ReplayManager::GetInstance()->TriggerBugReport("2秒間移動が反映されないスタック状態を検知しました。");
+        // 2. スタック検知（入力があるのに動いていない）
+        if ((std::abs(state_.velocity_.x) > 0.1f || std::abs(state_.velocity_.y) > 0.1f) && 
+            std::abs(state_.position_.x - state_.prevPositionForBugCheck_.x) < 0.001f && 
+            std::abs(state_.position_.y - state_.prevPositionForBugCheck_.y) < 0.001f) {
+            
+            state_.stuckTimer_ += deltaTime;
+            if (state_.stuckTimer_ > 2.0f) { // 2秒間スタック
+                ReplayManager::GetInstance()->TriggerBugReport("2秒間移動が反映されないスタック状態を検知しました。");
+                state_.stuckTimer_ = 0.0f;
+                state_.isDead_ = true; // スタック脱出のために死亡扱いにする
+            }
+        } else {
             state_.stuckTimer_ = 0.0f;
-            state_.isDead_ = true; // スタック脱出のために死亡扱いにする
         }
     } else {
         state_.stuckTimer_ = 0.0f;
@@ -294,21 +327,28 @@ void Player2D::DisplayImGui() {
 
     // ツリーノードが開かれた瞬間にJSONをロードする
     if (isTreeNodeOpen && !wasTreeNodeOpen) {
-        PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
+        PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
     }
     wasTreeNodeOpen = isTreeNodeOpen;
 
     if (isTreeNodeOpen) {
         if (ImGui::Button("パラメータ保存 (Save)")) {
-            PlayerConfig::Save(params_, "resources/json/Player/player_parameters.json");
+            std::filesystem::create_directories("resources/json/shared/Player");
+            PlayerConfig::Save(params_, "resources/json/shared/Player/player_parameters.json");
         }
         ImGui::SameLine();
         if (ImGui::Button("パラメータ読込 (Load)")) {
-            PlayerConfig::Load(params_, "resources/json/Player/player_parameters.json");
+            PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
         }
 
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);
         ImGui::DragFloat3("速度", &state_.velocity_.x, 0.1f);
+        
+        ImGui::Text("接地状態: %s", state_.isOnGround_ ? "True" : "False");
+        ImGui::Text("壁スライド: %s", state_.isWallSliding_ ? "True" : "False");
+        ImGui::Text("壁しがみつき: %s", state_.isWallClinging_ ? "True" : "False");
+        ImGui::Text("右壁接触: %s", state_.isTouchingWallRight_ ? "True" : "False");
+        ImGui::Text("左壁接触: %s", state_.isTouchingWallLeft_ ? "True" : "False");
         
         ImGui::Text("現在のスタミナ: %.1f / %.1f", state_.stamina_, params_.maxStamina_);
         if (state_.isExhausted_) {
@@ -372,6 +412,11 @@ void Player2D::DisplayImGui() {
             if (sizeChanged && visuals_.GetPrimitiveObject()) {
                 visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
             }
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("モデルしがみつきポーズ調整 (Cling Debug)")) {
+            visuals_.DisplayImGui();
             ImGui::TreePop();
         }
 
@@ -446,6 +491,7 @@ void Player2D::ResetState(const Vector3& initPos) {
         visuals_.GetPrimitiveObject()->SetRotation({ 0.0f, 0.0f, 0.0f });
         visuals_.GetPrimitiveObject()->Update();
     }
+    visuals_.ClearEffects();
 }
 
 

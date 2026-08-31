@@ -19,6 +19,8 @@ public:
     // モデル（バッファ作成済み）を取得する
     Model *GetModel(const std::string &directoryPath, const std::string &filename);
 
+    ModelCommon *GetModelCommon() const { return modelCommon_; }
+
 private:
     ModelManager() = default;
     ModelCommon *modelCommon_ = nullptr;

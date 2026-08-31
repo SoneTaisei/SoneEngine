@@ -4,12 +4,42 @@
 #include <random>
 #include <cmath>
 
-void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle) {
+void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();
     primitiveObj_->Initialize(device, boxPrimitive);
     primitiveObj_->SetName("Player");
     primitiveObj_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
     primitiveObj_->GetMaterial().lightingType = 1;
+
+    if (playerModel) {
+        modelObj_ = std::make_unique<Object3D>();
+        modelObj_->Initialize(device, playerModel);
+        modelObj_->SetName("Player3DModel");
+        modelObj_->GetMaterial().lightingType = 1;
+
+        animator_ = std::make_unique<AnimatorComponent>();
+        animator_->Initialize();
+        animator_->SetModelData(playerModel->GetModelData());
+
+        idleAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Idle");
+        walkAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Walk");
+        jumpAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Jump");
+
+        if (!LoadAnimationFromJsonFile(wallClimbAnimation_, "resources/json/shared/Player/wall_climb_animation.json")) {
+            wallClimbAnimation_ = CreateDefaultWallClimbAnimation();
+        }
+        if (!LoadAnimationFromJsonFile(holdingWallAnimation_, "resources/json/shared/Player/holding_wall.json")) {
+            holdingWallAnimation_ = idleAnimation_;
+        }
+        if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
+            airDashAnimation_ = CreateDefaultAirDashAnimation();
+        }
+
+        animator_->SetAnimation(idleAnimation_);
+        animator_->Play();
+
+        modelObj_->SetAnimator(animator_.get());
+    }
 
     dashRingPrimitive_ = std::make_unique<PrimitiveObject>();
     dashRingPrimitive_->Initialize(device, ringPrimitive);
@@ -80,6 +110,127 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         
         if (!state.isDead_) {
             primitiveObj_->Update();
+        }
+    }
+
+    if (modelObj_) {
+        if (animator_) {
+            if (state.isDashing_) {
+                // 空中ダッシュアニメーションの再生
+                airDashAnimTime_ = AdvanceAnimationTime(airDashAnimTime_, airDashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
+                animator_->ClearJointOverrides();
+                animator_->SetAnimation(airDashAnimation_);
+                animator_->SetTime(airDashAnimTime_);
+                animator_->Stop(); // 手動で時間を制御するため自動更新を停止
+            } else {
+                airDashAnimTime_ = 0.0f;
+
+                // しがみつき中ならブレンド率を上げ、それ以外は下げる
+                bool isClinging = state.isWallClinging_ || state.isWallSliding_;
+                if (isClinging) {
+                    climbBlendFactor_ += deltaTime * 5.0f; // 約0.2秒で最大値1.0fへ遷移
+                    if (climbBlendFactor_ > 1.0f) climbBlendFactor_ = 1.0f;
+
+                    // 壁つかまり移動（登り・降り）のアニメーション判定
+                    bool isClimbMoving = (std::abs(state.velocity_.y) > 0.1f);
+                    if (isClimbMoving) {
+                        // 上下移動に合わせてアニメーション時間を進行
+                        float speedFactor = std::clamp(std::abs(state.velocity_.y) / 5.0f, 0.5f, 2.0f);
+                        wallClimbAnimTime_ = AdvanceAnimationTime(wallClimbAnimTime_, wallClimbAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
+                        animator_->ClearJointOverrides();
+                        animator_->SetAnimation(wallClimbAnimation_);
+                        animator_->SetTime(wallClimbAnimTime_);
+                        animator_->Stop(); // 手動で時間を制御
+                    } else {
+                        // 静止した崖つかまり・壁つかまり時は holding_wall アニメーションを再生（最後のフレームで停止）
+                        holdingWallAnimTime_ = AdvanceAnimationTime(holdingWallAnimTime_, holdingWallAnimation_.duration, deltaTime, AnimationWrapMode::HoldLastFrame);
+                        animator_->ClearJointOverrides();
+                        animator_->SetAnimation(holdingWallAnimation_);
+                        animator_->SetTime(holdingWallAnimTime_);
+                        animator_->Stop(); // 手動で時間を制御（最後のフレームの姿勢を維持）
+                    }
+                } else {
+                    climbBlendFactor_ -= deltaTime * 5.0f;
+                    if (climbBlendFactor_ < 0.0f) climbBlendFactor_ = 0.0f;
+                    wallClimbAnimTime_ = 0.0f;
+                    holdingWallAnimTime_ = 0.0f;
+
+                    animator_->ClearJointOverrides();
+                    animator_->Play(); // 通常アニメーションは自動再生
+                    animator_->SetWrapMode(AnimationWrapMode::Loop);
+
+                    if (!state.isOnGround_) {
+                        animator_->SetAnimation(jumpAnimation_);
+                    } else if (std::abs(state.velocity_.x) > 0.1f) {
+                        animator_->SetAnimation(walkAnimation_);
+                    } else {
+                        animator_->SetAnimation(idleAnimation_);
+                    }
+                }
+            }
+            animator_->Update();
+        }
+
+        // gaikotuモデルは足元原点のため、当たり判定の底辺に合わせるようY軸をオフセットする
+        Vector3 modelPos = state.position_;
+        modelPos.y -= params.halfHeight_;
+        
+        float rotationY = modelObj_->GetRotation().y;
+        if (state.isWallClinging_ || state.isWallSliding_) {
+            if (state.isTouchingWallRight_) {
+                rotationY = -1.57079632f;
+                modelPos.x -= 0.2f; // 右壁から少し離す（左へずらす）
+            } else if (state.isTouchingWallLeft_) {
+                rotationY = 1.57079632f;
+                modelPos.x += 0.2f; // 左壁から少し離す（右へずらす）
+            }
+        } else {
+            if (state.velocity_.x < -0.01f) {
+                rotationY = 1.57079632f;
+            } else if (state.velocity_.x > 0.01f) {
+                rotationY = -1.57079632f;
+            }
+        }
+        
+        modelObj_->SetTranslation(modelPos);
+        
+        if (state.isDashing_) {
+            modelObj_->GetMaterial().color = params.colorDashed_;
+            Vector3 dashDir = state.velocity_;
+            dashDir.z = 0.0f;
+            float speed = 1.0f;
+            if (dashDir.x != 0.0f || dashDir.y != 0.0f) {
+                float length = std::sqrt(dashDir.x * dashDir.x + dashDir.y * dashDir.y);
+                if (length > 0.0f) { dashDir.x /= length; dashDir.y /= length; speed = length; }
+            }
+            float stretch = 1.0f + (speed * 0.02f);
+            float squash = 1.0f / stretch;
+            modelObj_->SetScale({ 1.0f * stretch, 1.0f * squash, 1.0f });
+            modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
+        } else {
+            if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
+                float blink = std::sin(visualTime_ * 40.0f);
+                if (blink > 0.0f) {
+                    modelObj_->GetMaterial().color = params.colorTired_;
+                } else {
+                    modelObj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                }
+            } else if (state.stamina_ <= params.maxStamina_ * 0.5f) {
+                float blink = std::sin(visualTime_ * 20.0f);
+                if (blink > 0.0f) {
+                    modelObj_->GetMaterial().color = params.colorTired_;
+                } else {
+                    modelObj_->GetMaterial().color = params.colorNormal_;
+                }
+            } else {
+                modelObj_->GetMaterial().color = params.colorNormal_;
+            }
+            modelObj_->SetScale({ 1.0f, 1.0f, 1.0f });
+            modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
+        }
+        
+        if (!state.isDead_) {
+            modelObj_->Update();
         }
     }
 
@@ -177,7 +328,11 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
             }
         }
     } else if (!state.isDead_ && primitiveObj_) {
-        primitiveObj_->Draw();
+        if (modelObj_) {
+            modelObj_->Draw();
+        } else {
+            primitiveObj_->Draw();
+        }
     }
     
     if (dashRingPrimitive_) {
@@ -399,3 +554,24 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
         currentEndSize *= 0.5f;
     }
 }
+
+void PlayerVisuals::ClearEffects() {
+    dustParticles_.clear();
+    confettiParticles_.clear();
+    dashRingParticles_.clear();
+}
+
+#ifdef USE_IMGUI
+#include "../../externals/imgui/imgui.h"
+
+void PlayerVisuals::DisplayImGui() {
+    if (ImGui::TreeNode("しがみつき姿勢 (Cling Pose Edit)")) {
+        ImGui::SliderFloat3("体（腰）回転 (Hips X,Y,Z)", debugHipsRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("左肩回転 (LArm X,Y,Z)", debugLArmRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("右肩回転 (RArm X,Y,Z)", debugRArmRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("左肘回転 (LForeArm X,Y,Z)", debugLForeArmRot_, -3.14f, 3.14f);
+        ImGui::SliderFloat3("右肘回転 (RForeArm X,Y,Z)", debugRForeArmRot_, -3.14f, 3.14f);
+        ImGui::TreePop();
+    }
+}
+#endif

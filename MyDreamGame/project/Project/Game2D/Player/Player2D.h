@@ -18,6 +18,7 @@
 
 // 前方宣言
 class MapChip2D;
+class GameCamera;
 
 /// <summary>
 /// 2Dスクロールゲーム用プレイヤークラス
@@ -51,6 +52,11 @@ public:
     // プレイヤーの位置を取得（カメラ追従用）
     const Vector3& GetPosition() const { return state_.position_; }
     void SetPosition(const Vector3& pos) { state_.position_ = pos; }
+    const Vector3& GetStartPosition() const { return state_.startPosition_; }
+
+    // カメラの設定と取得
+    void SetCamera(GameCamera* camera) { camera_ = camera; }
+    GameCamera* GetCamera() const { return camera_; }
 
     // マップからプレイヤー初期位置を検索して設定する
     void FindSpawnPoint(const MapChip2D& map);
@@ -73,6 +79,9 @@ public:
 
     // ヒエラルキー用
     PrimitiveObject* GetPrimitiveObject() { return visuals_.GetPrimitiveObject(); }
+    Object3D* GetModelObject() { return visuals_.GetModelObject(); }
+    AnimatorComponent* GetAnimator() { return visuals_.GetAnimator(); }
+    PlayerVisuals& GetVisuals() { return visuals_; }
 
     // ゲーム状態取得用
     int GetScore() const { return state_.score_; }
@@ -81,16 +90,25 @@ public:
     // リプレイ巻き戻し用の状態復元メソッド
 
     // ブロックのOnCollisionから呼ばれるコールバック群
-    void Kill() {
+    void Kill(bool isFallDeath = false) {
         if (!state_.isDead_) {
             state_.isDead_ = true;
             state_.isRespawning_ = false;
             state_.deathTimer_ = 0.0f;
-            // 後ろによろける演出のための速度設定 (よろけ具合を約半分に低減)
-            state_.velocity_ = { state_.velocity_.x > 0.0f ? -2.5f : (state_.velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f };
-            state_.isDashing_ = false;
-            // スローモーション開始
-            TimeManager::GetInstance().SetTimeScale(0.3f);
+            if (isFallDeath) {
+                // 落下・逸脱死の場合：上に跳ねず、下方向への初速を与えて重力で落とす
+                state_.velocity_.y = -5.0f; // 下方向への初速
+                state_.velocity_.x *= 0.2f; // 横方向の慣性はほぼなくす
+                state_.isDashing_ = false;
+                // スローモーションはかけず、通常速度で落ちていくようにする
+                TimeManager::GetInstance().SetTimeScale(1.0f);
+            } else {
+                // 後ろによろける演出のための速度設定 (よろけ具合を約半分に低減)
+                state_.velocity_ = { state_.velocity_.x > 0.0f ? -2.5f : (state_.velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f };
+                state_.isDashing_ = false;
+                // スローモーション開始
+                TimeManager::GetInstance().SetTimeScale(0.3f);
+            }
         }
     }
     void ReachGoal() {
@@ -110,11 +128,13 @@ public:
 
     // リプレイのループやシーク時に物理状態（速度や各種フラグ）をリセットする
     void ResetState(const Vector3& initPos);
+    void ClearEffects() { visuals_.ClearEffects(); }
 
     // ゲーム状態取得用ゲッター追加
     AABB2D GetAABB() const;
     bool IsDead() const { return state_.isDead_; }
     bool IsGoal() const { return state_.isGoal_; }
+    const PlayerParams& GetParams() const { return params_; }
 
 private:
 
@@ -128,8 +148,5 @@ private:
     InputState currentInput_;
     PlayerPhysics physics_;
 
-
-
-
-
+    GameCamera* camera_ = nullptr;
 };

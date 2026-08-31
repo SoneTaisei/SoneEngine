@@ -49,19 +49,30 @@ Quaternion Slerp(const Quaternion& q1, const Quaternion& q2, float t) {
     };
 }
 
+#include <algorithm>
+
 Vector3 Quaternion::ToEulerAngles() const {
     Vector3 angles;
     float sinr_cosp = 2.0f * (w * x + y * z);
     float cosr_cosp = 1.0f - 2.0f * (x * x + y * y);
     angles.x = std::atan2(sinr_cosp, cosr_cosp);
 
-    float sinp = std::sqrt(1.0f + 2.0f * (w * y - x * z));
-    float cosp = std::sqrt(1.0f - 2.0f * (w * y - x * z));
-    angles.y = 2.0f * std::atan2(sinp, cosp) - 3.14159265f / 2.0f;
+    float val = 2.0f * (w * y - x * z);
+    val = std::clamp(val, -1.0f, 1.0f);
+    angles.y = std::asin(val);
 
     float siny_cosp = 2.0f * (w * z + x * y);
     float cosy_cosp = 1.0f - 2.0f * (y * y + z * z);
     angles.z = std::atan2(siny_cosp, cosy_cosp);
 
     return angles;
+}
+
+Quaternion Quaternion::operator*(const Quaternion& other) const {
+    return Quaternion(
+        w * other.x + x * other.w + y * other.z - z * other.y,
+        w * other.y - x * other.z + y * other.w + z * other.x,
+        w * other.z + x * other.y - y * other.x + z * other.w,
+        w * other.w - x * other.x - y * other.y - z * other.z
+    );
 }

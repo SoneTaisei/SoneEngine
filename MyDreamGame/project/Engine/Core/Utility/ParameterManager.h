@@ -37,5 +37,5 @@ private:
     ~ParameterManager() = default;
 
     nlohmann::json data_;
-    std::string filepath_ = "resources/json/Global/parameters.json";
+    std::string filepath_ = "resources/json/shared/Global/parameters.json";
 };

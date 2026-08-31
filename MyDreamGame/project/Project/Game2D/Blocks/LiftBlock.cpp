@@ -1,6 +1,10 @@
 #include "LiftBlock.h"
 #include "../MapChip2D.h"
 #include <cmath>
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#endif
+#include "Editor/Replay/ReplayManager.h"
 
 namespace {
     bool IsRailOrLift(MapChip2D* map, int x, int y) {
@@ -143,11 +147,25 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
 void LiftBlock::Update() {
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-    if (deltaTime <= 0.0f) return;
+    
+    bool isPlayingOrReplaying = false;
+#ifdef USE_IMGUI
+    if (EditorManager::IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+#else
+    isPlayingOrReplaying = true;
+#endif
+    if (ReplayManager::GetInstance()->IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+
+    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+    float animDeltaTime = isAnimActive ? deltaTime : 0.0f;
 
     float prevT = currentT_; // 前フレームの進行度を保存
 
-    // 距離を計箁E
+    // 距離を計算
     float distance = 0.0f;
     if (direction_.x != 0.0f) {
         distance = std::abs(endPos_.x - startPos_.x);
@@ -155,54 +173,54 @@ void LiftBlock::Update() {
         distance = std::abs(endPos_.y - startPos_.y);
     }
 
-    if (distance <= 0.0f) return;
-
-    switch (state_) {
-        case LiftState::IdleAtStart:
-            currentT_ = 0.0f;
-            waitTimer_ = 0.0f;
-            currentSpeed_ = 0.0f;
-            if (isPlayerStandingThisFrame_) {
-                state_ = LiftState::MovingForward;
-            }
-            break;
-            
-        case LiftState::MovingForward: {
-            currentSpeed_ += acceleration_ * deltaTime;
-            if (currentSpeed_ > maxSpeedForward_) currentSpeed_ = maxSpeedForward_;
-            
-            float tRate = currentSpeed_ / distance;
-            currentT_ += tRate * deltaTime;
-            if (currentT_ >= 1.0f) {
-                currentT_ = 1.0f;
-                state_ = LiftState::WaitingAtEnd;
-                waitTimer_ = 0.0f;
-                shakeTimer_ = 0.15f; // Shake for 0.15 seconds
-            }
-            break;
-        }
-            
-        case LiftState::WaitingAtEnd:
-            currentT_ = 1.0f;
-            currentSpeed_ = 0.0f;
-            waitTimer_ += deltaTime;
-            if (waitTimer_ >= waitTime_) { // waitTime_経過
-                state_ = LiftState::MovingBackward;
-            }
-            break;
-            
-        case LiftState::MovingBackward: {
-            currentSpeed_ += acceleration_ * deltaTime;
-            if (currentSpeed_ > maxSpeedBackward_) currentSpeed_ = maxSpeedBackward_;
-            
-            float tRate = currentSpeed_ / distance;
-            currentT_ -= tRate * deltaTime;
-            if (currentT_ <= 0.0f) {
+    if (distance > 0.0f && animDeltaTime > 0.0f) {
+        switch (state_) {
+            case LiftState::IdleAtStart:
                 currentT_ = 0.0f;
-                state_ = LiftState::IdleAtStart;
-                shakeTimer_ = 0.15f;
+                waitTimer_ = 0.0f;
+                currentSpeed_ = 0.0f;
+                if (isPlayerStandingThisFrame_) {
+                    state_ = LiftState::MovingForward;
+                }
+                break;
+                
+            case LiftState::MovingForward: {
+                currentSpeed_ += acceleration_ * animDeltaTime;
+                if (currentSpeed_ > maxSpeedForward_) currentSpeed_ = maxSpeedForward_;
+                
+                float tRate = currentSpeed_ / distance;
+                currentT_ += tRate * animDeltaTime;
+                if (currentT_ >= 1.0f) {
+                    currentT_ = 1.0f;
+                    state_ = LiftState::WaitingAtEnd;
+                    waitTimer_ = 0.0f;
+                    shakeTimer_ = 0.15f; // Shake for 0.15 seconds
+                }
+                break;
             }
-            break;
+                
+            case LiftState::WaitingAtEnd:
+                currentT_ = 1.0f;
+                currentSpeed_ = 0.0f;
+                waitTimer_ += animDeltaTime;
+                if (waitTimer_ >= waitTime_) { // waitTime_経過
+                    state_ = LiftState::MovingBackward;
+                }
+                break;
+                
+            case LiftState::MovingBackward: {
+                currentSpeed_ += acceleration_ * animDeltaTime;
+                if (currentSpeed_ > maxSpeedBackward_) currentSpeed_ = maxSpeedBackward_;
+                
+                float tRate = currentSpeed_ / distance;
+                currentT_ -= tRate * animDeltaTime;
+                if (currentT_ <= 0.0f) {
+                    currentT_ = 0.0f;
+                    state_ = LiftState::IdleAtStart;
+                    shakeTimer_ = 0.15f;
+                }
+                break;
+            }
         }
     }
 
@@ -218,7 +236,7 @@ void LiftBlock::Update() {
     Vector3 shakeVec = {0.0f, 0.0f, 0.0f};
 
     if (shakeTimer_ > 0.0f) {
-        shakeTimer_ -= deltaTime;
+        shakeTimer_ -= animDeltaTime;
         if (shakeTimer_ < 0.0f) shakeTimer_ = 0.0f;
         
         float shakeIntensity = 0.2f * (shakeTimer_ / 0.15f);
@@ -235,9 +253,13 @@ void LiftBlock::Update() {
     newPos.y += shakeVec.y;
 
     // プレイヤーに渡す用の速度を更新 (シェイクの影響を除外するため純粋な進行度(T)の変化量から計算)
-    velocity_.x = (endPos_.x - startPos_.x) * (currentT_ - prevT) / deltaTime;
-    velocity_.y = (endPos_.y - startPos_.y) * (currentT_ - prevT) / deltaTime;
-    velocity_.z = 0.0f;
+    if (deltaTime > 0.0f) {
+        velocity_.x = (endPos_.x - startPos_.x) * (currentT_ - prevT) / deltaTime;
+        velocity_.y = (endPos_.y - startPos_.y) * (currentT_ - prevT) / deltaTime;
+        velocity_.z = 0.0f;
+    } else {
+        velocity_ = { 0.0f, 0.0f, 0.0f };
+    }
 
     if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
         tc->SetPosition(newPos);

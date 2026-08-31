@@ -326,3 +326,16 @@ FodyWeavers.xsd
 /project/imgui.ini
 /project/resources/imgui.ini
 *.pdb
+
+# Ignore all python files (temporary scripts, etc.)
+**/*.py
+
+# Allow python files under externals (e.g. imgui debugger scripts)
+!project/externals/**/*.py
+!externals/**/*.py
+
+# Blender portable ignore & allow project blender_addons
+tools/blender/
+!tools/blender_addons/**/*.py
+
+

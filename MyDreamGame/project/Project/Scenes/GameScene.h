@@ -20,6 +20,7 @@ class GameCamera;
 #include "Resource/Primitive/PrimitiveManager.h"
 class Skybox;
 
+
 enum class GameState {
     StartReady,
     Playing,
@@ -36,15 +37,19 @@ public:
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
+    void DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) override;
     void UpdateEditor() override;
 
     // ヒエラルキー用
-    std::vector<Object3D *> GetObjects() override { return {}; }
+    std::vector<Object3D *> GetObjects() override;
     std::vector<ParticleManager *> GetParticles() override;
     std::vector<PrimitiveObject *> GetPrimitives() override;
 
     // マップチップの取得
     MapChip2D* GetMapChip() override { return map_.get(); }
+
+    // プレイヤーの取得
+    Player2D* GetPlayer() override { return player_; }
 
 private:
     // ---------------------------------------------------
@@ -80,6 +85,7 @@ private:
     // ---------------------------------------------------
     // コマンドリストを覚えておくための変数
     
+
 
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;

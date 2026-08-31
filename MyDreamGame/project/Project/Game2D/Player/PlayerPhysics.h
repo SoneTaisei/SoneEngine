@@ -21,7 +21,7 @@ public:
     void SimulateCollisions(PlayerState& state_, const PlayerParams& params_, Player2D* player);
 
 private:
-    void HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime);
+    void HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player);
     void ApplyGravity(PlayerState& state_, const PlayerParams& params_, float deltaTime);
 
     void ResolveCollisionY(PlayerState& state_, const PlayerParams& params_);

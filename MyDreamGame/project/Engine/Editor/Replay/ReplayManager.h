@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/Utility/Structs.h"
+#include "Game2D/Player/PlayerConfig.h"
 #include <vector>
 #include <string>
 #include <memory>
@@ -186,7 +187,7 @@ public:
     class LevelEvolutionAI* GetLevelEvolutionAI() { return levelEvolutionAI_.get(); }
 
     // 物理ベースA* 探索ルート (非同期スレッド対応)
-    void ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, int maxNodes = 10000);
+    void ExecuteAStarAsync(const Vector3& startPos, const Vector3& goalPos, MapChip2D* mapChip, const PlayerParams& params = PlayerParams{}, int maxNodes = 30000);
     bool IsAISearching() const { return isAISearching_.load(); }
 
     void SetAIPathPositions(const std::vector<Vector3>& path) { aiPathPositions_ = path; }

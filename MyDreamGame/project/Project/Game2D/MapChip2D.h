@@ -26,6 +26,7 @@ public:
         kRail = 8,  // リフトの移動レール
         kJumpBlock = 9, // ジャンプ台
         kRoomRespawn = 10, // 部屋用リスポーン地点
+        kEnemy = 12, // 巡回する敵キャラクター
     };
 
     void Initialize(const std::string& mapFilePath);
@@ -45,6 +46,11 @@ public:
     // チップ座標 → ワールド座標（チップの左下） 変換
     float ChipToWorldX(int chipX) const;
     float ChipToWorldY(int chipY) const;
+
+    // プレイヤー初期位置 (kPlayerSpawn) の取得
+    bool HasPlayerSpawn() const;
+    bool GetPlayerSpawnChipPosition(int& outX, int& outY) const;
+    Vector3 GetPlayerSpawnWorldPosition(const Vector3& defaultPos = {2.0f, 5.0f, 0.0f}) const;
 
     // マップの寸法
     int GetWidth() const { return mapWidth_; }
@@ -102,6 +108,9 @@ public:
 
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
+
+    // 全ブロックのリセット（プレイヤー死亡・リトライ時）
+    void ResetBlocks();
 
     struct CustomBlockDef {
         int id = 100;

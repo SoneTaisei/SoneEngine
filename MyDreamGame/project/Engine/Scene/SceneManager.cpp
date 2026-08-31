@@ -93,3 +93,45 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
         nextScene_ = std::move(nextScene);
     }
 }
+
+void SceneManager::PushScene(std::unique_ptr<IScene> nextScene) {
+    assert(nextScene);
+    if (currentScene_) {
+        currentScene_->OnExit(this);
+        sceneStack_.push_back(std::move(currentScene_));
+    }
+
+    if (spriteCommon_) spriteCommon_->ClearAll();
+    if (modelCommon_) modelCommon_->ClearAll();
+    if (particleCommon_) particleCommon_->ClearAll();
+
+    currentScene_ = std::move(nextScene);
+    if (spriteCommon_) currentScene_->SetSpriteCommon(spriteCommon_);
+    if (modelCommon_) currentScene_->SetModelCommon(modelCommon_);
+    if (particleCommon_) currentScene_->SetParticleCommon(particleCommon_);
+    if (gameCamera_) currentScene_->SetGameCamera(gameCamera_);
+
+    currentScene_->Initialize();
+    currentScene_->OnEnter(this);
+    currentScene_->Update(this);
+}
+
+void SceneManager::PopScene() {
+    if (sceneStack_.empty()) return;
+
+    if (currentScene_) {
+        currentScene_->OnExit(this);
+    }
+
+    if (spriteCommon_) spriteCommon_->ClearAll();
+    if (modelCommon_) modelCommon_->ClearAll();
+    if (particleCommon_) particleCommon_->ClearAll();
+
+    currentScene_ = std::move(sceneStack_.back());
+    sceneStack_.pop_back();
+
+    if (currentScene_) {
+        currentScene_->OnEnter(this);
+        currentScene_->Update(this);
+    }
+}

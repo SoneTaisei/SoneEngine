@@ -1,9 +1,12 @@
 #include "GameCamera.h"
 #include "CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
+#include "Core/TimeManager.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
+#include <cstdlib>
+#include <ctime>
 
 void GameCamera::Initialize(int kClientWidth, int kClientHeight) {
     Camera::Initialize(kClientWidth, kClientHeight);
@@ -14,7 +17,29 @@ void GameCamera::Initialize(int kClientWidth, int kClientHeight) {
 }
 
 void GameCamera::Update() {
+    // 画面揺れの更新
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    if (shakeTimer_ > 0.0f) {
+        shakeTimer_ -= deltaTime;
+        if (shakeTimer_ <= 0.0f) {
+            shakeTimer_ = 0.0f;
+            shakeOffset_ = {0.0f, 0.0f, 0.0f};
+        } else {
+            // 残り時間に応じて揺れを減衰させる
+            float currentStrength = shakeStrength_ * (shakeTimer_ / shakeDuration_);
+            // ランダムに揺らす
+            float rx = ((float)std::rand() / RAND_MAX * 2.0f - 1.0f) * currentStrength;
+            float ry = ((float)std::rand() / RAND_MAX * 2.0f - 1.0f) * currentStrength;
+            shakeOffset_ = {rx, ry, 0.0f};
+        }
+    }
     UpdateMatrix();
+}
+
+void GameCamera::Shake(float strength, float duration) {
+    shakeStrength_ = strength;
+    shakeDuration_ = duration;
+    shakeTimer_ = duration;
 }
 
 void GameCamera::UpdateMatrix() {
@@ -148,7 +173,7 @@ void GameCamera::UpdateMatrixOrthographic() {
     );
 
     Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(
-        { -transform_.translate.x, -transform_.translate.y, -transform_.translate.z }
+        { -(transform_.translate.x + shakeOffset_.x), -(transform_.translate.y + shakeOffset_.y), -transform_.translate.z }
     );
 
     Matrix4x4 rotateMatrixInv = TransformFunctions::Transpose(rotationMatrix);
