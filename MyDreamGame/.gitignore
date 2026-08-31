@@ -338,4 +338,9 @@ FodyWeavers.xsd
 tools/blender/
 !tools/blender_addons/**/*.py
 
-
+# Local JSON & editor user settings (do not share on git)
+**/resources/json/local/
+resources/json/local/
+**/resources/json/shared/MapData/temp_play_map*
+**/resources/json/replay_macros.txt
+**/json/replay_macros.txt
