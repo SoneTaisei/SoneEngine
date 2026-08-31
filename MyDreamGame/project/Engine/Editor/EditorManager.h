@@ -18,6 +18,7 @@
 #include "Core/Utility/Structs.h"
 #include "Replay/ReplayManager.h"
 #include "Animation/AnimationEditor.h"
+#include "MapEditor/MapEditor.h"
 
 class SceneManager;
 class ParticleManager;
@@ -57,9 +58,9 @@ public:
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
     bool IsAnimationEditorHovered() const { return animationEditor_ ? animationEditor_->IsHovered() : false; }
-    bool IsMapEditorVisible() const { return isMapEditorVisible_; }
-    bool IsMapEditorHovered() const { return isMapEditorHovered_; }
-    bool IsRoomDragging() const { return draggingRoomIndex_ != -1; }
+    bool IsMapEditorVisible() const { return mapEditor_ ? mapEditor_->IsVisible() : false; }
+    bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
+    bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }
@@ -70,6 +71,7 @@ public:
     bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
 
     AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
+    MapEditor* GetMapEditor() const { return mapEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -107,7 +109,7 @@ public:
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
 
     // 現在選択中のステージマップファイル名を取得
-    const char* GetStageFilename() const { return stageFilename_; }
+    const char* GetStageFilename() const { return mapEditor_ ? mapEditor_->GetStageFilename() : ""; }
 
     // 今読み込んでいるマップから物理A* (詰みチェック)のスタート・ゴール座標を自動更新
     void UpdateAStarPositionsFromMap(class MapChip2D* mapChip, class SceneManager* sceneManager = nullptr);
@@ -216,12 +218,12 @@ public:
     }
 
     // マップ用の履歴保存ヘルパー
-    void BeginMapHistoryCapture(class MapChip2D* mapChip);
-    void EndMapHistoryCapture(class MapChip2D* mapChip);
+    void BeginMapHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->BeginMapHistoryCapture(mapChip); }
+    void EndMapHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->EndMapHistoryCapture(mapChip); }
     
     // バウンダリ用の履歴保存ヘルパー
-    void BeginRoomHistoryCapture(class MapChip2D* mapChip);
-    void EndRoomHistoryCapture(class MapChip2D* mapChip);
+    void BeginRoomHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->BeginRoomHistoryCapture(mapChip); }
+    void EndRoomHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->EndRoomHistoryCapture(mapChip); }
 
     static ImVec2 GetGameViewPos() { return gameViewPos_; }
     static ImVec2 GetGameViewSize() { return gameViewSize_; }
@@ -250,67 +252,9 @@ private:
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
     bool isReplayEditorHovered_ = false; // リプレイエディタがホバーされているか
-    bool isMapEditorVisible_ = false; // マップエディタがアクティブタブとして表示されているか
-    bool wasMapEditorVisible_ = false; // 前フレームの表示状態
-    bool isMapEditorHovered_ = false; // マップエディタがホバーされているか
-    
-    // マップエディタ用のツール状態
-    int mapEditorSelectedTool_ = 100; // 0 = None, 100 = Custom Block 1
-    int mapEditorInputWidth_ = -1;
-    int mapEditorInputHeight_ = -1;
-    
-    // Normalモード用補間
-    int prevGridX_ = -1;
-    int prevGridY_ = -1;
-    std::vector<std::pair<int, int>> pendingBlocks_;
-
-    // 拡張マップエディタ状態
-    MapEditMode mapEditMode_ = MapEditMode::Normal;
-    int selectStartX_ = -1;
-    int selectStartY_ = -1;
-    int selectEndX_ = -1;
-    int selectEndY_ = -1;
-    std::vector<std::vector<int>> clipboardMapData_;
-
-    // 範囲移動用
-    bool isDraggingSelection_ = false;
-    int dragStartGridX_ = -1;
-    int dragStartGridY_ = -1;
-    int originalSelectStartX_ = -1;
-    int originalSelectStartY_ = -1;
-    int originalSelectEndX_ = -1;
-    int originalSelectEndY_ = -1;
-    std::vector<std::vector<int>> dragSelectionData_;
-
-    // 境界線編集用
-    bool isRoomEditMode_ = false;
-    int draggingRoomIndex_ = -1;
-    int roomDragHandle_ = 0; // 0: None, 1: Move, 2: TopLeft, 3: TopRight, 4: BottomLeft, 5: BottomRight, 6: Left, 7: Right, 8: Top, 9: Bottom
-    float roomDragOffsetX_ = 0.0f;
-    float roomDragOffsetY_ = 0.0f;
 
     std::vector<std::shared_ptr<IEditorCommand>> undoStack_;
     std::vector<std::shared_ptr<IEditorCommand>> redoStack_;
-    
-    public:
-    struct MapState {
-        int width, height;
-        std::vector<std::vector<int>> data;
-    };
-    
-    struct RoomState {
-        std::vector<struct StageRoom> rooms;
-    };
-    private:
-    MapState oldMapState_;
-    RoomState oldRoomState_;
-
-    std::set<std::string> customToolFilters_;
-    std::vector<std::string> availableModels_; // "Object/..." のような相対パスを保持
-    void ScanAvailableModels();
-    
-    std::vector<std::string> availableTextures_;
-    void ScanAvailableTextures();
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;
@@ -346,8 +290,9 @@ private:
     std::string activeMainTab_ = "ゲームビュー";
     int focusActiveTabCountdown_ = 0;
 
-    // アニメーションエディター専用インスタンス
+    // サブエディター専用インスタンス
     std::unique_ptr<AnimationEditor> animationEditor_;
+    std::unique_ptr<MapEditor> mapEditor_;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅
