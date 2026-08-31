@@ -13,7 +13,8 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-  </ItemGroup>
+      <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h" />
+</ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -210,6 +211,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp" />
     <ClCompile Include="Engine\GameObject\GameObject.cpp" />
     <ClCompile Include="Engine\Component\TransformComponent.cpp" />
     <ClCompile Include="Engine\Component\AnimatorComponent.cpp" />
@@ -246,6 +248,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
@@ -464,6 +468,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTimelineEditor.h" />

@@ -56,6 +56,11 @@ public:
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
 
+#ifdef USE_IMGUI
+    // ImGuiによるブロックパラメータの調整やデバッグ操作用UI
+    virtual void DrawImGui() {}
+#endif
+
     GameObject* GetGameObject() const { return gameObject_.get(); }
     void SetGameObject(std::unique_ptr<GameObject> obj) { gameObject_ = std::move(obj); }
     

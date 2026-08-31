@@ -75,6 +75,25 @@
             },
             "textureName": "",
             "type": "OneWayBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.8999999761581421,
+                "g": 0.699999988079071,
+                "r": 0.4000000059604645
+            },
+            "id": 7,
+            "modelName": "",
+            "name": "Jump",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "JumpBlock"
         }
     ]
 }

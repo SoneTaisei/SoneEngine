@@ -4,7 +4,11 @@
 #include "Scene/SceneManager.h"
 #include "Scene/IScene.h"
 #include "Game2D/MapChip2D.h"
+#include "Game2D/Blocks/BlockFactory.h"
+#include "Game2D/Blocks/BaseBlock.h"
 #include <string>
+#include <algorithm>
+#include <vector>
 
 MapEditorInspector::MapEditorInspector(MapEditorContext* context)
     : context_(context) {
@@ -62,28 +66,37 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         changed = true;
     }
 
-    const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "OneWayBlock" };
-    int currentType = -1;
-    for (int i = 0; i < 4; ++i) {
-        if (targetDef->type == types[i]) {
-            currentType = i;
-            break;
+    // 登録済みの全ブロック型名リストを取得
+    std::vector<std::string> availableTypes = BlockFactory::GetInstance().GetAvailableTypes();
+    for (const auto& t : mapChip->GetTemplatePalette()) {
+        if (!t.type.empty() && std::find(availableTypes.begin(), availableTypes.end(), t.type) == availableTypes.end()) {
+            availableTypes.push_back(t.type);
         }
     }
-    if (ImGui::Combo("種類 (Type)", &currentType, types, 4)) {
-        targetDef->type = types[currentType];
-        changed = true;
-        bool foundTemplate = false;
-        for (const auto& t : mapChip->GetTemplatePalette()) {
-            if (t.type == targetDef->type) {
-                targetDef->properties = t.properties;
-                foundTemplate = true;
-                break;
+
+    if (ImGui::BeginCombo("種類 (Type)", targetDef->type.c_str())) {
+        for (const auto& typeName : availableTypes) {
+            bool isSelected = (targetDef->type == typeName);
+            if (ImGui::Selectable(typeName.c_str(), isSelected)) {
+                targetDef->type = typeName;
+                changed = true;
+                bool foundTemplate = false;
+                for (const auto& t : mapChip->GetTemplatePalette()) {
+                    if (t.type == targetDef->type) {
+                        targetDef->properties = t.properties;
+                        foundTemplate = true;
+                        break;
+                    }
+                }
+                if (!foundTemplate) {
+                    targetDef->properties = nlohmann::json::object();
+                }
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
             }
         }
-        if (!foundTemplate) {
-            targetDef->properties = nlohmann::json::object();
-        }
+        ImGui::EndCombo();
     }
 
     float col[4] = { targetDef->color.x, targetDef->color.y, targetDef->color.z, targetDef->color.w };
@@ -185,6 +198,21 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
                 value = v;
                 changed = true;
             }
+        }
+    }
+
+    // ブロッククラス固有の ImGui UI (DrawImGui) の表示
+    if (BlockFactory::GetInstance().HasType(targetDef->type)) {
+        ImGui::Separator();
+        static std::shared_ptr<BaseBlock> previewBlock = nullptr;
+        static std::string lastPreviewType = "";
+        if (!previewBlock || lastPreviewType != targetDef->type) {
+            previewBlock = BlockFactory::GetInstance().Create(targetDef->type, mapChip, 0, 0);
+            lastPreviewType = targetDef->type;
+        }
+        if (previewBlock) {
+            previewBlock->SetProperties(targetDef->properties);
+            previewBlock->DrawImGui();
         }
     }
 

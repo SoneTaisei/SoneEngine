@@ -211,6 +211,12 @@
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp">
+      <Filter>Engine\Editor\MapEditor</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
@@ -260,6 +266,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
 <ClCompile Include="Project\Game2D\Player\PlayerInput.cpp"><Filter>Project\Game2D</Filter></ClCompile><ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp"><Filter>Project\Game2D</Filter></ClCompile></ItemGroup>
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -466,7 +475,13 @@
       <Filter>Project\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h">
-      <Filter>Project\Game2D</Filter>
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h">
+      <Filter>Engine\Editor\MapEditor</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
@@ -516,6 +531,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
 <ClInclude Include="Project\Game2D\Player\PlayerInput.h"><Filter>Project\Game2D</Filter></ClInclude><ClInclude Include="Project\Game2D\Player\PlayerPhysics.h"><Filter>Project\Game2D</Filter></ClInclude></ItemGroup>
+    <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>

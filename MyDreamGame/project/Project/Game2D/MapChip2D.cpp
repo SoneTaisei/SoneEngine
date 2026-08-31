@@ -9,6 +9,7 @@
 #include "Blocks/DeathBlock.h"
 #include "Blocks/GoalBlock.h"
 #include "Blocks/OneWayBlock.h"
+#include "Blocks/BlockFactory.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -855,23 +856,28 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
     int typeId = static_cast<int>(type);
 
     if (type == ChipType::kBlock) {
-        newBlock = std::make_shared<NormalBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("NormalBlock", this, x, y);
     } else if (type == ChipType::kDeathBlock) {
-        newBlock = std::make_shared<DeathBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("DeathBlock", this, x, y);
     } else if (type == ChipType::kGoal) {
-        newBlock = std::make_shared<GoalBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("GoalBlock", this, x, y);
     } else if (type == ChipType::kOneWayBlock) {
-        newBlock = std::make_shared<OneWayBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("OneWayBlock", this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {
             if (d.id == typeId) { def = &d; break; }
         }
         if (def) {
-            if (def->type == "NormalBlock") newBlock = std::make_shared<NormalBlock>(this, x, y);
-            else if (def->type == "DeathBlock") newBlock = std::make_shared<DeathBlock>(this, x, y);
-            else if (def->type == "GoalBlock") newBlock = std::make_shared<GoalBlock>(this, x, y);
-            else if (def->type == "OneWayBlock") newBlock = std::make_shared<OneWayBlock>(this, x, y);
+            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
+        }
+    } else {
+        const CustomBlockDef* def = nullptr;
+        for (const auto& d : templatePalette_) {
+            if (d.id == typeId) { def = &d; break; }
+        }
+        if (def) {
+            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
         }
     }
 
