@@ -92,17 +92,7 @@ void TitleScene::Initialize() {
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(1280, 720);
 
-    // ■ 拡張Ringプリミティブのデモ実装
     PrimitiveManager::GetInstance()->Initialize(device.Get());
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
-    
-    // ■ RingEffectの作成
-    ringEffect_ = std::make_unique<RingEffect>();
-    ringEffect_->Initialize(device.Get(), gradationHandle);
-
-    // ■ CylinderEffectの作成
-    cylinderEffect_ = std::make_unique<CylinderEffect>();
-    cylinderEffect_->Initialize(device.Get(), gradationHandle);
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -134,15 +124,6 @@ void TitleScene::Update(SceneManager *sceneManager) {
 
     if (skybox_) {
         skybox_->Update();
-    }
-
-    // エフェクトの更新
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-    if (ringEffect_) {
-        ringEffect_->Update(deltaTime);
-    }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(deltaTime);
     }
 }
 
@@ -190,14 +171,6 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             particleCommon_->PreDraw();
             particleCommon_->DrawAll(viewProjectionMatrix);
         }
-
-        // ■ プリミティブパーティクルの描画
-        if (ringEffect_) {
-            ringEffect_->Draw();
-        }
-        if (cylinderEffect_) {
-            cylinderEffect_->Draw();
-        }
 #ifdef USE_IMGUI
     }
 #endif
@@ -221,15 +194,7 @@ std::vector<ParticleManager *> TitleScene::GetParticles() {
 }
 
 std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
-    std::vector<PrimitiveObject *> result;
-    if (ringEffect_) {
-        result.push_back(ringEffect_->GetRoot());
-    }
-    if (cylinderEffect_) {
-        result.push_back(cylinderEffect_->GetRoot());
-    }
-    // 子要素は返さないことでエディター上の表示を1つにまとめる
-    return result;
+    return {};
 }
 
 void TitleScene::UpdateEditor() {
@@ -241,12 +206,6 @@ void TitleScene::UpdateEditor() {
     }
     if (skybox_) {
         skybox_->Update();
-    }
-    if (ringEffect_) {
-        ringEffect_->Update(0.0f);
-    }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(0.0f);
     }
 }
 

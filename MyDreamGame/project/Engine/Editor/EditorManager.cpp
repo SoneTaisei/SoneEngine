@@ -1397,15 +1397,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 changed = true;
                             }
 
-                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock", "PatrolEnemyBlock" };
+                            const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "OneWayBlock" };
                             int currentType = -1;
-                            for (int i = 0; i < 9; ++i) {
+                            for (int i = 0; i < 4; ++i) {
                                 if (targetDef->type == types[i]) {
                                     currentType = i;
                                     break;
                                 }
                             }
-                            if (ImGui::Combo("種類 (Type)", &currentType, types, 9)) {
+                            if (ImGui::Combo("種類 (Type)", &currentType, types, 4)) {
                                 targetDef->type = types[currentType];
                                 changed = true;
                                 // デフォルトプロパティを設定 (BasicToolsのテンプレートに合わせる)
@@ -3190,17 +3190,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f }
                     };
 
-                    std::vector<ToolIcon> templateTools = {
-                        { 1, "Block", ImVec4(0.3f, 0.7f, 0.3f, 1.0f), 1.0f },
-                        { 2, "Death", ImVec4(1.0f, 0.2f, 0.2f, 1.0f), 1.0f },
-                        { 3, "Goal",  ImVec4(0.8f, 0.2f, 0.8f, 1.0f), 1.0f },
-                        { 4, "Coin",  ImVec4(1.0f, 0.8f, 0.0f, 1.0f), 0.5f },
-                        { 5, "OneWay",ImVec4(0.4f, 0.8f, 0.8f, 1.0f), 1.0f },
-                        { 7, "Lift",  ImVec4(0.9f, 0.6f, 0.1f, 1.0f), 1.0f },
-                        { 8, "Rail",  ImVec4(0.7f, 0.7f, 0.7f, 1.0f), 1.0f },
-                        { 9, "Jump",  ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.0f },
-                        { 12, "Enemy", ImVec4(0.9f, 0.2f, 0.2f, 1.0f), 1.0f }
-                    };
+                    std::vector<ToolIcon> templateTools;
+                    for (const auto& def : mapChip->GetTemplatePalette()) {
+                        templateTools.push_back({ def.id, def.name, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f });
+                    }
 
                     std::set<std::string> availableTypes;
                     for (const auto& def : mapChip->GetCustomPalette()) {
@@ -3336,9 +3329,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     MapChip2D::CustomBlockDef newDef;
                                     newDef.id = 100 + static_cast<int>(palette.size());
                                     newDef.name = "Custom " + std::to_string(palette.size() + 1);
-                                    newDef.type = "JumpBlock";
-                                    newDef.properties["jumpVelocityVertical"] = 15.0f;
-                                    newDef.properties["jumpVelocityHorizontal"] = 15.0f;
+                                    newDef.type = "NormalBlock";
                                     palette.push_back(newDef);
                                     mapEditorSelectedTool_ = newDef.id; // 新しいものを選択状態にする
                                     selectedGameObject_ = nullptr;

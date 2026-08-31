@@ -15,18 +15,13 @@
 class MapChip2D {
 public:
     enum class ChipType : int {
-        kNone = 0,  // 空気（何もなし）
-        kBlock = 1, // ブロック（地面・壁）
-        kDeathBlock = 2, // デスブロック（触れたら死ぬ）
-        kGoal = 3,  // ゴール
-        kCoin = 4,  // コイン
+        kNone = 0,        // 空気（何もなし）
+        kBlock = 1,       // ブロック（地面・壁）
+        kDeathBlock = 2,   // デスブロック（触れたら死ぬ）
+        kGoal = 3,        // ゴール
         kOneWayBlock = 5, // 一方向通行床
         kPlayerSpawn = 6, // プレイヤー初期位置
-        kLift = 7,  // 動く足場（リフト）
-        kRail = 8,  // リフトの移動レール
-        kJumpBlock = 9, // ジャンプ台
-        kRoomRespawn = 10, // 部屋用リスポーン地点
-        kEnemy = 12, // 巡回する敵キャラクター
+        kRoomRespawn = 10 // 部屋用リスポーン地点
     };
 
     void Initialize(const std::string& mapFilePath);

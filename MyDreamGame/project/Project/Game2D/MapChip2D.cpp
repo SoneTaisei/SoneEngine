@@ -8,12 +8,7 @@
 #include "Blocks/NormalBlock.h"
 #include "Blocks/DeathBlock.h"
 #include "Blocks/GoalBlock.h"
-#include "Blocks/CoinBlock.h"
 #include "Blocks/OneWayBlock.h"
-#include "Blocks/LiftBlock.h"
-#include "Blocks/RailBlock.h"
-#include "Blocks/JumpBlock.h"
-#include "Blocks/PatrolEnemyBlock.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -32,7 +27,6 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
     currentFilePath_ = mapFilePath;
 
     // デフォルトテクスチャのロード
-    
     uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
     gpuHandle_ = TextureManager::GetInstance()->GetGpuHandle(texHandle);
 
@@ -51,27 +45,8 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         };
         addTemplate(1, "Block", "NormalBlock", {0.3f, 0.7f, 0.3f, 1.0f}, nlohmann::json::object());
         addTemplate(2, "Death", "DeathBlock", {1.0f, 0.2f, 0.2f, 1.0f}, nlohmann::json::object());
-        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object()); // 紫色に変更
-        addTemplate(4, "Coin", "CoinBlock", {1.0f, 0.8f, 0.0f, 1.0f}, nlohmann::json::object());
+        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object());
         addTemplate(5, "OneWay", "OneWayBlock", {0.4f, 0.8f, 0.8f, 1.0f}, nlohmann::json::object());
-        
-        nlohmann::json liftProps;
-        liftProps["speedForward"] = 6.0f;
-        liftProps["speedBackward"] = 3.0f;
-        liftProps["waitTime"] = 1.0f;
-        liftProps["acceleration"] = 2.0f;
-        addTemplate(7, "Lift", "LiftBlock", {0.9f, 0.6f, 0.1f, 1.0f}, liftProps);
-        
-        addTemplate(8, "Rail", "RailBlock", {0.7f, 0.7f, 0.7f, 1.0f}, nlohmann::json::object());
-        
-        nlohmann::json jumpProps;
-        jumpProps["jumpVelocityVertical"] = 15.0f;
-        jumpProps["jumpVelocityHorizontal"] = 15.0f;
-        addTemplate(9, "Jump", "JumpBlock", {1.0f, 0.5f, 0.0f, 1.0f}, jumpProps);
-
-        nlohmann::json enemyProps;
-        enemyProps["moveSpeed"] = 2.5f;
-        addTemplate(12, "Enemy", "PatrolEnemyBlock", {1.0f, 1.0f, 1.0f, 1.0f}, enemyProps, "Object/Original/enemy/monsterBall.png");
 
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
@@ -291,11 +266,6 @@ void MapChip2D::BuildMap() {
 
     // --- ゴール配置 ---
     mapData_[8][35] = ChipType::kGoal;
-
-    // --- コイン配置 ---
-    mapData_[4][13] = ChipType::kCoin;
-    mapData_[5][20] = ChipType::kCoin;
-    mapData_[4][27] = ChipType::kCoin;
 }
 
 void MapChip2D::CreateChipObjects() {
@@ -394,7 +364,7 @@ void MapChip2D::RebuildChipObjects() {
             
             bool canMerge = false;
             if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kLift);
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock);
             } else {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 const CustomBlockDef* def = nullptr;
@@ -402,7 +372,7 @@ void MapChip2D::RebuildChipObjects() {
                     if (d.id == typeId) { def = &d; break; }
                 }
                 if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock");
+                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock");
                     // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
                     if (!def->modelName.empty()) {
                         canMerge = false;
@@ -848,18 +818,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = std::make_shared<DeathBlock>(this, x, y);
     } else if (type == ChipType::kGoal) {
         newBlock = std::make_shared<GoalBlock>(this, x, y);
-    } else if (type == ChipType::kCoin) {
-        newBlock = std::make_shared<CoinBlock>(this, x, y);
     } else if (type == ChipType::kOneWayBlock) {
         newBlock = std::make_shared<OneWayBlock>(this, x, y);
-    } else if (type == ChipType::kLift) {
-        newBlock = std::make_shared<LiftBlock>(this, x, y);
-    } else if (type == ChipType::kRail) {
-        newBlock = std::make_shared<RailBlock>(this, x, y);
-    } else if (type == ChipType::kJumpBlock) {
-        newBlock = std::make_shared<JumpBlock>(this, x, y);
-    } else if (type == ChipType::kEnemy) {
-        newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {
@@ -869,12 +829,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             if (def->type == "NormalBlock") newBlock = std::make_shared<NormalBlock>(this, x, y);
             else if (def->type == "DeathBlock") newBlock = std::make_shared<DeathBlock>(this, x, y);
             else if (def->type == "GoalBlock") newBlock = std::make_shared<GoalBlock>(this, x, y);
-            else if (def->type == "CoinBlock") newBlock = std::make_shared<CoinBlock>(this, x, y);
             else if (def->type == "OneWayBlock") newBlock = std::make_shared<OneWayBlock>(this, x, y);
-            else if (def->type == "LiftBlock") newBlock = std::make_shared<LiftBlock>(this, x, y);
-            else if (def->type == "RailBlock") newBlock = std::make_shared<RailBlock>(this, x, y);
-            else if (def->type == "JumpBlock") newBlock = std::make_shared<JumpBlock>(this, x, y);
-            else if (def->type == "PatrolEnemyBlock") newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
         }
     }
 
@@ -959,18 +914,13 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         if (newBlock->GetGameObject()) {
             newBlock->GetGameObject()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
             if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                if (type != ChipType::kEnemy && (def == nullptr || def->type != "PatrolEnemyBlock")) {
-                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
-                        float tileX = tc->GetScale().x / chipSize_;
-                        float tileY = tc->GetScale().y / chipSize_;
-                        float tileZ = tc->GetScale().z / chipSize_;
-                        Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
-                        prc->GetMaterial().uvTransform = uvTrans;
-                        prc->GetMaterial().enableBoxMapping = 1.0f;
-                    }
-                } else {
-                    prc->GetMaterial().uvTransform = TransformFunctions::MakeIdentity4x4();
-                    prc->GetMaterial().enableBoxMapping = 0.0f;
+                if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                    float tileX = tc->GetScale().x / chipSize_;
+                    float tileY = tc->GetScale().y / chipSize_;
+                    float tileZ = tc->GetScale().z / chipSize_;
+                    Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
+                    prc->GetMaterial().uvTransform = uvTrans;
+                    prc->GetMaterial().enableBoxMapping = 1.0f;
                 }
             }
         }

@@ -6,13 +6,9 @@
 /// 特定の入力デバイス（キーボードやパッド）に依存しない論理的な意図を持つ
 /// </summary>
 struct InputState {
-    float moveX = 0.0f; // -1.0f (左) 〜 1.0f (右)
-    float moveY = 0.0f; // -1.0f (下) 〜 1.0f (上)
-    
+    float moveX = 0.0f;          // -1.0f (左) 〜 1.0f (右)
     bool isJumpPressed = false;   // ジャンプキーが押された瞬間
-    bool isJumpReleased = false;  // ジャンプキーが離された瞬間
-    bool isDashPressed = false;   // ダッシュキーが押された瞬間
-    bool isClingHeld = false;     // 壁つかみキーが押されている間
+    bool isJumpHeld = false;      // ジャンプキーが押されている間
 };
 
 /// <summary>

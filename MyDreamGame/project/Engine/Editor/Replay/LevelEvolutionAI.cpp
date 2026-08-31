@@ -167,8 +167,6 @@ void LevelEvolutionAI::ApplyChromosomeToMap(const StageChromosome& chromosome, M
             mapChip->SetChip(gene.chipX, gene.chipY, MapChip2D::ChipType::kNone);
         } else if (gene.type == 1) {
             mapChip->SetChip(gene.chipX, gene.chipY, MapChip2D::ChipType::kDeathBlock);
-        } else if (gene.type == 2) {
-            mapChip->SetChip(gene.chipX, gene.chipY, MapChip2D::ChipType::kLift);
         }
     }
 }

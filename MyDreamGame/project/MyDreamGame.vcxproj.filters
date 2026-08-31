@@ -42,12 +42,6 @@
     <ClCompile Include="Project\Effect\SnowParticle.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Effect\RingEffect.cpp">
-      <Filter>Application\Particle</Filter>
-    </ClCompile>
-    <ClCompile Include="Project\Effect\CylinderEffect.cpp">
-      <Filter>Application\Particle</Filter>
-    </ClCompile>
     <ClCompile Include="Engine\Resource\Audio\AudioManager.cpp">
       <Filter>Engine\Audio</Filter>
     </ClCompile>
@@ -193,9 +187,6 @@
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Effect\CoinEffect.cpp">
-      <Filter>Application\Particle</Filter>
-    </ClCompile>
     <ClCompile Include="Project\Game2D\Player\Player2D.cpp">
       <Filter>Application\Game2D</Filter>
     </ClCompile>
@@ -208,15 +199,6 @@
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Project\Game2D</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Game2D\Blocks\LiftBlock.cpp">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClCompile>
-    <ClCompile Include="Project\Game2D\Blocks\RailBlock.cpp">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClCompile>
-    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -226,13 +208,7 @@
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Game2D\Blocks\CoinBlock.cpp">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClCompile>
-    <ClCompile Include="Project\Game2D\Blocks\PatrolEnemyBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
@@ -295,12 +271,6 @@
       <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Project\Effect\SnowParticle.h">
-      <Filter>Application\Particle</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Effect\RingEffect.h">
-      <Filter>Application\Particle</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Effect\CylinderEffect.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Resource\Audio\AudioManager.h">
@@ -461,9 +431,6 @@
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Effect\CoinEffect.h">
-      <Filter>Application\Particle</Filter>
-    </ClInclude>
     <ClInclude Include="Project\Game2D\Player\Player2D.h">
       <Filter>Application\Game2D</Filter>
     </ClInclude>
@@ -482,15 +449,6 @@
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Game2D\Blocks\LiftBlock.h">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Game2D\Blocks\RailBlock.h">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h">
-      <Filter>Project\Game2D\Blocks</Filter>
-    </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
@@ -500,14 +458,8 @@
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Game2D\Blocks\CoinBlock.h">
-      <Filter>Project\Game2D</Filter>
-    </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h">
       <Filter>Project\Game2D</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Game2D\Blocks\PatrolEnemyBlock.h">
-      <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />

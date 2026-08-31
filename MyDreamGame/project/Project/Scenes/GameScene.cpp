@@ -32,10 +32,7 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
 }
 
 void GameScene::OnExit(SceneManager* sceneManager) {
-    // スコアなどを保存してTitleやStageSelectに渡す
-    if (player_) {
-        sceneManager->SetData("LastScore", player_->GetScore());
-    }
+    (void)sceneManager;
 }
 
 void GameScene::Initialize() {
@@ -61,18 +58,6 @@ void GameScene::Initialize() {
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
     Log("GameScene::Initialize: Skybox loaded\n");
-
-    // CoinEffectの作成（コイン取得用）
-    coinEffect_ = std::make_unique<CoinEffect>();
-    coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
-    Log("GameScene::Initialize: CoinEffect Initialized\n");
-
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
-    ringEffect_ = std::make_unique<RingEffect>();
-    ringEffect_->Initialize(device.Get(), gradationHandle);
-    cylinderEffect_ = std::make_unique<CylinderEffect>();
-    cylinderEffect_->Initialize(device.Get(), gradationHandle);
-    Log("GameScene::Initialize: Effects Initialized\n");
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
@@ -118,18 +103,6 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
-
-    if (isGameActive) {
-        if (coinEffect_) {
-            coinEffect_->Update(1.0f / 60.0f);
-        }
-        if (ringEffect_) {
-            ringEffect_->Update(1.0f / 60.0f);
-        }
-        if (cylinderEffect_) {
-            cylinderEffect_->Update(1.0f / 60.0f);
-        }
-    }
 
     if (skybox_) {
         skybox_->Update();
@@ -204,9 +177,8 @@ void GameScene::Update(SceneManager *sceneManager) {
 
                     // 初期状態のマップに戻す
                     map_->LoadFromString(initMapStr);
-                    player_->SetScore(0);
                     
-                    // 録画されているフレームを最初からたどってコインの取得状態を再構築する
+                    // 録画されているフレームを最初からたどって再構築する
                     const auto& frames = ReplayManager::GetInstance()->GetTemporaryRecordedFrames();
                     for (const auto& frame : frames) {
                         player_->SetPosition(frame.position);
@@ -217,9 +189,6 @@ void GameScene::Update(SceneManager *sceneManager) {
                     
                     // 再構築を再開（ここで一括構築される）
                     map_->SetRebuildEnabled(true);
-
-                    // スコアを同期
-                    previousScore_ = player_->GetScore();
                 }
             }
         } else {
@@ -245,24 +214,22 @@ void GameScene::Update(SceneManager *sceneManager) {
                         map_->LoadFromString(replayData.mapDataStr);
                     }
                     
-                    // 2. プレイヤー状態(速度含む)とスコアをリセット
+                    // 2. プレイヤー状態(速度含む)をリセット
                     player_->ResetState(replayData.playerInitPos);
                     player_->ClearEffects();
-                    if (coinEffect_) coinEffect_->Clear();
                     
-                    // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
+                    // 3. 0フレーム目から現在フレームまで座標を再現
                     for (int i = 0; i <= curFrame; ++i) {
                         player_->SetPosition(replayData.frames[i].position);
                     }
                     map_->SetRebuildEnabled(true);
 
-                    // 4. コイン回収用に座標を動かしたので、シミュレーション再開用の正しい座標に戻す
+                    // 4. シミュレーション再開用の正しい座標に戻す
                     if (curFrame == 0) {
                         player_->SetPosition(replayData.playerInitPos);
                     } else {
                         player_->SetPosition(replayData.frames[curFrame - 1].position);
                     }
-                    previousScore_ = player_->GetScore();
                 }
 
                 if (!wasPlayingLastFrame_) {
@@ -331,22 +298,6 @@ void GameScene::Update(SceneManager *sceneManager) {
                 stateTimer_ = 0.0f;
             }
 
-            // コイン獲得エフェクト
-            int currentScore = player_->GetScore();
-            if (currentScore > previousScore_) {
-                if (coinEffect_) {
-                    Vector3 playerPos = player_->GetPosition();
-                    float playerWidth = 1.0f; // 実際のプレイヤーサイズに合わせて調整
-                    float playerHeight = 1.0f;
-                    Vector3 hitEmitterPos = {
-                        playerPos.x + playerWidth / 2.0f,
-                        playerPos.y + playerHeight / 2.0f,
-                        0.0f
-                    };
-                    coinEffect_->Emit(hitEmitterPos);
-                }
-                previousScore_ = currentScore;
-            }
         }
 
         if (!isRewinding && wasRewindingLastFrame_) {
@@ -398,24 +349,14 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     windowWidth = EditorManager::GetGameViewSize().x;
     windowHeight = EditorManager::GetGameViewSize().y;
 
-    // スコアの簡易表示
+    // 操作ガイド
     if (player_) {
         ImGui::SetNextWindowPos(ImVec2(windowPos.x + 10.0f, windowPos.y + 10.0f), ImGuiCond_Always);
-        ImGui::Begin("Game HUD", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
-        ImGui::SetWindowFontScale(2.0f);
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Score: %d", player_->GetScore());
-        ImGui::SetWindowFontScale(1.0f);
-        ImGui::End();
-
-        // 操作ガイド
-        ImGui::SetNextWindowPos(ImVec2(windowPos.x + 10.0f, windowPos.y + 70.0f), ImGuiCond_Always);
         ImGui::Begin("Operation Guide", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
 
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
         ImGui::End();
     }
 
@@ -522,16 +463,6 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     // コンポーネントの描画を実行
     Renderer::GetInstance()->RenderComponents();
-
-    if (coinEffect_) {
-#ifdef USE_IMGUI
-        if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
-            coinEffect_->Draw();
-        }
-#else
-        coinEffect_->Draw();
-#endif
-    }
 
 #ifdef USE_IMGUI
     // --- ゴースト残像の描画（マリオメーカー仕様） ---
@@ -728,28 +659,15 @@ std::vector<Object3D *> GameScene::GetObjects() {
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
 
-    // 1. 背景エフェクト
-    if (cylinderEffect_) {
-        result.push_back(cylinderEffect_->GetRoot());
-    }
-    if (ringEffect_) {
-        result.push_back(ringEffect_->GetRoot());
-    }
-
-    // 2. プレイヤー
+    // 1. プレイヤー
     if (player_) {
         result.push_back(player_->GetPrimitiveObject());
     }
 
-    // 3. マップチップ
+    // 2. マップチップ
     if (map_) {
         auto mapPrims = map_->GetPrimitiveObjects();
         result.insert(result.end(), mapPrims.begin(), mapPrims.end());
-    }
-
-    if (coinEffect_) {
-        auto coinPrims = coinEffect_->GetParticles();
-        result.insert(result.end(), coinPrims.begin(), coinPrims.end());
     }
 
     return result;

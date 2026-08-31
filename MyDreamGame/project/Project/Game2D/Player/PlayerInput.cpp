@@ -13,18 +13,7 @@ void PlayerInput::Update(InputState& outState) {
         outState.moveX += 1.0f;
     }
 
-    // 移動入力（Y軸）※主にはしごやダッシュ方向指定用
-    outState.moveY = 0.0f;
-    if (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) {
-        outState.moveY -= 1.0f;
-    }
-    if (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) {
-        outState.moveY += 1.0f;
-    }
-
     // 各種アクションキー
     outState.isJumpPressed = keyboard->IsKeyPressed(DIK_SPACE);
-    outState.isJumpReleased = keyboard->IsKeyReleased(DIK_SPACE);
-    outState.isDashPressed = keyboard->IsKeyPressed(DIK_J);
-    outState.isClingHeld = keyboard->IsKeyDown(DIK_K);
+    outState.isJumpHeld = keyboard->IsKeyDown(DIK_SPACE);
 }

@@ -1,33 +1,17 @@
 {
-    "colorDashed_": [
-        1.0,
-        1.0,
-        1.0,
-        1.0
-    ],
     "colorNormal_": [
         0.20000000298023224,
         0.6000000238418579,
         1.0,
         1.0
     ],
-    "dashDuration_": 0.15000000596046448,
-    "dashEndUpwardVelocity_": 10.0,
-    "dashSpeed_": 15.0,
-    "deathDuration_": 0.17499999701976776,
+    "deathDuration_": 0.2,
     "goalWaitTime_": 2.0,
-    "gravity_": -40.0,
+    "gravity_": -35.0,
     "halfHeight_": 0.73,
     "halfWidth_": 0.3,
-    "jumpPower_": 17.0,
-    "maxFallSpeed_": -15.0,
-    "moveSpeed_": 7.0,
-    "respawnDuration_": 0.5,
-    "wallJumpDirLockDuration_": 0.4000000059604645,
-    "wallJumpDuration_": 0.5,
-    "wallJumpPower_": [
-        8.0,
-        12.0
-    ],
-    "wallSlideSpeed_": -2.0
+    "jumpPower_": 15.0,
+    "maxFallSpeed_": -20.0,
+    "moveSpeed_": 6.0,
+    "respawnDuration_": 0.5
 }

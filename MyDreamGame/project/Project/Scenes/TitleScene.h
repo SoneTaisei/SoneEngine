@@ -18,8 +18,6 @@
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Effect/ParticleCommon.h"
-#include "Effect/RingEffect.h"
-#include "Effect/CylinderEffect.h"
 
 class TitleScene : public IScene {
 public:
@@ -69,9 +67,6 @@ private:
     uint32_t skyboxTextureHandle_ = 0;
 
     std::unique_ptr<DebugCamera> debugCamera_;
-
-    std::unique_ptr<RingEffect> ringEffect_;
-    std::unique_ptr<CylinderEffect> cylinderEffect_;
 
     // --- エディター停止中用 ---
     void UpdateEditor() override;
