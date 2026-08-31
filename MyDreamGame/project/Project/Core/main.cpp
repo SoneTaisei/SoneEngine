@@ -10,6 +10,7 @@
 #include "Editor/EditorManager.h"
 #endif
 
+#include "Scenes/GameScene.h"
 #include <filesystem>
 
 // windowsアプリでのエントリーポイント(main関数)
@@ -33,11 +34,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         // 起動シーンの決定
         SceneType startScene = SceneType::kGame;
 #ifdef USE_IMGUI
-        // エディターの場合はJSON設定から前回のシーンを復元
+        // エディターの場合はJSON設定から前回のシーンおよびマップを復元
         EditorManager* editor = app->GetEditorManager();
         if (editor) {
             editor->LoadSceneConfig();
             startScene = editor->GetCurrentSceneType();
+
+            // 前回開いていたマップパスをGameSceneの初期マップに反映
+            const char* savedMap = editor->GetStageFilename();
+            if (savedMap && savedMap[0] != '\0') {
+                std::string targetPath = std::string("resources/json/shared/MapData/") + savedMap;
+                if (!std::filesystem::exists(targetPath)) {
+                    // .txt 付与を試す
+                    if (std::filesystem::exists(targetPath + ".txt")) {
+                        targetPath += ".txt";
+                    } else if (std::filesystem::exists("resources/json/shared/MapData/map_data.txt")) {
+                        targetPath = "resources/json/shared/MapData/map_data.txt";
+                    } else if (std::filesystem::exists("resources/json/shared/Map/map_data.json")) {
+                        targetPath = "resources/json/shared/Map/map_data.json";
+                    }
+                }
+                GameScene::s_TargetMapFilePath = targetPath;
+            }
         }
 #endif
         app->GetSceneManager()->ChangeScene(SceneFactory::CreateScene(startScene));

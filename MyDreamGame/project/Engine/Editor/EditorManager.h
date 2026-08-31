@@ -106,6 +106,9 @@ public:
     // 現在選択中のシーンタイプを取得
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
 
+    // 現在選択中のステージマップファイル名を取得
+    const char* GetStageFilename() const { return stageFilename_; }
+
     // 今読み込んでいるマップから物理A* (詰みチェック)のスタート・ゴール座標を自動更新
     void UpdateAStarPositionsFromMap(class MapChip2D* mapChip, class SceneManager* sceneManager = nullptr);
 

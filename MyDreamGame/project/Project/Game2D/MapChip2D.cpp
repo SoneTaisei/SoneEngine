@@ -51,11 +51,15 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
-    // 保存ファイルがあれば読込み、なければ初期構築して保存する
+    // 保存ファイルがあれば読込み、なければデフォルトファイルや初期構築から読み込む
     if (!LoadFromFile(mapFilePath)) {
-        BuildMap();
-        GenerateDefaultRooms();
-        SaveToFile(mapFilePath);
+        if (!LoadFromFile("resources/json/shared/MapData/map_data.txt")) {
+            if (!LoadFromFile("resources/json/shared/Map/map_data.json")) {
+                BuildMap();
+                GenerateDefaultRooms();
+                SaveToFile(mapFilePath);
+            }
+        }
     }
 
     // 古いファイル等で CustomPalette が空の場合、テンプレートのブロックを CustomBlocks として登録する
@@ -488,15 +492,35 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
 }
 
 bool MapChip2D::LoadFromStageName(const std::string& stageName) {
-    std::string name = stageName;
-    bool hasExt = false;
-    if (name.length() >= 4) {
-        std::string ext = name.substr(name.length() - 4);
-        if (ext == ".txt" || ext == ".TXT") hasExt = true;
+    if (stageName.empty()) return false;
+
+    // 1. そのままのパスで存在するか試す
+    if (std::filesystem::exists(stageName) && LoadFromFile(stageName)) {
+        return true;
     }
-    if (!hasExt) name += ".txt";
-    std::string filepath = "resources/json/shared/MapData/" + name;
-    return LoadFromFile(filepath);
+
+    // ファイル名部分を抽出
+    std::filesystem::path p(stageName);
+    std::string filename = p.filename().string();
+    std::string stem = p.stem().string();
+
+    // 2. resources/json/shared/MapData/ 内を探索
+    std::vector<std::string> candidatePaths = {
+        "resources/json/shared/MapData/" + filename,
+        "resources/json/shared/MapData/" + stem + ".txt",
+        "resources/json/shared/MapData/" + stem + ".json",
+        "resources/json/shared/Map/" + filename,
+        "resources/json/shared/Map/" + stem + ".json",
+        "resources/json/shared/Map/" + stem + ".txt"
+    };
+
+    for (const auto& path : candidatePaths) {
+        if (std::filesystem::exists(path) && LoadFromFile(path)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool MapChip2D::LoadFromFile(const std::string& filepath) {
@@ -508,6 +532,7 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
     bool result = LoadFromString(buffer.str());
 
     if (result) {
+        currentFilePath_ = filepath;
         // 境界線メタデータの読み込み
         std::string boundsPath = filepath;
         size_t lastDot = boundsPath.find_last_of(".");

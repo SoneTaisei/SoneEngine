@@ -257,7 +257,21 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- 初回起動時 / マップロード時のA*座標初期化および前回マップ読み込み ---
     if (!isAStarPosInitialized_) {
+        // アニメーションプレビューシーンが積まれていたら元のシーンに戻す
+        if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+            sceneManager->PopScene();
+            animationEditor_->SetAnimScenePushed(false);
+        }
+
         IScene* activeScene = sceneManager->GetCurrentScene();
+        if (!activeScene || !activeScene->GetMapChip()) {
+            if (currentSceneType_ == SceneType::kGame) {
+                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+                sceneManager->ProcessSceneTransition();
+                activeScene = sceneManager->GetCurrentScene();
+            }
+        }
+
         if (activeScene && activeScene->GetMapChip()) {
             MapChip2D* mapChip = activeScene->GetMapChip();
             // 前回読み込んでいたマップをロード
@@ -268,6 +282,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 loaded = mapChip->LoadFromStageName(stageFilename_);
                 if (!loaded) {
                     if (!mapChip->LoadFromFile("resources/json/shared/Map/map_data.json")) {
+                        mapChip->BuildMap();
                         mapChip->GenerateDefaultRooms();
                     }
                 }
@@ -293,7 +308,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 } else {
                     if (!mapChip->LoadFromStageName(stageFilename_)) {
                         strcpy_s(stageFilename_, sizeof(stageFilename_), "map_data.txt");
-                        mapChip->LoadFromStageName(stageFilename_);
+                        if (!mapChip->LoadFromStageName(stageFilename_)) {
+                            if (!mapChip->LoadFromFile("resources/json/shared/Map/map_data.json")) {
+                                mapChip->BuildMap();
+                                mapChip->GenerateDefaultRooms();
+                            }
+                        }
                     }
                 }
                 mapEditorInputWidth_ = mapChip->GetWidth();
@@ -777,7 +797,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         if (ImGui::Begin("アニメーションエディター", &showAnimEditor_)) {
             bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
-            if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "アニメーションエディター")) {
+            if ((focusActiveTabCountdown_ == 0 && isFocused) || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "アニメーションエディター")) {
                 currentMode_ = EditorMode::Animation;
                 if (animationEditor_ && !animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
@@ -2055,12 +2075,31 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
             if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "マップチップ画面")) {
                 currentMode_ = EditorMode::Normal;
+                if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+                    sceneManager->PopScene();
+                    if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
                 if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "マップチップ画面") {
                     activeMainTab_ = "マップチップ画面";
                     SaveSceneConfig();
                 }
             }
             isMapEditorVisible_ = true;
+
+            // アニメーションプレビューシーンが積まれていたら戻す
+            if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+                sceneManager->PopScene();
+                if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+            }
+
+            IScene *activeScene = sceneManager->GetCurrentScene();
+            if (!activeScene || !activeScene->GetMapChip()) {
+                if (currentSceneType_ == SceneType::kGame) {
+                    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+                    sceneManager->ProcessSceneTransition();
+                    activeScene = sceneManager->GetCurrentScene();
+                }
+            }
 
             ImGui::Text("編集モード:");
             ImGui::SameLine();
@@ -2072,7 +2111,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::RadioButton("バケツ塗", &modeInt, 4);
             mapEditMode_ = static_cast<MapEditMode>(modeInt);
 
-            IScene *activeScene = sceneManager->GetCurrentScene();
             if (activeScene) {
                 MapChip2D* mapChip = activeScene->GetMapChip();
                 if (mapChip) {
@@ -3075,16 +3113,30 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::End();
         } else {
             if (ImGui::Begin("マップ設定", &showMapSettings_)) {
-            IScene *activeScene = sceneManager->GetCurrentScene();
-            if (activeScene) {
-                MapChip2D* mapChip = activeScene->GetMapChip();
-                if (mapChip) {
-                    if (mapEditorInputWidth_ == -1) {
-                        mapEditorInputWidth_ = mapChip->GetWidth();
+                // アニメーションプレビューシーンが積まれていたら戻す
+                if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+                    sceneManager->PopScene();
+                    if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
+
+                IScene *activeScene = sceneManager->GetCurrentScene();
+                if (!activeScene || !activeScene->GetMapChip()) {
+                    if (currentSceneType_ == SceneType::kGame) {
+                        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+                        sceneManager->ProcessSceneTransition();
+                        activeScene = sceneManager->GetCurrentScene();
                     }
-                    if (mapEditorInputHeight_ == -1) {
-                        mapEditorInputHeight_ = mapChip->GetHeight();
-                    }
+                }
+
+                if (activeScene) {
+                    MapChip2D* mapChip = activeScene->GetMapChip();
+                    if (mapChip) {
+                        if (mapEditorInputWidth_ == -1) {
+                            mapEditorInputWidth_ = mapChip->GetWidth();
+                        }
+                        if (mapEditorInputHeight_ == -1) {
+                            mapEditorInputHeight_ = mapChip->GetHeight();
+                        }
 
                     // ==========================================
                     // ここから移動してきたマップ設定（ファイル・サイズ）
