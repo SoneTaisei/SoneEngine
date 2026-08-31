@@ -225,12 +225,12 @@ void Renderer::DrawObject3D(Object3D* obj) {
         obj->model_->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
     } else {
         obj->model_->Draw(nullptr, obj->GetTextureHandle());
-    }
 
-    if (dxCommon_->IsOutlineEnabled() && obj->material_.color.w >= 1.0f && obj->blendMode_ != BlendMode::kBlendModeAdd) {
-        commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
-        commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
-        obj->model_->Draw();
+        if (dxCommon_->IsOutlineEnabled() && obj->material_.color.w >= 1.0f && obj->blendMode_ != BlendMode::kBlendModeAdd) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
+            commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
+            obj->model_->Draw(nullptr, obj->GetTextureHandle());
+        }
     }
 }
 
