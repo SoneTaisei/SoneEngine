@@ -12,7 +12,7 @@
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "Scenes/AnimationPreviewScene.h"
+#include "AnimationPreviewScene.h"
 #include "Component/TransformComponent.h"
 #include "Component/AnimatorComponent.h"
 #include "Core/Utility/Animation.h"

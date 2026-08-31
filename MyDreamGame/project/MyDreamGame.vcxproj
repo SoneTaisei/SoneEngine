@@ -228,7 +228,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
     <ClCompile Include="Project\Scenes\StageSelectScene.cpp" />
-    <ClCompile Include="Project\Scenes\AnimationPreviewScene.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp" />
     <ClCompile Include="Project\Effect\windowParticle.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
@@ -444,7 +444,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
     <ClInclude Include="Engine\Graphics\Skybox.h" />
-    <ClInclude Include="Project\Scenes\AnimationPreviewScene.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
     <ClInclude Include="Engine\Resource\Primitive\Primitive.h" />
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />

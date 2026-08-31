@@ -1,4 +1,5 @@
 #pragma once
+#ifdef USE_IMGUI
 #include "Scene/IScene.h"
 #include "Resource/Model/Model.h"
 #include <d3d12.h>
@@ -35,3 +36,4 @@ private:
     std::unique_ptr<Skybox> skybox_;
     uint32_t skyboxTextureHandle_ = 0;
 };
+#endif

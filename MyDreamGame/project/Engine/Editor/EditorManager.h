@@ -339,6 +339,10 @@ private:
     bool showMapSettings_ = true;
     bool showAnimEditor_ = true;
 
+    // 前回選択されていたメインタブ（次回起動時に復元）
+    std::string activeMainTab_ = "ゲームビュー";
+    int focusActiveTabCountdown_ = 0;
+
     // アニメーションエディター専用インスタンス
     std::unique_ptr<AnimationEditor> animationEditor_;
 

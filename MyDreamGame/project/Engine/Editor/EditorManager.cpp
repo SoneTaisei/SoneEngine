@@ -20,7 +20,7 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Game2D/Player/Player2D.h"
 #include "Component/TransformComponent.h"
-#include "Scenes/AnimationPreviewScene.h"
+#include "Animation/AnimationPreviewScene.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -254,11 +254,27 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
     ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
 
-    // --- 初回起動時 / マップロード時のA*座標初期化 ---
+    // --- 初回起動時 / マップロード時のA*座標初期化および前回マップ読み込み ---
     if (!isAStarPosInitialized_) {
         IScene* activeScene = sceneManager->GetCurrentScene();
         if (activeScene && activeScene->GetMapChip()) {
-            UpdateAStarPositionsFromMap(activeScene->GetMapChip(), sceneManager);
+            MapChip2D* mapChip = activeScene->GetMapChip();
+            // 前回読み込んでいたマップをロード
+            bool loaded = mapChip->LoadFromStageName(stageFilename_);
+            if (!loaded) {
+                // 前回のマップが存在しない場合はデフォルトマップを表示
+                strcpy_s(stageFilename_, sizeof(stageFilename_), "map_data.txt");
+                loaded = mapChip->LoadFromStageName(stageFilename_);
+                if (!loaded) {
+                    if (!mapChip->LoadFromFile("resources/json/shared/Map/map_data.json")) {
+                        mapChip->GenerateDefaultRooms();
+                    }
+                }
+                SaveSceneConfig();
+            }
+            mapEditorInputWidth_ = mapChip->GetWidth();
+            mapEditorInputHeight_ = mapChip->GetHeight();
+            UpdateAStarPositionsFromMap(mapChip, sceneManager);
             isAStarPosInitialized_ = true;
         }
     }
@@ -274,8 +290,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     mapChip->GetRooms() = savedRoomsForPlay_;
                     loadMapDataStrNextFrame_ = false;
                 } else {
-                    mapChip->LoadFromStageName(stageFilename_);
+                    if (!mapChip->LoadFromStageName(stageFilename_)) {
+                        strcpy_s(stageFilename_, sizeof(stageFilename_), "map_data.txt");
+                        mapChip->LoadFromStageName(stageFilename_);
+                    }
                 }
+                mapEditorInputWidth_ = mapChip->GetWidth();
+                mapEditorInputHeight_ = mapChip->GetHeight();
                 UpdateAStarPositionsFromMap(mapChip, sceneManager);
             }
         }
@@ -487,14 +508,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
         // Window開閉制御メニュー
         if (ImGui::BeginMenu("ウィンドウ")) {
-            ImGui::MenuItem("インスペクター", nullptr, &showInspector_);
-            ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_);
-            ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_);
-            ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_);
-            ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_);
-            ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_);
-            ImGui::MenuItem("リプレイエディター", nullptr, &showReplayEditor_);
-            ImGui::MenuItem("アニメーションエディター", nullptr, &showAnimEditor_);
+            if (ImGui::MenuItem("インスペクター", nullptr, &showInspector_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("リプレイエディター", nullptr, &showReplayEditor_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("アニメーションエディター", nullptr, &showAnimEditor_)) { SaveSceneConfig(); }
             ImGui::Separator();
             if (ImGui::BeginMenu("レイアウトプリセット")) {
                 if (layoutPresets_.empty()) {
@@ -601,16 +622,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
 
         if (resetLayout || !hasIniFile) {
+            if (resetLayout) {
+                showInspector_ = true;
+                showHierarchy_ = true;
+                showGameView_ = true;
+                showPostEffect_ = true;
+                showMapEditor_ = true;
+                showMapSettings_ = true;
+                showReplayEditor_ = true;
+                showAnimEditor_ = true;
+            }
             resetLayout = false;
-
-            showInspector_ = true;
-            showHierarchy_ = true;
-            showGameView_ = true;
-            showPostEffect_ = true;
-            showMapEditor_ = true;
-            showMapSettings_ = true;
-            showReplayEditor_ = true;
-            showAnimEditor_ = true;
 
             // 一度ノードをクリアして再構築
             ImGui::DockBuilderRemoveNode(dockspace_id);
@@ -652,13 +674,21 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- Game View ウィンドウ ---
     if (showGameView_) {
+        if (focusActiveTabCountdown_ > 0 && activeMainTab_ == "ゲームビュー") {
+            ImGui::SetNextWindowFocus();
+        }
         if (ImGui::Begin("ゲームビュー", &showGameView_)) {
-            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+            bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+            if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "ゲームビュー")) {
                 currentMode_ = EditorMode::Normal;
                 selectedReplaySeekbar_ = false;
                 if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
+                if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "ゲームビュー") {
+                    activeMainTab_ = "ゲームビュー";
+                    SaveSceneConfig();
                 }
             }
             isGameViewHovered_ = ImGui::IsWindowHovered();
@@ -689,12 +719,20 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Replay Editor ウィンドウ (dock_id_main) ---
     isReplayEditorHovered_ = false;
     if (showReplayEditor_) {
+        if (focusActiveTabCountdown_ > 0 && activeMainTab_ == "リプレイエディター") {
+            ImGui::SetNextWindowFocus();
+        }
         if (ImGui::Begin("リプレイエディター", &showReplayEditor_)) {
-            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
+            bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+            if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "リプレイエディター")) {
                 currentMode_ = EditorMode::Replay;
                 if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
+                if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "リプレイエディター") {
+                    activeMainTab_ = "リプレイエディター";
+                    SaveSceneConfig();
                 }
             }
             isReplayEditorHovered_ = ImGui::IsWindowHovered();
@@ -733,14 +771,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Animation Editor メインウィンドウ (dock_id_main) ---
     if (animationEditor_) animationEditor_->SetHovered(false);
     if (showAnimEditor_) {
+        if (focusActiveTabCountdown_ > 0 && activeMainTab_ == "アニメーションエディター") {
+            ImGui::SetNextWindowFocus();
+        }
         if (ImGui::Begin("アニメーションエディター", &showAnimEditor_)) {
-            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
+            bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+            if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "アニメーションエディター")) {
                 currentMode_ = EditorMode::Animation;
                 if (animationEditor_ && !animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
                     animationEditor_->SetAnimScenePushed(true);
                     animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
                     animationEditor_->RefreshAnimationJointList(sceneManager);
+                }
+                if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "アニメーションエディター") {
+                    activeMainTab_ = "アニメーションエディター";
+                    SaveSceneConfig();
                 }
             }
             if (animationEditor_) animationEditor_->SetHovered(ImGui::IsWindowHovered());
@@ -2001,9 +2047,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     // --- Map Editor ウィンドウ ---
     if (showMapEditor_) {
+        if (focusActiveTabCountdown_ > 0 && activeMainTab_ == "マップチップ画面") {
+            ImGui::SetNextWindowFocus();
+        }
         if (ImGui::Begin("マップチップ画面", &showMapEditor_)) {
-            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+            bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+            if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "マップチップ画面")) {
                 currentMode_ = EditorMode::Normal;
+                if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "マップチップ画面") {
+                    activeMainTab_ = "マップチップ画面";
+                    SaveSceneConfig();
+                }
             }
             isMapEditorVisible_ = true;
 
@@ -3099,6 +3153,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                         mapEditorInputWidth_ = mapChip->GetWidth();
                                         mapEditorInputHeight_ = mapChip->GetHeight();
                                         UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                                        SaveSceneConfig();
                                     }
                                 }
                                 if (isSelected) {
@@ -3115,6 +3170,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             mapEditorInputWidth_ = mapChip->GetWidth();
                             mapEditorInputHeight_ = mapChip->GetHeight();
                             UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                            SaveSceneConfig();
                         }
                     }
 
@@ -3153,6 +3209,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     // 操作ボタン
                     if (ImGui::Button("保存")) {
                         mapChip->SaveToFile(GetFullFilePath(stageFilename_));
+                        SaveSceneConfig();
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("クリア")) {
@@ -3164,6 +3221,59 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         mapEditorInputWidth_ = mapChip->GetWidth();
                         mapEditorInputHeight_ = mapChip->GetHeight();
                         UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                    }
+                    ImGui::SameLine();
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.3f, 0.3f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+                    if (ImGui::Button("マップを削除")) {
+                        ImGui::OpenPopup("DeleteMapConfirmPopup");
+                    }
+                    ImGui::PopStyleColor(3);
+
+                    // マップ削除確認ポップアップ
+                    if (ImGui::BeginPopupModal("DeleteMapConfirmPopup", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                        std::string targetFilePath = GetFullFilePath(stageFilename_);
+                        ImGui::Text("本当にマップファイル '%s' を削除しますか？", stageFilename_);
+                        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "※この操作は取り消せません。");
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Spacing();
+
+                        if (ImGui::Button("削除", ImVec2(120, 0))) {
+                            // .txt ファイルと _bounds.txt ファイルを削除
+                            std::error_code ec;
+                            std::filesystem::remove(targetFilePath, ec);
+
+                            std::string boundsPath = targetFilePath;
+                            size_t lastDot = boundsPath.find_last_of(".");
+                            if (lastDot != std::string::npos) {
+                                boundsPath = boundsPath.substr(0, lastDot) + "_bounds.txt";
+                            } else {
+                                boundsPath += "_bounds.txt";
+                            }
+                            std::filesystem::remove(boundsPath, ec);
+
+                            // デフォルトマップ名にリセットして再読み込み
+                            strcpy_s(stageFilename_, sizeof(stageFilename_), "map_data.txt");
+                            if (!mapChip->LoadFromStageName(stageFilename_)) {
+                                if (!mapChip->LoadFromFile("resources/json/shared/Map/map_data.json")) {
+                                    mapChip->ResetMap();
+                                }
+                            }
+                            mapEditorInputWidth_ = mapChip->GetWidth();
+                            mapEditorInputHeight_ = mapChip->GetHeight();
+                            UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                            SaveSceneConfig();
+
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::SetItemDefaultFocus();
+                        ImGui::SameLine();
+                        if (ImGui::Button("キャンセル", ImVec2(120, 0))) {
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::EndPopup();
                     }
 
                     ImGui::Spacing();
@@ -3467,6 +3577,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         ImGui::End();
     }
+
+    // 起動時のアクティブタブ復元
+    if (focusActiveTabCountdown_ > 0) {
+        if (!activeMainTab_.empty()) {
+            ImGui::SetWindowFocus(activeMainTab_.c_str());
+        }
+        focusActiveTabCountdown_--;
+    }
 }
 
 void EditorManager::Draw() {
@@ -3481,16 +3599,34 @@ void EditorManager::Finalize() {
 }
 
 void EditorManager::SaveSceneConfig() {
-
     std::filesystem::create_directories("resources/json/local");
     std::ofstream ofs("resources/json/local/editor_config.json");
     if (ofs.is_open()) {
         auto dxCommon = DirectXCommon::GetInstance();
-        ofs << "{" << std::endl;
-        ofs << "  \"currentScene\": \"" << SceneFactory::GetSceneTypeName(currentSceneType_) << "\"," << std::endl;
-        ofs << "  \"isOutlineEnabled\": " << (dxCommon->IsOutlineEnabled() ? "true" : "false") << "," << std::endl;
-        ofs << "  \"outlineThickness\": " << dxCommon->GetOutlineThickness() << std::endl;
-        ofs << "}" << std::endl;
+        nlohmann::json j;
+        j["currentScene"] = SceneFactory::GetSceneTypeName(currentSceneType_);
+        j["isOutlineEnabled"] = dxCommon ? dxCommon->IsOutlineEnabled() : false;
+        j["outlineThickness"] = dxCommon ? dxCommon->GetOutlineThickness() : 0.015f;
+
+        // アクティブメインタブ
+        j["activeMainTab"] = activeMainTab_;
+
+        // 現在のマップファイル名
+        j["currentMapFile"] = stageFilename_;
+
+        // 各ウィンドウの開閉状態
+        nlohmann::json winObj;
+        winObj["showInspector"] = showInspector_;
+        winObj["showHierarchy"] = showHierarchy_;
+        winObj["showGameView"] = showGameView_;
+        winObj["showPostEffect"] = showPostEffect_;
+        winObj["showMapEditor"] = showMapEditor_;
+        winObj["showMapSettings"] = showMapSettings_;
+        winObj["showReplayEditor"] = showReplayEditor_;
+        winObj["showAnimEditor"] = showAnimEditor_;
+        j["windows"] = winObj;
+
+        ofs << j.dump(4) << std::endl;
         ofs.close();
     }
 }
@@ -3501,70 +3637,58 @@ void EditorManager::LoadSceneConfig() {
         return;
     }
 
-    std::string content;
-    std::string line;
-    while (std::getline(ifs, line)) {
-        content += line;
-    }
-    ifs.close();
+    try {
+        nlohmann::json j;
+        ifs >> j;
+        ifs.close();
 
-    {
-        const std::string key = "\"currentScene\"";
-        size_t keyPos = content.find(key);
-        if (keyPos != std::string::npos) {
-            size_t colonPos = content.find(':', keyPos + key.length());
-            if (colonPos != std::string::npos) {
-                size_t valueStart = content.find('"', colonPos + 1);
-                if (valueStart != std::string::npos) {
-                    valueStart++;
-                    size_t valueEnd = content.find('"', valueStart);
-                    if (valueEnd != std::string::npos) {
-                        std::string sceneName = content.substr(valueStart, valueEnd - valueStart);
-                        currentSceneType_ = SceneFactory::GetSceneTypeFromName(sceneName);
-                    }
-                }
+        if (j.contains("currentScene") && j["currentScene"].is_string()) {
+            std::string sceneName = j["currentScene"].get<std::string>();
+            currentSceneType_ = SceneFactory::GetSceneTypeFromName(sceneName);
+        }
+
+        auto dxCommon = DirectXCommon::GetInstance();
+        if (dxCommon) {
+            if (j.contains("isOutlineEnabled") && j["isOutlineEnabled"].is_boolean()) {
+                dxCommon->SetOutlineEnabled(j["isOutlineEnabled"].get<bool>());
+            }
+            if (j.contains("outlineThickness") && j["outlineThickness"].is_number()) {
+                dxCommon->SetOutlineThickness(j["outlineThickness"].get<float>());
             }
         }
-    }
 
-    {
-        const std::string key = "\"isOutlineEnabled\"";
-        size_t keyPos = content.find(key);
-        if (keyPos != std::string::npos) {
-            size_t colonPos = content.find(':', keyPos + key.length());
-            if (colonPos != std::string::npos) {
-                size_t valPos = content.find_first_not_of(" \t\r\n", colonPos + 1);
-                if (valPos != std::string::npos) {
-                    if (content.compare(valPos, 4, "true") == 0) {
-                        DirectXCommon::GetInstance()->SetOutlineEnabled(true);
-                    } else if (content.compare(valPos, 5, "false") == 0) {
-                        DirectXCommon::GetInstance()->SetOutlineEnabled(false);
-                    }
-                }
+        if (j.contains("activeMainTab") && j["activeMainTab"].is_string()) {
+            activeMainTab_ = j["activeMainTab"].get<std::string>();
+            focusActiveTabCountdown_ = 5; // 起動後最初の数フレームで確実にフォーカスを当てる
+            if (activeMainTab_ == "リプレイエディター") {
+                currentMode_ = EditorMode::Replay;
+            } else if (activeMainTab_ == "アニメーションエディター") {
+                currentMode_ = EditorMode::Animation;
+            } else {
+                currentMode_ = EditorMode::Normal;
             }
         }
-    }
 
-    {
-        const std::string key = "\"outlineThickness\"";
-        size_t keyPos = content.find(key);
-        if (keyPos != std::string::npos) {
-            size_t colonPos = content.find(':', keyPos + key.length());
-            if (colonPos != std::string::npos) {
-                size_t valPos = content.find_first_not_of(" \t\r\n", colonPos + 1);
-                if (valPos != std::string::npos) {
-                    size_t endPos = content.find_first_of(",}", valPos);
-                    if (endPos != std::string::npos) {
-                        std::string numStr = content.substr(valPos, endPos - valPos);
-                        try {
-                            float thickness = std::stof(numStr);
-                            DirectXCommon::GetInstance()->SetOutlineThickness(thickness);
-                        } catch (...) {
-                        }
-                    }
-                }
+        if (j.contains("currentMapFile") && j["currentMapFile"].is_string()) {
+            std::string mapFile = j["currentMapFile"].get<std::string>();
+            if (!mapFile.empty()) {
+                strcpy_s(stageFilename_, sizeof(stageFilename_), mapFile.c_str());
             }
         }
+
+        if (j.contains("windows") && j["windows"].is_object()) {
+            const auto& winObj = j["windows"];
+            if (winObj.contains("showInspector") && winObj["showInspector"].is_boolean()) showInspector_ = winObj["showInspector"].get<bool>();
+            if (winObj.contains("showHierarchy") && winObj["showHierarchy"].is_boolean()) showHierarchy_ = winObj["showHierarchy"].get<bool>();
+            if (winObj.contains("showGameView") && winObj["showGameView"].is_boolean()) showGameView_ = winObj["showGameView"].get<bool>();
+            if (winObj.contains("showPostEffect") && winObj["showPostEffect"].is_boolean()) showPostEffect_ = winObj["showPostEffect"].get<bool>();
+            if (winObj.contains("showMapEditor") && winObj["showMapEditor"].is_boolean()) showMapEditor_ = winObj["showMapEditor"].get<bool>();
+            if (winObj.contains("showMapSettings") && winObj["showMapSettings"].is_boolean()) showMapSettings_ = winObj["showMapSettings"].get<bool>();
+            if (winObj.contains("showReplayEditor") && winObj["showReplayEditor"].is_boolean()) showReplayEditor_ = winObj["showReplayEditor"].get<bool>();
+            if (winObj.contains("showAnimEditor") && winObj["showAnimEditor"].is_boolean()) showAnimEditor_ = winObj["showAnimEditor"].get<bool>();
+        }
+    } catch (...) {
+        // パースエラー時は何もしない
     }
 }
 

@@ -219,6 +219,7 @@
     <ClCompile Include="Engine\Editor\Animation\AnimationEditorViewport.cpp" />
     <ClCompile Include="Engine\Editor\Animation\AnimationDopeSheet.cpp" />
     <ClCompile Include="Engine\Editor\Animation\AnimationInspector.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
     <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
     <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
@@ -469,6 +470,7 @@
     <ClInclude Include="Engine\Editor\Animation\AnimationEditorViewport.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationDopeSheet.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationInspector.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
       <ClInclude Include="Engine\Resource\Primitive\PrimitivePlane.h">

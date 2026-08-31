@@ -1,4 +1,5 @@
 #include "AnimationPreviewScene.h"
+#ifdef USE_IMGUI
 #include "Graphics/TextureManager.h"
 #include "Scene/SceneManager.h"
 #include "Resource/Model/ModelManager.h"
@@ -187,3 +188,4 @@ std::vector<PrimitiveObject *> AnimationPreviewScene::GetPrimitives() {
     }
     return result;
 }
+#endif

@@ -11,7 +11,7 @@
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "Scenes/AnimationPreviewScene.h"
+#include "AnimationPreviewScene.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
