@@ -18,6 +18,7 @@
 #include "Core/Utility/LogManager.h"
 #include "GameObject/MapObject2D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
+#include "Resource/Model/ModelManager.h"
 #include "Game2D/Player/Player2D.h"
 #include "Component/TransformComponent.h"
 #include "Animation/AnimationPreviewScene.h"
@@ -3288,21 +3289,66 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::Spacing();
 
                     struct ToolIcon {
-                        int id;
+                        int id = 0;
                         std::string name;
-                        ImVec4 color;
-                        float scale; // 実際のモデルに合わせたサイズ比率
+                        std::string type; // "NormalBlock", "DeathBlock", "GoalBlock", "OneWayBlock", "Spawn", "RoomSpawn", "Erase" etc.
+                        ImVec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                        float scale = 1.0f; // 実際のモデルに合わせたサイズ比率
+                        std::string modelName;
+                        std::string textureName;
+                        Model* modelPtr = nullptr;
+                        D3D12_GPU_DESCRIPTOR_HANDLE textureGpuHandle = {};
+                        bool hasTexture = false;
+                    };
+
+                    auto ResolveToolResource = [](const std::string& texName, const std::string& mdlName) -> std::tuple<Model*, D3D12_GPU_DESCRIPTOR_HANDLE, bool> {
+                        Model* model = nullptr;
+                        D3D12_GPU_DESCRIPTOR_HANDLE texGpuHandle = {};
+                        bool hasTexture = false;
+
+                        if (!mdlName.empty()) {
+                            if (mdlName.length() >= 4 && mdlName.substr(mdlName.length() - 4) == ".obj") {
+                                std::string fullPath = (mdlName.find("resources/") == 0) ? mdlName : ("resources/" + mdlName);
+                                std::filesystem::path p(fullPath);
+                                std::string dirPath = p.parent_path().string();
+                                std::string fileName = p.filename().string();
+                                std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
+                                model = ModelManager::GetInstance()->GetModel(dirPath, fileName);
+                            } else {
+                                model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + mdlName, mdlName + ".obj");
+                                if (!model) {
+                                    model = ModelManager::GetInstance()->GetModel("resources/models", mdlName + ".obj");
+                                }
+                            }
+                        }
+
+                        if (!texName.empty()) {
+                            std::string fullTex = (texName.find("resources/") == 0) ? texName : ("resources/" + texName);
+                            uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
+                            texGpuHandle = TextureManager::GetInstance()->GetGpuHandle(handle);
+                            hasTexture = true;
+                        } else if (model) {
+                            std::string texPath = model->GetModelData().material.textureFilePath;
+                            if (!texPath.empty() && std::filesystem::exists(texPath)) {
+                                uint32_t texIdx = TextureManager::GetInstance()->Load(texPath);
+                                texGpuHandle = TextureManager::GetInstance()->GetGpuHandle(texIdx);
+                                hasTexture = true;
+                            }
+                        }
+
+                        return { model, texGpuHandle, hasTexture };
                     };
 
                     std::vector<ToolIcon> systemTools = {
-                        { 6, "Spawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f },
-                        { 10, "RoomSpawn", ImVec4(0.2f, 0.8f, 1.0f, 1.0f), 1.0f },
-                        { 0, "Erase", ImVec4(0.2f, 0.2f, 0.2f, 1.0f), 1.0f }
+                        { 6, "Spawn", "PlayerSpawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f, "", "", nullptr, {}, false },
+                        { 10, "RoomSpawn", "RoomRespawn", ImVec4(0.2f, 0.8f, 1.0f, 1.0f), 1.0f, "", "", nullptr, {}, false },
+                        { 0, "Erase", "Erase", ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, "", "", nullptr, {}, false }
                     };
 
                     std::vector<ToolIcon> templateTools;
                     for (const auto& def : mapChip->GetTemplatePalette()) {
-                        templateTools.push_back({ def.id, def.name, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f });
+                        auto [mdl, gpuH, hasTex] = ResolveToolResource(def.textureName, def.modelName);
+                        templateTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex });
                     }
 
                     std::set<std::string> availableTypes;
@@ -3316,22 +3362,243 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         if (customToolFilters_.find(def.type) != customToolFilters_.end()) {
                             continue;
                         }
-                        customTools.push_back({ def.id, def.name, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f });
+                        auto [mdl, gpuH, hasTex] = ResolveToolResource(def.textureName, def.modelName);
+                        customTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex });
                     }
 
-                    float itemSize = 64.0f; // アイコン枠のサイズ
-                    float totalHeight = itemSize + 24.0f; // アイコン＋テキスト
+                    float cardWidth = 84.0f; // カード枠の横幅
+                    float cardHeight = 98.0f; // カード全体の高さ (プレビュー＋テキスト)
                     float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
 
                     static int toolToDelete = -1;
                     static bool openDeletePopup = false;
+
+                    // 3Dモデルを斜めアングルでリアルタイムレンダリングするヘルパー
+                    auto Draw3DModelPreview = [](ImDrawList* drawList, ImVec2 center, float boxSize, Model* model, ImVec4 baseColor, D3D12_GPU_DESCRIPTOR_HANDLE texGpuHandle, bool hasTexture) -> bool {
+                        if (!model) return false;
+                        const auto& modelData = model->GetModelData();
+                        if (modelData.vertices.empty()) return false;
+
+                        // 1. バウンディングボックスの計算
+                        Vector3 bMin = { 1e9f, 1e9f, 1e9f };
+                        Vector3 bMax = { -1e9f, -1e9f, -1e9f };
+                        for (const auto& v : modelData.vertices) {
+                            bMin.x = (std::min)(bMin.x, v.position.x);
+                            bMin.y = (std::min)(bMin.y, v.position.y);
+                            bMin.z = (std::min)(bMin.z, v.position.z);
+                            bMax.x = (std::max)(bMax.x, v.position.x);
+                            bMax.y = (std::max)(bMax.y, v.position.y);
+                            bMax.z = (std::max)(bMax.z, v.position.z);
+                        }
+                        Vector3 bCenter = { (bMin.x + bMax.x) * 0.5f, (bMin.y + bMax.y) * 0.5f, (bMin.z + bMax.z) * 0.5f };
+                        Vector3 bSize = { bMax.x - bMin.x, bMax.y - bMin.y, bMax.z - bMin.z };
+                        float maxDim = (std::max)({ bSize.x, bSize.y, bSize.z, 0.001f });
+                        float scale = (boxSize * 0.85f) / maxDim;
+
+                        // 2. 回転（斜めアングル: Yaw = 35度, Pitch = 22度）
+                        float yaw = 35.0f * 3.14159265f / 180.0f;
+                        float pitch = 22.0f * 3.14159265f / 180.0f;
+                        float cosY = std::cos(yaw), sinY = std::sin(yaw);
+                        float cosP = std::cos(pitch), sinP = std::sin(pitch);
+
+                        auto TransformVertex = [&](const Vector4& pos) -> Vector3 {
+                            float x = (pos.x - bCenter.x) * scale;
+                            float y = (pos.y - bCenter.y) * scale;
+                            float z = (pos.z - bCenter.z) * scale;
+
+                            // Yaw回転 (Y軸周り)
+                            float x1 = x * cosY + z * sinY;
+                            float y1 = y;
+                            float z1 = -x * sinY + z * cosY;
+
+                            // Pitch回転 (X軸周り)
+                            float x2 = x1;
+                            float y2 = y1 * cosP - z1 * sinP;
+                            float z2 = y1 * sinP + z1 * cosP;
+
+                            return { x2, y2, z2 };
+                        };
+
+                        struct Tri {
+                            ImVec2 p[3];
+                            ImVec2 uv[3];
+                            float avgZ;
+                            ImU32 col;
+                        };
+                        std::vector<Tri> triangles;
+                        size_t numIndices = modelData.indices.size();
+                        size_t numTriangles = numIndices > 0 ? numIndices / 3 : modelData.vertices.size() / 3;
+
+                        Vector3 lightDir = { 0.4f, 0.8f, 0.5f };
+                        float lightLen = std::sqrt(lightDir.x * lightDir.x + lightDir.y * lightDir.y + lightDir.z * lightDir.z);
+                        lightDir.x /= lightLen; lightDir.y /= lightLen; lightDir.z /= lightLen;
+
+                        triangles.reserve(numTriangles);
+
+                        for (size_t t = 0; t < numTriangles; ++t) {
+                            size_t idx0 = t * 3;
+                            size_t idx1 = t * 3 + 1;
+                            size_t idx2 = t * 3 + 2;
+                            if (numIndices > 0) {
+                                idx0 = modelData.indices[idx0];
+                                idx1 = modelData.indices[idx1];
+                                idx2 = modelData.indices[idx2];
+                            }
+                            if (idx0 >= modelData.vertices.size() || idx1 >= modelData.vertices.size() || idx2 >= modelData.vertices.size()) continue;
+
+                            const auto& v0 = modelData.vertices[idx0];
+                            const auto& v1 = modelData.vertices[idx1];
+                            const auto& v2 = modelData.vertices[idx2];
+
+                            Vector3 t0 = TransformVertex(v0.position);
+                            Vector3 t1 = TransformVertex(v1.position);
+                            Vector3 t2 = TransformVertex(v2.position);
+
+                            ImVec2 s0(center.x + t0.x, center.y - t0.y);
+                            ImVec2 s1(center.x + t1.x, center.y - t1.y);
+                            ImVec2 s2(center.x + t2.x, center.y - t2.y);
+
+                            // 法線とランバート反射（3D空間での計算）
+                            Vector3 edge1 = { t1.x - t0.x, t1.y - t0.y, t1.z - t0.z };
+                            Vector3 edge2 = { t2.x - t0.x, t2.y - t0.y, t2.z - t0.z };
+                            Vector3 norm = {
+                                edge1.y * edge2.z - edge1.z * edge2.y,
+                                edge1.z * edge2.x - edge1.x * edge2.z,
+                                edge1.x * edge2.y - edge1.y * edge2.x
+                            };
+                            float normLen = std::sqrt(norm.x * norm.x + norm.y * norm.y + norm.z * norm.z);
+                            float ndotl = 0.6f;
+                            if (normLen > 0.0001f) {
+                                norm.x /= normLen; norm.y /= normLen; norm.z /= normLen;
+                                float dot = norm.x * lightDir.x + norm.y * lightDir.y + norm.z * lightDir.z;
+                                ndotl = (std::max)(0.25f, std::abs(dot)); // 両面ライティングで欠けを防止
+                            }
+
+                            float r = (std::min)(1.0f, baseColor.x * (0.35f + 0.65f * ndotl));
+                            float g = (std::min)(1.0f, baseColor.y * (0.35f + 0.65f * ndotl));
+                            float b = (std::min)(1.0f, baseColor.z * (0.35f + 0.65f * ndotl));
+                            ImU32 col = IM_COL32((int)(r * 255), (int)(g * 255), (int)(b * 255), (int)(baseColor.w * 255));
+
+                            Tri tri;
+                            tri.p[0] = s0; tri.p[1] = s1; tri.p[2] = s2;
+                            tri.uv[0] = ImVec2(v0.texcoord.x, v0.texcoord.y);
+                            tri.uv[1] = ImVec2(v1.texcoord.x, v1.texcoord.y);
+                            tri.uv[2] = ImVec2(v2.texcoord.x, v2.texcoord.y);
+                            tri.avgZ = (t0.z + t1.z + t2.z) / 3.0f;
+                            tri.col = col;
+                            triangles.push_back(tri);
+                        }
+
+                        // 奥から手前へソート (Painter's Algorithm)
+                        std::sort(triangles.begin(), triangles.end(), [](const Tri& a, const Tri& b) {
+                            return a.avgZ < b.avgZ;
+                        });
+
+                        // 正確な三角形ラスタライゼーション (PrimWriteVtx)
+                        if (hasTexture && texGpuHandle.ptr != 0) {
+                            drawList->PushTextureID((ImTextureID)texGpuHandle.ptr);
+                            for (const auto& tri : triangles) {
+                                drawList->PrimReserve(3, 3);
+                                ImDrawIdx vidx = drawList->_VtxCurrentIdx;
+                                drawList->PrimWriteIdx(vidx);
+                                drawList->PrimWriteIdx(static_cast<ImDrawIdx>(vidx + 1));
+                                drawList->PrimWriteIdx(static_cast<ImDrawIdx>(vidx + 2));
+                                drawList->PrimWriteVtx(tri.p[0], tri.uv[0], tri.col);
+                                drawList->PrimWriteVtx(tri.p[1], tri.uv[1], tri.col);
+                                drawList->PrimWriteVtx(tri.p[2], tri.uv[2], tri.col);
+                            }
+                            drawList->PopTextureID();
+                        } else {
+                            for (const auto& tri : triangles) {
+                                drawList->AddTriangleFilled(tri.p[0], tri.p[1], tri.p[2], tri.col);
+                            }
+                        }
+                        return true;
+                    };
+
+                    // 立体3Dアイソメトリックボックス描画ヘルパー
+                    auto Draw3DIsometricBox = [](ImDrawList* drawList, ImVec2 center, float size, ImVec4 baseColor, float heightRatio, bool isWireframe) {
+                        float rx = size * 0.866f; // 30度のcos
+                        float ry = size * 0.5f;   // 30度のsin
+                        float h = size * 1.15f * heightRatio;
+
+                        float topCy = center.y - h * 0.5f;
+                        float botCy = center.y + h * 0.5f;
+
+                        ImVec2 pTop(center.x, topCy - ry);
+                        ImVec2 pRight(center.x + rx, topCy);
+                        ImVec2 pBottom(center.x, topCy + ry);
+                        ImVec2 pLeft(center.x - rx, topCy);
+
+                        ImVec2 pBotRight(center.x + rx, botCy);
+                        ImVec2 pBotCenter(center.x, botCy + ry);
+                        ImVec2 pBotLeft(center.x - rx, botCy);
+
+                        auto AdjustColor = [](ImVec4 c, float factor) -> ImU32 {
+                            float r = (std::min)(1.0f, c.x * factor);
+                            float g = (std::min)(1.0f, c.y * factor);
+                            float b = (std::min)(1.0f, c.z * factor);
+                            return IM_COL32((int)(r * 255), (int)(g * 255), (int)(b * 255), (int)(c.w * 255));
+                        };
+
+                        if (isWireframe) {
+                            ImU32 colWire = AdjustColor(baseColor, 1.4f);
+                            drawList->AddLine(pTop, pRight, colWire, 1.5f);
+                            drawList->AddLine(pRight, pBottom, colWire, 1.5f);
+                            drawList->AddLine(pBottom, pLeft, colWire, 1.5f);
+                            drawList->AddLine(pLeft, pTop, colWire, 1.5f);
+
+                            drawList->AddLine(pLeft, pBotLeft, colWire, 1.5f);
+                            drawList->AddLine(pBottom, pBotCenter, colWire, 1.5f);
+                            drawList->AddLine(pRight, pBotRight, colWire, 1.5f);
+
+                            drawList->AddLine(pBotLeft, pBotCenter, colWire, 1.5f);
+                            drawList->AddLine(pBotCenter, pBotRight, colWire, 1.5f);
+                        } else {
+                            ImU32 colTop = AdjustColor(baseColor, 1.25f);
+                            ImU32 colRight = AdjustColor(baseColor, 0.85f);
+                            ImU32 colLeft = AdjustColor(baseColor, 0.65f);
+                            ImU32 colBorder = AdjustColor(baseColor, 0.35f);
+
+                            // 左面
+                            drawList->AddQuadFilled(pLeft, pBottom, pBotCenter, pBotLeft, colLeft);
+                            // 右面
+                            drawList->AddQuadFilled(pBottom, pRight, pBotRight, pBotCenter, colRight);
+                            // 上面
+                            drawList->AddQuadFilled(pTop, pRight, pBottom, pLeft, colTop);
+
+                            // エッジ線
+                            drawList->AddLine(pTop, pRight, colBorder, 1.0f);
+                            drawList->AddLine(pRight, pBottom, colBorder, 1.0f);
+                            drawList->AddLine(pBottom, pLeft, colBorder, 1.0f);
+                            drawList->AddLine(pLeft, pTop, colBorder, 1.0f);
+
+                            drawList->AddLine(pLeft, pBotLeft, colBorder, 1.0f);
+                            drawList->AddLine(pBottom, pBotCenter, colBorder, 1.0f);
+                            drawList->AddLine(pRight, pBotRight, colBorder, 1.0f);
+
+                            drawList->AddLine(pBotLeft, pBotCenter, colBorder, 1.0f);
+                            drawList->AddLine(pBotCenter, pBotRight, colBorder, 1.0f);
+                        }
+                    };
+
+                    // 文字列の省略表示用ヘルパー
+                    auto GetEllipsisText = [](const std::string& text, float maxWidth) -> std::string {
+                        if (ImGui::CalcTextSize(text.c_str()).x <= maxWidth) {
+                            return text;
+                        }
+                        std::string result = text;
+                        while (!result.empty() && ImGui::CalcTextSize((result + "...").c_str()).x > maxWidth) {
+                            result.pop_back();
+                        }
+                        return result + "...";
+                    };
 
                     // ツール描画用の共通ラムダ
                     // sectionType: 0=System, 1=Template(Basic), 2=Custom
                     auto DrawTools = [&](const std::vector<ToolIcon>& tools, int sectionType) {
                         float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
                         int numTools = static_cast<int>(tools.size());
-                        // カスタムセクションの場合は最後に +追加 ボタンを描画するため +1 する
                         int maxIter = (sectionType == 2) ? numTools + 1 : numTools;
 
                         for (int i = 0; i < maxIter; i++) {
@@ -3346,7 +3613,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                                 // 当たり判定 (InvisibleButton)
                                 ImGui::SetNextItemAllowOverlap();
-                                if (ImGui::InvisibleButton("##Tool", ImVec2(itemSize, totalHeight))) {
+                                if (ImGui::InvisibleButton("##Tool", ImVec2(cardWidth, cardHeight))) {
                                     mapEditorSelectedTool_ = tool.id;
                                     selectedGameObject_ = nullptr;
                                     selectedObject_ = nullptr;
@@ -3355,39 +3622,101 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                 }
                                 
                                 lastButtonX2 = ImGui::GetItemRectMax().x;
-                                ImVec2 backupCursorPos = ImGui::GetCursorScreenPos();
 
                                 bool isHovered = ImGui::IsItemHovered();
                                 ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-                                // 背景 (ホバー時)
-                                if (isHovered) {
-                                    drawList->AddRectFilled(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(80, 80, 80, 255), 4.0f);
-                                }
-
-                                // アイコン (四角形 - スケールを適用)
-                                float iconPadding = 4.0f;
-                                float actualIconSize = (itemSize - iconPadding * 2) * tool.scale;
-                                float offset = (itemSize - actualIconSize) * 0.5f;
-
-                                ImVec2 iconMin = ImVec2(p.x + offset, p.y + offset);
-                                ImVec2 iconMax = ImVec2(p.x + offset + actualIconSize, p.y + offset + actualIconSize);
+                                // カード背景
+                                ImU32 bgCol = isHovered ? IM_COL32(55, 62, 75, 255) : (isSelected && sectionType != 1 ? IM_COL32(40, 52, 70, 255) : IM_COL32(36, 39, 46, 255));
+                                drawList->AddRectFilled(p, ImVec2(p.x + cardWidth, p.y + cardHeight), bgCol, 6.0f);
                                 
-                                // Erase(0) の場合は枠線だけにする、それ以外は塗りつぶし
-                                if (tool.id == 0) {
-                                    drawList->AddRect(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f, 0, 2.0f);
-                                } else {
-                                    drawList->AddRectFilled(iconMin, iconMax, ImGui::ColorConvertFloat4ToU32(tool.color), 4.0f);
+                                // カード枠線
+                                ImU32 borderCol = isSelected && sectionType != 1 ? IM_COL32(255, 205, 50, 255) : (isHovered ? IM_COL32(100, 130, 170, 255) : IM_COL32(50, 55, 65, 255));
+                                float borderWidth = isSelected && sectionType != 1 ? 2.0f : 1.0f;
+                                drawList->AddRect(p, ImVec2(p.x + cardWidth, p.y + cardHeight), borderCol, 6.0f, 0, borderWidth);
+
+                                // アイコン・プレビュー描画領域
+                                ImVec2 previewCenter(p.x + cardWidth * 0.5f, p.y + 34.0f);
+                                float previewRadius = 20.0f * tool.scale;
+
+                                bool modelRendered = false;
+                                if (tool.modelPtr) {
+                                    modelRendered = Draw3DModelPreview(drawList, previewCenter, 46.0f * tool.scale, tool.modelPtr, tool.color, tool.textureGpuHandle, tool.hasTexture);
                                 }
 
-                                // テキスト
-                                ImVec2 textSize = ImGui::CalcTextSize(tool.name.c_str());
-                                float textX = p.x + (itemSize - textSize.x) * 0.5f;
-                                drawList->AddText(ImVec2(textX, p.y + itemSize + 2.0f), IM_COL32(255, 255, 255, 255), tool.name.c_str());
+                                if (!modelRendered) {
+                                    if (tool.id == 0) {
+                                        // Erase: 立体ワイヤーフレーム
+                                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, true);
+                                    } else if (tool.type == "OneWayBlock") {
+                                        // OneWayBlock: 薄型3Dボックス + 上向き矢印
+                                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 0.35f, false);
+                                        ImVec2 arrowTop(previewCenter.x, previewCenter.y - 12.0f);
+                                        ImVec2 arrowLeft(previewCenter.x - 7.0f, previewCenter.y - 3.0f);
+                                        ImVec2 arrowRight(previewCenter.x + 7.0f, previewCenter.y - 3.0f);
+                                        drawList->AddTriangleFilled(arrowTop, arrowLeft, arrowRight, IM_COL32(255, 255, 255, 230));
+                                    } else if (tool.type == "DeathBlock") {
+                                        // DeathBlock: 赤系立体ボックス + ✕マーク
+                                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
+                                        drawList->AddLine(ImVec2(previewCenter.x - 6, previewCenter.y - 6), ImVec2(previewCenter.x + 6, previewCenter.y + 6), IM_COL32(255, 255, 255, 230), 2.0f);
+                                        drawList->AddLine(ImVec2(previewCenter.x + 6, previewCenter.y - 6), ImVec2(previewCenter.x - 6, previewCenter.y + 6), IM_COL32(255, 255, 255, 230), 2.0f);
+                                    } else if (tool.type == "GoalBlock") {
+                                        // GoalBlock: マゼンタ立体ボックス + ゴールフラッグ
+                                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
+                                        drawList->AddLine(ImVec2(previewCenter.x - 4, previewCenter.y + 8), ImVec2(previewCenter.x - 4, previewCenter.y - 8), IM_COL32(255, 255, 255, 240), 1.5f);
+                                        drawList->AddTriangleFilled(ImVec2(previewCenter.x - 3, previewCenter.y - 8), ImVec2(previewCenter.x + 6, previewCenter.y - 4), ImVec2(previewCenter.x - 3, previewCenter.y), IM_COL32(255, 220, 50, 240));
+                                    } else if (tool.id == 6 || tool.id == 10) {
+                                        // Spawn / RoomSpawn: 立体台座 + スポーンサークル
+                                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 0.35f, false);
+                                        drawList->AddCircleFilled(ImVec2(previewCenter.x, previewCenter.y - 6.0f), 5.0f, IM_COL32(255, 255, 255, 240));
+                                        drawList->AddCircle(ImVec2(previewCenter.x, previewCenter.y - 6.0f), 8.0f, IM_COL32(255, 255, 255, 160), 12, 1.5f);
+                                    } else {
+                                        // 通常の立体キューブボックス (NormalBlock / CustomBlock 等)
+                                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
+                                    }
+                                }
 
-                                // 選択中の黄色の枠線
-                                if (isSelected && sectionType != 1) { // テンプレートは選択状態の枠線を表示しない
-                                    drawList->AddRect(p, ImVec2(p.x + itemSize, p.y + totalHeight), IM_COL32(255, 255, 0, 255), 4.0f, 0, 2.0f);
+                                // 3Dモデル使用時の [3D] バッジ (左上に配置して右上の削除ボタンとの重なりを防止)
+                                if (!tool.modelName.empty()) {
+                                    ImVec2 badgeMin(p.x + 5.0f, p.y + 5.0f);
+                                    ImVec2 badgeMax(p.x + 27.0f, p.y + 18.0f);
+                                    drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(30, 100, 200, 230), 3.0f);
+                                    drawList->AddRect(badgeMin, badgeMax, IM_COL32(100, 180, 255, 200), 3.0f);
+                                    drawList->AddText(ImVec2(badgeMin.x + 3.0f, badgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "3D");
+                                }
+
+                                // カード内のテキスト描画 (クリッピング付きではみ出し・被りを完全防止)
+                                drawList->PushClipRect(ImVec2(p.x + 2.0f, p.y + 2.0f), ImVec2(p.x + cardWidth - 2.0f, p.y + cardHeight - 2.0f), true);
+                                
+                                std::string dispText = GetEllipsisText(tool.name, cardWidth - 8.0f);
+                                ImVec2 textSize = ImGui::CalcTextSize(dispText.c_str());
+                                float textX = p.x + (cardWidth - textSize.x) * 0.5f;
+                                float textY = p.y + cardHeight - textSize.y - 6.0f;
+                                drawList->AddText(ImVec2(textX, textY), isSelected && sectionType != 1 ? IM_COL32(255, 230, 120, 255) : IM_COL32(220, 220, 220, 255), dispText.c_str());
+
+                                drawList->PopClipRect();
+
+                                // マウスホバー時の詳細ツールチップ
+                                if (isHovered) {
+                                    ImGui::BeginTooltip();
+                                    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", tool.name.c_str());
+                                    ImGui::Separator();
+                                    ImGui::Text("ID: %d", tool.id);
+                                    if (!tool.type.empty()) {
+                                        ImGui::Text("Type: %s", tool.type.c_str());
+                                    }
+                                    if (!tool.modelName.empty()) {
+                                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Model: %s", tool.modelName.c_str());
+                                    } else {
+                                        std::string primName = (tool.type == "OneWayBlock") ? "Thin Box (Primitive)" : (tool.id == 0 ? "None (Erase)" : "Box (Primitive)");
+                                        ImGui::TextColored(ImVec4(0.7f, 0.9f, 0.7f, 1.0f), "Shape: %s", primName.c_str());
+                                    }
+                                    if (!tool.textureName.empty()) {
+                                        ImGui::Text("Texture: %s", tool.textureName.c_str());
+                                    }
+                                    ImGui::Spacing();
+                                    ImGui::ColorButton("##ColPreview", tool.color, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoPicker, ImVec2(50, 16));
+                                    ImGui::EndTooltip();
                                 }
 
                                 // Custom Tools セクションの場合はドラッグ＆ドロップ並べ替えに対応
@@ -3419,22 +3748,31 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                         ImGui::EndDragDropTarget();
                                     }
                                     
-                                    ImGui::SetCursorScreenPos(ImVec2(p.x + itemSize - 16.0f, p.y));
-                                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-                                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-                                    if (ImGui::Button(("X##del_" + std::to_string(tool.id)).c_str(), ImVec2(16, 16))) {
+                                    // 削除ボタン (ImGuiカーソルを汚染しないヒットテスト方式)
+                                    ImVec2 delMin(p.x + cardWidth - 18.0f, p.y + 4.0f);
+                                    ImVec2 delMax(p.x + cardWidth - 4.0f, p.y + 18.0f);
+                                    ImVec2 mousePos = ImGui::GetMousePos();
+                                    bool isDelHovered = (mousePos.x >= delMin.x && mousePos.x <= delMax.x && mousePos.y >= delMin.y && mousePos.y <= delMax.y);
+
+                                    ImU32 delBgCol = isDelHovered ? IM_COL32(235, 60, 60, 255) : IM_COL32(180, 50, 50, 200);
+                                    drawList->AddRectFilled(delMin, delMax, delBgCol, 3.0f);
+                                    
+                                    // 'X' マーク
+                                    float xPad = 3.5f;
+                                    drawList->AddLine(ImVec2(delMin.x + xPad, delMin.y + xPad), ImVec2(delMax.x - xPad, delMax.y - xPad), IM_COL32(255, 255, 255, 255), 1.5f);
+                                    drawList->AddLine(ImVec2(delMax.x - xPad, delMin.y + xPad), ImVec2(delMin.x + xPad, delMax.y - xPad), IM_COL32(255, 255, 255, 255), 1.5f);
+
+                                    if (isDelHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                                         toolToDelete = tool.id;
                                         openDeletePopup = true;
                                     }
-                                    ImGui::PopStyleVar();
-                                    ImGui::PopStyleColor();
-                                    
-                                    // カーソル位置を元の正しい位置に復帰させる
-                                    ImGui::SetCursorScreenPos(backupCursorPos);
                                 }
                             } else if (sectionType == 2) {
-                                // "＋ 追加" ボタン
-                                if (ImGui::Button("＋\n追加", ImVec2(itemSize, totalHeight))) {
+                                // "＋ 追加" ボタン (カードサイズ)
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.22f, 0.28f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.32f, 0.42f, 1.0f));
+                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.20f, 0.26f, 1.0f));
+                                if (ImGui::Button("＋\n追加", ImVec2(cardWidth, cardHeight))) {
                                     auto& palette = mapChip->GetCustomPalette();
                                     MapChip2D::CustomBlockDef newDef;
                                     newDef.id = 100 + static_cast<int>(palette.size());
@@ -3448,15 +3786,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedPrimitive_ = nullptr;
                                     mapChip->SaveToFile(GetFullFilePath(stageFilename_));
                                 }
+                                ImGui::PopStyleColor(3);
                                 lastButtonX2 = ImGui::GetItemRectMax().x;
                             }
 
                             ImGui::PopID();
 
                             // 折り返し処理 (ウィンドウ幅を超える場合は次の行へ)
-                            float nextButtonX2 = lastButtonX2 + itemSpacing + itemSize;
+                            float nextButtonX2 = lastButtonX2 + itemSpacing + cardWidth;
                             if (nextButtonX2 < windowVisibleX && i + 1 < maxIter) {
-                                ImGui::SameLine();
+                                ImGui::SameLine(0.0f, itemSpacing);
                             }
                         }
                         if (maxIter > 0) {
