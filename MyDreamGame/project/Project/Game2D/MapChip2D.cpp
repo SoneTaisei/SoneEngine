@@ -9,6 +9,7 @@
 #include "Blocks/DeathBlock.h"
 #include "Blocks/GoalBlock.h"
 #include "Blocks/OneWayBlock.h"
+#include "Blocks/ChainItemBlock.h"
 #include "Blocks/BlockFactory.h"
 #include <algorithm>
 #include <filesystem>
@@ -863,6 +864,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = BlockFactory::GetInstance().Create("GoalBlock", this, x, y);
     } else if (type == ChipType::kOneWayBlock) {
         newBlock = BlockFactory::GetInstance().Create("OneWayBlock", this, x, y);
+    } else if (type == ChipType::kChainItemBlock) {
+        newBlock = BlockFactory::GetInstance().Create("ChainItemBlock", this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {

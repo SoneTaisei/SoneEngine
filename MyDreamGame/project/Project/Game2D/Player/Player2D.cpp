@@ -112,10 +112,15 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.respawnTimer_ = 0.0f;
     state_.isGoal_ = false;
     state_.goalTimer_ = 0.0f;
+    state_.chainLength_ = 3;
 }
 
 void Player2D::DisplayImGui() {
 #ifdef USE_IMGUI
+    if (ImGui::TreeNode("Player Status")) {
+        ImGui::Text("Chain Length : %d", state_.chainLength_);
+        ImGui::TreePop();
+    }
     if (ImGui::TreeNode("Player Parameters")) {
         ImGui::DragFloat("Move Speed", &params_.moveSpeed_, 0.1f, 0.0f, 30.0f);
         ImGui::DragFloat("Jump Power", &params_.jumpPower_, 0.1f, 0.0f, 50.0f);
@@ -124,6 +129,7 @@ void Player2D::DisplayImGui() {
         ImGui::DragFloat("Half Width", &params_.halfWidth_, 0.01f, 0.05f, 2.0f);
         ImGui::DragFloat("Half Height", &params_.halfHeight_, 0.01f, 0.05f, 2.0f);
         ImGui::ColorEdit4("Player Color", &params_.colorNormal_.x);
+        ImGui::DragFloat("Chain Jump Penalty", &params_.chainJumpPenalty_, 0.1f, 0.0f, 10.0f);
 
         if (ImGui::Button("Save Parameters")) {
             PlayerConfig::Save(params_, "resources/json/shared/Player/player_parameters.json");

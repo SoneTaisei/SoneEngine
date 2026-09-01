@@ -3,6 +3,7 @@
 #include "DeathBlock.h"
 #include "GoalBlock.h"
 #include "OneWayBlock.h"
+#include "ChainItemBlock.h"
 #include <algorithm>
 
 BlockFactory& BlockFactory::GetInstance() {
@@ -23,6 +24,9 @@ BlockFactory::BlockFactory() {
     });
     Register("OneWayBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<OneWayBlock>(map, x, y);
+    });
+    Register("ChainItemBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<ChainItemBlock>(map, x, y);
     });
 }
 

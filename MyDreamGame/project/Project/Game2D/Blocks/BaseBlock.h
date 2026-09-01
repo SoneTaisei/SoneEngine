@@ -23,13 +23,13 @@ public:
     virtual void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {}
     
     virtual void Update() {
-        if (gameObject_) {
+        if (!isDestroyed_ && gameObject_) {
             gameObject_->Update();
         }
     }
     
     virtual void Draw() {
-        if (gameObject_) {
+        if (!isDestroyed_ && gameObject_) {
             gameObject_->Draw(); // Rendererへの登録が行われる
         }
     }
