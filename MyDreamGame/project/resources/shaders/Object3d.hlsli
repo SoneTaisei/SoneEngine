@@ -49,6 +49,8 @@ struct PointLight {
     float decay; 
 };
 
+static const uint kMaxSpotLights = 8;
+
 struct SpotLight {
     float4 color; 
     float3 position;
@@ -58,7 +60,14 @@ struct SpotLight {
     float decay;
     float cosAngle;
     float cosFalloffStart;
-    float padding;
+    int enable;
+};
+
+struct SpotLightGroup {
+    SpotLight spotLights[kMaxSpotLights];
+    int spotLightCount;
+    float ambientIntensity;
+    float2 padding;
 };
 
 struct ViewProjection {

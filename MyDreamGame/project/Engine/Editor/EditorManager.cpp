@@ -57,6 +57,7 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     animationEditor_ = std::make_unique<AnimationEditor>();
     mapEditor_ = std::make_unique<MapEditor>();
     mapEditor_->Initialize();
+    lightEditor_ = std::make_unique<LightEditor>();
     ScanLayoutPresets();
 
     // 1. ImGuiコンテキストの作成
@@ -506,6 +507,22 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("リプレイエディター", nullptr, &showReplayEditor_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("アニメーションエディター", nullptr, &showAnimEditor_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("ライトエディター", nullptr, &showLightEditor_)) {
+                if (showLightEditor_) {
+                    activeMainTab_ = "ライトエディター";
+                    currentMode_ = EditorMode::Light;
+                    showSpotLightPanel_ = true;
+                    focusActiveTabCountdown_ = 5;
+                    focusSpotLightTabCountdown_ = 5;
+                }
+                SaveSceneConfig();
+            }
+            if (ImGui::MenuItem("スポットライト", nullptr, &showSpotLightPanel_)) {
+                if (showSpotLightPanel_) {
+                    focusSpotLightTabCountdown_ = 5;
+                }
+                SaveSceneConfig();
+            }
             ImGui::Separator();
             if (ImGui::BeginMenu("レイアウトプリセット")) {
                 if (layoutPresets_.empty()) {
@@ -592,9 +609,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 bool hasReplayEditor = false;
                 bool hasStageSelectEditor = false;
                 bool hasDopeSheet = false;
+                bool hasLightEditor = false;
+                bool hasSpotLight = false;
                 char buffer[256];
                 while (fgets(buffer, sizeof(buffer), f)) {
-                    if (strstr(buffer, "マイメディア")) {
+                    if (strstr(buffer, "リプレイエディター")) {
                         hasReplayEditor = true;
                     }
                     if (strstr(buffer, "ステージセレクトエディター")) {
@@ -603,8 +622,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (strstr(buffer, "ドープシート")) {
                         hasDopeSheet = true;
                     }
+                    if (strstr(buffer, "ライトエディター")) {
+                        hasLightEditor = true;
+                    }
+                    if (strstr(buffer, "スポットライト")) {
+                        hasSpotLight = true;
+                    }
                 }
-                if (!hasReplayEditor || !hasStageSelectEditor || !hasDopeSheet) {
+                if (!hasReplayEditor || !hasStageSelectEditor || !hasDopeSheet || !hasLightEditor || !hasSpotLight) {
                     resetLayout = true;
                 }
                 fclose(f);
@@ -621,6 +646,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 showMapSettings_ = true;
                 showReplayEditor_ = true;
                 showAnimEditor_ = true;
+                showLightEditor_ = true;
+                showSpotLightPanel_ = true;
             }
             resetLayout = false;
 
@@ -642,6 +669,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
             ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
             ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
+            ImGui::DockBuilderDockWindow("ライトエディター", dock_id_main);
 
             // 左側
             ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
@@ -657,6 +685,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("スポットライト", dock_id_bottom);
 
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -669,16 +698,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         if (ImGui::Begin("ゲームビュー", &showGameView_)) {
             bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
-            if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "ゲームビュー")) {
+            if (isFocused && activeMainTab_ != "ゲームビュー") {
+                activeMainTab_ = "ゲームビュー";
+                currentMode_ = EditorMode::Normal;
+                SaveSceneConfig();
+            }
+            if (activeMainTab_ == "ゲームビュー") {
                 currentMode_ = EditorMode::Normal;
                 selectedReplaySeekbar_ = false;
                 if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
-                }
-                if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "ゲームビュー") {
-                    activeMainTab_ = "ゲームビュー";
-                    SaveSceneConfig();
                 }
             }
             isGameViewHovered_ = ImGui::IsWindowHovered();
@@ -714,15 +744,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         if (ImGui::Begin("リプレイエディター", &showReplayEditor_)) {
             bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
-            if (isFocused || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "リプレイエディター")) {
+            if (isFocused && activeMainTab_ != "リプレイエディター") {
+                activeMainTab_ = "リプレイエディター";
+                currentMode_ = EditorMode::Replay;
+                SaveSceneConfig();
+            }
+            if (activeMainTab_ == "リプレイエディター") {
                 currentMode_ = EditorMode::Replay;
                 if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
-                }
-                if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "リプレイエディター") {
-                    activeMainTab_ = "リプレイエディター";
-                    SaveSceneConfig();
                 }
             }
             isReplayEditorHovered_ = ImGui::IsWindowHovered();
@@ -766,7 +797,12 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
         if (ImGui::Begin("アニメーションエディター", &showAnimEditor_)) {
             bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
-            if ((focusActiveTabCountdown_ == 0 && isFocused) || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "アニメーションエディター")) {
+            if (isFocused && activeMainTab_ != "アニメーションエディター") {
+                activeMainTab_ = "アニメーションエディター";
+                currentMode_ = EditorMode::Animation;
+                SaveSceneConfig();
+            }
+            if (activeMainTab_ == "アニメーションエディター") {
                 currentMode_ = EditorMode::Animation;
                 if (animationEditor_ && !animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
@@ -774,13 +810,42 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
                     animationEditor_->RefreshAnimationJointList(sceneManager);
                 }
-                if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "アニメーションエディター") {
-                    activeMainTab_ = "アニメーションエディター";
-                    SaveSceneConfig();
-                }
             }
             if (animationEditor_) animationEditor_->SetHovered(ImGui::IsWindowHovered());
             if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawMainView(sceneManager, activeCamera, renderTextureSrvHandle); }
+        }
+        ImGui::End();
+    }
+
+    // --- Light Editor メインウィンドウ (dock_id_main) ---
+    if (showLightEditor_ && lightEditor_) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        lightEditor_->Update(dt, modelCommon, nullptr);
+
+        if (focusActiveTabCountdown_ > 0 && activeMainTab_ == "ライトエディター") {
+            ImGui::SetNextWindowFocus();
+        }
+        if (ImGui::Begin("ライトエディター", &showLightEditor_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+            bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+            if (isFocused || ImGui::IsWindowAppearing() || (focusActiveTabCountdown_ > 0 && activeMainTab_ == "ライトエディター")) {
+                if (activeMainTab_ != "ライトエディター") {
+                    activeMainTab_ = "ライトエディター";
+                    focusSpotLightTabCountdown_ = 5;
+                    SaveSceneConfig();
+                }
+                currentMode_ = EditorMode::Light;
+                if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+                    sceneManager->PopScene();
+                    if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
+            }
+            if (activeMainTab_ == "ライトエディター") {
+                currentMode_ = EditorMode::Light;
+            }
+            Matrix4x4 vpMatrix = (activeCamera && *activeCamera) ? 
+                TransformFunctions::Multiply((*activeCamera)->GetViewMatrix(), (*activeCamera)->GetProjectionMatrix()) : 
+                TransformFunctions::MakeIdentity4x4();
+            lightEditor_->DrawViewportContent(renderTextureSrvHandle, &vpMatrix);
         }
         ImGui::End();
     }
@@ -1420,92 +1485,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Text("グローバル設定 (ライティング)");
                 ImGui::Separator();
 
-                bool lightingChanged = false;
-
-                ImGui::Text("アクティブな光源");
-                lightingChanged |= ImGui::RadioButton("平行光源 (Directional)", &activeLightType_, 0);
-                ImGui::SameLine();
-                lightingChanged |= ImGui::RadioButton("点光源 (Point)", &activeLightType_, 1);
-                ImGui::SameLine();
-                lightingChanged |= ImGui::RadioButton("スポットライト (Spot)", &activeLightType_, 2);
-                ImGui::Separator();
-
-                DirectionalLight *dLight = modelCommon->GetDirectionalLight();
-                PointLight *pLight = modelCommon->GetPointLight();
-                SpotLight *sLight = modelCommon->GetSpotLight();
-
-                bool isFlatShading = (dLight->enableFlatShading != 0);
-                if (ImGui::Checkbox("フラットシェーディング", &isFlatShading)) {
-                    dLight->enableFlatShading = isFlatShading ? 1 : 0;
-                }
-                ImGui::Separator();
-
-                if (activeLightType_ == 0) {
-                    dLight->intensity = dIntensity_;
-                    pLight->intensity = 0.0f;
-                    sLight->intensity = 0.0f;
-                    ImGui::Text("平行光源設定");
+                if (lightEditor_) {
+                    ImGui::Text("環境光 (暗闇): %.2f", lightEditor_->GetAmbientIntensity());
+                    ImGui::Text("スポットライト数: %zu / %d", lightEditor_->GetSpotLights().size(), kMaxSpotLights);
                     
-                    auto onLightUpdate = [=]() { SaveLightingConfig(modelCommon); };
-                    
-                    lightingChanged |= TrackColorEdit4("色", &dLight->color, onLightUpdate);
-                    if (TrackDragFloat("輝度 (Intensity)", &dIntensity_, 0.01f, 0.0f, 10.0f, "%.3f", [=](){ dLight->intensity = dIntensity_; onLightUpdate(); })) {
-                        dLight->intensity = dIntensity_;
-                        lightingChanged = true;
+                    if (ImGui::Button("ライトエディターを開く", ImVec2(-1, 30))) {
+                        showLightEditor_ = true;
+                        showSpotLightPanel_ = true;
+                        activeMainTab_ = "ライトエディター";
+                        currentMode_ = EditorMode::Light;
+                        focusActiveTabCountdown_ = 5;
+                        focusSpotLightTabCountdown_ = 5;
+                        SaveSceneConfig();
                     }
-                    if (TrackDragFloat3("方向", &dLight->direction, 0.01f, -1.0f, 1.0f, "%.3f", [=](){ dLight->direction = TransformFunctions::Normalize(dLight->direction); onLightUpdate(); })) {
-                        dLight->direction = TransformFunctions::Normalize(dLight->direction);
-                        lightingChanged = true;
-                    }
-                } else if (activeLightType_ == 1) {
-                    pLight->intensity = pIntensity_;
-                    dLight->intensity = 0.0f;
-                    sLight->intensity = 0.0f;
-                    ImGui::Text("点光源設定");
-                    
-                    auto onLightUpdate = [=]() { SaveLightingConfig(modelCommon); };
-                    
-                    lightingChanged |= TrackColorEdit4("色", &pLight->color, onLightUpdate);
-                    if (TrackDragFloat("輝度 (Intensity)", &pIntensity_, 0.01f, 0.0f, 10.0f, "%.3f", [=](){ pLight->intensity = pIntensity_; onLightUpdate(); })) {
-                        pLight->intensity = pIntensity_;
-                        lightingChanged = true;
-                    }
-                    lightingChanged |= TrackDragFloat3("位置", &pLight->position, 0.1f, 0.0f, 0.0f, "%.3f", onLightUpdate);
-                    lightingChanged |= TrackDragFloat("半径 (Radius)", &pLight->radius, 0.1f, 0.0f, 100.0f, "%.3f", onLightUpdate);
-                    lightingChanged |= TrackDragFloat("減衰 (Decay)", &pLight->decay, 0.01f, 0.0f, 10.0f, "%.3f", onLightUpdate);
-                } else if (activeLightType_ == 2) {
-                    sLight->intensity = sIntensity_;
-                    dLight->intensity = 0.0f;
-                    pLight->intensity = 0.0f;
-                    ImGui::Text("スポットライト設定");
-                    
-                    auto onLightUpdate = [=]() { SaveLightingConfig(modelCommon); };
-                    
-                    lightingChanged |= TrackColorEdit4("色", &sLight->color, onLightUpdate);
-                    if (TrackDragFloat("輝度 (Intensity)", &sIntensity_, 0.01f, 0.0f, 20.0f, "%.3f", [=](){ sLight->intensity = sIntensity_; onLightUpdate(); })) {
-                        sLight->intensity = sIntensity_;
-                        lightingChanged = true;
-                    }
-                    lightingChanged |= TrackDragFloat3("位置", &sLight->position, 0.1f, 0.0f, 0.0f, "%.3f", onLightUpdate);
-                    if (TrackDragFloat3("方向", &sLight->direction, 0.01f, -1.0f, 1.0f, "%.3f", [=](){ sLight->direction = TransformFunctions::Normalize(sLight->direction); onLightUpdate(); })) {
-                        sLight->direction = TransformFunctions::Normalize(sLight->direction);
-                        lightingChanged = true;
-                    }
-                    lightingChanged |= TrackDragFloat("距離", &sLight->distance, 0.1f, 0.0f, 100.0f, "%.3f", onLightUpdate);
-                    lightingChanged |= TrackDragFloat("減衰 (Decay)", &sLight->decay, 0.01f, 0.0f, 10.0f, "%.3f", onLightUpdate);
-                    
-                    if (TrackSliderFloat("全角 (Total Angle)", &spotAngleDeg_, 0.0f, 90.0f, "%.3f", [=](){ sLight->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f); onLightUpdate(); })) {
-                        sLight->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f);
-                        lightingChanged = true;
-                    }
-                    if (TrackSliderFloat("フォールオフ開始角", &spotFalloffDeg_, 0.0f, spotAngleDeg_, "%.3f", [=](){ sLight->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f); onLightUpdate(); })) {
-                        sLight->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f);
-                        lightingChanged = true;
-                    }
-                }
-
-                if (lightingChanged) {
-                    SaveLightingConfig(modelCommon);
                 }
 
                 ImGui::Separator();
@@ -1840,12 +1832,23 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         showMapEditor_ = mapEditor_->IsVisible();
     }
 
-    // --- 下部ペイン (通常: マップ設定 / リプレイ時: タイムライン / アニメーション時: ドープシート) ---
-    if (showMapSettings_ || currentMode_ == EditorMode::Animation) {
-        if (currentMode_ == EditorMode::Animation) {
-            if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawDopeSheetUI(sceneManager); }
-        } else if (currentMode_ == EditorMode::Replay) {
-            if (ImGui::Begin("タイムライン", &showMapSettings_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+    // --- 下部ペイン (通常: マップ設定 / リプレイ時: タイムライン / アニメーション時: ドープシート / ライト時: スポットライトとログのみ) ---
+    if (currentMode_ == EditorMode::Light || activeMainTab_ == "ライトエディター") {
+        // ライトエディター時は下部に「スポットライト」を表示
+        if (lightEditor_) {
+            if (focusSpotLightTabCountdown_ > 0) {
+                ImGui::SetNextWindowFocus();
+                focusSpotLightTabCountdown_--;
+            }
+            if (ImGui::Begin("スポットライト", &showSpotLightPanel_)) {
+                lightEditor_->DrawLightEditorUI(modelCommon);
+            }
+            ImGui::End();
+        }
+    } else if (currentMode_ == EditorMode::Animation) {
+        if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawDopeSheetUI(sceneManager); }
+    } else if (currentMode_ == EditorMode::Replay) {
+        if (ImGui::Begin("タイムライン", &showMapSettings_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 auto replayMgr = ReplayManager::GetInstance();
                 const auto& currentReplay = replayMgr->GetCurrentReplay();
 
@@ -2377,7 +2380,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             ImGui::End();
         } else {
-            if (mapEditor_) {
+            if (showMapSettings_ && mapEditor_) {
                 mapEditor_->DrawSettingsUI(sceneManager, showMapSettings_, [&](){ SaveSceneConfig(); }, [&](){
                     selectedGameObject_ = nullptr;
                     selectedObject_ = nullptr;
@@ -2386,7 +2389,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 });
             }
         }
-    }
 
     if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->UpdateAnimationPosePreview(sceneManager); }
 
@@ -2473,6 +2475,8 @@ void EditorManager::SaveSceneConfig() {
         winObj["showMapSettings"] = showMapSettings_;
         winObj["showReplayEditor"] = showReplayEditor_;
         winObj["showAnimEditor"] = showAnimEditor_;
+        winObj["showLightEditor"] = showLightEditor_;
+        winObj["showSpotLightPanel"] = showSpotLightPanel_;
         j["windows"] = winObj;
 
         ofs << j.dump(4) << std::endl;
@@ -2513,6 +2517,8 @@ void EditorManager::LoadSceneConfig() {
                 currentMode_ = EditorMode::Replay;
             } else if (activeMainTab_ == "アニメーションエディター") {
                 currentMode_ = EditorMode::Animation;
+            } else if (activeMainTab_ == "ライトエディター") {
+                currentMode_ = EditorMode::Light;
             } else {
                 currentMode_ = EditorMode::Normal;
             }
@@ -2535,6 +2541,8 @@ void EditorManager::LoadSceneConfig() {
             if (winObj.contains("showMapSettings") && winObj["showMapSettings"].is_boolean()) showMapSettings_ = winObj["showMapSettings"].get<bool>();
             if (winObj.contains("showReplayEditor") && winObj["showReplayEditor"].is_boolean()) showReplayEditor_ = winObj["showReplayEditor"].get<bool>();
             if (winObj.contains("showAnimEditor") && winObj["showAnimEditor"].is_boolean()) showAnimEditor_ = winObj["showAnimEditor"].get<bool>();
+            if (winObj.contains("showLightEditor") && winObj["showLightEditor"].is_boolean()) showLightEditor_ = winObj["showLightEditor"].get<bool>();
+            if (winObj.contains("showSpotLightPanel") && winObj["showSpotLightPanel"].is_boolean()) showSpotLightPanel_ = winObj["showSpotLightPanel"].get<bool>();
         }
     } catch (...) {
         // パースエラー時は何もしない
@@ -2542,106 +2550,15 @@ void EditorManager::LoadSceneConfig() {
 }
 
 void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
-    std::filesystem::create_directories("resources/json/shared");
-    std::ofstream ofs("resources/json/shared/lighting_config.json");
-    if (ofs.is_open()) {
-        nlohmann::json j;
-        j["activeLightType"] = activeLightType_;
-        j["enableFog"] = enableFog_;
-        j["enableFlatShading"] = enableFlatShading_;
-        j["dIntensity"] = dIntensity_;
-        j["pIntensity"] = pIntensity_;
-        j["sIntensity"] = sIntensity_;
-        j["spotAngleDeg"] = spotAngleDeg_;
-        j["spotFalloffDeg"] = spotFalloffDeg_;
-
-        if (modelCommon) {
-            auto d = modelCommon->GetDirectionalLight();
-            j["dLight"]["color"] = {d->color.x, d->color.y, d->color.z, d->color.w};
-            j["dLight"]["direction"] = {d->direction.x, d->direction.y, d->direction.z};
-            
-            auto p = modelCommon->GetPointLight();
-            j["pLight"]["color"] = {p->color.x, p->color.y, p->color.z, p->color.w};
-            j["pLight"]["position"] = {p->position.x, p->position.y, p->position.z};
-            j["pLight"]["radius"] = p->radius;
-            j["pLight"]["decay"] = p->decay;
-
-            auto s = modelCommon->GetSpotLight();
-            j["sLight"]["color"] = {s->color.x, s->color.y, s->color.z, s->color.w};
-            j["sLight"]["position"] = {s->position.x, s->position.y, s->position.z};
-            j["sLight"]["direction"] = {s->direction.x, s->direction.y, s->direction.z};
-            j["sLight"]["distance"] = s->distance;
-            j["sLight"]["decay"] = s->decay;
-        }
-
-        ofs << j.dump(4);
-        ofs.close();
+    if (lightEditor_) {
+        lightEditor_->SaveLightingConfig(modelCommon);
     }
 }
 
 void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
-    std::ifstream ifs("resources/json/shared/lighting_config.json");
-    if (!ifs.is_open()) return;
-
-    try {
-        nlohmann::json j;
-        ifs >> j;
-        if (j.contains("activeLightType")) activeLightType_ = j["activeLightType"];
-        if (j.contains("enableFog")) enableFog_ = j["enableFog"];
-        if (j.contains("enableFlatShading")) enableFlatShading_ = j["enableFlatShading"];
-        if (j.contains("dIntensity")) dIntensity_ = j["dIntensity"];
-        if (j.contains("pIntensity")) pIntensity_ = j["pIntensity"];
-        if (j.contains("sIntensity")) sIntensity_ = j["sIntensity"];
-        if (j.contains("spotAngleDeg")) spotAngleDeg_ = j["spotAngleDeg"];
-        if (j.contains("spotFalloffDeg")) spotFalloffDeg_ = j["spotFalloffDeg"];
-
-        if (modelCommon) {
-            auto d = modelCommon->GetDirectionalLight();
-            if (j.contains("dLight")) {
-                if (j["dLight"].contains("color")) {
-                    d->color = {j["dLight"]["color"][0], j["dLight"]["color"][1], j["dLight"]["color"][2], j["dLight"]["color"][3]};
-                }
-                if (j["dLight"].contains("direction")) {
-                    d->direction = {j["dLight"]["direction"][0], j["dLight"]["direction"][1], j["dLight"]["direction"][2]};
-                }
-            }
-            d->enableFlatShading = enableFlatShading_ ? 1 : 0;
-            
-            auto p = modelCommon->GetPointLight();
-            if (j.contains("pLight")) {
-                if (j["pLight"].contains("color")) p->color = {j["pLight"]["color"][0], j["pLight"]["color"][1], j["pLight"]["color"][2], j["pLight"]["color"][3]};
-                if (j["pLight"].contains("position")) p->position = {j["pLight"]["position"][0], j["pLight"]["position"][1], j["pLight"]["position"][2]};
-                if (j["pLight"].contains("radius")) p->radius = j["pLight"]["radius"];
-                if (j["pLight"].contains("decay")) p->decay = j["pLight"]["decay"];
-            }
-
-            auto s = modelCommon->GetSpotLight();
-            if (j.contains("sLight")) {
-                if (j["sLight"].contains("color")) s->color = {j["sLight"]["color"][0], j["sLight"]["color"][1], j["sLight"]["color"][2], j["sLight"]["color"][3]};
-                if (j["sLight"].contains("position")) s->position = {j["sLight"]["position"][0], j["sLight"]["position"][1], j["sLight"]["position"][2]};
-                if (j["sLight"].contains("direction")) s->direction = {j["sLight"]["direction"][0], j["sLight"]["direction"][1], j["sLight"]["direction"][2]};
-                if (j["sLight"].contains("distance")) s->distance = j["sLight"]["distance"];
-                if (j["sLight"].contains("decay")) s->decay = j["sLight"]["decay"];
-            }
-            
-            // intensity の反映
-            if (activeLightType_ == 0) {
-                d->intensity = dIntensity_;
-                p->intensity = 0.0f;
-                s->intensity = 0.0f;
-            } else if (activeLightType_ == 1) {
-                d->intensity = 0.0f;
-                p->intensity = pIntensity_;
-                s->intensity = 0.0f;
-            } else if (activeLightType_ == 2) {
-                d->intensity = 0.0f;
-                p->intensity = 0.0f;
-                s->intensity = sIntensity_;
-                s->cosAngle = std::cos(spotAngleDeg_ * static_cast<float>(M_PI) / 180.0f);
-                s->cosFalloffStart = std::cos(spotFalloffDeg_ * static_cast<float>(M_PI) / 180.0f);
-            }
-        }
-    } catch (...) {}
+    if (lightEditor_) {
+        lightEditor_->LoadLightingConfig(modelCommon);
+    }
 }
 
 void EditorManager::Undo() {
@@ -2675,6 +2592,8 @@ void EditorManager::ApplyDefaultLayout() {
     showMapSettings_ = true;
     showReplayEditor_ = true;
     showAnimEditor_ = true;
+    showLightEditor_ = true;
+    showSpotLightPanel_ = true;
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     if (!viewport) return;
@@ -2701,6 +2620,7 @@ void EditorManager::ApplyDefaultLayout() {
     ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
     ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
     ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
+    ImGui::DockBuilderDockWindow("ライトエディター", dock_id_main);
 
     // 左側
     ImGui::DockBuilderDockWindow("ヒエラルキー", dock_id_left);
@@ -2716,6 +2636,7 @@ void EditorManager::ApplyDefaultLayout() {
     ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
     ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
     ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("スポットライト", dock_id_bottom);
 
     ImGui::DockBuilderFinish(dockspace_id);
 
@@ -2749,6 +2670,8 @@ void EditorManager::ScanLayoutPresets() {
                 preset.showMapSettings = j.value("showMapSettings", true);
                 preset.showReplayEditor = j.value("showReplayEditor", true);
                 preset.showAnimEditor = j.value("showAnimEditor", true);
+                preset.showLightEditor = j.value("showLightEditor", true);
+                preset.showSpotLightPanel = j.value("showSpotLightPanel", true);
 
                 layoutPresets_.push_back(preset);
             } catch (...) {
@@ -2780,6 +2703,8 @@ void EditorManager::SaveLayoutPreset(const std::string& name) {
     preset.showMapSettings = showMapSettings_;
     preset.showReplayEditor = showReplayEditor_;
     preset.showAnimEditor = showAnimEditor_;
+    preset.showLightEditor = showLightEditor_;
+    preset.showSpotLightPanel = showSpotLightPanel_;
 
     nlohmann::json j;
     j["name"] = preset.name;
@@ -2792,6 +2717,8 @@ void EditorManager::SaveLayoutPreset(const std::string& name) {
     j["showMapSettings"] = preset.showMapSettings;
     j["showReplayEditor"] = preset.showReplayEditor;
     j["showAnimEditor"] = preset.showAnimEditor;
+    j["showLightEditor"] = preset.showLightEditor;
+    j["showSpotLightPanel"] = preset.showSpotLightPanel;
 
     std::filesystem::path filePath = dirPath / (name + ".json");
     std::ofstream ofs(filePath);
@@ -2826,6 +2753,8 @@ bool EditorManager::ApplyLayoutPreset(const std::string& name) {
             showMapSettings_ = preset.showMapSettings;
             showReplayEditor_ = preset.showReplayEditor;
             showAnimEditor_ = preset.showAnimEditor;
+            showLightEditor_ = preset.showLightEditor;
+            showSpotLightPanel_ = preset.showSpotLightPanel;
 
             if (!preset.iniData.empty()) {
                 ImGui::LoadIniSettingsFromMemory(preset.iniData.c_str(), preset.iniData.size());
@@ -2870,6 +2799,8 @@ bool EditorManager::ExportLayoutPresetToFile(const std::string& name, const std:
             j["showMapSettings"] = preset.showMapSettings;
             j["showReplayEditor"] = preset.showReplayEditor;
             j["showAnimEditor"] = preset.showAnimEditor;
+            j["showLightEditor"] = preset.showLightEditor;
+            j["showSpotLightPanel"] = preset.showSpotLightPanel;
 
             std::filesystem::path outPath(filePath);
             if (outPath.has_parent_path()) {
@@ -2911,6 +2842,8 @@ bool EditorManager::ImportLayoutPresetFromFile(const std::string& filePath) {
         preset.showMapSettings = j.value("showMapSettings", true);
         preset.showReplayEditor = j.value("showReplayEditor", true);
         preset.showAnimEditor = j.value("showAnimEditor", true);
+        preset.showLightEditor = j.value("showLightEditor", true);
+        preset.showSpotLightPanel = j.value("showSpotLightPanel", true);
 
         std::filesystem::path dirPath("resources/json/local/layout_presets");
         std::filesystem::create_directories(dirPath);

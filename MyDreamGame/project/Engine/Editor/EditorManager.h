@@ -19,6 +19,7 @@
 #include "Replay/ReplayManager.h"
 #include "Animation/AnimationEditor.h"
 #include "MapEditor/MapEditor.h"
+#include "LightEditor/LightEditor.h"
 
 class SceneManager;
 class ParticleManager;
@@ -58,6 +59,7 @@ public:
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
     bool IsAnimationEditorHovered() const { return animationEditor_ ? animationEditor_->IsHovered() : false; }
+    bool IsLightEditorHovered() const { return lightEditor_ ? lightEditor_->IsHovered() : false; }
     bool IsMapEditorVisible() const { return mapEditor_ ? mapEditor_->IsVisible() : false; }
     bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
     bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
@@ -73,6 +75,7 @@ public:
 
     AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
     MapEditor* GetMapEditor() const { return mapEditor_.get(); }
+    LightEditor* GetLightEditor() const { return lightEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -86,6 +89,8 @@ public:
         bool showMapSettings = true;
         bool showReplayEditor = true;
         bool showAnimEditor = true;
+        bool showLightEditor = true;
+        bool showSpotLightPanel = true;
     };
 
     // レイアウトプリセットの保存・読込み・管理
@@ -273,7 +278,8 @@ private:
     enum class EditorMode {
         Normal,
         Replay,
-        Animation
+        Animation,
+        Light
     };
     EditorMode currentMode_ = EditorMode::Normal;
 
@@ -286,14 +292,18 @@ private:
     bool showMapEditor_ = true;
     bool showMapSettings_ = true;
     bool showAnimEditor_ = true;
+    bool showLightEditor_ = true;
+    bool showSpotLightPanel_ = true;
 
     // 前回選択されていたメインタブ（次回起動時に復元）
     std::string activeMainTab_ = "ゲームビュー";
     int focusActiveTabCountdown_ = 0;
+    int focusSpotLightTabCountdown_ = 0;
 
     // サブエディター専用インスタンス
     std::unique_ptr<AnimationEditor> animationEditor_;
     std::unique_ptr<MapEditor> mapEditor_;
+    std::unique_ptr<LightEditor> lightEditor_;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

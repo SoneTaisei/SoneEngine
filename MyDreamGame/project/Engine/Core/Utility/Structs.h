@@ -151,15 +151,31 @@ struct PointLight {
     float padding[2]; //!< 16バイト境界に合わせるためのパディング
 };
 
+enum class LightFollowType : int32_t {
+    None = 0,            //!< 固定
+    Camera = 1,          //!< カメラ追従（懐中電灯）
+    Player = 2,          //!< プレイヤー追従
+    RotateAnimation = 3  //!< 自動首振り回転
+};
+
+static constexpr uint32_t kMaxSpotLights = 8;
+
 struct SpotLight {
-    Vector4 color;
-    Vector3 position;
-    float intensity;
-    Vector3 direction;
-    float distance;
-	float decay;
-    float cosAngle;
-    float cosFalloffStart;
+    Vector4 color;           //!< ライトの色
+    Vector3 position;        //!< 位置
+    float intensity;         //!< 輝度
+    Vector3 direction;       //!< 照射方向
+    float distance;          //!< 届く距離
+    float decay;             //!< 減衰率
+    float cosAngle;          //!< 照射角度（cos）
+    float cosFalloffStart;   //!< フォールオフ開始角度（cos）
+    int32_t enable;          //!< 有効フラグ (1: 有効, 0: 無効)
+};
+
+struct SpotLightGroup {
+    SpotLight spotLights[kMaxSpotLights];
+    int32_t spotLightCount;
+    float ambientIntensity;  //!< 環境光強度（0.0で完全な暗闇）
     float padding[2];
 };
 
