@@ -214,6 +214,15 @@
     <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\Chain2D.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\ChainConfig.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Physics\VerletPhysics2D.cpp">
+      <Filter>Project\Game2D\Physics</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp">
       <Filter>Engine\Editor\MapEditor</Filter>
     </ClCompile>
@@ -480,6 +489,15 @@
     <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\Chain2D.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\ChainConfig.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Physics\VerletPhysics2D.h">
+      <Filter>Project\Game2D\Physics</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h">
       <Filter>Engine\Editor\MapEditor</Filter>
     </ClInclude>
@@ -594,6 +612,18 @@
     </Filter>
     <Filter Include="Application\Game2D">
       <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project">
+      <UniqueIdentifier>{1667c207-0d6e-4227-bf5b-92c0394b998b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D">
+      <UniqueIdentifier>{1d4d7285-8c3a-4589-81e1-379b0984b7a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Chain">
+      <UniqueIdentifier>{7dd988e4-5ce4-436e-8e0e-61c6f8ff20b5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Physics">
+      <UniqueIdentifier>{140e8cb0-1ff6-45a4-921f-783e8eee966b}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
