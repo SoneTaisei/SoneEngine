@@ -15,7 +15,7 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     ApplyGravity(state_, params_, deltaTime);
 
     // 3. X軸移動と壁押し戻し
-    state_.position_.x += state_.velocity_.x * deltaTime;
+    state_.position_.x += (state_.velocity_.x + state_.platformVelocity_.x) * deltaTime;
     ResolveCollisionX(state_, params_, mapChip, player);
     if (state_.isDead_ || state_.isGoal_) return;
 
@@ -141,6 +141,46 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
             }
         }
     }
+
+    // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
+    for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
+        
+        AABB2D blockAABB = blockPtr->GetAABB();
+        float blockLeft = blockAABB.left;
+        float blockRight = blockAABB.right;
+        float blockTop = blockAABB.top;
+        float blockBottom = blockAABB.bottom;
+        
+        // Y方向の重複チェック
+        if (maxY <= blockBottom || minY >= blockTop) {
+            continue;
+        }
+
+        if (state_.velocity_.x > 0.0f && maxX > blockLeft && minX < blockLeft) {
+            state_.position_.x = blockLeft - params_.halfWidth_;
+            state_.velocity_.x = 0.0f;
+            state_.isTouchingWallRight_ = true;
+            minX = state_.position_.x - params_.halfWidth_;
+            maxX = state_.position_.x + params_.halfWidth_;
+            if (player) {
+                blockPtr->OnCollision(player);
+                blockPtr->OnPlayerTouch(player);
+            }
+            if (state_.isDead_) return;
+        } else if (state_.velocity_.x < 0.0f && minX < blockRight && maxX > blockRight) {
+            state_.position_.x = blockRight + params_.halfWidth_;
+            state_.velocity_.x = 0.0f;
+            state_.isTouchingWallLeft_ = true;
+            minX = state_.position_.x - params_.halfWidth_;
+            maxX = state_.position_.x + params_.halfWidth_;
+            if (player) {
+                blockPtr->OnCollision(player);
+                blockPtr->OnPlayerTouch(player);
+            }
+            if (state_.isDead_) return;
+        }
+    }
 }
 
 void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip, Player2D* player) {
@@ -179,6 +219,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                             state_.position_.y = blockTop + params_.halfHeight_;
                             state_.velocity_.y = 0.0f;
                             groundedThisFrame = true;
+                            state_.platformVelocity_ = block->GetVelocity();
                             minY = state_.position_.y - params_.halfHeight_;
                             maxY = state_.position_.y + params_.halfHeight_;
                             if (player) {
@@ -192,6 +233,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                             state_.position_.y = blockTop + params_.halfHeight_;
                             state_.velocity_.y = 0.0f;
                             groundedThisFrame = true;
+                            state_.platformVelocity_ = block->GetVelocity();
                             minY = state_.position_.y - params_.halfHeight_;
                             maxY = state_.position_.y + params_.halfHeight_;
                             if (player) {
@@ -201,6 +243,52 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                             if (state_.isDead_) return;
                         }
                     }
+                }
+            }
+        }
+        
+        // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
+        for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+            if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
+            
+            AABB2D blockAABB = blockPtr->GetAABB();
+            float blockLeft = blockAABB.left;
+            float blockRight = blockAABB.right;
+            float blockTop = blockAABB.top;
+            float blockBottom = blockAABB.bottom;
+            
+            // X方向の重複チェック
+            if (maxX <= blockLeft || minX >= blockRight) {
+                continue;
+            }
+
+            if (blockPtr->IsSolid()) {
+                if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
+                    state_.position_.y = blockTop + params_.halfHeight_;
+                    state_.velocity_.y = 0.0f;
+                    groundedThisFrame = true;
+                    state_.platformVelocity_ = blockPtr->GetVelocity();
+                    minY = state_.position_.y - params_.halfHeight_;
+                    maxY = state_.position_.y + params_.halfHeight_;
+                    if (player) {
+                        blockPtr->OnCollision(player);
+                        blockPtr->OnPlayerStand(player);
+                    }
+                    if (state_.isDead_) return;
+                }
+            } else if (blockPtr->IsOneWay()) {
+                if (minY <= blockTop && minY >= blockTop - 0.25f) {
+                    state_.position_.y = blockTop + params_.halfHeight_;
+                    state_.velocity_.y = 0.0f;
+                    groundedThisFrame = true;
+                    state_.platformVelocity_ = blockPtr->GetVelocity();
+                    minY = state_.position_.y - params_.halfHeight_;
+                    maxY = state_.position_.y + params_.halfHeight_;
+                    if (player) {
+                        blockPtr->OnCollision(player);
+                        blockPtr->OnPlayerStand(player);
+                    }
+                    if (state_.isDead_) return;
                 }
             }
         }
@@ -238,6 +326,9 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     }
 
     state_.isOnGround_ = groundedThisFrame;
+    if (!groundedThisFrame) {
+        state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
+    }
 }
 
 void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerParams& params_, Player2D* player, MapChip2D* mapChip) {
