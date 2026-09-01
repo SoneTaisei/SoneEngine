@@ -23,6 +23,7 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["nodeRadius_"] = params.nodeRadius_;
         j["friction_"] = params.friction_;
         j["playerVelInfluence_"] = params.playerVelInfluence_;
+        j["rootCollisionSkip_"] = params.rootCollisionSkip_;
         j["linkThickness_"] = params.linkThickness_;
         j["linkOverlap_"] = params.linkOverlap_;
 
@@ -57,6 +58,7 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("nodeRadius_")) params.nodeRadius_ = j["nodeRadius_"];
         if (j.contains("friction_")) params.friction_ = j["friction_"];
         if (j.contains("playerVelInfluence_")) params.playerVelInfluence_ = j["playerVelInfluence_"];
+        if (j.contains("rootCollisionSkip_")) params.rootCollisionSkip_ = j["rootCollisionSkip_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
 

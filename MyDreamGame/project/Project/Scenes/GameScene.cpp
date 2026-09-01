@@ -78,6 +78,11 @@ void GameScene::Initialize() {
     SpawnChains();
     Log("GameScene::Initialize: Chains Initialized\n");
 
+    // 6.6. 鎖×プレイヤー接続コントローラ
+    chainController_ = std::make_unique<PlayerChainController>();
+    chainController_->Initialize(player_);
+    Log("GameScene::Initialize: ChainController Initialized\n");
+
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
         Log("GameScene::Initialize: Camera config...\n");
@@ -169,6 +174,9 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
             // プレイ開始時は鎖を初期姿勢に戻す（毎回同じ初期状態から始めてリプレイ再現性を保つ）
+            if (chainController_) {
+                chainController_->Release();
+            }
             for (auto& chain : chains_) {
                 chain->ResetToInitial();
             }
@@ -249,7 +257,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                     player_->ResetState(replayData.playerInitPos);
                     player_->ClearEffects();
 
-                    // 鎖も初期姿勢から再現する（鎖はプレイヤー位置の決定論的な関数なので再シミュレーションで一致する）
+                    // 鎖も初期姿勢から再現する（鎖はプレイヤー位置と入力の決定論的な関数なので再シミュレーションで一致する）
+                    if (chainController_) {
+                        chainController_->Release();
+                    }
                     for (auto& chain : chains_) {
                         chain->ResetToInitial();
                     }
@@ -328,6 +339,11 @@ void GameScene::Update(SceneManager *sceneManager) {
 
             player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
 
+            // 鎖×プレイヤー接続（ソケット同期・拾う/落とす入力）。鎖の更新より先に行う
+            if (chainController_) {
+                chainController_->Update(chains_);
+            }
+
             // 鎖の更新（鎖がプレイヤーに反応する仕様のため、プレイヤー位置確定後に行う）
             for (auto& chain : chains_) {
                 chain->Update(dt, map_.get(), player_);
@@ -385,6 +401,9 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     if (!chains_.empty()) {
         ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Chain Settings")) {
+            if (chainController_) {
+                chainController_->DrawImGui();
+            }
             for (auto& chain : chains_) {
                 chain->DrawImGui();
             }

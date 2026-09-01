@@ -13,6 +13,15 @@ class Object3D;
 class Model;
 
 /// <summary>
+/// 鎖の根元（アンカー）の状態
+/// </summary>
+enum class ChainAnchorMode {
+    kWorld,  // 根元をワールド座標に固定（吊り下げ装飾）
+    kSocket, // 根元を外部ソケット（プレイヤーの手など）へ毎フレーム追従（持たれている状態）
+    kFree,   // 固定なし（地面に落ちている状態）
+};
+
+/// <summary>
 /// 鎖（チェーン）
 /// VerletPhysics2Dを適用した節ノード列 + 縦横リンクモデルの交互描画
 /// アンカー（固定端）から垂れ下がり、地形に巻き付き、プレイヤーに反応する
@@ -48,6 +57,20 @@ public:
     // --- アンカー（固定端）操作 ---
     void SetAnchorPosition(const Vector3& pos) { anchorPos_ = pos; }
     const Vector3& GetAnchorPosition() const { return anchorPos_; }
+
+    // --- アンカーモード（拾う・落とす対応） ---
+    ChainAnchorMode GetAnchorMode() const { return anchorMode_; }
+
+    /// <summary>
+    /// アンカーモードを切り替える（kFree=落とす、kSocket=持つ、kWorld=ワールド固定）
+    /// </summary>
+    void SetAnchorMode(ChainAnchorMode mode);
+
+    /// <summary>
+    /// kSocket時のソケット座標同期。毎フレーム、Update() の前に呼ぶこと
+    /// （シミュレーションは z=0 で行うため z は無視される）
+    /// </summary>
+    void SyncSocket(const Vector3& socketWorld);
 
     /// <summary>
     /// アンカーを外部座標に追従させる（動くブロックへの取り付け等。nullptrで解除）
@@ -90,6 +113,11 @@ private:
     Vector3 anchorPos_ = { 0.0f, 0.0f, 0.0f };
     const Vector3* anchorFollow_ = nullptr;
     const Vector3* endFollow_ = nullptr;
+
+    // アンカーモード（現在値と、シーンリセット時に戻す初期値）
+    ChainAnchorMode anchorMode_ = ChainAnchorMode::kWorld;
+    ChainAnchorMode initialMode_ = ChainAnchorMode::kWorld;
+    Vector3 initialAnchorPos_ = { 0.0f, 0.0f, 0.0f };
 
     // 描画用（縦リンク・横リンクを交互に割り当てる）
     std::vector<std::unique_ptr<Object3D>> linkObjs_;

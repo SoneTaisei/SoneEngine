@@ -49,6 +49,11 @@ public:
     void SetAnimator(AnimatorComponent* animator) { animator_ = animator; }
     AnimatorComponent* GetAnimator() const { return animator_; }
 
+    // 最後に Update() で計算したワールド行列（Renderer::DrawObject3D が描画に使うSRT行列と同じ構成）
+    const Matrix4x4 &GetWorldMatrix() const { return worldMatrix_; }
+    // ジョイント名からワールド座標を取得（スケルトンが無い／名前が見つからなければ nullopt）
+    std::optional<Vector3> GetJointWorldPosition(const std::string &jointName) const;
+
 private:
     std::string name_ = "GameObject"; // ヒエラルキー表示用の名前
     BlendMode blendMode_ = BlendMode::kBlendModeNormal;
@@ -74,6 +79,7 @@ private:
 
     // CPU側データ
     EulerTransform transform_;
+    Matrix4x4 worldMatrix_ = TransformFunctions::MakeIdentity4x4(); // Update()で更新（ジョイント座標計算用）
     Material material_;
     DirectionalLight light_;
     PointLight pointLight_; // CPU側でも値を保持しておくと便利

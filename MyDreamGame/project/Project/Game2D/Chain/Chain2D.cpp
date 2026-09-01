@@ -37,6 +37,8 @@ void Chain2D::Initialize(const Vector3& anchorPos, const ChainParams& params, co
     params_ = params;
     anchorPos_ = anchorPos;
     anchorPos_.z = 0.0f;
+    initialAnchorPos_ = anchorPos_;
+    initialMode_ = anchorMode_;
 
     device_ = DirectXCommon::GetInstance()->GetDevice();
 
@@ -62,7 +64,8 @@ void Chain2D::BuildNodes() {
         // アンカーから真下に垂らした姿勢で初期化
         node.pos = { anchorPos_.x, anchorPos_.y - restLength_ * static_cast<float>(i), 0.0f };
         node.prevPos = node.pos;
-        node.invMass = (i == 0) ? 0.0f : 1.0f; // 先頭ノードがアンカー（固定）
+        // 先頭ノードがアンカー（固定）。ただしkFree（落ちている状態）なら全ノード自由
+        node.invMass = (i == 0 && anchorMode_ != ChainAnchorMode::kFree) ? 0.0f : 1.0f;
         node.radius = params_.nodeRadius_;
     }
 
@@ -96,22 +99,27 @@ void Chain2D::Update(float dt, MapChip2D* map, Player2D* player) {
         return;
     }
 
-    // 1. アンカー更新（追従先があれば追従）
-    Vector3 newAnchor = anchorFollow_ ? *anchorFollow_ : anchorPos_;
-    newAnchor.z = 0.0f;
-    {
+    // 1. アンカー更新（kFree=落ちている状態なら固定しない）
+    if (anchorMode_ != ChainAnchorMode::kFree) {
+        Vector3 newAnchor = anchorFollow_ ? *anchorFollow_ : anchorPos_;
+        newAnchor.z = 0.0f;
+
         // ワープ検出：アンカーが瞬間移動した場合は全ノードの速度をリセットして暴れを防ぐ
+        // （リスポーン・部屋遷移・拾った瞬間の遠距離ジャンプを全部ここで吸収）
         Vector3 diff = newAnchor - nodes_[0].pos;
         float distSq = diff.x * diff.x + diff.y * diff.y;
         bool teleported = distSq > kTeleportThreshold * kTeleportThreshold;
 
         anchorPos_ = newAnchor;
+        nodes_[0].invMass = 0.0f;
         nodes_[0].pos = newAnchor;
         nodes_[0].prevPos = newAnchor;
 
         if (teleported) {
             ResetDynamics();
         }
+    } else {
+        nodes_[0].invMass = 1.0f;
     }
 
     // 2. 終端拘束（プレイヤーが掴んだ状態などの将来拡張用）
@@ -143,11 +151,18 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
     Vector3 gravity = { 0.0f, params_.gravity_, 0.0f };
     VerletPhysics2D::Integrate(nodes_, gravity, params_.damping_, dt);
 
-    // プレイヤーのAABB（死亡中は判定しない）
-    bool hitPlayer = player && !player->IsDead();
+    // プレイヤーのAABB（死亡中と、プレイヤー自身が持っている鎖は判定しない）
+    bool hitPlayer = player && !player->IsDead() && anchorMode_ != ChainAnchorMode::kSocket;
     AABB2D playerBox{};
     if (hitPlayer) {
         playerBox = player->GetAABB();
+    }
+
+    // 手に持っている間は根元の数ノードを地形判定から除外する
+    // （壁張り付き時にソケットがブロック内部へ入り得るため、ジッタ防止）
+    size_t rootSkip = 0;
+    if (anchorMode_ == ChainAnchorMode::kSocket) {
+        rootSkip = static_cast<size_t>((std::max)(0, params_.rootCollisionSkip_));
     }
 
     // 反復ループ：距離制約とコリジョンを同一ループ内で交互に解いて同時収束させる
@@ -159,21 +174,25 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
             VerletPhysics2D::SolveDistanceConstraint(nodes_[i], nodes_[i + 1], restLength_);
         }
         // チップ押し出し（反復中は摩擦なし。摩擦は最後のパスでのみ適用する）
-        for (auto& node : nodes_) {
-            VerletPhysics2D::CollideNodeWithMap(node, map, 0.0f);
+        for (size_t i = 0; i < nodes_.size(); ++i) {
+            if (i >= rootSkip) {
+                VerletPhysics2D::CollideNodeWithMap(nodes_[i], map, 0.0f);
+            }
             if (hitPlayer) {
-                VerletPhysics2D::CollideNodeWithAABB(node, playerBox, 0.0f);
+                VerletPhysics2D::CollideNodeWithAABB(nodes_[i], playerBox, 0.0f);
             }
         }
     }
 
     // 最後にもう1回押し出しパス（ここでのみ摩擦・速度伝搬を適用）
-    for (auto& node : nodes_) {
-        VerletPhysics2D::CollideNodeWithMap(node, map, params_.friction_);
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        if (i >= rootSkip) {
+            VerletPhysics2D::CollideNodeWithMap(nodes_[i], map, params_.friction_);
+        }
         if (hitPlayer) {
-            if (VerletPhysics2D::CollideNodeWithAABB(node, playerBox, params_.friction_)) {
+            if (VerletPhysics2D::CollideNodeWithAABB(nodes_[i], playerBox, params_.friction_)) {
                 // 接触したノードへプレイヤーの速度を伝える（ダッシュで駆け抜けると跳ね上がる）
-                VerletPhysics2D::ApplyVelocity(node, player->GetVelocity(), dt, params_.playerVelInfluence_);
+                VerletPhysics2D::ApplyVelocity(nodes_[i], player->GetVelocity(), dt, params_.playerVelInfluence_);
             }
         }
     }
@@ -217,8 +236,25 @@ void Chain2D::ResetDynamics() {
 }
 
 void Chain2D::ResetToInitial() {
+    // 初期モード・初期アンカーに戻して垂下姿勢を再構築する
+    anchorMode_ = initialMode_;
+    anchorPos_ = initialAnchorPos_;
     BuildNodes();
     UpdateLinkTransforms();
+}
+
+void Chain2D::SetAnchorMode(ChainAnchorMode mode) {
+    anchorMode_ = mode;
+    if (!nodes_.empty()) {
+        nodes_[0].invMass = (mode == ChainAnchorMode::kFree) ? 1.0f : 0.0f;
+    }
+}
+
+void Chain2D::SyncSocket(const Vector3& socketWorld) {
+    // シミュレーションは z=0 平面で行う
+    Vector3 p = socketWorld;
+    p.z = 0.0f;
+    anchorPos_ = p; // Update() 冒頭のピン留め・ワープ検出がこの値を使う
 }
 
 void Chain2D::SetEndFollowTarget(const Vector3* target) {
@@ -260,6 +296,10 @@ std::vector<Object3D*> Chain2D::GetLinkObjects() const {
 void Chain2D::DrawImGui() {
 #ifdef USE_IMGUI
     if (ImGui::TreeNode(name_.c_str())) {
+        // 現在の保持状態
+        const char* modeNames[] = { "World (固定)", "Socket (手に追従)", "Free (落下中)" };
+        ImGui::Text("Mode: %s", modeNames[static_cast<int>(anchorMode_)]);
+
         // アンカー位置
         float anchor[2] = { anchorPos_.x, anchorPos_.y };
         if (ImGui::DragFloat2("Anchor", anchor, 0.1f)) {
@@ -278,6 +318,7 @@ void Chain2D::DrawImGui() {
         changed |= ImGui::DragFloat("Node Radius", &edit.nodeRadius_, 0.01f, 0.02f, 0.5f);
         changed |= ImGui::DragFloat("Friction", &edit.friction_, 0.01f, 0.0f, 1.0f);
         changed |= ImGui::DragFloat("Player Vel Influence", &edit.playerVelInfluence_, 0.01f, 0.0f, 1.0f);
+        changed |= ImGui::DragInt("Root Collision Skip", &edit.rootCollisionSkip_, 1, 0, 6);
         changed |= ImGui::DragFloat("Link Thickness", &edit.linkThickness_, 0.01f, 0.2f, 3.0f);
         changed |= ImGui::DragFloat("Link Overlap", &edit.linkOverlap_, 0.01f, 1.0f, 2.5f);
         if (changed) {
