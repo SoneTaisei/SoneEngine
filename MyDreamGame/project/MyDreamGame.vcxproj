@@ -248,6 +248,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Blocks\ChainItemBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\MovingBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\FragileBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\SwitchBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\DoorBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
@@ -475,6 +477,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\ChainItemBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\MovingBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\FragileBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\SwitchBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\DoorBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />

@@ -118,6 +118,51 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
+    bool hasSwitchTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kSwitchBlock)) {
+            hasSwitchTemplate = true;
+            break;
+        }
+    }
+    if (!hasSwitchTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kSwitchBlock);
+        def.name = "Switch";
+        def.type = "SwitchBlock";
+        def.color = {0.8f, 0.2f, 0.2f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["linkId"] = 1;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    bool hasDoorTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kDoorBlock)) {
+            hasDoorTemplate = true;
+            break;
+        }
+    }
+    if (!hasDoorTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kDoorBlock);
+        def.name = "Door";
+        def.type = "DoorBlock";
+        def.color = {0.5f, 0.6f, 0.7f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["linkId"] = 1;
+        props["openSpeed"] = 2.0f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
     // 保存ファイルがあれば読込み、なければデフォルトファイルや初期構築から読み込む
     if (!LoadFromFile(mapFilePath)) {
         if (!LoadFromFile("resources/json/shared/MapData/map_data.txt")) {
@@ -435,7 +480,7 @@ void MapChip2D::RebuildChipObjects() {
             
             bool canMerge = false;
             if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock);
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
             } else {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 const CustomBlockDef* def = nullptr;
@@ -443,7 +488,7 @@ void MapChip2D::RebuildChipObjects() {
                     if (d.id == typeId) { def = &d; break; }
                 }
                 if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock");
+                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "DoorBlock");
                     // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
                     if (!def->modelName.empty()) {
                         canMerge = false;

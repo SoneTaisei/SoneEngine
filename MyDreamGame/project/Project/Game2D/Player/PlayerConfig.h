@@ -17,7 +17,7 @@ struct PlayerParams {
     float respawnDuration_ = 0.5f;
     float goalWaitTime_ = 2.0f;
     float runDustInterval_ = 0.1f;
-    float chainJumpPenalty_ = 0.3f;
+    float chainJumpPenalty_ = 2.0f;
 };
 
 class PlayerConfig {

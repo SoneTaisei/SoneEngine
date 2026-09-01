@@ -6,6 +6,8 @@
 #include "ChainItemBlock.h"
 #include "MovingBlock.h"
 #include "FragileBlock.h"
+#include "SwitchBlock.h"
+#include "DoorBlock.h"
 #include <algorithm>
 
 BlockFactory& BlockFactory::GetInstance() {
@@ -35,6 +37,12 @@ BlockFactory::BlockFactory() {
     });
     Register("FragileBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<FragileBlock>(map, x, y);
+    });
+    Register("SwitchBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<SwitchBlock>(map, x, y);
+    });
+    Register("DoorBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<DoorBlock>(map, x, y);
     });
 }
 

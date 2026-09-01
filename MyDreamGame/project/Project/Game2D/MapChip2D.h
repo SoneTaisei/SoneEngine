@@ -24,7 +24,9 @@ public:
         kRoomRespawn = 10, // 部屋用リスポーン地点
         kChainItemBlock = 11, // 鎖アイテム
         kMovingBlock = 12, // 移動する床
-        kFragileBlock = 13 // 鎖の重さで崩れる床
+        kFragileBlock = 13, // 鎖の重さで崩れる床
+        kSwitchBlock = 14, // スイッチ
+        kDoorBlock = 15 // シャッタードア
     };
 
     void Initialize(const std::string& mapFilePath);
