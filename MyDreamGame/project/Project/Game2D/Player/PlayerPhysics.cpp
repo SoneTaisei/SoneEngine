@@ -45,7 +45,12 @@ void PlayerPhysics::HandleMovement(PlayerState& state_, const PlayerParams& para
 
     // ジャンプ
     if (state_.isOnGround_ && input_.isJumpPressed) {
-        state_.velocity_.y = params_.jumpPower_;
+        // 鎖の数が3個を超えた分だけジャンプ力を低下させる
+        int extraChains = (std::max)(0, state_.chainLength_ - 3);
+        float actualJumpPower = params_.jumpPower_ - (extraChains * params_.chainJumpPenalty_);
+        if (actualJumpPower < 0.0f) actualJumpPower = 0.0f; // 最低でも0以上
+
+        state_.velocity_.y = actualJumpPower;
         state_.isOnGround_ = false;
         if (player) {
             player->GetVisuals().SpawnJumpDust({ state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f }, 0.0f);
@@ -96,8 +101,8 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
 
     for (int cy = startChipY; cy <= endChipY; ++cy) {
         for (int cx = startChipX; cx <= endChipX; ++cx) {
-            MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
-            if (type == MapChip2D::ChipType::kBlock) {
+            auto* block = mapChip->GetBlock(cx, cy);
+            if (block && block->IsSolid() && !block->IsDestroyed()) {
                 float blockLeft = mapChip->ChipToWorldX(cx);
                 float blockRight = blockLeft + mapChip->GetChipSize();
                 float blockBottom = mapChip->ChipToWorldY(cy);
@@ -142,26 +147,28 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     if (state_.velocity_.y <= 0.0f) {
         for (int cy = startChipY; cy <= endChipY; ++cy) {
             for (int cx = startChipX; cx <= endChipX; ++cx) {
-                MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
-                if (type == MapChip2D::ChipType::kBlock) {
-                    float blockBottom = mapChip->ChipToWorldY(cy);
-                    float blockTop = blockBottom + mapChip->GetChipSize();
+                auto* block = mapChip->GetBlock(cx, cy);
+                if (block && !block->IsDestroyed()) {
+                    if (block->IsSolid()) {
+                        float blockBottom = mapChip->ChipToWorldY(cy);
+                        float blockTop = blockBottom + mapChip->GetChipSize();
 
-                    if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
-                        state_.position_.y = blockTop + params_.halfHeight_;
-                        state_.velocity_.y = 0.0f;
-                        groundedThisFrame = true;
-                        minY = state_.position_.y - params_.halfHeight_;
-                        maxY = state_.position_.y + params_.halfHeight_;
-                    }
-                } else if (type == MapChip2D::ChipType::kOneWayBlock) {
-                    float blockTop = mapChip->ChipToWorldY(cy) + mapChip->GetChipSize();
-                    if (minY <= blockTop && minY >= blockTop - 0.25f) {
-                        state_.position_.y = blockTop + params_.halfHeight_;
-                        state_.velocity_.y = 0.0f;
-                        groundedThisFrame = true;
-                        minY = state_.position_.y - params_.halfHeight_;
-                        maxY = state_.position_.y + params_.halfHeight_;
+                        if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
+                            state_.position_.y = blockTop + params_.halfHeight_;
+                            state_.velocity_.y = 0.0f;
+                            groundedThisFrame = true;
+                            minY = state_.position_.y - params_.halfHeight_;
+                            maxY = state_.position_.y + params_.halfHeight_;
+                        }
+                    } else if (block->IsOneWay()) {
+                        float blockTop = mapChip->ChipToWorldY(cy) + mapChip->GetChipSize();
+                        if (minY <= blockTop && minY >= blockTop - 0.25f) {
+                            state_.position_.y = blockTop + params_.halfHeight_;
+                            state_.velocity_.y = 0.0f;
+                            groundedThisFrame = true;
+                            minY = state_.position_.y - params_.halfHeight_;
+                            maxY = state_.position_.y + params_.halfHeight_;
+                        }
                     }
                 }
             }
@@ -171,8 +178,8 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     else if (state_.velocity_.y > 0.0f) {
         for (int cy = startChipY; cy <= endChipY; ++cy) {
             for (int cx = startChipX; cx <= endChipX; ++cx) {
-                MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
-                if (type == MapChip2D::ChipType::kBlock) {
+                auto* block = mapChip->GetBlock(cx, cy);
+                if (block && block->IsSolid() && !block->IsDestroyed()) {
                     float blockBottom = mapChip->ChipToWorldY(cy);
 
                     if (maxY >= blockBottom && minY < blockBottom) {
@@ -219,6 +226,10 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
             } else if (type == MapChip2D::ChipType::kGoal) {
                 player->ReachGoal();
                 return;
+            }
+
+            if (auto* block = mapChip->GetBlock(cx, cy)) {
+                block->OnCollision(player);
             }
         }
     }

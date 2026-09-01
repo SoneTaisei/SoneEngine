@@ -14,6 +14,9 @@ struct PlayerState {
     bool isGoal_ = false;
     float goalTimer_ = 0.0f;
 
+    // 鎖の長さ（個数）
+    int chainLength_ = 3;
+
     // 見た目・エフェクト同期用フラグ
     bool isDashing_ = false;
     bool isWallClinging_ = false;

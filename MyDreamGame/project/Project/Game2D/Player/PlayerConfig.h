@@ -4,7 +4,7 @@
 
 struct PlayerParams {
     float moveSpeed_ = 6.0f;
-    float jumpPower_ = 15.0f;
+    float jumpPower_ = 17.5f;
     float gravity_ = -35.0f;
     float maxFallSpeed_ = -20.0f;
     float halfWidth_ = 0.4f;
@@ -17,6 +17,7 @@ struct PlayerParams {
     float respawnDuration_ = 0.5f;
     float goalWaitTime_ = 2.0f;
     float runDustInterval_ = 0.1f;
+    float chainJumpPenalty_ = 0.3f;
 };
 
 class PlayerConfig {

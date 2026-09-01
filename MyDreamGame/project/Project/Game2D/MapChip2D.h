@@ -21,7 +21,8 @@ public:
         kGoal = 3,        // ゴール
         kOneWayBlock = 5, // 一方向通行床
         kPlayerSpawn = 6, // プレイヤー初期位置
-        kRoomRespawn = 10 // 部屋用リスポーン地点
+        kRoomRespawn = 10, // 部屋用リスポーン地点
+        kChainItemBlock = 11 // 鎖アイテム
     };
 
     void Initialize(const std::string& mapFilePath);
