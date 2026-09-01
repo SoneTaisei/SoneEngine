@@ -59,6 +59,29 @@ void GameScene::Initialize() {
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
     Log("GameScene::Initialize: Skybox loaded\n");
 
+    // 4.5. マップ背景板ポリゴンの生成（スポットライト等のライティング視認用）
+    Primitive* planePrim = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Plane, 1.0f);
+    if (planePrim) {
+        backgroundPlane_ = std::make_unique<PrimitiveObject>();
+        backgroundPlane_->Initialize(device.Get(), planePrim);
+        backgroundPlane_->SetName("BackgroundPlane");
+        
+        // 法線を手前（Z負方向）に向けるためX軸を-90度回転
+        backgroundPlane_->SetRotation({ -std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f });
+        // マップ全体を覆うスケール（X: 横幅, Z: 高さ）
+        backgroundPlane_->SetScale({ 300.0f, 1.0f, 150.0f });
+        // ブロック（Z=0, 厚み1.0）の奥（Z=1.6f）に配置
+        backgroundPlane_->SetTranslation({ 100.0f, 20.0f, 1.6f });
+        
+        auto& mat = backgroundPlane_->GetMaterial();
+        mat.lightingType = 1; // ライティング有効化
+        mat.enableEnvironmentMap = 0;
+        mat.color = { 0.28f, 0.30f, 0.35f, 1.0f }; // スポットライトが映えやすい背景色
+        mat.shininess = 20.0f;
+        backgroundPlane_->Update();
+        Log("GameScene::Initialize: BackgroundPlane Initialized\n");
+    }
+
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
     map_->Initialize( s_TargetMapFilePath);
@@ -138,6 +161,10 @@ void GameScene::Update(SceneManager *sceneManager) {
 
     if (skybox_) {
         skybox_->Update();
+    }
+
+    if (backgroundPlane_) {
+        backgroundPlane_->Update();
     }
 
     float dt = TimeManager::GetInstance().GetDeltaTime();
@@ -397,6 +424,10 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         player_->DisplayImGui();
     }
 
+    if (backgroundPlane_ && backgroundPlane_.get() == selectedPrimitive) {
+        backgroundPlane_->DisplayImGui("Background Plane");
+    }
+
     // 鎖の調整ウィンドウ（物理パラメータの実機調整用）
     if (!chains_.empty()) {
         ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
@@ -512,6 +543,11 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 1. Skyboxの描画
     if (skybox_) {
         skybox_->Draw();
+    }
+
+    // 1.5. 背景板ポリゴンの描画
+    if (backgroundPlane_) {
+        backgroundPlane_->Draw();
     }
 
     // 2. 3Dモデル（マップ・プレイヤー）の描画準備
@@ -751,6 +787,11 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
         result.insert(result.end(), mapPrims.begin(), mapPrims.end());
     }
 
+    // 3. 背景板ポリゴン
+    if (backgroundPlane_) {
+        result.push_back(backgroundPlane_.get());
+    }
+
     return result;
 }
 
@@ -782,6 +823,10 @@ void GameScene::UpdateEditor() {
             playerPrim->SetTranslation(player_->GetPosition());
             playerPrim->Update();
         }
+    }
+
+    if (backgroundPlane_) {
+        backgroundPlane_->Update();
     }
 
     if (skybox_) {

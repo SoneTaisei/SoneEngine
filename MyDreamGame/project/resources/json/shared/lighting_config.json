@@ -14,7 +14,7 @@
             0.26841291785240173
         ]
     },
-    "enableDirectional": true,
+    "enableDirectional": false,
     "enableFlatShading": false,
     "enablePoint": false,
     "pIntensity": 0.07000000029802322,
@@ -35,7 +35,7 @@
     },
     "spotLights": [
         {
-            "angleDeg": 35.0,
+            "angleDeg": 21.700000762939453,
             "baseDirection": [
                 0.0,
                 0.0,
@@ -47,7 +47,7 @@
                 1.0,
                 1.0
             ],
-            "decay": 1.5,
+            "decay": 0.10000000149011612,
             "direction": [
                 0.0,
                 0.0,
@@ -55,7 +55,7 @@
             ],
             "distance": 20.0,
             "enabled": true,
-            "falloffDeg": 20.0,
+            "falloffDeg": 10.800000190734863,
             "followOffset": [
                 0.0,
                 0.0,
@@ -63,10 +63,10 @@
             ],
             "followType": 0,
             "intensity": 5.0,
-            "name": "SpotLight",
+            "name": "SpotLight_1",
             "position": [
-                4.0,
-                1.399999976158142,
+                5.800000190734863,
+                4.900000095367432,
                 -5.0
             ],
             "rotateAxis": [

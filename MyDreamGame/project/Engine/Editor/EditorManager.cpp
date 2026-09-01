@@ -817,11 +817,20 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::End();
     }
 
+    // --- Light Editor の定数バッファ同期（常時実行） ---
+    if (lightEditor_) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        const Vector3* playerPos = nullptr;
+        if (IScene* curScene = sceneManager->GetCurrentScene()) {
+            if (Player2D* player = curScene->GetPlayer()) {
+                playerPos = &player->GetPosition();
+            }
+        }
+        lightEditor_->Update(dt, modelCommon, playerPos);
+    }
+
     // --- Light Editor メインウィンドウ (dock_id_main) ---
     if (showLightEditor_ && lightEditor_) {
-        float dt = TimeManager::GetInstance().GetDeltaTime();
-        lightEditor_->Update(dt, modelCommon, nullptr);
-
         if (focusActiveTabCountdown_ > 0 && activeMainTab_ == "ライトエディター") {
             ImGui::SetNextWindowFocus();
         }
