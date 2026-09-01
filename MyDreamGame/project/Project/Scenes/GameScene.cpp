@@ -74,6 +74,10 @@ void GameScene::Initialize() {
     player_->FindSpawnPoint(*map_);
     Log("GameScene::Initialize: Player SpawnPoint found\n");
 
+    // 6.5. 鎖の生成（スポーン地点基準のテスト配置）
+    SpawnChains();
+    Log("GameScene::Initialize: Chains Initialized\n");
+
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
         Log("GameScene::Initialize: Camera config...\n");
@@ -87,6 +91,29 @@ void GameScene::Initialize() {
 
 
     Log("GameScene::Initialize: Finish\n");
+}
+
+void GameScene::SpawnChains() {
+    // 鎖のテスト配置。マップ配置(kChainAnchor等)に対応するまでの暫定として
+    // プレイヤーのスポーン地点を基準に相対配置する（マップが変わっても必ず画面内に出る）
+    chains_.clear();
+
+    ChainParams params;
+    ChainConfig::Load(params, ChainConfig::kDefaultFilePath);
+
+    Vector3 base = player_ ? player_->GetStartPosition() : Vector3{ 2.0f, 5.0f, 0.0f };
+
+    auto chainA = std::make_unique<Chain2D>();
+    chainA->Initialize(base + Vector3{ 3.0f, 4.0f, 0.0f }, params, "Chain_A");
+    chains_.push_back(std::move(chainA));
+
+    // 2本目は少し長め（挙動比較用）
+    ChainParams paramsB = params;
+    paramsB.nodeCount_ = 16;
+    paramsB.totalLength_ = 4.0f;
+    auto chainB = std::make_unique<Chain2D>();
+    chainB->Initialize(base + Vector3{ 6.0f, 4.0f, 0.0f }, paramsB, "Chain_B");
+    chains_.push_back(std::move(chainB));
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
@@ -141,6 +168,10 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
+            // プレイ開始時は鎖を初期姿勢に戻す（毎回同じ初期状態から始めてリプレイ再現性を保つ）
+            for (auto& chain : chains_) {
+                chain->ResetToInitial();
+            }
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
@@ -217,6 +248,11 @@ void GameScene::Update(SceneManager *sceneManager) {
                     // 2. プレイヤー状態(速度含む)をリセット
                     player_->ResetState(replayData.playerInitPos);
                     player_->ClearEffects();
+
+                    // 鎖も初期姿勢から再現する（鎖はプレイヤー位置の決定論的な関数なので再シミュレーションで一致する）
+                    for (auto& chain : chains_) {
+                        chain->ResetToInitial();
+                    }
                     
                     // 3. 0フレーム目から現在フレームまで座標を再現
                     for (int i = 0; i <= curFrame; ++i) {
@@ -292,6 +328,11 @@ void GameScene::Update(SceneManager *sceneManager) {
 
             player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
 
+            // 鎖の更新（鎖がプレイヤーに反応する仕様のため、プレイヤー位置確定後に行う）
+            for (auto& chain : chains_) {
+                chain->Update(dt, map_.get(), player_);
+            }
+
             // ゴール判定
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
                 gameState_ = GameState::Clear;
@@ -303,6 +344,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (!isRewinding && wasRewindingLastFrame_) {
             if (gameCamera_) {
                 gameCamera_->SetFollowTarget(&player_->GetPosition());
+            }
+            // 巻き戻し明けは鎖の暴れ防止のため暗黙速度をリセット
+            for (auto& chain : chains_) {
+                chain->ResetDynamics();
             }
         }
         wasRewindingLastFrame_ = isRewinding;
@@ -334,6 +379,17 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
     if (player_ && player_->GetPrimitiveObject() == selectedPrimitive) {
         player_->DisplayImGui();
+    }
+
+    // 鎖の調整ウィンドウ（物理パラメータの実機調整用）
+    if (!chains_.empty()) {
+        ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Chain Settings")) {
+            for (auto& chain : chains_) {
+                chain->DrawImGui();
+            }
+        }
+        ImGui::End();
     }
 
     // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
@@ -452,6 +508,11 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // プレイヤーの描画
     if (player_) {
         player_->Draw();
+    }
+
+    // 鎖の描画
+    for (auto& chain : chains_) {
+        chain->Draw();
     }
 
 
@@ -647,6 +708,13 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
 
 std::vector<Object3D *> GameScene::GetObjects() {
     std::vector<Object3D *> result;
+
+    // 鎖のリンクモデルをヒエラルキーに表示する
+    for (auto& chain : chains_) {
+        auto links = chain->GetLinkObjects();
+        result.insert(result.end(), links.begin(), links.end());
+    }
+
     return result;
 }
 

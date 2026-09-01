@@ -10,6 +10,7 @@
 // 2Dゲーム用クラス
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
+#include "Game2D/Chain/Chain2D.h"
 
 class GameCamera;
 
@@ -58,6 +59,12 @@ private:
     std::unique_ptr<GameObject> playerObj_;
     Player2D* player_ = nullptr;
     std::unique_ptr<MapChip2D> map_;
+
+    // 鎖（Verlet物理）
+    std::vector<std::unique_ptr<Chain2D>> chains_;
+
+    // 鎖のテスト配置（スポーン地点基準）
+    void SpawnChains();
     
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
     bool wasCurrentlyPlaying_ = false;
