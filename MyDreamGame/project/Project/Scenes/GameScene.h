@@ -10,8 +10,7 @@
 // 2Dゲーム用クラス
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
-#include "Game2D/Chain/Chain2D.h"
-#include "Game2D/Chain/PlayerChainController.h"
+#include "Game2D/Chain/ChainManager.h"
 
 class GameCamera;
 
@@ -61,14 +60,8 @@ private:
     Player2D* player_ = nullptr;
     std::unique_ptr<MapChip2D> map_;
 
-    // 鎖（Verlet物理）
-    std::vector<std::unique_ptr<Chain2D>> chains_;
-
-    // 鎖×プレイヤー接続（ソケット同期・拾う/落とす）
-    std::unique_ptr<PlayerChainController> chainController_;
-
-    // 鎖のテスト配置（スポーン地点基準）
-    void SpawnChains();
+    // 鎖の管理（プレイヤー鎖 + 吊り鎖 + 落とした自由鎖、ユニット制）
+    std::unique_ptr<ChainManager> chainManager_;
     
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
     bool wasCurrentlyPlaying_ = false;

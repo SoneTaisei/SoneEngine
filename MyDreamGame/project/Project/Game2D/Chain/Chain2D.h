@@ -87,6 +87,45 @@ public:
     const Vector3& GetNodePosition(int index) const { return nodes_[index].pos; }
     Vector3 GetEndPosition() const { return nodes_.empty() ? anchorPos_ : nodes_.back().pos; }
 
+    // --- ユニット操作（鎖の伸縮。1ユニット = nodesPerUnit_ ノード） ---
+    /// <summary>現在のユニット数（(ノード数-1) / nodesPerUnit_）</summary>
+    int GetUnitCount() const;
+
+    /// <summary>ユニット数を目標値へ合わせる（差分だけアンカー側で挿入・削除）</summary>
+    void SetUnitCount(int units);
+
+    /// <summary>
+    /// アンカー側にユニットを挿入する（アンカーと隣ノードの間に線形補間で配置してポップを防ぐ）
+    /// </summary>
+    void AddUnitsAtAnchor(int units);
+
+    /// <summary>
+    /// アンカー側からユニットを切り離して返す（pos/prevPos維持 = 落下が連続的に見える）
+    /// アンカーノード自体は残る。返り値は先頭にアンカー複製を含む 1 + units×nodesPerUnit ノードで、
+    /// そのまま InitializeFromNodes に渡せば切り離した長さと一致する自由鎖になる
+    /// </summary>
+    std::vector<VerletNode> RemoveUnitsAtAnchor(int units);
+
+    /// <summary>
+    /// 切り離したノード列から自由鎖（kFree）を生成する（外した鎖を世界に落とす用）
+    /// </summary>
+    void InitializeFromNodes(std::vector<VerletNode>&& nodes, const ChainParams& params, const std::string& name);
+
+    /// <summary>いずれかのノードが point から radius 以内にあるか（拾う判定）</summary>
+    bool FindNearestNode(const Vector3& point, float radius, int* outIndex = nullptr) const;
+
+    /// <summary>
+    /// いずれかのノード（円）が AABB から margin 以内にあるか（拾う判定の本命）
+    /// 中心点距離ではなく体の箱からの距離で判定するため、足元に横たわる鎖も見た目通りに拾える
+    /// </summary>
+    bool FindNearestNodeToAABB(const AABB2D& box, float margin, int* outIndex = nullptr) const;
+
+    /// <summary>
+    /// 手持ち中（kSocket）にプレイヤー衝突から除外する根元ノード数
+    /// （根元がプレイヤーに追従するため、除外しないと毎フレーム押し合う）
+    /// </summary>
+    void SetPlayerCollisionSkipCount(int count) { playerCollisionSkip_ = count; }
+
     // --- パラメータ ---
     const ChainParams& GetParams() const { return params_; }
     void SetParams(const ChainParams& params);
@@ -118,6 +157,9 @@ private:
     ChainAnchorMode anchorMode_ = ChainAnchorMode::kWorld;
     ChainAnchorMode initialMode_ = ChainAnchorMode::kWorld;
     Vector3 initialAnchorPos_ = { 0.0f, 0.0f, 0.0f };
+
+    // 手持ち中にプレイヤー衝突から除外する根元ノード数（0なら全ノード判定）
+    int playerCollisionSkip_ = 0;
 
     // 描画用（縦リンク・横リンクを交互に割り当てる）
     std::vector<std::unique_ptr<Object3D>> linkObjs_;

@@ -2,11 +2,21 @@
 #include <string>
 
 /// <summary>
-/// 鎖のパラメータ（チップ1.0単位系）
+/// 鎖のパラメータ（チップ1.0単位系・ユニット制）
+/// 鎖の長さは「ユニット数」で決まる：節数 = 1 + ユニット数 × nodesPerUnit_、
+/// 節間隔 restLength = unitLength_ / nodesPerUnit_（デフォルト 1.0/4 = 0.25）
 /// </summary>
 struct ChainParams {
-    int nodeCount_ = 12;               // 節数（多いほど滑らか・伸びやすい）
-    float totalLength_ = 3.0f;         // 全長（チップ何枚分か）
+    // --- ユニット系 ---
+    int initialUnits_ = 3;             // 初期ユニット数（プレイヤー鎖は chainLength_ と同期）
+    float unitLength_ = 1.0f;          // 1ユニットの長さ（チップ何枚分か）
+    int nodesPerUnit_ = 4;             // 1ユニットあたりのノード数
+    int maxUnits_ = 8;                 // プレイヤー鎖の上限（重すぎて詰まないように）
+    int minUnits_ = 1;                 // 下限。最後の1本は外せない
+    int unitsPerAction_ = 2;           // 一度のK操作で外す/もらうユニット数（つながったまま着脱される）
+    float pickupRadius_ = 0.5f;        // 拾う判定（プレイヤーのAABBから鎖ノードまでの距離）
+
+    // --- 物理 ---
     float gravity_ = -35.0f;           // プレイヤーの gravity_ と同値から開始
     float damping_ = 0.99f;            // 減衰（1.0だと永久に揺れる）
     int iterations_ = 15;              // 制約反復回数（伸びるなら増やすかサブステップ）
@@ -15,6 +25,8 @@ struct ChainParams {
     float friction_ = 0.5f;            // 接触摩擦（接触時のみ暗黙速度を削る）
     float playerVelInfluence_ = 0.35f; // 接触時にプレイヤー速度を鎖へ伝える割合
     int rootCollisionSkip_ = 2;        // 手持ち中に地形判定から除外する根元ノード数（壁張り付き時のジッタ防止）
+
+    // --- 見た目 ---
     float linkThickness_ = 1.0f;       // リンクモデルの太さ倍率
     float linkOverlap_ = 1.6f;         // 節間隔に対するリンクモデル長の倍率（重なり量）
 };
