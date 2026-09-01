@@ -391,6 +391,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Pick up chain");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Drop chain");
         ImGui::End();
     }
 

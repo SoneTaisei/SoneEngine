@@ -3,6 +3,7 @@
 #include "Game2D/MapChip2D.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
+#include "Editor/Replay/ReplayManager.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include <algorithm>
 #ifdef USE_IMGUI
@@ -45,19 +46,41 @@ void ChainManager::Initialize(Player2D* player, const Vector3& worldChainBase) {
 }
 
 void ChainManager::HandleInput() {
+    // 一時診断ログ: HandleInputが毎フレーム呼ばれているかの確認（初回のみ）
+    static bool loggedActive = false;
+    if (!loggedActive) {
+        Log("ChainManager: HandleInput active\n");
+        loggedActive = true;
+    }
+    // 一時診断ログ: リプレイ再生状態の変化を記録
+    // （リプレイ再生中は KeyboardInput が実キーボードを読まないため、K/Jが完全に無効になる）
+    static bool firstReplayLog = true;
+    static bool lastReplayPlaying = false;
+    bool replayPlaying = ReplayManager::GetInstance()->IsPlaying();
+    if (firstReplayLog || replayPlaying != lastReplayPlaying) {
+        Log(std::string("ChainManager: [diag] replayPlaying=") + (replayPlaying ? "1" : "0") + "\n");
+        lastReplayPlaying = replayPlaying;
+        firstReplayLog = false;
+    }
     if (!player_ || player_->IsDead()) {
         return;
     }
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
+
+    // 一時診断ログ: キー検知の確認
+    if (keyboard->IsKeyDown(DIK_J)) { Log("ChainManager: [diag] J down\n"); }
+    if (keyboard->IsKeyDown(DIK_K)) { Log("ChainManager: [diag] K down\n"); }
 
     // 拾う（K）：範囲内に鎖がなければ何もしない（誤って外してしまう誤爆を防ぐ）
     if (keyboard->IsKeyPressed(DIK_K)) {
         TryPickup();
     }
 
-    // 外す（S・下キー）：拾うとは独立したボタン
-    // （Jは録画スロットをShiftと共有しており、リプレイ再生時にShift入力が幻の「外す」になるためSを使う）
-    if (keyboard->IsKeyPressed(DIK_S) || keyboard->IsKeyPressed(DIK_DOWN)) {
+    // 外す（J / S / 下キー）：拾うとは独立したボタン
+    // 注意: Jの録画スロットはShiftと共有のため、将来ダッシュ等でShiftを使うと
+    // リプレイ再生時に幻の「外す」になり得る。その場合はJを外してS(下)だけにする
+    if (keyboard->IsKeyPressed(DIK_J) ||
+        keyboard->IsKeyPressed(DIK_S) || keyboard->IsKeyPressed(DIK_DOWN)) {
         DetachUnits();
     }
 }
@@ -78,6 +101,8 @@ bool ChainManager::TryPickup() {
             int gain = (std::min)(droppedChains_[i].unitWorth, headroom);
             player_->AddChainLength(gain);
             droppedChains_.erase(droppedChains_.begin() + i);
+            Log("ChainManager: Picked up dropped chain +" + std::to_string(gain) + " unit(s), chainLength=" +
+                std::to_string(player_->GetChainLength()) + "\n");
             return true; // 個数が増えた分は Reconcile が伸ばす
         }
     }
@@ -125,6 +150,9 @@ void ChainManager::DetachUnits() {
     dropped->InitializeFromNodes(std::move(removed), playerChain_->GetParams(),
                                  "DroppedChain_" + std::to_string(droppedCounter_++));
     droppedChains_.push_back({ std::move(dropped), detach });
+
+    Log("ChainManager: Detached " + std::to_string(detach) + " unit(s), chainLength=" +
+        std::to_string(player_->GetChainLength()) + "\n");
 }
 
 void ChainManager::Reconcile() {
@@ -245,7 +273,7 @@ Vector3 ChainManager::ComputeSocketWorld() {
 void ChainManager::DrawImGui() {
 #ifdef USE_IMGUI
     ImGui::SeparatorText("Chain Manager");
-    ImGui::Text("K : 拾う / S : 外す（%dユニットずつ）", params_.unitsPerAction_);
+    ImGui::Text("K : 拾う / J・S : 外す（%dユニットずつ）", params_.unitsPerAction_);
     if (player_ && playerChain_) {
         ImGui::Text("ChainLength: %d (units: %d, min %d / max %d)",
                     player_->GetChainLength(), playerChain_->GetUnitCount(),
