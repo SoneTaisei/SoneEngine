@@ -290,8 +290,15 @@ void ReplayIO::DeleteSavedFile(const std::string& filepath) {
 
 std::vector<ReplayMacro> ReplayIO::LoadMacros() {
     std::vector<ReplayMacro> macros;
-    std::ifstream ifs("json/replay_macros.txt");
-    if (!ifs.is_open()) return macros;
+    std::ifstream ifs("resources/json/local/replay_macros.txt");
+    if (!ifs.is_open()) {
+        // フォールバック: 旧パスにあれば読み込む
+        ifs.open("resources/json/replay_macros.txt");
+        if (!ifs.is_open()) {
+            ifs.open("json/replay_macros.txt");
+            if (!ifs.is_open()) return macros;
+        }
+    }
 
     std::string line;
     ReplayMacro* currentMacro = nullptr;
@@ -321,8 +328,8 @@ std::vector<ReplayMacro> ReplayIO::LoadMacros() {
 }
 
 void ReplayIO::SaveMacros(const std::vector<ReplayMacro>& macros) {
-    std::filesystem::create_directories("json");
-    std::ofstream ofs("json/replay_macros.txt");
+    std::filesystem::create_directories("resources/json/local");
+    std::ofstream ofs("resources/json/local/replay_macros.txt");
     if (!ofs.is_open()) return;
 
     for (const auto& macro : macros) {

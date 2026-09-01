@@ -9,6 +9,7 @@
 #include "Blocks/DeathBlock.h"
 #include "Blocks/GoalBlock.h"
 #include "Blocks/OneWayBlock.h"
+#include "Blocks/BlockFactory.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -51,11 +52,15 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
-    // 保存ファイルがあれば読込み、なければ初期構築して保存する
+    // 保存ファイルがあれば読込み、なければデフォルトファイルや初期構築から読み込む
     if (!LoadFromFile(mapFilePath)) {
-        BuildMap();
-        GenerateDefaultRooms();
-        SaveToFile(mapFilePath);
+        if (!LoadFromFile("resources/json/shared/MapData/map_data.txt")) {
+            if (!LoadFromFile("resources/json/shared/Map/map_data.json")) {
+                BuildMap();
+                GenerateDefaultRooms();
+                SaveToFile(mapFilePath);
+            }
+        }
     }
 
     // 古いファイル等で CustomPalette が空の場合、テンプレートのブロックを CustomBlocks として登録する
@@ -476,27 +481,45 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
     ofs << data;
     ofs.close();
 
-    // 境界線メタデータの保存
-    std::string boundsPath = filepath;
-    size_t extPos = boundsPath.find_last_of('.');
-    if (extPos != std::string::npos) {
-        boundsPath = boundsPath.substr(0, extPos) + "_bounds.txt";
-    }
+    // 境界線メタデータの保存 (MapBoundsディレクトリに保存)
+    std::filesystem::path mapPath(filepath);
+    std::string stem = mapPath.stem().string();
+    std::string boundsPath = "resources/json/shared/MapBounds/" + stem + "_bounds.txt";
     SaveRoomsToFile(boundsPath);
 
     return true;
 }
 
 bool MapChip2D::LoadFromStageName(const std::string& stageName) {
-    std::string name = stageName;
-    bool hasExt = false;
-    if (name.length() >= 4) {
-        std::string ext = name.substr(name.length() - 4);
-        if (ext == ".txt" || ext == ".TXT") hasExt = true;
+    if (stageName.empty()) return false;
+
+    // 1. そのままのパスで存在するか試す
+    if (std::filesystem::exists(stageName) && LoadFromFile(stageName)) {
+        return true;
     }
-    if (!hasExt) name += ".txt";
-    std::string filepath = "resources/json/shared/MapData/" + name;
-    return LoadFromFile(filepath);
+
+    // ファイル名部分を抽出
+    std::filesystem::path p(stageName);
+    std::string filename = p.filename().string();
+    std::string stem = p.stem().string();
+
+    // 2. resources/json/shared/MapData/ 内を探索
+    std::vector<std::string> candidatePaths = {
+        "resources/json/shared/MapData/" + filename,
+        "resources/json/shared/MapData/" + stem + ".txt",
+        "resources/json/shared/MapData/" + stem + ".json",
+        "resources/json/shared/Map/" + filename,
+        "resources/json/shared/Map/" + stem + ".json",
+        "resources/json/shared/Map/" + stem + ".txt"
+    };
+
+    for (const auto& path : candidatePaths) {
+        if (std::filesystem::exists(path) && LoadFromFile(path)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool MapChip2D::LoadFromFile(const std::string& filepath) {
@@ -508,16 +531,31 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
     bool result = LoadFromString(buffer.str());
 
     if (result) {
-        // 境界線メタデータの読み込み
-        std::string boundsPath = filepath;
-        size_t lastDot = boundsPath.find_last_of(".");
-        if (lastDot != std::string::npos) {
-            boundsPath = boundsPath.substr(0, lastDot) + "_bounds.txt";
-        } else {
-            boundsPath += "_bounds.txt";
+        currentFilePath_ = filepath;
+        // 境界線メタデータの読み込み (MapBounds優先、なければ旧パス)
+        std::filesystem::path mapPath(filepath);
+        std::string stem = mapPath.stem().string();
+        std::string boundsPath = "resources/json/shared/MapBounds/" + stem + "_bounds.txt";
+        
+        bool loadedRooms = false;
+        if (std::filesystem::exists(boundsPath)) {
+            loadedRooms = LoadRoomsFromFile(boundsPath);
+        }
+        if (!loadedRooms) {
+            // 旧パス（マップファイルと同階層）の後方互換チェック
+            std::string oldBoundsPath = filepath;
+            size_t lastDot = oldBoundsPath.find_last_of(".");
+            if (lastDot != std::string::npos) {
+                oldBoundsPath = oldBoundsPath.substr(0, lastDot) + "_bounds.txt";
+            } else {
+                oldBoundsPath += "_bounds.txt";
+            }
+            if (std::filesystem::exists(oldBoundsPath)) {
+                loadedRooms = LoadRoomsFromFile(oldBoundsPath);
+            }
         }
         
-        if (!LoadRoomsFromFile(boundsPath)) {
+        if (!loadedRooms) {
             // ファイルがなければデフォルトを生成
             GenerateDefaultRooms();
         }
@@ -707,6 +745,11 @@ void MapChip2D::GenerateDefaultRooms() {
 }
 
 bool MapChip2D::SaveRoomsToFile(const std::string& filepath) {
+    std::filesystem::path path(filepath);
+    if (path.has_parent_path()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
+
     std::ofstream ofs(filepath);
     if (!ofs.is_open()) return false;
 
@@ -813,23 +856,28 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
     int typeId = static_cast<int>(type);
 
     if (type == ChipType::kBlock) {
-        newBlock = std::make_shared<NormalBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("NormalBlock", this, x, y);
     } else if (type == ChipType::kDeathBlock) {
-        newBlock = std::make_shared<DeathBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("DeathBlock", this, x, y);
     } else if (type == ChipType::kGoal) {
-        newBlock = std::make_shared<GoalBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("GoalBlock", this, x, y);
     } else if (type == ChipType::kOneWayBlock) {
-        newBlock = std::make_shared<OneWayBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("OneWayBlock", this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {
             if (d.id == typeId) { def = &d; break; }
         }
         if (def) {
-            if (def->type == "NormalBlock") newBlock = std::make_shared<NormalBlock>(this, x, y);
-            else if (def->type == "DeathBlock") newBlock = std::make_shared<DeathBlock>(this, x, y);
-            else if (def->type == "GoalBlock") newBlock = std::make_shared<GoalBlock>(this, x, y);
-            else if (def->type == "OneWayBlock") newBlock = std::make_shared<OneWayBlock>(this, x, y);
+            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
+        }
+    } else {
+        const CustomBlockDef* def = nullptr;
+        for (const auto& d : templatePalette_) {
+            if (d.id == typeId) { def = &d; break; }
+        }
+        if (def) {
+            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
         }
     }
 

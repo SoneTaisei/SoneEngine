@@ -1,2 +1,6 @@
 .aider*
 /MyDreamGame/project/resources/json/local/
+**/resources/json/local/
+**/resources/json/shared/MapData/temp_play_map*
+**/resources/json/replay_macros.txt
+**/json/replay_macros.txt
