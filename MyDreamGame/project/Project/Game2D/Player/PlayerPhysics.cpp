@@ -16,11 +16,13 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
 
     // 3. X軸移動と壁押し戻し
     state_.position_.x += state_.velocity_.x * deltaTime;
-    ResolveCollisionX(state_, params_, mapChip);
+    ResolveCollisionX(state_, params_, mapChip, player);
+    if (state_.isDead_ || state_.isGoal_) return;
 
     // 4. Y軸移動と床/天井押し戻し
     state_.position_.y += state_.velocity_.y * deltaTime;
-    ResolveCollisionY(state_, params_, mapChip);
+    ResolveCollisionY(state_, params_, mapChip, player);
+    if (state_.isDead_ || state_.isGoal_) return;
 
     // 5. 走行中の足元砂ぼこりエフェクト
     if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f && player) {
@@ -81,7 +83,7 @@ bool PlayerPhysics::CheckAABBCollision(const AABB2D& a, const AABB2D& b) const {
             a.top > b.bottom && a.bottom < b.top);
 }
 
-void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip) {
+void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip, Player2D* player) {
     state_.isTouchingWallLeft_ = false;
     state_.isTouchingWallRight_ = false;
     if (!mapChip) return;
@@ -108,27 +110,40 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
                 float blockBottom = mapChip->ChipToWorldY(cy);
                 float blockTop = blockBottom + mapChip->GetChipSize();
 
-                if (maxY > blockBottom && minY < blockTop) {
-                    if (state_.velocity_.x > 0.0f && maxX > blockLeft && minX < blockLeft) {
-                        state_.position_.x = blockLeft - params_.halfWidth_;
-                        state_.velocity_.x = 0.0f;
-                        state_.isTouchingWallRight_ = true;
-                        minX = state_.position_.x - params_.halfWidth_;
-                        maxX = state_.position_.x + params_.halfWidth_;
-                    } else if (state_.velocity_.x < 0.0f && minX < blockRight && maxX > blockRight) {
-                        state_.position_.x = blockRight + params_.halfWidth_;
-                        state_.velocity_.x = 0.0f;
-                        state_.isTouchingWallLeft_ = true;
-                        minX = state_.position_.x - params_.halfWidth_;
-                        maxX = state_.position_.x + params_.halfWidth_;
+                // Y方向の重複チェック
+                if (maxY <= blockBottom || minY >= blockTop) {
+                    continue;
+                }
+
+                if (state_.velocity_.x > 0.0f && maxX > blockLeft && minX < blockLeft) {
+                    state_.position_.x = blockLeft - params_.halfWidth_;
+                    state_.velocity_.x = 0.0f;
+                    state_.isTouchingWallRight_ = true;
+                    minX = state_.position_.x - params_.halfWidth_;
+                    maxX = state_.position_.x + params_.halfWidth_;
+                    if (player) {
+                        block->OnCollision(player);
+                        block->OnPlayerTouch(player);
                     }
+                    if (state_.isDead_) return;
+                } else if (state_.velocity_.x < 0.0f && minX < blockRight && maxX > blockRight) {
+                    state_.position_.x = blockRight + params_.halfWidth_;
+                    state_.velocity_.x = 0.0f;
+                    state_.isTouchingWallLeft_ = true;
+                    minX = state_.position_.x - params_.halfWidth_;
+                    maxX = state_.position_.x + params_.halfWidth_;
+                    if (player) {
+                        block->OnCollision(player);
+                        block->OnPlayerTouch(player);
+                    }
+                    if (state_.isDead_) return;
                 }
             }
         }
     }
 }
 
-void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip) {
+void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip, Player2D* player) {
     if (!mapChip) return;
 
     float minX = state_.position_.x - params_.halfWidth_ + 0.02f;
@@ -149,25 +164,41 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             for (int cx = startChipX; cx <= endChipX; ++cx) {
                 auto* block = mapChip->GetBlock(cx, cy);
                 if (block && !block->IsDestroyed()) {
-                    if (block->IsSolid()) {
-                        float blockBottom = mapChip->ChipToWorldY(cy);
-                        float blockTop = blockBottom + mapChip->GetChipSize();
+                    float blockLeft = mapChip->ChipToWorldX(cx);
+                    float blockRight = blockLeft + mapChip->GetChipSize();
+                    float blockBottom = mapChip->ChipToWorldY(cy);
+                    float blockTop = blockBottom + mapChip->GetChipSize();
 
+                    // X方向の重複チェック
+                    if (maxX <= blockLeft || minX >= blockRight) {
+                        continue;
+                    }
+
+                    if (block->IsSolid()) {
                         if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
                             state_.position_.y = blockTop + params_.halfHeight_;
                             state_.velocity_.y = 0.0f;
                             groundedThisFrame = true;
                             minY = state_.position_.y - params_.halfHeight_;
                             maxY = state_.position_.y + params_.halfHeight_;
+                            if (player) {
+                                block->OnCollision(player);
+                                block->OnPlayerStand(player);
+                            }
+                            if (state_.isDead_) return;
                         }
                     } else if (block->IsOneWay()) {
-                        float blockTop = mapChip->ChipToWorldY(cy) + mapChip->GetChipSize();
                         if (minY <= blockTop && minY >= blockTop - 0.25f) {
                             state_.position_.y = blockTop + params_.halfHeight_;
                             state_.velocity_.y = 0.0f;
                             groundedThisFrame = true;
                             minY = state_.position_.y - params_.halfHeight_;
                             maxY = state_.position_.y + params_.halfHeight_;
+                            if (player) {
+                                block->OnCollision(player);
+                                block->OnPlayerStand(player);
+                            }
+                            if (state_.isDead_) return;
                         }
                     }
                 }
@@ -180,13 +211,26 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             for (int cx = startChipX; cx <= endChipX; ++cx) {
                 auto* block = mapChip->GetBlock(cx, cy);
                 if (block && block->IsSolid() && !block->IsDestroyed()) {
+                    float blockLeft = mapChip->ChipToWorldX(cx);
+                    float blockRight = blockLeft + mapChip->GetChipSize();
                     float blockBottom = mapChip->ChipToWorldY(cy);
+                    float blockTop = blockBottom + mapChip->GetChipSize();
+
+                    // X方向の重複チェック
+                    if (maxX <= blockLeft || minX >= blockRight) {
+                        continue;
+                    }
 
                     if (maxY >= blockBottom && minY < blockBottom) {
                         state_.position_.y = blockBottom - params_.halfHeight_;
                         state_.velocity_.y = 0.0f;
                         minY = state_.position_.y - params_.halfHeight_;
                         maxY = state_.position_.y + params_.halfHeight_;
+                        if (player) {
+                            block->OnCollision(player);
+                            block->OnPlayerTouch(player);
+                        }
+                        if (state_.isDead_) return;
                     }
                 }
             }
@@ -197,7 +241,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
 }
 
 void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerParams& params_, Player2D* player, MapChip2D* mapChip) {
-    if (!player) return;
+    if (!player || state_.isDead_) return;
 
     // 画面下落下死
     if (state_.position_.y < -10.0f) {
@@ -207,18 +251,31 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
 
     if (!mapChip) return;
 
-    float minX = state_.position_.x - params_.halfWidth_;
-    float maxX = state_.position_.x + params_.halfWidth_;
-    float minY = state_.position_.y - params_.halfHeight_;
-    float maxY = state_.position_.y + params_.halfHeight_;
+    // 押し戻し後の境界線上（床や壁に接している状態）でも確実に判定できるように判定領域にマージンを持たせる
+    float margin = 0.05f;
+    float pLeft = state_.position_.x - params_.halfWidth_ - margin;
+    float pRight = state_.position_.x + params_.halfWidth_ + margin;
+    float pBottom = state_.position_.y - params_.halfHeight_ - margin;
+    float pTop = state_.position_.y + params_.halfHeight_ + margin;
 
-    int startChipX = mapChip->WorldToChipX(minX);
-    int endChipX   = mapChip->WorldToChipX(maxX);
-    int startChipY = mapChip->WorldToChipY(minY);
-    int endChipY   = mapChip->WorldToChipY(maxY);
+    int startChipX = mapChip->WorldToChipX(pLeft);
+    int endChipX   = mapChip->WorldToChipX(pRight);
+    int startChipY = mapChip->WorldToChipY(pBottom);
+    int endChipY   = mapChip->WorldToChipY(pTop);
 
     for (int cy = startChipY; cy <= endChipY; ++cy) {
         for (int cx = startChipX; cx <= endChipX; ++cx) {
+            float blockLeft = mapChip->ChipToWorldX(cx);
+            float blockRight = blockLeft + mapChip->GetChipSize();
+            float blockBottom = mapChip->ChipToWorldY(cy);
+            float blockTop = blockBottom + mapChip->GetChipSize();
+
+            // AABB重複判定
+            if (pRight <= blockLeft || pLeft >= blockRight ||
+                pTop <= blockBottom || pBottom >= blockTop) {
+                continue;
+            }
+
             MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
             if (type == MapChip2D::ChipType::kDeathBlock) {
                 player->Kill();
@@ -230,6 +287,9 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
 
             if (auto* block = mapChip->GetBlock(cx, cy)) {
                 block->OnCollision(player);
+                if (state_.isDead_ || state_.isGoal_) {
+                    return;
+                }
             }
         }
     }

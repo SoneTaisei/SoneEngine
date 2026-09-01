@@ -21,7 +21,7 @@ private:
     void HandleMovement(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime, Player2D* player);
     void ApplyGravity(PlayerState& state_, const PlayerParams& params_, float deltaTime);
 
-    void ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip);
-    void ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip);
+    void ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip, Player2D* player);
+    void ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip, Player2D* player);
     void CheckBlockInteractions(PlayerState& state_, const PlayerParams& params_, Player2D* player, MapChip2D* mapChip);
 };

@@ -7,4 +7,6 @@ public:
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
     bool IsSolid() const override { return true; }
     void OnCollision(Player2D* player) override;
+    void OnPlayerStand(Player2D* player) override;
+    void OnPlayerTouch(Player2D* player) override;
 };

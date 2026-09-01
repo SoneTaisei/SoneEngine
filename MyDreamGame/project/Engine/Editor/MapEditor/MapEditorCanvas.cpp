@@ -181,7 +181,19 @@ void MapEditorCanvas::Draw(
                     if (camera) {
                         Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
                         Matrix4x4 invViewProj = TransformFunctions::Inverse(viewProj);
-                        worldPos = TransformFunctions::EulerTransform({ ndcX, ndcY, 0.0f }, invViewProj);
+
+                        Vector3 nearPoint = TransformFunctions::EulerTransform({ ndcX, ndcY, 0.0f }, invViewProj);
+                        Vector3 farPoint = TransformFunctions::EulerTransform({ ndcX, ndcY, 1.0f }, invViewProj);
+
+                        Vector3 rayDir = { farPoint.x - nearPoint.x, farPoint.y - nearPoint.y, farPoint.z - nearPoint.z };
+                        if (std::abs(rayDir.z) > 1e-6f) {
+                            float t = (0.0f - nearPoint.z) / rayDir.z;
+                            worldPos.x = nearPoint.x + rayDir.x * t;
+                            worldPos.y = nearPoint.y + rayDir.y * t;
+                            worldPos.z = 0.0f;
+                        } else {
+                            worldPos = nearPoint;
+                        }
                     }
 
                     // モード切り替えショートカット (Ctrl + Wheel)
