@@ -528,45 +528,41 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     std::string filePath = directoryPath + "/" + filename;
 
     // 1. ファイルの読み込み
-    // 備考にある通り、三角形化、巻き順反転、UV反転を指定
-    const aiScene *scene = importer.ReadFile(filePath.c_str(),
-                                             // 1. すべての面を三角形に変換（DirectXが理解できる形式にする）
-                                             aiProcess_Triangulate |
-                                                 // 2. V軸を反転（glTFなどの左下原点を、DirectX標準の左上原点に合わせる）
-                                                 aiProcess_FlipUVs |
-                                                 // 3. 右手系から左手系へ変換（Z軸の反転や巻き順の調整をセットで行う）
-                                                 aiProcess_ConvertToLeftHanded |
-                                                 // 4. 法線がない場合に滑らかな法線を生成（ライティング計算に必要）
-                                                 aiProcess_GenSmoothNormals |
-                                                 // グローバルスケールを適用
-                                                 aiProcess_GlobalScale);
+    const aiScene *scene = nullptr;
+    try {
+        scene = importer.ReadFile(filePath.c_str(),
+                                  aiProcess_Triangulate |
+                                  aiProcess_FlipUVs |
+                                  aiProcess_ConvertToLeftHanded |
+                                  aiProcess_GenSmoothNormals |
+                                  aiProcess_GlobalScale);
+    } catch (...) {
+        scene = nullptr;
+    }
 
-    // メッシュがない場合はエラー
-    assert(scene && scene->HasMeshes());
+    // メッシュがないファイル（アニメーション専用ファイルや無効なファイル）の場合は空のModelDataを安全に返却
+    if (!scene || !scene->HasMeshes() || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
+        return modelData;
+    }
 
     // 2. メッシュの解析（備考に基づき、全メッシュをループ）
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh *mesh = scene->mMeshes[meshIndex];
+        if (!mesh) continue;
 
         // MultiMesh/MultiMaterial対応のため、頂点の開始位置を記録しておく
         uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
 
-        // 法線とTexcoordがないメッシュは今回は非対応（備考のassert）
-        assert(mesh->HasNormals());
-        assert(mesh->HasTextureCoords(0));
+        bool hasNormals = mesh->HasNormals();
+        bool hasTexCoords = mesh->HasTextureCoords(0);
 
         // 頂点データの解析
         for (uint32_t vIndex = 0; vIndex < mesh->mNumVertices; ++vIndex) {
             aiVector3D &position = mesh->mVertices[vIndex];
-            aiVector3D &normal = mesh->mNormals[vIndex];
-            aiVector3D &texcoord = mesh->mTextureCoords[0][vIndex];
+            aiVector3D normal = hasNormals ? mesh->mNormals[vIndex] : aiVector3D(0.0f, 1.0f, 0.0f);
+            aiVector3D texcoord = hasTexCoords ? mesh->mTextureCoords[0][vIndex] : aiVector3D(0.0f, 0.0f, 0.0f);
 
             VertexData vertex;
-            vertex.position = {position.x, position.y, position.z, 1.0f};
-            vertex.normal = {normal.x, normal.y, normal.z};
-            vertex.texcoord = {texcoord.x, texcoord.y};
-
-            // 左手系への変換（備考の通り、Xを反転）
             vertex.position = {position.x, position.y, position.z, 1.0f};
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
@@ -574,11 +570,10 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             modelData.vertices.push_back(vertex);
         }
 
-        // インデックス(Face)の解析（備考のIndexed描画に対応させる）
-        
         // Bone解析
         for (uint32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
             aiBone* bone = mesh->mBones[boneIndex];
+            if (!bone) continue;
             std::string jointName = bone->mName.C_Str();
             JointWeightData& weightData = modelData.skinClusterData[jointName];
 
@@ -586,7 +581,6 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             aiVector3D scale, translate;
             aiQuaternion rotate;
             bindPoseMatrixAssimp.Decompose(scale, rotate, translate); // 成分を抽出
-            // 左手系のBindPoseMatrixを作る (AssimpのaiProcess_ConvertToLeftHandedにより既に左手系に変換されているため、反転は不要)
             Matrix4x4 bindPoseMatrix = TransformFunctions::MakeAffineMatrix(
                 { scale.x, scale.y, scale.z },
                 { rotate.x, rotate.y, rotate.z, rotate.w },
@@ -603,13 +597,20 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             }
         }
 
+        // インデックス(Face)の解析
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
             aiFace &face = mesh->mFaces[faceIndex];
-            assert(face.mNumIndices == 3); // 三角形のみサポート
-
-            for (uint32_t element = 0; element < face.mNumIndices; ++element) {
-                uint32_t vertexIndex = face.mIndices[element];
-                modelData.indices.push_back(vertexIndex + vertexOffset); // vertexOffsetを加算する
+            if (face.mNumIndices == 3) {
+                for (uint32_t element = 0; element < face.mNumIndices; ++element) {
+                    uint32_t vertexIndex = face.mIndices[element];
+                    modelData.indices.push_back(vertexIndex + vertexOffset);
+                }
+            } else if (face.mNumIndices > 3) {
+                for (uint32_t element = 1; element + 1 < face.mNumIndices; ++element) {
+                    modelData.indices.push_back(face.mIndices[0] + vertexOffset);
+                    modelData.indices.push_back(face.mIndices[element] + vertexOffset);
+                    modelData.indices.push_back(face.mIndices[element + 1] + vertexOffset);
+                }
             }
         }
     }
@@ -617,6 +618,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     // 3. マテリアルの解析（Diffuse / BaseColor テクスチャを取得）
     for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
         aiMaterial *material = scene->mMaterials[materialIndex];
+        if (!material) continue;
         aiString textureFilePath;
         if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
             material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
@@ -627,7 +629,9 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         }
     }
 
-	modelData.rootNode = ReadNode(scene->mRootNode);
+    if (scene->mRootNode) {
+        modelData.rootNode = ReadNode(scene->mRootNode);
+    }
 
     return modelData;
 }

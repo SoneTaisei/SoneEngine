@@ -244,6 +244,12 @@
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorPalette.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditor.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
     <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
     <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
@@ -522,6 +528,12 @@
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorPalette.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditor.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
       <ClInclude Include="Engine\Resource\Primitive\PrimitivePlane.h">
