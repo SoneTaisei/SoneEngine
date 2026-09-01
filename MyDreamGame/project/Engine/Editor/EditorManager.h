@@ -61,6 +61,7 @@ public:
     bool IsMapEditorVisible() const { return mapEditor_ ? mapEditor_->IsVisible() : false; }
     bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
     bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
+    const std::string& GetActiveMainTab() const { return activeMainTab_; }
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }

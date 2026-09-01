@@ -139,7 +139,14 @@ void GameCamera::UpdateMatrixOrthographic() {
                 } else {
                     cameraTargetY = std::clamp(targetY, minClampY, maxClampY);
                 }
+            } else {
+                cameraTargetX = targetX;
+                cameraTargetY = targetY;
             }
+        } else {
+            // ルーム設定がない場合はターゲット（プレイヤー）を直接追従
+            cameraTargetX = targetX;
+            cameraTargetY = targetY;
         }
 
         if (newRoomX != currentRoomX_ || newRoomY != currentRoomY_) {

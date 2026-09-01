@@ -250,6 +250,38 @@ void WindowsApplication::Update() {
             dxCommon_->GetPostProcessSrvHandleGPU(),
             sceneManager_.get());
 
+        // 3. カメラの切り替えと入力受付（シーン更新前にアクティブカメラを決定）
+        if (editorManager_->UseDebugCamera()) {
+            activeCamera_ = debugCamera_.get();
+            isDebugCameraActive_ = true;
+            
+            if (EditorManager::IsPlaying() || ReplayManager::GetInstance()->IsPlaying()) {
+                CameraManager::GetInstance()->SetCullingCameraInfo(gameCamera_->GetViewMatrix(), gameCamera_->GetProjectionMatrix());
+            } else {
+                CameraManager::GetInstance()->ClearCullingCameraInfo();
+            }
+            
+            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
+                                    editorManager_->IsReplayEditorHovered() || 
+                                    editorManager_->IsAnimationEditorHovered() || 
+                                    editorManager_->IsMapEditorHovered() ||
+                                    !ImGui::GetIO().WantCaptureMouse;
+            debugCamera_->Update(allowCameraInput);
+        } else {
+            isDebugCameraActive_ = false;
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
+
+            // デバッグカメラが無効で、非再生中かつ「マップチップ画面」タブがアクティブな場合はマップエディタカメラを使用
+            if (!EditorManager::IsPlaying() && !ReplayManager::GetInstance()->IsPlaying() && editorManager_->GetActiveMainTab() == "マップチップ画面") {
+                activeCamera_ = mapEditorCamera_.get();
+                bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
+                mapEditorCamera_->Update(allowCameraInput);
+            } else {
+                // 通常時、ゲームプレイ中、リプレイ再生中、ゲームビュー、アニメーションエディタ等
+                activeCamera_ = gameCamera_.get();
+            }
+        }
+
         // --- エディターの状態に応じて更新処理を切り替え ---
         static bool wasActive = false;
         bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
@@ -305,40 +337,8 @@ void WindowsApplication::Update() {
             }
         }
         
-        // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
+        // プレイヤー移動後のゲームカメラを更新（ViewProjectionへの反映のため）
         gameCamera_->Update();
-
-        // カメラの切り替え（リプレイ再生中、またはチェックボックスの状態を優先）
-        if (ReplayManager::GetInstance()->IsPlaying()) {
-            activeCamera_ = gameCamera_.get();
-            isDebugCameraActive_ = false;
-            CameraManager::GetInstance()->ClearCullingCameraInfo();
-        } else if (editorManager_->IsMapEditorVisible()) {
-            activeCamera_ = mapEditorCamera_.get();
-            isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
-            CameraManager::GetInstance()->ClearCullingCameraInfo();
-            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
-            mapEditorCamera_->Update(allowCameraInput);
-        } else if (editorManager_->UseDebugCamera()) {
-            activeCamera_ = debugCamera_.get();
-            isDebugCameraActive_ = true;
-            
-            if (EditorManager::IsPlaying()) {
-                CameraManager::GetInstance()->SetCullingCameraInfo(gameCamera_->GetViewMatrix(), gameCamera_->GetProjectionMatrix());
-            } else {
-                CameraManager::GetInstance()->ClearCullingCameraInfo();
-            }
-            
-            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
-                                    editorManager_->IsReplayEditorHovered() || 
-                                    editorManager_->IsAnimationEditorHovered() || 
-                                    !ImGui::GetIO().WantCaptureMouse;
-            debugCamera_->Update(allowCameraInput);
-        } else {
-            activeCamera_ = gameCamera_.get();
-            isDebugCameraActive_ = false;
-            CameraManager::GetInstance()->ClearCullingCameraInfo();
-        }
     } else {
         // ImGui 非表示時は通常通りシーンとカメラを更新し、アクティブカメラをゲームカメラに強制する
         sceneManager_->Update();
