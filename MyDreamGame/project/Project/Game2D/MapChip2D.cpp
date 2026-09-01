@@ -53,6 +53,71 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
+    // チェーンアイテムがテンプレートに無ければ自動追加
+    bool hasChainTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kChainItemBlock)) {
+            hasChainTemplate = true;
+            break;
+        }
+    }
+    if (!hasChainTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kChainItemBlock);
+        def.name = "Item"; // 表示名を「Item」に変更
+        def.type = "ChainItemBlock";
+        def.color = {0.8f, 0.8f, 0.8f, 1.0f};
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    bool hasMovingTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kMovingBlock)) {
+            hasMovingTemplate = true;
+            break;
+        }
+    }
+    if (!hasMovingTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kMovingBlock);
+        def.name = "Moving Floor";
+        def.type = "MovingBlock";
+        def.color = {0.8f, 0.5f, 0.1f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["moveAxis"] = "X";
+        props["moveRange"] = 3.0f;
+        props["moveSpeed"] = 2.0f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    bool hasFragileTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kFragileBlock)) {
+            hasFragileTemplate = true;
+            break;
+        }
+    }
+    if (!hasFragileTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kFragileBlock);
+        def.name = "Fragile Floor";
+        def.type = "FragileBlock";
+        def.color = {0.4f, 0.4f, 0.4f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["breakWeight"] = 4;
+        props["breakDuration"] = 0.5f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
     // 保存ファイルがあれば読込み、なければデフォルトファイルや初期構築から読み込む
     if (!LoadFromFile(mapFilePath)) {
         if (!LoadFromFile("resources/json/shared/MapData/map_data.txt")) {

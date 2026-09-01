@@ -4,6 +4,8 @@
 #include "GoalBlock.h"
 #include "OneWayBlock.h"
 #include "ChainItemBlock.h"
+#include "MovingBlock.h"
+#include "FragileBlock.h"
 #include <algorithm>
 
 BlockFactory& BlockFactory::GetInstance() {
@@ -27,6 +29,12 @@ BlockFactory::BlockFactory() {
     });
     Register("ChainItemBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<ChainItemBlock>(map, x, y);
+    });
+    Register("MovingBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<MovingBlock>(map, x, y);
+    });
+    Register("FragileBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<FragileBlock>(map, x, y);
     });
 }
 

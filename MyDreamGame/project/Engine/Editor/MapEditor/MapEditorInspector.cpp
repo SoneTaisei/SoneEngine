@@ -173,6 +173,10 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (k == "jumpVelocityVertical") return std::string("縦ジャンプ力 (jumpVelocityVertical)");
         if (k == "jumpVelocityHorizontal") return std::string("横ジャンプ力 (jumpVelocityHorizontal)");
         if (k == "moveSpeed") return std::string("移動速度 (moveSpeed)");
+        if (k == "moveAxis") return std::string("移動軸 (moveAxis) X または Y");
+        if (k == "moveRange") return std::string("移動範囲 (moveRange)");
+        if (k == "breakWeight") return std::string("崩れる鎖の重さ (breakWeight)");
+        if (k == "breakDuration") return std::string("崩れるまでの時間 (breakDuration)");
         return k;
     };
 
