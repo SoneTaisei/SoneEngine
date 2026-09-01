@@ -11,6 +11,7 @@
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Chain/Chain2D.h"
+#include "Game2D/Chain/PlayerChainController.h"
 
 class GameCamera;
 
@@ -62,6 +63,9 @@ private:
 
     // 鎖（Verlet物理）
     std::vector<std::unique_ptr<Chain2D>> chains_;
+
+    // 鎖×プレイヤー接続（ソケット同期・拾う/落とす）
+    std::unique_ptr<PlayerChainController> chainController_;
 
     // 鎖のテスト配置（スポーン地点基準）
     void SpawnChains();

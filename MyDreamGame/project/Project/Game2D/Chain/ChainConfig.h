@@ -14,6 +14,7 @@ struct ChainParams {
     float nodeRadius_ = 0.1f;          // ノードの円コリジョン半径
     float friction_ = 0.5f;            // 接触摩擦（接触時のみ暗黙速度を削る）
     float playerVelInfluence_ = 0.35f; // 接触時にプレイヤー速度を鎖へ伝える割合
+    int rootCollisionSkip_ = 2;        // 手持ち中に地形判定から除外する根元ノード数（壁張り付き時のジッタ防止）
     float linkThickness_ = 1.0f;       // リンクモデルの太さ倍率
     float linkOverlap_ = 1.6f;         // 節間隔に対するリンクモデル長の倍率（重なり量）
 };
