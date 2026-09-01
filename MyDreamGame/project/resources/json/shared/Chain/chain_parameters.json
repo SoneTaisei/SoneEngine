@@ -1,0 +1,13 @@
+{
+    "damping_": 0.9900000095367432,
+    "friction_": 0.46000000834465027,
+    "gravity_": -35.0,
+    "iterations_": 15,
+    "linkOverlap_": 1.600000023841858,
+    "linkThickness_": 1.0,
+    "nodeCount_": 16,
+    "nodeRadius_": 0.10000000149011612,
+    "playerVelInfluence_": 0.3499999940395355,
+    "subSteps_": 1,
+    "totalLength_": 4.0
+}
