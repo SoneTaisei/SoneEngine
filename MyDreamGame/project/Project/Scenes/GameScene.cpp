@@ -74,9 +74,9 @@ void GameScene::Initialize() {
     player_->FindSpawnPoint(*map_);
     Log("GameScene::Initialize: Player SpawnPoint found\n");
 
-    // 6.5. 鎖の生成（プレイヤー鎖 + スポーン地点基準のテスト吊り鎖）
+    // 6.5. 鎖の生成（プレイヤー鎖 + 末端のお宝。吊り鎖はマップ配置で AddWorldChain）
     chainManager_ = std::make_unique<ChainManager>();
-    chainManager_->Initialize(player_, player_->GetStartPosition());
+    chainManager_->Initialize(player_);
     Log("GameScene::Initialize: ChainManager Initialized\n");
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え

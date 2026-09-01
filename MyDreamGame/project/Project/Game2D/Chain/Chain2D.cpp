@@ -25,6 +25,9 @@ namespace {
     // 描画時のZオフセット（ブロックより手前に表示する。物理はz=0のまま）
     constexpr float kDrawOffsetZ = -0.2f;
 
+    // 先頭セグメントの自然長がこの割合未満の間は先頭リンクを描かない（極短いリンクのチラつき防止）
+    constexpr float kHeadLinkVisibleRatio = 0.3f;
+
     // モデルの読み込み（ModelManagerがキャッシュするので何度呼んでも安い）
     Model* LoadLinkModel(const char* folderName, const char* fileName) {
         return ModelManager::GetInstance()->GetModel(
@@ -49,7 +52,11 @@ void Chain2D::Initialize(const Vector3& anchorPos, const ChainParams& params, co
     modelYoko_ = LoadLinkModel("kusari_yoko", "kusari_yoko.obj");
 
     BuildNodes();
-    BuildLinkObjects();
+
+    // 上限ユニット数分のリンクを先に確保しておく（繰り出し中に定数バッファ生成が走らないように）
+    int nodesPerUnit = (std::max)(1, params_.nodesPerUnit_);
+    size_t capacity = (std::max)(nodes_.size() - 1, static_cast<size_t>((std::max)(1, params_.maxUnits_) * nodesPerUnit));
+    EnsureLinkCapacity(capacity);
     UpdateLinkTransforms();
 }
 
@@ -72,26 +79,29 @@ void Chain2D::BuildNodes() {
         node.radius = params_.nodeRadius_;
     }
 
+    // 繰り出し状態をクリア（先頭セグメントは完全長）
+    pendingNodes_ = 0;
+    headRest_ = restLength_;
+
     // 終端拘束が設定されている場合は復元
     if (endFollow_ && !nodes_.empty()) {
         nodes_.back().invMass = 0.0f;
     }
+    // 末端の重りを再適用（ノード再構築で invMass が 1 に戻るため）
+    ApplyEndWeight();
 }
 
-void Chain2D::BuildLinkObjects() {
-    linkObjs_.clear();
-    if (!device_ || nodes_.size() < 2) {
+void Chain2D::EnsureLinkCapacity(size_t count) {
+    if (!device_) {
         return;
     }
-
-    // 節間ごとにリンクモデルを1個割り当てる（縦・横を交互に）
-    int linkCount = static_cast<int>(nodes_.size()) - 1;
-    linkObjs_.reserve(linkCount);
-    for (int i = 0; i < linkCount; ++i) {
+    // 添字 j = 末端からの距離。末端リンク(j=0)が縦、以降交互。手元側で増減しても既存リンクのモデルは変わらない
+    while (linkObjs_.size() < count) {
+        size_t j = linkObjs_.size();
         auto obj = std::make_unique<Object3D>();
-        Model* model = (i % 2 == 0) ? modelTate_ : modelYoko_;
+        Model* model = (j % 2 == 0) ? modelTate_ : modelYoko_;
         obj->Initialize(device_, model);
-        obj->SetName(name_ + "_Link" + std::to_string(i));
+        obj->SetName(name_ + "_Link" + std::to_string(j));
         obj->GetMaterial().lightingType = 1;
         linkObjs_.push_back(std::move(obj));
     }
@@ -135,18 +145,68 @@ void Chain2D::Update(float dt, MapChip2D* map, Player2D* player) {
         end.prevPos = target;
     }
 
-    // 3. サブステップ分割（硬さが欲しい時は反復を増やすよりこちらが同コストで効く）
+    // 3. 手元からの繰り出し（ノード数が変わるので末端の重りも再適用する）
+    UpdatePayout(dt);
+    ApplyEndWeight();
+
+    // 4. サブステップ分割（硬さが欲しい時は反復を増やすよりこちらが同コストで効く）
     int subSteps = (std::max)(1, params_.subSteps_);
     float subDt = dt / static_cast<float>(subSteps);
     for (int s = 0; s < subSteps; ++s) {
         StepSimulation(subDt, map, player);
     }
 
-    // 4. z成分を0に矯正（誤差蓄積の保険）
+    // 5. z成分を0に矯正（誤差蓄積の保険）
     VerletPhysics2D::ClampToPlaneZ(nodes_);
 
-    // 5. 描画用モデルの姿勢更新
+    // 6. 描画用モデルの姿勢更新
     UpdateLinkTransforms();
+}
+
+void Chain2D::UpdatePayout(float dt) {
+    float feed = params_.payoutSpeed_ * dt;
+
+    if (pendingNodes_ <= 0) {
+        // キューが空でも、最後に挿入した節が伸び切るまで先頭セグメントを伸ばし続ける
+        headRest_ = (std::min)(headRest_ + feed, restLength_);
+        return;
+    }
+
+    // 先頭セグメントの自然長を伸ばし、1節分に達するたびに手元へノードを1個挿入する
+    // （挿入位置はアンカーそのもの・速度ゼロ。headRest_ が小さい間は手の中に留まり、伸びるにつれて出てくる）
+    headRest_ += feed;
+    while (pendingNodes_ > 0 && headRest_ >= restLength_) {
+        VerletNode node;
+        node.pos = nodes_[0].pos;
+        node.prevPos = node.pos;
+        node.invMass = 1.0f;
+        node.radius = params_.nodeRadius_;
+        nodes_.insert(nodes_.begin() + 1, node);
+        headRest_ -= restLength_;
+        --pendingNodes_;
+    }
+    if (pendingNodes_ <= 0) {
+        headRest_ = (std::min)(headRest_, restLength_);
+    }
+}
+
+void Chain2D::ApplyEndWeight() {
+    // アンカーしか無い場合は対象外
+    if (nodes_.size() < 2) {
+        return;
+    }
+    VerletNode& end = nodes_.back();
+    if (endWeight_.enabled) {
+        end.radius = endWeight_.radius;
+        if (!endFollow_) {
+            end.invMass = 1.0f / (std::max)(0.1f, endWeight_.mass);
+        }
+    } else {
+        end.radius = params_.nodeRadius_;
+        if (!endFollow_) {
+            end.invMass = 1.0f;
+        }
+    }
 }
 
 void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
@@ -172,20 +232,26 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
         rootSkip = static_cast<size_t>((std::max)(0, params_.rootCollisionSkip_));
     }
 
+    // 末端（お宝）の扱い
+    const size_t lastIndex = nodes_.size() - 1;
+    const bool endIsWeight = endWeight_.enabled;
+    const bool endSkipsPlayer = endIsWeight && endWeight_.ignorePlayer;
+
     // 反復ループ：距離制約とコリジョンを同一ループ内で交互に解いて同時収束させる
     // （別々に1回ずつだと制約が押し出しを壊し、押し出しが距離を壊す）
     int iterations = (std::max)(1, params_.iterations_);
     for (int iter = 0; iter < iterations; ++iter) {
-        // 距離制約
+        // 距離制約（先頭セグメントだけ繰り出し中の自然長 headRest_ を使う）
         for (size_t i = 0; i + 1 < nodes_.size(); ++i) {
-            VerletPhysics2D::SolveDistanceConstraint(nodes_[i], nodes_[i + 1], restLength_);
+            float rest = (i == 0) ? headRest_ : restLength_;
+            VerletPhysics2D::SolveDistanceConstraint(nodes_[i], nodes_[i + 1], rest);
         }
         // チップ押し出し（反復中は摩擦なし。摩擦は最後のパスでのみ適用する）
         for (size_t i = 0; i < nodes_.size(); ++i) {
             if (i >= rootSkip) {
                 VerletPhysics2D::CollideNodeWithMap(nodes_[i], map, 0.0f);
             }
-            if (hitPlayer && i >= playerSkip) {
+            if (hitPlayer && i >= playerSkip && !(endSkipsPlayer && i == lastIndex)) {
                 VerletPhysics2D::CollideNodeWithAABB(nodes_[i], playerBox, 0.0f);
             }
         }
@@ -194,9 +260,11 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
     // 最後にもう1回押し出しパス（ここでのみ摩擦・速度伝搬を適用）
     for (size_t i = 0; i < nodes_.size(); ++i) {
         if (i >= rootSkip) {
-            VerletPhysics2D::CollideNodeWithMap(nodes_[i], map, params_.friction_);
+            // 末端の重りは専用の摩擦（引きずると渋い）
+            float mapFriction = (endIsWeight && i == lastIndex) ? endWeight_.friction : params_.friction_;
+            VerletPhysics2D::CollideNodeWithMap(nodes_[i], map, mapFriction);
         }
-        if (hitPlayer && i >= playerSkip) {
+        if (hitPlayer && i >= playerSkip && !(endSkipsPlayer && i == lastIndex)) {
             if (VerletPhysics2D::CollideNodeWithAABB(nodes_[i], playerBox, params_.friction_)) {
                 // 接触したノードへプレイヤーの速度を伝える（ダッシュで駆け抜けると跳ね上がる）
                 // 手持ち中は根元がプレイヤー追従のためエネルギーが増幅しやすく、速度伝搬は行わない
@@ -209,16 +277,18 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
 }
 
 void Chain2D::UpdateLinkTransforms() {
-    if (linkObjs_.size() + 1 != nodes_.size()) {
-        return;
+    size_t linkCount = (nodes_.size() >= 2) ? nodes_.size() - 1 : 0;
+    EnsureLinkCapacity(linkCount);
+    if (linkObjs_.size() < linkCount) {
+        return; // device 未設定など
     }
 
-    // リンクモデルの長さ・太さ
-    float linkLength = restLength_ * params_.linkOverlap_;
-    float scale = linkLength / kLinkModelLength;
-    float thickness = scale * params_.linkThickness_;
+    // リンクモデルの長さ・太さ（太さは完全長基準で一定にする）
+    float fullScale = (restLength_ * params_.linkOverlap_) / kLinkModelLength;
+    float thickness = fullScale * params_.linkThickness_;
 
-    for (size_t i = 0; i < linkObjs_.size(); ++i) {
+    hideHeadLink_ = false;
+    for (size_t i = 0; i < linkCount; ++i) {
         const Vector3& p1 = nodes_[i].pos;
         const Vector3& p2 = nodes_[i + 1].pos;
 
@@ -226,18 +296,35 @@ void Chain2D::UpdateLinkTransforms() {
         mid.z = kDrawOffsetZ;
         float angle = std::atan2(p2.y - p1.y, p2.x - p1.x);
 
-        Object3D* link = linkObjs_[i].get();
+        // 先頭セグメントは繰り出し中の自然長に合わせて短く描く（手から生えてくる見た目）
+        float segRest = (i == 0) ? headRest_ : restLength_;
+        float lengthScale = (segRest * params_.linkOverlap_) / kLinkModelLength;
+        if (i == 0 && headRest_ < restLength_ * kHeadLinkVisibleRatio) {
+            hideHeadLink_ = true;
+        }
+
+        // 添字 j は末端からの距離（パリティを末端基準にして手元での増減でチカチカしないようにする）
+        size_t j = linkCount - 1 - i;
+        Object3D* link = linkObjs_[j].get();
         link->SetTranslation(mid);
         // モデルの長軸はZ方向なので、X軸-90度で画面内(Y方向)へ倒してからZ回転で節方向に合わせる
         // (回転合成順 Rx→Ry→Rz の行ベクトル規約で、長軸は (-sinθ, cosθ) を向くため -π/2 補正)
         link->SetRotation({ -kPi * 0.5f, 0.0f, angle - kPi * 0.5f });
-        link->SetScale({ thickness, thickness, scale });
+        link->SetScale({ thickness, thickness, lengthScale });
     }
 }
 
 void Chain2D::Draw() {
-    for (auto& link : linkObjs_) {
-        link->Draw();
+    size_t linkCount = (nodes_.size() >= 2) ? nodes_.size() - 1 : 0;
+    if (linkObjs_.size() < linkCount) {
+        return;
+    }
+    for (size_t j = 0; j < linkCount; ++j) {
+        // 先頭リンク(j = linkCount-1)は繰り出し直後の極短い間だけ描かない
+        if (hideHeadLink_ && j == linkCount - 1) {
+            continue;
+        }
+        linkObjs_[j]->Draw();
     }
 }
 
@@ -246,7 +333,7 @@ void Chain2D::ResetDynamics() {
 }
 
 void Chain2D::ResetToInitial() {
-    // 初期モード・初期アンカーに戻して垂下姿勢を再構築する
+    // 初期モード・初期アンカーに戻して垂下姿勢を再構築する（繰り出し状態もクリアされる）
     anchorMode_ = initialMode_;
     anchorPos_ = initialAnchorPos_;
     BuildNodes();
@@ -269,17 +356,29 @@ void Chain2D::SyncSocket(const Vector3& socketWorld) {
 
 int Chain2D::GetUnitCount() const {
     int nodesPerUnit = (std::max)(1, params_.nodesPerUnit_);
-    return (static_cast<int>(nodes_.size()) - 1) / nodesPerUnit;
+    // 繰り出し待ちも含めて数える（含めないと Reconcile が毎フレーム「足りない」と判断して無限に伸びる）
+    return (static_cast<int>(nodes_.size()) - 1 + pendingNodes_) / nodesPerUnit;
 }
 
 void Chain2D::SetUnitCount(int units) {
     units = (std::max)(1, units);
     int current = GetUnitCount();
     if (units > current) {
-        AddUnitsAtAnchor(units - current);
+        QueueUnits(units - current);
     } else if (units < current) {
         RemoveUnitsAtAnchor(current - units); // 戻り値は捨てる（外す操作は別経路）
     }
+}
+
+void Chain2D::QueueUnits(int units) {
+    if (units <= 0) {
+        return;
+    }
+    pendingNodes_ += units * (std::max)(1, params_.nodesPerUnit_);
+}
+
+bool Chain2D::IsPayingOut() const {
+    return pendingNodes_ > 0 || headRest_ < restLength_ - 1e-4f;
 }
 
 void Chain2D::AddUnitsAtAnchor(int units) {
@@ -303,34 +402,47 @@ void Chain2D::AddUnitsAtAnchor(int units) {
     }
     nodes_.insert(nodes_.begin() + 1, inserted.begin(), inserted.end());
 
-    BuildLinkObjects();
+    ApplyEndWeight();
     UpdateLinkTransforms();
 }
 
 std::vector<VerletNode> Chain2D::RemoveUnitsAtAnchor(int units) {
     std::vector<VerletNode> removed;
-    if (units <= 0 || nodes_.size() < 2) {
+    if (units <= 0) {
         return removed;
     }
     int nodesPerUnit = (std::max)(1, params_.nodesPerUnit_);
-    // アンカーノード自体は必ず残す
-    int removeCount = (std::min)(units * nodesPerUnit, static_cast<int>(nodes_.size()) - 1);
+    int nodesToRemove = units * nodesPerUnit;
+
+    // まだ繰り出していないノードを先に消費する（見えていない分は静かに減らす）
+    int fromPending = (std::min)(nodesToRemove, pendingNodes_);
+    pendingNodes_ -= fromPending;
+    nodesToRemove -= fromPending;
+    if (nodesToRemove <= 0 || nodes_.size() < 2) {
+        return removed;
+    }
+
+    // アンカーノードと、重りが有効なら末端ノードも必ず残す
+    int keep = endWeight_.enabled ? 2 : 1;
+    int removeCount = (std::min)(nodesToRemove, static_cast<int>(nodes_.size()) - keep);
     if (removeCount <= 0) {
         return removed;
     }
 
     // アンカーの次から removeCount 個を pos/prevPos そのままで切り離す（落下が連続的に見える）
     removed.assign(nodes_.begin() + 1, nodes_.begin() + 1 + removeCount);
-    // 先頭にアンカーの複製を足して「1 + units×nodesPerUnit ノード」の完全なユニット構成にする
+    // 先頭にアンカーの複製を足して「1 + 削除ノード数」の完全なユニット構成にする
     // （これがないと切り離した鎖が1セグメント分短くなり、GetUnitCountも1少なく数えてしまう）
     removed.insert(removed.begin(), nodes_[0]);
     nodes_.erase(nodes_.begin() + 1, nodes_.begin() + 1 + removeCount);
     for (auto& node : removed) {
         node.invMass = 1.0f; // 自由ノード化
+        node.radius = params_.nodeRadius_;
     }
-    // 残りの揺れは殺さない（ResetDynamicsは呼ばない）
+    // 残った新しい先頭セグメントは完全長。残りの揺れは殺さない（ResetDynamicsは呼ばない）
+    headRest_ = restLength_;
 
-    BuildLinkObjects();
+    ApplyEndWeight();
     UpdateLinkTransforms();
     return removed;
 }
@@ -348,14 +460,17 @@ void Chain2D::InitializeFromNodes(std::vector<VerletNode>&& nodes, const ChainPa
         node.invMass = 1.0f;
     }
 
-    // 落ちている状態として生成
+    // 落ちている状態として生成（重りなし・繰り出しなし）
     anchorMode_ = ChainAnchorMode::kFree;
     initialMode_ = ChainAnchorMode::kFree;
+    endWeight_ = EndWeight{};
     restLength_ = params_.unitLength_ / static_cast<float>((std::max)(1, params_.nodesPerUnit_));
+    pendingNodes_ = 0;
+    headRest_ = restLength_;
     anchorPos_ = nodes_.empty() ? Vector3{ 0.0f, 0.0f, 0.0f } : nodes_[0].pos;
     initialAnchorPos_ = anchorPos_;
 
-    BuildLinkObjects();
+    // 自由鎖は伸びないので必要本数だけ確保する
     UpdateLinkTransforms();
 }
 
@@ -408,9 +523,15 @@ bool Chain2D::FindNearestNode(const Vector3& point, float radius, int* outIndex)
 void Chain2D::SetEndFollowTarget(const Vector3* target) {
     endFollow_ = target;
     if (!nodes_.empty()) {
-        // 拘束解除時は終端を自由ノードに戻す
+        // 拘束解除時は終端を自由ノード（重りが有効なら重り）に戻す
         nodes_.back().invMass = endFollow_ ? 0.0f : 1.0f;
     }
+    ApplyEndWeight();
+}
+
+void Chain2D::SetEndWeight(const EndWeight& weight) {
+    endWeight_ = weight;
+    ApplyEndWeight();
 }
 
 void Chain2D::SetParams(const ChainParams& params) {
@@ -420,24 +541,33 @@ void Chain2D::SetParams(const ChainParams& params) {
         params.unitLength_ != params_.unitLength_;
 
     params_ = params;
+    // ImGui のキーボード入力や外部からの直接指定で不正値が入っても繰り出しが止まらないよう正規化する
+    // （payoutSpeed_=0 だと繰り出しが永久に終わらず外す操作が拒否され続ける。ChainConfig::Load と同じ規則）
+    params_.nodesPerUnit_ = (std::max)(2, params_.nodesPerUnit_);
+    params_.initialUnits_ = (std::max)(1, params_.initialUnits_);
+    params_.unitLength_ = (std::max)(0.1f, params_.unitLength_);
+    params_.payoutSpeed_ = (std::max)(0.1f, params_.payoutSpeed_);
 
     if (needRebuild) {
         BuildNodes();
-        BuildLinkObjects();
     } else {
         restLength_ = params_.unitLength_ / static_cast<float>((std::max)(1, params_.nodesPerUnit_));
+        headRest_ = (std::min)(headRest_, restLength_);
         for (auto& node : nodes_) {
             node.radius = params_.nodeRadius_;
         }
+        ApplyEndWeight();
     }
     UpdateLinkTransforms();
 }
 
 std::vector<Object3D*> Chain2D::GetLinkObjects() const {
     std::vector<Object3D*> result;
-    result.reserve(linkObjs_.size());
-    for (auto& link : linkObjs_) {
-        result.push_back(link.get());
+    size_t linkCount = (nodes_.size() >= 2) ? nodes_.size() - 1 : 0;
+    linkCount = (std::min)(linkCount, linkObjs_.size());
+    result.reserve(linkCount);
+    for (size_t j = 0; j < linkCount; ++j) {
+        result.push_back(linkObjs_[j].get());
     }
     return result;
 }
@@ -448,6 +578,12 @@ void Chain2D::DrawImGui() {
         // 現在の保持状態
         const char* modeNames[] = { "World (固定)", "Socket (手に追従)", "Free (落下中)" };
         ImGui::Text("Mode: %s", modeNames[static_cast<int>(anchorMode_)]);
+        ImGui::Text("Nodes: %d  Pending: %d  HeadRest: %.3f / %.3f",
+                    static_cast<int>(nodes_.size()), pendingNodes_, headRest_, restLength_);
+        if (endWeight_.enabled) {
+            ImGui::Text("EndWeight: mass %.1f  radius %.2f  friction %.2f",
+                        endWeight_.mass, endWeight_.radius, endWeight_.friction);
+        }
 
         // アンカー位置
         float anchor[2] = { anchorPos_.x, anchorPos_.y };
@@ -455,7 +591,7 @@ void Chain2D::DrawImGui() {
             anchorPos_ = { anchor[0], anchor[1], 0.0f };
         }
 
-        // 実行中のユニット数（差分だけアンカー側で伸縮する）
+        // 実行中のユニット数（増える分は繰り出し、減る分はアンカー側から削除）
         int units = GetUnitCount();
         if (ImGui::DragInt("Units", &units, 1, 1, 16)) {
             SetUnitCount(units);
@@ -467,6 +603,7 @@ void Chain2D::DrawImGui() {
         changed |= ImGui::DragInt("Initial Units", &edit.initialUnits_, 1, 1, 16);
         changed |= ImGui::DragFloat("Unit Length", &edit.unitLength_, 0.05f, 0.25f, 3.0f);
         changed |= ImGui::DragInt("Nodes Per Unit", &edit.nodesPerUnit_, 1, 2, 8);
+        changed |= ImGui::DragFloat("Payout Speed", &edit.payoutSpeed_, 0.1f, 0.5f, 30.0f);
         changed |= ImGui::DragFloat("Pickup Radius", &edit.pickupRadius_, 0.05f, 0.1f, 3.0f);
         changed |= ImGui::DragFloat("Gravity", &edit.gravity_, 0.5f, -100.0f, 0.0f);
         changed |= ImGui::DragFloat("Damping", &edit.damping_, 0.001f, 0.90f, 1.0f);

@@ -1,5 +1,6 @@
 #pragma once
 #include "Game2D/Chain/Chain2D.h"
+#include "Game2D/Treasure/Treasure2D.h"
 #include "Core/Utility/Vector3.h"
 #include <memory>
 #include <string>
@@ -11,10 +12,13 @@ class Object3D;
 
 /// <summary>
 /// 鎖全体の管理（ユニット制）
-/// - playerChain_  : プレイヤーの手から下がる鎖1本。ユニット数は chainLength_ と Reconcile で同期
+/// - playerChain_  : プレイヤーの手から下がる鎖1本。ユニット数は chainLength_ と Reconcile で同期し、
+///                   増えた分は手元から繰り出される。末端はお宝（重り）
 /// - worldChains_  : マップ配置の吊り鎖（拾うとユニットをもらえる。使い切ると休眠しリセットで復活）
+///                   現在は配置なし。AddWorldChain() がマップ配置やレベルデータ生成の入口
 /// - droppedChains_: 外して落とした自由鎖（拾うと個数が戻る）
-/// 操作は分離：K = 拾う（範囲内に鎖がなければ何もしない）/ S = unitsPerAction_ ユニットまとめて外す
+/// - treasure_     : プレイヤー鎖の末端ノードに描画されるお宝（表示専用）
+/// 操作は分離：K = 拾う（範囲内に鎖がなければ何もしない）/ J・S = unitsPerAction_ ユニットまとめて外す
 /// </summary>
 class ChainManager {
 public:
@@ -22,9 +26,15 @@ public:
     static constexpr const char* kSocketJointName = "RightHand_Dummy_017";
 
     /// <summary>
-    /// 初期化。プレイヤー鎖と、worldChainBase 基準のテスト吊り鎖を生成する
+    /// 初期化。プレイヤー鎖とお宝を生成する（吊り鎖は生成しない）
     /// </summary>
-    void Initialize(Player2D* player, const Vector3& worldChainBase);
+    void Initialize(Player2D* player);
+
+    /// <summary>
+    /// マップ配置の吊り鎖を追加する（将来のマップ ChipType / レベルデータ生成用の入口）
+    /// 必ず Initialize() の後に呼ぶこと（Initialize は worldChains_ をクリアする）
+    /// </summary>
+    void AddWorldChain(const Vector3& anchorPos, int units, const std::string& name = "WorldChain");
 
     /// <summary>
     /// 鎖アクション入力の処理。player_->UpdateWithMap() の直後に呼ぶ
@@ -36,12 +46,12 @@ public:
 
     /// <summary>
     /// chainLength_（個数の正）とプレイヤー鎖のユニット数を照合し、差分だけ伸縮する
-    /// ChainItemBlock・拾う・デバッグ操作は AddChainLength を呼ぶだけでよい
+    /// 増える分は繰り出しキューに積まれ手元から出てくる。ChainItemBlock・拾う・デバッグ操作は AddChainLength を呼ぶだけでよい
     /// </summary>
     void Reconcile();
 
     /// <summary>
-    /// 鎖の物理更新（プレイヤー鎖 → 吊り鎖 → 自由鎖の順）
+    /// 鎖の物理更新（プレイヤー鎖 → 吊り鎖 → 自由鎖の順）とお宝の位置同期
     /// </summary>
     void Update(float dt, MapChip2D* map);
 
@@ -64,6 +74,12 @@ public:
     Chain2D* GetPlayerChain() const { return playerChain_.get(); }
     const Vector3& GetSocketWorld() const { return lastSocketWorld_; }
 
+    // --- お宝（ゴール判定・敗北判定・カメラ用のフック） ---
+    Treasure2D* GetTreasure() const { return treasure_.get(); }
+    Vector3 GetTreasurePosition() const { return treasure_ ? treasure_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f }; }
+    /// <summary>お宝がプレイヤー鎖につながっているか（将来「鎖が途切れる=敗北」用。現状は常に true）</summary>
+    bool IsTreasureConnected() const { return playerChain_ && playerChain_->GetEndWeight().enabled; }
+
 private:
     // ソケット（手のジョイント）のワールド座標を取得。ジョイントが無ければプレイヤー座標で代用
     Vector3 ComputeSocketWorld();
@@ -71,12 +87,17 @@ private:
     bool TryPickup();
     // unitsPerAction_ ユニットをつながったまま外して自由鎖として世界に落とす
     void DetachUnits();
+    // params_ のお宝設定をプレイヤー鎖の末端と表示に反映する
+    void ApplyTreasureParams();
+    // お宝の表示位置をプレイヤー鎖の末端に合わせる
+    void SyncTreasureTransform();
 
     Player2D* player_ = nullptr;
     ChainParams params_; // 共有パラメータ（ChainConfigからロード）
 
     std::unique_ptr<Chain2D> playerChain_;
     std::vector<std::unique_ptr<Chain2D>> worldChains_;
+    std::unique_ptr<Treasure2D> treasure_;
 
     // 外して落とした自由鎖（unitWorth = 拾った時に戻る個数）
     struct DroppedChain {
@@ -85,7 +106,6 @@ private:
     };
     std::vector<DroppedChain> droppedChains_;
 
-    Vector3 worldChainBase_ = { 0.0f, 0.0f, 0.0f };
     Vector3 lastSocketWorld_ = { 0.0f, 0.0f, 0.0f };
     bool socketValid_ = false;
     bool loggedSocketState_ = false;

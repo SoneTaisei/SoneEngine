@@ -15,6 +15,7 @@ struct ChainParams {
     int minUnits_ = 1;                 // 下限。最後の1本は外せない
     int unitsPerAction_ = 2;           // 一度のK操作で外す/もらうユニット数（つながったまま着脱される）
     float pickupRadius_ = 0.5f;        // 拾う判定（プレイヤーのAABBから鎖ノードまでの距離）
+    float payoutSpeed_ = 6.0f;         // 手元からの繰り出し速度（チップ/秒）。2ユニット≒0.33秒
 
     // --- 物理 ---
     float gravity_ = -35.0f;           // プレイヤーの gravity_ と同値から開始
@@ -25,6 +26,12 @@ struct ChainParams {
     float friction_ = 0.5f;            // 接触摩擦（接触時のみ暗黙速度を削る）
     float playerVelInfluence_ = 0.35f; // 接触時にプレイヤー速度を鎖へ伝える割合
     int rootCollisionSkip_ = 2;        // 手持ち中に地形判定から除外する根元ノード数（壁張り付き時のジッタ防止）
+
+    // --- お宝（重り）: プレイヤー鎖の末端ノード ---
+    float treasureMass_ = 5.0f;        // 質量（invMass = 1/mass。5なら鎖側が8割動く）
+    float treasureRadius_ = 0.3f;      // 半径（ノード0.1の3倍。段差に引っかかる）
+    float treasureFriction_ = 0.8f;    // 地形との摩擦（引きずると渋い）
+    bool treasureIgnorePlayer_ = false; // お宝をプレイヤー衝突から外す（狭い通路で押されて困る時用）
 
     // --- 見た目 ---
     float linkThickness_ = 1.0f;       // リンクモデルの太さ倍率

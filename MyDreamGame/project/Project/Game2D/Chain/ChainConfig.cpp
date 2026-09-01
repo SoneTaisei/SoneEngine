@@ -22,6 +22,7 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["minUnits_"] = params.minUnits_;
         j["unitsPerAction_"] = params.unitsPerAction_;
         j["pickupRadius_"] = params.pickupRadius_;
+        j["payoutSpeed_"] = params.payoutSpeed_;
         j["gravity_"] = params.gravity_;
         j["damping_"] = params.damping_;
         j["iterations_"] = params.iterations_;
@@ -30,6 +31,10 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["friction_"] = params.friction_;
         j["playerVelInfluence_"] = params.playerVelInfluence_;
         j["rootCollisionSkip_"] = params.rootCollisionSkip_;
+        j["treasureMass_"] = params.treasureMass_;
+        j["treasureRadius_"] = params.treasureRadius_;
+        j["treasureFriction_"] = params.treasureFriction_;
+        j["treasureIgnorePlayer_"] = params.treasureIgnorePlayer_;
         j["linkThickness_"] = params.linkThickness_;
         j["linkOverlap_"] = params.linkOverlap_;
 
@@ -63,6 +68,7 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("minUnits_")) params.minUnits_ = j["minUnits_"];
         if (j.contains("unitsPerAction_")) params.unitsPerAction_ = j["unitsPerAction_"];
         if (j.contains("pickupRadius_")) params.pickupRadius_ = j["pickupRadius_"];
+        if (j.contains("payoutSpeed_")) params.payoutSpeed_ = j["payoutSpeed_"];
         if (j.contains("gravity_")) params.gravity_ = j["gravity_"];
         if (j.contains("damping_")) params.damping_ = j["damping_"];
         if (j.contains("iterations_")) params.iterations_ = j["iterations_"];
@@ -71,6 +77,10 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("friction_")) params.friction_ = j["friction_"];
         if (j.contains("playerVelInfluence_")) params.playerVelInfluence_ = j["playerVelInfluence_"];
         if (j.contains("rootCollisionSkip_")) params.rootCollisionSkip_ = j["rootCollisionSkip_"];
+        if (j.contains("treasureMass_")) params.treasureMass_ = j["treasureMass_"];
+        if (j.contains("treasureRadius_")) params.treasureRadius_ = j["treasureRadius_"];
+        if (j.contains("treasureFriction_")) params.treasureFriction_ = j["treasureFriction_"];
+        if (j.contains("treasureIgnorePlayer_")) params.treasureIgnorePlayer_ = j["treasureIgnorePlayer_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
 
@@ -82,6 +92,10 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         params.unitsPerAction_ = (std::max)(1, params.unitsPerAction_);
         params.initialUnits_ = (std::max)(1, params.initialUnits_);
         params.unitLength_ = (std::max)(0.1f, params.unitLength_);
+        params.payoutSpeed_ = (std::max)(0.1f, params.payoutSpeed_);
+        params.treasureMass_ = (std::max)(0.1f, params.treasureMass_);
+        params.treasureRadius_ = (std::max)(0.05f, params.treasureRadius_);
+        params.treasureFriction_ = std::clamp(params.treasureFriction_, 0.0f, 1.0f);
 
         std::cout << "Chain parameters loaded from " << filepath << std::endl;
     } catch (const std::exception& e) {

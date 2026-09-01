@@ -3,16 +3,14 @@
 #include "Game2D/MapChip2D.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
-#include "Editor/Replay/ReplayManager.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include <algorithm>
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
 
-void ChainManager::Initialize(Player2D* player, const Vector3& worldChainBase) {
+void ChainManager::Initialize(Player2D* player) {
     player_ = player;
-    worldChainBase_ = worldChainBase;
     droppedChains_.clear();
     worldChains_.clear();
     droppedCounter_ = 0;
@@ -31,45 +29,31 @@ void ChainManager::Initialize(Player2D* player, const Vector3& worldChainBase) {
     playerChain_->Initialize(start, playerParams, "PlayerChain");
     playerChain_->SetPlayerCollisionSkipCount(playerParams.nodesPerUnit_);
 
-    // ワールド吊り鎖（テスト配置。拾うとユニットをもらえる）
-    ChainParams paramsA = params_;
-    paramsA.initialUnits_ = 3;
-    auto chainA = std::make_unique<Chain2D>();
-    chainA->Initialize(worldChainBase_ + Vector3{ 3.0f, 4.0f, 0.0f }, paramsA, "Chain_A");
-    worldChains_.push_back(std::move(chainA));
+    // お宝（鎖の末端ノードに描画する重り）
+    treasure_ = std::make_unique<Treasure2D>();
+    treasure_->Initialize(params_.treasureRadius_);
+    ApplyTreasureParams();
+    SyncTreasureTransform();
 
-    ChainParams paramsB = params_;
-    paramsB.initialUnits_ = 4;
-    auto chainB = std::make_unique<Chain2D>();
-    chainB->Initialize(worldChainBase_ + Vector3{ 6.0f, 4.0f, 0.0f }, paramsB, "Chain_B");
-    worldChains_.push_back(std::move(chainB));
+    // 吊り鎖はマップ配置で追加する（AddWorldChain）。テスト用の仮配置は廃止
+}
+
+void ChainManager::AddWorldChain(const Vector3& anchorPos, int units, const std::string& name) {
+    ChainParams worldParams = params_;
+    worldParams.initialUnits_ = (std::max)(1, units);
+    // 吊り鎖は伸びない（拾われて縮むだけ）ので、リンクの事前確保は必要分だけにする
+    // （Chain2D::Initialize は maxUnits_ 分を確保する。1本あたり約16MBの定数バッファ節約）
+    worldParams.maxUnits_ = worldParams.initialUnits_;
+    auto chain = std::make_unique<Chain2D>();
+    chain->Initialize(anchorPos, worldParams, name);
+    worldChains_.push_back(std::move(chain));
 }
 
 void ChainManager::HandleInput() {
-    // 一時診断ログ: HandleInputが毎フレーム呼ばれているかの確認（初回のみ）
-    static bool loggedActive = false;
-    if (!loggedActive) {
-        Log("ChainManager: HandleInput active\n");
-        loggedActive = true;
-    }
-    // 一時診断ログ: リプレイ再生状態の変化を記録
-    // （リプレイ再生中は KeyboardInput が実キーボードを読まないため、K/Jが完全に無効になる）
-    static bool firstReplayLog = true;
-    static bool lastReplayPlaying = false;
-    bool replayPlaying = ReplayManager::GetInstance()->IsPlaying();
-    if (firstReplayLog || replayPlaying != lastReplayPlaying) {
-        Log(std::string("ChainManager: [diag] replayPlaying=") + (replayPlaying ? "1" : "0") + "\n");
-        lastReplayPlaying = replayPlaying;
-        firstReplayLog = false;
-    }
     if (!player_ || player_->IsDead()) {
         return;
     }
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
-
-    // 一時診断ログ: キー検知の確認
-    if (keyboard->IsKeyDown(DIK_J)) { Log("ChainManager: [diag] J down\n"); }
-    if (keyboard->IsKeyDown(DIK_K)) { Log("ChainManager: [diag] K down\n"); }
 
     // 拾う（K）：範囲内に鎖がなければ何もしない（誤って外してしまう誤爆を防ぐ）
     if (keyboard->IsKeyPressed(DIK_K)) {
@@ -103,7 +87,7 @@ bool ChainManager::TryPickup() {
             droppedChains_.erase(droppedChains_.begin() + i);
             Log("ChainManager: Picked up dropped chain +" + std::to_string(gain) + " unit(s), chainLength=" +
                 std::to_string(player_->GetChainLength()) + "\n");
-            return true; // 個数が増えた分は Reconcile が伸ばす
+            return true; // 個数が増えた分は Reconcile が繰り出す
         }
     }
     for (size_t i = 0; i < worldChains_.size(); ++i) {
@@ -125,6 +109,11 @@ bool ChainManager::TryPickup() {
 
 void ChainManager::DetachUnits() {
     if (!playerChain_ || !player_) {
+        return;
+    }
+    // 繰り出し中は外せない（繰り出し待ちと実ノードが混在すると落とす鎖の長さが個数と合わなくなるため）
+    if (playerChain_->IsPayingOut()) {
+        Log("ChainManager: 繰り出し中は外せない\n");
         return;
     }
     // 一度の操作で unitsPerAction_ ユニットをつながったまま外す（minUnits_ は必ず残す）
@@ -165,7 +154,7 @@ void ChainManager::Reconcile() {
     if (length != player_->GetChainLength()) {
         player_->SetChainLength(length);
     }
-    playerChain_->SetUnitCount(length); // 差分だけアンカー側で伸縮（等しければ何もしない）
+    playerChain_->SetUnitCount(length); // 増える分は繰り出しキューへ、減る分はアンカー側から削除（等しければ何もしない）
 }
 
 void ChainManager::Update(float dt, MapChip2D* map) {
@@ -182,6 +171,9 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     for (auto& dropped : droppedChains_) {
         dropped.chain->Update(dt, map, player_);
     }
+
+    // お宝の表示位置を末端ノードに合わせる
+    SyncTreasureTransform();
 }
 
 void ChainManager::Draw() {
@@ -194,6 +186,9 @@ void ChainManager::Draw() {
     for (auto& dropped : droppedChains_) {
         dropped.chain->Draw();
     }
+    if (treasure_) {
+        treasure_->Draw();
+    }
 }
 
 void ChainManager::ResetAll() {
@@ -204,13 +199,12 @@ void ChainManager::ResetAll() {
         player_->SetChainLength(initialChainLength_);
     }
     if (playerChain_) {
-        playerChain_->ResetToInitial(); // kSocket・初期ユニット数へ。次のSyncSocketのワープ検出が手元へ引き寄せる
+        playerChain_->ResetToInitial(); // kSocket・初期ユニット数へ（繰り出し状態もクリア）。次のSyncSocketのワープ検出が手元へ引き寄せる
     }
     for (auto& chain : worldChains_) {
-        chain->ResetToInitial();
+        chain->ResetToInitial(); // 使い切って休眠していた吊り鎖もここで復活する
     }
-    // 吊り鎖が拾われて消えていた場合は復元しない（マップ再構築を伴わないため）。
-    // 完全復元が必要になったら初期配置リストから作り直す形にする
+    SyncTreasureTransform();
 }
 
 void ChainManager::OnRewindEnd() {
@@ -230,6 +224,9 @@ std::vector<Object3D*> ChainManager::GetLinkObjects() const {
         auto links = playerChain_->GetLinkObjects();
         result.insert(result.end(), links.begin(), links.end());
     }
+    if (treasure_ && treasure_->GetObject()) {
+        result.push_back(treasure_->GetObject());
+    }
     for (auto& chain : worldChains_) {
         auto links = chain->GetLinkObjects();
         result.insert(result.end(), links.begin(), links.end());
@@ -239,6 +236,33 @@ std::vector<Object3D*> ChainManager::GetLinkObjects() const {
         result.insert(result.end(), links.begin(), links.end());
     }
     return result;
+}
+
+void ChainManager::ApplyTreasureParams() {
+    if (playerChain_) {
+        EndWeight weight;
+        weight.enabled = true;
+        weight.mass = params_.treasureMass_;
+        weight.radius = params_.treasureRadius_;
+        weight.friction = params_.treasureFriction_;
+        weight.ignorePlayer = params_.treasureIgnorePlayer_;
+        playerChain_->SetEndWeight(weight);
+        playerChain_->SetPayoutSpeed(params_.payoutSpeed_);
+    }
+    if (treasure_) {
+        treasure_->SetRadius(params_.treasureRadius_);
+    }
+}
+
+void ChainManager::SyncTreasureTransform() {
+    if (!treasure_ || !playerChain_) {
+        return;
+    }
+    int n = playerChain_->GetNodeCount();
+    if (n < 2) {
+        return;
+    }
+    treasure_->UpdateTransform(playerChain_->GetEndPosition(), playerChain_->GetNodePosition(n - 2));
 }
 
 Vector3 ChainManager::ComputeSocketWorld() {
@@ -275,9 +299,10 @@ void ChainManager::DrawImGui() {
     ImGui::SeparatorText("Chain Manager");
     ImGui::Text("K : 拾う / J・S : 外す（%dユニットずつ）", params_.unitsPerAction_);
     if (player_ && playerChain_) {
-        ImGui::Text("ChainLength: %d (units: %d, min %d / max %d)",
+        ImGui::Text("ChainLength: %d (units: %d, min %d / max %d)%s",
                     player_->GetChainLength(), playerChain_->GetUnitCount(),
-                    params_.minUnits_, params_.maxUnits_);
+                    params_.minUnits_, params_.maxUnits_,
+                    playerChain_->IsPayingOut() ? "  [繰り出し中]" : "");
     }
     ImGui::Text("Socket: %s (%.2f, %.2f)", socketValid_ ? "joint" : "fallback",
                 lastSocketWorld_.x, lastSocketWorld_.y);
@@ -288,11 +313,30 @@ void ChainManager::DrawImGui() {
     ImGui::DragInt("Units Per Action##Mgr", &params_.unitsPerAction_, 1, 1, 8);
     ImGui::DragInt("Max Units##Mgr", &params_.maxUnits_, 1, 1, 16);
     ImGui::DragInt("Min Units##Mgr", &params_.minUnits_, 1, 1, 4);
+    if (ImGui::DragFloat("Payout Speed##Mgr", &params_.payoutSpeed_, 0.1f, 0.5f, 30.0f)) {
+        params_.payoutSpeed_ = (std::max)(0.1f, params_.payoutSpeed_);
+        if (playerChain_) playerChain_->SetPayoutSpeed(params_.payoutSpeed_);
+    }
     // ImGuiのDragIntはキーボード入力で範囲外の値も入るため、min>max等で
     // std::clampが未定義動作にならないよう毎回正規化する
     params_.unitsPerAction_ = (std::max)(1, params_.unitsPerAction_);
     params_.maxUnits_ = (std::max)(1, params_.maxUnits_);
     params_.minUnits_ = std::clamp(params_.minUnits_, 1, params_.maxUnits_);
+
+    // お宝（重り）
+    ImGui::SeparatorText("Treasure (End Weight)");
+    bool treasureChanged = false;
+    treasureChanged |= ImGui::DragFloat("Mass##Treasure", &params_.treasureMass_, 0.1f, 0.1f, 50.0f);
+    treasureChanged |= ImGui::DragFloat("Radius##Treasure", &params_.treasureRadius_, 0.01f, 0.05f, 1.0f);
+    treasureChanged |= ImGui::DragFloat("Friction##Treasure", &params_.treasureFriction_, 0.01f, 0.0f, 1.0f);
+    treasureChanged |= ImGui::Checkbox("Ignore Player##Treasure", &params_.treasureIgnorePlayer_);
+    if (treasureChanged) {
+        params_.treasureMass_ = (std::max)(0.1f, params_.treasureMass_);
+        params_.treasureRadius_ = (std::max)(0.05f, params_.treasureRadius_);
+        params_.treasureFriction_ = std::clamp(params_.treasureFriction_, 0.0f, 1.0f);
+        ApplyTreasureParams();
+    }
+    ImGui::Text("Treasure pos: (%.2f, %.2f)", GetTreasurePosition().x, GetTreasurePosition().y);
 
     // デバッグ用の個数操作（Reconcileが伸縮を反映する）
     if (ImGui::Button("+1 Unit")) {
