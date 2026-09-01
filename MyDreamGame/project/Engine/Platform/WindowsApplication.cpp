@@ -251,7 +251,15 @@ void WindowsApplication::Update() {
             sceneManager_.get());
 
         // 3. カメラの切り替えと入力受付（シーン更新前にアクティブカメラを決定）
-        if (editorManager_->UseDebugCamera()) {
+        if (!EditorManager::IsPlaying() && !ReplayManager::GetInstance()->IsPlaying() && editorManager_->GetActiveMainTab() == "マップチップ画面") {
+            // マップエディタ表示時はUseDebugCameraに関係なく常に2D専用のMapEditorCameraを使用（回転を完全に排除）
+            activeCamera_ = mapEditorCamera_.get();
+            isDebugCameraActive_ = false;
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
+
+            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
+            mapEditorCamera_->Update(allowCameraInput);
+        } else if (editorManager_->UseDebugCamera()) {
             activeCamera_ = debugCamera_.get();
             isDebugCameraActive_ = true;
             
@@ -264,22 +272,12 @@ void WindowsApplication::Update() {
             bool allowCameraInput = editorManager_->IsGameViewHovered() || 
                                     editorManager_->IsReplayEditorHovered() || 
                                     editorManager_->IsAnimationEditorHovered() || 
-                                    editorManager_->IsMapEditorHovered() ||
                                     !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {
             isDebugCameraActive_ = false;
             CameraManager::GetInstance()->ClearCullingCameraInfo();
-
-            // デバッグカメラが無効で、非再生中かつ「マップチップ画面」タブがアクティブな場合はマップエディタカメラを使用
-            if (!EditorManager::IsPlaying() && !ReplayManager::GetInstance()->IsPlaying() && editorManager_->GetActiveMainTab() == "マップチップ画面") {
-                activeCamera_ = mapEditorCamera_.get();
-                bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
-                mapEditorCamera_->Update(allowCameraInput);
-            } else {
-                // 通常時、ゲームプレイ中、リプレイ再生中、ゲームビュー、アニメーションエディタ等
-                activeCamera_ = gameCamera_.get();
-            }
+            activeCamera_ = gameCamera_.get();
         }
 
         // --- エディターの状態に応じて更新処理を切り替え ---
