@@ -64,6 +64,7 @@ public:
     bool IsGoalComplete() const { return state_.isGoal_ && state_.goalTimer_ >= params_.goalWaitTime_; }
 
     void AddChainLength(int amount) { state_.chainLength_ += amount; }
+    void SetChainLength(int length) { state_.chainLength_ = length; }
     int GetChainLength() const { return state_.chainLength_; }
 
     void ResetState(const Vector3& initPos);

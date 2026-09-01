@@ -235,7 +235,7 @@
     <ClCompile Include="Project\Game2D\Chain\ChainConfig.cpp">
       <Filter>Project\Game2D\Chain</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Game2D\Chain\PlayerChainController.cpp">
+    <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp">
       <Filter>Project\Game2D\Chain</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Physics\VerletPhysics2D.cpp">
@@ -528,7 +528,7 @@
     <ClInclude Include="Project\Game2D\Chain\ChainConfig.h">
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Game2D\Chain\PlayerChainController.h">
+    <ClInclude Include="Project\Game2D\Chain\ChainManager.h">
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Physics\VerletPhysics2D.h">

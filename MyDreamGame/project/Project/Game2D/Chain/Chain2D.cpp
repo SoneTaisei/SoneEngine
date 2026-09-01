@@ -54,8 +54,11 @@ void Chain2D::Initialize(const Vector3& anchorPos, const ChainParams& params, co
 }
 
 void Chain2D::BuildNodes() {
-    int nodeCount = (std::max)(2, params_.nodeCount_);
-    restLength_ = params_.totalLength_ / static_cast<float>(nodeCount - 1);
+    // ユニット制：節数 = アンカー1個 + ユニット数 × nodesPerUnit_
+    int nodesPerUnit = (std::max)(1, params_.nodesPerUnit_);
+    int units = (std::max)(1, params_.initialUnits_);
+    restLength_ = params_.unitLength_ / static_cast<float>(nodesPerUnit);
+    int nodeCount = 1 + units * nodesPerUnit;
 
     nodes_.clear();
     nodes_.resize(nodeCount);
@@ -151,8 +154,12 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
     Vector3 gravity = { 0.0f, params_.gravity_, 0.0f };
     VerletPhysics2D::Integrate(nodes_, gravity, params_.damping_, dt);
 
-    // プレイヤーのAABB（死亡中と、プレイヤー自身が持っている鎖は判定しない）
-    bool hitPlayer = player && !player->IsDead() && anchorMode_ != ChainAnchorMode::kSocket;
+    // プレイヤーのAABB（死亡中は判定しない）
+    // 手持ち中（kSocket）は根元 playerCollisionSkip_ ノードだけ除外して残りは判定する
+    // （根元がプレイヤーに追従するため、除外しないと毎フレーム押し合う）
+    bool isHeld = (anchorMode_ == ChainAnchorMode::kSocket);
+    bool hitPlayer = player && !player->IsDead();
+    size_t playerSkip = isHeld ? static_cast<size_t>((std::max)(0, playerCollisionSkip_)) : 0;
     AABB2D playerBox{};
     if (hitPlayer) {
         playerBox = player->GetAABB();
@@ -178,7 +185,7 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
             if (i >= rootSkip) {
                 VerletPhysics2D::CollideNodeWithMap(nodes_[i], map, 0.0f);
             }
-            if (hitPlayer) {
+            if (hitPlayer && i >= playerSkip) {
                 VerletPhysics2D::CollideNodeWithAABB(nodes_[i], playerBox, 0.0f);
             }
         }
@@ -189,10 +196,13 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
         if (i >= rootSkip) {
             VerletPhysics2D::CollideNodeWithMap(nodes_[i], map, params_.friction_);
         }
-        if (hitPlayer) {
+        if (hitPlayer && i >= playerSkip) {
             if (VerletPhysics2D::CollideNodeWithAABB(nodes_[i], playerBox, params_.friction_)) {
                 // 接触したノードへプレイヤーの速度を伝える（ダッシュで駆け抜けると跳ね上がる）
-                VerletPhysics2D::ApplyVelocity(nodes_[i], player->GetVelocity(), dt, params_.playerVelInfluence_);
+                // 手持ち中は根元がプレイヤー追従のためエネルギーが増幅しやすく、速度伝搬は行わない
+                if (!isHeld) {
+                    VerletPhysics2D::ApplyVelocity(nodes_[i], player->GetVelocity(), dt, params_.playerVelInfluence_);
+                }
             }
         }
     }
@@ -257,6 +267,144 @@ void Chain2D::SyncSocket(const Vector3& socketWorld) {
     anchorPos_ = p; // Update() 冒頭のピン留め・ワープ検出がこの値を使う
 }
 
+int Chain2D::GetUnitCount() const {
+    int nodesPerUnit = (std::max)(1, params_.nodesPerUnit_);
+    return (static_cast<int>(nodes_.size()) - 1) / nodesPerUnit;
+}
+
+void Chain2D::SetUnitCount(int units) {
+    units = (std::max)(1, units);
+    int current = GetUnitCount();
+    if (units > current) {
+        AddUnitsAtAnchor(units - current);
+    } else if (units < current) {
+        RemoveUnitsAtAnchor(current - units); // 戻り値は捨てる（外す操作は別経路）
+    }
+}
+
+void Chain2D::AddUnitsAtAnchor(int units) {
+    if (units <= 0 || nodes_.size() < 2) {
+        return;
+    }
+    int insertCount = units * (std::max)(1, params_.nodesPerUnit_);
+
+    // アンカーと隣ノードの間に線形補間で挿入する
+    // （全部アンカーに重ねると距離制約が一気に弾いてポップする）
+    const Vector3 a = nodes_[0].pos;
+    const Vector3 b = nodes_[1].pos;
+    std::vector<VerletNode> inserted(insertCount);
+    for (int i = 0; i < insertCount; ++i) {
+        float t = static_cast<float>(i + 1) / static_cast<float>(insertCount + 1);
+        VerletNode& node = inserted[i];
+        node.pos = TransformFunctions::Lerp(a, b, t);
+        node.prevPos = node.pos; // 速度ゼロで生む
+        node.invMass = 1.0f;
+        node.radius = params_.nodeRadius_;
+    }
+    nodes_.insert(nodes_.begin() + 1, inserted.begin(), inserted.end());
+
+    BuildLinkObjects();
+    UpdateLinkTransforms();
+}
+
+std::vector<VerletNode> Chain2D::RemoveUnitsAtAnchor(int units) {
+    std::vector<VerletNode> removed;
+    if (units <= 0 || nodes_.size() < 2) {
+        return removed;
+    }
+    int nodesPerUnit = (std::max)(1, params_.nodesPerUnit_);
+    // アンカーノード自体は必ず残す
+    int removeCount = (std::min)(units * nodesPerUnit, static_cast<int>(nodes_.size()) - 1);
+    if (removeCount <= 0) {
+        return removed;
+    }
+
+    // アンカーの次から removeCount 個を pos/prevPos そのままで切り離す（落下が連続的に見える）
+    removed.assign(nodes_.begin() + 1, nodes_.begin() + 1 + removeCount);
+    // 先頭にアンカーの複製を足して「1 + units×nodesPerUnit ノード」の完全なユニット構成にする
+    // （これがないと切り離した鎖が1セグメント分短くなり、GetUnitCountも1少なく数えてしまう）
+    removed.insert(removed.begin(), nodes_[0]);
+    nodes_.erase(nodes_.begin() + 1, nodes_.begin() + 1 + removeCount);
+    for (auto& node : removed) {
+        node.invMass = 1.0f; // 自由ノード化
+    }
+    // 残りの揺れは殺さない（ResetDynamicsは呼ばない）
+
+    BuildLinkObjects();
+    UpdateLinkTransforms();
+    return removed;
+}
+
+void Chain2D::InitializeFromNodes(std::vector<VerletNode>&& nodes, const ChainParams& params, const std::string& name) {
+    name_ = name;
+    params_ = params;
+
+    device_ = DirectXCommon::GetInstance()->GetDevice();
+    modelTate_ = LoadLinkModel("kusari_tate", "kusari_tate.obj");
+    modelYoko_ = LoadLinkModel("kusari_yoko", "kusari_yoko.obj");
+
+    nodes_ = std::move(nodes);
+    for (auto& node : nodes_) {
+        node.invMass = 1.0f;
+    }
+
+    // 落ちている状態として生成
+    anchorMode_ = ChainAnchorMode::kFree;
+    initialMode_ = ChainAnchorMode::kFree;
+    restLength_ = params_.unitLength_ / static_cast<float>((std::max)(1, params_.nodesPerUnit_));
+    anchorPos_ = nodes_.empty() ? Vector3{ 0.0f, 0.0f, 0.0f } : nodes_[0].pos;
+    initialAnchorPos_ = anchorPos_;
+
+    BuildLinkObjects();
+    UpdateLinkTransforms();
+}
+
+bool Chain2D::FindNearestNodeToAABB(const AABB2D& box, float margin, int* outIndex) const {
+    float bestDistSq = -1.0f;
+    int bestIndex = -1;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        const Vector3& p = nodes_[i].pos;
+        // AABB上の最近接点からノードまでの距離で判定する
+        float closestX = std::clamp(p.x, box.left, box.right);
+        float closestY = std::clamp(p.y, box.bottom, box.top);
+        float dx = p.x - closestX;
+        float dy = p.y - closestY;
+        float distSq = dx * dx + dy * dy;
+        float reach = margin + nodes_[i].radius;
+        if (distSq <= reach * reach && (bestIndex < 0 || distSq < bestDistSq)) {
+            bestDistSq = distSq;
+            bestIndex = static_cast<int>(i);
+        }
+    }
+    if (bestIndex < 0) {
+        return false;
+    }
+    if (outIndex) {
+        *outIndex = bestIndex;
+    }
+    return true;
+}
+
+bool Chain2D::FindNearestNode(const Vector3& point, float radius, int* outIndex) const {
+    float bestDistSq = radius * radius;
+    int bestIndex = -1;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        Vector3 d = nodes_[i].pos - point;
+        float distSq = d.x * d.x + d.y * d.y;
+        if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            bestIndex = static_cast<int>(i);
+        }
+    }
+    if (bestIndex < 0) {
+        return false;
+    }
+    if (outIndex) {
+        *outIndex = bestIndex;
+    }
+    return true;
+}
+
 void Chain2D::SetEndFollowTarget(const Vector3* target) {
     endFollow_ = target;
     if (!nodes_.empty()) {
@@ -267,8 +415,9 @@ void Chain2D::SetEndFollowTarget(const Vector3* target) {
 
 void Chain2D::SetParams(const ChainParams& params) {
     bool needRebuild =
-        params.nodeCount_ != params_.nodeCount_ ||
-        params.totalLength_ != params_.totalLength_;
+        params.initialUnits_ != params_.initialUnits_ ||
+        params.nodesPerUnit_ != params_.nodesPerUnit_ ||
+        params.unitLength_ != params_.unitLength_;
 
     params_ = params;
 
@@ -276,7 +425,7 @@ void Chain2D::SetParams(const ChainParams& params) {
         BuildNodes();
         BuildLinkObjects();
     } else {
-        restLength_ = params_.totalLength_ / static_cast<float>((std::max)(2, params_.nodeCount_) - 1);
+        restLength_ = params_.unitLength_ / static_cast<float>((std::max)(1, params_.nodesPerUnit_));
         for (auto& node : nodes_) {
             node.radius = params_.nodeRadius_;
         }
@@ -306,11 +455,19 @@ void Chain2D::DrawImGui() {
             anchorPos_ = { anchor[0], anchor[1], 0.0f };
         }
 
-        // パラメータ（節数・全長の変更はノード再構築が必要なのでSetParams経由）
+        // 実行中のユニット数（差分だけアンカー側で伸縮する）
+        int units = GetUnitCount();
+        if (ImGui::DragInt("Units", &units, 1, 1, 16)) {
+            SetUnitCount(units);
+        }
+
+        // パラメータ（ユニット構成の変更はノード再構築が必要なのでSetParams経由）
         ChainParams edit = params_;
         bool changed = false;
-        changed |= ImGui::DragInt("Node Count", &edit.nodeCount_, 1, 2, 64);
-        changed |= ImGui::DragFloat("Total Length", &edit.totalLength_, 0.1f, 0.5f, 20.0f);
+        changed |= ImGui::DragInt("Initial Units", &edit.initialUnits_, 1, 1, 16);
+        changed |= ImGui::DragFloat("Unit Length", &edit.unitLength_, 0.05f, 0.25f, 3.0f);
+        changed |= ImGui::DragInt("Nodes Per Unit", &edit.nodesPerUnit_, 1, 2, 8);
+        changed |= ImGui::DragFloat("Pickup Radius", &edit.pickupRadius_, 0.05f, 0.1f, 3.0f);
         changed |= ImGui::DragFloat("Gravity", &edit.gravity_, 0.5f, -100.0f, 0.0f);
         changed |= ImGui::DragFloat("Damping", &edit.damping_, 0.001f, 0.90f, 1.0f);
         changed |= ImGui::DragInt("Iterations", &edit.iterations_, 1, 1, 50);

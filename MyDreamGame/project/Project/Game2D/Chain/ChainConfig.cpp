@@ -1,4 +1,5 @@
 #include "ChainConfig.h"
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <iostream>
@@ -14,8 +15,13 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         }
 
         nlohmann::json j;
-        j["nodeCount_"] = params.nodeCount_;
-        j["totalLength_"] = params.totalLength_;
+        j["initialUnits_"] = params.initialUnits_;
+        j["unitLength_"] = params.unitLength_;
+        j["nodesPerUnit_"] = params.nodesPerUnit_;
+        j["maxUnits_"] = params.maxUnits_;
+        j["minUnits_"] = params.minUnits_;
+        j["unitsPerAction_"] = params.unitsPerAction_;
+        j["pickupRadius_"] = params.pickupRadius_;
         j["gravity_"] = params.gravity_;
         j["damping_"] = params.damping_;
         j["iterations_"] = params.iterations_;
@@ -49,8 +55,14 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         file >> j;
         file.close();
 
-        if (j.contains("nodeCount_")) params.nodeCount_ = j["nodeCount_"];
-        if (j.contains("totalLength_")) params.totalLength_ = j["totalLength_"];
+        // 旧形式のキー(nodeCount_/totalLength_)は無視される（ユニット制へ移行済み）
+        if (j.contains("initialUnits_")) params.initialUnits_ = j["initialUnits_"];
+        if (j.contains("unitLength_")) params.unitLength_ = j["unitLength_"];
+        if (j.contains("nodesPerUnit_")) params.nodesPerUnit_ = j["nodesPerUnit_"];
+        if (j.contains("maxUnits_")) params.maxUnits_ = j["maxUnits_"];
+        if (j.contains("minUnits_")) params.minUnits_ = j["minUnits_"];
+        if (j.contains("unitsPerAction_")) params.unitsPerAction_ = j["unitsPerAction_"];
+        if (j.contains("pickupRadius_")) params.pickupRadius_ = j["pickupRadius_"];
         if (j.contains("gravity_")) params.gravity_ = j["gravity_"];
         if (j.contains("damping_")) params.damping_ = j["damping_"];
         if (j.contains("iterations_")) params.iterations_ = j["iterations_"];
@@ -61,6 +73,15 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("rootCollisionSkip_")) params.rootCollisionSkip_ = j["rootCollisionSkip_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
+
+        // 値の整合性を保証する（手編集されたJSONでも min>max 等で std::clamp が未定義動作にならないように。
+        // nodesPerUnit_ が 1 だと切り離した鎖が1ノードになり、見えない拾得点が浮くため 2 以上に制限）
+        params.nodesPerUnit_ = (std::max)(2, params.nodesPerUnit_);
+        params.maxUnits_ = (std::max)(1, params.maxUnits_);
+        params.minUnits_ = std::clamp(params.minUnits_, 1, params.maxUnits_);
+        params.unitsPerAction_ = (std::max)(1, params.unitsPerAction_);
+        params.initialUnits_ = (std::max)(1, params.initialUnits_);
+        params.unitLength_ = (std::max)(0.1f, params.unitLength_);
 
         std::cout << "Chain parameters loaded from " << filepath << std::endl;
     } catch (const std::exception& e) {
