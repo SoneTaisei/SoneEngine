@@ -5,6 +5,7 @@ on:
     branches:
       - develop  # 開発用ブランチを指定
       - Game_master
+      - 10Days_master
   workflow_dispatch:
 
 env:
