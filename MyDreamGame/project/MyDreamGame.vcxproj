@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -250,6 +250,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Blocks\FragileBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\SwitchBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\DoorBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\GuardBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
@@ -481,6 +482,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\FragileBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\SwitchBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\DoorBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\GuardBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />

@@ -2,6 +2,7 @@
 #include "Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BaseBlock.h"
+#include "Game2D/Blocks/GuardBlock.h"
 #include <algorithm>
 #include <cmath>
 
@@ -471,6 +472,19 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
         blockPtr->OnCollision(player);
         if (state_.isDead_ || state_.isGoal_) {
             return;
+        }
+    }
+
+    // 警備員の視界判定
+    AABB2D playerAABB = GetAABB(state_, params_);
+    for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed()) continue;
+        if (auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get())) {
+            AABB2D sight = guard->GetSightAABB();
+            if (CheckAABBCollision(playerAABB, sight)) {
+                guard->OnSpottedPlayer(player);
+                if (state_.isDead_) return;
+            }
         }
     }
 
