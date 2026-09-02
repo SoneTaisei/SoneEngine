@@ -45,6 +45,7 @@ static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HA
 bool EditorManager::isPlaying_ = false;
 bool EditorManager::showObjects_ = true;
 bool EditorManager::showEffects_ = true;
+EditorManager* EditorManager::s_Instance = nullptr;
 ImVec2 EditorManager::gameViewPos_ = ImVec2(0, 0);
 ImVec2 EditorManager::gameViewSize_ = ImVec2(1280, 720);
 
@@ -54,6 +55,7 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 }
 
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
+    s_Instance = this;
     animationEditor_ = std::make_unique<AnimationEditor>();
     mapEditor_ = std::make_unique<MapEditor>();
     mapEditor_->Initialize();

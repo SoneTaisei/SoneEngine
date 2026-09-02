@@ -1,5 +1,5 @@
 {
-    "ambientIntensity": 1.0,
+    "ambientIntensity": 1.0119999647140503,
     "dIntensity": 1.75,
     "dLight": {
         "color": [
@@ -33,48 +33,5 @@
         ],
         "radius": 10.0
     },
-    "spotLights": [
-        {
-            "angleDeg": 21.700000762939453,
-            "baseDirection": [
-                0.0,
-                0.0,
-                1.0
-            ],
-            "color": [
-                1.0,
-                1.0,
-                1.0,
-                1.0
-            ],
-            "decay": 0.10000000149011612,
-            "direction": [
-                0.0,
-                0.0,
-                1.0
-            ],
-            "distance": 20.0,
-            "enabled": true,
-            "falloffDeg": 10.800000190734863,
-            "followOffset": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "followType": 0,
-            "intensity": 5.0,
-            "name": "SpotLight_1",
-            "position": [
-                5.800000190734863,
-                4.900000095367432,
-                -5.0
-            ],
-            "rotateAxis": [
-                0.0,
-                1.0,
-                0.0
-            ],
-            "rotateSpeed": 45.0
-        }
-    ]
+    "spotLights": []
 }

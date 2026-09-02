@@ -137,12 +137,103 @@ void LightEditor::Update(float deltaTime, ModelCommon* modelCommon, const Vector
     }
 }
 
+namespace {
+    bool IsPointInsideSpotLightDangerousArea(const Vector3& pt, const SpotLightItem& item) {
+        if (!item.enabled || !item.isDangerous) return false;
+        
+        Vector3 v = { pt.x - item.position.x, pt.y - item.position.y, pt.z - item.position.z };
+        float distSq = v.x * v.x + v.y * v.y + v.z * v.z;
+        if (distSq > item.distance * item.distance) return false;
+        
+        float dist = std::sqrt(distSq);
+        if (dist < 0.0001f) return true; // 光源位置そのもの
+        
+        Vector3 dir = item.direction;
+        float dirLen = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+        if (dirLen < 0.0001f) return false;
+        dir = { dir.x / dirLen, dir.y / dirLen, dir.z / dirLen };
+        
+        float dotDir = v.x * dir.x + v.y * dir.y + v.z * dir.z;
+        if (dotDir <= 0.0f) return false; // 光源の後方
+        
+        float cosTheta = dotDir / dist;
+        
+        // 判定基準: 照射全角（外枠・光の届く範囲全体）の内側に触れたら当たり判定（死亡）！
+        float cosOuter = std::cos(item.angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+        return (cosTheta >= cosOuter);
+    }
+}
+
+bool LightEditor::CheckPlayerHit(const Vector3& playerPos, float playerRadius) const {
+    // プレイヤーの高さ（通常 1.6f）を考慮した縦長サンプリング
+    float halfH = playerRadius * 2.0f; // 約0.8f
+    const Vector3 samples[] = {
+        playerPos,
+        { playerPos.x, playerPos.y + halfH, playerPos.z },       // 頭頂部
+        { playerPos.x, playerPos.y + halfH * 0.5f, playerPos.z },// 胸部
+        { playerPos.x, playerPos.y - halfH * 0.5f, playerPos.z },// 腰部
+        { playerPos.x, playerPos.y - halfH, playerPos.z },       // 足元
+        { playerPos.x - playerRadius, playerPos.y, playerPos.z },
+        { playerPos.x + playerRadius, playerPos.y, playerPos.z },
+        { playerPos.x - playerRadius, playerPos.y + halfH * 0.5f, playerPos.z },
+        { playerPos.x + playerRadius, playerPos.y + halfH * 0.5f, playerPos.z },
+        { playerPos.x - playerRadius, playerPos.y - halfH * 0.5f, playerPos.z },
+        { playerPos.x + playerRadius, playerPos.y - halfH * 0.5f, playerPos.z },
+    };
+
+    for (const auto& item : spotLights_) {
+        if (!item.enabled || !item.isDangerous) continue;
+        for (const auto& pt : samples) {
+            if (IsPointInsideSpotLightDangerousArea(pt, item)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool LightEditor::CheckAABBHit(const AABB2D& aabb) const {
+    float xMin = aabb.left;
+    float xMax = aabb.right;
+    float yMin = aabb.bottom;
+    float yMax = aabb.top;
+
+    for (const auto& item : spotLights_) {
+        if (!item.enabled || !item.isDangerous) continue;
+
+        // AABBの矩形領域を網羅する 3x5 グリッドサンプリング (頭〜足元、左右)
+        for (int iy = 0; iy < 5; ++iy) {
+            float ty = static_cast<float>(iy) / 4.0f;
+            float y = yMin + (yMax - yMin) * ty;
+
+            for (int ix = 0; ix < 3; ++ix) {
+                float tx = static_cast<float>(ix) / 2.0f;
+                float x = xMin + (xMax - xMin) * tx;
+
+                const Vector3 pts[] = {
+                    { x, y, 0.0f },
+                    { x, y, -0.2f },
+                    { x, y, 0.2f }
+                };
+
+                for (const auto& pt : pts) {
+                    if (IsPointInsideSpotLightDangerousArea(pt, item)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 void LightEditor::AddSpotLight() {
     if (spotLights_.size() >= kMaxSpotLights) return;
 
     SpotLightItem newItem;
     newItem.name = "SpotLight_" + std::to_string(spotLights_.size() + 1);
     newItem.enabled = true;
+    newItem.isDangerous = true;
     newItem.color = {1.0f, 1.0f, 1.0f, 1.0f};
     newItem.position = {0.0f, 0.0f, -5.0f};
     newItem.direction = {0.0f, 0.0f, 1.0f};
@@ -246,7 +337,9 @@ void LightEditor::DrawViewportContent(D3D12_GPU_DESCRIPTOR_HANDLE renderTextureS
     }
 }
 
-void LightEditor::DrawOverlay(const Matrix4x4& viewProjMatrix, ImVec2 viewportPos, ImVec2 viewportSize) {
+void LightEditor::DrawOverlay(const Matrix4x4& viewProjMatrix, ImVec2 viewportPos, ImVec2 viewportSize, const AABB2D* playerAABB) {
+    if (!showDebugCollision_) return;
+
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     if (!drawList) return;
 
@@ -254,14 +347,17 @@ void LightEditor::DrawOverlay(const Matrix4x4& viewProjMatrix, ImVec2 viewportPo
 
     for (int i = 0; i < (int)spotLights_.size(); i++) {
         const auto& light = spotLights_[i];
-        bool isSelected = (i == selectedLightIndex_);
+        if (!light.enabled) continue;
 
+        bool isSelected = (i == selectedLightIndex_);
         Vector3 p = light.position;
+        Vector3 dirNorm = NormalizeVector(light.direction);
+
+        // 1. 光源キューブと方向線
         float halfSize = isSelected ? 0.35f : 0.18f;
-        ImU32 boxColor = isSelected ? IM_COL32(255, 230, 0, 255) : IM_COL32(180, 180, 180, 140);
+        ImU32 boxColor = isSelected ? IM_COL32(255, 230, 0, 255) : (light.isDangerous ? IM_COL32(255, 80, 80, 180) : IM_COL32(180, 180, 180, 140));
         float lineThickness = isSelected ? 2.5f : 1.2f;
 
-        // 8頂点（ワイヤーの立方体）
         Vector3 v[8] = {
             {p.x - halfSize, p.y - halfSize, p.z - halfSize},
             {p.x + halfSize, p.y - halfSize, p.z - halfSize},
@@ -279,7 +375,6 @@ void LightEditor::DrawOverlay(const Matrix4x4& viewProjMatrix, ImVec2 viewportPo
             valid[j] = WorldToScreenPos(v[j], viewProjMatrix, viewportPos, viewportSize, s[j]);
         }
 
-        // 12本のエッジ（立方体のワイヤーフレーム）
         const int edges[12][2] = {
             {0, 1}, {1, 2}, {2, 3}, {3, 0},
             {4, 5}, {5, 6}, {6, 7}, {7, 4},
@@ -294,27 +389,122 @@ void LightEditor::DrawOverlay(const Matrix4x4& viewProjMatrix, ImVec2 viewportPo
             }
         }
 
-        // 中心点
         ImVec2 centerScreen;
         if (WorldToScreenPos(p, viewProjMatrix, viewportPos, viewportSize, centerScreen)) {
-            ImU32 centerColor = isSelected ? IM_COL32(255, 255, 80, 255) : IM_COL32(200, 200, 200, 180);
-            drawList->AddCircleFilled(centerScreen, isSelected ? 4.5f : 2.5f, centerColor);
+            ImU32 centerColor = isSelected ? IM_COL32(255, 255, 80, 255) : (light.isDangerous ? IM_COL32(255, 60, 60, 255) : IM_COL32(200, 200, 200, 180));
+            drawList->AddCircleFilled(centerScreen, isSelected ? 4.5f : 3.0f, centerColor);
 
-            if (isSelected) {
-                // 選択中のスポットライトの照射方向線 (Direction)
-                Vector3 dirNorm = NormalizeVector(light.direction);
-                Vector3 targetP = { p.x + dirNorm.x * 1.8f, p.y + dirNorm.y * 1.8f, p.z + dirNorm.z * 1.8f };
-                ImVec2 targetScreen;
-                if (WorldToScreenPos(targetP, viewProjMatrix, viewportPos, viewportSize, targetScreen)) {
-                    drawList->AddLine(centerScreen, targetScreen, IM_COL32(255, 180, 0, 255), 2.0f);
-                    drawList->AddCircleFilled(targetScreen, 3.5f, IM_COL32(255, 120, 0, 255));
+            char label[64];
+            snprintf(label, sizeof(label), " [Spot #%d: %s%s]", i + 1, light.name.c_str(), light.isDangerous ? " (危険)" : "");
+            drawList->AddText(ImVec2(centerScreen.x + 8, centerScreen.y - 8), isSelected ? IM_COL32(255, 240, 50, 255) : IM_COL32(255, 120, 120, 220), label);
+        }
+
+        // 2. スポットライト円錐（Cone）の直交基底ベクトルを計算
+        Vector3 up = (std::abs(dirNorm.y) < 0.99f) ? Vector3{0.0f, 1.0f, 0.0f} : Vector3{1.0f, 0.0f, 0.0f};
+        Vector3 u = NormalizeVector(TransformFunctions::Cross(dirNorm, up));
+        Vector3 w = NormalizeVector(TransformFunctions::Cross(dirNorm, u));
+
+        // 3. プレイヤーが存在する Z=0 平面での光の交差円（判定断面）を描画
+        if (std::abs(dirNorm.z) > 0.001f) {
+            float tZ0 = -p.z / dirNorm.z;
+            if (tZ0 > 0.0f && tZ0 <= light.distance) {
+                Vector3 centerZ0 = { p.x + dirNorm.x * tZ0, p.y + dirNorm.y * tZ0, 0.0f };
+                float radOuter = tZ0 * std::tan(light.angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+                float radCore = tZ0 * std::tan(light.falloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+
+                const int SEGMENTS = 24;
+                ImVec2 prevOuterScreen, prevCoreScreen;
+                bool prevOuterValid = false, prevCoreValid = false;
+
+                for (int sIdx = 0; sIdx <= SEGMENTS; ++sIdx) {
+                    float phi = static_cast<float>(sIdx) * (2.0f * static_cast<float>(std::numbers::pi) / static_cast<float>(SEGMENTS));
+                    float cosP = std::cos(phi);
+                    float sinP = std::sin(phi);
+
+                    // 外縁円 (Z=0: 当たり判定境界・光の届く範囲)
+                    Vector3 ptOuter = { centerZ0.x + cosP * radOuter, centerZ0.y + sinP * radOuter, 0.0f };
+                    ImVec2 scrOuter;
+                    bool vOuter = WorldToScreenPos(ptOuter, viewProjMatrix, viewportPos, viewportSize, scrOuter);
+                    if (prevOuterValid && vOuter) {
+                        ImU32 outerCol = light.isDangerous ? IM_COL32(255, 30, 30, 240) : IM_COL32(255, 220, 80, 140);
+                        float outerThick = light.isDangerous ? 2.5f : 1.2f;
+                        drawList->AddLine(prevOuterScreen, scrOuter, outerCol, outerThick);
+                    }
+                    prevOuterScreen = scrOuter;
+                    prevOuterValid = vOuter;
+
+                    // 中心コア円 (Z=0: フル輝度エリア)
+                    if (radCore > 0.001f) {
+                        Vector3 ptCore = { centerZ0.x + cosP * radCore, centerZ0.y + sinP * radCore, 0.0f };
+                        ImVec2 scrCore;
+                        bool vCore = WorldToScreenPos(ptCore, viewProjMatrix, viewportPos, viewportSize, scrCore);
+                        if (prevCoreValid && vCore) {
+                            drawList->AddLine(prevCoreScreen, scrCore, IM_COL32(255, 255, 100, 160), 1.2f);
+                        }
+                        prevCoreScreen = scrCore;
+                        prevCoreValid = vCore;
+                    }
                 }
 
-                // ライト番号テキスト
-                char label[64];
-                snprintf(label, sizeof(label), " [Spot #%d: %s]", i + 1, light.name.c_str());
-                drawList->AddText(ImVec2(centerScreen.x + 8, centerScreen.y - 8), IM_COL32(255, 240, 50, 255), label);
+                // 判定円の中心とラベル
+                ImVec2 cz0Screen;
+                if (WorldToScreenPos(centerZ0, viewProjMatrix, viewportPos, viewportSize, cz0Screen)) {
+                    drawList->AddCircleFilled(cz0Screen, 3.5f, light.isDangerous ? IM_COL32(255, 30, 30, 255) : IM_COL32(255, 200, 50, 200));
+                    if (light.isDangerous) {
+                        drawList->AddText(ImVec2(cz0Screen.x + 6, cz0Screen.y + 4), IM_COL32(255, 60, 60, 255), "Z=0 光の判定エリア");
+                    }
+                }
             }
+        }
+    }
+
+    // 4. プレイヤーの当たり判定ボックス (AABB) の可視化
+    if (playerAABB) {
+        float xMin = playerAABB->left;
+        float xMax = playerAABB->right;
+        float yMin = playerAABB->bottom;
+        float yMax = playerAABB->top;
+
+        Vector3 pCorners[4] = {
+            { xMin, yMax, 0.0f }, // 左上
+            { xMax, yMax, 0.0f }, // 右上
+            { xMax, yMin, 0.0f }, // 右下
+            { xMin, yMin, 0.0f }  // 左下
+        };
+
+        ImVec2 pScr[4];
+        bool pValid[4];
+        for (int j = 0; j < 4; ++j) {
+            pValid[j] = WorldToScreenPos(pCorners[j], viewProjMatrix, viewportPos, viewportSize, pScr[j]);
+        }
+
+        bool isHit = CheckAABBHit(*playerAABB);
+        ImU32 aabbColor = isHit ? IM_COL32(255, 30, 30, 255) : IM_COL32(40, 230, 80, 230);
+        float aabbThickness = isHit ? 3.0f : 1.8f;
+
+        for (int j = 0; j < 4; ++j) {
+            int next = (j + 1) % 4;
+            if (pValid[j] && pValid[next]) {
+                drawList->AddLine(pScr[j], pScr[next], aabbColor, aabbThickness);
+            }
+        }
+
+        // サンプリング点の描画
+        for (int iy = 0; iy < 5; ++iy) {
+            float ty = static_cast<float>(iy) / 4.0f;
+            float y = yMin + (yMax - yMin) * ty;
+            for (int ix = 0; ix < 3; ++ix) {
+                float tx = static_cast<float>(ix) / 2.0f;
+                float x = xMin + (xMax - xMin) * tx;
+                ImVec2 ptScr;
+                if (WorldToScreenPos(Vector3{x, y, 0.0f}, viewProjMatrix, viewportPos, viewportSize, ptScr)) {
+                    drawList->AddCircleFilled(ptScr, 2.5f, aabbColor);
+                }
+            }
+        }
+
+        if (pValid[0]) {
+            drawList->AddText(ImVec2(pScr[0].x, pScr[0].y - 16), aabbColor, isHit ? "[HIT! 光判定接触]" : "Player Collider");
         }
     }
 
@@ -339,6 +529,9 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
         // 1. スポットライト管理タブ
         // ==========================================
         if (ImGui::BeginTabItem("スポットライト (Spot)")) {
+            ImGui::Checkbox("当たり判定・ライトコーンを可視化 (Debug Overlay)", &showDebugCollision_);
+            ImGui::Separator();
+
             ImGui::Text("配置済みスポットライト (最大 %d 個): %zu 個", kMaxSpotLights, spotLights_.size());
             
             ImGui::BeginDisabled(spotLights_.size() >= kMaxSpotLights);
@@ -401,13 +594,16 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                 configChanged |= ImGui::DragFloat("届く距離 (Distance)", &light.distance, 0.1f, 0.1f, 200.0f, "%.1f");
                 configChanged |= ImGui::DragFloat("減衰率 (Decay)", &light.decay, 0.05f, 0.1f, 10.0f, "%.2f");
 
-                if (ImGui::SliderFloat("照射全角 (Angle)", &light.angleDeg, 1.0f, 90.0f, "%.1f deg")) {
+                if (ImGui::SliderFloat("照射全角 (Angle / 当たり判定範囲)", &light.angleDeg, 1.0f, 90.0f, "%.1f deg")) {
                     if (light.falloffDeg > light.angleDeg) light.falloffDeg = light.angleDeg;
                     configChanged = true;
                 }
-                if (ImGui::SliderFloat("フォールオフ開始角", &light.falloffDeg, 0.0f, light.angleDeg, "%.1f deg")) {
+                if (ImGui::SliderFloat("フォールオフ開始角 (最大輝度芯)", &light.falloffDeg, 0.0f, light.angleDeg, "%.1f deg")) {
                     configChanged = true;
                 }
+
+                configChanged |= ImGui::Checkbox("危険な光 (当たるとプレイヤー死亡)", &light.isDangerous);
+                ImGui::TextDisabled("※照射全角の内側(光が当たっている領域全体)がプレイヤーの当たり判定になります。");
 
                 ImGui::Separator();
                 ImGui::Text("追従・動作モード");
@@ -601,6 +797,7 @@ void LightEditor::SaveLightingConfig(ModelCommon* modelCommon) {
         s["decay"] = item.decay;
         s["angleDeg"] = item.angleDeg;
         s["falloffDeg"] = item.falloffDeg;
+        s["isDangerous"] = item.isDangerous;
         s["followType"] = static_cast<int>(item.followType);
         s["followOffset"] = {item.followOffset.x, item.followOffset.y, item.followOffset.z};
         s["rotateAxis"] = {item.rotateAxis.x, item.rotateAxis.y, item.rotateAxis.z};
@@ -664,6 +861,7 @@ void LightEditor::LoadLightingConfig(ModelCommon* modelCommon) {
                 if (item.contains("decay")) sl.decay = item["decay"];
                 if (item.contains("angleDeg")) sl.angleDeg = item["angleDeg"];
                 if (item.contains("falloffDeg")) sl.falloffDeg = item["falloffDeg"];
+                if (item.contains("isDangerous")) sl.isDangerous = item["isDangerous"];
                 if (item.contains("followType")) sl.followType = static_cast<LightFollowType>(item["followType"]);
                 if (item.contains("followOffset")) sl.followOffset = {item["followOffset"][0], item["followOffset"][1], item["followOffset"][2]};
                 if (item.contains("rotateAxis")) sl.rotateAxis = {item["rotateAxis"][0], item["rotateAxis"][1], item["rotateAxis"][2]};
@@ -676,6 +874,7 @@ void LightEditor::LoadLightingConfig(ModelCommon* modelCommon) {
             SpotLightItem sl;
             sl.name = "SpotLight";
             sl.enabled = true;
+            sl.isDangerous = true;
             if (j["sLight"].contains("color")) sl.color = {j["sLight"]["color"][0], j["sLight"]["color"][1], j["sLight"]["color"][2], j["sLight"]["color"][3]};
             if (j["sLight"].contains("position")) sl.position = {j["sLight"]["position"][0], j["sLight"]["position"][1], j["sLight"]["position"][2]};
             if (j["sLight"].contains("direction")) sl.direction = {j["sLight"]["direction"][0], j["sLight"]["direction"][1], j["sLight"]["direction"][2]};

@@ -22,6 +22,9 @@ struct SpotLightItem {
     float angleDeg = 30.0f;
     float falloffDeg = 20.0f;
 
+    // 危険度・当たり判定設定
+    bool isDangerous = true;        //!< プレイヤーへの当たり判定（当たると即死）
+
     // 追従・アニメーション設定
     LightFollowType followType = LightFollowType::None;
     Vector3 followOffset = {0.0f, 0.0f, 0.0f};
@@ -41,13 +44,17 @@ public:
     // 毎フレームのライト追従・アニメーション更新およびGPUバッファへの同期
     void Update(float deltaTime, ModelCommon* modelCommon, const Vector3* playerPos = nullptr);
 
+    // プレイヤー（点・半径またはAABB）が危険なスポットライトの光に当たっているかチェック
+    bool CheckPlayerHit(const Vector3& playerPos, float playerRadius = 0.4f) const;
+    bool CheckAABBHit(const AABB2D& aabb) const;
+
 #ifdef USE_IMGUI
     // メインタブ画面描画（ゲームビューやリプレイエディターと同じメイン領域に配置：画面プレビューのみ）
     void DrawViewport(D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, const Matrix4x4* viewProjMatrix = nullptr, bool* pOpen = nullptr);
     void DrawViewportContent(D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, const Matrix4x4* viewProjMatrix = nullptr);
 
-    // 画面オーバーレイ描画（選択中スポットライトのワイヤーボックス・照射方向等）
-    void DrawOverlay(const Matrix4x4& viewProjMatrix, ImVec2 viewportPos, ImVec2 viewportSize);
+    // 画面オーバーレイ描画（スポットライトのコーン、Z=0平面の危険円、プレイヤーの当たり判定等）
+    void DrawOverlay(const Matrix4x4& viewProjMatrix, ImVec2 viewportPos, ImVec2 viewportSize, const AABB2D* playerAABB = nullptr);
 
     // 下部タブ画面描画（ログやドープシートと同じ位置に配置：「スポットライト」設定パネル）
     void DrawBottomPanel(ModelCommon* modelCommon, bool* pOpen = nullptr);
@@ -70,6 +77,10 @@ public:
     void SetVisible(bool visible) { isVisible_ = visible; }
     bool IsHovered() const { return isHovered_; }
 
+    // 当たり判定デバッグ表示
+    bool IsShowDebugCollision() const { return showDebugCollision_; }
+    void SetShowDebugCollision(bool show) { showDebugCollision_ = show; }
+
     // 環境光・グローバルライトのゲッター/セッター
     float GetAmbientIntensity() const { return ambientIntensity_; }
     void SetAmbientIntensity(float intensity) { ambientIntensity_ = intensity; }
@@ -80,6 +91,7 @@ public:
 private:
     bool isVisible_ = true;
     bool isHovered_ = false;
+    bool showDebugCollision_ = true; //!< 当たり判定とライトコーンのデバッグ可視化
     int selectedLightIndex_ = 0;
 
     // 環境光（暗闇調整用：0.0fで完全な暗闇）

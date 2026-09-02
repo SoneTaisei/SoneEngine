@@ -52,6 +52,9 @@ public:
     // 終了処理 (ImGuiの解放)
     void Finalize();
 
+    // シングルトンインスタンス取得
+    static EditorManager* GetInstance() { return s_Instance; }
+
     // 再生状態の取得・設定
     static bool IsPlaying() { return isPlaying_; }
     static void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
@@ -340,5 +343,6 @@ private:
 
     static bool showObjects_;
     static bool showEffects_;
+    static EditorManager* s_Instance;
 };
 #endif

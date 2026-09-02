@@ -3,6 +3,7 @@
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
+#include "Resource/Model/ModelManager.h"
 #include "Graphics/GameCamera.h"
 #include "Scene/SceneFactory.h"
 #ifdef USE_IMGUI
@@ -365,6 +366,22 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
 
             player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
+
+            // プレイヤーと危険な光（スポットライト）の当たり判定
+            if (gameState_ == GameState::Playing && !player_->IsDead() && !player_->IsGoal()) {
+                bool hitDangerousLight = false;
+#ifdef USE_IMGUI
+                if (auto* editorMgr = EditorManager::GetInstance()) {
+                    if (auto* lightEditor = editorMgr->GetLightEditor()) {
+                        hitDangerousLight = lightEditor->CheckAABBHit(player_->GetAABB()) ||
+                                            lightEditor->CheckPlayerHit(player_->GetPosition(), player_->GetParams().halfWidth_);
+                    }
+                }
+#endif
+                if (hitDangerousLight) {
+                    player_->Kill();
+                }
+            }
 
             // 鎖×プレイヤー接続（ソケット同期・拾う/落とす入力）。鎖の更新より先に行う
             if (chainController_) {
@@ -749,6 +766,14 @@ void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
                         }
                     }
                     drawList->PopClipRect();
+                }
+            }
+
+            // 3. スポットライトの危険光・当たり判定オーバーレイ描画
+            if (auto* editorMgr = EditorManager::GetInstance()) {
+                if (auto* lightEditor = editorMgr->GetLightEditor()) {
+                    AABB2D playerAABB = player_->GetAABB();
+                    lightEditor->DrawOverlay(viewProjectionMatrix, gameViewPos, gameViewSize, &playerAABB);
                 }
             }
         }

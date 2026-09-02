@@ -143,11 +143,16 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
             
             float3 spotLightDirOnSurface = normalize(input.worldPosition - sl.position);
             float spotDistance = length(sl.position - input.worldPosition);
+            
+            // Distance attenuation
             float spotAttenuation = pow(saturate(1.0f - (spotDistance / max(0.0001f, sl.distance))), sl.decay);
             
+            // Angular falloff: full intensity inside core angle (cosFalloffStart), smoothly falls off to 0 outside (cosAngle)
             float cosTheta = dot(spotLightDirOnSurface, normalize(sl.direction));
             float falloffRange = sl.cosFalloffStart - sl.cosAngle;
-            float falloffFactor = saturate((cosTheta - sl.cosAngle) / max(0.001f, falloffRange));
+            float rawFalloff = saturate((cosTheta - sl.cosAngle) / max(0.0001f, falloffRange));
+            // Smoothstep curve for clear distinction between safe falloff zone and dangerous core zone
+            float falloffFactor = smoothstep(0.0f, 1.0f, rawFalloff);
             
             float spotNdotL = dot(normal, -spotLightDirOnSurface);
             float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
