@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"
 #include "Effect/ParticleManager.h"
@@ -28,6 +28,8 @@ enum class GameState {
 class GameScene : public IScene {
 public:
     static std::string s_TargetMapFilePath;
+
+    ~GameScene() override;
 
     void Initialize() override;
     void OnEnter(SceneManager *sceneManager) override;
@@ -80,6 +82,9 @@ private:
     // コマンドリストを覚えておくための変数
     
 
+
+    // ステージクリア遷移で覆い切った後の行き先（stage_config.txt の次のステージ。無ければ同じステージをもう一度）
+    void GoToNextStage(SceneManager* sceneManager);
 
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;

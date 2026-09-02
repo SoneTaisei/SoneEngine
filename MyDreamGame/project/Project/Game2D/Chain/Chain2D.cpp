@@ -1,4 +1,4 @@
-#include "Chain2D.h"
+﻿#include "Chain2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Player/Player2D.h"
 #include "GameObject/Object3D.h"
@@ -21,9 +21,6 @@ namespace {
     // アンカーが1フレームでこれ以上動いたらワープとみなして速度をリセットする
     // （リスポーン・部屋遷移で鎖が鞭のように暴れるのを防ぐ）
     constexpr float kTeleportThreshold = 2.0f;
-
-    // 描画時のZオフセット（ブロックより手前に表示する。物理はz=0のまま）
-    constexpr float kDrawOffsetZ = -0.2f;
 
     // 先頭セグメントの自然長がこの割合未満の間は先頭リンクを描かない（極短いリンクのチラつき防止）
     constexpr float kHeadLinkVisibleRatio = 0.3f;
@@ -308,7 +305,7 @@ void Chain2D::UpdateLinkTransforms() {
         const Vector3& p2 = nodes_[i + 1].pos;
 
         Vector3 mid = (p1 + p2) * 0.5f;
-        mid.z = kDrawOffsetZ;
+        mid.z = drawOffsetZ_;
         float angle = std::atan2(p2.y - p1.y, p2.x - p1.x);
 
         // 先頭セグメントは繰り出し中の自然長に合わせて短く描く（手から生えてくる見た目）
@@ -613,6 +610,23 @@ void Chain2D::ReleaseRigidLine(const Vector3& center, float omega, float velocit
         float ry = node.pos.y - center.y;
         Vector3 v = { -ry * w, rx * w, 0.0f };
         VerletPhysics2D::ApplyVelocity(node, v, subDt, 1.0f);
+    }
+}
+
+void Chain2D::TranslateNodes(const Vector3& delta) {
+    Vector3 d = { delta.x, delta.y, 0.0f };
+    for (auto& node : nodes_) {
+        node.pos += d;
+        node.prevPos += d;
+    }
+    anchorPos_ += d;
+    UpdateLinkTransforms();
+}
+
+void Chain2D::SetAllVelocities(const Vector3& velocity, float dt) {
+    float subDt = dt / static_cast<float>((std::max)(1, params_.subSteps_));
+    for (auto& node : nodes_) {
+        node.prevPos = node.pos - velocity * subDt;
     }
 }
 

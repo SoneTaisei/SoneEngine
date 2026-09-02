@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Core/Utility/Vector3.h"
 #include <memory>
 #include <string>
@@ -21,6 +21,9 @@ public:
     /// <summary>回転中の合図（色を明るくする）</summary>
     void SetHighlight(bool highlight);
 
+    /// <summary>描画時の z（既定 -0.25 で鎖(-0.2)よりわずかに手前。遷移用は黒い背景板より手前にする）</summary>
+    void SetDrawOffsetZ(float z) { drawOffsetZ_ = z; }
+
     /// <summary>自転を進める（宝石モデル用。球では見えない）</summary>
     void AddSelfRotation(float deltaAngle);
 
@@ -38,4 +41,5 @@ private:
     float scale_ = 0.3f;
     float selfAngle_ = 0.0f;
     bool highlight_ = false;
+    float drawOffsetZ_ = -0.25f;
 };
