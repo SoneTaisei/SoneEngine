@@ -40,10 +40,13 @@
 
 #pragma comment(lib, "winmm.lib")
 
+WindowsApplication *WindowsApplication::s_Instance = nullptr;
+
 WindowsApplication::WindowsApplication() = default;
 WindowsApplication::~WindowsApplication() = default;
 
 void WindowsApplication::Initialize() {
+    s_Instance = this;
 
     // COMの初期化
     CoInitializeEx(0, COINIT_MULTITHREADED);
@@ -411,6 +414,29 @@ void WindowsApplication::Draw() {
     dxCommon_->ExecuteCommands();
     dxCommon_->Present();
 }
+
+void WindowsApplication::OnResize(int width, int height) {
+    if (width <= 0 || height <= 0) return;
+
+    if (dxCommon_) {
+        dxCommon_->ResizeSwapchain(width, height);
+    }
+    if (gameCamera_) {
+        gameCamera_->SetResolution(width, height);
+    }
+    if (debugCamera_) {
+        debugCamera_->SetResolution(width, height);
+    }
+#ifdef USE_IMGUI
+    if (mapEditorCamera_) {
+        mapEditorCamera_->SetResolution(width, height);
+    }
+#endif
+    if (spriteCommon_) {
+        spriteCommon_->SetResolution(width, height);
+    }
+}
+
 void WindowsApplication::Finalize() {
 #ifdef USE_IMGUI
     if (editorManager_) {
@@ -458,6 +484,8 @@ void WindowsApplication::Finalize() {
 
     // 終了前に現在のウィンドウ状態を保存する
     SaveWindowConfig();
+
+    s_Instance = nullptr;
 
     // 8. COMの終了処理
     CoUninitialize();

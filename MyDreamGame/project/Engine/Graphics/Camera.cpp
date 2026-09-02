@@ -8,6 +8,12 @@ void Camera::Initialize(int kClientWidth, int kClientHeight) {
     UpdateMatrix(); // 最初の行列を作っておく
 }
 
+void Camera::SetResolution(int kClientWidth, int kClientHeight) {
+    kClientWidth_ = kClientWidth;
+    kClientHeight_ = kClientHeight;
+    UpdateMatrix();
+}
+
 void Camera::UpdateMatrix() {
     // [DebugCamera.cpp] にあった計算処理をここに移動します
 

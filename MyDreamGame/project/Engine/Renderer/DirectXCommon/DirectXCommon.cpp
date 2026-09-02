@@ -185,7 +185,7 @@ void DirectXCommon::PostDraw() {
 }
 
 void DirectXCommon::ResizeSwapchain(int32_t width, int32_t height) {
-    if (!swapChain_) return;
+    if (!swapChain_ || width <= 0 || height <= 0) return;
 
     // 1. GPUが現在のコマンドリストの実行を完了するまで待機
     fenceValue_++;
@@ -216,10 +216,97 @@ void DirectXCommon::ResizeSwapchain(int32_t width, int32_t height) {
     }
 
     // 6. ビューポートとシザー矩形を更新
-    swapchainViewport_.Width = (float)width;
-    swapchainViewport_.Height = (float)height;
-    swapchainScissorRect_.right = width;
-    swapchainScissorRect_.bottom = height;
+    viewport_.Width = (float)width;
+    viewport_.Height = (float)height;
+    viewport_.TopLeftX = 0;
+    viewport_.TopLeftY = 0;
+    viewport_.MinDepth = 0.0f;
+    viewport_.MaxDepth = 1.0f;
+
+    scissorRect_.left = 0;
+    scissorRect_.right = width;
+    scissorRect_.top = 0;
+    scissorRect_.bottom = height;
+
+    swapchainViewport_ = viewport_;
+    swapchainScissorRect_ = scissorRect_;
+
+    // 7. デプスバッファの再生成
+    if (depthStencilResource_ && dsvDescriptorHeap_) {
+        depthStencilResource_.Reset();
+        depthStencilResource_ = CreateDepthStencilTextureResource(device_.Get(), width, height);
+
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+        dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        device_->CreateDepthStencilView(depthStencilResource_.Get(), &dsvDesc, dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart());
+
+        if (depthStencilSrvHandleCPU_.ptr != 0) {
+            D3D12_SHADER_RESOURCE_VIEW_DESC depthSrvDesc{};
+            depthSrvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+            depthSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            depthSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            depthSrvDesc.Texture2D.MipLevels = 1;
+            device_->CreateShaderResourceView(depthStencilResource_.Get(), &depthSrvDesc, depthStencilSrvHandleCPU_);
+        }
+    }
+
+    // 8. レンダーターゲット（RenderTexture / PostProcessTexture）の再生成
+    if (renderTextureResource_) {
+        renderTextureResource_.Reset();
+        const Vector4 kRenderTargetClearValue{0.1f, 0.25f, 0.5f, 1.0f};
+        renderTextureResource_ = CreateRenderTextureResource(
+            device_.Get(), width, height,
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kRenderTargetClearValue);
+
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
+        rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        device_->CreateRenderTargetView(renderTextureResource_.Get(), &rtvDesc, renderTextureRtvHandle_);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+        srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = 1;
+        device_->CreateShaderResourceView(renderTextureResource_.Get(), &srvDesc, renderTextureSrvHandleCPU_);
+    }
+
+    if (postProcessResource_) {
+        postProcessResource_.Reset();
+        const Vector4 kPostProcessClearValue{0.0f, 0.0f, 0.0f, 1.0f};
+        postProcessResource_ = CreateRenderTextureResource(
+            device_.Get(), width, height,
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, kPostProcessClearValue, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
+        rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        device_->CreateRenderTargetView(postProcessResource_.Get(), &rtvDesc, postProcessRtvHandle_);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+        srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = 1;
+        device_->CreateShaderResourceView(postProcessResource_.Get(), &srvDesc, postProcessSrvHandleCPU_);
+
+        finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
+    }
+
+    // 9. ポストプロセス用定数バッファのテクセルサイズ更新
+    if (smoothingParamsData_) {
+        smoothingParamsData_->texelSize[0] = 1.0f / (float)width;
+        smoothingParamsData_->texelSize[1] = 1.0f / (float)height;
+    }
+    if (gaussianParamsData_) {
+        gaussianParamsData_->texelSize[0] = 1.0f / (float)width;
+        gaussianParamsData_->texelSize[1] = 1.0f / (float)height;
+    }
+    if (compositeParamsData_) {
+        compositeParamsData_->texelSize[0] = 1.0f / (float)width;
+        compositeParamsData_->texelSize[1] = 1.0f / (float)height;
+    }
 }
 
 void DirectXCommon::CreateDxInstance() {
@@ -1155,30 +1242,9 @@ void DirectXCommon::ExecutePostEffect() {
 }
 
 void DirectXCommon::DrawRenderTexture() {
-    // 1. スワップチェーンのサイズと論理サイズ(1280x720)からレターボックス用のビューポートを計算
-    float scale = (std::min)((float)windowWidth_ / 1280.0f, (float)windowHeight_ / 720.0f);
-    float vpWidth = 1280.0f * scale;
-    float vpHeight = 720.0f * scale;
-    float vpX = ((float)windowWidth_ - vpWidth) / 2.0f;
-    float vpY = ((float)windowHeight_ - vpHeight) / 2.0f;
-
-    D3D12_VIEWPORT letterboxViewport{};
-    letterboxViewport.TopLeftX = vpX;
-    letterboxViewport.TopLeftY = vpY;
-    letterboxViewport.Width = vpWidth;
-    letterboxViewport.Height = vpHeight;
-    letterboxViewport.MinDepth = 0.0f;
-    letterboxViewport.MaxDepth = 1.0f;
-
-    D3D12_RECT letterboxScissor{};
-    letterboxScissor.left = static_cast<LONG>(vpX);
-    letterboxScissor.top = static_cast<LONG>(vpY);
-    letterboxScissor.right = static_cast<LONG>(vpX + vpWidth);
-    letterboxScissor.bottom = static_cast<LONG>(vpY + vpHeight);
-
-    // ビューポートとシザーを適用（元のswapchainViewport_からは一時的に変更）
-    commandList_->RSSetViewports(1, &letterboxViewport);
-    commandList_->RSSetScissorRects(1, &letterboxScissor);
+    // レンダーターゲットがウィンドウ解像度に一致しているため、スワップチェーン全体に1:1で直接描画
+    commandList_->RSSetViewports(1, &swapchainViewport_);
+    commandList_->RSSetScissorRects(1, &swapchainScissorRect_);
 
     // ポストプロセス済みのテクスチャ(SRV)を Swapchain (RT) にコピーする
     commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());

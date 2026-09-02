@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Core/Utility/Structs.h" // Vector3, Matrix4x4 等の定義
 
 class Camera {
@@ -9,6 +9,9 @@ public:
 
     // 初期化（画面サイズを受け取る）
     virtual void Initialize(int kClientWidth, int kClientHeight);
+
+    // 画面サイズ・解像度変更時の更新
+    virtual void SetResolution(int kClientWidth, int kClientHeight);
 
     // 行列を更新する（位置や角度が変わったら呼ぶ）
     virtual void UpdateMatrix();
