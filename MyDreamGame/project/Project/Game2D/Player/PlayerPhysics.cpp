@@ -17,11 +17,17 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     // 3. X霆ｸ遘ｻ蜍輔→螢∵款縺玲綾縺・
     state_.position_.x += (state_.velocity_.x + state_.platformVelocity_.x) * deltaTime;
     ResolveCollisionX(state_, params_, mapChip, player);
+    if (state_.isTouchingWallLeft_ || state_.isTouchingWallRight_) {
+        state_.launchVelocityX_ = 0.0f; // 壁に当たったら発射の勢いは消える
+    }
     if (state_.isDead_ || state_.isGoal_) return;
 
     // 4. Y霆ｸ遘ｻ蜍輔→蠎・螟ｩ莠墓款縺玲綾縺・
     state_.position_.y += state_.velocity_.y * deltaTime;
     ResolveCollisionY(state_, params_, mapChip, player);
+    if (state_.isOnGround_) {
+        state_.launchVelocityX_ = 0.0f; // 着地で発射の勢いは消える
+    }
     if (state_.isDead_ || state_.isGoal_) return;
 
     // 5. 襍ｰ陦御ｸｭ縺ｮ雜ｳ蜈・ゅ⊂縺薙ｊ繧ｨ繝輔ぉ繧ｯ繝・
@@ -43,7 +49,8 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
 void PlayerPhysics::HandleMovement(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime, Player2D* player) {
     (void)deltaTime;
     // 蟾ｦ蜿ｳ遘ｻ蜍・
-    state_.velocity_.x = input_.moveX * params_.moveSpeed_;
+    // 発射横速度(鎖アクション)は入力と独立に残す。着地・壁接触で消える
+    state_.velocity_.x = input_.moveX * params_.moveSpeed_ + state_.launchVelocityX_;
 
     // 繧ｸ繝｣繝ｳ繝・
     if (state_.isOnGround_ && input_.isJumpPressed) {

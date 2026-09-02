@@ -64,6 +64,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
                 state_.respawnTimer_ = 0.0f;
                 state_.position_ = state_.startPosition_;
                 state_.velocity_ = { 0.0f, 0.0f, 0.0f };
+                state_.launchVelocityX_ = 0.0f; // 空中で死んだ時の発射の勢いをリスポーン先に持ち込まない
             }
         } else {
             state_.respawnTimer_ += deltaTime;
@@ -79,6 +80,12 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
 
     // 入力の更新
     input_.Update(currentInput_);
+    // 鎖アクション（スピン中など）による入力修飾
+    currentInput_.moveX *= actionMoveFactor_;
+    if (actionJumpLocked_) {
+        currentInput_.isJumpPressed = false;
+        currentInput_.isJumpHeld = false;
+    }
 
     // 物理・移動・当たり判定の更新
     physics_.Update(state_, params_, currentInput_, deltaTime, this, &map);
@@ -105,6 +112,7 @@ void Player2D::Draw() {
 void Player2D::ResetState(const Vector3& initPos) {
     state_.position_ = initPos;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
+    state_.launchVelocityX_ = 0.0f;
     state_.isOnGround_ = false;
     state_.isDead_ = false;
     state_.deathTimer_ = 0.0f;

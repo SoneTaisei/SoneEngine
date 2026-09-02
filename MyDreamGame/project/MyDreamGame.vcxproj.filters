@@ -238,6 +238,9 @@
     <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp">
       <Filter>Project\Game2D\Chain</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\ChainSpinAction.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Treasure\Treasure2D.cpp">
       <Filter>Project\Game2D\Treasure</Filter>
     </ClCompile>
@@ -532,6 +535,9 @@
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Chain\ChainManager.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\ChainSpinAction.h">
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Treasure\Treasure2D.h">
