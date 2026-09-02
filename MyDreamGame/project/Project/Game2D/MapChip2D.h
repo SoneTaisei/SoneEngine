@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Core/Utility/Structs.h"
@@ -26,7 +26,8 @@ public:
         kMovingBlock = 12, // 移動する床
         kFragileBlock = 13, // 鎖の重さで崩れる床
         kSwitchBlock = 14, // スイッチ
-        kDoorBlock = 15 // シャッタードア
+        kDoorBlock = 15, // シャッタードア
+        kGuardBlock = 16 // 警備員
     };
 
     void Initialize(const std::string& mapFilePath);

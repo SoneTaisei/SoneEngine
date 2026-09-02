@@ -201,6 +201,34 @@
             },
             "textureName": "",
             "type": "DoorBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.5,
+                "g": 0.20000000298023224,
+                "r": 0.10000000149011612
+            },
+            "id": 16,
+            "modelName": "",
+            "name": "Guard",
+            "properties": {
+                "alertSpeed": 3.0,
+                "maxAlertGauge": 1.5,
+                "moveRange": 3.0,
+                "patrolSpeed": 1.5,
+                "sightHeight": 1.0,
+                "sightLength": 4.0,
+                "startDirection": 1,
+                "waitTimeAtEdge": 1.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "GuardBlock"
         }
     ]
 }

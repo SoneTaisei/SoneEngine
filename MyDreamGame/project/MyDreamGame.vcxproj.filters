@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+﻿<?xml version='1.0' encoding='utf-8'?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -216,7 +216,7 @@
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\DoorBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
-    </ClCompile>
+    </ClCompile>`n    <ClCompile Include="Project\Game2D\Blocks\GuardBlock.cpp">`n      <Filter>Project\Game2D\Blocks</Filter>`n    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -522,7 +522,7 @@
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\DoorBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
-    </ClInclude>
+    </ClInclude>`n    <ClInclude Include="Project\Game2D\Blocks\GuardBlock.h">`n      <Filter>Project\Game2D\Blocks</Filter>`n    </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
