@@ -2,6 +2,7 @@
 #include "Game2D/Chain/Chain2D.h"
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
+#include "Game2D/Blocks/BaseBlock.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include <algorithm>
 #include <cmath>
@@ -38,15 +39,44 @@ namespace {
     }
     // 手→重りの棒が長さ length の範囲でブロックに入るか
     bool RodBlocked(MapChip2D* map, const Vector3& center, float cs, float sn, float length) {
+        if (!map) return false;
         auto blockedAt = [&](float s) {
             float x = center.x + cs * s;
             float y = center.y + sn * s;
-            return map->GetChipType(map->WorldToChipX(x), map->WorldToChipY(y)) == MapChip2D::ChipType::kBlock;
+            int cx = map->WorldToChipX(x);
+            int cy = map->WorldToChipY(y);
+            auto* block = map->GetBlock(cx, cy);
+            if (block) {
+                if (block->IsSolid() && !block->IsDestroyed() && !block->IsMoving()) {
+                    return true;
+                }
+            } else {
+                if (map->GetChipType(cx, cy) == MapChip2D::ChipType::kBlock) {
+                    return true;
+                }
+            }
+            return false;
         };
         for (float s = kRodProbeStart; s < length; s += kRodProbeStep) {
             if (blockedAt(s)) return true;
         }
-        return blockedAt(length);
+        if (blockedAt(length)) return true;
+
+        // 動くソリッドブロックのAABBとの交差チェック
+        for (const auto& blockPtr : map->GetUpdateBlocks()) {
+            if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) {
+                continue;
+            }
+            AABB2D box = blockPtr->GetAABB();
+            for (float s = kRodProbeStart; s <= length; s += kRodProbeStep) {
+                float px = center.x + cs * s;
+                float py = center.y + sn * s;
+                if (px >= box.left && px <= box.right && py >= box.bottom && py <= box.top) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
 

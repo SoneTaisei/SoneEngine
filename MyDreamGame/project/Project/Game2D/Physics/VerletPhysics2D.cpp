@@ -1,5 +1,6 @@
 #include "VerletPhysics2D.h"
 #include "Game2D/MapChip2D.h"
+#include "Game2D/Blocks/BaseBlock.h"
 #include "Core/Utility/TransformFunctions.h"
 #include <algorithm>
 #include <cmath>
@@ -53,7 +54,7 @@ void VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float
     const float r = node.radius;
     const float chipSize = map->GetChipSize();
 
-    // ノード周辺のチップだけを調べる
+    // 1. 静的ブロック判定（ノード周辺のチップだけを調べる）
     int minCx = map->WorldToChipX(node.pos.x - r);
     int maxCx = map->WorldToChipX(node.pos.x + r);
     int minCy = map->WorldToChipY(node.pos.y - r);
@@ -61,9 +62,23 @@ void VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float
 
     for (int cy = minCy; cy <= maxCy; ++cy) {
         for (int cx = minCx; cx <= maxCx; ++cx) {
-            // 鎖が衝突するのは通常ブロックのみ
-            // （kOneWayBlockの一方通行判定はプレイヤー移動専用なのですり抜け、kDeathBlockも鎖には無害）
-            if (map->GetChipType(cx, cy) != MapChip2D::ChipType::kBlock) {
+            auto* block = map->GetBlock(cx, cy);
+            bool isSolidBlock = false;
+
+            if (block) {
+                // ブロックインスタンスが存在する場合：IsSolid() かつ未破壊かつ静止ブロックを判定
+                // （MovingBlock等の動くブロックは後述の動的AABBで判定するためここではスキップ）
+                if (block->IsSolid() && !block->IsDestroyed() && !block->IsMoving()) {
+                    isSolidBlock = true;
+                }
+            } else {
+                // ブロックインスタンスがない場合のフォールバック（kBlockのみ）
+                if (map->GetChipType(cx, cy) == MapChip2D::ChipType::kBlock) {
+                    isSolidBlock = true;
+                }
+            }
+
+            if (!isSolidBlock) {
                 continue;
             }
 
@@ -74,6 +89,16 @@ void VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float
 
             CollideNodeWithAABB(node, chipBox, friction);
         }
+    }
+
+    // 2. 動くブロック（MovingBlock, DoorBlock等）のリアルタイムAABB判定
+    for (const auto& blockPtr : map->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) {
+            continue;
+        }
+
+        AABB2D blockAABB = blockPtr->GetAABB();
+        CollideNodeWithAABB(node, blockAABB, friction);
     }
 }
 
