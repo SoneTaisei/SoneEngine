@@ -8,23 +8,23 @@
 void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime, Player2D* player, MapChip2D* mapChip) {
     if (state_.isDead_ || state_.isGoal_) return;
 
-    // 1. 蟾ｦ蜿ｳ蜈･蜉・
+    // 1. 左右入力
     HandleMovement(state_, params_, input_, deltaTime, player);
 
-    // 2. 驥榊鴨
+    // 2. 重力
     ApplyGravity(state_, params_, deltaTime);
 
-    // 3. X霆ｸ遘ｻ蜍輔→螢∵款縺玲綾縺・
+    // 3. X軸移動と壁押し戻し
     state_.position_.x += (state_.velocity_.x + state_.platformVelocity_.x) * deltaTime;
     ResolveCollisionX(state_, params_, mapChip, player);
     if (state_.isDead_ || state_.isGoal_) return;
 
-    // 4. Y霆ｸ遘ｻ蜍輔→蠎・螟ｩ莠墓款縺玲綾縺・
+    // 4. Y軸移動と床天井押し戻し
     state_.position_.y += state_.velocity_.y * deltaTime;
     ResolveCollisionY(state_, params_, mapChip, player);
     if (state_.isDead_ || state_.isGoal_) return;
 
-    // 5. 襍ｰ陦御ｸｭ縺ｮ雜ｳ蜈・ゅ⊂縺薙ｊ繧ｨ繝輔ぉ繧ｯ繝・
+    // 5. 走行中の足元の砂埃エフェクト
     if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f && player) {
         state_.runDustTimer_ += deltaTime;
         if (state_.runDustTimer_ >= params_.runDustInterval_) {
@@ -36,21 +36,21 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         state_.runDustTimer_ = 0.0f;
     }
 
-    // 6. 迚ｹ谿翫ヶ繝ｭ繝・け蛻､螳夲ｼ医ョ繧ｹ繝ｻ繧ｴ繝ｼ繝ｫ遲会ｼ・
+    // 6. 特殊ブロック判定（デス・ゴール等）
     CheckBlockInteractions(state_, params_, player, mapChip);
 }
 
 void PlayerPhysics::HandleMovement(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime, Player2D* player) {
     (void)deltaTime;
-    // 蟾ｦ蜿ｳ遘ｻ蜍・
+    // 左右移動
     state_.velocity_.x = input_.moveX * params_.moveSpeed_;
 
-    // 繧ｸ繝｣繝ｳ繝・
+    // ジャンプ
     if (state_.isOnGround_ && input_.isJumpPressed) {
-        // 骼悶・謨ｰ縺・蛟九ｒ雜・∴縺溷・縺縺代ず繝｣繝ｳ繝怜鴨繧剃ｽ惹ｸ九＆縺帙ｋ
+        // 鎖の数が3個を超えた分だけジャンプ力を低下させる
         int extraChains = (std::max)(0, state_.chainLength_ - 3);
         float actualJumpPower = params_.jumpPower_ - (extraChains * params_.chainJumpPenalty_);
-        if (actualJumpPower < 0.0f) actualJumpPower = 0.0f; // 譛菴弱〒繧・莉･荳・
+        if (actualJumpPower < 0.0f) actualJumpPower = 0.0f; // 最低でも・以上
 
         state_.velocity_.y = actualJumpPower;
         state_.isOnGround_ = false;
@@ -88,7 +88,7 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
     state_.isTouchingWallRight_ = false;
     if (!mapChip) return;
 
-    // 蠎翫・螟ｩ莠輔・隗偵→縺ｮ蟷ｲ貂峨ｒ驕ｿ縺代ｋ縺溘ａ縲〆譁ｹ蜷代・蛻､螳壹し繧､繧ｺ繧剃ｸ贋ｸ・.05f蟆上＆縺上☆繧・
+    // 床・天井の角との干渉を避けるため、Y方向の判定サイズを上下0.05f小さくする
     float minX = state_.position_.x - params_.halfWidth_;
     float maxX = state_.position_.x + params_.halfWidth_;
     float minY = state_.position_.y - params_.halfHeight_ + 0.05f;
@@ -110,7 +110,7 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
                 float blockBottom = mapChip->ChipToWorldY(cy);
                 float blockTop = blockBottom + mapChip->GetChipSize();
 
-                // Y譁ｹ蜷代・驥崎､・メ繧ｧ繝・け
+                // Y方向の重複チェック
                 if (maxY <= blockBottom || minY >= blockTop) {
                     continue;
                 }
@@ -142,7 +142,7 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
         }
     }
 
-    // 蜍輔￥蠎翫・迚ｹ蛻･蛻､螳・(繧ｰ繝ｪ繝・ラ縺ｧ縺ｯ縺ｪ縺丞ｮ滄圀縺ｮ繝ｯ繝ｼ繝ｫ繝牙ｺｧ讓・AABB)繝吶・繧ｹ縺ｧ蛻､螳・
+    // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
     for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
         if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
         
@@ -152,7 +152,7 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
         float blockTop = blockAABB.top;
         float blockBottom = blockAABB.bottom;
         
-        // Y譁ｹ蜷代・驥崎､・メ繧ｧ繝・け
+        // Y方向の重複チェック
         if (maxY <= blockBottom || minY >= blockTop) {
             continue;
         }
@@ -198,7 +198,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
 
     bool groundedThisFrame = false;
 
-    // 關ｽ荳倶ｸｭ縺ｾ縺溘・蛛懈ｭ｢荳ｭ縺ｮ蠎雁愛螳・
+    // 落下中または停止中の床判定
     if (state_.velocity_.y <= 0.0f) {
         for (int cy = startChipY; cy <= endChipY; ++cy) {
             for (int cx = startChipX; cx <= endChipX; ++cx) {
@@ -209,7 +209,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                     float blockBottom = mapChip->ChipToWorldY(cy);
                     float blockTop = blockBottom + mapChip->GetChipSize();
 
-                    // X譁ｹ蜷代・驥崎､・メ繧ｧ繝・け
+                    // X方向の重複チェック
                     if (maxX <= blockLeft || minX >= blockRight) {
                         continue;
                     }
@@ -247,7 +247,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             }
         }
         
-        // 蜍輔￥蠎翫・迚ｹ蛻･蛻､螳・(繧ｰ繝ｪ繝・ラ縺ｧ縺ｯ縺ｪ縺丞ｮ滄圀縺ｮ繝ｯ繝ｼ繝ｫ繝牙ｺｧ讓・AABB)繝吶・繧ｹ縺ｧ蛻､螳・
+        // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
         for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
             if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
             
@@ -257,7 +257,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             float blockTop = blockAABB.top;
             float blockBottom = blockAABB.bottom;
             
-            // X譁ｹ蜷代・驥崎､・メ繧ｧ繝・け
+            // X方向の重複チェック
             if (maxX <= blockLeft || minX >= blockRight) {
                 continue;
             }
@@ -293,7 +293,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             }
         }
     }
-    // 荳頑・荳ｭ縺ｮ螟ｩ莠募愛螳・
+    // 上昇中の天井判定
     else if (state_.velocity_.y > 0.0f) {
         for (int cy = startChipY; cy <= endChipY; ++cy) {
             for (int cx = startChipX; cx <= endChipX; ++cx) {
@@ -304,7 +304,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                     float blockBottom = mapChip->ChipToWorldY(cy);
                     float blockTop = blockBottom + mapChip->GetChipSize();
 
-                    // X譁ｹ蜷代・驥阪↑繧翫メ繧ｧ繝・け
+                    // X方向の重なりチェック
                     if (maxX <= blockLeft || minX >= blockRight) {
                         continue;
                     }
@@ -324,7 +324,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             }
         }
 
-        // 蜍輔￥蠎翫・迚ｹ蛻･蛻､螳・(繧ｰ繝ｪ繝・ラ縺ｧ縺ｯ縺ｪ縺丞ｮ滄圀縺ｮ繝ｯ繝ｼ繝ｫ繝牙ｺｧ讓・AABB)繝吶・繧ｹ縺ｧ蛻､螳・
+        // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
         for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
             if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
             
@@ -334,7 +334,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             float blockTop = blockAABB.top;
             float blockBottom = blockAABB.bottom;
             
-            // X譁ｹ蜷代・驥阪↑繧翫メ繧ｧ繝・け
+            // X方向の重なりチェック
             if (maxX <= blockLeft || minX >= blockRight) {
                 continue;
             }
@@ -362,7 +362,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
 void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerParams& params_, Player2D* player, MapChip2D* mapChip) {
     if (!player || state_.isDead_) return;
 
-    // 逕ｻ髱｢荳玖誠荳区ｭｻ
+    // 画面下落下死
     if (state_.position_.y < -10.0f) {
         player->Kill(true);
         return;
@@ -370,7 +370,7 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
 
     if (!mapChip) return;
 
-    // 謚ｼ縺玲綾縺怜ｾ後・蠅・阜邱壻ｸ奇ｼ亥ｺ翫ｄ螢√↓謗･縺励※縺・ｋ迥ｶ諷具ｼ峨〒繧ら｢ｺ螳溘↓蛻､螳壹〒縺阪ｋ繧医≧縺ｫ蛻､螳夐伜沺縺ｫ繝槭・繧ｸ繝ｳ繧呈戟縺溘○繧・
+    // 押し戻し後の境界線上（床や壁に接している状態）でも確実に判定できるように判定領域にマージンを持たせる
     float margin = 0.05f;
     float pLeft = state_.position_.x - params_.halfWidth_ - margin;
     float pRight = state_.position_.x + params_.halfWidth_ + margin;
@@ -389,7 +389,7 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
             float blockBottom = mapChip->ChipToWorldY(cy);
             float blockTop = blockBottom + mapChip->GetChipSize();
 
-            // AABB驥崎､・愛螳・
+            // AABB重複判定
             if (pRight <= blockLeft || pLeft >= blockRight ||
                 pTop <= blockBottom || pBottom >= blockTop) {
                 continue;

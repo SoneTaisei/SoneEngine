@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Core/Utility/Structs.h"

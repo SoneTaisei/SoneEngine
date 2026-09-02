@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "BaseBlock.h"
 
 class SwitchBlock : public BaseBlock {
