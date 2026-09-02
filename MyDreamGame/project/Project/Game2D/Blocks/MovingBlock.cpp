@@ -62,7 +62,9 @@ void MovingBlock::Update() {
     if (tc) {
         // 配置された初期座標を元にタイミング（位相）をずらす
         float phase = startX_ * 0.5f + startY_ * 0.5f;
-        float offset = std::sin(timer_ * moveSpeed_ + phase) * moveRange_;
+        // 指定した moveSpeed_ が「最大速度」になるように角速度を計算 (v = r * ω より ω = v / r)
+        float omega = (moveRange_ > 0.0f) ? (moveSpeed_ / moveRange_) : 0.0f;
+        float offset = std::sin(timer_ * omega + phase) * moveRange_;
         Vector3 newPos = {startX_, startY_, 0.0f};
 
         if (moveAxis_ == "X" || moveAxis_ == "x") {

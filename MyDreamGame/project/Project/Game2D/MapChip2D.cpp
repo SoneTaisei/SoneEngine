@@ -1,4 +1,4 @@
-﻿#include "MapChip2D.h"
+#include "MapChip2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
@@ -157,6 +157,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         nlohmann::json props = nlohmann::json::object();
         props["linkId"] = 1;
         props["openSpeed"] = 2.0f;
+        props["closeSpeed"] = 2.0f;
         def.properties = props;
         
         templatePalette_.push_back(def);

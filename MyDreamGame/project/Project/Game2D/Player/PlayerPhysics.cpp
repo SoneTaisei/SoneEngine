@@ -152,26 +152,28 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
         float blockTop = blockAABB.top;
         float blockBottom = blockAABB.bottom;
         
-        // Y方向の重複チェック
-        if (maxY <= blockBottom || minY >= blockTop) {
+        // Y方向の重なりチェック（頭スレスレやすれ違いを避けるため少しマージンを取る）
+        if (maxY - 0.05f <= blockBottom || minY + 0.05f >= blockTop) {
             continue;
         }
 
-        if (state_.velocity_.x > 0.0f && maxX > blockLeft && minX < blockLeft) {
-            state_.position_.x = blockLeft - params_.halfWidth_;
-            state_.velocity_.x = 0.0f;
-            state_.isTouchingWallRight_ = true;
-            minX = state_.position_.x - params_.halfWidth_;
-            maxX = state_.position_.x + params_.halfWidth_;
-            if (player) {
-                blockPtr->OnCollision(player);
-                blockPtr->OnPlayerTouch(player);
+        // X方向の重なりチェック（めり込んでいる場合は押し出す）
+        if (maxX > blockLeft && minX < blockRight) {
+            float playerCenter = state_.position_.x;
+            float blockCenter = (blockLeft + blockRight) * 0.5f;
+
+            if (playerCenter < blockCenter) {
+                // 左へ押し出す
+                state_.position_.x = blockLeft - params_.halfWidth_;
+                state_.velocity_.x = 0.0f;
+                state_.isTouchingWallRight_ = true;
+            } else {
+                // 右へ押し出す
+                state_.position_.x = blockRight + params_.halfWidth_;
+                state_.velocity_.x = 0.0f;
+                state_.isTouchingWallLeft_ = true;
             }
-            if (state_.isDead_) return;
-        } else if (state_.velocity_.x < 0.0f && minX < blockRight && maxX > blockRight) {
-            state_.position_.x = blockRight + params_.halfWidth_;
-            state_.velocity_.x = 0.0f;
-            state_.isTouchingWallLeft_ = true;
+            
             minX = state_.position_.x - params_.halfWidth_;
             maxX = state_.position_.x + params_.halfWidth_;
             if (player) {
@@ -353,6 +355,48 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
         }
     }
 
+    // Y軸方向の動く床（シャッターなど）による押し出し処理
+    for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
+        
+        AABB2D blockAABB = blockPtr->GetAABB();
+        float blockLeft = blockAABB.left;
+        float blockRight = blockAABB.right;
+        float blockTop = blockAABB.top;
+        float blockBottom = blockAABB.bottom;
+        
+        // X方向の重なりチェック（左右のスレスレを避ける）
+        if (maxX - 0.05f <= blockLeft || minX + 0.05f >= blockRight) {
+            continue;
+        }
+
+        // Y方向のめり込みチェック
+        if (maxY > blockBottom && minY < blockTop) {
+            float playerCenterY = state_.position_.y;
+            float blockCenterY = (blockTop + blockBottom) * 0.5f;
+
+            if (playerCenterY < blockCenterY) {
+                // シャッターが上から降りてきた場合など、下へ押し出す
+                state_.position_.y = blockBottom - params_.halfHeight_;
+                if (state_.velocity_.y > 0.0f) state_.velocity_.y = 0.0f;
+            } else {
+                // 床が下から突き上げてきた場合など、上へ押し出す
+                state_.position_.y = blockTop + params_.halfHeight_;
+                if (state_.velocity_.y < 0.0f) state_.velocity_.y = 0.0f;
+                groundedThisFrame = true;
+                state_.platformVelocity_ = blockPtr->GetVelocity();
+            }
+            
+            minY = state_.position_.y - params_.halfHeight_;
+            maxY = state_.position_.y + params_.halfHeight_;
+            if (player) {
+                blockPtr->OnCollision(player);
+                blockPtr->OnPlayerTouch(player);
+            }
+            if (state_.isDead_) return;
+        }
+    }
+
     state_.isOnGround_ = groundedThisFrame;
     if (!groundedThisFrame) {
         state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
@@ -427,6 +471,38 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
         blockPtr->OnCollision(player);
         if (state_.isDead_ || state_.isGoal_) {
             return;
+        }
+    }
+
+    // 挟まれ（潰され）判定：押し出し処理後もソリッドブロックにめり込んでいる場合はデス
+    float crushMargin = 0.15f;
+    float cLeft = state_.position_.x - params_.halfWidth_ + crushMargin;
+    float cRight = state_.position_.x + params_.halfWidth_ - crushMargin;
+    float cBottom = state_.position_.y - params_.halfHeight_ + crushMargin;
+    float cTop = state_.position_.y + params_.halfHeight_ - crushMargin;
+
+    if (cLeft < cRight && cBottom < cTop) {
+        int cStartX = mapChip->WorldToChipX(cLeft);
+        int cEndX = mapChip->WorldToChipX(cRight);
+        int cStartY = mapChip->WorldToChipY(cBottom);
+        int cEndY = mapChip->WorldToChipY(cTop);
+        for (int cy = cStartY; cy <= cEndY; ++cy) {
+            for (int cx = cStartX; cx <= cEndX; ++cx) {
+                if (auto* block = mapChip->GetBlock(cx, cy)) {
+                    if (block->IsSolid() && !block->IsMoving()) {
+                        player->Kill();
+                        return;
+                    }
+                }
+            }
+        }
+        for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+            if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsSolid()) continue;
+            AABB2D bAABB = blockPtr->GetAABB();
+            if (cRight > bAABB.left && cLeft < bAABB.right && cTop > bAABB.bottom && cBottom < bAABB.top) {
+                player->Kill();
+                return;
+            }
         }
     }
 }
