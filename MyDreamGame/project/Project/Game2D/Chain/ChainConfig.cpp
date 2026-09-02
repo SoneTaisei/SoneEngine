@@ -35,6 +35,22 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["treasureRadius_"] = params.treasureRadius_;
         j["treasureFriction_"] = params.treasureFriction_;
         j["treasureIgnorePlayer_"] = params.treasureIgnorePlayer_;
+        j["heldChainPlayerCollision_"] = params.heldChainPlayerCollision_;
+        j["treasureModelDir_"] = params.treasureModelDir_;
+        j["treasureModelFile_"] = params.treasureModelFile_;
+        j["treasureScale_"] = params.treasureScale_;
+        j["spinRadiusMax_"] = params.spinRadiusMax_;
+        j["spinRadiusRatio_"] = params.spinRadiusRatio_;
+        j["swingStrength_"] = params.swingStrength_;
+        j["swingDamping_"] = params.swingDamping_;
+        j["chainMassPerUnit_"] = params.chainMassPerUnit_;
+        j["weightThrowScale_"] = params.weightThrowScale_;
+        j["pullDelay_"] = params.pullDelay_;
+        j["pullTransfer_"] = params.pullTransfer_;
+        j["launchMaxJumpRatio_"] = params.launchMaxJumpRatio_;
+        j["launchMinUpward_"] = params.launchMinUpward_;
+        j["spinMoveFactor_"] = params.spinMoveFactor_;
+        j["spinCooldown_"] = params.spinCooldown_;
         j["linkThickness_"] = params.linkThickness_;
         j["linkOverlap_"] = params.linkOverlap_;
 
@@ -60,7 +76,7 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         file >> j;
         file.close();
 
-        // 旧形式のキー(nodeCount_/totalLength_)は無視される（ユニット制へ移行済み）
+        // 旧形式のキー(nodeCount_/totalLength_/omegaMax_/launchSpeedScale_/tautRatio_ 等)は無視される
         if (j.contains("initialUnits_")) params.initialUnits_ = j["initialUnits_"];
         if (j.contains("unitLength_")) params.unitLength_ = j["unitLength_"];
         if (j.contains("nodesPerUnit_")) params.nodesPerUnit_ = j["nodesPerUnit_"];
@@ -81,6 +97,22 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("treasureRadius_")) params.treasureRadius_ = j["treasureRadius_"];
         if (j.contains("treasureFriction_")) params.treasureFriction_ = j["treasureFriction_"];
         if (j.contains("treasureIgnorePlayer_")) params.treasureIgnorePlayer_ = j["treasureIgnorePlayer_"];
+        if (j.contains("heldChainPlayerCollision_")) params.heldChainPlayerCollision_ = j["heldChainPlayerCollision_"];
+        if (j.contains("treasureModelDir_")) params.treasureModelDir_ = j["treasureModelDir_"].get<std::string>();
+        if (j.contains("treasureModelFile_")) params.treasureModelFile_ = j["treasureModelFile_"].get<std::string>();
+        if (j.contains("treasureScale_")) params.treasureScale_ = j["treasureScale_"];
+        if (j.contains("spinRadiusMax_")) params.spinRadiusMax_ = j["spinRadiusMax_"];
+        if (j.contains("spinRadiusRatio_")) params.spinRadiusRatio_ = j["spinRadiusRatio_"];
+        if (j.contains("swingStrength_")) params.swingStrength_ = j["swingStrength_"];
+        if (j.contains("swingDamping_")) params.swingDamping_ = j["swingDamping_"];
+        if (j.contains("chainMassPerUnit_")) params.chainMassPerUnit_ = j["chainMassPerUnit_"];
+        if (j.contains("weightThrowScale_")) params.weightThrowScale_ = j["weightThrowScale_"];
+        if (j.contains("pullDelay_")) params.pullDelay_ = j["pullDelay_"];
+        if (j.contains("pullTransfer_")) params.pullTransfer_ = j["pullTransfer_"];
+        if (j.contains("launchMaxJumpRatio_")) params.launchMaxJumpRatio_ = j["launchMaxJumpRatio_"];
+        if (j.contains("launchMinUpward_")) params.launchMinUpward_ = j["launchMinUpward_"];
+        if (j.contains("spinMoveFactor_")) params.spinMoveFactor_ = j["spinMoveFactor_"];
+        if (j.contains("spinCooldown_")) params.spinCooldown_ = j["spinCooldown_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
 
@@ -96,6 +128,22 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         params.treasureMass_ = (std::max)(0.1f, params.treasureMass_);
         params.treasureRadius_ = (std::max)(0.05f, params.treasureRadius_);
         params.treasureFriction_ = std::clamp(params.treasureFriction_, 0.0f, 1.0f);
+        params.treasureScale_ = (std::max)(0.01f, params.treasureScale_);
+        if (params.treasureModelDir_.empty()) params.treasureModelDir_ = "resources/Object/Original/sphere";
+        if (params.treasureModelFile_.empty()) params.treasureModelFile_ = "sphere.obj";
+        params.spinRadiusMax_ = (std::max)(0.3f, params.spinRadiusMax_);
+        params.spinRadiusRatio_ = std::clamp(params.spinRadiusRatio_, 0.3f, 1.0f);
+        params.swingStrength_ = (std::max)(0.0f, params.swingStrength_);
+        params.swingDamping_ = (std::max)(0.0f, params.swingDamping_);
+        params.chainMassPerUnit_ = (std::max)(0.0f, params.chainMassPerUnit_);
+        params.weightThrowScale_ = (std::max)(0.0f, params.weightThrowScale_);
+        params.pullDelay_ = std::clamp(params.pullDelay_, 0.0f, 1.0f);
+        params.pullTransfer_ = (std::max)(0.0f, params.pullTransfer_);
+        // 上限倍率 1.7 × ジャンプ初速17.5 ≒ 30 u/s。プレイヤーの当たり判定は掃引しないため、これ以上は1チップ壁をすり抜け得る
+        params.launchMaxJumpRatio_ = std::clamp(params.launchMaxJumpRatio_, 0.1f, 1.7f);
+        params.launchMinUpward_ = std::clamp(params.launchMinUpward_, 0.0f, 1.0f);
+        params.spinMoveFactor_ = std::clamp(params.spinMoveFactor_, 0.0f, 1.0f);
+        params.spinCooldown_ = (std::max)(0.0f, params.spinCooldown_);
 
         std::cout << "Chain parameters loaded from " << filepath << std::endl;
     } catch (const std::exception& e) {

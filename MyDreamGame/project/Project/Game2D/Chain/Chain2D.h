@@ -96,9 +96,30 @@ public:
     /// </summary>
     void SetEndFollowTarget(const Vector3* target);
 
+    /// <summary>末端ノードへ速度を注入する（放る・投げる用。dt は固定ステップ）</summary>
+    void ApplyEndVelocity(const Vector3& velocity, float dt);
+
+    /// <summary>
+    /// 全ノードをアンカー→target の直線上に等間隔で拘束する（ピンと張った棒として振り回す用）
+    /// 拘束中は物理を止め、毎フレーム直線上に置き直す。nullptr で解除（速度ゼロで物理に戻す）
+    /// </summary>
+    void SetRigidLineTarget(const Vector3* target);
+    bool IsRigidLine() const { return rigidLine_ != nullptr; }
+
+    /// <summary>
+    /// 直線拘束を解除し、center 周りの角速度 omega(rad/s) に相当する速度を全ノードに与えて物理に戻す
+    /// （鎖全体が一体で飛ぶ。末端だけに速度を与えると途中の鎖に引き戻されて重りが止まる）
+    /// </summary>
+    void ReleaseRigidLine(const Vector3& center, float omega, float velocityScale, float dt);
+
+    /// <summary>鎖の実長（繰り出し中は先頭セグメントの現在長を含む）</summary>
+    float GetTotalLength() const;
+
     int GetNodeCount() const { return static_cast<int>(nodes_.size()); }
     const Vector3& GetNodePosition(int index) const { return nodes_[index].pos; }
     Vector3 GetEndPosition() const { return nodes_.empty() ? anchorPos_ : nodes_.back().pos; }
+    /// <summary>末端ノードの暗黙速度（Verlet の pos - prevPos を直近の積分ステップ幅で割ったもの）</summary>
+    Vector3 GetEndVelocity() const;
 
     // --- ユニット操作（鎖の伸縮。1ユニット = nodesPerUnit_ ノード） ---
     /// <summary>現在のユニット数（繰り出し待ちのノードも含めて数える。含めないと Reconcile が無限に伸ばす）</summary>
@@ -150,6 +171,14 @@ public:
     /// </summary>
     void SetPlayerCollisionSkipCount(int count) { playerCollisionSkip_ = count; }
 
+    /// <summary>
+    /// この鎖とプレイヤーの当たり判定を有効/無効にする
+    /// プレイヤーが持っている鎖は無効にする（回している重りや鎖が自分の体に引っかからないように）。
+    /// 落ちている鎖・吊り鎖は有効のまま
+    /// </summary>
+    void SetPlayerCollisionEnabled(bool enabled) { playerCollisionEnabled_ = enabled; }
+    bool IsPlayerCollisionEnabled() const { return playerCollisionEnabled_; }
+
     // --- 末端の重り（お宝） ---
     void SetEndWeight(const EndWeight& weight);
     const EndWeight& GetEndWeight() const { return endWeight_; }
@@ -177,6 +206,10 @@ private:
     void UpdatePayout(float dt);
     // 末端ノードへ重り設定を適用する（ノード再構築で invMass が 1 に戻るため都度呼ぶ）
     void ApplyEndWeight();
+    // 全ノードを from→to の直線上に等間隔で置き、全て固定する（剛体棒モード）
+    void PlaceNodesOnLine(const Vector3& from, const Vector3& to);
+    // 剛体棒モード解除後に invMass をアンカー種別・重り設定に従って戻す
+    void RestoreMasses();
 
     std::string name_ = "Chain";
     ChainParams params_;
@@ -186,6 +219,7 @@ private:
     Vector3 anchorPos_ = { 0.0f, 0.0f, 0.0f };
     const Vector3* anchorFollow_ = nullptr;
     const Vector3* endFollow_ = nullptr;
+    const Vector3* rigidLine_ = nullptr; // 非nullなら全ノードをアンカー→ここへの直線上に拘束（振り回し中）
 
     // アンカーモード（現在値と、シーンリセット時に戻す初期値）
     ChainAnchorMode anchorMode_ = ChainAnchorMode::kWorld;
@@ -194,6 +228,11 @@ private:
 
     // 手持ち中にプレイヤー衝突から除外する根元ノード数（0なら全ノード判定）
     int playerCollisionSkip_ = 0;
+    // プレイヤーとの当たり判定そのものの有効/無効（持っている鎖は false にする）
+    bool playerCollisionEnabled_ = true;
+
+    // 直近の積分ステップ幅（暗黙速度を実速度に換算する用）
+    float lastStepDt_ = 1.0f / 60.0f;
 
     // 繰り出し（スプール）
     int pendingNodes_ = 0;    // まだ繰り出していないノード数

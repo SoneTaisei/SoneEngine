@@ -3,6 +3,7 @@
 struct PlayerState {
     Vector3 position_ = { 2.0f, 5.0f, 0.0f };
     Vector3 velocity_ = { 0.0f, 0.0f, 0.0f };
+    float launchVelocityX_ = 0.0f;                    // 鎖アクション(スピンジャンプ等)の発射横速度。着地・壁接触で消える
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f };
     Vector3 platformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 乗っている床の速度
     bool isOnGround_ = false;

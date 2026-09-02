@@ -191,6 +191,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
 
         if (isRewinding) {
+            // 巻き戻し中は鎖が更新されないので、スピンは中断しておく（明けの幻の発射・チャージのずれ防止）
+            if (chainManager_) {
+                chainManager_->OnRewindBegin();
+            }
             FrameData poppedFrame;
             if (ReplayManager::GetInstance()->PopRecordedFrame(poppedFrame)) {
                 player_->SetPosition(poppedFrame.position);
@@ -442,6 +446,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Pick up chain");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Drop chain");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "W (hold) + A/D : Swing weight");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Release W : Throw weight -> chain pulls you");
         ImGui::End();
     }
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "Game2D/Chain/Chain2D.h"
+#include "Game2D/Chain/ChainSpinAction.h"
 #include "Game2D/Treasure/Treasure2D.h"
 #include "Core/Utility/Vector3.h"
 #include <memory>
@@ -18,7 +19,9 @@ class Object3D;
 ///                   現在は配置なし。AddWorldChain() がマップ配置やレベルデータ生成の入口
 /// - droppedChains_: 外して落とした自由鎖（拾うと個数が戻る）
 /// - treasure_     : プレイヤー鎖の末端ノードに描画されるお宝（表示専用）
-/// 操作は分離：K = 拾う（範囲内に鎖がなければ何もしない）/ J・S = unitsPerAction_ ユニットまとめて外す
+/// - spin_         : スピンジャンプ（重りを回して飛ぶ）
+/// 操作：K = 拾う（範囲内に鎖がなければ何もしない）/ J・S = unitsPerAction_ ユニットまとめて外す
+///       W(↑) 押し続け = 構え（移動不可）/ 構え中に A/D = 重りを振る / W を離す = 宝石の方向へ飛ぶ
 /// </summary>
 class ChainManager {
 public:
@@ -38,9 +41,11 @@ public:
 
     /// <summary>
     /// 鎖アクション入力の処理。player_->UpdateWithMap() の直後に呼ぶ
-    /// K = 拾う（範囲内に鎖がなければ何もしない）/ J・S(下) = 外す
-    /// どのキーもリプレイ録画対象スロット（K='C'、J='D'、S='S'）のため再生時も再現される
+    /// K = 拾う / J・S(下) = 外す / W(↑) = 構え（押し続け）+ A/D で振る、離して発射
+    /// どのキーもリプレイ録画対象スロット（K='C'、J='D'、S='S'、W='W'）のため再生時も再現される
     /// 注意: 'C'はCtrl、'D'はShiftとスロット共有。録画中にそれらを押すと再生時に幻の入力になり得る
+    /// 注意: エンジンのリプレイタイムラインエディタは W と S を1本の排他トラックに畳むため、
+    ///       編集を経由したリプレイでは「W押しっぱなし中のS（外す）」が消える（Engine側の制約）
     /// </summary>
     void HandleInput();
 
@@ -51,7 +56,7 @@ public:
     void Reconcile();
 
     /// <summary>
-    /// 鎖の物理更新（プレイヤー鎖 → 吊り鎖 → 自由鎖の順）とお宝の位置同期
+    /// 鎖の物理更新（スピンの拘束先決定 → プレイヤー鎖 → 吊り鎖 → 自由鎖）とお宝の位置同期
     /// </summary>
     void Update(float dt, MapChip2D* map);
 
@@ -59,12 +64,18 @@ public:
 
     /// <summary>
     /// プレイ開始・リプレイ再生開始時のリセット
-    /// （自由鎖を全消去し、個数を初期値へ、吊り鎖とプレイヤー鎖を初期姿勢へ）
+    /// （自由鎖を全消去し、個数を初期値へ、吊り鎖とプレイヤー鎖を初期姿勢へ、スピンを中断）
     /// </summary>
     void ResetAll();
 
     /// <summary>
-    /// 巻き戻し明けの処理（自由鎖の消去 + 速度リセット。巻き戻し中の鎖アクションは再現しない割り切り）
+    /// 巻き戻し中に毎フレーム呼ぶ。スピンを中断して末端の拘束を解く
+    /// （巻き戻し中は鎖が更新されないため、放置すると巻き戻し明けに幻の発射やチャージのずれが起きる）
+    /// </summary>
+    void OnRewindBegin();
+
+    /// <summary>
+    /// 巻き戻し明けの処理（自由鎖の消去 + 速度リセット + スピン中断。巻き戻し中の鎖アクションは再現しない割り切り）
     /// </summary>
     void OnRewindEnd();
 
@@ -73,6 +84,7 @@ public:
 
     Chain2D* GetPlayerChain() const { return playerChain_.get(); }
     const Vector3& GetSocketWorld() const { return lastSocketWorld_; }
+    ChainSpinAction* GetSpinAction() const { return spin_.get(); }
 
     // --- お宝（ゴール判定・敗北判定・カメラ用のフック） ---
     Treasure2D* GetTreasure() const { return treasure_.get(); }
@@ -87,7 +99,7 @@ private:
     bool TryPickup();
     // unitsPerAction_ ユニットをつながったまま外して自由鎖として世界に落とす
     void DetachUnits();
-    // params_ のお宝設定をプレイヤー鎖の末端と表示に反映する
+    // params_ のお宝設定・スピン設定をプレイヤー鎖・表示・アクションに反映する
     void ApplyTreasureParams();
     // お宝の表示位置をプレイヤー鎖の末端に合わせる
     void SyncTreasureTransform();
@@ -98,6 +110,7 @@ private:
     std::unique_ptr<Chain2D> playerChain_;
     std::vector<std::unique_ptr<Chain2D>> worldChains_;
     std::unique_ptr<Treasure2D> treasure_;
+    std::unique_ptr<ChainSpinAction> spin_;
 
     // 外して落とした自由鎖（unitWorth = 拾った時に戻る個数）
     struct DroppedChain {
