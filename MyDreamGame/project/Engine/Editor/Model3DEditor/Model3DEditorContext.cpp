@@ -67,9 +67,9 @@ void Model3DEditorContext::Update() {
     }
 }
 
-void Model3DEditorContext::Draw() {
-    // 1. 3D グリッド床描画 (Zバッファ有効の3D描画のためオブジェクトに貫通・最前面表示されない)
-    if (gridFloorObj_) {
+void Model3DEditorContext::Draw(bool drawGridFloor) {
+    // 1. 3D グリッド床描画 (3Dモデル配置エディタがアクティブかつ非プレイ中の時のみ描画)
+    if (gridFloorObj_ && drawGridFloor) {
         gridFloorObj_->Draw();
     }
 

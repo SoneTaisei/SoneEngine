@@ -27,7 +27,7 @@ public:
 
     void Initialize(ID3D12Device* device);
     void Update();
-    void Draw();
+    void Draw(bool drawGridFloor = false);
 
     // Object Management
     PlacedObject3D* AddObject(const std::string& name, const std::string& modelDir, const std::string& modelFileName, const Vector3& position);

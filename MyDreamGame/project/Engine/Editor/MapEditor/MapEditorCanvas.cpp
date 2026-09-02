@@ -1,6 +1,8 @@
 #ifdef USE_IMGUI
 #include "MapEditorCanvas.h"
 #include "MapEditorContext.h"
+#include "Editor/EditorManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include "Scene/SceneManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneFactory.h"
@@ -74,8 +76,9 @@ void MapEditorCanvas::Draw(
                 ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
 
                 // グリッド・ルーム・選択・オーバーレイ描画
+                bool isPlaying = EditorManager::IsPlaying() || (ReplayManager::GetInstance() && ReplayManager::GetInstance()->IsPlaying());
                 Camera* camera = activeCamera ? *activeCamera : nullptr;
-                if (camera) {
+                if (camera && !isPlaying) {
                     Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
 
                     auto WorldToScreen = [&](float wx, float wy) -> ImVec2 {
@@ -91,18 +94,21 @@ void MapEditorCanvas::Draw(
 
                     drawList->PushClipRect(imageScreenPos, ImVec2(imageScreenPos.x + imageSize.x, imageScreenPos.y + imageSize.y), true);
 
-                    // 縦線
-                    for (int x = 0; x <= mapWidth; ++x) {
-                        ImVec2 p1 = WorldToScreen(static_cast<float>(x), 0.0f);
-                        ImVec2 p2 = WorldToScreen(static_cast<float>(x), static_cast<float>(mapHeight));
-                        drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
-                    }
+                    // グリッド線描画（エディット設定でONの場合のみ）
+                    if (context_->IsShowGrid()) {
+                        // 縦線
+                        for (int x = 0; x <= mapWidth; ++x) {
+                            ImVec2 p1 = WorldToScreen(static_cast<float>(x), 0.0f);
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(x), static_cast<float>(mapHeight));
+                            drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
+                        }
 
-                    // 横線
-                    for (int y = 0; y <= mapHeight; ++y) {
-                        ImVec2 p1 = WorldToScreen(0.0f, static_cast<float>(y));
-                        ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), static_cast<float>(y));
-                        drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
+                        // 横線
+                        for (int y = 0; y <= mapHeight; ++y) {
+                            ImVec2 p1 = WorldToScreen(0.0f, static_cast<float>(y));
+                            ImVec2 p2 = WorldToScreen(static_cast<float>(mapWidth), static_cast<float>(y));
+                            drawList->AddLine(p1, p2, IM_COL32(255, 255, 255, 80), 1.0f);
+                        }
                     }
 
                     // ルームの描画
@@ -166,7 +172,7 @@ void MapEditorCanvas::Draw(
                 ImGui::InvisibleButton("MapCanvasImage", imageSize);
                 isMapEditorHovered = ImGui::IsItemHovered();
 
-                if (isMapEditorHovered) {
+                if (isMapEditorHovered && !isPlaying) {
                     ImVec2 mousePos = ImGui::GetIO().MousePos;
                     float localX = mousePos.x - imageScreenPos.x;
                     float localY = mousePos.y - imageScreenPos.y;

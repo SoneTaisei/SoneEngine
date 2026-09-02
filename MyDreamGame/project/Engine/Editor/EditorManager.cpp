@@ -2608,7 +2608,9 @@ void EditorManager::Draw() {
 
 void EditorManager::Draw3D() {
     if (model3DEditor_) {
-        model3DEditor_->Draw();
+        bool isPlaying = isPlaying_ || (ReplayManager::GetInstance() && ReplayManager::GetInstance()->IsPlaying());
+        bool drawGridFloor = showModelPlacementEditor_ && (activeMainTab_ == "3Dモデル配置") && !isPlaying;
+        model3DEditor_->Draw(drawGridFloor);
     }
 }
 
@@ -2658,6 +2660,9 @@ void EditorManager::SaveSceneConfig() {
         winObj["showSpotLightPanel"] = showSpotLightPanel_;
         winObj["showModelPlacementEditor"] = showModelPlacementEditor_;
         winObj["showModelPalette"] = showModelPalette_;
+        if (mapEditor_ && mapEditor_->GetContext()) {
+            winObj["showMapGrid"] = mapEditor_->GetContext()->IsShowGrid();
+        }
         j["windows"] = winObj;
 
         ofs << j.dump(4) << std::endl;
@@ -2748,6 +2753,9 @@ void EditorManager::LoadSceneConfig() {
             if (winObj.contains("showSpotLightPanel") && winObj["showSpotLightPanel"].is_boolean()) showSpotLightPanel_ = winObj["showSpotLightPanel"].get<bool>();
             if (winObj.contains("showModelPlacementEditor") && winObj["showModelPlacementEditor"].is_boolean()) showModelPlacementEditor_ = winObj["showModelPlacementEditor"].get<bool>();
             if (winObj.contains("showModelPalette") && winObj["showModelPalette"].is_boolean()) showModelPalette_ = winObj["showModelPalette"].get<bool>();
+            if (winObj.contains("showMapGrid") && winObj["showMapGrid"].is_boolean() && mapEditor_ && mapEditor_->GetContext()) {
+                mapEditor_->GetContext()->SetShowGrid(winObj["showMapGrid"].get<bool>());
+            }
         }
     } catch (...) {
         // パースエラー時は何もしない

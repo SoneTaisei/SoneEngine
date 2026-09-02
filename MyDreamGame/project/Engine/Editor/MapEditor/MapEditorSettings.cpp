@@ -106,6 +106,14 @@ void MapEditorSettings::Draw(
                 ImGui::Separator();
                 ImGui::Spacing();
 
+                // 表示設定
+                bool showGrid = context_->IsShowGrid();
+                if (ImGui::Checkbox("グリッド線を表示", &showGrid)) {
+                    context_->SetShowGrid(showGrid);
+                }
+
+                ImGui::Spacing();
+
                 // 操作ボタン
                 if (ImGui::Button("保存")) {
                     mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
