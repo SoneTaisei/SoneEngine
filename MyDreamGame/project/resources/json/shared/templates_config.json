@@ -75,6 +75,160 @@
             },
             "textureName": "",
             "type": "OneWayBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.8999999761581421,
+                "g": 0.699999988079071,
+                "r": 0.4000000059604645
+            },
+            "id": 7,
+            "modelName": "",
+            "name": "Jump",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "JumpBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.800000011920929,
+                "g": 0.800000011920929,
+                "r": 0.800000011920929
+            },
+            "id": 11,
+            "modelName": "",
+            "name": "Chain Item",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "ChainItemBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.10000000149011612,
+                "g": 0.5,
+                "r": 0.800000011920929
+            },
+            "id": 12,
+            "modelName": "",
+            "name": "Moving Floor",
+            "properties": {
+                "moveAxis": "X",
+                "moveRange": 3.0,
+                "moveSpeed": 2.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "MovingBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.5,
+                "g": 0.699999988079071,
+                "r": 0.800000011920929
+            },
+            "id": 13,
+            "modelName": "",
+            "name": "Fragile Floor",
+            "properties": {
+                "breakDuration": 0.5,
+                "breakWeight": 4
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "FragileBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.20000000298023224,
+                "g": 0.20000000298023224,
+                "r": 0.800000011920929
+            },
+            "id": 14,
+            "modelName": "",
+            "name": "Switch",
+            "properties": {
+                "linkId": 1
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "SwitchBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.699999988079071,
+                "g": 0.6000000238418579,
+                "r": 0.5
+            },
+            "id": 15,
+            "modelName": "",
+            "name": "Door",
+            "properties": {
+                "linkId": 1,
+                "openSpeed": 2.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "DoorBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.5,
+                "g": 0.20000000298023224,
+                "r": 0.10000000149011612
+            },
+            "id": 16,
+            "modelName": "",
+            "name": "Guard",
+            "properties": {
+                "alertSpeed": 3.0,
+                "maxAlertGauge": 1.5,
+                "moveRange": 3.0,
+                "patrolSpeed": 1.5,
+                "sightHeight": 1.0,
+                "sightLength": 4.0,
+                "startDirection": 1,
+                "waitTimeAtEdge": 1.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "GuardBlock"
         }
     ]
 }

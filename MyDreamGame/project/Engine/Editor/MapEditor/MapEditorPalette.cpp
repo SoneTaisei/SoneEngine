@@ -7,6 +7,8 @@
 #include "Resource/Model/ModelManager.h"
 #include "Resource/Model/Model.h"
 #include "Graphics/TextureManager.h"
+#include "BlockClassGenerator.h"
+#include "Game2D/Blocks/BlockFactory.h"
 #include <vector>
 #include <string>
 #include <tuple>
@@ -329,7 +331,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
     auto DrawTools = [&](const std::vector<ToolIcon>& tools, int sectionType) {
         float windowVisibleX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
         int numTools = static_cast<int>(tools.size());
-        int maxIter = (sectionType == 2) ? numTools + 1 : numTools;
+        int maxIter = (sectionType == 2 || sectionType == 1) ? numTools + 1 : numTools;
 
         for (int i = 0; i < maxIter; i++) {
             ImGui::PushID(sectionType * 1000 + i);
@@ -479,6 +481,24 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                         toolToDelete_ = tool.id;
                         openDeletePopup_ = true;
                     }
+                } else if (sectionType == 1) {
+                    // Basic Tools (テンプレート) の削除ボタン
+                    ImVec2 delMin(p.x + cardWidth - 18.0f, p.y + 4.0f);
+                    ImVec2 delMax(p.x + cardWidth - 4.0f, p.y + 18.0f);
+                    ImVec2 mousePos = ImGui::GetMousePos();
+                    bool isDelHovered = (mousePos.x >= delMin.x && mousePos.x <= delMax.x && mousePos.y >= delMin.y && mousePos.y <= delMax.y);
+
+                    ImU32 delBgCol = isDelHovered ? IM_COL32(235, 60, 60, 255) : IM_COL32(180, 50, 50, 200);
+                    drawList->AddRectFilled(delMin, delMax, delBgCol, 3.0f);
+
+                    float xPad = 3.5f;
+                    drawList->AddLine(ImVec2(delMin.x + xPad, delMin.y + xPad), ImVec2(delMax.x - xPad, delMax.y - xPad), IM_COL32(255, 255, 255, 255), 1.5f);
+                    drawList->AddLine(ImVec2(delMax.x - xPad, delMin.y + xPad), ImVec2(delMin.x + xPad, delMax.y - xPad), IM_COL32(255, 255, 255, 255), 1.5f);
+
+                    if (isDelHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                        templateToDelete_ = tool.id;
+                        openDeleteTemplatePopup_ = true;
+                    }
                 }
             } else if (sectionType == 2) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.22f, 0.28f, 1.0f));
@@ -496,6 +516,19 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                         onSelectionCleared();
                     }
                     mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+                }
+                ImGui::PopStyleColor(3);
+                lastButtonX2 = ImGui::GetItemRectMax().x;
+            } else if (sectionType == 1) {
+                // Basic Tools 用の「＋ 新規クラス作成」ボタン
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.28f, 0.38f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.38f, 0.52f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.16f, 0.24f, 0.32f, 1.0f));
+                if (ImGui::Button("＋\nクラス\n作成", ImVec2(cardWidth, cardHeight))) {
+                    openCreateBlockPopup_ = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("新しいブロックのC++クラス（.h / .cpp）を自動生成し、\nVisual Studioプロジェクトに登録します。");
                 }
                 ImGui::PopStyleColor(3);
                 lastButtonX2 = ImGui::GetItemRectMax().x;
@@ -518,7 +551,172 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
     }
     if (ImGui::CollapsingHeader("Basic Tools (Settings)", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextDisabled("※これらのブロックはマップ設定用のテンプレートです。（直接設置はできません）");
+        
+        if (ImGui::Button("テンプレート再読み込み (Reload)")) {
+            mapChip->LoadTemplatesFromFile("resources/json/shared/templates_config.json");
+            mapChip->RebuildChipObjects();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("＋ 新規ブロッククラス作成...")) {
+            openCreateBlockPopup_ = true;
+        }
+        ImGui::Spacing();
+
         DrawTools(templateTools, 1);
+
+        // テンプレート削除確認ポップアップ
+        if (openDeleteTemplatePopup_) {
+            ImGui::OpenPopup("DeleteTemplateConfirmPopup");
+            openDeleteTemplatePopup_ = false;
+        }
+        if (ImGui::BeginPopupModal("DeleteTemplateConfirmPopup", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            const MapChip2D::CustomBlockDef* targetDef = nullptr;
+            for (const auto& t : mapChip->GetTemplatePalette()) {
+                if (t.id == templateToDelete_) {
+                    targetDef = &t;
+                    break;
+                }
+            }
+
+            std::string toolName = targetDef ? targetDef->name : "選択されたツール";
+            std::string className = targetDef ? targetDef->type : "";
+
+            ImGui::Text("本当にこのベーシックツール「%s（クラス: %s）」を削除しますか？", toolName.c_str(), className.c_str());
+            ImGui::Spacing();
+            ImGui::Checkbox("C++クラスファイル (.h / .cpp) とVSプロジェクト登録も完全に削除する", &deleteClassSourceFiles_);
+            if (deleteClassSourceFiles_) {
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "※Project/Game2D/Blocks/%s.h および .cpp がディスクから削除されます。", className.c_str());
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("はい", ImVec2(120, 0))) {
+                auto& templates = mapChip->GetTemplatePalette();
+                std::string typeToDelete = "";
+                for (const auto& d : templates) {
+                    if (d.id == templateToDelete_) {
+                        typeToDelete = d.type;
+                        break;
+                    }
+                }
+
+                auto it = std::remove_if(templates.begin(), templates.end(), [&](const MapChip2D::CustomBlockDef& d) { return d.id == templateToDelete_; });
+                templates.erase(it, templates.end());
+                mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
+                
+                if (context_->GetSelectedTool() == templateToDelete_) {
+                    context_->SetSelectedTool(0);
+                }
+                templateToDelete_ = -1;
+
+                if (deleteClassSourceFiles_ && !typeToDelete.empty()) {
+                    std::string delMsg;
+                    BlockClassGenerator::DeleteBlockClass(typeToDelete, delMsg);
+                    createResultStatus_ = delMsg;
+                    showCreateResultPopup_ = true;
+                }
+
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if (ImGui::Button("いいえ", ImVec2(120, 0))) {
+                templateToDelete_ = -1;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // 新規クラス作成ポップアップ
+        if (openCreateBlockPopup_) {
+            ImGui::OpenPopup("CreateBlockClassModal");
+            openCreateBlockPopup_ = false;
+        }
+
+        if (ImGui::BeginPopupModal("CreateBlockClassModal", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "新規ブロッククラスの作成");
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::InputText("クラス名 (Class Name)", newClassNameBuf_, sizeof(newClassNameBuf_));
+            ImGui::TextDisabled("※半角英数字（例: JumpBlock, IceBlock, SpringBlock）");
+
+            ImGui::InputText("表示名 (Display Name)", newDisplayNameBuf_, sizeof(newDisplayNameBuf_));
+
+            const char* behaviorTypes[] = {
+                "通常ブロック (Solid / 地面・壁)",
+                "一方向すり抜け足場 (One-Way Platform)",
+                "トゲ・ダメージ (Hazard / Death)",
+                "ゴール (Goal)",
+                "トリガー・すり抜け (Trigger / Non-solid)"
+            };
+            ImGui::Combo("基本挙動タイプ", &newBlockBehaviorType_, behaviorTypes, IM_ARRAYSIZE(behaviorTypes));
+
+            ImGui::ColorEdit4("初期カラー", newBlockColor_);
+
+            ImGui::Separator();
+            ImGui::TextDisabled("生成先:");
+            ImGui::TextDisabled("  - Project/Game2D/Blocks/%s.h", newClassNameBuf_);
+            ImGui::TextDisabled("  - Project/Game2D/Blocks/%s.cpp", newClassNameBuf_);
+            ImGui::TextDisabled("  - MyDreamGame.vcxproj (自動登録)");
+
+            ImGui::Spacing();
+            ImGui::Separator();
+
+            if (ImGui::Button("クラス生成 (Create)", ImVec2(140, 0))) {
+                BlockClassGenParams params;
+                params.className = newClassNameBuf_;
+                params.displayName = newDisplayNameBuf_;
+                params.isSolid = (newBlockBehaviorType_ != 4 && newBlockBehaviorType_ != 1);
+                params.isOneWay = (newBlockBehaviorType_ == 1);
+                params.color = { newBlockColor_[0], newBlockColor_[1], newBlockColor_[2], newBlockColor_[3] };
+
+                auto genRes = BlockClassGenerator::GenerateBlockClass(params);
+                if (genRes.success) {
+                    // テンプレートパレットにも登録
+                    auto& templates = mapChip->GetTemplatePalette();
+                    int maxId = 0;
+                    for (const auto& t : templates) {
+                        if (t.id > maxId) maxId = t.id;
+                    }
+                    MapChip2D::CustomBlockDef newDef;
+                    newDef.id = (std::max)(maxId + 1, 7);
+                    newDef.name = params.displayName.empty() ? params.className : params.displayName;
+                    newDef.type = params.className;
+                    newDef.color = params.color;
+                    newDef.scale = { 1.0f, 1.0f, 1.0f };
+                    templates.push_back(newDef);
+
+                    mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
+
+                    createResultStatus_ = genRes.message;
+                    showCreateResultPopup_ = true;
+                    ImGui::CloseCurrentPopup();
+                } else {
+                    createResultStatus_ = "エラー: " + genRes.message;
+                    showCreateResultPopup_ = true;
+                }
+            }
+            ImGui::SetItemDefaultFocus();
+            ImGui::SameLine();
+            if (ImGui::Button("キャンセル (Cancel)", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        if (showCreateResultPopup_) {
+            ImGui::OpenPopup("CreateResultPopup");
+            showCreateResultPopup_ = false;
+        }
+
+        if (ImGui::BeginPopupModal("CreateResultPopup", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("%s", createResultStatus_.c_str());
+            ImGui::Separator();
+            if (ImGui::Button("閉じる (OK)", ImVec2(120, 0))) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
     }
     if (ImGui::CollapsingHeader("Custom Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::Button("フィルター設定...")) {

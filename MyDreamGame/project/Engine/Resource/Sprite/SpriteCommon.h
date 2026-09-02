@@ -14,6 +14,9 @@ public:
     // 初期化 (デバイスとウィンドウサイズを受け取る)
     void Initialize(DirectXCommon *dxCommon, int windowWidth, int windowHeight);
 
+    // 解像度変更時の更新
+    void SetResolution(int windowWidth, int windowHeight);
+
     // 終了処理
     void Finalize();
 

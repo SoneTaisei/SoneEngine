@@ -103,41 +103,16 @@ void MapEditorSettings::Draw(
                 }
 
                 ImGui::Spacing();
-
-                // ルーム編集モード
-                bool roomEdit = context_->IsRoomEditMode();
-                if (ImGui::Checkbox("ルーム編集モード", &roomEdit)) {
-                    context_->SetRoomEditMode(roomEdit);
-                }
-                if (context_->IsRoomEditMode()) {
-                    ImGui::Text("左ドラッグ: マス目にスナップして作成・移動・リサイズ");
-                    ImGui::Text("右ドラッグ: スナップなしで作成・移動・リサイズ");
-                    ImGui::Text("Ctrl + クリック: ルームの削除");
-                }
-
                 ImGui::Separator();
+                ImGui::Spacing();
 
-                ImGui::Text("マップサイズ設定 (1画面＝ 幅:20, 高さ:11)");
-                ImGui::TextDisabled("※ 画面を増やしたい場合はサイズを広げてください");
-
-                ImGui::SetNextItemWidth(100.0f);
-                ImGui::InputInt("Width", context_->GetInputWidthPtr());
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(100.0f);
-                ImGui::InputInt("Height", context_->GetInputHeightPtr());
-                ImGui::SameLine();
-                if (ImGui::Button("Apply Size")) {
-                    context_->BeginMapHistoryCapture(mapChip);
-                    int w = context_->GetInputWidth();
-                    int h = context_->GetInputHeight();
-                    if (w < 1) w = 1;
-                    if (h < 1) h = 1;
-                    context_->SetInputSize(w, h);
-                    mapChip->Resize(w, h);
-                    context_->EndMapHistoryCapture(mapChip);
+                // 表示設定
+                bool showGrid = context_->IsShowGrid();
+                if (ImGui::Checkbox("グリッド線を表示", &showGrid)) {
+                    context_->SetShowGrid(showGrid);
                 }
 
-                ImGui::Separator();
+                ImGui::Spacing();
 
                 // 操作ボタン
                 if (ImGui::Button("保存")) {
@@ -145,16 +120,6 @@ void MapEditorSettings::Draw(
                     if (onSaveSceneConfig) {
                         onSaveSceneConfig();
                     }
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("クリア")) {
-                    mapChip->ClearMap();
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("初期化")) {
-                    mapChip->ResetMap();
-                    context_->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
-                    context_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
                 }
                 ImGui::SameLine();
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));

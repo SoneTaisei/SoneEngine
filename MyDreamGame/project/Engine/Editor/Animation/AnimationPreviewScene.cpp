@@ -62,55 +62,11 @@ void AnimationPreviewScene::Initialize() {
 
         gameObjects_.push_back(playerObject_);
     }
-
-    // 4. スタジオライティングを自然なスタジオ照明（キーライト・フィルライト）に設定
-    if (auto* mc = ModelManager::GetInstance()->GetModelCommon()) {
-        if (auto* d = mc->GetDirectionalLight()) {
-            d->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            d->direction = TransformFunctions::Normalize({ -0.35f, -0.55f, 0.70f });
-            d->intensity = 0.70f;
-            d->enableFlatShading = 0;
-        }
-        if (auto* p = mc->GetPointLight()) {
-            p->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            p->position = { -1.5f, 2.5f, 2.0f };
-            p->radius = 15.0f;
-            p->intensity = 0.25f;
-            p->decay = 1.0f;
-        }
-        if (auto* s = mc->GetSpotLight()) {
-            s->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            s->position = { 0.0f, 4.0f, 3.5f };
-            s->direction = TransformFunctions::Normalize({ 0.0f, -3.0f, -3.5f });
-            s->distance = 12.0f;
-            s->intensity = 0.0f;
-        }
-    }
 }
 
 void AnimationPreviewScene::OnEnter(SceneManager *sceneManager) {
     if (gridFloorObj_) gridFloorObj_->Update();
     if (playerObject_) playerObject_->Update();
-
-    // シーン進入時にもライティングを自然なスタジオ照明にセット
-    if (auto* mc = ModelManager::GetInstance()->GetModelCommon()) {
-        if (auto* d = mc->GetDirectionalLight()) {
-            d->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            d->direction = TransformFunctions::Normalize({ -0.35f, -0.55f, 0.70f });
-            d->intensity = 0.70f;
-            d->enableFlatShading = 0;
-        }
-        if (auto* p = mc->GetPointLight()) {
-            p->color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            p->position = { -1.5f, 2.5f, 2.0f };
-            p->radius = 15.0f;
-            p->intensity = 0.25f;
-            p->decay = 1.0f;
-        }
-        if (auto* s = mc->GetSpotLight()) {
-            s->intensity = 0.0f;
-        }
-    }
 }
 
 void AnimationPreviewScene::OnExit(SceneManager *sceneManager) {

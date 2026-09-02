@@ -2,6 +2,7 @@
 #include "Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BaseBlock.h"
+#include "Game2D/Blocks/GuardBlock.h"
 #include <algorithm>
 #include <cmath>
 
@@ -15,14 +16,22 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     ApplyGravity(state_, params_, deltaTime);
 
     // 3. X軸移動と壁押し戻し
-    state_.position_.x += state_.velocity_.x * deltaTime;
-    ResolveCollisionX(state_, params_, mapChip);
+    state_.position_.x += (state_.velocity_.x + state_.platformVelocity_.x) * deltaTime;
+    ResolveCollisionX(state_, params_, mapChip, player);
+    if (state_.isTouchingWallLeft_ || state_.isTouchingWallRight_) {
+        state_.launchVelocityX_ = 0.0f; // 壁に当たったら発射の勢いは消える
+    }
+    if (state_.isDead_ || state_.isGoal_) return;
 
-    // 4. Y軸移動と床/天井押し戻し
+    // 4. Y軸移動と床天井押し戻し
     state_.position_.y += state_.velocity_.y * deltaTime;
-    ResolveCollisionY(state_, params_, mapChip);
+    ResolveCollisionY(state_, params_, mapChip, player);
+    if (state_.isOnGround_) {
+        state_.launchVelocityX_ = 0.0f; // 着地で発射の勢いは消える
+    }
+    if (state_.isDead_ || state_.isGoal_) return;
 
-    // 5. 走行中の足元砂ぼこりエフェクト
+    // 5. 走行中の足元の砂埃エフェクト
     if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f && player) {
         state_.runDustTimer_ += deltaTime;
         if (state_.runDustTimer_ >= params_.runDustInterval_) {
@@ -45,7 +54,12 @@ void PlayerPhysics::HandleMovement(PlayerState& state_, const PlayerParams& para
 
     // ジャンプ
     if (state_.isOnGround_ && input_.isJumpPressed) {
-        state_.velocity_.y = params_.jumpPower_;
+        // 鎖の数が3個を超えた分だけジャンプ力を低下させる
+        int extraChains = (std::max)(0, state_.chainLength_ - 3);
+        float actualJumpPower = params_.jumpPower_ - (extraChains * params_.chainJumpPenalty_);
+        if (actualJumpPower < 0.0f) actualJumpPower = 0.0f; // 最低でも・以上
+
+        state_.velocity_.y = actualJumpPower;
         state_.isOnGround_ = false;
         if (player) {
             player->GetVisuals().SpawnJumpDust({ state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f }, 0.0f);
@@ -76,7 +90,7 @@ bool PlayerPhysics::CheckAABBCollision(const AABB2D& a, const AABB2D& b) const {
             a.top > b.bottom && a.bottom < b.top);
 }
 
-void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip) {
+void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip, Player2D* player) {
     state_.isTouchingWallLeft_ = false;
     state_.isTouchingWallRight_ = false;
     if (!mapChip) return;
@@ -96,34 +110,89 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
 
     for (int cy = startChipY; cy <= endChipY; ++cy) {
         for (int cx = startChipX; cx <= endChipX; ++cx) {
-            MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
-            if (type == MapChip2D::ChipType::kBlock) {
+            auto* block = mapChip->GetBlock(cx, cy);
+            if (block && block->IsSolid() && !block->IsDestroyed() && !block->IsMoving()) {
                 float blockLeft = mapChip->ChipToWorldX(cx);
                 float blockRight = blockLeft + mapChip->GetChipSize();
                 float blockBottom = mapChip->ChipToWorldY(cy);
                 float blockTop = blockBottom + mapChip->GetChipSize();
 
-                if (maxY > blockBottom && minY < blockTop) {
-                    if (state_.velocity_.x > 0.0f && maxX > blockLeft && minX < blockLeft) {
-                        state_.position_.x = blockLeft - params_.halfWidth_;
-                        state_.velocity_.x = 0.0f;
-                        state_.isTouchingWallRight_ = true;
-                        minX = state_.position_.x - params_.halfWidth_;
-                        maxX = state_.position_.x + params_.halfWidth_;
-                    } else if (state_.velocity_.x < 0.0f && minX < blockRight && maxX > blockRight) {
-                        state_.position_.x = blockRight + params_.halfWidth_;
-                        state_.velocity_.x = 0.0f;
-                        state_.isTouchingWallLeft_ = true;
-                        minX = state_.position_.x - params_.halfWidth_;
-                        maxX = state_.position_.x + params_.halfWidth_;
+                // Y方向の重複チェック
+                if (maxY <= blockBottom || minY >= blockTop) {
+                    continue;
+                }
+
+                if (state_.velocity_.x > 0.0f && maxX > blockLeft && minX < blockLeft) {
+                    state_.position_.x = blockLeft - params_.halfWidth_;
+                    state_.velocity_.x = 0.0f;
+                    state_.isTouchingWallRight_ = true;
+                    minX = state_.position_.x - params_.halfWidth_;
+                    maxX = state_.position_.x + params_.halfWidth_;
+                    if (player) {
+                        block->OnCollision(player);
+                        block->OnPlayerTouch(player);
                     }
+                    if (state_.isDead_) return;
+                } else if (state_.velocity_.x < 0.0f && minX < blockRight && maxX > blockRight) {
+                    state_.position_.x = blockRight + params_.halfWidth_;
+                    state_.velocity_.x = 0.0f;
+                    state_.isTouchingWallLeft_ = true;
+                    minX = state_.position_.x - params_.halfWidth_;
+                    maxX = state_.position_.x + params_.halfWidth_;
+                    if (player) {
+                        block->OnCollision(player);
+                        block->OnPlayerTouch(player);
+                    }
+                    if (state_.isDead_) return;
                 }
             }
         }
     }
+
+    // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
+    for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
+        
+        AABB2D blockAABB = blockPtr->GetAABB();
+        float blockLeft = blockAABB.left;
+        float blockRight = blockAABB.right;
+        float blockTop = blockAABB.top;
+        float blockBottom = blockAABB.bottom;
+        
+        // Y方向の重なりチェック（頭スレスレやすれ違いを避けるため少しマージンを取る）
+        if (maxY - 0.05f <= blockBottom || minY + 0.05f >= blockTop) {
+            continue;
+        }
+
+        // X方向の重なりチェック（めり込んでいる場合は押し出す）
+        if (maxX > blockLeft && minX < blockRight) {
+            float playerCenter = state_.position_.x;
+            float blockCenter = (blockLeft + blockRight) * 0.5f;
+
+            if (playerCenter < blockCenter) {
+                // 左へ押し出す
+                state_.position_.x = blockLeft - params_.halfWidth_;
+                state_.velocity_.x = 0.0f;
+                state_.isTouchingWallRight_ = true;
+            } else {
+                // 右へ押し出す
+                state_.position_.x = blockRight + params_.halfWidth_;
+                state_.velocity_.x = 0.0f;
+                state_.isTouchingWallLeft_ = true;
+            }
+            
+            minX = state_.position_.x - params_.halfWidth_;
+            maxX = state_.position_.x + params_.halfWidth_;
+            if (player) {
+                blockPtr->OnCollision(player);
+                blockPtr->OnPlayerTouch(player);
+            }
+            if (state_.isDead_) return;
+        }
+    }
 }
 
-void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip) {
+void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, MapChip2D* mapChip, Player2D* player) {
     if (!mapChip) return;
 
     float minX = state_.position_.x - params_.halfWidth_ + 0.02f;
@@ -142,27 +211,93 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     if (state_.velocity_.y <= 0.0f) {
         for (int cy = startChipY; cy <= endChipY; ++cy) {
             for (int cx = startChipX; cx <= endChipX; ++cx) {
-                MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
-                if (type == MapChip2D::ChipType::kBlock) {
+                auto* block = mapChip->GetBlock(cx, cy);
+                if (block && !block->IsDestroyed() && !block->IsMoving()) {
+                    float blockLeft = mapChip->ChipToWorldX(cx);
+                    float blockRight = blockLeft + mapChip->GetChipSize();
                     float blockBottom = mapChip->ChipToWorldY(cy);
                     float blockTop = blockBottom + mapChip->GetChipSize();
 
-                    if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
-                        state_.position_.y = blockTop + params_.halfHeight_;
-                        state_.velocity_.y = 0.0f;
-                        groundedThisFrame = true;
-                        minY = state_.position_.y - params_.halfHeight_;
-                        maxY = state_.position_.y + params_.halfHeight_;
+                    // X方向の重複チェック
+                    if (maxX <= blockLeft || minX >= blockRight) {
+                        continue;
                     }
-                } else if (type == MapChip2D::ChipType::kOneWayBlock) {
-                    float blockTop = mapChip->ChipToWorldY(cy) + mapChip->GetChipSize();
-                    if (minY <= blockTop && minY >= blockTop - 0.25f) {
-                        state_.position_.y = blockTop + params_.halfHeight_;
-                        state_.velocity_.y = 0.0f;
-                        groundedThisFrame = true;
-                        minY = state_.position_.y - params_.halfHeight_;
-                        maxY = state_.position_.y + params_.halfHeight_;
+
+                    if (block->IsSolid()) {
+                        if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
+                            state_.position_.y = blockTop + params_.halfHeight_;
+                            state_.velocity_.y = 0.0f;
+                            groundedThisFrame = true;
+                            state_.platformVelocity_ = block->GetVelocity();
+                            minY = state_.position_.y - params_.halfHeight_;
+                            maxY = state_.position_.y + params_.halfHeight_;
+                            if (player) {
+                                block->OnCollision(player);
+                                block->OnPlayerStand(player);
+                            }
+                            if (state_.isDead_) return;
+                        }
+                    } else if (block->IsOneWay()) {
+                        if (minY <= blockTop && minY >= blockTop - 0.25f) {
+                            state_.position_.y = blockTop + params_.halfHeight_;
+                            state_.velocity_.y = 0.0f;
+                            groundedThisFrame = true;
+                            state_.platformVelocity_ = block->GetVelocity();
+                            minY = state_.position_.y - params_.halfHeight_;
+                            maxY = state_.position_.y + params_.halfHeight_;
+                            if (player) {
+                                block->OnCollision(player);
+                                block->OnPlayerStand(player);
+                            }
+                            if (state_.isDead_) return;
+                        }
                     }
+                }
+            }
+        }
+        
+        // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
+        for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+            if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
+            
+            AABB2D blockAABB = blockPtr->GetAABB();
+            float blockLeft = blockAABB.left;
+            float blockRight = blockAABB.right;
+            float blockTop = blockAABB.top;
+            float blockBottom = blockAABB.bottom;
+            
+            // X方向の重複チェック
+            if (maxX <= blockLeft || minX >= blockRight) {
+                continue;
+            }
+
+            if (blockPtr->IsSolid()) {
+                if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
+                    state_.position_.y = blockTop + params_.halfHeight_;
+                    state_.velocity_.y = 0.0f;
+                    groundedThisFrame = true;
+                    state_.platformVelocity_ = blockPtr->GetVelocity();
+                    minY = state_.position_.y - params_.halfHeight_;
+                    maxY = state_.position_.y + params_.halfHeight_;
+                    if (player) {
+                        blockPtr->OnCollision(player);
+                        blockPtr->OnPlayerStand(player);
+                    }
+                    if (state_.isDead_) return;
+                }
+            } else if (blockPtr->IsOneWay()) {
+                if (minY <= blockTop && minY >= blockTop - 0.25f) {
+                    state_.position_.y = blockTop + params_.halfHeight_;
+                    state_.velocity_.y = 0.0f;
+                    groundedThisFrame = true;
+                    state_.platformVelocity_ = blockPtr->GetVelocity();
+                    minY = state_.position_.y - params_.halfHeight_;
+                    maxY = state_.position_.y + params_.halfHeight_;
+                    if (player) {
+                        blockPtr->OnCollision(player);
+                        blockPtr->OnPlayerStand(player);
+                    }
+                    if (state_.isDead_) return;
                 }
             }
         }
@@ -171,26 +306,112 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     else if (state_.velocity_.y > 0.0f) {
         for (int cy = startChipY; cy <= endChipY; ++cy) {
             for (int cx = startChipX; cx <= endChipX; ++cx) {
-                MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
-                if (type == MapChip2D::ChipType::kBlock) {
+                auto* block = mapChip->GetBlock(cx, cy);
+                if (block && block->IsSolid() && !block->IsDestroyed() && !block->IsMoving()) {
+                    float blockLeft = mapChip->ChipToWorldX(cx);
+                    float blockRight = blockLeft + mapChip->GetChipSize();
                     float blockBottom = mapChip->ChipToWorldY(cy);
+                    float blockTop = blockBottom + mapChip->GetChipSize();
+
+                    // X方向の重なりチェック
+                    if (maxX <= blockLeft || minX >= blockRight) {
+                        continue;
+                    }
 
                     if (maxY >= blockBottom && minY < blockBottom) {
                         state_.position_.y = blockBottom - params_.halfHeight_;
                         state_.velocity_.y = 0.0f;
                         minY = state_.position_.y - params_.halfHeight_;
                         maxY = state_.position_.y + params_.halfHeight_;
+                        if (player) {
+                            block->OnCollision(player);
+                            block->OnPlayerTouch(player);
+                        }
+                        if (state_.isDead_) return;
                     }
                 }
             }
         }
+
+        // 動く床の特別判定 (グリッドではなく実際のワールド座標(AABB)ベースで判定)
+        for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+            if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
+            
+            AABB2D blockAABB = blockPtr->GetAABB();
+            float blockLeft = blockAABB.left;
+            float blockRight = blockAABB.right;
+            float blockTop = blockAABB.top;
+            float blockBottom = blockAABB.bottom;
+            
+            // X方向の重なりチェック
+            if (maxX <= blockLeft || minX >= blockRight) {
+                continue;
+            }
+
+            if (maxY >= blockBottom && minY < blockBottom) {
+                state_.position_.y = blockBottom - params_.halfHeight_;
+                state_.velocity_.y = 0.0f;
+                minY = state_.position_.y - params_.halfHeight_;
+                maxY = state_.position_.y + params_.halfHeight_;
+                if (player) {
+                    blockPtr->OnCollision(player);
+                    blockPtr->OnPlayerTouch(player);
+                }
+                if (state_.isDead_) return;
+            }
+        }
+    }
+
+    // Y軸方向の動く床（シャッターなど）による押し出し処理
+    for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
+        
+        AABB2D blockAABB = blockPtr->GetAABB();
+        float blockLeft = blockAABB.left;
+        float blockRight = blockAABB.right;
+        float blockTop = blockAABB.top;
+        float blockBottom = blockAABB.bottom;
+        
+        // X方向の重なりチェック（左右のスレスレを避ける）
+        if (maxX - 0.05f <= blockLeft || minX + 0.05f >= blockRight) {
+            continue;
+        }
+
+        // Y方向のめり込みチェック
+        if (maxY > blockBottom && minY < blockTop) {
+            float playerCenterY = state_.position_.y;
+            float blockCenterY = (blockTop + blockBottom) * 0.5f;
+
+            if (playerCenterY < blockCenterY) {
+                // シャッターが上から降りてきた場合など、下へ押し出す
+                state_.position_.y = blockBottom - params_.halfHeight_;
+                if (state_.velocity_.y > 0.0f) state_.velocity_.y = 0.0f;
+            } else {
+                // 床が下から突き上げてきた場合など、上へ押し出す
+                state_.position_.y = blockTop + params_.halfHeight_;
+                if (state_.velocity_.y < 0.0f) state_.velocity_.y = 0.0f;
+                groundedThisFrame = true;
+                state_.platformVelocity_ = blockPtr->GetVelocity();
+            }
+            
+            minY = state_.position_.y - params_.halfHeight_;
+            maxY = state_.position_.y + params_.halfHeight_;
+            if (player) {
+                blockPtr->OnCollision(player);
+                blockPtr->OnPlayerTouch(player);
+            }
+            if (state_.isDead_) return;
+        }
     }
 
     state_.isOnGround_ = groundedThisFrame;
+    if (!groundedThisFrame) {
+        state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
+    }
 }
 
 void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerParams& params_, Player2D* player, MapChip2D* mapChip) {
-    if (!player) return;
+    if (!player || state_.isDead_) return;
 
     // 画面下落下死
     if (state_.position_.y < -10.0f) {
@@ -200,18 +421,31 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
 
     if (!mapChip) return;
 
-    float minX = state_.position_.x - params_.halfWidth_;
-    float maxX = state_.position_.x + params_.halfWidth_;
-    float minY = state_.position_.y - params_.halfHeight_;
-    float maxY = state_.position_.y + params_.halfHeight_;
+    // 押し戻し後の境界線上（床や壁に接している状態）でも確実に判定できるように判定領域にマージンを持たせる
+    float margin = 0.05f;
+    float pLeft = state_.position_.x - params_.halfWidth_ - margin;
+    float pRight = state_.position_.x + params_.halfWidth_ + margin;
+    float pBottom = state_.position_.y - params_.halfHeight_ - margin;
+    float pTop = state_.position_.y + params_.halfHeight_ + margin;
 
-    int startChipX = mapChip->WorldToChipX(minX);
-    int endChipX   = mapChip->WorldToChipX(maxX);
-    int startChipY = mapChip->WorldToChipY(minY);
-    int endChipY   = mapChip->WorldToChipY(maxY);
+    int startChipX = mapChip->WorldToChipX(pLeft);
+    int endChipX   = mapChip->WorldToChipX(pRight);
+    int startChipY = mapChip->WorldToChipY(pBottom);
+    int endChipY   = mapChip->WorldToChipY(pTop);
 
     for (int cy = startChipY; cy <= endChipY; ++cy) {
         for (int cx = startChipX; cx <= endChipX; ++cx) {
+            float blockLeft = mapChip->ChipToWorldX(cx);
+            float blockRight = blockLeft + mapChip->GetChipSize();
+            float blockBottom = mapChip->ChipToWorldY(cy);
+            float blockTop = blockBottom + mapChip->GetChipSize();
+
+            // AABB重複判定
+            if (pRight <= blockLeft || pLeft >= blockRight ||
+                pTop <= blockBottom || pBottom >= blockTop) {
+                continue;
+            }
+
             MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
             if (type == MapChip2D::ChipType::kDeathBlock) {
                 player->Kill();
@@ -220,6 +454,76 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
                 player->ReachGoal();
                 return;
             }
+
+            if (auto* block = mapChip->GetBlock(cx, cy)) {
+                if (block->IsMoving()) continue; // 動く床は別ループで処理
+                block->OnCollision(player);
+                if (state_.isDead_ || state_.isGoal_) {
+                    return;
+                }
+            }
+        }
+    }
+
+    // 動く床の特別判定 (実際のAABBベース)
+    for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
+        
+        AABB2D blockAABB = blockPtr->GetAABB();
+        if (pRight <= blockAABB.left || pLeft >= blockAABB.right ||
+            pTop <= blockAABB.bottom || pBottom >= blockAABB.top) {
+            continue;
+        }
+
+        blockPtr->OnCollision(player);
+        if (state_.isDead_ || state_.isGoal_) {
+            return;
+        }
+    }
+
+    // 警備員の視界判定
+    AABB2D playerAABB = GetAABB(state_, params_);
+    for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed()) continue;
+        if (auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get())) {
+            AABB2D sight = guard->GetSightAABB();
+            if (CheckAABBCollision(playerAABB, sight)) {
+                guard->OnSpottedPlayer(player);
+                if (state_.isDead_) return;
+            }
+        }
+    }
+
+    // 挟まれ（潰され）判定：押し出し処理後もソリッドブロックにめり込んでいる場合はデス
+    float crushMargin = 0.15f;
+    float cLeft = state_.position_.x - params_.halfWidth_ + crushMargin;
+    float cRight = state_.position_.x + params_.halfWidth_ - crushMargin;
+    float cBottom = state_.position_.y - params_.halfHeight_ + crushMargin;
+    float cTop = state_.position_.y + params_.halfHeight_ - crushMargin;
+
+    if (cLeft < cRight && cBottom < cTop) {
+        int cStartX = mapChip->WorldToChipX(cLeft);
+        int cEndX = mapChip->WorldToChipX(cRight);
+        int cStartY = mapChip->WorldToChipY(cBottom);
+        int cEndY = mapChip->WorldToChipY(cTop);
+        for (int cy = cStartY; cy <= cEndY; ++cy) {
+            for (int cx = cStartX; cx <= cEndX; ++cx) {
+                if (auto* block = mapChip->GetBlock(cx, cy)) {
+                    if (block->IsSolid() && !block->IsMoving()) {
+                        player->Kill();
+                        return;
+                    }
+                }
+            }
+        }
+        for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
+            if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsSolid()) continue;
+            AABB2D bAABB = blockPtr->GetAABB();
+            if (cRight > bAABB.left && cLeft < bAABB.right && cTop > bAABB.bottom && cBottom < bAABB.top) {
+                player->Kill();
+                return;
+            }
         }
     }
 }
+

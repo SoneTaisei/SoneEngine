@@ -161,7 +161,7 @@ public:
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
-    D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return postProcessSrvHandleGPU_; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return finalPostProcessSRVHandle_.ptr != 0 ? finalPostProcessSRVHandle_ : postProcessSrvHandleGPU_; }
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
     GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }

@@ -3,7 +3,9 @@
 struct PlayerState {
     Vector3 position_ = { 2.0f, 5.0f, 0.0f };
     Vector3 velocity_ = { 0.0f, 0.0f, 0.0f };
+    float launchVelocityX_ = 0.0f;                    // 鎖アクション(スピンジャンプ等)の発射横速度。着地・壁接触で消える
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f };
+    Vector3 platformVelocity_ = { 0.0f, 0.0f, 0.0f }; // 乗っている床の速度
     bool isOnGround_ = false;
 
     // ゲーム進行・ステート
@@ -13,6 +15,9 @@ struct PlayerState {
     float respawnTimer_ = 0.0f;
     bool isGoal_ = false;
     float goalTimer_ = 0.0f;
+
+    // 鎖の長さ（個数）
+    int chainLength_ = 3;
 
     // 見た目・エフェクト同期用フラグ
     bool isDashing_ = false;

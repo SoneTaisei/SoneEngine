@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -13,7 +13,8 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-  </ItemGroup>
+      <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h" />
+</ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -210,6 +211,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp" />
     <ClCompile Include="Engine\GameObject\GameObject.cpp" />
     <ClCompile Include="Engine\Component\TransformComponent.cpp" />
     <ClCompile Include="Engine\Component\AnimatorComponent.cpp" />
@@ -243,9 +245,24 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\ChainItemBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\MovingBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\FragileBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\SwitchBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\DoorBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\GuardBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp" />
+    <ClCompile Include="Project\Game2D\Chain\Chain2D.cpp" />
+    <ClCompile Include="Project\Game2D\Chain\ChainConfig.cpp" />
+    <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp" />
+    <ClCompile Include="Project\Game2D\Chain\ChainSpinAction.cpp" />
+    <ClCompile Include="Project\Effect\TransitionDirector.cpp" />
+    <ClCompile Include="Project\Game2D\Treasure\Treasure2D.cpp" />
+    <ClCompile Include="Project\Game2D\Physics\VerletPhysics2D.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTimelineEditor.cpp" />
@@ -260,6 +277,13 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorPalette.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\LightEditor\LightEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditor.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
     <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
     <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
@@ -461,9 +485,24 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\ChainItemBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\MovingBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\FragileBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\SwitchBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\DoorBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\GuardBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h" />
+    <ClInclude Include="Project\Game2D\Chain\Chain2D.h" />
+    <ClInclude Include="Project\Game2D\Chain\ChainConfig.h" />
+    <ClInclude Include="Project\Game2D\Chain\ChainManager.h" />
+    <ClInclude Include="Project\Game2D\Chain\ChainSpinAction.h" />
+    <ClInclude Include="Project\Effect\TransitionDirector.h" />
+    <ClInclude Include="Project\Game2D\Treasure\Treasure2D.h" />
+    <ClInclude Include="Project\Game2D\Physics\VerletPhysics2D.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTimelineEditor.h" />
@@ -478,6 +517,13 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorPalette.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\LightEditor\LightEditor.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditor.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />

@@ -16,6 +16,20 @@ void GameCamera::Initialize(int kClientWidth, int kClientHeight) {
     UpdateMatrix();
 }
 
+void GameCamera::SetResolution(int kClientWidth, int kClientHeight) {
+    kClientWidth_ = kClientWidth;
+    kClientHeight_ = kClientHeight;
+    if (isOrthographic_) {
+        // 縦幅を基準にアスペクト比に合わせて横幅を動的拡張
+        if (kClientHeight_ > 0) {
+            orthoWidth_ = orthoHeight_ * ((float)kClientWidth_ / (float)kClientHeight_);
+        }
+        UpdateMatrixOrthographic();
+    } else {
+        Camera::SetResolution(kClientWidth, kClientHeight);
+    }
+}
+
 void GameCamera::Update() {
     // 画面揺れの更新
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
@@ -139,7 +153,14 @@ void GameCamera::UpdateMatrixOrthographic() {
                 } else {
                     cameraTargetY = std::clamp(targetY, minClampY, maxClampY);
                 }
+            } else {
+                cameraTargetX = targetX;
+                cameraTargetY = targetY;
             }
+        } else {
+            // ルーム設定がない場合はターゲット（プレイヤー）を直接追従
+            cameraTargetX = targetX;
+            cameraTargetY = targetY;
         }
 
         if (newRoomX != currentRoomX_ || newRoomY != currentRoomY_) {

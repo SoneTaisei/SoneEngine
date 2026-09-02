@@ -1,0 +1,81 @@
+{
+    "ambientIntensity": 1.0119999647140503,
+    "dIntensity": 1.75,
+    "dLight": {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "direction": [
+            -0.03844712674617767,
+            -0.9625364542007446,
+            0.26841291785240173
+        ]
+    },
+    "enableDirectional": false,
+    "enableFlatShading": false,
+    "enablePoint": false,
+    "pIntensity": 0.07000000029802322,
+    "pLight": {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "decay": 1.0,
+        "position": [
+            0.0,
+            2.0,
+            0.0
+        ],
+        "radius": 10.0
+    },
+    "spotLights": [
+        {
+            "angleDeg": 35.0,
+            "baseDirection": [
+                0.0,
+                0.0,
+                1.0
+            ],
+            "color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "decay": 1.5,
+            "direction": [
+                0.0,
+                0.0,
+                1.0
+            ],
+            "distance": 20.0,
+            "enabled": true,
+            "falloffDeg": 20.0,
+            "followOffset": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "followType": 0,
+            "intensity": 5.0,
+            "isDangerous": true,
+            "name": "SpotLight_1",
+            "position": [
+                9.899999618530273,
+                3.9000000953674316,
+                -5.0
+            ],
+            "rotateAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "rotateSpeed": 45.0
+        }
+    ]
+}

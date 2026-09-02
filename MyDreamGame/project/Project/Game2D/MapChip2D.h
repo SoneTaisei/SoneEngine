@@ -21,7 +21,13 @@ public:
         kGoal = 3,        // ゴール
         kOneWayBlock = 5, // 一方向通行床
         kPlayerSpawn = 6, // プレイヤー初期位置
-        kRoomRespawn = 10 // 部屋用リスポーン地点
+        kRoomRespawn = 10, // 部屋用リスポーン地点
+        kChainItemBlock = 11, // 鎖アイテム
+        kMovingBlock = 12, // 移動する床
+        kFragileBlock = 13, // 鎖の重さで崩れる床
+        kSwitchBlock = 14, // スイッチ
+        kDoorBlock = 15, // シャッタードア
+        kGuardBlock = 16 // 警備員
     };
 
     void Initialize(const std::string& mapFilePath);
@@ -90,7 +96,6 @@ public:
     std::string GetMapDataAsString() const;
     bool LoadFromString(const std::string& data);
 
-    // 境界線（ルームトリガー）データの管理 -> Roomに変更
     std::vector<StageRoom>& GetRooms() { return rooms_; }
     const std::vector<StageRoom>& GetRooms() const { return rooms_; }
     

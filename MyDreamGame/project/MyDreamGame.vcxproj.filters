@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+﻿<?xml version='1.0' encoding='utf-8'?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -202,6 +202,21 @@
     <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\ChainItemBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\MovingBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\FragileBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\SwitchBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\DoorBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>`n    <ClCompile Include="Project\Game2D\Blocks\GuardBlock.cpp">`n      <Filter>Project\Game2D\Blocks</Filter>`n    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -210,6 +225,33 @@
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\OneWayBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\Chain2D.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\ChainConfig.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Effect\TransitionDirector.cpp">
+      <Filter>Application\Transition</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\ChainSpinAction.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Treasure\Treasure2D.cpp">
+      <Filter>Project\Game2D\Treasure</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Physics\VerletPhysics2D.cpp">
+      <Filter>Project\Game2D\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp">
+      <Filter>Engine\Editor\MapEditor</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Editor\Replay\ReplayManager.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayIO.cpp" />
@@ -226,6 +268,13 @@
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorPalette.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\LightEditor\LightEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditor.cpp" />
     <ClCompile Include="Engine\Editor\Replay\ReplayTester.cpp" />
     <ClCompile Include="Engine\Editor\Replay\LevelEvolutionAI.cpp" />
     <ClCompile Include="Engine\Editor\Replay\PhysicsAStar.cpp" />
@@ -260,6 +309,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
 <ClCompile Include="Project\Game2D\Player\PlayerInput.cpp"><Filter>Project\Game2D</Filter></ClCompile><ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp"><Filter>Project\Game2D</Filter></ClCompile></ItemGroup>
+    <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -459,6 +511,21 @@
     <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\ChainItemBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\MovingBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\FragileBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\SwitchBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\DoorBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>`n    <ClInclude Include="Project\Game2D\Blocks\GuardBlock.h">`n      <Filter>Project\Game2D\Blocks</Filter>`n    </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
@@ -466,7 +533,34 @@
       <Filter>Project\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\OneWayBlock.h">
-      <Filter>Project\Game2D</Filter>
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\Chain2D.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\ChainConfig.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\ChainManager.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Effect\TransitionDirector.h">
+      <Filter>Application\Transition</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\ChainSpinAction.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Treasure\Treasure2D.h">
+      <Filter>Project\Game2D\Treasure</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Physics\VerletPhysics2D.h">
+      <Filter>Project\Game2D\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h">
+      <Filter>Engine\Editor\MapEditor</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\Replay\ReplayManager.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayIO.h" />
@@ -483,6 +577,13 @@
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorPalette.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\LightEditor\LightEditor.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditor.h" />
     <ClInclude Include="Engine\Editor\Replay\ReplayTester.h" />
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
       <ClInclude Include="Engine\Resource\Primitive\PrimitivePlane.h">
@@ -516,6 +617,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
 <ClInclude Include="Project\Game2D\Player\PlayerInput.h"><Filter>Project\Game2D</Filter></ClInclude><ClInclude Include="Project\Game2D\Player\PlayerPhysics.h"><Filter>Project\Game2D</Filter></ClInclude></ItemGroup>
+    <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>
@@ -531,6 +635,9 @@
     </Filter>
     <Filter Include="Application\Particle">
       <UniqueIdentifier>{f803ec09-fc94-4c2c-b6a1-f928a872e2ee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Application\Transition">
+      <UniqueIdentifier>{947F3DB4-ECBE-49FB-BCEA-591F95D5748B}</UniqueIdentifier>
     </Filter>
     <Filter Include="Engine\Audio">
       <UniqueIdentifier>{5141fe66-3ad3-41bd-86ca-fe4d5bb94bfb}</UniqueIdentifier>
@@ -576,6 +683,21 @@
     </Filter>
     <Filter Include="Application\Game2D">
       <UniqueIdentifier>{a1b2c3d4-e5f6-7890-abcd-ef1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project">
+      <UniqueIdentifier>{1667c207-0d6e-4227-bf5b-92c0394b998b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D">
+      <UniqueIdentifier>{1d4d7285-8c3a-4589-81e1-379b0984b7a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Chain">
+      <UniqueIdentifier>{7dd988e4-5ce4-436e-8e0e-61c6f8ff20b5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Treasure">
+      <UniqueIdentifier>{a7ed0a8a-9f15-4059-a5f7-2b22cc433c60}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Physics">
+      <UniqueIdentifier>{140e8cb0-1ff6-45a4-921f-783e8eee966b}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

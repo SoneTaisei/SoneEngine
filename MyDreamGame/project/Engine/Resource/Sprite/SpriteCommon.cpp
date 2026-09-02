@@ -21,6 +21,11 @@ void SpriteCommon::Initialize(DirectXCommon *dxCommon, int windowWidth, int wind
     CreateGraphicsPipeline(); // ここで dxCommon_ を使ってコンパイルできるようになります！
 }
 
+void SpriteCommon::SetResolution(int windowWidth, int windowHeight) {
+    projectionMatrix_ = TransformFunctions::MakeOrthographicMatrix(
+        0.0f, 0.0f, float(windowWidth), float(windowHeight), 0.0f, 100.0f);
+}
+
 void SpriteCommon::Finalize() {
     sprites_.clear();
     // ComPtrなのでリソースは自動解放されます

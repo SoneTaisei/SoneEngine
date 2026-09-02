@@ -23,13 +23,13 @@ public:
     virtual void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {}
     
     virtual void Update() {
-        if (gameObject_) {
+        if (!isDestroyed_ && gameObject_) {
             gameObject_->Update();
         }
     }
     
     virtual void Draw() {
-        if (gameObject_) {
+        if (!isDestroyed_ && gameObject_) {
             gameObject_->Draw(); // Rendererへの登録が行われる
         }
     }
@@ -46,15 +46,22 @@ public:
     virtual void OnCollision(Player2D* player) {}
     
     virtual void OnPlayerStand() {}
+    virtual void OnPlayerStand(Player2D* player) { OnPlayerStand(); }
     
     // プレイヤーが横などから接触した際の処理
     virtual void OnPlayerTouch() {}
+    virtual void OnPlayerTouch(Player2D* player) { OnPlayerTouch(); }
 
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
 
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
+
+#ifdef USE_IMGUI
+    // ImGuiによるブロックパラメータの調整やデバッグ操作用UI
+    virtual void DrawImGui() {}
+#endif
 
     GameObject* GetGameObject() const { return gameObject_.get(); }
     void SetGameObject(std::unique_ptr<GameObject> obj) { gameObject_ = std::move(obj); }

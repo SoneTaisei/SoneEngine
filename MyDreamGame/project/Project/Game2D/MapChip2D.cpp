@@ -9,6 +9,8 @@
 #include "Blocks/DeathBlock.h"
 #include "Blocks/GoalBlock.h"
 #include "Blocks/OneWayBlock.h"
+#include "Blocks/ChainItemBlock.h"
+#include "Blocks/BlockFactory.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -48,6 +50,148 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object());
         addTemplate(5, "OneWay", "OneWayBlock", {0.4f, 0.8f, 0.8f, 1.0f}, nlohmann::json::object());
 
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    // チェーンアイテムがテンプレートに無ければ自動追加
+    bool hasChainTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kChainItemBlock)) {
+            hasChainTemplate = true;
+            break;
+        }
+    }
+    if (!hasChainTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kChainItemBlock);
+        def.name = "Item"; // 表示名を「Item」に変更
+        def.type = "ChainItemBlock";
+        def.color = {0.8f, 0.8f, 0.8f, 1.0f};
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    bool hasMovingTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kMovingBlock)) {
+            hasMovingTemplate = true;
+            break;
+        }
+    }
+    if (!hasMovingTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kMovingBlock);
+        def.name = "Moving Floor";
+        def.type = "MovingBlock";
+        def.color = {0.8f, 0.5f, 0.1f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["moveAxis"] = "X";
+        props["moveRange"] = 3.0f;
+        props["moveSpeed"] = 2.0f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    bool hasFragileTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kFragileBlock)) {
+            hasFragileTemplate = true;
+            break;
+        }
+    }
+    if (!hasFragileTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kFragileBlock);
+        def.name = "Fragile Floor";
+        def.type = "FragileBlock";
+        def.color = {0.4f, 0.4f, 0.4f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["breakWeight"] = 4;
+        props["breakDuration"] = 0.5f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    bool hasSwitchTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kSwitchBlock)) {
+            hasSwitchTemplate = true;
+            break;
+        }
+    }
+    if (!hasSwitchTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kSwitchBlock);
+        def.name = "Switch";
+        def.type = "SwitchBlock";
+        def.color = {0.8f, 0.2f, 0.2f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["linkId"] = 1;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+        SaveTemplatesToFile("resources/json/shared/templates_config.json");
+    }
+
+    bool hasDoorTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kDoorBlock)) {
+            hasDoorTemplate = true;
+            break;
+        }
+    }
+    if (!hasDoorTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kDoorBlock);
+        def.name = "Door";
+        def.type = "DoorBlock";
+        def.color = {0.5f, 0.6f, 0.7f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["linkId"] = 1;
+        props["openSpeed"] = 2.0f;
+        props["closeSpeed"] = 2.0f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+    }
+
+    bool hasGuardTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kGuardBlock)) {
+            hasGuardTemplate = true;
+            break;
+        }
+    }
+    if (!hasGuardTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kGuardBlock);
+        def.name = "Guard";
+        def.type = "GuardBlock";
+        def.color = {0.1f, 0.2f, 0.5f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["moveRange"] = 3.0f;
+        props["patrolSpeed"] = 1.5f;
+        props["alertSpeed"] = 3.0f;
+        props["sightLength"] = 4.0f;
+        props["sightHeight"] = 1.0f;
+        props["maxAlertGauge"] = 1.5f;
+        props["startDirection"] = 1;
+        props["waitTimeAtEdge"] = 1.0f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+    }
+
+    if (!hasDoorTemplate || !hasGuardTemplate) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
@@ -368,7 +512,7 @@ void MapChip2D::RebuildChipObjects() {
             
             bool canMerge = false;
             if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock);
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
             } else {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 const CustomBlockDef* def = nullptr;
@@ -376,7 +520,7 @@ void MapChip2D::RebuildChipObjects() {
                     if (d.id == typeId) { def = &d; break; }
                 }
                 if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock");
+                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "DoorBlock");
                     // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
                     if (!def->modelName.empty()) {
                         canMerge = false;
@@ -855,23 +999,30 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
     int typeId = static_cast<int>(type);
 
     if (type == ChipType::kBlock) {
-        newBlock = std::make_shared<NormalBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("NormalBlock", this, x, y);
     } else if (type == ChipType::kDeathBlock) {
-        newBlock = std::make_shared<DeathBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("DeathBlock", this, x, y);
     } else if (type == ChipType::kGoal) {
-        newBlock = std::make_shared<GoalBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("GoalBlock", this, x, y);
     } else if (type == ChipType::kOneWayBlock) {
-        newBlock = std::make_shared<OneWayBlock>(this, x, y);
+        newBlock = BlockFactory::GetInstance().Create("OneWayBlock", this, x, y);
+    } else if (type == ChipType::kChainItemBlock) {
+        newBlock = BlockFactory::GetInstance().Create("ChainItemBlock", this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {
             if (d.id == typeId) { def = &d; break; }
         }
         if (def) {
-            if (def->type == "NormalBlock") newBlock = std::make_shared<NormalBlock>(this, x, y);
-            else if (def->type == "DeathBlock") newBlock = std::make_shared<DeathBlock>(this, x, y);
-            else if (def->type == "GoalBlock") newBlock = std::make_shared<GoalBlock>(this, x, y);
-            else if (def->type == "OneWayBlock") newBlock = std::make_shared<OneWayBlock>(this, x, y);
+            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
+        }
+    } else {
+        const CustomBlockDef* def = nullptr;
+        for (const auto& d : templatePalette_) {
+            if (d.id == typeId) { def = &d; break; }
+        }
+        if (def) {
+            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
         }
     }
 

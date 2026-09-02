@@ -1,16 +1,17 @@
 {
+    "chainJumpPenalty_": 2.0,
     "colorNormal_": [
         0.20000000298023224,
         0.6000000238418579,
         1.0,
         1.0
     ],
-    "deathDuration_": 0.2,
+    "deathDuration_": 0.20000000298023224,
     "goalWaitTime_": 2.0,
     "gravity_": -35.0,
-    "halfHeight_": 0.73,
-    "halfWidth_": 0.3,
-    "jumpPower_": 15.0,
+    "halfHeight_": 0.7300000190734863,
+    "halfWidth_": 0.30000001192092896,
+    "jumpPower_": 17.5,
     "maxFallSpeed_": -20.0,
     "moveSpeed_": 6.0,
     "respawnDuration_": 0.5

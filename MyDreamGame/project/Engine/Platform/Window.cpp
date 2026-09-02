@@ -1,5 +1,6 @@
 #include "Window.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "WindowsApplication.h"
 
 #ifdef USE_IMGUI
 #include <imgui_impl_win32.h>
@@ -20,8 +21,12 @@ LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     case WM_SIZE: {
         int width = LOWORD(lparam);
         int height = HIWORD(lparam);
-        if (DirectXCommon::GetInstance() && width > 0 && height > 0) {
-            DirectXCommon::GetInstance()->ResizeSwapchain(width, height);
+        if (width > 0 && height > 0) {
+            if (WindowsApplication::GetInstance()) {
+                WindowsApplication::GetInstance()->OnResize(width, height);
+            } else if (DirectXCommon::GetInstance()) {
+                DirectXCommon::GetInstance()->ResizeSwapchain(width, height);
+            }
         }
         return 0;
     }

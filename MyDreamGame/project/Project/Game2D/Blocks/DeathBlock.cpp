@@ -19,3 +19,15 @@ void DeathBlock::OnCollision(Player2D* player) {
         player->Kill();
     }
 }
+
+void DeathBlock::OnPlayerStand(Player2D* player) {
+    if (player) {
+        player->Kill();
+    }
+}
+
+void DeathBlock::OnPlayerTouch(Player2D* player) {
+    if (player) {
+        player->Kill();
+    }
+}

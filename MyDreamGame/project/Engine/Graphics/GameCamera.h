@@ -5,6 +5,7 @@
 class GameCamera : public Camera {
 public:
     void Initialize(int kClientWidth, int kClientHeight) override;
+    void SetResolution(int kClientWidth, int kClientHeight) override;
     void Update(); // 特に操作はないが、追従処理などをここに書く
     void UpdateMatrix() override;
 
@@ -46,8 +47,9 @@ public:
     float GetScale() const { return scale_; }
     void SetScale(float scale) {
         scale_ = (scale > 0.01f) ? scale : 0.01f;
-        orthoWidth_ = 20.0f / scale_;
         orthoHeight_ = 11.25f / scale_;
+        float aspect = (kClientHeight_ > 0) ? ((float)kClientWidth_ / (float)kClientHeight_) : (16.0f / 9.0f);
+        orthoWidth_ = orthoHeight_ * aspect;
     }
 
     void LoadConfig(const std::string& filepath = "resources/json/shared/camera_config.json");

@@ -1,8 +1,9 @@
-#include "GameScene.h"
+﻿#include "GameScene.h"
 #include <Windows.h>
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
+#include "Resource/Model/ModelManager.h"
 #include "Graphics/GameCamera.h"
 #include "Scene/SceneFactory.h"
 #ifdef USE_IMGUI
@@ -17,6 +18,9 @@
 #include "Input/KeyboardInput.h"
 #include "Graphics/Skybox.h"
 #include "Core/Utility/ParameterManager.h"
+#include "Effect/TransitionDirector.h"
+#include <filesystem>
+#include <fstream>
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
@@ -33,6 +37,41 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
 
 void GameScene::OnExit(SceneManager* sceneManager) {
     (void)sceneManager;
+}
+
+GameScene::~GameScene() {
+    // 覆い切って次シーンへ持ち越す途中以外は遷移演出を捨てる（このシーンの鎖・マップへの参照を切る）
+    TransitionDirector::GetInstance()->OnSceneDestroyed(chainManager_.get());
+}
+
+void GameScene::GoToNextStage(SceneManager* sceneManager) {
+    // ステージセレクトと同じ一覧（stage_config.txt）で今のマップの次を探す
+    std::string current = std::filesystem::path(s_TargetMapFilePath).filename().string();
+    std::string next;
+    std::ifstream ifs("resources/json/shared/stage_config.txt");
+    int count = 0;
+    if (ifs.is_open() && (ifs >> count)) {
+        std::vector<std::string> names;
+        std::string path;
+        for (int i = 0; i < count && (ifs >> path); ++i) {
+            names.push_back(path == "none" ? std::string() : std::filesystem::path(path).filename().string());
+        }
+        for (size_t i = 0; i + 1 < names.size(); ++i) {
+            if (!names[i].empty() && names[i] == current && !names[i + 1].empty()) {
+                next = names[i + 1];
+                break;
+            }
+        }
+    }
+    if (!next.empty()) {
+        s_TargetMapFilePath = "resources/json/shared/MapData/" + next;
+        Log("GameScene: next stage -> " + s_TargetMapFilePath + "\n");
+    } else {
+        // 一覧に無い（エディタで開いたマップ等）か最終ステージ：同じステージをもう一度（宝石を持って降りてくる確認ができる）
+        Log("GameScene: no next stage in stage_config.txt, replaying " + s_TargetMapFilePath + "\n");
+    }
+    sceneManager->SetData("SelectedStagePath", s_TargetMapFilePath);
+    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
 }
 
 void GameScene::Initialize() {
@@ -59,6 +98,29 @@ void GameScene::Initialize() {
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
     Log("GameScene::Initialize: Skybox loaded\n");
 
+    // 4.5. マップ背景板ポリゴンの生成（スポットライト等のライティング視認用）
+    Primitive* planePrim = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Plane, 1.0f);
+    if (planePrim) {
+        backgroundPlane_ = std::make_unique<PrimitiveObject>();
+        backgroundPlane_->Initialize(device.Get(), planePrim);
+        backgroundPlane_->SetName("BackgroundPlane");
+        
+        // 法線を手前（Z負方向）に向けるためX軸を-90度回転
+        backgroundPlane_->SetRotation({ -std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f });
+        // マップ全体を覆うスケール（X: 横幅, Z: 高さ）
+        backgroundPlane_->SetScale({ 300.0f, 1.0f, 150.0f });
+        // ブロック（Z=0, 厚み1.0）の奥（Z=1.6f）に配置
+        backgroundPlane_->SetTranslation({ 100.0f, 20.0f, 1.6f });
+        
+        auto& mat = backgroundPlane_->GetMaterial();
+        mat.lightingType = 1; // ライティング有効化
+        mat.enableEnvironmentMap = 0;
+        mat.color = { 0.28f, 0.30f, 0.35f, 1.0f }; // スポットライトが映えやすい背景色
+        mat.shininess = 20.0f;
+        backgroundPlane_->Update();
+        Log("GameScene::Initialize: BackgroundPlane Initialized\n");
+    }
+
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
     map_->Initialize( s_TargetMapFilePath);
@@ -74,6 +136,19 @@ void GameScene::Initialize() {
     player_->FindSpawnPoint(*map_);
     Log("GameScene::Initialize: Player SpawnPoint found\n");
 
+    // 6.4. 前のステージから持ち越した鎖の個数を引き継ぐ（遷移用の鎖と同じ長さで生成され、着地の切り替えが見えない）
+    {
+        TransitionDirector* director = TransitionDirector::GetInstance();
+        if (director->HasCarry() && director->GetParams().carryChainLength_) {
+            player_->SetChainLength(director->GetCarryUnits());
+        }
+    }
+
+    // 6.5. 鎖の生成（プレイヤー鎖 + 末端のお宝。吊り鎖はマップ配置で AddWorldChain）
+    chainManager_ = std::make_unique<ChainManager>();
+    chainManager_->Initialize(player_);
+    Log("GameScene::Initialize: ChainManager Initialized\n");
+
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
         Log("GameScene::Initialize: Camera config...\n");
@@ -85,6 +160,17 @@ void GameScene::Initialize() {
         Log("GameScene::Initialize: Camera configured\n");
     }
 
+
+    // 7.5. ステージクリア遷移の続き（前のステージを黒で覆って来た場合、黒から円が開き、持ち越した宝石と鎖が上から降りてくる）
+    {
+        TransitionDirector* director = TransitionDirector::GetInstance();
+        if (director->IsCovered() && player_) {
+            float w = gameCamera_ ? gameCamera_->GetOrthoWidth() : 20.0f;
+            float h = gameCamera_ ? gameCamera_->GetOrthoHeight() : 11.25f;
+            director->StartStageOpen(chainManager_.get(), player_->GetPosition(), w, h);
+            transitionAlpha_ = 0.0f; // 既存のフェードインは円が開く演出に置き換える
+        }
+    }
 
     Log("GameScene::Initialize: Finish\n");
 }
@@ -108,6 +194,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
+    if (backgroundPlane_) {
+        backgroundPlane_->Update();
+    }
+
     float dt = TimeManager::GetInstance().GetDeltaTime();
     
     // フェードイン演出
@@ -126,7 +216,8 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     } else if (gameState_ == GameState::Clear) {
         stateTimer_ += dt;
-        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+        // 遷移演出が動いていない時（中断された場合など）だけ SPACE でタイトルへ戻れる
+        if (!TransitionDirector::GetInstance()->IsPlaying() && KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
         }
@@ -141,6 +232,10 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
+            // プレイ開始時は鎖と個数を初期状態に戻す（毎回同じ初期状態から始めてリプレイ再現性を保つ）
+            if (chainManager_) {
+                chainManager_->ResetAll();
+            }
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
@@ -154,6 +249,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
 
         if (isRewinding) {
+            // 巻き戻し中は鎖が更新されないので、スピンは中断しておく（明けの幻の発射・チャージのずれ防止）
+            if (chainManager_) {
+                chainManager_->OnRewindBegin();
+            }
             FrameData poppedFrame;
             if (ReplayManager::GetInstance()->PopRecordedFrame(poppedFrame)) {
                 player_->SetPosition(poppedFrame.position);
@@ -217,6 +316,11 @@ void GameScene::Update(SceneManager *sceneManager) {
                     // 2. プレイヤー状態(速度含む)をリセット
                     player_->ResetState(replayData.playerInitPos);
                     player_->ClearEffects();
+
+                    // 鎖も初期状態から再現する（鎖はプレイヤー位置と入力の決定論的な関数なので再シミュレーションで一致する）
+                    if (chainManager_) {
+                        chainManager_->ResetAll();
+                    }
                     
                     // 3. 0フレーム目から現在フレームまで座標を再現
                     for (int i = 0; i <= curFrame; ++i) {
@@ -273,7 +377,8 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
 
-            if (gameCamera_ && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding) {
+            if (gameCamera_ && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding &&
+                !TransitionDirector::GetInstance()->IsCameraControlled()) { // クリア演出中はカメラを演出側が動かす
                 if (player_->IsDead()) {
                     gameCamera_->SetFollowTarget(nullptr);
                 } else {
@@ -292,10 +397,51 @@ void GameScene::Update(SceneManager *sceneManager) {
 
             player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
 
-            // ゴール判定
+            // プレイヤーと危険な光（スポットライト）の当たり判定
+            if (gameState_ == GameState::Playing && !player_->IsDead() && !player_->IsGoal()) {
+                bool hitDangerousLight = false;
+#ifdef USE_IMGUI
+                if (auto* editorMgr = EditorManager::GetInstance()) {
+                    if (auto* lightEditor = editorMgr->GetLightEditor()) {
+                        hitDangerousLight = lightEditor->CheckAABBHit(player_->GetAABB()) ||
+                                            lightEditor->CheckPlayerHit(player_->GetPosition(), player_->GetParams().halfWidth_);
+                    }
+                }
+#endif
+                if (hitDangerousLight) {
+                    player_->Kill();
+                }
+            }
+
+
+            // 鎖の更新（K入力 → 個数照合 → 物理。鎖がプレイヤーに反応するため、プレイヤー位置確定後に行う）
+            if (chainManager_) {
+                chainManager_->HandleInput();
+                chainManager_->Reconcile();
+                chainManager_->Update(dt, map_.get());
+            }
+
+            // ゴール判定 → ステージクリア遷移の開始（宝石と鎖を遷移側へ渡し、黒い円で絞る）
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
                 gameState_ = GameState::Clear;
                 stateTimer_ = 0.0f;
+                if (ReplayManager::GetInstance()->IsRecording()) {
+                    ReplayManager::GetInstance()->StopRecord(); // 記録はゴール時点で止める
+                }
+                if (chainManager_) {
+                    // プレイヤーのモデルとカメラは演出（寄る・喜ぶ・奥へ・飛び抜け）に使う
+                    TransitionDirector::GetInstance()->StartStageClear(chainManager_.get(), map_.get(), player_, gameCamera_);
+                }
+            }
+
+            // ステージクリア遷移（絞る → 宝石と鎖が降りる → 覆い切ったら次のステージへ。次シーン側では円が開いて降りてくる）
+            {
+                TransitionDirector* director = TransitionDirector::GetInstance();
+                director->Update(dt);
+                if (director->ConsumeCoveredEvent()) {
+                    GoToNextStage(sceneManager);
+                    return;
+                }
             }
 
         }
@@ -304,11 +450,15 @@ void GameScene::Update(SceneManager *sceneManager) {
             if (gameCamera_) {
                 gameCamera_->SetFollowTarget(&player_->GetPosition());
             }
+            // 巻き戻し明けは鎖の暴れ防止のため暗黙速度をリセット（落とした鎖は再現できないため消去）
+            if (chainManager_) {
+                chainManager_->OnRewindEnd();
+            }
         }
         wasRewindingLastFrame_ = isRewinding;
 
         // プレイ中の場合、リプレイ録画を行う
-        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
+        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying() && gameState_ != GameState::Clear) {
             if (!isRewinding) {
                 Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
                 if (!ReplayManager::GetInstance()->IsRecording()) {
@@ -336,6 +486,21 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         player_->DisplayImGui();
     }
 
+    if (backgroundPlane_ && backgroundPlane_.get() == selectedPrimitive) {
+        backgroundPlane_->DisplayImGui("Background Plane");
+    }
+
+    // 鎖の調整（この関数はエディタの「インスペクター」ウィンドウの中から呼ばれるので、別ウィンドウを開かず折りたたみで出す。
+    // ImGui::Begin で別ウィンドウにするとドックの外に浮いてしまう）
+    if (chainManager_ && ImGui::CollapsingHeader("Chain Settings")) {
+        chainManager_->DrawImGui();
+        ImGui::Separator();
+        TransitionDirector::GetInstance()->DrawImGui();
+        if (player_ && gameState_ == GameState::Playing && ImGui::Button("Debug: Reach Goal (start clear transition)")) {
+            player_->ReachGoal(); // goalWaitTime 後にクリア遷移が始まる
+        }
+    }
+
     // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
     if (!EditorManager::IsPlaying()) {
         return;
@@ -357,6 +522,10 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Pick up chain");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Drop chain");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "W (hold) + A/D : Swing weight");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Release W : Throw weight -> chain pulls you");
         ImGui::End();
     }
 
@@ -379,8 +548,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::End();
     }
 
-    // Clear 演出
-    if (gameState_ == GameState::Clear) {
+    // Clear 演出（黒い円の遷移が動いている間はその演出に任せる）
+    if (gameState_ == GameState::Clear && !TransitionDirector::GetInstance()->IsPlaying()) {
         ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::Begin("ClearUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::SetWindowFontScale(6.0f);
@@ -439,6 +608,11 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         skybox_->Draw();
     }
 
+    // 1.5. 背景板ポリゴンの描画
+    if (backgroundPlane_) {
+        backgroundPlane_->Draw();
+    }
+
     // 2. 3Dモデル（マップ・プレイヤー）の描画準備
     if (modelCommon_) {
         modelCommon_->PreDraw();
@@ -453,6 +627,14 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (player_) {
         player_->Draw();
     }
+
+    // 鎖の描画
+    if (chainManager_) {
+        chainManager_->Draw();
+    }
+
+    // ステージクリア遷移（持ち越し中の宝石と鎖 + 黒い穴あき板。同じ3Dパスなので深度で穴の外が隠れる）
+    TransitionDirector::GetInstance()->Draw();
 
 
     // コンポーネントの描画を実行
@@ -532,7 +714,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
 #endif
-        particleCommon_->DrawAll(viewProjectionMatrix);
+        if (!TransitionDirector::GetInstance()->IsCovering()) { // 黒で絞っている間は紙吹雪等を上に描かない
+            particleCommon_->DrawAll(viewProjectionMatrix);
+        }
 #ifdef USE_IMGUI
     }
 #endif
@@ -635,6 +819,14 @@ void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
                     drawList->PopClipRect();
                 }
             }
+
+            // 3. スポットライトの危険光・当たり判定オーバーレイ描画
+            if (auto* editorMgr = EditorManager::GetInstance()) {
+                if (auto* lightEditor = editorMgr->GetLightEditor()) {
+                    AABB2D playerAABB = player_->GetAABB();
+                    lightEditor->DrawOverlay(viewProjectionMatrix, gameViewPos, gameViewSize, &playerAABB);
+                }
+            }
         }
     }
 #endif
@@ -647,6 +839,18 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
 
 std::vector<Object3D *> GameScene::GetObjects() {
     std::vector<Object3D *> result;
+
+    // 鎖のリンクモデルをヒエラルキーに表示する
+    if (chainManager_) {
+        auto links = chainManager_->GetLinkObjects();
+        result.insert(result.end(), links.begin(), links.end());
+    }
+    // 遷移中の宝石・鎖・黒板
+    {
+        auto objs = TransitionDirector::GetInstance()->GetObjects();
+        result.insert(result.end(), objs.begin(), objs.end());
+    }
+
     return result;
 }
 
@@ -662,6 +866,11 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     if (map_) {
         auto mapPrims = map_->GetPrimitiveObjects();
         result.insert(result.end(), mapPrims.begin(), mapPrims.end());
+    }
+
+    // 3. 背景板ポリゴン
+    if (backgroundPlane_) {
+        result.push_back(backgroundPlane_.get());
     }
 
     return result;
@@ -695,6 +904,10 @@ void GameScene::UpdateEditor() {
             playerPrim->SetTranslation(player_->GetPosition());
             playerPrim->Update();
         }
+    }
+
+    if (backgroundPlane_) {
+        backgroundPlane_->Update();
     }
 
     if (skybox_) {
