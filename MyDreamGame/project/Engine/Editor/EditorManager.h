@@ -20,6 +20,7 @@
 #include "Animation/AnimationEditor.h"
 #include "MapEditor/MapEditor.h"
 #include "LightEditor/LightEditor.h"
+#include "Model3DEditor/Model3DEditor.h"
 
 class SceneManager;
 class ParticleManager;
@@ -49,6 +50,9 @@ public:
     // 描画処理 (コマンドリストへImGuiの描画命令を積む)
     void Draw();
 
+    // 3Dオブジェクト描画処理 (RenderTextureへの3Dモデル配置オブジェクト描画)
+    void Draw3D();
+
     // 終了処理 (ImGuiの解放)
     void Finalize();
 
@@ -63,6 +67,7 @@ public:
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
     bool IsAnimationEditorHovered() const { return animationEditor_ ? animationEditor_->IsHovered() : false; }
     bool IsLightEditorHovered() const { return lightEditor_ ? lightEditor_->IsHovered() : false; }
+    bool IsModel3DEditorHovered() const { return model3DEditor_ ? model3DEditor_->IsHovered() : false; }
     bool IsMapEditorVisible() const { return mapEditor_ ? mapEditor_->IsVisible() : false; }
     bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
     bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
@@ -79,6 +84,7 @@ public:
     AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
     MapEditor* GetMapEditor() const { return mapEditor_.get(); }
     LightEditor* GetLightEditor() const { return lightEditor_.get(); }
+    Model3DEditor* GetModel3DEditor() const { return model3DEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -94,6 +100,8 @@ public:
         bool showAnimEditor = true;
         bool showLightEditor = true;
         bool showSpotLightPanel = true;
+        bool showModelPlacement = true;
+        bool showModelPalette = true;
     };
 
     // レイアウトプリセットの保存・読込み・管理
@@ -283,6 +291,7 @@ private:
         Replay,
         Animation,
         Light
+        ModelPlacement
     };
     EditorMode currentMode_ = EditorMode::Normal;
 
@@ -297,6 +306,8 @@ private:
     bool showAnimEditor_ = true;
     bool showLightEditor_ = true;
     bool showSpotLightPanel_ = true;
+    bool showModelPlacementEditor_ = true;
+    bool showModelPalette_ = true;
 
     // 前回選択されていたメインタブ（次回起動時に復元）
     std::string activeMainTab_ = "ゲームビュー";
@@ -307,6 +318,7 @@ private:
     std::unique_ptr<AnimationEditor> animationEditor_;
     std::unique_ptr<MapEditor> mapEditor_;
     std::unique_ptr<LightEditor> lightEditor_;
+    std::unique_ptr<Model3DEditor> model3DEditor_;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

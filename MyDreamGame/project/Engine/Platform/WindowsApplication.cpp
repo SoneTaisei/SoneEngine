@@ -273,6 +273,7 @@ void WindowsApplication::Update() {
                                     editorManager_->IsReplayEditorHovered() || 
                                     editorManager_->IsAnimationEditorHovered() || 
                                     editorManager_->IsLightEditorHovered() || 
+                                    editorManager_->IsModel3DEditorHovered() || 
                                     !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {
@@ -373,6 +374,12 @@ void WindowsApplication::Draw() {
 
     modelCommon_->PreDraw();
     sceneManager_->Draw(viewProjection_->GetMatrix());
+
+#ifdef USE_IMGUI
+    if (editorManager_) {
+        editorManager_->Draw3D();
+    }
+#endif
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw();
