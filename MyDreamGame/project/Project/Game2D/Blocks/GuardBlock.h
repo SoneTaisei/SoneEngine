@@ -5,6 +5,7 @@ class GuardBlock : public BaseBlock {
 public:
     enum class State {
         Patrol,
+        Wait,
         Alert
     };
 
@@ -19,6 +20,8 @@ public:
     bool IsSolid() const override { return false; }
     bool IsMoving() const override { return true; }
     
+    Vector3 GetVelocity() const override { return currentVelocity_; }
+
     void SetProperties(const nlohmann::json& properties) override;
     void Reset() override;
 
@@ -29,8 +32,6 @@ public:
     
     // プレイヤーが視界に入った時に呼ばれる
     void OnSpottedPlayer(Player2D* player);
-
-    Vector3 GetVelocity() const override { return currentVelocity_; }
 
 private:
     float startX_ = 0.0f;
@@ -47,12 +48,17 @@ private:
     float patrolSpeed_ = 1.5f;    // パトロール時の速度
     float alertSpeed_ = 3.0f;     // 警戒時の速度
     float sightLength_ = 4.0f;    // 視界の長さ
+    float sightHeight_ = 1.0f;    // 視界の高さ
     float maxAlertGauge_ = 1.5f;  // 見つかってからゲームオーバーになるまでの時間(秒)
+    int startDirection_ = 1;      // 初期の向き(1:右, -1:左)
+    float waitTimeAtEdge_ = 1.0f; // 端に到達した時の待機時間(秒)
 
     // 状態
     State state_ = State::Patrol;
     int direction_ = 1;           // 1: 右, -1: 左
+    float currentFacing_ = 1.0f;  // 滑らかな振り向き用（1.0 ~ -1.0）
     float alertGauge_ = 0.0f;
+    float waitTimer_ = 0.0f;
     bool isPlayerInSightThisFrame_ = false;
 
     // 視界描画用

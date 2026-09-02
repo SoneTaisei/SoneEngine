@@ -1,4 +1,4 @@
-﻿#include "MapChip2D.h"
+#include "MapChip2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
@@ -161,6 +161,37 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.properties = props;
         
         templatePalette_.push_back(def);
+    }
+
+    bool hasGuardTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kGuardBlock)) {
+            hasGuardTemplate = true;
+            break;
+        }
+    }
+    if (!hasGuardTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kGuardBlock);
+        def.name = "Guard";
+        def.type = "GuardBlock";
+        def.color = {0.1f, 0.2f, 0.5f, 1.0f};
+        
+        nlohmann::json props = nlohmann::json::object();
+        props["moveRange"] = 3.0f;
+        props["patrolSpeed"] = 1.5f;
+        props["alertSpeed"] = 3.0f;
+        props["sightLength"] = 4.0f;
+        props["sightHeight"] = 1.0f;
+        props["maxAlertGauge"] = 1.5f;
+        props["startDirection"] = 1;
+        props["waitTimeAtEdge"] = 1.0f;
+        def.properties = props;
+        
+        templatePalette_.push_back(def);
+    }
+
+    if (!hasDoorTemplate || !hasGuardTemplate) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 

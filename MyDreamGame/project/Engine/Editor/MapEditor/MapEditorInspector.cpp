@@ -1,4 +1,4 @@
-﻿#ifdef USE_IMGUI
+#ifdef USE_IMGUI
 #include "MapEditorInspector.h"
 #include "MapEditorContext.h"
 #include "Scene/SceneManager.h"
@@ -184,6 +184,9 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (k == "alertSpeed") return std::string("警戒時の速度 (alertSpeed)");
         if (k == "sightLength") return std::string("視界の長さ (sightLength)");
         if (k == "maxAlertGauge") return std::string("警戒ゲージMAXまでの時間 (maxAlertGauge)");
+        if (k == "sightHeight") return std::string("視界の高さ (sightHeight)");
+        if (k == "startDirection") return std::string("初期の向き(1:右, -1:左) (startDirection)");
+        if (k == "waitTimeAtEdge") return std::string("端での待機時間 (waitTimeAtEdge)");
         return k;
     };
 
