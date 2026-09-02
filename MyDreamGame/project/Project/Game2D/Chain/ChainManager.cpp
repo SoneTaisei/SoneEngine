@@ -29,9 +29,14 @@ void ChainManager::Initialize(Player2D* player) {
     playerChain_->Initialize(start, playerParams, "PlayerChain");
     playerChain_->SetPlayerCollisionSkipCount(playerParams.nodesPerUnit_);
 
-    // お宝（鎖の末端ノードに描画する重り）
+    // お宝（鎖の末端ノードに描画する重り。モデルは ChainParams のパスから）
     treasure_ = std::make_unique<Treasure2D>();
-    treasure_->Initialize(params_.treasureRadius_);
+    treasure_->Initialize(params_.treasureModelDir_, params_.treasureModelFile_, params_.treasureScale_);
+
+    // スピンジャンプ
+    spin_ = std::make_unique<ChainSpinAction>();
+    spin_->Initialize(params_);
+
     ApplyTreasureParams();
     SyncTreasureTransform();
 
@@ -50,13 +55,26 @@ void ChainManager::AddWorldChain(const Vector3& anchorPos, int units, const std:
 }
 
 void ChainManager::HandleInput() {
-    if (!player_ || player_->IsDead()) {
+    if (!player_ || player_->IsDead() || player_->IsGoal()) {
         return;
     }
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
 
+    // スピン（W / ↑キー）：押し続けて構え、A/D で重りを振り、離して発射。縁の検出は ChainSpinAction 側
+    // （'W'スロットは W と ↑ のみで他用途と競合しない。A/D は 'L'/'R' スロットで録画される）
+    if (spin_) {
+        bool spinHeld = keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP);
+        spin_->SetKeyHeld(spinHeld);
+
+        float swing = 0.0f;
+        if (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) swing += 1.0f;
+        if (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) swing -= 1.0f;
+        spin_->SetSwingInput(swing);
+    }
+
     // 拾う（K）：範囲内に鎖がなければ何もしない（誤って外してしまう誤爆を防ぐ）
     if (keyboard->IsKeyPressed(DIK_K)) {
+        if (spin_) spin_->Cancel(player_, playerChain_.get()); // 構え中の着脱は中断してから
         TryPickup();
     }
 
@@ -65,6 +83,7 @@ void ChainManager::HandleInput() {
     // リプレイ再生時に幻の「外す」になり得る。その場合はJを外してS(下)だけにする
     if (keyboard->IsKeyPressed(DIK_J) ||
         keyboard->IsKeyPressed(DIK_S) || keyboard->IsKeyPressed(DIK_DOWN)) {
+        if (spin_) spin_->Cancel(player_, playerChain_.get());
         DetachUnits();
     }
 }
@@ -161,6 +180,11 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     // ソケット同期（プレイヤーモデルの行列更新は UpdateWithMap 内で完了している）
     lastSocketWorld_ = ComputeSocketWorld();
 
+    // スピン：末端の拘束先を物理更新の前に決める
+    if (spin_) {
+        spin_->Update(dt, map, player_, playerChain_.get(), lastSocketWorld_);
+    }
+
     if (playerChain_) {
         playerChain_->SyncSocket(lastSocketWorld_);
         playerChain_->Update(dt, map, player_);
@@ -172,7 +196,13 @@ void ChainManager::Update(float dt, MapChip2D* map) {
         dropped.chain->Update(dt, map, player_);
     }
 
-    // お宝の表示位置を末端ノードに合わせる
+    // お宝の見た目：構え中は振りに合わせて自転させ、発射の勢いが十分な間は明るくして「今離せば強く飛ぶ」合図にする
+    if (treasure_ && spin_) {
+        treasure_->SetHighlight(spin_->IsLaunchReady());
+        if (spin_->IsInStance()) {
+            treasure_->AddSelfRotation(spin_->GetOmega() * dt);
+        }
+    }
     SyncTreasureTransform();
 }
 
@@ -192,6 +222,10 @@ void ChainManager::Draw() {
 }
 
 void ChainManager::ResetAll() {
+    if (spin_) {
+        spin_->Cancel(player_, playerChain_.get());
+        spin_->ResetInputState(); // 0フレーム目の縁検出を録画/再生で揃える
+    }
     droppedChains_.clear();
 
     // 個数を初期値に戻す（リプレイはK入力を録画から再現するため、初期個数の一致が再現性の前提）
@@ -204,11 +238,25 @@ void ChainManager::ResetAll() {
     for (auto& chain : worldChains_) {
         chain->ResetToInitial(); // 使い切って休眠していた吊り鎖もここで復活する
     }
+    if (treasure_) {
+        treasure_->SetHighlight(false);
+    }
     SyncTreasureTransform();
+}
+
+void ChainManager::OnRewindBegin() {
+    if (spin_) {
+        spin_->Cancel(player_, playerChain_.get());
+        spin_->ResetInputState();
+    }
 }
 
 void ChainManager::OnRewindEnd() {
     // 巻き戻し中の鎖アクションは再現できないため、落ちている鎖は消して速度をリセットする（10日規模の割り切り）
+    if (spin_) {
+        spin_->Cancel(player_, playerChain_.get());
+        spin_->ResetInputState();
+    }
     droppedChains_.clear();
     if (playerChain_) {
         playerChain_->ResetDynamics();
@@ -248,9 +296,14 @@ void ChainManager::ApplyTreasureParams() {
         weight.ignorePlayer = params_.treasureIgnorePlayer_;
         playerChain_->SetEndWeight(weight);
         playerChain_->SetPayoutSpeed(params_.payoutSpeed_);
+        // 持っている鎖はプレイヤーと当たらない（回した重りや鎖が体に引っかからない）。落ちている鎖・吊り鎖は当たる
+        playerChain_->SetPlayerCollisionEnabled(params_.heldChainPlayerCollision_);
     }
     if (treasure_) {
-        treasure_->SetRadius(params_.treasureRadius_);
+        treasure_->SetVisualScale(params_.treasureScale_);
+    }
+    if (spin_) {
+        spin_->SetParams(params_); // 宝石の質量はスピンの振りにくさにも使う
     }
 }
 
@@ -297,7 +350,7 @@ Vector3 ChainManager::ComputeSocketWorld() {
 void ChainManager::DrawImGui() {
 #ifdef USE_IMGUI
     ImGui::SeparatorText("Chain Manager");
-    ImGui::Text("K : 拾う / J・S : 外す（%dユニットずつ）", params_.unitsPerAction_);
+    ImGui::Text("K : 拾う / J・S : 外す（%dユニットずつ） / W(↑)押し続け+A/D : 重りを振る → W離して発射", params_.unitsPerAction_);
     if (player_ && playerChain_) {
         ImGui::Text("ChainLength: %d (units: %d, min %d / max %d)%s",
                     player_->GetChainLength(), playerChain_->GetUnitCount(),
@@ -322,6 +375,7 @@ void ChainManager::DrawImGui() {
     params_.unitsPerAction_ = (std::max)(1, params_.unitsPerAction_);
     params_.maxUnits_ = (std::max)(1, params_.maxUnits_);
     params_.minUnits_ = std::clamp(params_.minUnits_, 1, params_.maxUnits_);
+    if (spin_) spin_->SetParams(params_); // minUnits_ 等はスピン側でも使うので同期する
 
     // お宝（重り）
     ImGui::SeparatorText("Treasure (End Weight)");
@@ -330,13 +384,53 @@ void ChainManager::DrawImGui() {
     treasureChanged |= ImGui::DragFloat("Radius##Treasure", &params_.treasureRadius_, 0.01f, 0.05f, 1.0f);
     treasureChanged |= ImGui::DragFloat("Friction##Treasure", &params_.treasureFriction_, 0.01f, 0.0f, 1.0f);
     treasureChanged |= ImGui::Checkbox("Ignore Player##Treasure", &params_.treasureIgnorePlayer_);
+    treasureChanged |= ImGui::Checkbox("Held Chain Collides Player (持ち鎖とプレイヤーの判定)##Treasure", &params_.heldChainPlayerCollision_);
+    treasureChanged |= ImGui::DragFloat("Visual Scale##Treasure", &params_.treasureScale_, 0.01f, 0.01f, 2.0f);
+    ImGui::Text("Model: %s / %s", params_.treasureModelDir_.c_str(), params_.treasureModelFile_.c_str());
     if (treasureChanged) {
         params_.treasureMass_ = (std::max)(0.1f, params_.treasureMass_);
         params_.treasureRadius_ = (std::max)(0.05f, params_.treasureRadius_);
         params_.treasureFriction_ = std::clamp(params_.treasureFriction_, 0.0f, 1.0f);
+        params_.treasureScale_ = (std::max)(0.01f, params_.treasureScale_);
         ApplyTreasureParams();
     }
     ImGui::Text("Treasure pos: (%.2f, %.2f)", GetTreasurePosition().x, GetTreasurePosition().y);
+
+    // スピンジャンプ
+    ImGui::SeparatorText("Spin Jump");
+    if (spin_) {
+        spin_->DrawImGui();
+    }
+    bool spinChanged = false;
+    ImGui::TextDisabled("張った鎖を 振る力 / (宝石の質量 + 鎖の質量) で漕ぐ。離すと鎖ごと |角速度| x 半径 で飛び、Delay 秒後に重りの進行方向へ 重りの速さ x Transfer で引かれる（上限 = ジャンプ初速 x Ratio）");
+    spinChanged |= ImGui::DragFloat("Spin Radius Max##Spin", &params_.spinRadiusMax_, 0.05f, 0.3f, 10.0f);
+    spinChanged |= ImGui::DragFloat("Spin Radius Ratio##Spin", &params_.spinRadiusRatio_, 0.01f, 0.3f, 1.0f);
+    spinChanged |= ImGui::DragFloat("Swing Strength##Spin", &params_.swingStrength_, 0.5f, 0.0f, 200.0f);
+    spinChanged |= ImGui::DragFloat("Swing Damping##Spin", &params_.swingDamping_, 0.01f, 0.0f, 5.0f);
+    spinChanged |= ImGui::DragFloat("Chain Mass Per Unit##Spin", &params_.chainMassPerUnit_, 0.05f, 0.0f, 10.0f);
+    spinChanged |= ImGui::DragFloat("Weight Throw Scale##Spin", &params_.weightThrowScale_, 0.05f, 0.0f, 3.0f);
+    spinChanged |= ImGui::DragFloat("Pull Delay##Spin", &params_.pullDelay_, 0.01f, 0.0f, 1.0f);
+    spinChanged |= ImGui::DragFloat("Pull Transfer##Spin", &params_.pullTransfer_, 0.05f, 0.0f, 3.0f);
+    spinChanged |= ImGui::DragFloat("Launch Max Jump Ratio##Spin", &params_.launchMaxJumpRatio_, 0.05f, 0.1f, 1.7f);
+    spinChanged |= ImGui::DragFloat("Launch Min Upward##Spin", &params_.launchMinUpward_, 0.01f, 0.0f, 1.0f);
+    spinChanged |= ImGui::DragFloat("Stance Move Factor##Spin", &params_.spinMoveFactor_, 0.05f, 0.0f, 1.0f);
+    spinChanged |= ImGui::DragFloat("Spin Cooldown##Spin", &params_.spinCooldown_, 0.05f, 0.0f, 3.0f);
+    if (spinChanged) {
+        // ImGuiのキーボード入力で不正値が入っても NaN や壁すり抜けにならないよう、ChainConfig::Load と同じ正規化を行う
+        params_.spinRadiusMax_ = (std::max)(0.3f, params_.spinRadiusMax_);
+        params_.spinRadiusRatio_ = std::clamp(params_.spinRadiusRatio_, 0.3f, 1.0f);
+        params_.swingStrength_ = (std::max)(0.0f, params_.swingStrength_);
+        params_.swingDamping_ = (std::max)(0.0f, params_.swingDamping_);
+        params_.chainMassPerUnit_ = (std::max)(0.0f, params_.chainMassPerUnit_);
+        params_.weightThrowScale_ = (std::max)(0.0f, params_.weightThrowScale_);
+        params_.pullDelay_ = std::clamp(params_.pullDelay_, 0.0f, 1.0f);
+        params_.pullTransfer_ = (std::max)(0.0f, params_.pullTransfer_);
+        params_.launchMaxJumpRatio_ = std::clamp(params_.launchMaxJumpRatio_, 0.1f, 1.7f); // 1.7×17.5≒30 u/s が壁すり抜けの上限
+        params_.launchMinUpward_ = std::clamp(params_.launchMinUpward_, 0.0f, 1.0f);
+        params_.spinMoveFactor_ = std::clamp(params_.spinMoveFactor_, 0.0f, 1.0f);
+        params_.spinCooldown_ = (std::max)(0.0f, params_.spinCooldown_);
+        if (spin_) spin_->SetParams(params_);
+    }
 
     // デバッグ用の個数操作（Reconcileが伸縮を反映する）
     if (ImGui::Button("+1 Unit")) {

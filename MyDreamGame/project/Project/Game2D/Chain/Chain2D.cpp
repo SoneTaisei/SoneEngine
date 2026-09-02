@@ -149,9 +149,22 @@ void Chain2D::Update(float dt, MapChip2D* map, Player2D* player) {
     UpdatePayout(dt);
     ApplyEndWeight();
 
-    // 4. サブステップ分割（硬さが欲しい時は反復を増やすよりこちらが同コストで効く）
     int subSteps = (std::max)(1, params_.subSteps_);
     float subDt = dt / static_cast<float>(subSteps);
+
+    // 3.5 剛体棒モード：全ノードをアンカー→目標の直線上に置き直して物理は止める
+    // （振り回し中に途中の鎖がたるんで重りが勝手に動いて見えるのを防ぐ。ピンと張ったまま回る）
+    if (rigidLine_) {
+        Vector3 target = *rigidLine_;
+        target.z = 0.0f;
+        PlaceNodesOnLine(nodes_[0].pos, target);
+        lastStepDt_ = subDt;
+        VerletPhysics2D::ClampToPlaneZ(nodes_);
+        UpdateLinkTransforms();
+        return;
+    }
+
+    // 4. サブステップ分割（硬さが欲しい時は反復を増やすよりこちらが同コストで効く）
     for (int s = 0; s < subSteps; ++s) {
         StepSimulation(subDt, map, player);
     }
@@ -210,15 +223,17 @@ void Chain2D::ApplyEndWeight() {
 }
 
 void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
+    lastStepDt_ = (dt > 0.0f) ? dt : lastStepDt_;
+
     // Verlet積分
     Vector3 gravity = { 0.0f, params_.gravity_, 0.0f };
     VerletPhysics2D::Integrate(nodes_, gravity, params_.damping_, dt);
 
-    // プレイヤーのAABB（死亡中は判定しない）
-    // 手持ち中（kSocket）は根元 playerCollisionSkip_ ノードだけ除外して残りは判定する
+    // プレイヤーのAABB（死亡中は判定しない。playerCollisionEnabled_=false の鎖＝プレイヤーが持っている鎖は判定しない）
+    // 判定する場合、手持ち中（kSocket）は根元 playerCollisionSkip_ ノードだけ除外して残りは判定する
     // （根元がプレイヤーに追従するため、除外しないと毎フレーム押し合う）
     bool isHeld = (anchorMode_ == ChainAnchorMode::kSocket);
-    bool hitPlayer = player && !player->IsDead();
+    bool hitPlayer = player && !player->IsDead() && playerCollisionEnabled_;
     size_t playerSkip = isHeld ? static_cast<size_t>((std::max)(0, playerCollisionSkip_)) : 0;
     AABB2D playerBox{};
     if (hitPlayer) {
@@ -527,6 +542,94 @@ void Chain2D::SetEndFollowTarget(const Vector3* target) {
         nodes_.back().invMass = endFollow_ ? 0.0f : 1.0f;
     }
     ApplyEndWeight();
+}
+
+void Chain2D::ApplyEndVelocity(const Vector3& velocity, float dt) {
+    if (nodes_.size() < 2) {
+        return;
+    }
+    // 拘束解除後（invMass > 0）に呼ぶこと。拘束中は VerletPhysics2D 側で無視される
+    // Verlet の暗黙速度は「1積分ステップあたりの変位」なので、サブステップ分割時は subDt で注入する
+    // （フレーム dt のまま入れると subSteps_ 倍の速さで飛んでしまう）
+    float subDt = dt / static_cast<float>((std::max)(1, params_.subSteps_));
+    VerletPhysics2D::ApplyVelocity(nodes_.back(), velocity, subDt, 1.0f);
+}
+
+void Chain2D::PlaceNodesOnLine(const Vector3& from, const Vector3& to) {
+    size_t n = nodes_.size();
+    if (n == 0) {
+        return;
+    }
+    Vector3 d = to - from;
+    float denom = static_cast<float>((std::max)(static_cast<size_t>(1), n - 1));
+    for (size_t i = 0; i < n; ++i) {
+        float t = static_cast<float>(i) / denom;
+        Vector3 p = { from.x + d.x * t, from.y + d.y * t, 0.0f };
+        nodes_[i].pos = p;
+        nodes_[i].prevPos = p;
+        nodes_[i].invMass = 0.0f; // 固定（地形・プレイヤー判定も自動的にスキップされる）
+    }
+}
+
+void Chain2D::RestoreMasses() {
+    for (auto& node : nodes_) {
+        node.invMass = 1.0f;
+    }
+    if (!nodes_.empty()) {
+        nodes_[0].invMass = (anchorMode_ == ChainAnchorMode::kFree) ? 1.0f : 0.0f;
+        if (endFollow_) {
+            nodes_.back().invMass = 0.0f;
+        }
+    }
+    ApplyEndWeight(); // 末端の重り（invMass = 1/mass）を再適用
+}
+
+void Chain2D::SetRigidLineTarget(const Vector3* target) {
+    if (rigidLine_ && !target) {
+        // 解除：速度ゼロで物理に戻す（prevPos は PlaceNodesOnLine で pos と同じ）
+        rigidLine_ = nullptr;
+        RestoreMasses();
+        return;
+    }
+    rigidLine_ = target;
+}
+
+void Chain2D::ReleaseRigidLine(const Vector3& center, float omega, float velocityScale, float dt) {
+    rigidLine_ = nullptr;
+    RestoreMasses();
+    if (nodes_.size() < 2) {
+        return;
+    }
+    // 剛体回転の速度場 v = ω × r（2Dでは ω(-ry, rx)）を各ノードに与える。サブステップ分割時は subDt で注入する
+    float subDt = dt / static_cast<float>((std::max)(1, params_.subSteps_));
+    float w = omega * velocityScale;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        VerletNode& node = nodes_[i];
+        node.prevPos = node.pos; // 拘束中の残留変位を消してから注入
+        if (node.invMass <= 0.0f) {
+            continue; // アンカー等の固定ノード
+        }
+        float rx = node.pos.x - center.x;
+        float ry = node.pos.y - center.y;
+        Vector3 v = { -ry * w, rx * w, 0.0f };
+        VerletPhysics2D::ApplyVelocity(node, v, subDt, 1.0f);
+    }
+}
+
+Vector3 Chain2D::GetEndVelocity() const {
+    if (nodes_.empty() || lastStepDt_ <= 0.0f) {
+        return { 0.0f, 0.0f, 0.0f };
+    }
+    const VerletNode& end = nodes_.back();
+    Vector3 d = end.pos - end.prevPos;
+    return { d.x / lastStepDt_, d.y / lastStepDt_, 0.0f };
+}
+
+float Chain2D::GetTotalLength() const {
+    if (nodes_.size() < 2) {
+        return 0.0f;
+    }
+    return headRest_ + restLength_ * static_cast<float>(nodes_.size() - 2);
 }
 
 void Chain2D::SetEndWeight(const EndWeight& weight) {

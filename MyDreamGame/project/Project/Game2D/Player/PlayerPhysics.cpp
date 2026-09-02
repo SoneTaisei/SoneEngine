@@ -17,11 +17,17 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     // 3. X軸移動と壁押し戻し
     state_.position_.x += (state_.velocity_.x + state_.platformVelocity_.x) * deltaTime;
     ResolveCollisionX(state_, params_, mapChip, player);
+    if (state_.isTouchingWallLeft_ || state_.isTouchingWallRight_) {
+        state_.launchVelocityX_ = 0.0f; // 壁に当たったら発射の勢いは消える
+    }
     if (state_.isDead_ || state_.isGoal_) return;
 
     // 4. Y軸移動と床天井押し戻し
     state_.position_.y += state_.velocity_.y * deltaTime;
     ResolveCollisionY(state_, params_, mapChip, player);
+    if (state_.isOnGround_) {
+        state_.launchVelocityX_ = 0.0f; // 着地で発射の勢いは消える
+    }
     if (state_.isDead_ || state_.isGoal_) return;
 
     // 5. 走行中の足元の砂埃エフェクト
