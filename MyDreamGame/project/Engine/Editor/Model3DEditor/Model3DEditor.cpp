@@ -26,9 +26,9 @@ void Model3DEditor::Update() {
     }
 }
 
-void Model3DEditor::Draw() {
+void Model3DEditor::Draw(bool drawGridFloor) {
     if (context_) {
-        context_->Draw();
+        context_->Draw(drawGridFloor);
     }
 }
 

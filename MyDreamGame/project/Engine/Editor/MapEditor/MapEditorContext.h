@@ -142,7 +142,13 @@ public:
     void SetAStarStartPos(float x, float y) { aStarStartPos_[0] = x; aStarStartPos_[1] = y; }
     void SetAStarGoalPos(float x, float y) { aStarGoalPos_[0] = x; aStarGoalPos_[1] = y; }
 
+    // グリッド線表示設定
+    bool IsShowGrid() const { return showGrid_; }
+    void SetShowGrid(bool show) { showGrid_ = show; }
+    bool* GetShowGridPtr() { return &showGrid_; }
+
 private:
+    bool showGrid_ = true;
     MapEditMode mapEditMode_ = MapEditMode::Normal;
     int selectedTool_ = 100; // 0 = None, 100 = Custom Block 1
 

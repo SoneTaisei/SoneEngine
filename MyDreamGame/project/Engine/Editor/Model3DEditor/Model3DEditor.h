@@ -18,7 +18,7 @@ public:
 
     void Initialize(ID3D12Device* device);
     void Update();
-    void Draw();
+    void Draw(bool drawGridFloor = false);
 
     // UI Drawing
     void DrawMainViewport(
