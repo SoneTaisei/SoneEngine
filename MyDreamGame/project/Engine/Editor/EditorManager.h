@@ -290,7 +290,7 @@ private:
         Normal,
         Replay,
         Animation,
-        Light
+        Light,
         ModelPlacement
     };
     EditorMode currentMode_ = EditorMode::Normal;

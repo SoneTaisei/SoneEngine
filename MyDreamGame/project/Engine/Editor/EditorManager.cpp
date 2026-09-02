@@ -2521,6 +2521,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::EndChild();
             }
             ImGui::End();
+        } else if (currentMode_ == EditorMode::ModelPlacement || activeMainTab_ == "3Dモデル配置") {
+            if (model3DEditor_) {
+                model3DEditor_->DrawPalette(showModelPalette_, sceneManager);
+            }
         } else {
             if (showMapSettings_ && mapEditor_) {
                 mapEditor_->DrawSettingsUI(sceneManager, showMapSettings_, [&](){ SaveSceneConfig(); }, [&](){
@@ -2531,11 +2535,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 });
             }
         }
-    }
-
-    if (model3DEditor_) {
-        model3DEditor_->DrawPalette(showModelPalette_, sceneManager);
-    }
 
     if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->UpdateAnimationPosePreview(sceneManager); }
 
