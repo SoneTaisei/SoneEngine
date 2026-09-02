@@ -75,7 +75,19 @@ void DirectXCommon::Finalize() {
 // 既存の PreDraw を RenderTexture 用に書き換える
 // -------------------------------------------------------------
 void DirectXCommon::PreDraw() {
-    // ※今後、RenderTextureを画像として読み込むようになったらバリア処理が必要になりますが、今は省略します。
+    // 直前のフレームで RenderTexture が PIXEL_SHADER_RESOURCE で終わっていた場合、RENDER_TARGET に遷移
+    if (finalPostProcessSRVHandle_.ptr == renderTextureSrvHandleGPU_.ptr) {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = renderTextureResource_.Get();
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(1, &barrier);
+
+        // バリアを戻したのでリセット
+        finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
+    }
 
     // ★修正1：描画先を Swapchain ではなく RenderTexture の RTV にする！
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
@@ -1038,7 +1050,8 @@ void DirectXCommon::ExecutePostEffect() {
 
         // 2. 描画先を RenderTexture に設定
         commandList_->OMSetRenderTargets(1, &renderTextureRtvHandle_, false, nullptr);
-        commandList_->ClearRenderTargetView(renderTextureRtvHandle_, clearColor, 0, nullptr);
+        float rtClearColor[] = {0.1f, 0.25f, 0.5f, 1.0f};
+        commandList_->ClearRenderTargetView(renderTextureRtvHandle_, rtClearColor, 0, nullptr);
 
         // 3. パイプライン設定
         commandList_->SetGraphicsRootSignature(copyImageRootSignature_.Get());
@@ -1183,6 +1196,8 @@ void DirectXCommon::DrawRenderTexture() {
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
         commandList_->ResourceBarrier(1, &barrier);
+
+        finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
     }
 
     // ビューポートとシザーを元に戻す（念のため）

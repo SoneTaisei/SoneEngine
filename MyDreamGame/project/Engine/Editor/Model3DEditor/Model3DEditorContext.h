@@ -6,6 +6,7 @@
 #include <functional>
 #include <d3d12.h>
 #include "PlacedObject3D.h"
+#include "GameObject/PrimitiveObject.h"
 #include "Core/Utility/Vector3.h"
 
 class Model3DEditorContext {
@@ -22,7 +23,7 @@ public:
     };
 
     Model3DEditorContext();
-    ~Model3DEditorContext() = default;
+    ~Model3DEditorContext();
 
     void Initialize(ID3D12Device* device);
     void Update();
@@ -114,19 +115,7 @@ private:
 
     std::string currentFilePath_ = "resources/json/shared/LevelData/placed_models.json";
 
-    // 3D Depth-Tested Grid Resources (Zバッファ有効の3Dグリッド)
-    void CreateGridBuffers(ID3D12Device* device);
-    void DrawGrid3D();
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> gridVertexResource_;
-    D3D12_VERTEX_BUFFER_VIEW gridVertexBufferView_{};
-    Microsoft::WRL::ComPtr<ID3D12Resource> gridIndexResource_;
-    D3D12_INDEX_BUFFER_VIEW gridIndexBufferView_{};
-    uint32_t gridIndexCount_ = 0;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> gridTransformResource_;
-    TransformMatrix* mappedGridTransform_ = nullptr;
-    Microsoft::WRL::ComPtr<ID3D12Resource> gridMaterialResource_;
-    Material* mappedGridMaterial_ = nullptr;
+    // 3D Depth-Tested Procedural Grid Floor Object
+    std::unique_ptr<class PrimitiveObject> gridFloorObj_;
 };
 #endif

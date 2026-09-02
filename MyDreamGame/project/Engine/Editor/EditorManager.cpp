@@ -1104,8 +1104,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         }
                     }
                 }
-                ImGui::End();
             }
+            ImGui::End();
         }
     }
 

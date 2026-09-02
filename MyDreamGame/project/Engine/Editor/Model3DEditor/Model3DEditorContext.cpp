@@ -4,6 +4,8 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/UtilityFunctions.h"
+#include "Resource/Primitive/PrimitiveManager.h"
+#include "GameObject/PrimitiveObject.h"
 #include <fstream>
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -14,10 +16,24 @@
 Model3DEditorContext::Model3DEditorContext() {
 }
 
+Model3DEditorContext::~Model3DEditorContext() = default;
+
 void Model3DEditorContext::Initialize(ID3D12Device* device) {
     device_ = device;
     if (device_) {
-        CreateGridBuffers(device_);
+        auto* boxPrim = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box);
+        if (boxPrim) {
+            gridFloorObj_ = std::make_unique<PrimitiveObject>();
+            gridFloorObj_->Initialize(device_, boxPrim);
+            gridFloorObj_->SetName("3DModelEditorGridFloor");
+            gridFloorObj_->SetTranslation({ 0.0f, -0.01f, 0.0f });
+            gridFloorObj_->SetScale({ 4000.0f, 0.02f, 4000.0f });
+            gridFloorObj_->SetIsDoubleSided(true);
+            gridFloorObj_->GetMaterial().lightingType = 0; // Unlit
+            gridFloorObj_->GetMaterial().color = { 0.0f, 0.0f, 0.0f, 0.0f }; // Transparent floor, only grid lines
+            gridFloorObj_->GetMaterial().enableBoxMapping = 2.0f; // Procedural 3D Grid
+            gridFloorObj_->Update();
+        }
     }
     // Try auto-loading if default file exists
     if (std::filesystem::exists(currentFilePath_)) {
@@ -25,132 +41,14 @@ void Model3DEditorContext::Initialize(ID3D12Device* device) {
     }
 }
 
-void Model3DEditorContext::CreateGridBuffers(ID3D12Device* device) {
-    if (!device) return;
-
-    std::vector<VertexData> vertices;
-    std::vector<uint32_t> indices;
-
-    const float extent = 100.0f;
-    const float step = 1.0f;
-    const float halfW = 0.012f;
-
-    auto addLineQuad = [&](float x1, float z1, float x2, float z2, float w) {
-        float dx = x2 - x1;
-        float dz = z2 - z1;
-        float len = std::sqrt(dx * dx + dz * dz);
-        if (len < 1e-4f) return;
-        float nx = -dz / len * w;
-        float nz = dx / len * w;
-
-        uint32_t startIdx = static_cast<uint32_t>(vertices.size());
-
-        VertexData v0{ { x1 + nx, 0.001f, z1 + nz, 1.0f }, { 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } };
-        VertexData v1{ { x1 - nx, 0.001f, z1 - nz, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } };
-        VertexData v2{ { x2 - nx, 0.001f, z2 - nz, 1.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } };
-        VertexData v3{ { x2 + nx, 0.001f, z2 + nz, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } };
-
-        vertices.push_back(v0);
-        vertices.push_back(v1);
-        vertices.push_back(v2);
-        vertices.push_back(v3);
-
-        indices.push_back(startIdx + 0);
-        indices.push_back(startIdx + 1);
-        indices.push_back(startIdx + 2);
-        indices.push_back(startIdx + 0);
-        indices.push_back(startIdx + 2);
-        indices.push_back(startIdx + 3);
-    };
-
-    // 通常グリッド線 (X平行線 & Z平行線)
-    for (float x = -extent; x <= extent; x += step) {
-        if (std::abs(x) < 0.001f) continue;
-        addLineQuad(x, -extent, x, extent, halfW);
-    }
-    for (float z = -extent; z <= extent; z += step) {
-        if (std::abs(z) < 0.001f) continue;
-        addLineQuad(-extent, z, extent, z, halfW);
-    }
-
-    // 主軸線 (X軸 & Z軸)
-    addLineQuad(-extent, 0.0f, extent, 0.0f, halfW * 2.0f);
-    addLineQuad(0.0f, -extent, 0.0f, extent, halfW * 2.0f);
-
-    gridIndexCount_ = static_cast<uint32_t>(indices.size());
-
-    // Vertex Buffer
-    gridVertexResource_ = CreateBufferResource(device, sizeof(VertexData) * vertices.size());
-    VertexData* mappedVertices = nullptr;
-    gridVertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertices));
-    std::memcpy(mappedVertices, vertices.data(), sizeof(VertexData) * vertices.size());
-    gridVertexResource_->Unmap(0, nullptr);
-
-    gridVertexBufferView_.BufferLocation = gridVertexResource_->GetGPUVirtualAddress();
-    gridVertexBufferView_.SizeInBytes = static_cast<UINT>(sizeof(VertexData) * vertices.size());
-    gridVertexBufferView_.StrideInBytes = sizeof(VertexData);
-
-    // Index Buffer
-    gridIndexResource_ = CreateBufferResource(device, sizeof(uint32_t) * indices.size());
-    uint32_t* mappedIndices = nullptr;
-    gridIndexResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedIndices));
-    std::memcpy(mappedIndices, indices.data(), sizeof(uint32_t) * indices.size());
-    gridIndexResource_->Unmap(0, nullptr);
-
-    gridIndexBufferView_.BufferLocation = gridIndexResource_->GetGPUVirtualAddress();
-    gridIndexBufferView_.SizeInBytes = static_cast<UINT>(sizeof(uint32_t) * indices.size());
-    gridIndexBufferView_.Format = DXGI_FORMAT_R32_UINT;
-
-    // Transform & Material
-    gridTransformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
-    gridTransformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedGridTransform_));
-
-    gridMaterialResource_ = CreateBufferResource(device, (sizeof(Material) + 255) & ~255u);
-    gridMaterialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedGridMaterial_));
-
-    mappedGridMaterial_->color = { 0.35f, 0.35f, 0.38f, 0.75f };
-    mappedGridMaterial_->lightingType = 0;
-    mappedGridMaterial_->uvTransform = TransformFunctions::MakeIdentity4x4();
-    mappedGridMaterial_->shininess = 1.0f;
-    mappedGridMaterial_->enableEnvironmentMap = 0;
-}
-
-void Model3DEditorContext::DrawGrid3D() {
-    if (!device_ || gridIndexCount_ == 0 || !mappedGridTransform_ || !mappedGridMaterial_) return;
-
-    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
-    if (!dxCommon) return;
-
-    auto commandList = dxCommon->GetCommandList();
-    if (!commandList) return;
-
-    CameraManager* cameraMgr = CameraManager::GetInstance();
-    Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
-    Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
-
-    Matrix4x4 identity = TransformFunctions::MakeIdentity4x4();
-    mappedGridTransform_->World = identity;
-    mappedGridTransform_->WorldInverseTranspose = identity;
-    mappedGridTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(identity, viewMatrix), projectionMatrix);
-
-    *mappedGridMaterial_ = *mappedGridMaterial_;
-
-    commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
-    commandList->SetPipelineState(dxCommon->GetGraphicsPipelineStateTransparent());
-
-    commandList->SetGraphicsRootConstantBufferView(1, gridTransformResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(0, gridMaterialResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-
-    commandList->IASetVertexBuffers(0, 1, &gridVertexBufferView_);
-    commandList->IASetIndexBuffer(&gridIndexBufferView_);
-    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    commandList->DrawIndexedInstanced(gridIndexCount_, 1, 0, 0, 0);
-}
-
 void Model3DEditorContext::Update() {
     currentFrame_++;
+    if (gridFloorObj_) {
+        // Keep grid floor centered at camera XZ position for infinite extent
+        Vector3 camPos = CameraManager::GetInstance()->GetCameraPos();
+        gridFloorObj_->SetTranslation({ camPos.x, -0.01f, camPos.z });
+        gridFloorObj_->Update();
+    }
     for (auto& obj : objects_) {
         if (obj) {
             obj->Update();
@@ -159,8 +57,10 @@ void Model3DEditorContext::Update() {
 }
 
 void Model3DEditorContext::Draw() {
-    // 1. 3D グリッド描画 (Zバッファ有効の3D描画のためオブジェクトに貫通・最前面表示されない)
-    DrawGrid3D();
+    // 1. 3D グリッド床描画 (Zバッファ有効の3D描画のためオブジェクトに貫通・最前面表示されない)
+    if (gridFloorObj_) {
+        gridFloorObj_->Draw();
+    }
 
     // 2. 配置した3Dモデルの描画
     for (auto& obj : objects_) {

@@ -125,10 +125,10 @@ void Model3DEditorViewport::DrawViewportGrid(const Matrix4x4& viewProjectionMatr
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     drawList->PushClipRect(vpPos, ImVec2(vpPos.x + vpSize.x, vpPos.y + vpSize.y), true);
 
-    const float gridExtent = 100.0f; // どこまでも伸びる広域グリッド
-    const float gridStep = 1.0f;
-    const float nearW = 0.05f; // Nearクリップ閾値
-    const float gridY = 0.005f; // 床オブジェクト等との干渉を避ける高さ
+    const float fineExtent = 30.0f;  // 1m単位の詳細グリッド範囲 (±30m)
+    const float broadExtent = 60.0f; // 5m単位の広域グリッド範囲 (±60m)
+    const float nearW = 0.05f;       // Nearクリップ閾値
+    const float gridY = 0.005f;      // 床オブジェクト等との干渉を避ける高さ
 
     // 同次クリップ座標の計算
     auto transformToClip = [&](const Vector3& p, Vector4& outClip) {
@@ -174,30 +174,56 @@ void Model3DEditorViewport::DrawViewportGrid(const Matrix4x4& viewProjectionMatr
         drawList->AddLine(s1, s2, col, thickness);
     };
 
-    // 1. 通常グリッド線 (XZ平面) - 1.0mセグメント分割で安定描画 (アニメーションエディターと完全統一)
-    ImU32 gridCol = IM_COL32(75, 75, 80, 140);
-    for (float x = -gridExtent; x <= gridExtent; x += gridStep) {
-        if (std::abs(x) < 0.001f) continue; // Z軸(x=0)は後で強調描画
-        for (float z = -gridExtent; z < gridExtent; z += gridStep) {
-            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x, gridY, z + gridStep }, gridCol, 1.0f);
+    ImU32 fineGridCol = IM_COL32(75, 75, 80, 130);
+    ImU32 majorGridCol = IM_COL32(110, 110, 120, 180);
+    ImU32 broadGridCol = IM_COL32(60, 60, 65, 80);
+
+    // 1. 広域グリッド線 (5m間隔, ±60m)
+    for (float x = -broadExtent; x <= broadExtent; x += 5.0f) {
+        if (std::abs(x) < 0.001f) continue;
+        for (float z = -broadExtent; z < broadExtent; z += 5.0f) {
+            // 詳細グリッド内はスキップ
+            if (std::abs(x) <= fineExtent && (z >= -fineExtent && (z + 5.0f) <= fineExtent)) continue;
+            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x, gridY, z + 5.0f }, broadGridCol, 1.0f);
         }
     }
-    for (float z = -gridExtent; z <= gridExtent; z += gridStep) {
-        if (std::abs(z) < 0.001f) continue; // X軸(z=0)は後で強調描画
-        for (float x = -gridExtent; x < gridExtent; x += gridStep) {
-            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x + gridStep, gridY, z }, gridCol, 1.0f);
+    for (float z = -broadExtent; z <= broadExtent; z += 5.0f) {
+        if (std::abs(z) < 0.001f) continue;
+        for (float x = -broadExtent; x < broadExtent; x += 5.0f) {
+            if (std::abs(z) <= fineExtent && (x >= -fineExtent && (x + 5.0f) <= fineExtent)) continue;
+            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x + 5.0f, gridY, z }, broadGridCol, 1.0f);
         }
     }
 
-    // 2. 0のライン強調 (X軸: 赤, Z軸: 青) - 1.0mセグメント分割で安定描画
-    ImU32 xAxisCol = IM_COL32(230, 60, 75, 230);
-    for (float x = -gridExtent; x < gridExtent; x += gridStep) {
-        drawSegment3D(Vector3{ x, gridY, 0.0f }, Vector3{ x + gridStep, gridY, 0.0f }, xAxisCol, 2.0f);
+    // 2. 詳細グリッド線 (1m間隔, ±30m)
+    for (float x = -fineExtent; x <= fineExtent; x += 1.0f) {
+        if (std::abs(x) < 0.001f) continue;
+        bool isMajor = (static_cast<int>(std::round(std::abs(x))) % 5 == 0);
+        ImU32 col = isMajor ? majorGridCol : fineGridCol;
+        float th = isMajor ? 1.2f : 1.0f;
+        for (float z = -fineExtent; z < fineExtent; z += 1.0f) {
+            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x, gridY, z + 1.0f }, col, th);
+        }
+    }
+    for (float z = -fineExtent; z <= fineExtent; z += 1.0f) {
+        if (std::abs(z) < 0.001f) continue;
+        bool isMajor = (static_cast<int>(std::round(std::abs(z))) % 5 == 0);
+        ImU32 col = isMajor ? majorGridCol : fineGridCol;
+        float th = isMajor ? 1.2f : 1.0f;
+        for (float x = -fineExtent; x < fineExtent; x += 1.0f) {
+            drawSegment3D(Vector3{ x, gridY, z }, Vector3{ x + 1.0f, gridY, z }, col, th);
+        }
     }
 
-    ImU32 zAxisCol = IM_COL32(60, 140, 230, 230);
-    for (float z = -gridExtent; z < gridExtent; z += gridStep) {
-        drawSegment3D(Vector3{ 0.0f, gridY, z }, Vector3{ 0.0f, gridY, z + gridStep }, zAxisCol, 2.0f);
+    // 3. 原点軸線 (X軸: 赤, Z軸: 青) - ±60mまでしっかり強調
+    ImU32 xAxisCol = IM_COL32(235, 65, 80, 240);
+    for (float x = -broadExtent; x < broadExtent; x += 2.0f) {
+        drawSegment3D(Vector3{ x, gridY, 0.0f }, Vector3{ x + 2.0f, gridY, 0.0f }, xAxisCol, 2.0f);
+    }
+
+    ImU32 zAxisCol = IM_COL32(65, 145, 240, 240);
+    for (float z = -broadExtent; z < broadExtent; z += 2.0f) {
+        drawSegment3D(Vector3{ 0.0f, gridY, z }, Vector3{ 0.0f, gridY, z + 2.0f }, zAxisCol, 2.0f);
     }
 
     drawList->PopClipRect();
