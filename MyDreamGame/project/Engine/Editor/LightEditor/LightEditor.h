@@ -68,9 +68,31 @@ public:
     void RemoveSpotLight(int index);
     void DuplicateSpotLight(int index);
 
-    // 設定の保存・読み込み
-    void SaveLightingConfig(ModelCommon* modelCommon);
-    void LoadLightingConfig(ModelCommon* modelCommon);
+    // 設定の保存・読み込み・ファイル管理
+    bool SaveToFile(const std::string& filePath = "");
+    bool LoadFromFile(const std::string& filePath = "");
+    bool DeleteFile(const std::string& filePath = "");
+    void NewConfig();
+    void ScanLightFiles();
+
+    std::string ResolveFilePath(const std::string& fileNameOrPath) const;
+    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
+    void SetCurrentFilePath(const std::string& path);
+    std::string GetCurrentFileName() const;
+    std::string GetCurrentBaseName() const;
+    static std::string StripJsonExtension(const std::string& filename);
+    const std::vector<std::string>& GetAvailableLightFiles() const { return availableLightFiles_; }
+
+    const std::string& GetStatusMessage() const { return statusMessage_; }
+    float GetStatusMessageTimer() const { return statusMessageTimer_; }
+    void SetStatusMessage(const std::string& msg, float duration = 3.0f) {
+        statusMessage_ = msg;
+        statusMessageTimer_ = duration;
+    }
+
+    // 互換用インターフェース
+    void SaveLightingConfig(ModelCommon* modelCommon = nullptr);
+    void LoadLightingConfig(ModelCommon* modelCommon = nullptr);
 
     // ウィンドウ表示制御
     bool IsVisible() const { return isVisible_; }
@@ -93,6 +115,14 @@ private:
     bool isHovered_ = false;
     bool showDebugCollision_ = true; //!< 当たり判定とライトコーンのデバッグ可視化
     int selectedLightIndex_ = 0;
+
+    // ファイル管理
+    std::string currentFilePath_ = "resources/json/shared/Lighting/lighting_config.json";
+    std::vector<std::string> availableLightFiles_;
+    char saveFileNameBuf_[128] = "lighting_config.json";
+    int selectedFileComboIdx_ = -1;
+    std::string statusMessage_ = "";
+    float statusMessageTimer_ = 0.0f;
 
     // 環境光（暗闇調整用：0.0fで完全な暗闇）
     float ambientIntensity_ = 1.0f;

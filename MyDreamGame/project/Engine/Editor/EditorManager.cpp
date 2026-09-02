@@ -62,6 +62,7 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     model3DEditor_ = std::make_unique<Model3DEditor>();
     model3DEditor_->Initialize(device);
     lightEditor_ = std::make_unique<LightEditor>();
+    lightEditor_->Initialize(nullptr);
     ScanLayoutPresets();
 
     // 1. ImGuiコンテキストの作成
@@ -1628,6 +1629,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Separator();
 
                 if (lightEditor_) {
+                    ImGui::Text("現在の設定: %s", lightEditor_->GetCurrentFileName().c_str());
                     ImGui::Text("環境光 (暗闇): %.2f", lightEditor_->GetAmbientIntensity());
                     ImGui::Text("スポットライト数: %zu / %d", lightEditor_->GetSpotLights().size(), kMaxSpotLights);
                     
@@ -2637,6 +2639,11 @@ void EditorManager::SaveSceneConfig() {
             j["currentPlacedModelsFile"] = model3DEditor_->GetContext()->GetCurrentFilePath();
         }
 
+        // 現在のライティングJSONファイルパス
+        if (lightEditor_) {
+            j["currentLightingFile"] = lightEditor_->GetCurrentFilePath();
+        }
+
         // 各ウィンドウの開閉状態
         nlohmann::json winObj;
         winObj["showInspector"] = showInspector_;
@@ -2713,6 +2720,16 @@ void EditorManager::LoadSceneConfig() {
                 model3DEditor_->GetContext()->SetCurrentFilePath(modelFile);
                 if (std::filesystem::exists(model3DEditor_->GetContext()->GetCurrentFilePath())) {
                     model3DEditor_->GetContext()->LoadFromFile(model3DEditor_->GetContext()->GetCurrentFilePath());
+                }
+            }
+        }
+
+        if (j.contains("currentLightingFile") && j["currentLightingFile"].is_string()) {
+            std::string lightFile = j["currentLightingFile"].get<std::string>();
+            if (!lightFile.empty() && lightEditor_) {
+                lightEditor_->SetCurrentFilePath(lightFile);
+                if (std::filesystem::exists(lightEditor_->GetCurrentFilePath())) {
+                    lightEditor_->LoadFromFile(lightEditor_->GetCurrentFilePath());
                 }
             }
         }

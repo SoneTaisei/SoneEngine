@@ -31,13 +31,29 @@ LightEditor::LightEditor() {
     defaultSpot.followType = LightFollowType::None;
     defaultSpot.followOffset = {0.0f, 0.0f, 0.0f};
     spotLights_.push_back(defaultSpot);
+
+    Initialize(nullptr);
 }
 
 void LightEditor::Initialize(ModelCommon* modelCommon) {
+    try {
+        std::filesystem::create_directories("resources/json/shared/Lighting");
+        // 既存の古い lighting_config.json があれば Lighting ディレクトリへ移行
+        if (!std::filesystem::exists("resources/json/shared/Lighting/lighting_config.json") &&
+            std::filesystem::exists("resources/json/shared/lighting_config.json")) {
+            std::filesystem::copy_file("resources/json/shared/lighting_config.json", "resources/json/shared/Lighting/lighting_config.json");
+        }
+    } catch (...) {}
+
+    ScanLightFiles();
     LoadLightingConfig(modelCommon);
 }
 
 void LightEditor::Update(float deltaTime, ModelCommon* modelCommon, const Vector3* playerPos) {
+    if (statusMessageTimer_ > 0.0f) {
+        statusMessageTimer_ -= deltaTime;
+    }
+
     if (!modelCommon) return;
 
     CameraManager* camMgr = CameraManager::GetInstance();
@@ -521,7 +537,110 @@ void LightEditor::DrawBottomPanel(ModelCommon* modelCommon, bool* pOpen) {
 }
 
 void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
-    bool configChanged = false;
+    (void)modelCommon;
+
+    // ==========================================
+    // 0. ファイル管理セクション（画像準拠）
+    // ==========================================
+    if (availableLightFiles_.empty()) {
+        ScanLightFiles();
+        if (availableLightFiles_.empty()) {
+            // 初回または空の場合、現在の設定でデフォルトファイルを保存
+            SaveToFile("resources/json/shared/Lighting/lighting_config.json");
+            ScanLightFiles();
+        }
+    }
+
+    std::string curFileName = GetCurrentFileName();
+    const auto& fileList = availableLightFiles_;
+
+    static std::string lastSyncedFileName = "";
+    if (lastSyncedFileName != curFileName) {
+        lastSyncedFileName = curFileName;
+        strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), curFileName.c_str());
+    }
+
+    // 既存のライティングファイルを選択するコンボボックス (常に表示)
+    selectedFileComboIdx_ = -1;
+    for (int i = 0; i < static_cast<int>(fileList.size()); ++i) {
+        if (fileList[i] == curFileName) {
+            selectedFileComboIdx_ = i;
+            break;
+        }
+    }
+
+    std::string comboPreview = (selectedFileComboIdx_ != -1) ? fileList[selectedFileComboIdx_] : (curFileName.empty() ? "ライティングファイルを選択..." : curFileName);
+    if (ImGui::BeginCombo("ライティングファイルを選択", comboPreview.c_str())) {
+        for (int i = 0; i < static_cast<int>(fileList.size()); ++i) {
+            bool isSelected = (selectedFileComboIdx_ == i);
+            if (ImGui::Selectable(fileList[i].c_str(), isSelected)) {
+                selectedFileComboIdx_ = i;
+                strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), fileList[i].c_str());
+                LoadFromFile(fileList[i]);
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        if (fileList.empty()) {
+            if (ImGui::Selectable(curFileName.c_str(), true)) {
+                strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), curFileName.c_str());
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    // ファイル名入力 (Enterキーでロード)
+    if (ImGui::InputText("ファイル名", saveFileNameBuf_, sizeof(saveFileNameBuf_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (strlen(saveFileNameBuf_) > 0) {
+            LoadFromFile(saveFileNameBuf_);
+        }
+    }
+
+    ImGui::Spacing();
+
+    // 操作ボタン (保存、データを削除)
+    if (ImGui::Button("保存", ImVec2(100, 26))) {
+        if (strlen(saveFileNameBuf_) > 0) {
+            SaveToFile(saveFileNameBuf_);
+        } else {
+            SaveToFile();
+        }
+    }
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.3f, 0.3f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+    if (ImGui::Button("データを削除", ImVec2(110, 26))) {
+        ImGui::OpenPopup("DeleteLightDataConfirmPopup");
+    }
+    ImGui::PopStyleColor(3);
+
+    // 削除確認ポップアップ
+    if (ImGui::BeginPopupModal("DeleteLightDataConfirmPopup", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        std::string targetFile = GetCurrentFileName();
+        ImGui::Text("本当にライティング設定ファイル '%s' を削除しますか？", targetFile.c_str());
+        ImGui::Spacing();
+        if (ImGui::Button("はい、削除します", ImVec2(140, 0))) {
+            DeleteFile(targetFile);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("キャンセル", ImVec2(100, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // ステータスメッセージ表示
+    if (statusMessageTimer_ > 0.0f && !statusMessage_.empty()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", statusMessage_.c_str());
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
 
     if (ImGui::BeginTabBar("LightEditorTabBar")) {
 
@@ -537,7 +656,6 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
             ImGui::BeginDisabled(spotLights_.size() >= kMaxSpotLights);
             if (ImGui::Button("+ 追加")) {
                 AddSpotLight();
-                configChanged = true;
             }
             ImGui::EndDisabled();
             
@@ -545,12 +663,10 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
             ImGui::BeginDisabled(spotLights_.empty() || selectedLightIndex_ < 0 || selectedLightIndex_ >= static_cast<int>(spotLights_.size()));
             if (ImGui::Button("複製")) {
                 DuplicateSpotLight(selectedLightIndex_);
-                configChanged = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("- 削除")) {
                 RemoveSpotLight(selectedLightIndex_);
-                configChanged = true;
             }
             ImGui::EndDisabled();
 
@@ -563,7 +679,6 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                 bool enabled = spotLights_[i].enabled;
                 if (ImGui::Checkbox("##enabled", &enabled)) {
                     spotLights_[i].enabled = enabled;
-                    configChanged = true;
                 }
                 ImGui::SameLine();
                 
@@ -586,23 +701,19 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                 strncpy_s(nameBuf, light.name.c_str(), sizeof(nameBuf));
                 if (ImGui::InputText("名前", nameBuf, sizeof(nameBuf))) {
                     light.name = nameBuf;
-                    configChanged = true;
                 }
 
-                configChanged |= ImGui::ColorEdit4("光の色", &light.color.x);
-                configChanged |= ImGui::DragFloat("輝度 (Intensity)", &light.intensity, 0.05f, 0.0f, 50.0f, "%.2f");
-                configChanged |= ImGui::DragFloat("届く距離 (Distance)", &light.distance, 0.1f, 0.1f, 200.0f, "%.1f");
-                configChanged |= ImGui::DragFloat("減衰率 (Decay)", &light.decay, 0.05f, 0.1f, 10.0f, "%.2f");
+                ImGui::ColorEdit4("光の色", &light.color.x);
+                ImGui::DragFloat("輝度 (Intensity)", &light.intensity, 0.05f, 0.0f, 50.0f, "%.2f");
+                ImGui::DragFloat("届く距離 (Distance)", &light.distance, 0.1f, 0.1f, 200.0f, "%.1f");
+                ImGui::DragFloat("減衰率 (Decay)", &light.decay, 0.05f, 0.1f, 10.0f, "%.2f");
 
                 if (ImGui::SliderFloat("照射全角 (Angle / 当たり判定範囲)", &light.angleDeg, 1.0f, 90.0f, "%.1f deg")) {
                     if (light.falloffDeg > light.angleDeg) light.falloffDeg = light.angleDeg;
-                    configChanged = true;
                 }
-                if (ImGui::SliderFloat("フォールオフ開始角 (最大輝度芯)", &light.falloffDeg, 0.0f, light.angleDeg, "%.1f deg")) {
-                    configChanged = true;
-                }
+                ImGui::SliderFloat("フォールオフ開始角 (最大輝度芯)", &light.falloffDeg, 0.0f, light.angleDeg, "%.1f deg");
 
-                configChanged |= ImGui::Checkbox("危険な光 (当たるとプレイヤー死亡)", &light.isDangerous);
+                ImGui::Checkbox("危険な光 (当たるとプレイヤー死亡)", &light.isDangerous);
                 ImGui::TextDisabled("※照射全角の内側(光が当たっている領域全体)がプレイヤーの当たり判定になります。");
 
                 ImGui::Separator();
@@ -612,63 +723,54 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                 int currentFollow = static_cast<int>(light.followType);
                 if (ImGui::Combo("追従モード", &currentFollow, followTypes, IM_ARRAYSIZE(followTypes))) {
                     light.followType = static_cast<LightFollowType>(currentFollow);
-                    configChanged = true;
                 }
 
                 if (light.followType == LightFollowType::None) {
-                    configChanged |= ImGui::DragFloat3("位置", &light.position.x, 0.1f);
+                    ImGui::DragFloat3("位置", &light.position.x, 0.1f);
                     if (ImGui::DragFloat3("照射方向", &light.direction.x, 0.01f, -1.0f, 1.0f)) {
                         light.direction = TransformFunctions::Normalize(light.direction);
                         light.baseDirection = light.direction;
-                        configChanged = true;
                     }
                     ImGui::Text("向きプリセット:");
                     ImGui::SameLine();
                     if (ImGui::Button("正面 (奥)")) {
                         light.direction = {0.0f, 0.0f, 1.0f};
                         light.baseDirection = light.direction;
-                        configChanged = true;
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("下")) {
                         light.direction = {0.0f, -1.0f, 0.0f};
                         light.baseDirection = light.direction;
-                        configChanged = true;
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("上")) {
                         light.direction = {0.0f, 1.0f, 0.0f};
                         light.baseDirection = light.direction;
-                        configChanged = true;
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("左")) {
                         light.direction = {-1.0f, 0.0f, 0.0f};
                         light.baseDirection = light.direction;
-                        configChanged = true;
                     }
                     ImGui::SameLine();
                     if (ImGui::Button("右")) {
                         light.direction = {1.0f, 0.0f, 0.0f};
                         light.baseDirection = light.direction;
-                        configChanged = true;
                     }
                 } else if (light.followType == LightFollowType::Camera || light.followType == LightFollowType::Player) {
-                    configChanged |= ImGui::DragFloat3("追従オフセット", &light.followOffset.x, 0.05f);
+                    ImGui::DragFloat3("追従オフセット", &light.followOffset.x, 0.05f);
                     if (light.followType == LightFollowType::Player) {
                         if (ImGui::DragFloat3("照射方向", &light.direction.x, 0.01f, -1.0f, 1.0f)) {
                             light.direction = TransformFunctions::Normalize(light.direction);
-                            configChanged = true;
                         }
                     }
                 } else if (light.followType == LightFollowType::RotateAnimation) {
-                    configChanged |= ImGui::DragFloat3("位置", &light.position.x, 0.1f);
+                    ImGui::DragFloat3("位置", &light.position.x, 0.1f);
                     if (ImGui::DragFloat3("基準照射方向", &light.baseDirection.x, 0.01f, -1.0f, 1.0f)) {
                         light.baseDirection = TransformFunctions::Normalize(light.baseDirection);
-                        configChanged = true;
                     }
-                    configChanged |= ImGui::DragFloat3("回転軸", &light.rotateAxis.x, 0.01f, -1.0f, 1.0f);
-                    configChanged |= ImGui::DragFloat("回転速度 (度/秒)", &light.rotateSpeed, 1.0f, -360.0f, 360.0f, "%.1f");
+                    ImGui::DragFloat3("回転軸", &light.rotateAxis.x, 0.01f, -1.0f, 1.0f);
+                    ImGui::DragFloat("回転速度 (度/秒)", &light.rotateSpeed, 1.0f, -360.0f, 360.0f, "%.1f");
                 }
             }
 
@@ -682,28 +784,24 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
             ImGui::Text("環境光 (アンビエント) 設定");
             ImGui::TextDisabled("※数値を 0.0 に近づけると、画像のような真っ暗なホラー表現になります。");
 
-            configChanged |= ImGui::SliderFloat("環境光の強さ", &ambientIntensity_, 0.0f, 2.0f, "%.3f");
+            ImGui::SliderFloat("環境光の強さ", &ambientIntensity_, 0.0f, 2.0f, "%.3f");
 
             ImGui::Spacing();
             ImGui::Text("プリセット:");
             if (ImGui::Button("完全な暗闇 (0.00)")) {
                 ambientIntensity_ = 0.0f;
-                configChanged = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("ホラー探索 (0.05)")) {
                 ambientIntensity_ = 0.05f;
-                configChanged = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("薄暗い部屋 (0.30)")) {
                 ambientIntensity_ = 0.30f;
-                configChanged = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("標準 (1.00)")) {
                 ambientIntensity_ = 1.0f;
-                configChanged = true;
             }
 
             ImGui::EndTabItem();
@@ -714,27 +812,26 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
         // ==========================================
         if (ImGui::BeginTabItem("平行光源・点光源")) {
             // 平行光源
-            configChanged |= ImGui::Checkbox("平行光源 (Directional) を有効化", &enableDirectional_);
+            ImGui::Checkbox("平行光源 (Directional) を有効化", &enableDirectional_);
             if (enableDirectional_) {
-                configChanged |= ImGui::ColorEdit4("平行光 色", &directionalColor_.x);
-                configChanged |= ImGui::DragFloat("平行光 輝度", &directionalIntensity_, 0.02f, 0.0f, 10.0f);
+                ImGui::ColorEdit4("平行光 色", &directionalColor_.x);
+                ImGui::DragFloat("平行光 輝度", &directionalIntensity_, 0.02f, 0.0f, 10.0f);
                 if (ImGui::DragFloat3("平行光 方向", &directionalDir_.x, 0.01f, -1.0f, 1.0f)) {
                     directionalDir_ = TransformFunctions::Normalize(directionalDir_);
-                    configChanged = true;
                 }
-                configChanged |= ImGui::Checkbox("フラットシェーディング", &enableFlatShading_);
+                ImGui::Checkbox("フラットシェーディング", &enableFlatShading_);
             }
 
             ImGui::Separator();
 
             // 点光源
-            configChanged |= ImGui::Checkbox("点光源 (Point) を有効化", &enablePoint_);
+            ImGui::Checkbox("点光源 (Point) を有効化", &enablePoint_);
             if (enablePoint_) {
-                configChanged |= ImGui::ColorEdit4("点光源 色", &pointColor_.x);
-                configChanged |= ImGui::DragFloat("点光源 輝度", &pointIntensity_, 0.02f, 0.0f, 10.0f);
-                configChanged |= ImGui::DragFloat3("点光源 位置", &pointPos_.x, 0.1f);
-                configChanged |= ImGui::DragFloat("点光源 半径", &pointRadius_, 0.1f, 0.1f, 100.0f);
-                configChanged |= ImGui::DragFloat("点光源 減衰", &pointDecay_, 0.02f, 0.1f, 10.0f);
+                ImGui::ColorEdit4("点光源 色", &pointColor_.x);
+                ImGui::DragFloat("点光源 輝度", &pointIntensity_, 0.02f, 0.0f, 10.0f);
+                ImGui::DragFloat3("点光源 位置", &pointPos_.x, 0.1f);
+                ImGui::DragFloat("点光源 半径", &pointRadius_, 0.1f, 0.1f, 100.0f);
+                ImGui::DragFloat("点光源 減衰", &pointDecay_, 0.02f, 0.1f, 10.0f);
             }
 
             ImGui::EndTabItem();
@@ -742,82 +839,203 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
 
         ImGui::EndTabBar();
     }
-
-    ImGui::Separator();
-    if (ImGui::Button("設定を保存")) {
-        SaveLightingConfig(modelCommon);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("設定を再読込")) {
-        LoadLightingConfig(modelCommon);
-    }
-
-    if (configChanged) {
-        SaveLightingConfig(modelCommon);
-    }
 }
 #endif
 
-void LightEditor::SaveLightingConfig(ModelCommon* modelCommon) {
-    (void)modelCommon;
-    std::filesystem::create_directories("resources/json/shared");
-    std::ofstream ofs("resources/json/shared/lighting_config.json");
-    if (!ofs.is_open()) return;
+void LightEditor::NewConfig() {
+    ambientIntensity_ = 1.0f;
+    enableDirectional_ = true;
+    directionalColor_ = {1.0f, 1.0f, 1.0f, 1.0f};
+    directionalDir_ = {-0.038f, -0.962f, 0.268f};
+    directionalIntensity_ = 1.0f;
+    enableFlatShading_ = false;
 
-    nlohmann::json j;
-    j["ambientIntensity"] = ambientIntensity_;
-    j["enableDirectional"] = enableDirectional_;
-    j["enablePoint"] = enablePoint_;
-    j["enableFlatShading"] = enableFlatShading_;
+    enablePoint_ = false;
+    pointColor_ = {1.0f, 1.0f, 1.0f, 1.0f};
+    pointPos_ = {0.0f, 2.0f, 0.0f};
+    pointIntensity_ = 1.0f;
+    pointRadius_ = 10.0f;
+    pointDecay_ = 1.0f;
 
-    // Directional
-    j["dLight"]["color"] = {directionalColor_.x, directionalColor_.y, directionalColor_.z, directionalColor_.w};
-    j["dLight"]["direction"] = {directionalDir_.x, directionalDir_.y, directionalDir_.z};
-    j["dIntensity"] = directionalIntensity_;
+    spotLights_.clear();
+    SpotLightItem defaultSpot;
+    defaultSpot.name = "SpotLight_1";
+    defaultSpot.enabled = true;
+    defaultSpot.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    defaultSpot.position = {0.0f, 0.0f, -5.0f};
+    defaultSpot.direction = {0.0f, 0.0f, 1.0f};
+    defaultSpot.baseDirection = {0.0f, 0.0f, 1.0f};
+    defaultSpot.intensity = 5.0f;
+    defaultSpot.distance = 20.0f;
+    defaultSpot.decay = 1.5f;
+    defaultSpot.angleDeg = 35.0f;
+    defaultSpot.falloffDeg = 20.0f;
+    defaultSpot.followType = LightFollowType::None;
+    defaultSpot.followOffset = {0.0f, 0.0f, 0.0f};
+    spotLights_.push_back(defaultSpot);
+    selectedLightIndex_ = 0;
 
-    // Point
-    j["pLight"]["color"] = {pointColor_.x, pointColor_.y, pointColor_.z, pointColor_.w};
-    j["pLight"]["position"] = {pointPos_.x, pointPos_.y, pointPos_.z};
-    j["pLight"]["radius"] = pointRadius_;
-    j["pLight"]["decay"] = pointDecay_;
-    j["pIntensity"] = pointIntensity_;
-
-    // SpotLights
-    nlohmann::json spotArray = nlohmann::json::array();
-    for (const auto& item : spotLights_) {
-        nlohmann::json s;
-        s["name"] = item.name;
-        s["enabled"] = item.enabled;
-        s["color"] = {item.color.x, item.color.y, item.color.z, item.color.w};
-        s["position"] = {item.position.x, item.position.y, item.position.z};
-        s["direction"] = {item.direction.x, item.direction.y, item.direction.z};
-        s["baseDirection"] = {item.baseDirection.x, item.baseDirection.y, item.baseDirection.z};
-        s["intensity"] = item.intensity;
-        s["distance"] = item.distance;
-        s["decay"] = item.decay;
-        s["angleDeg"] = item.angleDeg;
-        s["falloffDeg"] = item.falloffDeg;
-        s["isDangerous"] = item.isDangerous;
-        s["followType"] = static_cast<int>(item.followType);
-        s["followOffset"] = {item.followOffset.x, item.followOffset.y, item.followOffset.z};
-        s["rotateAxis"] = {item.rotateAxis.x, item.rotateAxis.y, item.rotateAxis.z};
-        s["rotateSpeed"] = item.rotateSpeed;
-        spotArray.push_back(s);
-    }
-    j["spotLights"] = spotArray;
-
-    ofs << j.dump(4);
-    ofs.close();
+    SetStatusMessage("新規ライティング設定を作成しました");
 }
 
-void LightEditor::LoadLightingConfig(ModelCommon* modelCommon) {
-    (void)modelCommon;
-    std::ifstream ifs("resources/json/shared/lighting_config.json");
-    if (!ifs.is_open()) return;
+std::string LightEditor::StripJsonExtension(const std::string& filename) {
+    if (filename.length() >= 5) {
+        std::string ext = filename.substr(filename.length() - 5);
+        if (ext == ".json" || ext == ".JSON") {
+            return filename.substr(0, filename.length() - 5);
+        }
+    }
+    return filename;
+}
+
+std::string LightEditor::GetCurrentFileName() const {
+    try {
+        return std::filesystem::path(currentFilePath_).filename().string();
+    } catch (...) {
+        return "lighting_config.json";
+    }
+}
+
+std::string LightEditor::GetCurrentBaseName() const {
+    return StripJsonExtension(GetCurrentFileName());
+}
+
+std::string LightEditor::ResolveFilePath(const std::string& fileNameOrPath) const {
+    if (fileNameOrPath.empty()) {
+        return currentFilePath_;
+    }
+
+    std::string path = fileNameOrPath;
+    std::replace(path.begin(), path.end(), '\\', '/');
+
+    // ディレクトリが含まれていなければ resources/json/shared/Lighting/ を付与
+    if (path.find('/') == std::string::npos) {
+        path = "resources/json/shared/Lighting/" + path;
+    }
+
+    // .json 拡張子が付いていなければ付与
+    if (path.length() < 5 || path.substr(path.length() - 5) != ".json") {
+        path += ".json";
+    }
+
+    return path;
+}
+
+void LightEditor::SetCurrentFilePath(const std::string& path) {
+    currentFilePath_ = ResolveFilePath(path);
+    strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), GetCurrentFileName().c_str());
+    ScanLightFiles();
+}
+
+void LightEditor::ScanLightFiles() {
+    availableLightFiles_.clear();
+    const std::string dir = "resources/json/shared/Lighting";
+    try {
+        if (!std::filesystem::exists(dir)) {
+            std::filesystem::create_directories(dir);
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".json") {
+                availableLightFiles_.push_back(entry.path().filename().string());
+            }
+        }
+        std::sort(availableLightFiles_.begin(), availableLightFiles_.end());
+    } catch (...) {
+        // ignore errors
+    }
+}
+
+bool LightEditor::SaveToFile(const std::string& filePath) {
+    std::string path = ResolveFilePath(filePath);
+    try {
+        std::filesystem::path p(path);
+        if (p.has_parent_path()) {
+            std::filesystem::create_directories(p.parent_path());
+        }
+
+        nlohmann::json j;
+        j["ambientIntensity"] = ambientIntensity_;
+        j["enableDirectional"] = enableDirectional_;
+        j["enablePoint"] = enablePoint_;
+        j["enableFlatShading"] = enableFlatShading_;
+
+        // Directional
+        j["dLight"]["color"] = {directionalColor_.x, directionalColor_.y, directionalColor_.z, directionalColor_.w};
+        j["dLight"]["direction"] = {directionalDir_.x, directionalDir_.y, directionalDir_.z};
+        j["dIntensity"] = directionalIntensity_;
+
+        // Point
+        j["pLight"]["color"] = {pointColor_.x, pointColor_.y, pointColor_.z, pointColor_.w};
+        j["pLight"]["position"] = {pointPos_.x, pointPos_.y, pointPos_.z};
+        j["pLight"]["radius"] = pointRadius_;
+        j["pLight"]["decay"] = pointDecay_;
+        j["pIntensity"] = pointIntensity_;
+
+        // SpotLights
+        nlohmann::json spotArray = nlohmann::json::array();
+        for (const auto& item : spotLights_) {
+            nlohmann::json s;
+            s["name"] = item.name;
+            s["enabled"] = item.enabled;
+            s["color"] = {item.color.x, item.color.y, item.color.z, item.color.w};
+            s["position"] = {item.position.x, item.position.y, item.position.z};
+            s["direction"] = {item.direction.x, item.direction.y, item.direction.z};
+            s["baseDirection"] = {item.baseDirection.x, item.baseDirection.y, item.baseDirection.z};
+            s["intensity"] = item.intensity;
+            s["distance"] = item.distance;
+            s["decay"] = item.decay;
+            s["angleDeg"] = item.angleDeg;
+            s["falloffDeg"] = item.falloffDeg;
+            s["isDangerous"] = item.isDangerous;
+            s["followType"] = static_cast<int>(item.followType);
+            s["followOffset"] = {item.followOffset.x, item.followOffset.y, item.followOffset.z};
+            s["rotateAxis"] = {item.rotateAxis.x, item.rotateAxis.y, item.rotateAxis.z};
+            s["rotateSpeed"] = item.rotateSpeed;
+            spotArray.push_back(s);
+        }
+        j["spotLights"] = spotArray;
+
+        std::ofstream ofs(path);
+        if (!ofs.is_open()) {
+            SetStatusMessage("保存に失敗しました: " + path);
+            return false;
+        }
+        ofs << j.dump(4);
+        ofs.close();
+
+        currentFilePath_ = path;
+        strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), GetCurrentFileName().c_str());
+        ScanLightFiles();
+        SetStatusMessage("保存しました: " + GetCurrentFileName());
+        return true;
+    } catch (...) {
+        SetStatusMessage("保存エラーが発生しました");
+        return false;
+    }
+}
+
+bool LightEditor::LoadFromFile(const std::string& filePath) {
+    std::string path = ResolveFilePath(filePath);
+    if (!std::filesystem::exists(path)) {
+        // フォールバック: shared/lighting_config.json をチェック
+        if (std::filesystem::exists("resources/json/shared/lighting_config.json")) {
+            path = "resources/json/shared/lighting_config.json";
+        } else {
+            SetStatusMessage("ファイルが見つかりません: " + path);
+            return false;
+        }
+    }
 
     try {
+        std::ifstream ifs(path);
+        if (!ifs.is_open()) {
+            SetStatusMessage("ファイルを開けませんでした: " + path);
+            return false;
+        }
+
         nlohmann::json j;
         ifs >> j;
+        ifs.close();
 
         if (j.contains("ambientIntensity")) ambientIntensity_ = j["ambientIntensity"];
         if (j.contains("enableDirectional")) enableDirectional_ = j["enableDirectional"];
@@ -891,5 +1109,48 @@ void LightEditor::LoadLightingConfig(ModelCommon* modelCommon) {
             spotLights_.push_back(defaultSpot);
         }
         selectedLightIndex_ = 0;
-    } catch (...) {}
+
+        currentFilePath_ = path;
+        strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), GetCurrentFileName().c_str());
+        ScanLightFiles();
+        SetStatusMessage("読み込みました: " + GetCurrentFileName() + " (" + std::to_string(spotLights_.size()) + " 個)");
+        return true;
+    } catch (...) {
+        SetStatusMessage("JSON読み込みエラーが発生しました");
+        return false;
+    }
+}
+
+bool LightEditor::DeleteFile(const std::string& filePath) {
+    std::string path = ResolveFilePath(filePath);
+    try {
+        if (std::filesystem::exists(path)) {
+            std::filesystem::remove(path);
+        }
+        ScanLightFiles();
+
+        // 削除後、他のファイルが存在すれば先頭をロード、なければ新規作成
+        if (!availableLightFiles_.empty()) {
+            LoadFromFile(availableLightFiles_[0]);
+        } else {
+            currentFilePath_ = "resources/json/shared/Lighting/lighting_config.json";
+            strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), GetCurrentFileName().c_str());
+            NewConfig();
+        }
+        SetStatusMessage("ファイルを削除しました: " + StripJsonExtension(std::filesystem::path(path).filename().string()));
+        return true;
+    } catch (...) {
+        SetStatusMessage("ファイル削除エラーが発生しました");
+        return false;
+    }
+}
+
+void LightEditor::SaveLightingConfig(ModelCommon* modelCommon) {
+    (void)modelCommon;
+    SaveToFile(currentFilePath_);
+}
+
+void LightEditor::LoadLightingConfig(ModelCommon* modelCommon) {
+    (void)modelCommon;
+    LoadFromFile(currentFilePath_);
 }

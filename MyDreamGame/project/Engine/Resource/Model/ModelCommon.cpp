@@ -135,7 +135,11 @@ void ModelCommon::DrawAll(const Matrix4x4 &viewProjectionMatrix) {
 }
 
 void ModelCommon::LoadLightingConfig() {
-    std::ifstream ifs("resources/json/shared/lighting_config.json");
+    std::string path = "resources/json/shared/Lighting/lighting_config.json";
+    if (!std::filesystem::exists(path)) {
+        path = "resources/json/shared/lighting_config.json";
+    }
+    std::ifstream ifs(path);
     if (!ifs.is_open()) return;
 
     try {
