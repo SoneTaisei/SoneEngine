@@ -1,4 +1,4 @@
-﻿#include "DoorBlock.h"
+#include "DoorBlock.h"
 #include "SwitchBlock.h"
 #include "Core/TimeManager.h"
 #include "Game2D/MapChip2D.h"
@@ -37,6 +37,9 @@ void DoorBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("openSpeed") && properties["openSpeed"].is_number()) {
         openSpeed_ = properties["openSpeed"];
     }
+    if (properties.contains("closeSpeed") && properties["closeSpeed"].is_number()) {
+        closeSpeed_ = properties["closeSpeed"];
+    }
 }
 
 void DoorBlock::Update() {
@@ -67,7 +70,7 @@ void DoorBlock::Update() {
         if (openProgress_ > 1.0f) openProgress_ = 1.0f;
     } else {
         // 閉まる
-        openProgress_ -= dt * openSpeed_;
+        openProgress_ -= dt * closeSpeed_;
         if (openProgress_ < 0.0f) openProgress_ = 0.0f;
     }
 

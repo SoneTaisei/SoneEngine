@@ -177,6 +177,9 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (k == "moveRange") return std::string("移動範囲 (moveRange)");
         if (k == "breakWeight") return std::string("崩れる鎖の重さ (breakWeight)");
         if (k == "breakDuration") return std::string("崩れるまでの時間 (breakDuration)");
+        if (k == "linkId") return std::string("連動ID (linkId)");
+        if (k == "openSpeed") return std::string("開く速度 (openSpeed)");
+        if (k == "closeSpeed") return std::string("閉まる速度 (closeSpeed)");
         return k;
     };
 

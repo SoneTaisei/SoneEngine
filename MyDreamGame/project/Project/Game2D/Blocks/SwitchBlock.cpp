@@ -1,4 +1,4 @@
-#include "SwitchBlock.h"
+﻿#include "SwitchBlock.h"
 #include "Core/TimeManager.h"
 
 SwitchBlock::SwitchBlock(MapChip2D* map, int chipX, int chipY)

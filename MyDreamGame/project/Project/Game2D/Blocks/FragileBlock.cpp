@@ -1,4 +1,4 @@
-#include "FragileBlock.h"
+﻿#include "FragileBlock.h"
 #include "Game2D/Player/Player2D.h"
 #include "Core/TimeManager.h"
 #include <cmath>

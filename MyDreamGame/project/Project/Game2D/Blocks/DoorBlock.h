@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "BaseBlock.h"
 
 class DoorBlock : public BaseBlock {
@@ -24,5 +24,6 @@ private:
 
     int linkId_ = 1;
     float openProgress_ = 0.0f; // 0.0f (閉) ～ 1.0f (開)
-    float openSpeed_ = 2.0f;    // 開閉速度
+    float openSpeed_ = 2.0f;    // 開く速度
+    float closeSpeed_ = 2.0f;   // 閉まる速度
 };
