@@ -33,6 +33,9 @@ public:
     PlacedObject3D* AddObject(const std::string& name, const std::string& modelDir, const std::string& modelFileName, const Vector3& position);
     void RemoveObject(PlacedObject3D* target);
     PlacedObject3D* DuplicateObject(PlacedObject3D* target);
+    void CopySelectedObject();
+    PlacedObject3D* PasteObject();
+    bool HasClipboard() const { return hasClipboard_; }
     void ClearObjects();
 
     const std::vector<std::unique_ptr<PlacedObject3D>>& GetObjects() const { return objects_; }
@@ -58,8 +61,26 @@ public:
     // Save & Load
     bool SaveToFile(const std::string& filePath = "");
     bool LoadFromFile(const std::string& filePath = "");
+    bool DeleteFile(const std::string& filePath = "");
+    void NewScene();
+    void ScanLevelFiles();
+
+    const std::vector<std::string>& GetAvailableLevelFiles() const { return availableLevelFiles_; }
     const std::string& GetCurrentFilePath() const { return currentFilePath_; }
-    void SetCurrentFilePath(const std::string& path) { currentFilePath_ = path; }
+    void SetCurrentFilePath(const std::string& path);
+    std::string GetCurrentFileName() const;
+    std::string GetCurrentBaseName() const;
+    static std::string StripJsonExtension(const std::string& filename);
+
+    std::string ResolveFilePath(const std::string& fileNameOrPath) const;
+
+    // Status Message notification
+    const std::string& GetStatusMessage() const { return statusMessage_; }
+    float GetStatusMessageTimer() const { return statusMessageTimer_; }
+    void SetStatusMessage(const std::string& msg, float duration = 3.0f) {
+        statusMessage_ = msg;
+        statusMessageTimer_ = duration;
+    }
 
     // Undo / Redo
     struct PlacedObjectSnapshot {
@@ -114,6 +135,13 @@ private:
     float scaleSnap_ = 0.25f;
 
     std::string currentFilePath_ = "resources/json/shared/LevelData/placed_models.json";
+    std::vector<std::string> availableLevelFiles_;
+    std::string statusMessage_ = "";
+    float statusMessageTimer_ = 0.0f;
+
+    // Clipboard for Copy & Paste
+    nlohmann::json clipboardJson_;
+    bool hasClipboard_ = false;
 
     // 3D Depth-Tested Procedural Grid Floor Object
     std::unique_ptr<class PrimitiveObject> gridFloorObj_;

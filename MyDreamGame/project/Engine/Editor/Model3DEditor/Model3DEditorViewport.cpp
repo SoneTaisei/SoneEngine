@@ -90,33 +90,6 @@ void Model3DEditorViewport::Draw(
             HandleKeyboardShortcuts();
         }
 
-        // 7. Top-left Mode Toolbar Overlay
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 barPos = ImVec2(vpPos.x + 10.0f, vpPos.y + 10.0f);
-        drawList->AddRectFilled(barPos, ImVec2(barPos.x + 230.0f, barPos.y + 36.0f), IM_COL32(20, 20, 25, 200), 6.0f);
-        drawList->AddRect(barPos, ImVec2(barPos.x + 230.0f, barPos.y + 36.0f), IM_COL32(80, 80, 100, 180), 6.0f);
-
-        ImGui::SetCursorScreenPos(ImVec2(barPos.x + 8.0f, barPos.y + 5.0f));
-        if (context_) {
-            auto mode = context_->GetGizmoMode();
-            bool isT = (mode == Model3DEditorContext::GizmoMode::Translation);
-            bool isR = (mode == Model3DEditorContext::GizmoMode::Rotation);
-            bool isS = (mode == Model3DEditorContext::GizmoMode::Scale);
-
-            if (isT) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.9f, 1.0f));
-            if (ImGui::Button("[T] 移動", ImVec2(65, 24))) context_->SetGizmoMode(Model3DEditorContext::GizmoMode::Translation);
-            if (isT) ImGui::PopStyleColor();
-
-            ImGui::SameLine();
-            if (isR) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.9f, 1.0f));
-            if (ImGui::Button("[R] 回転", ImVec2(65, 24))) context_->SetGizmoMode(Model3DEditorContext::GizmoMode::Rotation);
-            if (isR) ImGui::PopStyleColor();
-
-            ImGui::SameLine();
-            if (isS) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.9f, 1.0f));
-            if (ImGui::Button("[S] 拡大", ImVec2(65, 24))) context_->SetGizmoMode(Model3DEditorContext::GizmoMode::Scale);
-            if (isS) ImGui::PopStyleColor();
-        }
     }
     ImGui::End();
 }
@@ -512,6 +485,15 @@ void Model3DEditorViewport::HandleKeyboardShortcuts() {
         context_->Redo();
     }
 
+    // Save (Ctrl+S)
+    if (ctrl && !shift && (ImGui::IsKeyPressed(ImGuiKey_S, false) || (keyboard && keyboard->IsKeyPressed(DIK_S)))) {
+        context_->SaveToFile();
+    }
+    // New (Ctrl+N)
+    if (ctrl && !shift && (ImGui::IsKeyPressed(ImGuiKey_N, false) || (keyboard && keyboard->IsKeyPressed(DIK_N)))) {
+        context_->NewScene();
+    }
+
     if (ImGui::IsKeyPressed(ImGuiKey_T) || (keyboard && keyboard->IsKeyPressed(DIK_T))) {
         context_->SetGizmoMode(Model3DEditorContext::GizmoMode::Translation);
     }
@@ -520,6 +502,15 @@ void Model3DEditorViewport::HandleKeyboardShortcuts() {
     }
     if (ImGui::IsKeyPressed(ImGuiKey_S) || (keyboard && keyboard->IsKeyPressed(DIK_S))) {
         context_->SetGizmoMode(Model3DEditorContext::GizmoMode::Scale);
+    }
+
+    // Copy (Ctrl+C)
+    if (ctrl && !shift && (ImGui::IsKeyPressed(ImGuiKey_C, false) || (keyboard && keyboard->IsKeyPressed(DIK_C)))) {
+        context_->CopySelectedObject();
+    }
+    // Paste (Ctrl+V)
+    if (ctrl && !shift && (ImGui::IsKeyPressed(ImGuiKey_V, false) || (keyboard && keyboard->IsKeyPressed(DIK_V)))) {
+        context_->PasteObject();
     }
 
     if (context_->GetSelectedObject()) {

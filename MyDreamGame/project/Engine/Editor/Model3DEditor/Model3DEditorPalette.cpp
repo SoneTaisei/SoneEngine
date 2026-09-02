@@ -299,8 +299,106 @@ void Model3DEditorPalette::Draw(bool& showModelPalette, SceneManager* sceneManag
     if (!showModelPalette) return;
 
     if (ImGui::Begin("3Dモデルパレット", &showModelPalette)) {
-        // --- ツールバー ---
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "3Dモデルパレット");
+        // --- 1. 3Dモデル配置ファイル設定 (マップエディタと同仕様) ---
+        if (context_) {
+            const auto& fileList = context_->GetAvailableLevelFiles();
+            std::string curFileName = context_->GetCurrentFileName();
+
+            static std::string lastSyncedFileName = "";
+            if (lastSyncedFileName != curFileName) {
+                lastSyncedFileName = curFileName;
+                strcpy_s(saveFileNameBuf_, curFileName.c_str());
+            }
+
+            // 既存の3Dモデル配置ファイルを選択するコンボボックス
+            if (!fileList.empty()) {
+                selectedFileComboIdx_ = -1;
+                for (int i = 0; i < static_cast<int>(fileList.size()); ++i) {
+                    if (fileList[i] == curFileName) {
+                        selectedFileComboIdx_ = i;
+                        break;
+                    }
+                }
+
+                std::string comboPreview = (selectedFileComboIdx_ != -1) ? fileList[selectedFileComboIdx_] : "3Dモデルファイルを選択...";
+                if (ImGui::BeginCombo("3Dモデルファイルを選択", comboPreview.c_str())) {
+                    for (int i = 0; i < static_cast<int>(fileList.size()); ++i) {
+                        bool isSelected = (selectedFileComboIdx_ == i);
+                        if (ImGui::Selectable(fileList[i].c_str(), isSelected)) {
+                            selectedFileComboIdx_ = i;
+                            strcpy_s(saveFileNameBuf_, fileList[i].c_str());
+                            context_->LoadFromFile(fileList[i]);
+                        }
+                        if (isSelected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+
+            // ファイル名入力 (Enterキーでロード)
+            if (ImGui::InputText("ファイル名", saveFileNameBuf_, sizeof(saveFileNameBuf_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                if (strlen(saveFileNameBuf_) > 0) {
+                    context_->LoadFromFile(saveFileNameBuf_);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // 操作ボタン
+            if (ImGui::Button("保存", ImVec2(100, 26))) {
+                if (strlen(saveFileNameBuf_) > 0) {
+                    context_->SaveToFile(saveFileNameBuf_);
+                } else {
+                    context_->SaveToFile();
+                }
+            }
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+            if (ImGui::Button("データを削除", ImVec2(110, 26))) {
+                ImGui::OpenPopup("Delete3DModelDataConfirmPopup");
+            }
+            ImGui::PopStyleColor(3);
+
+            // 削除確認ポップアップ
+            if (ImGui::BeginPopupModal("Delete3DModelDataConfirmPopup", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+                std::string targetFile = context_->GetCurrentFileName();
+                ImGui::Text("本当に3Dモデル配置ファイル '%s' を削除しますか？", targetFile.c_str());
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "※この操作は取り消せません。");
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                if (ImGui::Button("削除", ImVec2(120, 0))) {
+                    context_->DeleteFile(targetFile);
+                    strcpy_s(saveFileNameBuf_, context_->GetCurrentFileName().c_str());
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("キャンセル", ImVec2(120, 0))) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
+            // ステータスメッセージ表示
+            if (context_->GetStatusMessageTimer() > 0.0f && !context_->GetStatusMessage().empty()) {
+                ImGui::Spacing();
+                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), ">> %s", context_->GetStatusMessage().c_str());
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+        }
+
+        // --- 2. 3Dモデルパレット (アセット一覧) ---
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "3Dモデル一覧");
         ImGui::SameLine();
         ImGui::TextDisabled("(%zu models)", modelList_.size());
         ImGui::SameLine();

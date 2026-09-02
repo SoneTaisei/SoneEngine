@@ -11,12 +11,14 @@ public:
     ~Model3DEditorInspector() = default;
 
     bool Draw(SceneManager* sceneManager);
+    void DrawFileManagementSection();
 
 private:
     Model3DEditorContext* context_ = nullptr;
     Model3DEditorContext::Model3DEditorSnapshot preEditSnapshot_;
     char nameBuf_[128] = "";
     char texBuf_[256] = "";
-    char saveFilePathBuf_[256] = "resources/json/shared/LevelData/placed_models.json";
+    char saveFileNameBuf_[128] = "placed_models";
+    int selectedFileComboIdx_ = -1;
 };
 #endif

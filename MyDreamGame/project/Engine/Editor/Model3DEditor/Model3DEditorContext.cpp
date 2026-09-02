@@ -35,6 +35,8 @@ void Model3DEditorContext::Initialize(ID3D12Device* device) {
             gridFloorObj_->Update();
         }
     }
+    ScanLevelFiles();
+
     // Try auto-loading if default file exists
     if (std::filesystem::exists(currentFilePath_)) {
         LoadFromFile(currentFilePath_);
@@ -43,6 +45,15 @@ void Model3DEditorContext::Initialize(ID3D12Device* device) {
 
 void Model3DEditorContext::Update() {
     currentFrame_++;
+
+    if (statusMessageTimer_ > 0.0f) {
+        statusMessageTimer_ -= 0.016f; // approximate delta time for editor UI
+        if (statusMessageTimer_ <= 0.0f) {
+            statusMessageTimer_ = 0.0f;
+            statusMessage_.clear();
+        }
+    }
+
     if (gridFloorObj_) {
         // Keep grid floor centered at camera XZ position for infinite extent
         Vector3 camPos = CameraManager::GetInstance()->GetCameraPos();
@@ -243,7 +254,38 @@ PlacedObject3D* Model3DEditorContext::DuplicateObject(PlacedObject3D* target) {
     PlacedObject3D* ptr = dup.get();
     objects_.push_back(std::move(dup));
     selectedObject_ = ptr;
+    SetStatusMessage("複製しました: " + ptr->GetName());
     return ptr;
+}
+
+void Model3DEditorContext::CopySelectedObject() {
+    if (!selectedObject_) return;
+    clipboardJson_ = selectedObject_->ToJson();
+    hasClipboard_ = true;
+    SetStatusMessage("コピーしました: " + selectedObject_->GetName());
+}
+
+PlacedObject3D* Model3DEditorContext::PasteObject() {
+    if (!hasClipboard_ || !device_) return nullptr;
+    PushUndoState();
+
+    auto pasted = std::make_unique<PlacedObject3D>();
+    if (pasted->FromJson(clipboardJson_, device_)) {
+        pasted->SetName(pasted->GetName() + "_Copy");
+        // Offset slightly from original position
+        Vector3 pos = pasted->GetTranslation();
+        pos.x += 1.0f;
+        pos.z += 1.0f;
+        pasted->SetTranslation(pos);
+        pasted->Update();
+
+        PlacedObject3D* ptr = pasted.get();
+        objects_.push_back(std::move(pasted));
+        selectedObject_ = ptr;
+        SetStatusMessage("貼り付けました: " + ptr->GetName());
+        return ptr;
+    }
+    return nullptr;
 }
 
 void Model3DEditorContext::ClearObjects() {
@@ -254,8 +296,81 @@ void Model3DEditorContext::ClearObjects() {
     objects_.clear();
 }
 
+void Model3DEditorContext::NewScene() {
+    ClearObjects();
+    undoStack_.clear();
+    redoStack_.clear();
+    SetStatusMessage("新規シーンを作成しました");
+}
+
+void Model3DEditorContext::ScanLevelFiles() {
+    availableLevelFiles_.clear();
+    const std::string dir = "resources/json/shared/LevelData";
+    try {
+        if (!std::filesystem::exists(dir)) {
+            std::filesystem::create_directories(dir);
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".json") {
+                availableLevelFiles_.push_back(entry.path().filename().string());
+            }
+        }
+        std::sort(availableLevelFiles_.begin(), availableLevelFiles_.end());
+    } catch (...) {
+        // ignore errors
+    }
+}
+
+std::string Model3DEditorContext::ResolveFilePath(const std::string& fileNameOrPath) const {
+    if (fileNameOrPath.empty()) {
+        return currentFilePath_;
+    }
+
+    std::string path = fileNameOrPath;
+    std::replace(path.begin(), path.end(), '\\', '/');
+
+    // If it's just a filename without directory
+    if (path.find('/') == std::string::npos) {
+        path = "resources/json/shared/LevelData/" + path;
+    }
+
+    // Append .json extension if missing
+    if (path.length() < 5 || path.substr(path.length() - 5) != ".json") {
+        path += ".json";
+    }
+
+    return path;
+}
+
+void Model3DEditorContext::SetCurrentFilePath(const std::string& path) {
+    currentFilePath_ = ResolveFilePath(path);
+    ScanLevelFiles();
+}
+
+std::string Model3DEditorContext::StripJsonExtension(const std::string& filename) {
+    if (filename.length() >= 5) {
+        std::string ext = filename.substr(filename.length() - 5);
+        if (ext == ".json" || ext == ".JSON") {
+            return filename.substr(0, filename.length() - 5);
+        }
+    }
+    return filename;
+}
+
+std::string Model3DEditorContext::GetCurrentFileName() const {
+    try {
+        return std::filesystem::path(currentFilePath_).filename().string();
+    } catch (...) {
+        return "placed_models.json";
+    }
+}
+
+std::string Model3DEditorContext::GetCurrentBaseName() const {
+    return StripJsonExtension(GetCurrentFileName());
+}
+
 bool Model3DEditorContext::SaveToFile(const std::string& filePath) {
-    std::string path = filePath.empty() ? currentFilePath_ : filePath;
+    std::string path = ResolveFilePath(filePath);
     try {
         std::filesystem::path p(path);
         if (p.has_parent_path()) {
@@ -270,25 +385,40 @@ bool Model3DEditorContext::SaveToFile(const std::string& filePath) {
         }
 
         std::ofstream ofs(path);
-        if (!ofs.is_open()) return false;
+        if (!ofs.is_open()) {
+            SetStatusMessage("保存に失敗しました: " + path);
+            return false;
+        }
         ofs << root.dump(4);
         currentFilePath_ = path;
+        ScanLevelFiles();
+        SetStatusMessage("保存しました: " + GetCurrentFileName());
         return true;
     } catch (...) {
+        SetStatusMessage("保存エラーが発生しました");
         return false;
     }
 }
 
 bool Model3DEditorContext::LoadFromFile(const std::string& filePath) {
-    std::string path = filePath.empty() ? currentFilePath_ : filePath;
-    if (!std::filesystem::exists(path)) return false;
+    std::string path = ResolveFilePath(filePath);
+    if (!std::filesystem::exists(path)) {
+        SetStatusMessage("ファイルが見つかりません: " + path);
+        return false;
+    }
 
     try {
         std::ifstream ifs(path);
-        if (!ifs.is_open()) return false;
+        if (!ifs.is_open()) {
+            SetStatusMessage("ファイルを開けませんでした: " + path);
+            return false;
+        }
         nlohmann::json root = nlohmann::json::parse(ifs);
 
-        if (!root.is_array()) return false;
+        if (!root.is_array()) {
+            SetStatusMessage("JSONフォーマットが不正です: " + path);
+            return false;
+        }
 
         ClearObjects();
 
@@ -300,8 +430,36 @@ bool Model3DEditorContext::LoadFromFile(const std::string& filePath) {
         }
 
         currentFilePath_ = path;
+        undoStack_.clear();
+        redoStack_.clear();
+        ScanLevelFiles();
+        SetStatusMessage("読み込みました: " + GetCurrentFileName() + " (" + std::to_string(objects_.size()) + " 個)");
         return true;
     } catch (...) {
+        SetStatusMessage("JSON読み込みエラーが発生しました");
+        return false;
+    }
+}
+
+bool Model3DEditorContext::DeleteFile(const std::string& filePath) {
+    std::string path = ResolveFilePath(filePath);
+    try {
+        if (std::filesystem::exists(path)) {
+            std::filesystem::remove(path);
+        }
+        ScanLevelFiles();
+
+        // 削除後、他のファイルが存在すれば先頭をロード、なければ新規シーン
+        if (!availableLevelFiles_.empty()) {
+            LoadFromFile(availableLevelFiles_[0]);
+        } else {
+            currentFilePath_ = "resources/json/shared/LevelData/placed_models.json";
+            NewScene();
+        }
+        SetStatusMessage("ファイルを削除しました: " + StripJsonExtension(std::filesystem::path(path).filename().string()));
+        return true;
+    } catch (...) {
+        SetStatusMessage("ファイル削除エラーが発生しました");
         return false;
     }
 }

@@ -2616,6 +2616,11 @@ void EditorManager::SaveSceneConfig() {
         // 現在のマップファイル名
         j["currentMapFile"] = stageFilename_;
 
+        // 現在の3Dモデル配置JSONファイルパス
+        if (model3DEditor_ && model3DEditor_->GetContext()) {
+            j["currentPlacedModelsFile"] = model3DEditor_->GetContext()->GetCurrentFilePath();
+        }
+
         // 各ウィンドウの開閉状態
         nlohmann::json winObj;
         winObj["showInspector"] = showInspector_;
@@ -2679,6 +2684,16 @@ void EditorManager::LoadSceneConfig() {
             std::string mapFile = j["currentMapFile"].get<std::string>();
             if (!mapFile.empty()) {
                 strcpy_s(stageFilename_, sizeof(stageFilename_), mapFile.c_str());
+            }
+        }
+
+        if (j.contains("currentPlacedModelsFile") && j["currentPlacedModelsFile"].is_string()) {
+            std::string modelFile = j["currentPlacedModelsFile"].get<std::string>();
+            if (!modelFile.empty() && model3DEditor_ && model3DEditor_->GetContext()) {
+                model3DEditor_->GetContext()->SetCurrentFilePath(modelFile);
+                if (std::filesystem::exists(model3DEditor_->GetContext()->GetCurrentFilePath())) {
+                    model3DEditor_->GetContext()->LoadFromFile(model3DEditor_->GetContext()->GetCurrentFilePath());
+                }
             }
         }
 

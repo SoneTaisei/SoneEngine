@@ -50,6 +50,10 @@ private:
     std::vector<ModelAssetItem> modelList_;
     char searchFilter_[128] = "";
     int selectedModelIdx_ = -1;
+
+    // JSON Level Data File Management
+    char saveFileNameBuf_[128] = "placed_models";
+    int selectedFileComboIdx_ = -1;
 };
 #endif
 
