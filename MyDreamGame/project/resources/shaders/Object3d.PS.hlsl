@@ -8,7 +8,7 @@ ConstantBuffer<Material> gMaterial : register(b0);
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 ConstantBuffer<PointLight> gPointLight : register(b2);
 ConstantBuffer<Camera> gCamera : register(b3);
-ConstantBuffer<SpotLight> gSpotLight : register(b4);
+ConstantBuffer<SpotLightGroup> gSpotLightGroup : register(b4);
 
 struct PixelShaderOutput {
     float4 color : SV_TARGET0;
@@ -130,35 +130,51 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         float pointSpecularMask = saturate(pointNdotL * 2.0f);
         float3 specularPoint = gPointLight.color.rgb * gPointLight.intensity * (pointSpecularPow * pointSpecularMask) * float3(1.0f, 1.0f, 1.0f) * factor;
         
-        // 3. Spot Light (Soft Half-Lambert diffuse and guarded specular)
-        float3 spotLightDirOnSurface = normalize(input.worldPosition - gSpotLight.position);
-        float spotDistance = length(gSpotLight.position - input.worldPosition);
-        float spotAttenuation = pow(saturate(1.0f - (spotDistance / max(0.0001f, gSpotLight.distance))), gSpotLight.decay);
+        // 3. Multi Spot Lights (Soft Half-Lambert diffuse and guarded specular)
+        float3 diffuseSpotTotal = float3(0.0f, 0.0f, 0.0f);
+        float3 specularSpotTotal = float3(0.0f, 0.0f, 0.0f);
         
-        float cosTheta = dot(spotLightDirOnSurface, normalize(gSpotLight.direction));
-        float falloffRange = gSpotLight.cosFalloffStart - gSpotLight.cosAngle;
-        float falloffFactor = saturate((cosTheta - gSpotLight.cosAngle) / max(0.001f, falloffRange));
-        
-        float spotNdotL = dot(normal, -spotLightDirOnSurface);
-        float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
-        float spotCos = spotHalfLambert * spotHalfLambert;
-        float3 diffuseSpot = gMaterial.color.rgb * textureColor.rgb * gSpotLight.color.rgb * spotCos * gSpotLight.intensity * spotAttenuation * falloffFactor;
-        
-        float3 spotHalfVector = normalize(-spotLightDirOnSurface + toEye);
-        float spotNdotH = dot(normal, spotHalfVector);
-        float spotSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(spotNdotH), gMaterial.shininess) : 0.0f;
-        float spotSpecularMask = saturate(spotNdotL * 2.0f);
-        float3 specularSpot = gSpotLight.color.rgb * gSpotLight.intensity * (spotSpecularPow * spotSpecularMask) * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor;
+        int activeSpotCount = min(gSpotLightGroup.spotLightCount, (int)kMaxSpotLights);
+        for (int i = 0; i < activeSpotCount; ++i) {
+            if (gSpotLightGroup.spotLights[i].enable == 0) {
+                continue;
+            }
+            SpotLight sl = gSpotLightGroup.spotLights[i];
+            
+            float3 spotLightDirOnSurface = normalize(input.worldPosition - sl.position);
+            float spotDistance = length(sl.position - input.worldPosition);
+            
+            // Distance attenuation
+            float spotAttenuation = pow(saturate(1.0f - (spotDistance / max(0.0001f, sl.distance))), sl.decay);
+            
+            // Angular falloff: full intensity inside core angle (cosFalloffStart), smoothly falls off to 0 outside (cosAngle)
+            float cosTheta = dot(spotLightDirOnSurface, normalize(sl.direction));
+            float falloffRange = sl.cosFalloffStart - sl.cosAngle;
+            float rawFalloff = saturate((cosTheta - sl.cosAngle) / max(0.0001f, falloffRange));
+            // Smoothstep curve for clear distinction between safe falloff zone and dangerous core zone
+            float falloffFactor = smoothstep(0.0f, 1.0f, rawFalloff);
+            
+            float spotNdotL = dot(normal, -spotLightDirOnSurface);
+            float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
+            float spotCos = spotHalfLambert * spotHalfLambert;
+            diffuseSpotTotal += gMaterial.color.rgb * textureColor.rgb * sl.color.rgb * spotCos * sl.intensity * spotAttenuation * falloffFactor;
+            
+            float3 spotHalfVector = normalize(-spotLightDirOnSurface + toEye);
+            float spotNdotH = dot(normal, spotHalfVector);
+            float spotSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(spotNdotH), gMaterial.shininess) : 0.0f;
+            float spotSpecularMask = saturate(spotNdotL * 2.0f);
+            specularSpotTotal += sl.color.rgb * sl.intensity * (spotSpecularPow * spotSpecularMask) * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor;
+        }
         
         float3 cameraToPosition = normalize(input.worldPosition - gCamera.worldPosition);
         float3 reflectedVector = reflect(cameraToPosition, normalize(input.normal));
         float4 environmentColor = gEnvironmentMap.Sample(gSampler, reflectedVector);
 
         // 4. Final color composition
-        float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpot) * input.color.rgb;
-        float3 specularTotal = (specularDirectional + specularPoint + specularSpot) * input.color.rgb;
-        // Ambient light for uniform visibility and smooth shading without pitch black shadows
-        float3 ambient = gMaterial.color.rgb * textureColor.rgb * 0.35f;
+        float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpotTotal) * input.color.rgb;
+        float3 specularTotal = (specularDirectional + specularPoint + specularSpotTotal) * input.color.rgb;
+        // Ambient light modulated by ambientIntensity (allows creating full pitch black darkness)
+        float3 ambient = gMaterial.color.rgb * textureColor.rgb * (0.35f * gSpotLightGroup.ambientIntensity);
 
         // Add environment map lighting if enabled
         if (gMaterial.enableEnvironmentMap != 0) {

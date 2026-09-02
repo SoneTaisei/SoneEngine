@@ -272,6 +272,7 @@ void WindowsApplication::Update() {
             bool allowCameraInput = editorManager_->IsGameViewHovered() || 
                                     editorManager_->IsReplayEditorHovered() || 
                                     editorManager_->IsAnimationEditorHovered() || 
+                                    editorManager_->IsLightEditorHovered() || 
                                     !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {

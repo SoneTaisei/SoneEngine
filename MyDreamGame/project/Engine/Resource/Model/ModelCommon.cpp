@@ -33,23 +33,22 @@ void ModelCommon::Initialize(ID3D12Device *device) {
     // ▼ 平行光源（DirectionalLight）のリソースの作成と初期化
     directionalLightResource_ = CreateCB(sizeof(DirectionalLight));
     directionalLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedDirectionalLight_));
-
-    // ★ ここに初期値をセット！ (directionalLightData_ を mappedDirectionalLight_ に変更)
-    mappedDirectionalLight_->color = {1.0f, 1.0f, 1.0f, 1.0f};
-    mappedDirectionalLight_->direction = {0.0f, -1.0f, 0.0f};
-    mappedDirectionalLight_->intensity = 1.0f;
+    *mappedDirectionalLight_ = {};
 
     pointLightResource_ = CreateCB(sizeof(PointLight));
     pointLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedPointLight_));
+    *mappedPointLight_ = {};
 
     cameraResource_ = CreateCB(sizeof(CameraForGPU));
     cameraResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedCamera_));
+    mappedCamera_->worldPosition = {0.0f, 0.0f, -10.0f};
 
-    // 💡 1. スポットライト用のリソースを生成
-    spotLightResource_ = CreateCB(sizeof(SpotLight));
+    // 💡 1. スポットライト群用のリソースを生成
+    spotLightResource_ = CreateCB(sizeof(SpotLightGroup));
 
-    // 💡 2. CPUから書き込めるように Map する（これで mappedSpotLight_ が Null じゃなくなります）
-    spotLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedSpotLight_));
+    // 💡 2. CPUから書き込めるように Map する
+    spotLightResource_->Map(0, nullptr, reinterpret_cast<void **>(&mappedSpotLightGroup_));
+    *mappedSpotLightGroup_ = {};
 
     // --- 2. 初期値の設定 ---
 
@@ -59,25 +58,8 @@ void ModelCommon::Initialize(ID3D12Device *device) {
     mappedMaterial_->uvTransform = TransformFunctions::MakeIdentity4x4();
     mappedMaterial_->shininess = 50.0f;
 
-    // ライトとカメラの初期値
-    *mappedDirectionalLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, -1.0f, 0.0f}, 0.0f};
-    *mappedPointLight_ = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 2.0f, 0.0f}, 1.0f, 10.0f, 1.0f};
-    mappedCamera_->worldPosition = {0.0f, 0.0f, -10.0f};
-
-    // 💡 資料通りの設定値に更新
-    mappedSpotLight_->color = {1.0f, 1.0f, 1.0f, 1.0f};
-    mappedSpotLight_->position = {2.0f, 1.25f, 0.0f};
-    mappedSpotLight_->distance = 7.0f;
-
-    // 💡 向きは正規化(Normalize)を忘れずに！
-    Vector3 rawDir = {-1.0f, -1.0f, 0.0f};
-    mappedSpotLight_->direction = TransformFunctions::Normalize(rawDir);
-
-    mappedSpotLight_->intensity = 4.0f;
-    mappedSpotLight_->decay = 2.0f;
-
-    // 💡 π/3 (60度) のコサインを設定
-    mappedSpotLight_->cosAngle = std::cos(std::numbers::pi_v<float> / 3.0f);
+    // ライトの初期設定をJSONからロード
+    LoadLightingConfig();
 }
 
 void ModelCommon::PreDraw() {
@@ -160,68 +142,74 @@ void ModelCommon::LoadLightingConfig() {
         nlohmann::json j;
         ifs >> j;
         
-        int activeLightType = 2; // デフォルト：スポットライト
-        bool enableFog = false;
+        bool enableDirectional = false;
+        bool enablePoint = false;
         bool enableFlatShading = false;
         float dIntensity = 1.0f;
         float pIntensity = 1.0f;
-        float sIntensity = 4.0f;
-        float spotAngleDeg = 30.0f;
-        float spotFalloffDeg = 20.0f;
 
-        if (j.contains("activeLightType")) activeLightType = j["activeLightType"];
-        if (j.contains("enableFog")) enableFog = j["enableFog"];
+        if (j.contains("enableDirectional")) enableDirectional = j["enableDirectional"];
+        if (j.contains("enablePoint")) enablePoint = j["enablePoint"];
         if (j.contains("enableFlatShading")) enableFlatShading = j["enableFlatShading"];
         if (j.contains("dIntensity")) dIntensity = j["dIntensity"];
         if (j.contains("pIntensity")) pIntensity = j["pIntensity"];
-        if (j.contains("sIntensity")) sIntensity = j["sIntensity"];
-        if (j.contains("spotAngleDeg")) spotAngleDeg = j["spotAngleDeg"];
-        if (j.contains("spotFalloffDeg")) spotFalloffDeg = j["spotFalloffDeg"];
+
+        float ambientIntensity = 1.0f;
+        if (j.contains("ambientIntensity")) ambientIntensity = j["ambientIntensity"];
+        if (mappedSpotLightGroup_) {
+            mappedSpotLightGroup_->ambientIntensity = ambientIntensity;
+        }
 
         auto d = GetDirectionalLight();
-        if (d && j.contains("dLight")) {
-            if (j["dLight"].contains("color")) {
-                d->color = {j["dLight"]["color"][0], j["dLight"]["color"][1], j["dLight"]["color"][2], j["dLight"]["color"][3]};
+        if (d) {
+            if (j.contains("dLight")) {
+                if (j["dLight"].contains("color")) {
+                    d->color = {j["dLight"]["color"][0], j["dLight"]["color"][1], j["dLight"]["color"][2], j["dLight"]["color"][3]};
+                }
+                if (j["dLight"].contains("direction")) {
+                    d->direction = TransformFunctions::Normalize(Vector3{j["dLight"]["direction"][0], j["dLight"]["direction"][1], j["dLight"]["direction"][2]});
+                }
             }
-            if (j["dLight"].contains("direction")) {
-                d->direction = {j["dLight"]["direction"][0], j["dLight"]["direction"][1], j["dLight"]["direction"][2]};
-            }
+            d->intensity = enableDirectional ? dIntensity : 0.0f;
+            d->enableFlatShading = enableFlatShading ? 1 : 0;
         }
-        if (d) d->enableFlatShading = enableFlatShading ? 1 : 0;
         
         auto p = GetPointLight();
-        if (p && j.contains("pLight")) {
-            if (j["pLight"].contains("color")) p->color = {j["pLight"]["color"][0], j["pLight"]["color"][1], j["pLight"]["color"][2], j["pLight"]["color"][3]};
-            if (j["pLight"].contains("position")) p->position = {j["pLight"]["position"][0], j["pLight"]["position"][1], j["pLight"]["position"][2]};
-            if (j["pLight"].contains("radius")) p->radius = j["pLight"]["radius"];
-            if (j["pLight"].contains("decay")) p->decay = j["pLight"]["decay"];
+        if (p) {
+            if (j.contains("pLight")) {
+                if (j["pLight"].contains("color")) p->color = {j["pLight"]["color"][0], j["pLight"]["color"][1], j["pLight"]["color"][2], j["pLight"]["color"][3]};
+                if (j["pLight"].contains("position")) p->position = {j["pLight"]["position"][0], j["pLight"]["position"][1], j["pLight"]["position"][2]};
+                if (j["pLight"].contains("radius")) p->radius = j["pLight"]["radius"];
+                if (j["pLight"].contains("decay")) p->decay = j["pLight"]["decay"];
+            }
+            p->intensity = enablePoint ? pIntensity : 0.0f;
         }
 
-        auto s = GetSpotLight();
-        if (s && j.contains("sLight")) {
-            if (j["sLight"].contains("color")) s->color = {j["sLight"]["color"][0], j["sLight"]["color"][1], j["sLight"]["color"][2], j["sLight"]["color"][3]};
-            if (j["sLight"].contains("position")) s->position = {j["sLight"]["position"][0], j["sLight"]["position"][1], j["sLight"]["position"][2]};
-            if (j["sLight"].contains("direction")) s->direction = {j["sLight"]["direction"][0], j["sLight"]["direction"][1], j["sLight"]["direction"][2]};
-            if (j["sLight"].contains("distance")) s->distance = j["sLight"]["distance"];
-            if (j["sLight"].contains("decay")) s->decay = j["sLight"]["decay"];
-        }
-        
-        // intensity の反映
-        if (activeLightType == 0) {
-            if (d) d->intensity = dIntensity;
-            if (p) p->intensity = 0.0f;
-            if (s) s->intensity = 0.0f;
-        } else if (activeLightType == 1) {
-            if (d) d->intensity = 0.0f;
-            if (p) p->intensity = pIntensity;
-            if (s) s->intensity = 0.0f;
-        } else if (activeLightType == 2) {
-            if (d) d->intensity = 0.0f;
-            if (p) p->intensity = 0.0f;
-            if (s) {
-                s->intensity = sIntensity;
-                s->cosAngle = std::cos(spotAngleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
-                s->cosFalloffStart = std::cos(spotFalloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+        if (mappedSpotLightGroup_) {
+            for (uint32_t i = 0; i < kMaxSpotLights; ++i) {
+                mappedSpotLightGroup_->spotLights[i].enable = 0;
+            }
+            if (j.contains("spotLights") && j["spotLights"].is_array()) {
+                const auto& slArray = j["spotLights"];
+                mappedSpotLightGroup_->spotLightCount = static_cast<int32_t>((std::min)(slArray.size(), static_cast<size_t>(kMaxSpotLights)));
+                for (int32_t i = 0; i < mappedSpotLightGroup_->spotLightCount; ++i) {
+                    const auto& slItem = slArray[i];
+                    auto& sl = mappedSpotLightGroup_->spotLights[i];
+                    if (slItem.contains("color")) sl.color = {slItem["color"][0], slItem["color"][1], slItem["color"][2], slItem["color"][3]};
+                    if (slItem.contains("position")) sl.position = {slItem["position"][0], slItem["position"][1], slItem["position"][2]};
+                    if (slItem.contains("direction")) {
+                        Vector3 dir = {slItem["direction"][0], slItem["direction"][1], slItem["direction"][2]};
+                        sl.direction = TransformFunctions::Normalize(dir);
+                    }
+                    if (slItem.contains("intensity")) sl.intensity = slItem["intensity"];
+                    if (slItem.contains("distance")) sl.distance = slItem["distance"];
+                    if (slItem.contains("decay")) sl.decay = slItem["decay"];
+                    float angleDeg = slItem.value("angleDeg", 30.0f);
+                    float falloffDeg = slItem.value("falloffDeg", 20.0f);
+                    sl.cosAngle = std::cos(angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+                    sl.cosFalloffStart = std::cos(falloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+                    sl.enable = slItem.value("enabled", true) ? 1 : 0;
+                }
             }
         }
     } catch (...) {}

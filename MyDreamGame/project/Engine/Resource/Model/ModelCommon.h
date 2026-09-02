@@ -36,7 +36,8 @@ public:
     // ライトやカメラのデータを更新するためのゲッター/セッター
     DirectionalLight *GetDirectionalLight() { return mappedDirectionalLight_; }
     PointLight *GetPointLight() { return mappedPointLight_; }
-    SpotLight *GetSpotLight() { return mappedSpotLight_; }
+    SpotLightGroup *GetSpotLightGroup() { return mappedSpotLightGroup_; }
+    SpotLight *GetSpotLight() { return (mappedSpotLightGroup_ && mappedSpotLightGroup_->spotLightCount > 0) ? &mappedSpotLightGroup_->spotLights[0] : nullptr; }
     CameraForGPU *GetCamera() { return mappedCamera_; }
     
     D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const { return directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0; }
@@ -63,7 +64,7 @@ private:
     Material *mappedMaterial_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> spotLightResource_;
-    SpotLight *mappedSpotLight_ = nullptr;
+    SpotLightGroup *mappedSpotLightGroup_ = nullptr;
 
     // 全モデルのリスト
     std::list<Model *> models_;

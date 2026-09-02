@@ -71,6 +71,9 @@ private:
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
 
+    // マップ背景用板ポリゴン（スポットライト等のライティング視認用）
+    std::unique_ptr<PrimitiveObject> backgroundPlane_;
+
     // ---------------------------------------------------
     // 共通システム
     // ---------------------------------------------------
