@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Game2D/Physics/VerletPhysics2D.h"
 #include "Game2D/Chain/ChainConfig.h"
 #include "Core/Utility/Vector3.h"
@@ -121,6 +121,13 @@ public:
     /// <summary>末端ノードの暗黙速度（Verlet の pos - prevPos を直近の積分ステップ幅で割ったもの）</summary>
     Vector3 GetEndVelocity() const;
 
+    /// <summary>ノード列（遷移用の複製など、読み取り専用）</summary>
+    const std::vector<VerletNode>& GetNodes() const { return nodes_; }
+    /// <summary>全ノードとアンカーを平行移動する（速度は保つ。持ち越した鎖を次シーンの座標へ置き直す用）</summary>
+    void TranslateNodes(const Vector3& delta);
+    /// <summary>全ノードに同じ速度を与える（prevPos を置き直す。鎖全体を一斉に動かし始める用。dt は固定ステップ）</summary>
+    void SetAllVelocities(const Vector3& velocity, float dt);
+
     // --- ユニット操作（鎖の伸縮。1ユニット = nodesPerUnit_ ノード） ---
     /// <summary>現在のユニット数（繰り出し待ちのノードも含めて数える。含めないと Reconcile が無限に伸ばす）</summary>
     int GetUnitCount() const;
@@ -178,6 +185,10 @@ public:
     /// </summary>
     void SetPlayerCollisionEnabled(bool enabled) { playerCollisionEnabled_ = enabled; }
     bool IsPlayerCollisionEnabled() const { return playerCollisionEnabled_; }
+
+    /// <summary>描画時の z（物理は z=0。既定 -0.2 でブロックの前面 -0.5 より奥だが手前に見える。遷移用は黒い背景板より手前にする）</summary>
+    void SetDrawOffsetZ(float z) { drawOffsetZ_ = z; }
+    float GetDrawOffsetZ() const { return drawOffsetZ_; }
 
     // --- 末端の重り（お宝） ---
     void SetEndWeight(const EndWeight& weight);
@@ -245,6 +256,7 @@ private:
     // 縦横のパリティを末端基準にすると、手元での増減で既存リンクのモデルが入れ替わらずチカチカしない
     std::vector<std::unique_ptr<Object3D>> linkObjs_;
     bool hideHeadLink_ = false; // 繰り出し直後の極短い先頭リンクは描かない
+    float drawOffsetZ_ = -0.2f; // 描画時の z オフセット（ブロックより手前に表示する。物理は z=0 のまま）
     Model* modelTate_ = nullptr;
     Model* modelYoko_ = nullptr;
     ID3D12Device* device_ = nullptr;

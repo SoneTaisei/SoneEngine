@@ -1,4 +1,4 @@
-#include "ChainManager.h"
+﻿#include "ChainManager.h"
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "GameObject/Object3D.h"
@@ -55,7 +55,7 @@ void ChainManager::AddWorldChain(const Vector3& anchorPos, int units, const std:
 }
 
 void ChainManager::HandleInput() {
-    if (!player_ || player_->IsDead() || player_->IsGoal()) {
+    if (!player_ || player_->IsDead() || player_->IsGoal() || transitionHidden_) {
         return;
     }
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
@@ -180,6 +180,17 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     // ソケット同期（プレイヤーモデルの行列更新は UpdateWithMap 内で完了している）
     lastSocketWorld_ = ComputeSocketWorld();
 
+    // 遷移中はプレイヤー鎖・お宝・スピンを止める（遷移側の複製が代わりに描かれる。ソケット計算だけは着地目標のため続ける）
+    if (transitionHidden_) {
+        for (auto& chain : worldChains_) {
+            chain->Update(dt, map, player_);
+        }
+        for (auto& dropped : droppedChains_) {
+            dropped.chain->Update(dt, map, player_);
+        }
+        return;
+    }
+
     // スピン：末端の拘束先を物理更新の前に決める
     if (spin_) {
         spin_->Update(dt, map, player_, playerChain_.get(), lastSocketWorld_);
@@ -207,7 +218,7 @@ void ChainManager::Update(float dt, MapChip2D* map) {
 }
 
 void ChainManager::Draw() {
-    if (playerChain_) {
+    if (playerChain_ && !transitionHidden_) {
         playerChain_->Draw();
     }
     for (auto& chain : worldChains_) {
@@ -216,8 +227,27 @@ void ChainManager::Draw() {
     for (auto& dropped : droppedChains_) {
         dropped.chain->Draw();
     }
-    if (treasure_) {
+    if (treasure_ && !transitionHidden_) {
         treasure_->Draw();
+    }
+}
+
+void ChainManager::SetTransitionHidden(bool hidden) {
+    if (transitionHidden_ == hidden) {
+        return;
+    }
+    transitionHidden_ = hidden;
+    if (spin_) {
+        spin_->Cancel(player_, playerChain_.get());
+        spin_->ResetInputState();
+    }
+    if (!hidden && playerChain_) {
+        // 手元に垂れた初期姿勢から再開（次の SyncSocket のワープ検出で手元へ引き寄せられる）
+        playerChain_->ResetToInitial();
+        if (treasure_) {
+            treasure_->SetHighlight(false);
+        }
+        SyncTreasureTransform();
     }
 }
 

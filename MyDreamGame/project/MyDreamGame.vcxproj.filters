@@ -238,6 +238,9 @@
     <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp">
       <Filter>Project\Game2D\Chain</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Effect\TransitionDirector.cpp">
+      <Filter>Application\Transition</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Chain\ChainSpinAction.cpp">
       <Filter>Project\Game2D\Chain</Filter>
     </ClCompile>
@@ -544,6 +547,9 @@
     <ClInclude Include="Project\Game2D\Chain\ChainManager.h">
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Effect\TransitionDirector.h">
+      <Filter>Application\Transition</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\Chain\ChainSpinAction.h">
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
@@ -629,6 +635,9 @@
     </Filter>
     <Filter Include="Application\Particle">
       <UniqueIdentifier>{f803ec09-fc94-4c2c-b6a1-f928a872e2ee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Application\Transition">
+      <UniqueIdentifier>{947F3DB4-ECBE-49FB-BCEA-591F95D5748B}</UniqueIdentifier>
     </Filter>
     <Filter Include="Engine\Audio">
       <UniqueIdentifier>{5141fe66-3ad3-41bd-86ca-fe4d5bb94bfb}</UniqueIdentifier>

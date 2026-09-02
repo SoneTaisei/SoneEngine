@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Game2D/Chain/Chain2D.h"
 #include "Game2D/Chain/ChainSpinAction.h"
 #include "Game2D/Treasure/Treasure2D.h"
@@ -79,9 +79,17 @@ public:
     /// </summary>
     void OnRewindEnd();
 
+    /// <summary>
+    /// ステージクリア遷移中の非表示。プレイヤー鎖・お宝・スピンの更新と描画を止める（吊り鎖・自由鎖は動いたまま）
+    /// false に戻すと手元に垂れた初期姿勢から再開する（遷移側が持ち越した鎖から引き継ぐ用）
+    /// </summary>
+    void SetTransitionHidden(bool hidden);
+    bool IsTransitionHidden() const { return transitionHidden_; }
+
     std::vector<Object3D*> GetLinkObjects() const;
     void DrawImGui();
 
+    const ChainParams& GetParams() const { return params_; }
     Chain2D* GetPlayerChain() const { return playerChain_.get(); }
     const Vector3& GetSocketWorld() const { return lastSocketWorld_; }
     ChainSpinAction* GetSpinAction() const { return spin_.get(); }
@@ -124,4 +132,5 @@ private:
     bool loggedSocketState_ = false;
     int initialChainLength_ = 3; // シーン開始時の個数（リセット時に戻す）
     int droppedCounter_ = 0;     // 自由鎖の命名用連番
+    bool transitionHidden_ = false; // ステージクリア遷移中（プレイヤー鎖とお宝は遷移側の複製が描かれる）
 };
