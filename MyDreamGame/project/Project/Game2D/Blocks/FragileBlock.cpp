@@ -1,6 +1,6 @@
 ﻿#include "FragileBlock.h"
 #include "Game2D/Player/Player2D.h"
-#include "Core/TimeManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include <cmath>
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -46,7 +46,8 @@ void FragileBlock::Update() {
     if (isDestroyed_ || !gameObject_) return;
 
     if (isBreaking_) {
-        float dt = TimeManager::GetInstance().GetDeltaTime();
+        // リプレイ再生・シーク時も録画時と同じだけ時間が進むよう、共有クロックの差分を使う
+        float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
         breakTimer_ += dt;
 
         auto* tc = gameObject_->GetComponent<TransformComponent>();
@@ -110,3 +111,15 @@ void FragileBlock::DrawImGui() {
     // 設定は MapEditorInspector 側で自動生成されるため、ここでは何もしません
 }
 #endif
+
+void FragileBlock::CaptureReplayState(std::vector<float>& outCustom) const {
+    outCustom.clear();
+    outCustom.push_back(isBreaking_ ? 1.0f : 0.0f);
+    outCustom.push_back(breakTimer_);
+}
+
+void FragileBlock::RestoreReplayState(const std::vector<float>& custom) {
+    if (custom.size() < 2) return;
+    isBreaking_ = (custom[0] != 0.0f);
+    breakTimer_ = custom[1];
+}

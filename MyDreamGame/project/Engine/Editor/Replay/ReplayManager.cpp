@@ -16,6 +16,21 @@
 #include <cmath>
 #include <cstdlib>
 
+namespace {
+// プロバイダ名から16bitのハッシュを作り、オブジェクトIDの上位ビットに埋め込む。
+// 複数のプロバイダを登録しても、ローカルIDが衝突しないようにするための名前空間分け。
+constexpr uint64_t kReplayLocalIdMask = 0x0000FFFFFFFFFFFFull;
+
+uint64_t MakeReplayProviderMask(const char* name) {
+    uint32_t hash = 2166136261u;
+    for (const char* c = name; c && *c; ++c) {
+        hash ^= static_cast<uint8_t>(*c);
+        hash *= 16777619u;
+    }
+    return static_cast<uint64_t>(hash & 0xFFFFu) << 48;
+}
+} // namespace
+
 ReplayManager* ReplayManager::GetInstance() {
     static ReplayManager instance;
     return &instance;
@@ -70,10 +85,16 @@ void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraIni
         currentStageFilename_ = currentReplay_.stageFilename;
         
         temporaryRecordedFrames_.clear();
+        temporaryRecordedObjects_.clear();
         int endFrame = (std::min)(takeoverFrame_, currentReplay_.totalFrames - 1);
         for (int i = 0; i <= endFrame; ++i) {
             temporaryRecordedFrames_.push_back(currentReplay_.frames[i]);
+            if (i < static_cast<int>(currentReplay_.objectFrames.size())) {
+                temporaryRecordedObjects_.push_back(currentReplay_.objectFrames[i]);
+            }
         }
+        // 引き継いだ地点の時刻からゲーム内クロックを再開する
+        playTime_ = (endFrame >= 0) ? currentReplay_.frames[endFrame].time : 0.0f;
         
         // フレームカウンタは引き継いだ分だけ進めた状態にする（必要なら）
         // ただし録画時は currentFrame_ は使わず temporaryRecordedFrames_.size() が参照される
@@ -86,6 +107,9 @@ void ReplayManager::StartRecord(const Vector3& initPos, const Vector3& cameraIni
         cameraInitPos_ = cameraInitPos;
         currentMapDataStr_ = mapDataStr;
         temporaryRecordedFrames_.clear();
+        temporaryRecordedObjects_.clear();
+        // 録画は必ず時刻0から始める（動く床の位相を毎回同じにするため）
+        playTime_ = 0.0f;
     }
     
     // 注入モードがオンになっていればオフにする
@@ -102,6 +126,7 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
     frame.color = color;
     frame.scale = scale;
     frame.rotation = rotation;
+    frame.time = playTime_;
 
     // "LRJDCWS" の初期文字列
     frame.keys[0] = (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) ? 'L' : '-';
@@ -114,6 +139,9 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
     frame.keys[7] = '\0';
 
     temporaryRecordedFrames_.push_back(frame);
+
+    // 動く床などの動的オブジェクトも同じフレーム番号で記録しておく
+    CaptureObjectsForRecording();
 }
 
 void ReplayManager::StopRecord() {
@@ -164,12 +192,14 @@ void ReplayManager::StopRecord() {
 
     if (wasMacroRecording) {
         temporaryRecordedFrames_.clear();
+        temporaryRecordedObjects_.clear();
         return;
     }
 
     // 録画されたフレーム数が極端に短い場合は履歴に登録しない
     if (temporaryRecordedFrames_.size() < 5) {
         temporaryRecordedFrames_.clear();
+        temporaryRecordedObjects_.clear();
         return;
     }
 
@@ -180,6 +210,8 @@ void ReplayManager::StopRecord() {
     data.mapDataStr = currentMapDataStr_;
     data.totalFrames = static_cast<int>(temporaryRecordedFrames_.size());
     data.frames = temporaryRecordedFrames_;
+    data.objectFrames = temporaryRecordedObjects_;
+    NormalizeFrameRecords(data);
 
     // 日時の取得
     auto now = std::time(nullptr);
@@ -204,6 +236,7 @@ void ReplayManager::StopRecord() {
     history_.insert(history_.begin(), data);
 
     temporaryRecordedFrames_.clear();
+    temporaryRecordedObjects_.clear();
 }
 
 bool ReplayManager::PopRecordedFrame(FrameData& outFrame) {
@@ -212,6 +245,16 @@ bool ReplayManager::PopRecordedFrame(FrameData& outFrame) {
     }
     outFrame = temporaryRecordedFrames_.back();
     temporaryRecordedFrames_.pop_back();
+
+    // 巻き戻し時は動的オブジェクトの記録も同じだけ戻す。
+    // 実際の復元は、呼び出し側がマップを再構築した後に
+    // RestoreRecordedObjectsAtCurrent() を呼んで行う。
+    if (!temporaryRecordedObjects_.empty()) {
+        temporaryRecordedObjects_.pop_back();
+    }
+    // 巻き戻した先の時刻へクロックを戻す
+    playTime_ = outFrame.time;
+    playDeltaTime_ = 0.0f;
     return true;
 }
 
@@ -273,6 +316,10 @@ void ReplayManager::StartPlayback(int historyIndex, const std::string& filepath)
     hasLoggedDesync_ = false;
     forceSnapNextFrame_ = true; // 再生開始時に強制的に状態を再構築させる
 
+    // 記録された時刻の並びを整えてから、先頭フレームの時刻でクロックを開始する
+    NormalizeFrameRecords(currentReplay_);
+    playTime_ = GetFrameTime(0);
+
     // KeyboardInput をリプレイモードに切り替える
     KeyboardInput::GetInstance()->SetReplayMode(true);
     
@@ -294,6 +341,8 @@ void ReplayManager::SelectReplay(int historyIndex, const std::string& filepath) 
     // 再生は開始せず、フレームを0にしておく
     currentFrame_ = 0;
     hasLoggedDesync_ = false;
+    NormalizeFrameRecords(currentReplay_);
+    playTime_ = GetFrameTime(0);
 }
 
 void ReplayManager::StopPlayback() {
@@ -464,6 +513,119 @@ void ReplayManager::SetCurrentFrame(int frame) {
         forceSnapNextFrame_ = true;
         hasLoggedDesync_ = false;
     }
+    // シーク先の時刻へクロックを合わせる（動く床がその場でシーク先の位置になる）
+    playTime_ = GetFrameTime(currentFrame_);
+}
+
+// ===== 動的オブジェクトのリプレイ対応 =====
+
+void ReplayManager::RegisterObjectProvider(IReplayObjectProvider* provider) {
+    if (!provider) return;
+    if (std::find(objectProviders_.begin(), objectProviders_.end(), provider) != objectProviders_.end()) return;
+    objectProviders_.push_back(provider);
+}
+
+void ReplayManager::UnregisterObjectProvider(IReplayObjectProvider* provider) {
+    objectProviders_.erase(
+        std::remove(objectProviders_.begin(), objectProviders_.end(), provider),
+        objectProviders_.end());
+}
+
+void ReplayManager::CaptureObjectsForRecording() {
+    ReplayObjectFrame objectFrame;
+    for (auto* provider : objectProviders_) {
+        if (!provider) continue;
+        objectCaptureScratch_.clear();
+        provider->CaptureReplayObjects(objectCaptureScratch_);
+
+        // プロバイダごとの名前空間をIDの上位ビットに埋め込む
+        const uint64_t mask = MakeReplayProviderMask(provider->GetReplayProviderName());
+        for (auto& state : objectCaptureScratch_) {
+            state.id = mask | (state.id & kReplayLocalIdMask);
+            objectFrame.states.push_back(std::move(state));
+        }
+    }
+    temporaryRecordedObjects_.push_back(std::move(objectFrame));
+}
+
+void ReplayManager::RestoreObjectStates(const ReplayObjectFrame& objectFrame) {
+    if (objectProviders_.empty()) return;
+
+    std::vector<ReplayObjectState> forProvider;
+    for (auto* provider : objectProviders_) {
+        if (!provider) continue;
+        const uint64_t mask = MakeReplayProviderMask(provider->GetReplayProviderName());
+
+        forProvider.clear();
+        for (const auto& state : objectFrame.states) {
+            if ((state.id & ~kReplayLocalIdMask) != mask) continue;
+            ReplayObjectState local = state;
+            local.id = state.id & kReplayLocalIdMask;
+            forProvider.push_back(std::move(local));
+        }
+        // 対象が無くても、プロバイダ側で「記録されていないものを初期状態に戻す」判断ができるよう常に呼ぶ
+        provider->RestoreReplayObjects(forProvider);
+    }
+}
+
+void ReplayManager::RestoreRecordedObjectsAtCurrent() {
+    if (temporaryRecordedObjects_.empty()) return;
+    RestoreObjectStates(temporaryRecordedObjects_.back());
+}
+
+void ReplayManager::RestoreObjectsAtFrame(int frame) {
+    const auto& objectFrames = currentReplay_.objectFrames;
+    if (objectFrames.empty()) return;
+
+    int index = (std::max)(0, (std::min)(frame, static_cast<int>(objectFrames.size()) - 1));
+    RestoreObjectStates(objectFrames[index]);
+}
+
+// ===== ゲーム内時刻（共有クロック） =====
+
+void ReplayManager::UpdatePlayClock(float deltaTime) {
+    float previousTime = playTime_;
+
+    if (isPlaying_) {
+        // 再生中は記録された時刻をそのまま使う。これでシーク・ループしても完全に一致する
+        playTime_ = GetFrameTime(currentFrame_);
+    } else if (!isPaused_) {
+        playTime_ += deltaTime;
+    }
+
+    playDeltaTime_ = playTime_ - previousTime;
+    // ループやシークで時刻が巻き戻った場合は、進んでいない扱いにする
+    if (playDeltaTime_ < 0.0f) playDeltaTime_ = 0.0f;
+}
+
+float ReplayManager::GetFrameTime(int frame) const {
+    if (currentReplay_.frames.empty()) return 0.0f;
+    int index = (std::max)(0, (std::min)(frame, static_cast<int>(currentReplay_.frames.size()) - 1));
+    return currentReplay_.frames[index].time;
+}
+
+void ReplayManager::NormalizeFrameRecords(ReplayData& data) {
+    const float fixedDeltaTime = 1.0f / 60.0f;
+
+    // タイムライン編集でフレームがコピー・増減すると時刻が重複するため、単調増加に直す
+    float prevTime = 0.0f;
+    for (size_t i = 0; i < data.frames.size(); ++i) {
+        float& time = data.frames[i].time;
+        if (i == 0) {
+            if (!(time >= 0.0f)) time = 0.0f;
+        } else if (!(time > prevTime)) {
+            time = prevTime + fixedDeltaTime;
+        }
+        prevTime = time;
+    }
+
+    data.totalFrames = static_cast<int>(data.frames.size());
+
+    // 動的オブジェクトの記録もフレーム数に合わせる（増えた分は最後の状態を維持）
+    if (!data.objectFrames.empty() && data.objectFrames.size() != data.frames.size()) {
+        ReplayObjectFrame lastFrame = data.objectFrames.back();
+        data.objectFrames.resize(data.frames.size(), lastFrame);
+    }
 }
 
 void ReplayManager::ApplyTimelineEdit(int frameIdx, int keyIdx, bool active) {
@@ -532,6 +694,8 @@ void ReplayManager::GenerateRuntimeKeys() {
 
 void ReplayManager::RebuildMmlFromFrames(ReplayData& data) {
     ReplayTimelineEditor::RebuildMmlFromFrames(data);
+    // 編集でフレーム数が変わっている可能性があるため、時刻列とオブジェクト記録を整える
+    NormalizeFrameRecords(data);
 }
 
 void ReplayManager::RebuildFramesFromMml(ReplayData& data) {
@@ -543,7 +707,10 @@ bool ReplayManager::SaveToFile(const ReplayData& data, const std::string& filena
 }
 
 bool ReplayManager::LoadFromFile(const std::string& filepath, ReplayData& outData) {
-    return ReplayIO::LoadFromFile(filepath, outData);
+    if (!ReplayIO::LoadFromFile(filepath, outData)) return false;
+    // 時刻を持たない旧フォーマットのファイルもここで 1/60 刻みに補完される
+    NormalizeFrameRecords(outData);
+    return true;
 }
 
 void ReplayManager::LoadSavedList() {

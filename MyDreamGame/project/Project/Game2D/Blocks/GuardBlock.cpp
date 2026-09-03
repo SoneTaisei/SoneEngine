@@ -1,5 +1,5 @@
 ﻿#include "GuardBlock.h"
-#include "Core/TimeManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Player/Player2D.h"
 #include <cmath>
@@ -104,7 +104,8 @@ void GuardBlock::Update() {
     }
 #endif
 
-    float dt = TimeManager::GetInstance().GetDeltaTime();
+    // リプレイ再生・シーク時も録画時と同じだけ時間が進むよう、共有クロックの差分を使う
+    float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
     if (dt <= 0.0f) return;
 
     // 向きの滑らかな補間
@@ -268,4 +269,31 @@ void GuardBlock::Reset() {
             prevPosition_ = {startX_, startY_, 0.0f};
         }
     }
+}
+
+void GuardBlock::CaptureReplayState(std::vector<float>& outCustom) const {
+    outCustom.clear();
+    outCustom.push_back(static_cast<float>(state_));
+    outCustom.push_back(static_cast<float>(direction_));
+    outCustom.push_back(currentFacing_);
+    outCustom.push_back(alertGauge_);
+    outCustom.push_back(waitTimer_);
+}
+
+void GuardBlock::RestoreReplayState(const std::vector<float>& custom) {
+    if (custom.size() < 5) return;
+    state_ = static_cast<State>(static_cast<int>(custom[0]));
+    direction_ = static_cast<int>(custom[1]);
+    currentFacing_ = custom[2];
+    alertGauge_ = custom[3];
+    waitTimer_ = custom[4];
+
+    // 位置は共通処理側で復元済みなので、速度の計算基準だけ合わせておく
+    if (gameObject_) {
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            prevPosition_ = tc->GetPosition();
+        }
+    }
+    deltaPosition_ = {0.0f, 0.0f, 0.0f};
+    currentVelocity_ = {0.0f, 0.0f, 0.0f};
 }

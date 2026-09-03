@@ -1,6 +1,6 @@
 #include "DoorBlock.h"
 #include "SwitchBlock.h"
-#include "Core/TimeManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
 #include <algorithm>
 
@@ -62,7 +62,8 @@ void DoorBlock::Update() {
         }
     }
 
-    float dt = TimeManager::GetInstance().GetDeltaTime();
+    // リプレイ再生・シーク時も録画時と同じだけ時間が進むよう、共有クロックの差分を使う
+    float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
 
     if (isAnySwitchPressed) {
         // 開く
@@ -101,4 +102,14 @@ void DoorBlock::Reset() {
             tc->SetPosition({startX_, startY_, 0.0f});
         }
     }
+}
+
+void DoorBlock::CaptureReplayState(std::vector<float>& outCustom) const {
+    outCustom.clear();
+    outCustom.push_back(openProgress_);
+}
+
+void DoorBlock::RestoreReplayState(const std::vector<float>& custom) {
+    if (custom.empty()) return;
+    openProgress_ = custom[0];
 }

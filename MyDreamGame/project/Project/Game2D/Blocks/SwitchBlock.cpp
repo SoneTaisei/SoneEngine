@@ -1,5 +1,5 @@
 ﻿#include "SwitchBlock.h"
-#include "Core/TimeManager.h"
+#include "Editor/Replay/ReplayManager.h"
 
 SwitchBlock::SwitchBlock(MapChip2D* map, int chipX, int chipY)
     : BaseBlock(map, chipX, chipY) {}
@@ -38,7 +38,8 @@ void SwitchBlock::Update() {
     BaseBlock::Update();
     if (!gameObject_) return;
 
-    float dt = TimeManager::GetInstance().GetDeltaTime();
+    // リプレイ再生・シーク時も録画時と同じだけ時間が進むよう、共有クロックの差分を使う
+    float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
     
     // タイマーを減らす
     if (pressedTimer_ > 0.0f) {
@@ -81,4 +82,16 @@ void SwitchBlock::OnChainTouch(const Vector3& pos, float radius, float speed) {
 void SwitchBlock::Reset() {
     isPressed_ = false;
     pressedTimer_ = 0.0f;
+}
+
+void SwitchBlock::CaptureReplayState(std::vector<float>& outCustom) const {
+    outCustom.clear();
+    outCustom.push_back(pressedTimer_);
+    outCustom.push_back(isPressed_ ? 1.0f : 0.0f);
+}
+
+void SwitchBlock::RestoreReplayState(const std::vector<float>& custom) {
+    if (custom.size() < 2) return;
+    pressedTimer_ = custom[0];
+    isPressed_ = (custom[1] != 0.0f);
 }

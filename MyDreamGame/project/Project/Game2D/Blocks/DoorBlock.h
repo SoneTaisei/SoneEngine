@@ -16,6 +16,10 @@ public:
     void SetProperties(const nlohmann::json& properties) override;
     void Reset() override;
 
+    // リプレイ対応（開閉の進行度を保存・復元する）
+    void CaptureReplayState(std::vector<float>& outCustom) const override;
+    void RestoreReplayState(const std::vector<float>& custom) override;
+
 private:
     float startX_ = 0.0f;
     float startY_ = 0.0f;

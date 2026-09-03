@@ -18,6 +18,11 @@ public:
     void SetProperties(const nlohmann::json& properties) override;
     void Reset() override;
 
+    // リプレイ対応（押下タイマーを保存・復元する）
+    bool IsReplayTracked() const override { return true; }
+    void CaptureReplayState(std::vector<float>& outCustom) const override;
+    void RestoreReplayState(const std::vector<float>& custom) override;
+
     int GetLinkId() const { return linkId_; }
     bool IsPressed() const { return isPressed_; }
 
