@@ -52,6 +52,9 @@ public:
     virtual void OnPlayerTouch() {}
     virtual void OnPlayerTouch(Player2D* player) { OnPlayerTouch(); }
 
+    // このチップの上（または体が重なる位置）でプレイヤーが鎖を振り回せるか（木の板 ThinPlatformBlock が true を返す）
+    virtual bool AllowsChainSpin() const { return false; }
+
     // 鎖（節・末端の重り）がこのブロックのチップに重なった際の処理（スイッチを鎖で押す等）
     // pos/radius は節の円、speed は節の速さ（チップ/秒。叩いて作動する仕掛け用）。鎖の物理更新後に毎フレーム呼ばれる
     virtual void OnChainTouch(const Vector3& pos, float radius, float speed) { (void)pos; (void)radius; (void)speed; }

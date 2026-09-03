@@ -211,6 +211,9 @@
     <ClCompile Include="Project\Game2D\Blocks\FragileBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\ThinPlatformBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\SwitchBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -518,6 +521,9 @@
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\FragileBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\ThinPlatformBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\SwitchBlock.h">

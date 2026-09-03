@@ -1,4 +1,4 @@
-#include "MapChip2D.h"
+﻿#include "MapChip2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
@@ -191,7 +191,28 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         templatePalette_.push_back(def);
     }
 
-    if (!hasDoorTemplate || !hasGuardTemplate) {
+    bool hasThinPlatformTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kThinPlatform)) {
+            hasThinPlatformTemplate = true;
+            break;
+        }
+    }
+    if (!hasThinPlatformTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kThinPlatform);
+        def.name = "Thin Platform";
+        def.type = "ThinPlatformBlock";
+        def.color = {0.62f, 0.42f, 0.22f, 1.0f};
+
+        nlohmann::json props = nlohmann::json::object();
+        props["thickness"] = 0.2f;
+        def.properties = props;
+
+        templatePalette_.push_back(def);
+    }
+
+    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 

@@ -112,6 +112,7 @@ public:
     /// </summary>
     void ReleaseRigidLine(const Vector3& center, float omega, float velocityScale, float dt);
 
+
     /// <summary>鎖の実長（繰り出し中は先頭セグメントの現在長を含む）</summary>
     float GetTotalLength() const;
 

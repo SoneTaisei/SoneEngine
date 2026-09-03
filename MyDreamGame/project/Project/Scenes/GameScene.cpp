@@ -524,8 +524,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Pick up chain");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Drop chain");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "W (hold) + A/D : Swing weight");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Release W : Throw weight -> chain pulls you");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "W (hold) + A/D on wooden plank : Swing weight");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Release W : Fly in the weight's direction");
         ImGui::End();
     }
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 
 /// <summary>
@@ -39,7 +39,7 @@ struct ChainParams {
     std::string treasureModelFile_ = "sphere.obj";
     float treasureScale_ = 0.3f;       // 表示スケール（sphere.obj は半径1.0なので 0.3 で物理半径と一致）
 
-    // --- スピンジャンプ（構えて鎖をピンと張った棒として自分で振り、離すと鎖ごと飛び、重りの勢いに引っ張られる） ---
+    // --- スピンジャンプ（木の板の上で構え、ピンと張った鎖を自分で振り、離すと鎖ごと飛び、プレイヤーも同じ方向へ飛ぶ） ---
     float spinRadiusMax_ = 5.0f;       // 回転半径の上限
     float spinRadiusRatio_ = 1.0f;     // 回転半径 = 鎖の実長 × これ（1.0 で節間隔ちょうど。下げると縮めた棒になり離した瞬間に伸びる）
     float swingStrength_ = 40.0f;      // A/Dで振る力。角加速度 = これ ÷ (宝石の質量 + 鎖の質量)
@@ -47,12 +47,12 @@ struct ChainParams {
     float swingDamping_ = 0.25f;       // 振りの減衰（1/秒。漕がないと徐々に止まる）
     float chainMassPerUnit_ = 0.5f;    // 鎖1ユニットあたりの質量（宝石の質量に加算。長いほど振りにくい）
     float weightThrowScale_ = 1.0f;    // 離した時に鎖と重りへ与える速度の倍率（角速度 × 半径 × これ）
-    float pullDelay_ = 0.1f;           // 離してから引っ張られるまでの秒数（重りが先に飛んで見える間）
-    float pullTransfer_ = 0.9f;        // 引く速さ = その時点の重りの速さ × これ（壁に当たって減速していれば弱くなる）
+    float pullTransfer_ = 0.9f;        // 離した時にプレイヤーが飛ぶ速さ = 重りの速さ × これ
     float launchMaxJumpRatio_ = 1.0f;  // 引く速さの上限 = 通常ジャンプ初速 × これ（1.0 で通常ジャンプより高くは飛べない）
     float launchMinUpward_ = 0.35f;    // 引く方向の最低上向き成分（真横で引かれても床に貼り付かない）
     float spinMoveFactor_ = 0.0f;      // 構え中の移動速度倍率（0 で移動不可。A/D は振りに使う）
     float spinCooldown_ = 0.4f;        // 引かれた後のクールダウン（秒。着地でも解除）
+    bool spinAnywhere_ = false;        // false: 木の板（ThinPlatformBlock）の上に立っている時だけ回せる（既定）。true: どこでも回せる（調整用）
 
     // --- 見た目 ---
     float linkThickness_ = 1.0f;       // リンクモデルの太さ倍率

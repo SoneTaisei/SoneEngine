@@ -229,6 +229,27 @@
             },
             "textureName": "",
             "type": "GuardBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.2199999988079071,
+                "g": 0.41999998688697815,
+                "r": 0.6200000047683716
+            },
+            "id": 17,
+            "modelName": "",
+            "name": "Thin Platform",
+            "properties": {
+                "thickness": 0.20000000298023224
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "ThinPlatformBlock"
         }
     ]
 }

@@ -194,7 +194,8 @@ void ChainManager::Update(float dt, MapChip2D* map) {
         return;
     }
 
-    // スピン：末端の拘束先を物理更新の前に決める
+    // スピン：回せる場所（木の板の上）にいるかを先に判定し、末端の拘束先を物理更新の前に決める
+    UpdateSpinSpots(map);
     if (spin_) {
         spin_->Update(dt, map, player_, playerChain_.get(), lastSocketWorld_);
     }
@@ -389,6 +390,31 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
     }
 }
 
+void ChainManager::UpdateSpinSpots(MapChip2D* map) {
+    bool allowed = false;
+    if (map && player_ && !player_->IsDead()) {
+        // 足の直下のチップ（木の板はここにある）か、体が重なるチップに「回せる」ブロックがあれば可
+        // （判定はプレイヤーのブロック接触と同じチップ単位。足の直下は 0.1 だけ下を見る）
+        AABB2D box = player_->GetAABB();
+        int x0 = map->WorldToChipX(box.left);
+        int x1 = map->WorldToChipX(box.right);
+        int y0 = map->WorldToChipY(box.bottom - 0.1f);
+        int y1 = map->WorldToChipY(box.top);
+        for (int cy = y0; cy <= y1; ++cy) {
+            for (int cx = x0; cx <= x1; ++cx) {
+                BaseBlock* block = map->GetBlock(cx, cy);
+                if (!block || block->IsDestroyed() || !block->AllowsChainSpin()) {
+                    continue;
+                }
+                allowed = true;
+            }
+        }
+    }
+    if (spin_) {
+        spin_->SetSpinAllowed(allowed);
+    }
+}
+
 void ChainManager::SyncTreasureTransform() {
     if (!treasure_ || !playerChain_) {
         return;
@@ -484,15 +510,19 @@ void ChainManager::DrawImGui() {
         spin_->DrawImGui();
     }
     bool spinChanged = false;
-    ImGui::TextDisabled("張った鎖を 振る力 / (宝石の質量 + 鎖の質量) で漕ぐ。離すと鎖ごと |角速度| x 半径 で飛び、Delay 秒後に重りの進行方向へ 重りの速さ x Transfer で引かれる（上限 = ジャンプ初速 x Ratio）");
+    ImGui::TextDisabled("木の板の上で構え、振る力 / (宝石の質量 + 鎖の質量) で漕ぐ。離すと鎖ごと |角速度| x 半径 で飛び、プレイヤーもその方向へ x Transfer で飛ぶ（上限 = ジャンプ初速 x Ratio）。棒が地形に当たると解除");
     spinChanged |= ImGui::DragFloat("Spin Radius Max##Spin", &params_.spinRadiusMax_, 0.05f, 0.3f, 10.0f);
     spinChanged |= ImGui::DragFloat("Spin Radius Ratio##Spin", &params_.spinRadiusRatio_, 0.01f, 0.3f, 1.0f);
+    spinChanged |= ImGui::Checkbox("Spin Anywhere (OFF: 木の板の上でのみ回せる)##Spin", &params_.spinAnywhere_);
+    if (spin_) {
+        ImGui::SameLine();
+        ImGui::TextDisabled(spin_->IsSpinAllowed() ? "[on plank]" : "[not on plank]");
+    }
     spinChanged |= ImGui::DragFloat("Swing Strength##Spin", &params_.swingStrength_, 0.5f, 0.0f, 200.0f);
     spinChanged |= ImGui::DragFloat("Swing Damping##Spin", &params_.swingDamping_, 0.01f, 0.0f, 5.0f);
     spinChanged |= ImGui::DragFloat("Chain Mass Per Unit##Spin", &params_.chainMassPerUnit_, 0.05f, 0.0f, 10.0f);
     spinChanged |= ImGui::DragFloat("Weight Throw Scale##Spin", &params_.weightThrowScale_, 0.05f, 0.0f, 3.0f);
-    spinChanged |= ImGui::DragFloat("Pull Delay##Spin", &params_.pullDelay_, 0.01f, 0.0f, 1.0f);
-    spinChanged |= ImGui::DragFloat("Pull Transfer##Spin", &params_.pullTransfer_, 0.05f, 0.0f, 3.0f);
+    spinChanged |= ImGui::DragFloat("Launch Transfer (飛ぶ速さ = 投げた速さ x これ)##Spin", &params_.pullTransfer_, 0.05f, 0.0f, 3.0f);
     spinChanged |= ImGui::DragFloat("Launch Max Jump Ratio##Spin", &params_.launchMaxJumpRatio_, 0.05f, 0.1f, 1.7f);
     spinChanged |= ImGui::DragFloat("Launch Min Upward##Spin", &params_.launchMinUpward_, 0.01f, 0.0f, 1.0f);
     spinChanged |= ImGui::DragFloat("Stance Move Factor##Spin", &params_.spinMoveFactor_, 0.05f, 0.0f, 1.0f);
@@ -505,7 +535,6 @@ void ChainManager::DrawImGui() {
         params_.swingDamping_ = (std::max)(0.0f, params_.swingDamping_);
         params_.chainMassPerUnit_ = (std::max)(0.0f, params_.chainMassPerUnit_);
         params_.weightThrowScale_ = (std::max)(0.0f, params_.weightThrowScale_);
-        params_.pullDelay_ = std::clamp(params_.pullDelay_, 0.0f, 1.0f);
         params_.pullTransfer_ = (std::max)(0.0f, params_.pullTransfer_);
         params_.launchMaxJumpRatio_ = std::clamp(params_.launchMaxJumpRatio_, 0.1f, 1.7f); // 1.7×17.5≒30 u/s が壁すり抜けの上限
         params_.launchMinUpward_ = std::clamp(params_.launchMinUpward_, 0.0f, 1.0f);

@@ -1,4 +1,4 @@
-#include "ChainConfig.h"
+﻿#include "ChainConfig.h"
 #include <algorithm>
 #include <fstream>
 #include <filesystem>
@@ -45,12 +45,12 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["swingDamping_"] = params.swingDamping_;
         j["chainMassPerUnit_"] = params.chainMassPerUnit_;
         j["weightThrowScale_"] = params.weightThrowScale_;
-        j["pullDelay_"] = params.pullDelay_;
         j["pullTransfer_"] = params.pullTransfer_;
         j["launchMaxJumpRatio_"] = params.launchMaxJumpRatio_;
         j["launchMinUpward_"] = params.launchMinUpward_;
         j["spinMoveFactor_"] = params.spinMoveFactor_;
         j["spinCooldown_"] = params.spinCooldown_;
+        j["spinAnywhere_"] = params.spinAnywhere_;
         j["linkThickness_"] = params.linkThickness_;
         j["linkOverlap_"] = params.linkOverlap_;
 
@@ -107,12 +107,12 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("swingDamping_")) params.swingDamping_ = j["swingDamping_"];
         if (j.contains("chainMassPerUnit_")) params.chainMassPerUnit_ = j["chainMassPerUnit_"];
         if (j.contains("weightThrowScale_")) params.weightThrowScale_ = j["weightThrowScale_"];
-        if (j.contains("pullDelay_")) params.pullDelay_ = j["pullDelay_"];
         if (j.contains("pullTransfer_")) params.pullTransfer_ = j["pullTransfer_"];
         if (j.contains("launchMaxJumpRatio_")) params.launchMaxJumpRatio_ = j["launchMaxJumpRatio_"];
         if (j.contains("launchMinUpward_")) params.launchMinUpward_ = j["launchMinUpward_"];
         if (j.contains("spinMoveFactor_")) params.spinMoveFactor_ = j["spinMoveFactor_"];
         if (j.contains("spinCooldown_")) params.spinCooldown_ = j["spinCooldown_"];
+        if (j.contains("spinAnywhere_")) params.spinAnywhere_ = j["spinAnywhere_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
 
@@ -137,7 +137,6 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         params.swingDamping_ = (std::max)(0.0f, params.swingDamping_);
         params.chainMassPerUnit_ = (std::max)(0.0f, params.chainMassPerUnit_);
         params.weightThrowScale_ = (std::max)(0.0f, params.weightThrowScale_);
-        params.pullDelay_ = std::clamp(params.pullDelay_, 0.0f, 1.0f);
         params.pullTransfer_ = (std::max)(0.0f, params.pullTransfer_);
         // 上限倍率 1.7 × ジャンプ初速17.5 ≒ 30 u/s。プレイヤーの当たり判定は掃引しないため、これ以上は1チップ壁をすり抜け得る
         params.launchMaxJumpRatio_ = std::clamp(params.launchMaxJumpRatio_, 0.1f, 1.7f);

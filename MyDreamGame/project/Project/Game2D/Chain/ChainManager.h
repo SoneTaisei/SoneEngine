@@ -113,6 +113,8 @@ private:
     void SyncTreasureTransform();
     // 全ての鎖の節（と宝石）が重なっているブロックへ OnChainTouch を通知する（スイッチを鎖で押す等。物理更新の後に呼ぶ）
     void NotifyBlockContacts(MapChip2D* map);
+    // プレイヤーが「回せる場所」（木の板 ThinPlatformBlock の上）にいるかを調べ、スピンの可否を更新する
+    void UpdateSpinSpots(MapChip2D* map);
 
     Player2D* player_ = nullptr;
     ChainParams params_; // 共有パラメータ（ChainConfigからロード）
