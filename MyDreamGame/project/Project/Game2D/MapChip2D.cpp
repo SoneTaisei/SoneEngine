@@ -12,6 +12,7 @@
 #include "Blocks/ChainItemBlock.h"
 #include "Blocks/BlockFactory.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <string>
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -227,6 +228,13 @@ void MapChip2D::Update() {
         if (*it) {
             (*it)->Update();
             if ((*it)->IsDestroyed()) {
+                // リプレイ復元用に「破壊済み」であることを覚えておく
+                // （updateBlocks_ から外れると状態を記録できなくなるため）
+                uint64_t destroyedId = (*it)->GetReplayObjectId();
+                if (std::find(replayDestroyedIds_.begin(), replayDestroyedIds_.end(), destroyedId) == replayDestroyedIds_.end()) {
+                    replayDestroyedIds_.push_back(destroyedId);
+                }
+
                 // Remove from mapData_ and activeBlocks_
                 for (int y = 0; y < mapHeight_; ++y) {
                     for (int x = 0; x < mapWidth_; ++x) {
@@ -237,11 +245,13 @@ void MapChip2D::Update() {
                     }
                 }
                 it = updateBlocks_.erase(it);
+                blocksRevision_++;
             } else {
                 ++it;
             }
         } else {
             it = updateBlocks_.erase(it);
+            blocksRevision_++;
         }
     }
 }
@@ -491,6 +501,10 @@ void MapChip2D::RebuildChipObjects() {
     activeBlocks_.clear();
     activeBlocks_.resize(mapHeight_, std::vector<std::shared_ptr<BaseBlock>>(mapWidth_, nullptr));
     updateBlocks_.clear();
+
+    // ブロックが作り直されたので、リプレイ用の追跡情報も無効化する
+    replayDestroyedIds_.clear();
+    blocksRevision_++;
 
     std::vector<std::vector<bool>> visited(mapHeight_, std::vector<bool>(mapWidth_, false));
 
@@ -1126,5 +1140,146 @@ void MapChip2D::ResetBlocks() {
         if (block) {
             block->Reset();
         }
+    }
+    replayDestroyedIds_.clear();
+    blocksRevision_++;
+}
+
+// ===== IReplayObjectProvider =====
+
+void MapChip2D::RefreshReplayTrackEntries() {
+    if (replayTrackRevision_ == blocksRevision_) return;
+    replayTrackRevision_ = blocksRevision_;
+
+    // 既に記録対象になっているブロックは、作り直し前の判定を引き継ぐ
+    std::unordered_map<uint64_t, bool> wasTracked;
+    for (const auto& entry : replayTrackEntries_) {
+        if (entry.isTracked && entry.block) {
+            wasTracked[entry.block->GetReplayObjectId()] = true;
+        }
+    }
+
+    replayTrackEntries_.clear();
+    replayBlockById_.clear();
+    replayTrackEntries_.reserve(updateBlocks_.size());
+
+    for (const auto& blockPtr : updateBlocks_) {
+        BaseBlock* block = blockPtr.get();
+        if (!block) continue;
+
+        ReplayTrackEntry entry;
+        entry.block = block;
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                entry.initPosition = transform->GetPosition();
+                entry.initRotation = transform->GetRotation();
+                entry.initScale = transform->GetScale();
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                entry.initColor = renderer->GetMaterial().color;
+            }
+        }
+        entry.isTracked = block->IsReplayTracked();
+
+        const uint64_t id = block->GetReplayObjectId();
+        if (wasTracked.find(id) != wasTracked.end()) {
+            entry.isTracked = true;
+        }
+
+        replayBlockById_[id] = block;
+        replayTrackEntries_.push_back(entry);
+    }
+}
+
+void MapChip2D::CaptureReplayObjects(std::vector<ReplayObjectState>& out) {
+    RefreshReplayTrackEntries();
+
+    // 初期状態と比べて変化しているか（していれば以降ずっと記録対象にする）
+    const float kEpsilon = 0.0001f;
+    auto isSame = [kEpsilon](float a, float b) { return std::fabs(a - b) <= kEpsilon; };
+
+    std::vector<float> customScratch;
+    for (auto& entry : replayTrackEntries_) {
+        BaseBlock* block = entry.block;
+        if (!block) continue;
+
+        Vector3 position = entry.initPosition;
+        Vector3 rotation = entry.initRotation;
+        Vector3 scale = entry.initScale;
+        Vector4 color = entry.initColor;
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                position = transform->GetPosition();
+                rotation = transform->GetRotation();
+                scale = transform->GetScale();
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                color = renderer->GetMaterial().color;
+            }
+        }
+
+        if (!entry.isTracked) {
+            // 新しく追加したブロックでも、動いた・変色した時点で自動的に記録対象になる
+            bool changed =
+                block->IsDestroyed() ||
+                !isSame(position.x, entry.initPosition.x) || !isSame(position.y, entry.initPosition.y) || !isSame(position.z, entry.initPosition.z) ||
+                !isSame(rotation.x, entry.initRotation.x) || !isSame(rotation.y, entry.initRotation.y) || !isSame(rotation.z, entry.initRotation.z) ||
+                !isSame(scale.x, entry.initScale.x) || !isSame(scale.y, entry.initScale.y) || !isSame(scale.z, entry.initScale.z) ||
+                !isSame(color.x, entry.initColor.x) || !isSame(color.y, entry.initColor.y) || !isSame(color.z, entry.initColor.z) || !isSame(color.w, entry.initColor.w);
+            if (!changed) continue;
+            entry.isTracked = true;
+        }
+
+        ReplayObjectState state;
+        state.id = block->GetReplayObjectId();
+        state.position = position;
+        state.rotation = rotation;
+        state.scale = scale;
+        state.color = color;
+        state.destroyed = block->IsDestroyed();
+
+        customScratch.clear();
+        block->CaptureReplayState(customScratch);
+        state.custom = customScratch;
+
+        out.push_back(std::move(state));
+    }
+
+    // 既に破壊されて updateBlocks_ から外れたブロックも「破壊済み」として記録し続ける
+    for (uint64_t destroyedId : replayDestroyedIds_) {
+        ReplayObjectState state;
+        state.id = destroyedId;
+        state.destroyed = true;
+        out.push_back(std::move(state));
+    }
+}
+
+void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState>& states) {
+    RefreshReplayTrackEntries();
+
+    for (const auto& state : states) {
+        auto it = replayBlockById_.find(state.id);
+        if (it == replayBlockById_.end()) continue;
+        BaseBlock* block = it->second;
+        if (!block) continue;
+
+        if (state.destroyed) {
+            // 破壊済みの記録は破壊フラグだけを復元する（次の Update でマップから取り除かれる）
+            block->Destroy();
+            continue;
+        }
+
+        block->SetDestroyed(false);
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                transform->SetPosition(state.position);
+                transform->SetRotation(state.rotation);
+                transform->SetScale(state.scale);
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                renderer->GetMaterial().color = state.color;
+            }
+        }
+        block->RestoreReplayState(state.custom);
     }
 }

@@ -5,14 +5,16 @@
 #include <vector>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 #include "Blocks/BaseBlock.h"
+#include "Editor/Replay/ReplayManager.h"
 
 /// <summary>
 /// 2Dスクロールゲーム用マップクラス
 /// 2D配列でマップチップを管理し、PrimitiveObject(Box)で描画する
 /// </summary>
 
-class MapChip2D {
+class MapChip2D : public IReplayObjectProvider {
 public:
     enum class ChipType : int {
         kNone = 0,        // 空気（何もなし）
@@ -112,6 +114,13 @@ public:
     // 全ブロックのリセット（プレイヤー死亡・リトライ時）
     void ResetBlocks();
 
+    // ===== IReplayObjectProvider =====
+    // 動く床・扉・スイッチなど、状態が変化するブロックをリプレイに記録・復元する。
+    // 変化の検出は共通処理で行うため、ブロックを新しく追加しても登録作業は不要。
+    const char* GetReplayProviderName() const override { return "MapChip2D"; }
+    void CaptureReplayObjects(std::vector<ReplayObjectState>& out) override;
+    void RestoreReplayObjects(const std::vector<ReplayObjectState>& states) override;
+
     struct CustomBlockDef {
         int id = 100;
         std::string name = "New Custom Block";
@@ -142,6 +151,9 @@ private:
     std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void CreateChipObjects();
 
+    // リプレイ記録対象の追跡情報を updateBlocks_ に合わせて作り直す
+    void RefreshReplayTrackEntries();
+
 private:
     // マップデータ（左下が(0,0)）
     std::vector<std::vector<ChipType>> mapData_;
@@ -160,6 +172,22 @@ private:
     
     // 更新・描画用のユニークなブロックリスト
     std::vector<std::shared_ptr<BaseBlock>> updateBlocks_;
+
+    // ===== リプレイ記録用 =====
+    // 初期状態から変化したブロックを自動的に記録対象に加えるための追跡情報
+    struct ReplayTrackEntry {
+        BaseBlock* block = nullptr;
+        Vector3 initPosition = {0.0f, 0.0f, 0.0f};
+        Vector3 initRotation = {0.0f, 0.0f, 0.0f};
+        Vector3 initScale = {1.0f, 1.0f, 1.0f};
+        Vector4 initColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        bool isTracked = false; // 一度でも変化したブロックは以降ずっと記録する
+    };
+    std::vector<ReplayTrackEntry> replayTrackEntries_;
+    std::unordered_map<uint64_t, BaseBlock*> replayBlockById_;
+    std::vector<uint64_t> replayDestroyedIds_;  // 破壊されて updateBlocks_ から外れたブロックのID
+    uint32_t blocksRevision_ = 0;              // updateBlocks_ が作り直された回数
+    uint32_t replayTrackRevision_ = 0xFFFFFFFFu; // 追跡情報を作った時点の blocksRevision_
 
     // カスタムパレット（自作ブロック定義リスト）
     std::vector<CustomBlockDef> customPalette_;

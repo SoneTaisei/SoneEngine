@@ -4,6 +4,27 @@
 #include <sstream>
 #include <filesystem>
 #include <iomanip>
+#include <algorithm>
+#include <cmath>
+
+namespace {
+// 動的オブジェクトの状態が実質同じかどうか（差分保存の判定用）
+bool IsSameObjectState(const ReplayObjectState& a, const ReplayObjectState& b) {
+    const float kEpsilon = 0.0001f;
+    auto same = [&](float x, float y) { return std::fabs(x - y) <= kEpsilon; };
+
+    if (a.destroyed != b.destroyed) return false;
+    if (!same(a.position.x, b.position.x) || !same(a.position.y, b.position.y) || !same(a.position.z, b.position.z)) return false;
+    if (!same(a.rotation.x, b.rotation.x) || !same(a.rotation.y, b.rotation.y) || !same(a.rotation.z, b.rotation.z)) return false;
+    if (!same(a.scale.x, b.scale.x) || !same(a.scale.y, b.scale.y) || !same(a.scale.z, b.scale.z)) return false;
+    if (!same(a.color.x, b.color.x) || !same(a.color.y, b.color.y) || !same(a.color.z, b.color.z) || !same(a.color.w, b.color.w)) return false;
+    if (a.custom.size() != b.custom.size()) return false;
+    for (size_t i = 0; i < a.custom.size(); ++i) {
+        if (!same(a.custom[i], b.custom[i])) return false;
+    }
+    return true;
+}
+} // namespace
 
 bool ReplayIO::SaveToFile(const ReplayData& data, const std::string& filename) {
     std::filesystem::create_directories("resources/json/local/saved_replays");
@@ -80,7 +101,40 @@ bool ReplayIO::SaveToFile(const ReplayData& data, const std::string& filename) {
             << frame.keys << "|"
             << frame.color.x << "," << frame.color.y << "," << frame.color.z << "," << frame.color.w << "|"
             << frame.scale.x << "," << frame.scale.y << "," << frame.scale.z << "|"
-            << frame.rotation.x << "," << frame.rotation.y << "," << frame.rotation.z << std::endl;
+            << frame.rotation.x << "," << frame.rotation.y << "," << frame.rotation.z << "|"
+            << std::setprecision(9) << frame.time << std::setprecision(6) << std::endl;
+    }
+
+    // 動的オブジェクト（動く床・扉・スイッチ等）の状態
+    // 1行 = 「フレーム番号|ID,破壊フラグ,pos,rot,scale,color[,固有状態...]」
+    // 直前フレームから変化がないオブジェクトは書き出さない（読み込み時に前フレームから引き継ぐ）
+    if (!data.objectFrames.empty()) {
+        ofs << std::endl;
+        ofs << "[Objects]" << std::endl;
+        std::vector<ReplayObjectState> prevStates;
+        for (size_t f = 0; f < data.objectFrames.size(); ++f) {
+            for (const auto& state : data.objectFrames[f].states) {
+                auto prevIt = std::find_if(prevStates.begin(), prevStates.end(),
+                    [&state](const ReplayObjectState& p) { return p.id == state.id; });
+                if (prevIt != prevStates.end() && IsSameObjectState(*prevIt, state)) continue;
+
+                ofs << f << "|" << state.id << "," << (state.destroyed ? 1 : 0) << ","
+                    << state.position.x << "," << state.position.y << "," << state.position.z << ","
+                    << state.rotation.x << "," << state.rotation.y << "," << state.rotation.z << ","
+                    << state.scale.x << "," << state.scale.y << "," << state.scale.z << ","
+                    << state.color.x << "," << state.color.y << "," << state.color.z << "," << state.color.w;
+                for (float value : state.custom) {
+                    ofs << "," << value;
+                }
+                ofs << std::endl;
+
+                if (prevIt != prevStates.end()) {
+                    *prevIt = state;
+                } else {
+                    prevStates.push_back(state);
+                }
+            }
+        }
     }
 
     ofs.close();
@@ -101,8 +155,16 @@ bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
     if (!ifs.is_open()) return false;
 
     outData.frames.clear();
+    outData.objectFrames.clear();
     outData.filename = std::filesystem::path(pathToOpen).filename().string();
-    
+
+    // [Objects] は差分保存なので、いったん「フレーム番号 + 状態」の並びで読み込む
+    struct ObjectRecord {
+        int frame = 0;
+        ReplayObjectState state;
+    };
+    std::vector<ObjectRecord> objectRecords;
+
     std::string line;
     std::string currentSection = "";
 
@@ -170,11 +232,35 @@ bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
                 m.duration = std::stoi(p3);
                 outData.appliedMacros.push_back(m);
             }
+        } else if (currentSection == "Objects") {
+            // 「フレーム番号|ID,破壊フラグ,pos,rot,scale,color[,固有状態...]」
+            std::string frameStr, body;
+            if (!std::getline(ss, frameStr, '|') || !std::getline(ss, body)) continue;
+
+            std::vector<float> values;
+            std::stringstream bss(body);
+            std::string token;
+            while (std::getline(bss, token, ',')) {
+                if (token.empty()) continue;
+                values.push_back(std::stof(token));
+            }
+            if (values.size() < 15) continue; // id,破壊フラグ,pos(3),rot(3),scale(3),color(4)
+
+            ReplayObjectState state;
+            state.id = static_cast<uint64_t>(std::stoull(body.substr(0, body.find(','))));
+            state.destroyed = (values[1] != 0.0f);
+            state.position = { values[2], values[3], values[4] };
+            state.rotation = { values[5], values[6], values[7] };
+            state.scale = { values[8], values[9], values[10] };
+            state.color = { values[11], values[12], values[13], values[14] };
+            state.custom.assign(values.begin() + 15, values.end());
+
+            objectRecords.push_back({ std::stoi(frameStr), std::move(state) });
         } else if (currentSection == "STR") {
-            std::string parts[7];
+            std::string parts[8];
             int partCount = 0;
             std::string part;
-            while (std::getline(ss, part, '|') && partCount < 7) {
+            while (std::getline(ss, part, '|') && partCount < 8) {
                 parts[partCount++] = part;
             }
             
@@ -186,6 +272,7 @@ bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
                 std::string colorStr = "";
                 std::string scaleStr = "";
                 std::string rotStr = "";
+                std::string timeStr = "";
                 
                 if (partCount == 4) {
                     camPosStr = parts[2];
@@ -197,6 +284,9 @@ bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
                     if (partCount >= 7) {
                         scaleStr = parts[5];
                         rotStr = parts[6];
+                    }
+                    if (partCount >= 8) {
+                        timeStr = parts[7];
                     }
                 }
                 
@@ -252,7 +342,14 @@ bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
                         frame.rotation = { std::stof(rx), std::stof(ry), std::stof(rz) };
                     }
                 }
-                
+
+                // ゲーム内時刻（旧フォーマットには無いので、その場合は 1/60 刻みで補完する）
+                if (!timeStr.empty()) {
+                    frame.time = std::stof(timeStr);
+                } else {
+                    frame.time = static_cast<float>(outData.frames.size()) / 60.0f;
+                }
+
                 outData.frames.push_back(frame);
             }
         }
@@ -264,6 +361,28 @@ bool ReplayIO::LoadFromFile(const std::string& filepath, ReplayData& outData) {
         ReplayManager::GetInstance()->RebuildFramesFromMml(outData);
     } else {
         outData.totalFrames = static_cast<int>(outData.frames.size());
+    }
+
+    // 差分で保存された動的オブジェクトの状態を、全フレーム分に展開する
+    if (!objectRecords.empty() && outData.totalFrames > 0) {
+        outData.objectFrames.assign(outData.totalFrames, ReplayObjectFrame{});
+
+        std::vector<ReplayObjectState> activeStates; // 現在有効な状態（IDごとに最新のもの）
+        size_t recordIdx = 0;
+        for (int f = 0; f < outData.totalFrames; ++f) {
+            while (recordIdx < objectRecords.size() && objectRecords[recordIdx].frame <= f) {
+                const ReplayObjectState& state = objectRecords[recordIdx].state;
+                auto it = std::find_if(activeStates.begin(), activeStates.end(),
+                    [&state](const ReplayObjectState& s) { return s.id == state.id; });
+                if (it != activeStates.end()) {
+                    *it = state;
+                } else {
+                    activeStates.push_back(state);
+                }
+                ++recordIdx;
+            }
+            outData.objectFrames[f].states = activeStates;
+        }
     }
 
     return true;

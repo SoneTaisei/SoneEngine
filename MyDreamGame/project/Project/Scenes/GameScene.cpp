@@ -42,6 +42,8 @@ void GameScene::OnExit(SceneManager* sceneManager) {
 GameScene::~GameScene() {
     // 覆い切って次シーンへ持ち越す途中以外は遷移演出を捨てる（このシーンの鎖・マップへの参照を切る）
     TransitionDirector::GetInstance()->OnSceneDestroyed(chainManager_.get());
+    // リプレイのオブジェクト記録対象から外す（次シーンのマップと混ざらないようにする）
+    ReplayManager::GetInstance()->UnregisterObjectProvider(map_.get());
 }
 
 void GameScene::GoToNextStage(SceneManager* sceneManager) {
@@ -124,6 +126,8 @@ void GameScene::Initialize() {
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
     map_->Initialize( s_TargetMapFilePath);
+    // 動く床・扉などの状態をリプレイに記録・復元できるように登録する
+    ReplayManager::GetInstance()->RegisterObjectProvider(map_.get());
     Log("GameScene::Initialize: Map Initialized\n");
 
     // 6. プレイヤーの生成と初期化
@@ -237,7 +241,19 @@ void GameScene::Update(SceneManager *sceneManager) {
                 chainManager_->ResetAll();
             }
         }
+        if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
+            // プレイ開始時はゲーム内クロックを0に戻す（動く床の位相を毎回同じにするため）
+            ReplayManager::GetInstance()->ResetPlayClock();
+        }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
+
+        // 動く床などが参照する共有クロックを進める。
+        // 再生中は記録された時刻になるため、シークやループでも録画時と同じ位置になる。
+        // UpdatePlayback より前に呼ぶこと（UpdatePlayback がフレーム番号を進めてしまうため）。
+        int replayFrameForThisTick = ReplayManager::GetInstance()->GetCurrentFrame();
+        if (isCurrentlyPlaying || ReplayManager::GetInstance()->IsPlaying()) {
+            ReplayManager::GetInstance()->UpdatePlayClock(dt);
+        }
 
         bool isRewinding = false;
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
@@ -289,6 +305,9 @@ void GameScene::Update(SceneManager *sceneManager) {
                     // 再構築を再開（ここで一括構築される）
                     map_->SetRebuildEnabled(true);
                 }
+
+                // 再構築でブロックが作り直されるので、その後に動く床などの状態を巻き戻す
+                ReplayManager::GetInstance()->RestoreRecordedObjectsAtCurrent();
             }
         } else {
             // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
@@ -388,6 +407,12 @@ void GameScene::Update(SceneManager *sceneManager) {
 
             if (gameCamera_ && map_) {
                 gameCamera_->SetRooms(map_->GetRooms());
+            }
+
+            // リプレイ再生中は、動く床・扉・スイッチ等の状態を記録時のものへ戻す。
+            // マップ再構築（LoadFromString）の後・マップ更新の前に行う必要がある。
+            if (ReplayManager::GetInstance()->IsPlaying()) {
+                ReplayManager::GetInstance()->RestoreObjectsAtFrame(replayFrameForThisTick);
             }
 
             // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）

@@ -1,6 +1,8 @@
 #pragma once
 #include "GameObject/PrimitiveObject.h"
 #include <memory>
+#include <vector>
+#include <cstdint>
 #include <nlohmann/json.hpp>
 #include "GameObject/Object3D.h"
 #include "Core/Utility/Structs.h"
@@ -58,6 +60,27 @@ public:
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
 
+    // ===== リプレイ対応 =====
+    // リプレイに毎フレーム状態を記録する対象かどうか。
+    // 位置・回転・スケール・色・破壊フラグの変化は MapChip2D 側が自動で検出して
+    // 記録対象に加えるため、新しいブロックを追加しても基本的に何もしなくてよい。
+    // 「見た目は変わらないが内部状態を持つ」ブロックだけ、これを true にする。
+    virtual bool IsReplayTracked() const { return IsMoving(); }
+
+    // 派生ブロック固有の内部状態（タイマー・開閉率など）を float 列に詰める。
+    // 位置・回転・スケール・色・破壊フラグは共通で保存されるので、ここには含めなくてよい。
+    virtual void CaptureReplayState(std::vector<float>& outCustom) const { outCustom.clear(); }
+
+    // CaptureReplayState で詰めた内容から内部状態を復元する。
+    virtual void RestoreReplayState(const std::vector<float>& custom) { (void)custom; }
+
+    // リプレイ上でブロックを一意に識別するID（配置チップ座標から生成する）。
+    // マップは録画時の状態から復元されるため、同じ座標のブロックは必ず同じIDになる。
+    virtual uint64_t GetReplayObjectId() const {
+        return (static_cast<uint64_t>(static_cast<uint32_t>(chipX_) & 0xFFFFu) << 16) |
+               (static_cast<uint32_t>(chipY_) & 0xFFFFu);
+    }
+
 #ifdef USE_IMGUI
     // ImGuiによるブロックパラメータの調整やデバッグ操作用UI
     virtual void DrawImGui() {}
@@ -69,6 +92,7 @@ public:
     // 消滅フラグ（コイン取得時など）
     bool IsDestroyed() const { return isDestroyed_; }
     void Destroy() { isDestroyed_ = true; }
+    void SetDestroyed(bool destroyed) { isDestroyed_ = destroyed; }
 
     void SetupCollider() {
         if (!gameObject_) return;

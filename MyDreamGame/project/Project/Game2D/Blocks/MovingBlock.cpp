@@ -1,6 +1,6 @@
 ﻿#include "MovingBlock.h"
 #include "Game2D/Player/Player2D.h"
-#include "Core/TimeManager.h"
+#include "Editor/Replay/ReplayManager.h"
 #include <cmath>
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -15,6 +15,7 @@ void MovingBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, floa
     startY_ = worldY;
     prevPosition_ = {worldX, worldY, 0.0f};
     deltaPosition_ = {0.0f, 0.0f, 0.0f};
+    hasPrevPosition_ = false;
 
     gameObject_ = std::make_unique<GameObject>();
     gameObject_->Initialize();
@@ -44,6 +45,22 @@ void MovingBlock::SetProperties(const nlohmann::json& properties) {
     }
 }
 
+Vector3 MovingBlock::CalcPositionAt(float time) const {
+    // 配置された初期座標を元にタイミング（位相）をずらす
+    float phase = startX_ * 0.5f + startY_ * 0.5f;
+    // 指定した moveSpeed_ が「最大速度」になるように角速度を計算 (v = r * ω より ω = v / r)
+    float omega = (moveRange_ > 0.0f) ? (moveSpeed_ / moveRange_) : 0.0f;
+    float offset = std::sin(time * omega + phase) * moveRange_;
+
+    Vector3 newPos = {startX_, startY_, 0.0f};
+    if (moveAxis_ == "X" || moveAxis_ == "x") {
+        newPos.x += offset;
+    } else if (moveAxis_ == "Y" || moveAxis_ == "y") {
+        newPos.y += offset;
+    }
+    return newPos;
+}
+
 void MovingBlock::Update() {
     BaseBlock::Update();
     if (!gameObject_) return;
@@ -53,32 +70,48 @@ void MovingBlock::Update() {
     if (!EditorManager::IsPlaying()) return;
 #endif
 
-    float dt = TimeManager::GetInstance().GetDeltaTime();
-    if (dt <= 0.0f) return;
-    
-    timer_ += dt;
+    // 自前で deltaTime を積算せず、ReplayManager が持つ共有のゲーム内時刻を使う。
+    // 再生中はこの値が記録されたフレームの時刻になるため、
+    // シークやループをしても録画時とまったく同じ位置に来る。
+    float newTime = ReplayManager::GetInstance()->GetPlayTime();
+    float elapsed = newTime - timer_;
+    timer_ = newTime;
 
     auto* tc = gameObject_->GetComponent<TransformComponent>();
-    if (tc) {
-        // 配置された初期座標を元にタイミング（位相）をずらす
-        float phase = startX_ * 0.5f + startY_ * 0.5f;
-        // 指定した moveSpeed_ が「最大速度」になるように角速度を計算 (v = r * ω より ω = v / r)
-        float omega = (moveRange_ > 0.0f) ? (moveSpeed_ / moveRange_) : 0.0f;
-        float offset = std::sin(timer_ * omega + phase) * moveRange_;
-        Vector3 newPos = {startX_, startY_, 0.0f};
+    if (!tc) return;
 
-        if (moveAxis_ == "X" || moveAxis_ == "x") {
-            newPos.x += offset;
-        } else if (moveAxis_ == "Y" || moveAxis_ == "y") {
-            newPos.y += offset;
-        }
+    Vector3 newPos = CalcPositionAt(timer_);
 
-        deltaPosition_ = {newPos.x - prevPosition_.x, newPos.y - prevPosition_.y, 0.0f};
-        currentVelocity_ = {deltaPosition_.x / dt, deltaPosition_.y / dt, 0.0f};
+    if (!hasPrevPosition_) {
+        // 初回はまだ移動していない扱いにして、速度が跳ね上がらないようにする
         prevPosition_ = newPos;
-
-        tc->SetPosition(newPos);
+        hasPrevPosition_ = true;
     }
+
+    deltaPosition_ = {newPos.x - prevPosition_.x, newPos.y - prevPosition_.y, 0.0f};
+    if (elapsed > 0.0f) {
+        currentVelocity_ = {deltaPosition_.x / elapsed, deltaPosition_.y / elapsed, 0.0f};
+    } else {
+        // 一時停止・シーク直後は速度を持たせない（プレイヤーが乗っていても押し出さない）
+        currentVelocity_ = {0.0f, 0.0f, 0.0f};
+    }
+    prevPosition_ = newPos;
+
+    tc->SetPosition(newPos);
+}
+
+void MovingBlock::CaptureReplayState(std::vector<float>& outCustom) const {
+    outCustom.clear();
+    outCustom.push_back(timer_);
+}
+
+void MovingBlock::RestoreReplayState(const std::vector<float>& custom) {
+    if (custom.empty()) return;
+    timer_ = custom[0];
+    prevPosition_ = CalcPositionAt(timer_);
+    deltaPosition_ = {0.0f, 0.0f, 0.0f};
+    currentVelocity_ = {0.0f, 0.0f, 0.0f};
+    hasPrevPosition_ = true;
 }
 
 void MovingBlock::OnPlayerStand(Player2D* player) {

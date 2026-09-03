@@ -25,6 +25,10 @@ public:
     void SetProperties(const nlohmann::json& properties) override;
     void Reset() override;
 
+    // リプレイ対応（巡回状態・警戒ゲージ・向きを保存・復元する）
+    void CaptureReplayState(std::vector<float>& outCustom) const override;
+    void RestoreReplayState(const std::vector<float>& custom) override;
+
     void OnCollision(Player2D* player) override;
 
     // 視界領域を取得
