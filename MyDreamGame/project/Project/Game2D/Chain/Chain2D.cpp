@@ -630,6 +630,14 @@ void Chain2D::SetAllVelocities(const Vector3& velocity, float dt) {
     }
 }
 
+Vector3 Chain2D::GetNodeVelocity(int index) const {
+    if (index < 0 || index >= static_cast<int>(nodes_.size()) || lastStepDt_ <= 0.0f) {
+        return { 0.0f, 0.0f, 0.0f };
+    }
+    Vector3 d = nodes_[index].pos - nodes_[index].prevPos;
+    return { d.x / lastStepDt_, d.y / lastStepDt_, 0.0f };
+}
+
 Vector3 Chain2D::GetEndVelocity() const {
     if (nodes_.empty() || lastStepDt_ <= 0.0f) {
         return { 0.0f, 0.0f, 0.0f };

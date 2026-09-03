@@ -13,6 +13,8 @@ public:
     bool IsSolid() const override { return false; }
     
     void OnCollision(Player2D* player) override;
+    // 鎖（投げた鎖・落とした鎖・宝石）が乗っている間も押される
+    void OnChainTouch(const Vector3& pos, float radius, float speed) override;
     void SetProperties(const nlohmann::json& properties) override;
     void Reset() override;
 

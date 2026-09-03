@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "GameObject/PrimitiveObject.h"
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -51,6 +51,10 @@ public:
     // プレイヤーが横などから接触した際の処理
     virtual void OnPlayerTouch() {}
     virtual void OnPlayerTouch(Player2D* player) { OnPlayerTouch(); }
+
+    // 鎖（節・末端の重り）がこのブロックのチップに重なった際の処理（スイッチを鎖で押す等）
+    // pos/radius は節の円、speed は節の速さ（チップ/秒。叩いて作動する仕掛け用）。鎖の物理更新後に毎フレーム呼ばれる
+    virtual void OnChainTouch(const Vector3& pos, float radius, float speed) { (void)pos; (void)radius; (void)speed; }
 
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}

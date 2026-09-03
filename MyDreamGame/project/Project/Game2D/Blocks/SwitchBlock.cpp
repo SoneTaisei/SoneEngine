@@ -68,6 +68,13 @@ void SwitchBlock::Update() {
 
 void SwitchBlock::OnCollision(Player2D* player) {
     // プレイヤーが重なった（通過した）時、タイマーをリセット
+    (void)player;
+    pressedTimer_ = 0.1f;
+}
+
+void SwitchBlock::OnChainTouch(const Vector3& pos, float radius, float speed) {
+    // 鎖の節や宝石が乗っている間はプレイヤーと同じく押され続ける（重さスイッチ）
+    (void)pos; (void)radius; (void)speed;
     pressedTimer_ = 0.1f;
 }
 

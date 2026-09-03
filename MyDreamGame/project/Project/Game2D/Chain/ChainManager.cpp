@@ -1,4 +1,6 @@
 ﻿#include "ChainManager.h"
+#include "Game2D/Blocks/BaseBlock.h"
+#include <cmath>
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "GameObject/Object3D.h"
@@ -188,6 +190,7 @@ void ChainManager::Update(float dt, MapChip2D* map) {
         for (auto& dropped : droppedChains_) {
             dropped.chain->Update(dt, map, player_);
         }
+        NotifyBlockContacts(map);
         return;
     }
 
@@ -206,6 +209,9 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     for (auto& dropped : droppedChains_) {
         dropped.chain->Update(dt, map, player_);
     }
+
+    // 鎖が乗っているブロックへ通知（スイッチは鎖でも押せる）
+    NotifyBlockContacts(map);
 
     // お宝の見た目：構え中は振りに合わせて自転させ、発射の勢いが十分な間は明るくして「今離せば強く飛ぶ」合図にする
     if (treasure_ && spin_) {
@@ -334,6 +340,52 @@ void ChainManager::ApplyTreasureParams() {
     }
     if (spin_) {
         spin_->SetParams(params_); // 宝石の質量はスピンの振りにくさにも使う
+    }
+}
+
+void ChainManager::NotifyBlockContacts(MapChip2D* map) {
+    if (!map) {
+        return;
+    }
+    // プレイヤーと同じくチップ単位で判定する（節の円が重なるチップのブロックに通知）。動くブロックは対象外
+    auto notify = [&](const Chain2D* chain) {
+        if (!chain) {
+            return;
+        }
+        const auto& nodes = chain->GetNodes();
+        for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
+            // 固定されたアンカー（手・吊り点）は鎖ではないので除外。落ちている鎖は先頭も節として扱う
+            if (i == 0 && chain->GetAnchorMode() != ChainAnchorMode::kFree) {
+                continue;
+            }
+            const VerletNode& node = nodes[i];
+            float r = node.radius;
+            Vector3 vel = chain->GetNodeVelocity(i);
+            float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+            int x0 = map->WorldToChipX(node.pos.x - r);
+            int x1 = map->WorldToChipX(node.pos.x + r);
+            int y0 = map->WorldToChipY(node.pos.y - r);
+            int y1 = map->WorldToChipY(node.pos.y + r);
+            for (int cy = y0; cy <= y1; ++cy) {
+                for (int cx = x0; cx <= x1; ++cx) {
+                    BaseBlock* block = map->GetBlock(cx, cy);
+                    if (!block || block->IsDestroyed() || block->IsMoving()) {
+                        continue;
+                    }
+                    block->OnChainTouch(node.pos, r, speed);
+                }
+            }
+        }
+    };
+
+    if (!transitionHidden_) {
+        notify(playerChain_.get()); // 手に持っている鎖・投げた直後の鎖・末端の宝石
+    }
+    for (auto& chain : worldChains_) {
+        notify(chain.get());
+    }
+    for (auto& dropped : droppedChains_) {
+        notify(dropped.chain.get());
     }
 }
 

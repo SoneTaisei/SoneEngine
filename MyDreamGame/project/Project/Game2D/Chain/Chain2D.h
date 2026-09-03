@@ -120,6 +120,8 @@ public:
     Vector3 GetEndPosition() const { return nodes_.empty() ? anchorPos_ : nodes_.back().pos; }
     /// <summary>末端ノードの暗黙速度（Verlet の pos - prevPos を直近の積分ステップ幅で割ったもの）</summary>
     Vector3 GetEndVelocity() const;
+    /// <summary>任意ノードの暗黙速度</summary>
+    Vector3 GetNodeVelocity(int index) const;
 
     /// <summary>ノード列（遷移用の複製など、読み取り専用）</summary>
     const std::vector<VerletNode>& GetNodes() const { return nodes_; }

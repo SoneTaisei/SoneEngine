@@ -111,6 +111,8 @@ private:
     void ApplyTreasureParams();
     // お宝の表示位置をプレイヤー鎖の末端に合わせる
     void SyncTreasureTransform();
+    // 全ての鎖の節（と宝石）が重なっているブロックへ OnChainTouch を通知する（スイッチを鎖で押す等。物理更新の後に呼ぶ）
+    void NotifyBlockContacts(MapChip2D* map);
 
     Player2D* player_ = nullptr;
     ChainParams params_; // 共有パラメータ（ChainConfigからロード）
