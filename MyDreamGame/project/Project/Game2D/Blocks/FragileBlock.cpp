@@ -11,6 +11,7 @@
 int FragileBlock::s_currentChainWeight = -1;
 int FragileBlock::s_previewChainWeight = -1;
 bool FragileBlock::s_highlightAll = false;
+bool FragileBlock::s_debugNoBreak = false;
 
 namespace {
     constexpr int kMaxPips = 8;              // 表示する点の上限（鎖の上限本数と同じ）
@@ -200,6 +201,11 @@ void FragileBlock::Update() {
         breakTimer_ += dt;
 
         if (breakTimer_ >= breakDuration_) {
+            if (s_debugNoBreak) {
+                // デバッグ用：消えずに元に戻る（何度でも試せる）
+                Reset();
+                return;
+            }
             // 落ちて消える
             isDestroyed_ = true;
             return;

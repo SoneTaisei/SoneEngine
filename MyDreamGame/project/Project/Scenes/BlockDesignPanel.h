@@ -9,18 +9,27 @@ class Camera;
 /// ブロック設計パネル（エディタ用。USE_IMGUI 時だけ中身がある）
 /// ・ゲームビューでどのブロックにもマウスを乗せる／クリックして選べる
 /// ・選んだ1枚のプロパティ（パレットの値）を、その1枚だけ上書きして保存できる（MapChip2D の blockOverrides）
-/// ・スイッチ／ドアの連動一覧（番号ごとのペア、片方しか無い番号の警告）
+/// ・スイッチ／ドアの連動：番号バッジ、マウスを乗せた時の小さな番号パネル、1〜9 キーで番号、ペアを作るモード
 /// ・ゲームビューに設計情報を重ねて描く（連動番号、動く床の範囲、警備員の巡回範囲、ドアの開く向き、選択枠）
 /// </summary>
 class BlockDesignPanel {
 public:
-    /// <summary>インスペクター内の折りたたみとして毎フレーム呼ぶ（開いている時だけ）</summary>
+    /// <summary>「Block Design」折りたたみの中身（選んだ1枚のプロパティ、重ね描きの切り替え、保存）</summary>
     static void Draw(MapChip2D* map, Camera* camera, const std::string& stagePath);
-    /// <summary>ゲームビューへの重ね描きとマウス選択。折りたたみが閉じていても毎フレーム呼ぶ</summary>
+    /// <summary>「Switch & Door」折りたたみの中身（連動番号の割り当て）。見つけやすいように別の折りたたみで出す</summary>
+    static void DrawLinksPanel(MapChip2D* map, Camera* camera, const std::string& stagePath);
+    /// <summary>ゲームビューへの重ね描きとマウス選択、番号キー、マウスを乗せた時の番号パネル。折りたたみが閉じていても毎フレーム呼ぶ</summary>
     static void DrawOverlays(MapChip2D* map, Camera* camera);
 
-    /// <summary>ゲームビューのマウス位置をチップ座標に変換（ゲームビューの外なら false）</summary>
+    /// <summary>他のパネル（崩れる床など）から「未保存の変更がある」を共有する</summary>
+    static void MarkUnsaved();
+    /// <summary>保存ボタンと未保存の表示（各パネルで共通）</summary>
+    static void DrawSaveRow(MapChip2D* map, const std::string& stagePath, const char* id);
+
+    /// <summary>マウス位置をチップ座標に変換（ゲームビューとマップチップ画面の両方に対応。どちらの外でも false）</summary>
     static bool MouseToChip(MapChip2D* map, Camera* camera, int& outX, int& outY);
-    /// <summary>ワールド座標（z=0）をゲームビュー上の画面座標に変換</summary>
+    /// <summary>ワールド座標（z=0）を、今表示している画面（ゲームビューかマップチップ画面）の画面座標に変換</summary>
     static bool WorldToScreen(Camera* camera, const Vector3& world, float& outX, float& outY);
+    /// <summary>今マウスが乗っている画面でクリック選択ができるか（マップチップ画面ではクリックが塗りになるので不可）</summary>
+    static bool CanClickSelect();
 };
