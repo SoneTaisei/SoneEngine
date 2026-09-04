@@ -21,6 +21,7 @@
 #include "MapEditor/MapEditor.h"
 #include "LightEditor/LightEditor.h"
 #include "Model3DEditor/Model3DEditor.h"
+#include "PostEffectEditor/PostEffectEditor.h"
 
 class SceneManager;
 class ParticleManager;
@@ -95,6 +96,7 @@ public:
     MapEditor* GetMapEditor() const { return mapEditor_.get(); }
     LightEditor* GetLightEditor() const { return lightEditor_.get(); }
     Model3DEditor* GetModel3DEditor() const { return model3DEditor_.get(); }
+    PostEffectEditor* GetPostEffectEditor() const { return postEffectEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -330,6 +332,7 @@ private:
     std::unique_ptr<MapEditor> mapEditor_;
     std::unique_ptr<LightEditor> lightEditor_;
     std::unique_ptr<Model3DEditor> model3DEditor_;
+    std::unique_ptr<PostEffectEditor> postEffectEditor_;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅
