@@ -83,10 +83,10 @@ void GameCamera::InitializeOrthographic(int kClientWidth, int kClientHeight, flo
 
 void GameCamera::UpdateMatrixOrthographic() {
     // ターゲットへの追従（ルームベース遷移）
-    if (followTarget_) {
-        // ターゲットの現在の座標
-        float targetX = followTarget_->x;
-        float targetY = followTarget_->y;
+    if (followTarget_ && isFollowEnabled_) {
+        // ターゲットの現在の座標（オフセットを加味）
+        float targetX = followTarget_->x + followOffset_.x;
+        float targetY = followTarget_->y + followOffset_.y;
 
         // カスタム境界線リストを用いたルーム計算
         int newRoomX = currentRoomX_;

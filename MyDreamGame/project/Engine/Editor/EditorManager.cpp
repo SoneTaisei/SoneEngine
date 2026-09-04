@@ -1271,10 +1271,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- デバッグカメラの切り替え制御 ---
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F3)) {
         useDebugCamera_ = !useDebugCamera_;
-        if (useDebugCamera_) {
-            debugCamera->SetTranslation(gameCamera->GetTranslation());
-            debugCamera->SetRotation(gameCamera->GetRotation());
-        }
     }
 
     // --- Inspector ウィンドウ ---
@@ -1733,22 +1729,97 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 }
 
                 ImGui::Spacing();
-                ImGui::Text("グローバル設定 (ゲームカメラ)");
+                ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "カメラ設定 (デバッグカメラ)");
+                ImGui::Separator();
+                if (debugCamera) {
+                    if (activeMainTab_ == "マップチップ画面") {
+                        ImGui::TextDisabled("※現在『マップチップ画面』のため2Dマップ用カメラが表示されています。");
+                    }
+
+                    ImGui::Checkbox("デバッグカメラを使用 (F3)", &useDebugCamera_);
+                    ImGui::SameLine();
+                    if (useDebugCamera_) {
+                        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "[アクティブ]");
+                    } else {
+                        ImGui::TextDisabled("[非アクティブ]");
+                    }
+
+                    Vector3 dbgPos = debugCamera->GetTranslation();
+                    float dbgPosArr[3] = { dbgPos.x, dbgPos.y, dbgPos.z };
+                    if (ImGui::DragFloat3("カメラ座標 (Position)##DebugCam", dbgPosArr, 0.1f, -10000.0f, 10000.0f, "%.2f")) {
+                        debugCamera->SetTranslation({ dbgPosArr[0], dbgPosArr[1], dbgPosArr[2] });
+                        debugCamera->UpdateMatrix();
+                        useDebugCamera_ = true; // 座標変更時に自動的にデバッグカメラをアクティブ化
+                    }
+
+                    Vector3 dbgRot = debugCamera->GetRotation();
+                    float dbgRotDeg[3] = { dbgRot.x * 180.0f / 3.14159265f, dbgRot.y * 180.0f / 3.14159265f, dbgRot.z * 180.0f / 3.14159265f };
+                    if (ImGui::DragFloat3("カメラ角度 (Rotation)##DebugCam", dbgRotDeg, 0.5f, -180.0f, 180.0f, "%.1f")) {
+                        debugCamera->SetRotation({ dbgRotDeg[0] * 3.14159265f / 180.0f, dbgRotDeg[1] * 3.14159265f / 180.0f, dbgRotDeg[2] * 3.14159265f / 180.0f });
+                        debugCamera->UpdateMatrix();
+                        useDebugCamera_ = true;
+                    }
+
+                    if (gameCamera && ImGui::Button("ゲームカメラの位置に同期##DebugCam", ImVec2(-1, 0))) {
+                        debugCamera->SetTranslation(gameCamera->GetTranslation());
+                        debugCamera->SetRotation(gameCamera->GetRotation());
+                        debugCamera->UpdateMatrix();
+                    }
+                } else {
+                    ImGui::TextDisabled("※デバッグカメラが有効ではありません。");
+                }
+
+                ImGui::Spacing();
+                ImGui::Text("グローバル設定 (ゲームカメラ: 2Dゲーム用)");
                 ImGui::Separator();
                 if (gameCamera) {
+                    // ターゲット追従のON/OFF
+                    bool followEnabled = gameCamera->IsFollowEnabled();
+                    if (ImGui::Checkbox("ゲームカメラのターゲット追従", &followEnabled)) {
+                        gameCamera->SetFollowEnabled(followEnabled);
+                    }
+                    ImGui::SameLine();
+                    if (followEnabled) {
+                        ImGui::TextDisabled("(追従中)");
+                    } else {
+                        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "(手動固定モード)");
+                    }
+
+                    // ゲームカメラ座標
+                    Vector3 pos = gameCamera->GetTranslation();
+                    float posArr[3] = { pos.x, pos.y, pos.z };
+                    if (TrackActionDragFloat3("ゲームカメラ座標 (Position)##GameCam", posArr, 0.1f, -10000.0f, 10000.0f, "%.2f", [=](const Vector3& v){ 
+                        gameCamera->SetTranslation(v); 
+                        gameCamera->UpdateMatrix();
+                    })) {
+                        pos.x = posArr[0];
+                        pos.y = posArr[1];
+                        pos.z = posArr[2];
+                        gameCamera->SetTranslation(pos);
+                        gameCamera->SetFollowEnabled(false);
+                        gameCamera->UpdateMatrix();
+                    }
+
+                    // 追従時のオフセット
+                    Vector3 offset = gameCamera->GetFollowOffset();
+                    float offsetArr[2] = { offset.x, offset.y };
+                    if (ImGui::DragFloat2("追従オフセット (Offset X/Y)##GameCam", offsetArr, 0.1f, -1000.0f, 1000.0f, "%.2f")) {
+                        gameCamera->SetFollowOffset({ offsetArr[0], offsetArr[1], 0.0f });
+                    }
+
                     float scale = gameCamera->GetScale();
                     Vector3 rot = gameCamera->GetRotation();
                     float follow = gameCamera->GetFollowLerp();
                     float trans = gameCamera->GetTransitionLerp();
 
                     // カメラスケール (Zoom)
-                    if (TrackActionDragFloat("カメラスケール (Zoom)", &scale, 0.01f, 0.1f, 10.0f, "%.2f", [=](float v){ gameCamera->SetScale(v); SaveSceneConfig(); })) {
+                    if (TrackActionDragFloat("カメラスケール (Zoom)##GameCam", &scale, 0.01f, 0.1f, 10.0f, "%.2f", [=](float v){ gameCamera->SetScale(v); SaveSceneConfig(); })) {
                         gameCamera->SetScale(scale);
                     }
 
                     // カメラ角度 (Rotation) - ラジアンを度数法で表示・編集
                     float rotDeg[3] = { rot.x * 180.0f / 3.14159265f, rot.y * 180.0f / 3.14159265f, rot.z * 180.0f / 3.14159265f };
-                    if (TrackActionDragFloat3("カメラ角度 (Rotation)", rotDeg, 0.5f, -180.0f, 180.0f, "%.1f", [=](const Vector3& v){ 
+                    if (TrackActionDragFloat3("カメラ角度 (Rotation)##GameCam", rotDeg, 0.5f, -180.0f, 180.0f, "%.1f", [=](const Vector3& v){ 
                         Vector3 r = { v.x * 3.14159265f / 180.0f, v.y * 3.14159265f / 180.0f, v.z * 3.14159265f / 180.0f };
                         gameCamera->SetRotation(r); SaveSceneConfig(); 
                     })) {
@@ -1758,10 +1829,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         gameCamera->SetRotation(rot);
                     }
 
-                    if (TrackActionDragFloat("追従速度 (FollowLerp)", &follow, 0.005f, 0.0f, 1.0f, "%.3f", [=](float v){ gameCamera->SetFollowLerp(v); SaveSceneConfig(); })) {
+                    if (TrackActionDragFloat("追従速度 (FollowLerp)##GameCam", &follow, 0.005f, 0.0f, 1.0f, "%.3f", [=](float v){ gameCamera->SetFollowLerp(v); SaveSceneConfig(); })) {
                         gameCamera->SetFollowLerp(follow);
                     }
-                    if (TrackActionDragFloat("遷移速度 (TransitionLerp)", &trans, 0.005f, 0.0f, 1.0f, "%.3f", [=](float v){ gameCamera->SetTransitionLerp(v); SaveSceneConfig(); })) {
+                    if (TrackActionDragFloat("遷移速度 (TransitionLerp)##GameCam", &trans, 0.005f, 0.0f, 1.0f, "%.3f", [=](float v){ gameCamera->SetTransitionLerp(v); SaveSceneConfig(); })) {
                         gameCamera->SetTransitionLerp(trans);
                     }
 
