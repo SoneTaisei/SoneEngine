@@ -97,8 +97,10 @@ public:
     // --- お宝（ゴール判定・敗北判定・カメラ用のフック） ---
     Treasure2D* GetTreasure() const { return treasure_.get(); }
     Vector3 GetTreasurePosition() const { return treasure_ ? treasure_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f }; }
-    /// <summary>お宝がプレイヤー鎖につながっているか（将来「鎖が途切れる=敗北」用。現状は常に true）</summary>
-    bool IsTreasureConnected() const { return playerChain_ && playerChain_->GetEndWeight().enabled; }
+    /// <summary>お宝がプレイヤー鎖につながっているか（ちぎれていない）</summary>
+    bool IsTreasureConnected() const { return playerChain_ && playerChain_->GetEndWeight().enabled && !tornChain_; }
+    /// <summary>鎖がちぎれてミスになった直後（復活まで）</summary>
+    bool IsTorn() const { return tornChain_ != nullptr; }
 
 private:
     // ソケット（手のジョイント）のワールド座標を取得。ジョイントが無ければプレイヤー座標で代用
@@ -115,6 +117,10 @@ private:
     void NotifyBlockContacts(MapChip2D* map);
     // プレイヤーが「回せる場所」（木の板 ThinPlatformBlock の上）にいるかを調べ、スピンの可否を更新する
     void UpdateSpinSpots(MapChip2D* map);
+    // ちぎれ判定：鎖が伸び切った状態が続いたら鎖をその場に落としてミスにする。復活したら落ちた鎖を消す
+    void UpdateTear(float dt, MapChip2D* map);
+    void Tear();
+    void ClearTorn();
 
     Player2D* player_ = nullptr;
     ChainParams params_; // 共有パラメータ（ChainConfigからロード）
@@ -137,4 +143,9 @@ private:
     int initialChainLength_ = 3; // シーン開始時の個数（リセット時に戻す）
     int droppedCounter_ = 0;     // 自由鎖の命名用連番
     bool transitionHidden_ = false; // ステージクリア遷移中（プレイヤー鎖とお宝は遷移側の複製が描かれる）
+
+    // ちぎれ：ちぎれた鎖はその場に落ちたまま残り（tornChain_）、復活まで手元の鎖は描かない
+    std::unique_ptr<Chain2D> tornChain_;
+    float tearTimer_ = 0.0f;
+    bool wasDead_ = false;
 };

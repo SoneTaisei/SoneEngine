@@ -34,6 +34,12 @@ struct ChainParams {
     bool treasureIgnorePlayer_ = false; // お宝をプレイヤー衝突から外す（狭い通路で押されて困る時用）
     bool heldChainPlayerCollision_ = false; // 持っている鎖とプレイヤーの当たり判定（false: 判定なし。回した重りや鎖が体に引っかからない）
 
+    // --- ちぎれ（鎖が伸び切ったらミス） ---
+    bool tearEnabled_ = true;          // 宝石が地形に引っかかったまま手元が離れ、鎖が伸び切り続けたらちぎれてミスになる
+    float tearStretchRatio_ = 1.4f;    // ちぎれる伸び（直線距離 ÷ 鎖の実長）。1.0 が伸び切った状態
+    float tearStuckSpeed_ = 1.5f;      // 宝石の速さがこれ未満（引っかかって動けない）の時だけ伸びを数える（チップ/秒）
+    float tearGraceTime_ = 0.35f;      // 「伸びている かつ 宝石が止まっている」がこの秒数続いたらちぎれる（物理の一時的な伸びは無視）
+
     // --- お宝の見た目（物理とは独立。宝石モデルへの差し替えはここを書き換えるだけ） ---
     std::string treasureModelDir_ = "resources/Object/Original/sphere";
     std::string treasureModelFile_ = "sphere.obj";
@@ -42,6 +48,10 @@ struct ChainParams {
     // --- スピンジャンプ（木の板の上で構え、ピンと張った鎖を自分で振り、離すと鎖ごと飛び、プレイヤーも同じ方向へ飛ぶ） ---
     float spinRadiusMax_ = 5.0f;       // 回転半径の上限
     float spinRadiusRatio_ = 1.0f;     // 回転半径 = 鎖の実長 × これ（1.0 で節間隔ちょうど。下げると縮めた棒になり離した瞬間に伸びる）
+    float holdOffset_ = 0.9f;          // W で宝石を掲げている間の、手から真上の宝石までの距離（鎖はその間に畳まれる）
+    float throwOutTime_ = 0.2f;        // A/D で投げてから棒が鎖の実長まで伸び切るまでの秒数
+    float throwAngleDeg_ = 180.0f;     // 投げ始めの角度（真下=0。180 で真上＝頭上から振り下ろす、90 で真横）
+    float throwOmega_ = 2.0f;          // 投げた瞬間の角速度（rad/s。投げた方向へ回り続ける勢い）
     float swingStrength_ = 40.0f;      // A/Dで振る力。角加速度 = これ ÷ (宝石の質量 + 鎖の質量)
                                        // 40: 押しっぱなしでは弱く(3ユニットで3.5u/s)、交互に漕ぐと約3秒で上限到達
     float swingDamping_ = 0.25f;       // 振りの減衰（1/秒。漕がないと徐々に止まる）

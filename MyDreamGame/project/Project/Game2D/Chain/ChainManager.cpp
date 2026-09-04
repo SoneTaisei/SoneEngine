@@ -159,6 +159,10 @@ void ChainManager::DetachUnits() {
     auto dropped = std::make_unique<Chain2D>();
     dropped->InitializeFromNodes(std::move(removed), playerChain_->GetParams(),
                                  "DroppedChain_" + std::to_string(droppedCounter_++));
+    // その場に落とす：手の移動速度を引き継がない（引き継ぐと歩きながら外した時にぶっ飛ぶ）
+    dropped->ResetDynamics();
+    // 落とした鎖はプレイヤーに蹴られて動かない（拾う判定には影響しない）
+    dropped->SetPlayerCollisionEnabled(false);
     droppedChains_.push_back({ std::move(dropped), detach });
 
     Log("ChainManager: Detached " + std::to_string(detach) + " unit(s), chainLength=" +
@@ -200,9 +204,12 @@ void ChainManager::Update(float dt, MapChip2D* map) {
         spin_->Update(dt, map, player_, playerChain_.get(), lastSocketWorld_);
     }
 
-    if (playerChain_) {
+    if (playerChain_ && !tornChain_) {
         playerChain_->SyncSocket(lastSocketWorld_);
         playerChain_->Update(dt, map, player_);
+    }
+    if (tornChain_) {
+        tornChain_->Update(dt, map, nullptr); // ちぎれた鎖はその場で物理に任せる
     }
     for (auto& chain : worldChains_) {
         chain->Update(dt, map, player_);
@@ -213,6 +220,9 @@ void ChainManager::Update(float dt, MapChip2D* map) {
 
     // 鎖が乗っているブロックへ通知（スイッチは鎖でも押せる）
     NotifyBlockContacts(map);
+
+    // ちぎれ判定（伸び切った状態が続いたらミス）と、復活時の後始末
+    UpdateTear(dt, map);
 
     // お宝の見た目：構え中は振りに合わせて自転させ、発射の勢いが十分な間は明るくして「今離せば強く飛ぶ」合図にする
     if (treasure_ && spin_) {
@@ -225,8 +235,11 @@ void ChainManager::Update(float dt, MapChip2D* map) {
 }
 
 void ChainManager::Draw() {
-    if (playerChain_ && !transitionHidden_) {
+    if (playerChain_ && !transitionHidden_ && !tornChain_) {
         playerChain_->Draw();
+    }
+    if (tornChain_) {
+        tornChain_->Draw();
     }
     for (auto& chain : worldChains_) {
         chain->Draw();
@@ -244,6 +257,7 @@ void ChainManager::SetTransitionHidden(bool hidden) {
         return;
     }
     transitionHidden_ = hidden;
+    ClearTorn();
     if (spin_) {
         spin_->Cancel(player_, playerChain_.get());
         spin_->ResetInputState();
@@ -263,6 +277,7 @@ void ChainManager::ResetAll() {
         spin_->Cancel(player_, playerChain_.get());
         spin_->ResetInputState(); // 0フレーム目の縁検出を録画/再生で揃える
     }
+    ClearTorn();
     droppedChains_.clear();
 
     // 個数を初期値に戻す（リプレイはK入力を録画から再現するため、初期個数の一致が再現性の前提）
@@ -294,6 +309,7 @@ void ChainManager::OnRewindEnd() {
         spin_->Cancel(player_, playerChain_.get());
         spin_->ResetInputState();
     }
+    ClearTorn();
     droppedChains_.clear();
     if (playerChain_) {
         playerChain_->ResetDynamics();
@@ -379,9 +395,10 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
         }
     };
 
-    if (!transitionHidden_) {
+    if (!transitionHidden_ && !tornChain_) {
         notify(playerChain_.get()); // 手に持っている鎖・投げた直後の鎖・末端の宝石
     }
+    notify(tornChain_.get()); // ちぎれて落ちた鎖
     for (auto& chain : worldChains_) {
         notify(chain.get());
     }
@@ -415,15 +432,91 @@ void ChainManager::UpdateSpinSpots(MapChip2D* map) {
     }
 }
 
+void ChainManager::UpdateTear(float dt, MapChip2D* map) {
+    if (!player_ || !playerChain_) {
+        return;
+    }
+    // 復活した瞬間：ちぎれて落ちていた鎖を消し、手元の鎖は挟まれ固定を解除して手元から垂れた姿勢に作り直す
+    // （古い固定フラグが残っていると復活直後にまた「挟まれた」と判定されて無限に死ぬ）
+    bool dead = player_->IsDead();
+    if (wasDead_ && !dead) {
+        ClearTorn();
+        playerChain_->ClearCrushed();
+        playerChain_->ResetPoseHanging(lastSocketWorld_, map);
+        tearTimer_ = 0.0f;
+    }
+    wasDead_ = dead;
+
+    if (!params_.tearEnabled_ || dead || player_->IsGoal() || tornChain_ || transitionHidden_) {
+        tearTimer_ = 0.0f;
+        return;
+    }
+    // ドア等に挟まれた節があれば即ちぎれる（引っ張られて伸びるのを待たない）
+    if (playerChain_->HasCrushedNode()) {
+        Tear();
+        return;
+    }
+    // 剛体拘束中（掲げている・回している）と発射直後のクールダウン中は判定しない（飛んでいる最中の一時的な伸びを拾わない）
+    if (spin_ && (spin_->IsInStance() || spin_->GetState() == ChainSpinAction::State::kCooldown)) {
+        tearTimer_ = 0.0f;
+        return;
+    }
+    // 伸び：手元から宝石までの直線距離 ÷ 鎖の実長。宝石が地形に引っかかったまま離れると制約が負けて 1 を超える
+    // ただし速く動いている最中は制約の反復が追いつかず一時的に伸びるので、宝石がほぼ止まっている（挟まっている）時だけ数える
+    Vector3 endVel = playerChain_->GetEndVelocity();
+    float endSpeed = std::sqrt(endVel.x * endVel.x + endVel.y * endVel.y);
+    bool stretched = playerChain_->GetSpanRatio() > params_.tearStretchRatio_;
+    bool stuck = endSpeed < params_.tearStuckSpeed_;
+    if (stretched && stuck) {
+        tearTimer_ += dt;
+    } else {
+        tearTimer_ = 0.0f;
+    }
+    if (tearTimer_ >= params_.tearGraceTime_) {
+        Tear();
+    }
+}
+
+void ChainManager::Tear() {
+    if (!player_ || !playerChain_) {
+        return;
+    }
+    // 鎖はその場でちぎれて落ちる（宝石ごと。速度は消す）。手元の鎖は復活まで描かない
+    std::vector<VerletNode> nodes = playerChain_->GetNodes();
+    tornChain_ = std::make_unique<Chain2D>();
+    tornChain_->InitializeFromNodes(std::move(nodes), playerChain_->GetParams(), "TornChain");
+    tornChain_->SetEndWeight(playerChain_->GetEndWeight());
+    tornChain_->SetPlayerCollisionEnabled(false);
+    tornChain_->ResetDynamics();
+    playerChain_->ClearCrushed(); // 挟まれた節はちぎれた側に移った。手元の鎖に固定を残さない
+    tearTimer_ = 0.0f;
+    if (spin_) {
+        spin_->Cancel(player_, playerChain_.get());
+    }
+    if (treasure_) {
+        treasure_->SetHighlight(false);
+    }
+    // ちぎれ＝ミス
+    player_->Kill();
+    Log("ChainManager: chain torn (span ratio over " + std::to_string(params_.tearStretchRatio_) + ") -> miss\n");
+}
+
+void ChainManager::ClearTorn() {
+    tornChain_.reset();
+    tearTimer_ = 0.0f;
+}
+
 void ChainManager::SyncTreasureTransform() {
     if (!treasure_ || !playerChain_) {
         return;
     }
-    int n = playerChain_->GetNodeCount();
+    // ちぎれた後は落ちた鎖の先に宝石がある
+    const Chain2D* source = tornChain_ ? tornChain_.get() : playerChain_.get();
+    int n = source->GetNodeCount();
     if (n < 2) {
         return;
     }
-    treasure_->UpdateTransform(playerChain_->GetEndPosition(), playerChain_->GetNodePosition(n - 2));
+    treasure_->UpdateTransform(source->GetEndPosition(), source->GetNodePosition(n - 2));
 }
 
 Vector3 ChainManager::ComputeSocketWorld() {
@@ -486,6 +579,23 @@ void ChainManager::DrawImGui() {
     if (spin_) spin_->SetParams(params_); // minUnits_ 等はスピン側でも使うので同期する
 
     // お宝（重り）
+    ImGui::SeparatorText("Tear (chain snaps = miss)");
+    ImGui::Checkbox("Tear Enabled##Tear", &params_.tearEnabled_);
+    if (ImGui::DragFloat("Tear Stretch Ratio (直線距離/実長)##Tear", &params_.tearStretchRatio_, 0.01f, 1.05f, 5.0f)) {
+        params_.tearStretchRatio_ = std::clamp(params_.tearStretchRatio_, 1.05f, 5.0f);
+    }
+    if (ImGui::DragFloat("Tear Stuck Speed (宝石がこれ未満で停止扱い)##Tear", &params_.tearStuckSpeed_, 0.1f, 0.0f, 20.0f)) {
+        params_.tearStuckSpeed_ = std::clamp(params_.tearStuckSpeed_, 0.0f, 20.0f);
+    }
+    if (ImGui::DragFloat("Tear Grace Time##Tear", &params_.tearGraceTime_, 0.01f, 0.0f, 2.0f)) {
+        params_.tearGraceTime_ = std::clamp(params_.tearGraceTime_, 0.0f, 2.0f);
+    }
+    if (playerChain_) {
+        Vector3 ev = playerChain_->GetEndVelocity();
+        ImGui::Text("span ratio %.2f  gem speed %.1f  timer %.2f  %s", playerChain_->GetSpanRatio(),
+                    std::sqrt(ev.x * ev.x + ev.y * ev.y), tearTimer_, tornChain_ ? "[TORN]" : "");
+    }
+
     ImGui::SeparatorText("Treasure (End Weight)");
     bool treasureChanged = false;
     treasureChanged |= ImGui::DragFloat("Mass##Treasure", &params_.treasureMass_, 0.1f, 0.1f, 50.0f);
@@ -510,9 +620,13 @@ void ChainManager::DrawImGui() {
         spin_->DrawImGui();
     }
     bool spinChanged = false;
-    ImGui::TextDisabled("木の板の上で構え、振る力 / (宝石の質量 + 鎖の質量) で漕ぐ。離すと鎖ごと |角速度| x 半径 で飛び、プレイヤーもその方向へ x Transfer で飛ぶ（上限 = ジャンプ初速 x Ratio）。棒が地形に当たると解除");
+    ImGui::TextDisabled("W: どこでも宝石を頭上に掲げる → 木の板の上で A/D: その方向へ振り下ろして振り子開始 → A/D で漕ぐ → W を離すと宝石の進行方向へ飛ぶ（上限 = ジャンプ初速 x Ratio）。棒が地形に当たると解除");
     spinChanged |= ImGui::DragFloat("Spin Radius Max##Spin", &params_.spinRadiusMax_, 0.05f, 0.3f, 10.0f);
     spinChanged |= ImGui::DragFloat("Spin Radius Ratio##Spin", &params_.spinRadiusRatio_, 0.01f, 0.3f, 1.0f);
+    spinChanged |= ImGui::DragFloat("Hold Offset (掲げる高さ)##Spin", &params_.holdOffset_, 0.01f, 0.05f, 2.0f);
+    spinChanged |= ImGui::DragFloat("Throw Out Time (伸び切るまで)##Spin", &params_.throwOutTime_, 0.01f, 0.01f, 2.0f);
+    spinChanged |= ImGui::DragFloat("Throw Angle Deg (180=真上から)##Spin", &params_.throwAngleDeg_, 1.0f, 0.0f, 180.0f);
+    spinChanged |= ImGui::DragFloat("Throw Omega (投げの角速度)##Spin", &params_.throwOmega_, 0.1f, 0.0f, 20.0f);
     spinChanged |= ImGui::Checkbox("Spin Anywhere (OFF: 木の板の上でのみ回せる)##Spin", &params_.spinAnywhere_);
     if (spin_) {
         ImGui::SameLine();
@@ -531,6 +645,10 @@ void ChainManager::DrawImGui() {
         // ImGuiのキーボード入力で不正値が入っても NaN や壁すり抜けにならないよう、ChainConfig::Load と同じ正規化を行う
         params_.spinRadiusMax_ = (std::max)(0.3f, params_.spinRadiusMax_);
         params_.spinRadiusRatio_ = std::clamp(params_.spinRadiusRatio_, 0.3f, 1.0f);
+        params_.holdOffset_ = std::clamp(params_.holdOffset_, 0.05f, 2.0f);
+        params_.throwOutTime_ = std::clamp(params_.throwOutTime_, 0.01f, 2.0f);
+        params_.throwAngleDeg_ = std::clamp(params_.throwAngleDeg_, 0.0f, 180.0f);
+        params_.throwOmega_ = std::clamp(params_.throwOmega_, 0.0f, 20.0f);
         params_.swingStrength_ = (std::max)(0.0f, params_.swingStrength_);
         params_.swingDamping_ = (std::max)(0.0f, params_.swingDamping_);
         params_.chainMassPerUnit_ = (std::max)(0.0f, params_.chainMassPerUnit_);
