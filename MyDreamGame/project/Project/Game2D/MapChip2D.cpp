@@ -454,6 +454,11 @@ void MapChip2D::CreateChipObjects() {
 void MapChip2D::SetChip(int x, int y, ChipType type) {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
 
+    // 別の種類に置き換えたら、そのチップの上書き設定は捨てる
+    if (mapData_[y][x] != type) {
+        blockOverrides_.erase({x, y});
+    }
+
     // もしプレイヤー初期位置を置こうとしているなら、他の初期位置を消す
     if (type == ChipType::kPlayerSpawn) {
         for (int cy = 0; cy < mapHeight_; ++cy) {
@@ -467,6 +472,14 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
     if (mapData_[y][x] != type) {
         mapData_[y][x] = type;
         isDirty_ = true;
+
+        // 置いた瞬間に付ける上書き（例：次に置く崩れる床の上限）
+        if (!placementOverrides_.empty()) {
+            auto it = placementOverrides_.find(GetBlockTypeName(static_cast<int>(type)));
+            if (it != placementOverrides_.end() && !it->second.empty()) {
+                blockOverrides_[{x, y}] = it->second;
+            }
+        }
     }
 }
 
@@ -499,6 +512,7 @@ void MapChip2D::BucketFill(int startX, int startY, ChipType targetType, ChipType
 }
 
 void MapChip2D::ClearMap() {
+    blockOverrides_.clear();
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
             mapData_[y][x] = ChipType::kNone;
@@ -810,7 +824,21 @@ std::string MapChip2D::GetMapDataAsString() const {
         paletteArray.push_back(p);
     }
     j["customPalette"] = paletteArray;
-    
+
+    // チップごとの上書き（崩れる床の通れる上限など）
+    nlohmann::json overrides = nlohmann::json::array();
+    for (const auto& [key, props] : blockOverrides_) {
+        if (props.empty()) continue;
+        nlohmann::json o;
+        o["x"] = key.first;
+        o["y"] = key.second;
+        o["properties"] = props;
+        overrides.push_back(o);
+    }
+    if (!overrides.empty()) {
+        j["blockOverrides"] = overrides;
+    }
+
     return j.dump();
 }
 
@@ -819,6 +847,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
     
     try {
         nlohmann::json j = nlohmann::json::parse(data);
+        blockOverrides_.clear();
         if (j.contains("mapWidth") && j.contains("mapHeight")) {
             mapWidth_ = j["mapWidth"];
             mapHeight_ = j["mapHeight"];
@@ -898,6 +927,17 @@ bool MapChip2D::LoadFromString(const std::string& data) {
             }
         }
         
+        // チップごとの上書き
+        if (j.contains("blockOverrides") && j["blockOverrides"].is_array()) {
+            for (const auto& o : j["blockOverrides"]) {
+                if (!o.contains("x") || !o.contains("y") || !o.contains("properties")) continue;
+                int ox = o["x"].get<int>();
+                int oy = o["y"].get<int>();
+                if (ox < 0 || ox >= mapWidth_ || oy < 0 || oy >= mapHeight_) continue;
+                blockOverrides_[{ox, oy}] = o["properties"];
+            }
+        }
+
         RebuildChipObjects();
         return true;
     } catch (const nlohmann::json::parse_error&) {
@@ -1067,6 +1107,59 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
 }
 
 
+void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json& properties) {
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
+    nlohmann::json& slot = blockOverrides_[{x, y}];
+    if (!slot.is_object()) slot = nlohmann::json::object();
+    slot.update(properties);
+    isDirty_ = true;
+}
+
+const nlohmann::json* MapChip2D::GetBlockOverride(int x, int y) const {
+    auto it = blockOverrides_.find({x, y});
+    if (it == blockOverrides_.end() || it->second.empty()) return nullptr;
+    return &it->second;
+}
+
+void MapChip2D::ClearBlockOverride(int x, int y) {
+    if (blockOverrides_.erase({x, y}) > 0) {
+        isDirty_ = true;
+    }
+}
+
+std::string MapChip2D::GetBlockTypeName(int typeId) const {
+    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
+    for (const auto& d : palette) {
+        if (d.id == typeId) return d.type;
+    }
+    return std::string();
+}
+
+void MapChip2D::SetPlacementOverride(const std::string& blockType, const nlohmann::json& properties) {
+    if (blockType.empty()) return;
+    placementOverrides_[blockType] = properties;
+}
+
+void MapChip2D::ClearPlacementOverride(const std::string& blockType) {
+    placementOverrides_.erase(blockType);
+}
+
+const nlohmann::json* MapChip2D::GetPlacementOverride(const std::string& blockType) const {
+    auto it = placementOverrides_.find(blockType);
+    if (it == placementOverrides_.end() || it->second.empty()) return nullptr;
+    return &it->second;
+}
+
+nlohmann::json MapChip2D::GetPaletteProperties(int x, int y) const {
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return nlohmann::json::object();
+    int typeId = static_cast<int>(mapData_[y][x]);
+    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
+    for (const auto& d : palette) {
+        if (d.id == typeId) return d.properties;
+    }
+    return nlohmann::json::object();
+}
+
 std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive* boxPrimitive) {
     float worldX = ChipToWorldX(x) + (spanWidth * chipSize_) * 0.5f;
     float worldY = ChipToWorldY(y) + (spanHeight * chipSize_) * 0.5f;
@@ -1117,7 +1210,14 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         }
         
         if (def) {
-            newBlock->SetProperties(def->properties);
+            // パレットのプロパティに、このチップだけの上書きを重ねて渡す
+            if (const nlohmann::json* ov = GetBlockOverride(x, y)) {
+                nlohmann::json merged = def->properties;
+                merged.update(*ov);
+                newBlock->SetProperties(merged);
+            } else {
+                newBlock->SetProperties(def->properties);
+            }
             if (newBlock->GetGameObject()) {
                 if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                     prc->GetMaterial().color = def->color;

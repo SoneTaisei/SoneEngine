@@ -11,6 +11,8 @@
 #include "Editor/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
+#include "Game2D/Blocks/FragileBlock.h"
+#include "BlockDesignPanel.h"
 #include "Renderer/Renderer.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
@@ -21,6 +23,11 @@
 #include "Effect/TransitionDirector.h"
 #include <filesystem>
 #include <fstream>
+#include <set>
+#include <map>
+#include <algorithm>
+#include "Core/Utility/TransformFunctions.h"
+#include "Graphics/Camera.h"
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
@@ -420,6 +427,7 @@ void GameScene::Update(SceneManager *sceneManager) {
             if (chainManager_) {
                 chainManager_->HandleInput();
                 chainManager_->Reconcile();
+                FragileBlock::SetCurrentChainWeight(player_->GetChainLength()); // 崩れる床の赤い予告用
                 chainManager_->Update(dt, map_.get());
             }
 
@@ -481,6 +489,339 @@ void GameScene::Update(SceneManager *sceneManager) {
 
 }
 
+#ifdef USE_IMGUI
+namespace {
+    // ===== 崩れる床の調整パネル（インスペクター内の折りたたみ） =====
+    // ・ゲームビューで床にマウスを乗せると水色に点滅、クリックでその橋を選択
+    // ・隣り合う崩れる床は「橋」として1行にまとめ、1つの値で全部に適用（1枚ずつも開ける）
+    // ・「次に置く床の上限」を決めておくと、塗った瞬間にその上限になる
+    // ・「試し本数」で、何本持っていればどの床が崩れるかを色で確かめられる
+    constexpr int kFragileMaxLimit = 8;
+
+    struct FragileGroup {
+        std::vector<FragileBlock*> members; // 下の段から、左から
+        int minX = 0, maxX = 0, minY = 0, maxY = 0;
+        int key = 0;          // 先頭メンバーのキー（選択の識別用）
+        int minLimit = 0;
+        int maxLimit = 0;
+    };
+
+    int FragileKey(const FragileBlock* f) { return f->GetChipX() * 100000 + f->GetChipY(); }
+
+    bool FragileLess(const FragileBlock* a, const FragileBlock* b) {
+        if (a->GetChipY() != b->GetChipY()) return a->GetChipY() < b->GetChipY();
+        return a->GetChipX() < b->GetChipX();
+    }
+
+    // 上下左右でつながっている崩れる床を「橋」としてまとめる
+    std::vector<FragileGroup> BuildFragileGroups(MapChip2D* map) {
+        std::vector<FragileBlock*> floors;
+        std::map<std::pair<int, int>, FragileBlock*> byChip;
+        for (const auto& block : map->GetUpdateBlocks()) {
+            if (auto* f = dynamic_cast<FragileBlock*>(block.get())) {
+                if (f->IsDestroyed()) continue;
+                floors.push_back(f);
+                byChip[{f->GetChipX(), f->GetChipY()}] = f;
+            }
+        }
+        std::sort(floors.begin(), floors.end(), FragileLess);
+
+        std::vector<FragileGroup> groups;
+        std::set<FragileBlock*> visited;
+        for (auto* start : floors) {
+            if (visited.count(start)) continue;
+            FragileGroup g;
+            std::vector<FragileBlock*> stack;
+            stack.push_back(start);
+            visited.insert(start);
+            while (!stack.empty()) {
+                FragileBlock* f = stack.back();
+                stack.pop_back();
+                g.members.push_back(f);
+                const int dx[4] = {1, -1, 0, 0};
+                const int dy[4] = {0, 0, 1, -1};
+                for (int i = 0; i < 4; ++i) {
+                    auto it = byChip.find({f->GetChipX() + dx[i], f->GetChipY() + dy[i]});
+                    if (it != byChip.end() && !visited.count(it->second)) {
+                        visited.insert(it->second);
+                        stack.push_back(it->second);
+                    }
+                }
+            }
+            std::sort(g.members.begin(), g.members.end(), FragileLess);
+            g.minX = g.maxX = g.members.front()->GetChipX();
+            g.minY = g.maxY = g.members.front()->GetChipY();
+            g.minLimit = g.maxLimit = g.members.front()->GetPassLimit();
+            for (auto* f : g.members) {
+                g.minX = (std::min)(g.minX, f->GetChipX());
+                g.maxX = (std::max)(g.maxX, f->GetChipX());
+                g.minY = (std::min)(g.minY, f->GetChipY());
+                g.maxY = (std::max)(g.maxY, f->GetChipY());
+                g.minLimit = (std::min)(g.minLimit, f->GetPassLimit());
+                g.maxLimit = (std::max)(g.maxLimit, f->GetPassLimit());
+            }
+            g.key = FragileKey(g.members.front());
+            groups.push_back(std::move(g));
+        }
+        return groups;
+    }
+
+    void ApplyFragileLimit(MapChip2D* map, FragileBlock* f, int limit) {
+        limit = std::clamp(limit, 0, kFragileMaxLimit);
+        f->SetBreakWeight(limit + 1);
+        map->SetBlockOverride(f->GetChipX(), f->GetChipY(), {{"breakWeight", limit + 1}});
+    }
+
+    void ResetFragileLimit(MapChip2D* map, FragileBlock* f) {
+        map->ClearBlockOverride(f->GetChipX(), f->GetChipY());
+        nlohmann::json def = map->GetPaletteProperties(f->GetChipX(), f->GetChipY());
+        int bw = 4;
+        if (def.contains("breakWeight") && def["breakWeight"].is_number()) bw = def["breakWeight"].get<int>();
+        f->SetBreakWeight(bw);
+    }
+
+    // 「−  N 本  ＋」の入力。変わったら true
+    bool FragileLimitInput(const char* id, int& limit, bool mixed) {
+        ImGui::PushID(id);
+        bool changed = false;
+        if (ImGui::Button("-")) { limit -= 1; changed = true; }
+        ImGui::SameLine(0.0f, 4.0f);
+        if (mixed) {
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "混在");
+        } else {
+            ImGui::Text("%d 本", limit);
+        }
+        ImGui::SameLine(0.0f, 4.0f);
+        if (ImGui::Button("+")) { limit += 1; changed = true; }
+        limit = std::clamp(limit, 0, kFragileMaxLimit);
+        ImGui::PopID();
+        return changed;
+    }
+
+    // ゲームビューのマウス位置をチップ座標に変換（エディタのキャンバスと同じ手順）。ゲームビューの外なら false
+    bool GameViewMouseToChip(MapChip2D* map, Camera* camera, int& outX, int& outY) {
+        auto* editor = EditorManager::GetInstance();
+        if (!editor || !camera || !map) return false;
+        if (!editor->IsGameViewHovered()) return false;
+        ImVec2 pos = EditorManager::GetGameViewPos();
+        ImVec2 size = EditorManager::GetGameViewSize();
+        if (size.x <= 1.0f || size.y <= 1.0f) return false;
+        ImVec2 m = ImGui::GetIO().MousePos;
+        float u = (m.x - pos.x) / size.x;
+        float v = (m.y - pos.y) / size.y;
+        if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return false;
+        float ndcX = u * 2.0f - 1.0f;
+        float ndcY = 1.0f - v * 2.0f;
+        Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+        Matrix4x4 inv = TransformFunctions::Inverse(viewProj);
+        Vector3 nearP = TransformFunctions::EulerTransform({ndcX, ndcY, 0.0f}, inv);
+        Vector3 farP = TransformFunctions::EulerTransform({ndcX, ndcY, 1.0f}, inv);
+        Vector3 dir = {farP.x - nearP.x, farP.y - nearP.y, farP.z - nearP.z};
+        if (std::abs(dir.z) < 1e-6f) return false;
+        float t = (0.0f - nearP.z) / dir.z;
+        float wx = nearP.x + dir.x * t;
+        float wy = nearP.y + dir.y * t;
+        outX = map->WorldToChipX(wx);
+        outY = map->WorldToChipY(wy);
+        return true;
+    }
+
+    void DrawFragileFloorImGui(MapChip2D* map, Camera* camera, const std::string& stagePath) {
+        static bool highlightAll = false;
+        static int selectedGroupKey = -1;   // 橋ごとの選択
+        static int selectedBlockKey = -1;   // 1枚だけの選択
+        static bool scrollToSelected = false;
+        static bool previewEnabled = false;
+        static int previewCount = 3;
+        static bool placementEnabled = false;
+        static int placementLimit = 3;
+        static std::string lastSaveMessage;
+        static bool unsaved = false;
+
+        // --- 見つける ---
+        if (ImGui::Checkbox("崩れる床を全部点滅させる", &highlightAll)) {
+            FragileBlock::SetHighlightAll(highlightAll);
+        }
+        ImGui::TextDisabled("床の点の数 = 通れる鎖の上限本数（この本数までは乗れる、超えると震えて落ちる）");
+
+        // --- 試し本数 ---
+        if (ImGui::Checkbox("試し本数で色分け", &previewEnabled)) {
+            FragileBlock::SetPreviewChainWeight(previewEnabled ? previewCount : -1);
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(160.0f);
+        if (ImGui::SliderInt("##preview", &previewCount, 0, kFragileMaxLimit, "%d 本持っていたら")) {
+            if (previewEnabled) FragileBlock::SetPreviewChainWeight(previewCount);
+        }
+        if (previewEnabled) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.5f, 1.0f), "赤い床 = この本数では崩れる");
+        }
+
+        // --- 次に置く床の上限 ---
+        if (ImGui::Checkbox("次に置く崩れる床の上限を決める", &placementEnabled)) {
+            if (placementEnabled) {
+                map->SetPlacementOverride("FragileBlock", {{"breakWeight", placementLimit + 1}});
+            } else {
+                map->ClearPlacementOverride("FragileBlock");
+            }
+        }
+        ImGui::SameLine();
+        {
+            int v = placementLimit;
+            if (FragileLimitInput("placement", v, false)) {
+                placementLimit = v;
+                if (placementEnabled) map->SetPlacementOverride("FragileBlock", {{"breakWeight", placementLimit + 1}});
+            }
+        }
+        if (placementEnabled) {
+            ImGui::TextDisabled("有効な間、Fragile Floor を塗るとこの上限で置かれる（塗った後に一覧で直すこともできる）");
+        }
+
+        // --- ゲームビューでの選択 ---
+        auto groups = BuildFragileGroups(map);
+        FragileBlock* hovered = nullptr;
+        int mx = 0, my = 0;
+        bool debugCam = EditorManager::GetInstance() && EditorManager::GetInstance()->UseDebugCamera();
+        if (!debugCam && GameViewMouseToChip(map, camera, mx, my)) {
+            hovered = dynamic_cast<FragileBlock*>(map->GetBlock(mx, my));
+            if (hovered && hovered->IsDestroyed()) hovered = nullptr;
+            if (hovered) {
+                hovered->SetHovered(true);
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    int key = FragileKey(hovered);
+                    for (const auto& g : groups) {
+                        for (auto* f : g.members) {
+                            if (f == hovered) {
+                                selectedGroupKey = (selectedGroupKey == g.key && selectedBlockKey == -1) ? -1 : g.key;
+                                selectedBlockKey = -1;
+                                scrollToSelected = true;
+                                (void)key;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (debugCam) {
+            ImGui::TextDisabled("ゲームビューのクリック選択はデバッグカメラを切ると使える");
+        } else if (hovered) {
+            ImGui::Text("ゲームビュー: 崩れる床 (%d, %d) にマウス。クリックでその橋を選ぶ", hovered->GetChipX(), hovered->GetChipY());
+        } else {
+            ImGui::TextDisabled("ゲームビューで床にマウスを乗せると水色に点滅、クリックでその橋を選ぶ");
+        }
+
+        ImGui::Separator();
+        if (groups.empty()) {
+            ImGui::Text("このステージに崩れる床はありません（パレットの Fragile Floor を置いてください）");
+            return;
+        }
+
+        // --- 橋の一覧 ---
+        int index = 0;
+        for (auto& g : groups) {
+            ++index;
+            ImGui::PushID(g.key);
+            bool groupSelected = (selectedGroupKey == g.key && selectedBlockKey == -1);
+            for (auto* f : g.members) {
+                bool sel = groupSelected || (selectedBlockKey == FragileKey(f));
+                f->SetSelected(sel);
+            }
+
+            char label[96];
+            if (g.members.size() == 1) {
+                snprintf(label, sizeof(label), "床 %d  (%d, %d)", index, g.minX, g.minY);
+            } else if (g.minY == g.maxY) {
+                snprintf(label, sizeof(label), "橋 %d  (%d〜%d, %d)  %d枚", index, g.minX, g.maxX, g.minY, static_cast<int>(g.members.size()));
+            } else {
+                snprintf(label, sizeof(label), "橋 %d  (%d〜%d, %d〜%d)  %d枚", index, g.minX, g.maxX, g.minY, g.maxY, static_cast<int>(g.members.size()));
+            }
+            if (ImGui::Selectable(label, groupSelected, 0, ImVec2(210.0f, 0.0f))) {
+                selectedGroupKey = groupSelected ? -1 : g.key;
+                selectedBlockKey = -1;
+            }
+            if (groupSelected && scrollToSelected) {
+                ImGui::SetScrollHereY();
+                scrollToSelected = false;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("押すとこの橋が白く点滅する");
+            ImGui::SameLine();
+            ImGui::Text("通れる上限");
+            ImGui::SameLine();
+            {
+                bool mixed = (g.minLimit != g.maxLimit);
+                int v = g.minLimit;
+                if (FragileLimitInput("group", v, mixed)) {
+                    for (auto* f : g.members) ApplyFragileLimit(map, f, v);
+                    unsaved = true;
+                }
+            }
+            ImGui::SameLine();
+            bool anyOverride = false;
+            for (auto* f : g.members) {
+                if (map->GetBlockOverride(f->GetChipX(), f->GetChipY())) { anyOverride = true; break; }
+            }
+            if (!anyOverride) ImGui::BeginDisabled();
+            if (ImGui::SmallButton("パレットの値に戻す")) {
+                for (auto* f : g.members) ResetFragileLimit(map, f);
+                unsaved = true;
+            }
+            if (!anyOverride) ImGui::EndDisabled();
+
+            if (g.members.size() > 1) {
+                ImGui::Indent(16.0f);
+                if (ImGui::TreeNode("1枚ずつ")) {
+                    for (auto* f : g.members) {
+                        int key = FragileKey(f);
+                        ImGui::PushID(key);
+                        bool sel = (selectedBlockKey == key);
+                        char l2[48];
+                        snprintf(l2, sizeof(l2), "(%d, %d)", f->GetChipX(), f->GetChipY());
+                        if (ImGui::Selectable(l2, sel, 0, ImVec2(80.0f, 0.0f))) {
+                            selectedBlockKey = sel ? -1 : key;
+                            selectedGroupKey = -1;
+                        }
+                        ImGui::SameLine();
+                        int v = f->GetPassLimit();
+                        if (FragileLimitInput("one", v, false)) {
+                            ApplyFragileLimit(map, f, v);
+                            unsaved = true;
+                        }
+                        ImGui::SameLine();
+                        bool ov = (map->GetBlockOverride(f->GetChipX(), f->GetChipY()) != nullptr);
+                        if (!ov) ImGui::BeginDisabled();
+                        if (ImGui::SmallButton("戻す")) {
+                            ResetFragileLimit(map, f);
+                            unsaved = true;
+                        }
+                        if (!ov) ImGui::EndDisabled();
+                        ImGui::PopID();
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::Unindent(16.0f);
+            }
+            ImGui::PopID();
+        }
+
+        ImGui::Separator();
+        // 保存先はこのシーンが読み込んだステージファイル。エディタで別のステージに切り替えていると食い違うので、押した時だけ保存する
+        if (ImGui::Button("ステージファイルに保存 (Save)")) {
+            bool ok = map->SaveToFile(stagePath);
+            lastSaveMessage = ok ? "保存しました" : "保存に失敗しました";
+            if (ok) unsaved = false;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", stagePath.c_str());
+        if (unsaved) {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "未保存の変更があります（エディタ側の自動保存でも書き込まれます）");
+        } else if (!lastSaveMessage.empty()) {
+            ImGui::TextDisabled("%s", lastSaveMessage.c_str());
+        }
+    }
+}
+#endif
+
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
 
@@ -501,6 +842,19 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         if (player_ && gameState_ == GameState::Playing && ImGui::Button("Debug: Reach Goal (start clear transition)")) {
             player_->ReachGoal(); // goalWaitTime 後にクリア遷移が始まる
         }
+    }
+
+    // ブロック設計：ゲームビューへの重ね描きとマウス選択は毎フレーム、パネルは開いている時だけ
+    if (map_) {
+        BlockDesignPanel::DrawOverlays(map_.get(), gameCamera_);
+        if (ImGui::CollapsingHeader("Block Design (ブロック設計)")) {
+            BlockDesignPanel::Draw(map_.get(), gameCamera_, s_TargetMapFilePath);
+        }
+    }
+
+    // 崩れる床の調整（どれが崩れる床か／1枚ずつの通れる上限／ステージへの保存）
+    if (map_ && ImGui::CollapsingHeader("Fragile Floors (崩れる床)")) {
+        DrawFragileFloorImGui(map_.get(), gameCamera_, s_TargetMapFilePath);
     }
 
     // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
@@ -530,6 +884,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D while raised on wooden plank : Throw it -> swing (A/D to pump)");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "Release W : Fly in the weight's direction");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "Guard : gem hit = stun / J near glowing guard = bind / K near bound = take back / dropped chain trips");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Fragile floor : dots = chain units it can hold / red = too heavy, it shakes then falls");
         ImGui::End();
     }
 

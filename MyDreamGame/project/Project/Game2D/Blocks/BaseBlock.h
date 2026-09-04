@@ -97,6 +97,10 @@ public:
     virtual void DrawImGui() {}
 #endif
 
+    // 配置チップ座標（エディタの一覧表示や、チップごとの上書き設定のキーに使う）
+    int GetChipX() const { return chipX_; }
+    int GetChipY() const { return chipY_; }
+
     GameObject* GetGameObject() const { return gameObject_.get(); }
     void SetGameObject(std::unique_ptr<GameObject> obj) { gameObject_ = std::move(obj); }
     

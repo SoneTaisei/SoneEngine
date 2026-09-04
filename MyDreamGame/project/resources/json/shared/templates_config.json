@@ -105,7 +105,9 @@
             "id": 11,
             "modelName": "",
             "name": "Chain Item",
-            "properties": {},
+            "properties": {
+                "units": 1
+            },
             "scale": {
                 "x": 1.0,
                 "y": 1.0,
@@ -127,7 +129,8 @@
             "properties": {
                 "moveAxis": "X",
                 "moveRange": 3.0,
-                "moveSpeed": 2.0
+                "moveSpeed": 2.0,
+                "phase": -1.0
             },
             "scale": {
                 "x": 1.0,
@@ -191,7 +194,12 @@
             "modelName": "",
             "name": "Door",
             "properties": {
+                "closeSpeed": 2.0,
+                "crushKills": true,
+                "latch": false,
                 "linkId": 1,
+                "openDirection": "Up",
+                "openDistance": 0.0,
                 "openSpeed": 2.0
             },
             "scale": {
@@ -214,13 +222,26 @@
             "name": "Guard",
             "properties": {
                 "alertSpeed": 3.0,
+                "bindFromBehind": true,
+                "hitCooldown": 0.3,
                 "maxAlertGauge": 1.5,
                 "moveRange": 3.0,
                 "patrolSpeed": 1.5,
                 "sightHeight": 1.0,
                 "sightLength": 4.0,
+                "staggerTime": 0.2,
                 "startDirection": 1,
-                "waitTimeAtEdge": 1.0
+                "stunBase": 2.0,
+                "stunMax": 4.0,
+                "stunPerSpeed": 0.1,
+                "stunSpeed": 6.0,
+                "tripCooldown": 2.0,
+                "tripFootHeight": 0.3,
+                "tripSpeedBonus": 0.1,
+                "tripStun": 1.0,
+                "unbindStun": 1.5,
+                "waitTimeAtEdge": 1.0,
+                "wakeWarning": 0.5
             },
             "scale": {
                 "x": 1.0,
