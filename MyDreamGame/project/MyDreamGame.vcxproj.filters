@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -272,6 +272,7 @@
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
     <ClCompile Include="Engine\Editor\LightEditor\LightEditor.cpp" />
+    <ClCompile Include="Engine\Editor\PostEffectEditor\PostEffectEditor.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
@@ -584,6 +585,7 @@
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
     <ClInclude Include="Engine\Editor\LightEditor\LightEditor.h" />
+    <ClInclude Include="Engine\Editor\PostEffectEditor\PostEffectEditor.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
