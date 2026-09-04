@@ -110,12 +110,18 @@ void ModelCommon::PreDraw() {
         }
     }
 
-    // 6: SpotLight (register b3)
+    // 6: SpotLight (register b4)
     if (spotLightResource_) {
         D3D12_GPU_VIRTUAL_ADDRESS addr = spotLightResource_->GetGPUVirtualAddress();
         if (addr != 0) {
             commandList_->SetGraphicsRootConstantBufferView(6, addr);
         }
+    }
+
+    // 9: ShadowMap (register t2)
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = DirectXCommon::GetInstance()->GetShadowMapSrvHandleGPU();
+    if (shadowSrv.ptr != 0) {
+        commandList_->SetGraphicsRootDescriptorTable(9, shadowSrv);
     }
 }
 

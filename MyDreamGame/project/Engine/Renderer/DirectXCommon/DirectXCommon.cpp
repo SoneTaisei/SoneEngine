@@ -30,6 +30,8 @@ void DirectXCommon::Initialize(HWND hwnd, int32_t windowWidth, int32_t windowHei
     CreatePostEffectPipelines();
     // Skybox用のパイプラインを作る指示を出す
     CreateSkyboxPipeline();
+    // シャドウマップ用のパイプラインを作る
+    CreateShadowMapPipelines();
     InitializeFixFPS();
     startTime_ = std::chrono::steady_clock::now();
 
@@ -136,6 +138,17 @@ void DirectXCommon::PreDrawSwapchain() {
     // ビューポートとシザー矩形を再設定
     commandList_->RSSetViewports(1, &swapchainViewport_);
     commandList_->RSSetScissorRects(1, &swapchainScissorRect_);
+}
+
+void DirectXCommon::RestoreMainRenderTarget() {
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+    commandList_->OMSetRenderTargets(1, &renderTextureRtvHandle_, false, &dsvHandle);
+    ID3D12DescriptorHeap *pHeaps[] = {SrvManager::GetInstance()->GetSrvDescriptorHeap()};
+    commandList_->SetDescriptorHeaps(1, pHeaps);
+    commandList_->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList_->RSSetViewports(1, &viewport_);
+    commandList_->RSSetScissorRects(1, &scissorRect_);
+    commandList_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 void DirectXCommon::ExecuteCommands() {
@@ -421,7 +434,13 @@ void DirectXCommon::CreatePipelines() {
     descriptorRangeEnv[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRangeEnv[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[9] = {};
+    D3D12_DESCRIPTOR_RANGE descriptorRangeShadow[1] = {};
+    descriptorRangeShadow[0].BaseShaderRegister = 2; // t2 (ShadowMap)
+    descriptorRangeShadow[0].NumDescriptors = 1;
+    descriptorRangeShadow[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeShadow[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParameters[10] = {};
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     rootParameters[0].Descriptor.ShaderRegister = 0;
@@ -467,10 +486,16 @@ void DirectXCommon::CreatePipelines() {
     rootParameters[8].Descriptor.ShaderRegister = 1;                     // register(b1)
     rootParameters[8].Descriptor.RegisterSpace = 0;
 
+    // 9: ShadowMap (register t2, PS)
+    rootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[9].DescriptorTable.pDescriptorRanges = descriptorRangeShadow;
+    rootParameters[9].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeShadow);
+
     descriptionRootSignature.pParameters = rootParameters;
     descriptionRootSignature.NumParameters = _countof(rootParameters);
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -480,6 +505,19 @@ void DirectXCommon::CreatePipelines() {
     staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
     staticSamplers[0].ShaderRegister = 0;
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // シャドウ用 Comparison Sampler (s1)
+    staticSamplers[1].Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+    staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplers[1].AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    staticSamplers[1].BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+    staticSamplers[1].ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    staticSamplers[1].MinLOD = 0;
+    staticSamplers[1].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[1].ShaderRegister = 1;
+    staticSamplers[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
     descriptionRootSignature.pStaticSamplers = staticSamplers;
     descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
@@ -564,20 +602,20 @@ void DirectXCommon::CreatePipelines() {
     CD3DX12_DESCRIPTOR_RANGE paletteRange{};
     paletteRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1); // t1
 
-    D3D12_ROOT_PARAMETER skinningRootParameters[10] = {};
-    for (int i = 0; i < 9; ++i) {
+    D3D12_ROOT_PARAMETER skinningRootParameters[11] = {};
+    for (int i = 0; i < 10; ++i) {
         skinningRootParameters[i] = rootParameters[i];
     }
 
-    // 追加の パレットSRV (t1, VS)
-    skinningRootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    skinningRootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-    skinningRootParameters[9].DescriptorTable.pDescriptorRanges = &paletteRange;
-    skinningRootParameters[9].DescriptorTable.NumDescriptorRanges = 1;
+    // 追加の パレットSRV (t1, VS) -> インデックス10
+    skinningRootParameters[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    skinningRootParameters[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    skinningRootParameters[10].DescriptorTable.pDescriptorRanges = &paletteRange;
+    skinningRootParameters[10].DescriptorTable.NumDescriptorRanges = 1;
 
     D3D12_ROOT_SIGNATURE_DESC skinningRootSignatureDesc{};
     skinningRootSignatureDesc.pParameters = skinningRootParameters;
-    skinningRootSignatureDesc.NumParameters = 10;
+    skinningRootSignatureDesc.NumParameters = 11;
     skinningRootSignatureDesc.pStaticSamplers = staticSamplers;
     skinningRootSignatureDesc.NumStaticSamplers = _countof(staticSamplers);
     skinningRootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -789,6 +827,9 @@ void DirectXCommon::InitializeRenderTexture() {
 
     // 最終出力先SRVハンドルの初期値
     finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
+
+    // シャドウマップリソースの初期化
+    InitializeShadowMap();
 }
 
 void DirectXCommon::CreatePostEffectPipelines() {
@@ -1407,5 +1448,181 @@ void DirectXCommon::CreateSkyboxPipeline() {
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&skyboxPipelineState_));
+    assert(SUCCEEDED(hr));
+}
+
+void DirectXCommon::InitializeShadowMap() {
+    // 1. シャドウマップ用の深度テクスチャリソースを作成 (2048x2048, DXGI_FORMAT_R24G8_TYPELESS)
+    shadowMapResource_ = CreateDepthStencilTextureResource(device_.Get(), kShadowMapWidth, kShadowMapHeight);
+    assert(shadowMapResource_);
+
+    // 2. シャドウマップ専用のDSVヒープを作成 (1個分)
+    shadowMapDsvHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, false);
+    assert(shadowMapDsvHeap_);
+
+    // 3. DSVの作成
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+    dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    shadowMapDsvHandleCPU_ = shadowMapDsvHeap_->GetCPUDescriptorHandleForHeapStart();
+    device_->CreateDepthStencilView(shadowMapResource_.Get(), &dsvDesc, shadowMapDsvHandleCPU_);
+
+    // 4. SRVの割り当てと作成
+    SrvManager::GetInstance()->Allocate(&shadowMapSrvHandleCPU_, &shadowMapSrvHandleGPU_);
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    device_->CreateShaderResourceView(shadowMapResource_.Get(), &srvDesc, shadowMapSrvHandleCPU_);
+
+    // 5. シャドウグローバル定数バッファ (LightViewProj行列用)
+    shadowGlobalParamResource_ = CreateBufferResource(device_.Get(), (sizeof(Matrix4x4) + 255) & ~255u);
+    shadowGlobalParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&shadowGlobalParamData_));
+    if (shadowGlobalParamData_) {
+        *shadowGlobalParamData_ = TransformFunctions::MakeIdentity4x4();
+    }
+
+    // 6. ビューポートとシザー矩形の設定
+    shadowViewport_.Width = static_cast<float>(kShadowMapWidth);
+    shadowViewport_.Height = static_cast<float>(kShadowMapHeight);
+    shadowViewport_.TopLeftX = 0.0f;
+    shadowViewport_.TopLeftY = 0.0f;
+    shadowViewport_.MinDepth = 0.0f;
+    shadowViewport_.MaxDepth = 1.0f;
+
+    shadowScissorRect_.left = 0;
+    shadowScissorRect_.top = 0;
+    shadowScissorRect_.right = static_cast<LONG>(kShadowMapWidth);
+    shadowScissorRect_.bottom = static_cast<LONG>(kShadowMapHeight);
+}
+
+void DirectXCommon::CreateShadowMapPipelines() {
+    HRESULT hr;
+
+    // 1. ShadowMap用の軽量RootSignatureを作成
+    CD3DX12_DESCRIPTOR_RANGE paletteRange{};
+    paletteRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1); // t1
+
+    D3D12_ROOT_PARAMETER rootParameters[3] = {};
+    // 0: Transform (register b0, VS)
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[0].Descriptor.ShaderRegister = 0;
+    rootParameters[0].Descriptor.RegisterSpace = 0;
+
+    // 1: LightViewProj (register b1, VS)
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[1].Descriptor.ShaderRegister = 1;
+    rootParameters[1].Descriptor.RegisterSpace = 0;
+
+    // 2: Skinning Palette (register t1, VS)
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[2].DescriptorTable.pDescriptorRanges = &paletteRange;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+
+    D3D12_ROOT_SIGNATURE_DESC rootSigDesc{};
+    rootSigDesc.pParameters = rootParameters;
+    rootSigDesc.NumParameters = 3;
+    rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    Microsoft::WRL::ComPtr<ID3DBlob> sigBlob = nullptr;
+    Microsoft::WRL::ComPtr<ID3DBlob> errBlob = nullptr;
+    hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &sigBlob, &errBlob);
+    if (FAILED(hr)) {
+        if (errBlob) Log(reinterpret_cast<char*>(errBlob->GetBufferPointer()));
+        assert(false);
+    }
+    hr = device_->CreateRootSignature(0, sigBlob->GetBufferPointer(), sigBlob->GetBufferSize(), IID_PPV_ARGS(&shadowMapRootSignature_));
+    assert(SUCCEEDED(hr));
+
+    // 2. 通常シャドウマップ用パイプラインステート
+    Microsoft::WRL::ComPtr<IDxcBlob> vsBlob = CompileShader(L"resources/shaders/ShadowMap.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    assert(vsBlob);
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[4] = {};
+    inputElementDescs[0].SemanticName = "POSITION";
+    inputElementDescs[0].SemanticIndex = 0;
+    inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    inputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDescs[1].SemanticName = "TEXCOORD";
+    inputElementDescs[1].SemanticIndex = 0;
+    inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
+    inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDescs[2].SemanticName = "NORMAL";
+    inputElementDescs[2].SemanticIndex = 0;
+    inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+    inputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    inputElementDescs[3].SemanticName = "COLOR";
+    inputElementDescs[3].SemanticIndex = 0;
+    inputElementDescs[3].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    inputElementDescs[3].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
+    psoDesc.pRootSignature = shadowMapRootSignature_.Get();
+    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { nullptr, 0 }; // 深度専用パス
+
+    psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0;
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
+    psoDesc.RasterizerState.DepthBias = 100;
+    psoDesc.RasterizerState.DepthBiasClamp = 0.0f;
+    psoDesc.RasterizerState.SlopeScaledDepthBias = 2.0f;
+    psoDesc.RasterizerState.DepthClipEnable = TRUE;
+
+    psoDesc.DepthStencilState.DepthEnable = TRUE;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    psoDesc.NumRenderTargets = 0;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&shadowMapPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // 3. スキニングシャドウマップ用パイプラインステート
+    Microsoft::WRL::ComPtr<IDxcBlob> skinningVsBlob = CompileShader(L"resources/shaders/SkinningShadowMap.VS.hlsl", L"vs_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    assert(skinningVsBlob);
+
+    D3D12_INPUT_ELEMENT_DESC skinningInputElementDescs[6] = {};
+    skinningInputElementDescs[0].SemanticName = "POSITION";
+    skinningInputElementDescs[0].SemanticIndex = 0;
+    skinningInputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    skinningInputElementDescs[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    skinningInputElementDescs[1].SemanticName = "TEXCOORD";
+    skinningInputElementDescs[1].SemanticIndex = 0;
+    skinningInputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
+    skinningInputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    skinningInputElementDescs[2].SemanticName = "NORMAL";
+    skinningInputElementDescs[2].SemanticIndex = 0;
+    skinningInputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+    skinningInputElementDescs[2].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    skinningInputElementDescs[3].SemanticName = "COLOR";
+    skinningInputElementDescs[3].SemanticIndex = 0;
+    skinningInputElementDescs[3].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    skinningInputElementDescs[3].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    skinningInputElementDescs[4].SemanticName = "WEIGHT";
+    skinningInputElementDescs[4].SemanticIndex = 0;
+    skinningInputElementDescs[4].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    skinningInputElementDescs[4].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    skinningInputElementDescs[4].InputSlot = 1;
+    skinningInputElementDescs[5].SemanticName = "INDEX";
+    skinningInputElementDescs[5].SemanticIndex = 0;
+    skinningInputElementDescs[5].Format = DXGI_FORMAT_R32G32B32A32_SINT;
+    skinningInputElementDescs[5].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+    skinningInputElementDescs[5].InputSlot = 1;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC skinningPsoDesc = psoDesc;
+    skinningPsoDesc.InputLayout = { skinningInputElementDescs, _countof(skinningInputElementDescs) };
+    skinningPsoDesc.VS = { skinningVsBlob->GetBufferPointer(), skinningVsBlob->GetBufferSize() };
+
+    hr = device_->CreateGraphicsPipelineState(&skinningPsoDesc, IID_PPV_ARGS(&shadowMapSkinningPipelineState_));
     assert(SUCCEEDED(hr));
 }

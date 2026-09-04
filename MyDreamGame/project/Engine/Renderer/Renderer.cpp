@@ -41,6 +41,66 @@ void Renderer::PostDraw() {
     }
 }
 
+void Renderer::BeginShadowPass(const Matrix4x4& lightViewProj) {
+    if (!dxCommon_) return;
+    auto commandList = dxCommon_->GetCommandList();
+    if (!commandList) return;
+
+    isShadowPass_ = true;
+
+    // ライトビュー射影行列を定数バッファに書き込む
+    dxCommon_->SetShadowLightViewProjection(lightViewProj);
+
+    // リソースバリア: シャドウマップリソースを PIXEL_SHADER_RESOURCE から DEPTH_WRITE へ遷移
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = dxCommon_->GetShadowMapResource();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    commandList->ResourceBarrier(1, &barrier);
+
+    // レンダーターゲットを解除し、DSVにシャドウマップを設定
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dxCommon_->GetShadowMapDsvCPUHandle();
+    commandList->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
+
+    // 深度バッファをクリア (1.0f)
+    commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+    // ビューポートとシザー矩形をシャドウマップサイズ (2048x2048) に設定
+    const D3D12_VIEWPORT& vp = dxCommon_->GetShadowViewport();
+    const D3D12_RECT& sc = dxCommon_->GetShadowScissorRect();
+    commandList->RSSetViewports(1, &vp);
+    commandList->RSSetScissorRects(1, &sc);
+
+    // シャドウ用RootSignatureとトポロジの設定
+    commandList->SetGraphicsRootSignature(dxCommon_->GetShadowMapRootSignature());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // シャドウ用グローバル定数バッファ (LightViewProj) をルートパラメータ1にバインド
+    commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
+}
+
+void Renderer::EndShadowPass() {
+    if (!dxCommon_) return;
+    auto commandList = dxCommon_->GetCommandList();
+    if (!commandList) return;
+
+    // リソースバリア: シャドウマップリソースを DEPTH_WRITE から PIXEL_SHADER_RESOURCE へ遷移
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = dxCommon_->GetShadowMapResource();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    commandList->ResourceBarrier(1, &barrier);
+
+    isShadowPass_ = false;
+
+    // メインの描画先（RenderTextureとメインDSV、ビューポート、シザー矩形）に復帰
+    dxCommon_->RestoreMainRenderTarget();
+}
+
 void Renderer::DrawPrimitive(Primitive* primitive) {
     if (primitive && dxCommon_) {
         primitive->Draw();
@@ -121,6 +181,29 @@ void Renderer::DrawObject3D(Object3D* obj) {
 
     obj->mappedTransform_->World = finalWorldMatrix;
     obj->mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+
+    // シャドウパス時は深度専用パイプラインで高速描画
+    if (isShadowPass_) {
+        if (obj->material_.color.w <= 0.0f) return;
+
+        AnimatorComponent* animator = obj->GetAnimator();
+        bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+
+        if (useSkinning) {
+            commandList->SetPipelineState(dxCommon_->GetShadowMapSkinningPipelineState());
+            commandList->SetGraphicsRootConstantBufferView(0, obj->transformResource_->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
+            const SkinCluster& skinCluster = animator->GetSkinCluster();
+            commandList->SetGraphicsRootDescriptorTable(2, skinCluster.paletteSrvHandle.second);
+            obj->model_->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
+        } else {
+            commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
+            commandList->SetGraphicsRootConstantBufferView(0, obj->transformResource_->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
+            obj->model_->Draw(nullptr, obj->GetTextureHandle());
+        }
+        return;
+    }
 
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
@@ -219,9 +302,15 @@ void Renderer::DrawObject3D(Object3D* obj) {
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::sEnvironmentMapHandle);
     }
 
+    // 9: ShadowMap SRV
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = dxCommon_->GetShadowMapSrvHandleGPU();
+    if (shadowSrv.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
+    }
+
     if (useSkinning) {
         const SkinCluster& skinCluster = animator->GetSkinCluster();
-        commandList->SetGraphicsRootDescriptorTable(9, skinCluster.paletteSrvHandle.second);
+        commandList->SetGraphicsRootDescriptorTable(10, skinCluster.paletteSrvHandle.second);
         obj->model_->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
     } else {
         obj->model_->Draw(nullptr, obj->GetTextureHandle());
@@ -274,6 +363,19 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
     
     obj->mappedTransform_->World = obj->worldMatrix_;
     obj->mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(obj->worldMatrix_));
+
+    // シャドウパス時は深度専用パイプラインで描画
+    if (isShadowPass_) {
+        if (obj->material_.color.w <= 0.0f) return;
+        commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
+        commandList->SetGraphicsRootConstantBufferView(0, obj->transformResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
+        if (obj->primitive_) {
+            obj->primitive_->Draw();
+        }
+        return;
+    }
+
     obj->mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(obj->worldMatrix_, viewMatrix), projectionMatrix);
 
     D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = obj->textureHandle_;
@@ -311,6 +413,12 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
 
     if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+    }
+
+    // 9: ShadowMap SRV
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = dxCommon_->GetShadowMapSrvHandleGPU();
+    if (shadowSrv.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
     }
 
     if (obj->primitive_) {
@@ -452,6 +560,28 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
     TransformMatrix* mappedTransform = comp->GetMappedTransform();
     mappedTransform->World = worldMatrix;
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+
+    // シャドウパス時は深度専用パイプラインで描画
+    if (isShadowPass_) {
+        if (comp->GetMaterial().color.w <= 0.0f) return;
+        AnimatorComponent* animator = comp->GetGameObject()->GetComponent<AnimatorComponent>();
+        bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+        if (useSkinning) {
+            commandList->SetPipelineState(dxCommon_->GetShadowMapSkinningPipelineState());
+            commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformResource()->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
+            const SkinCluster& skinCluster = animator->GetSkinCluster();
+            commandList->SetGraphicsRootDescriptorTable(2, skinCluster.paletteSrvHandle.second);
+            comp->GetModel()->Draw(&skinCluster.influenceBufferView, comp->GetTextureHandle());
+        } else {
+            commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
+            commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformResource()->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
+            comp->GetModel()->Draw(nullptr, comp->GetTextureHandle());
+        }
+        return;
+    }
+
     mappedTransform->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
 
     AnimatorComponent* animator = comp->GetGameObject()->GetComponent<AnimatorComponent>();
@@ -473,12 +603,16 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
             commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
         }
-        
-        // Skinning Palette setup at index 9
-        const SkinCluster& skinCluster = animator->GetSkinCluster();
-        commandList->SetGraphicsRootDescriptorTable(9, skinCluster.paletteSrvHandle.second);
-        
 
+        // 9: ShadowMap SRV
+        D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = dxCommon_->GetShadowMapSrvHandleGPU();
+        if (shadowSrv.ptr != 0) {
+            commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
+        }
+        
+        // Skinning Palette setup at index 10
+        const SkinCluster& skinCluster = animator->GetSkinCluster();
+        commandList->SetGraphicsRootDescriptorTable(10, skinCluster.paletteSrvHandle.second);
 
         comp->GetModel()->Draw(&skinCluster.influenceBufferView, comp->GetTextureHandle());
     } else {
@@ -506,8 +640,20 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
         commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
+        if (ModelCommon* mc = comp->GetModel()->GetModelCommon()) {
+            if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
+            if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
+            if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
+        }
+
         if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
             commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+        }
+
+        // 9: ShadowMap SRV
+        D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = dxCommon_->GetShadowMapSrvHandleGPU();
+        if (shadowSrv.ptr != 0) {
+            commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
         }
 
         comp->GetModel()->Draw(nullptr, comp->GetTextureHandle());
@@ -559,6 +705,17 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
     TransformMatrix* mappedTransform = comp->GetMappedTransform();
     mappedTransform->World = worldMatrix;
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+
+    // シャドウパス時は深度専用パイプラインで描画
+    if (isShadowPass_) {
+        if (comp->GetMaterial().color.w <= 0.0f) return;
+        commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
+        commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
+        comp->GetPrimitive()->Draw();
+        return;
+    }
+
     mappedTransform->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
 
     D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = comp->GetTextureHandle();
@@ -596,6 +753,12 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
 
     if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+    }
+
+    // 9: ShadowMap SRV
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = dxCommon_->GetShadowMapSrvHandleGPU();
+    if (shadowSrv.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
     }
 
     comp->GetPrimitive()->Draw();

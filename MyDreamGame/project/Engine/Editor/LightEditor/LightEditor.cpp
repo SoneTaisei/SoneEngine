@@ -3,6 +3,7 @@
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/Quaternion.h"
+#include <DirectXMath.h>
 #include <fstream>
 #include <filesystem>
 #include <numbers>
@@ -128,8 +129,36 @@ void LightEditor::Update(float deltaTime, ModelCommon* modelCommon, const Vector
                 slGroup->spotLights[i].cosAngle = std::cos(item.angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                 slGroup->spotLights[i].cosFalloffStart = std::cos(item.falloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                 slGroup->spotLights[i].enable = item.enabled ? 1 : 0;
+
+                // シャドウマッピング用ビュー射影行列の計算
+                Vector3 dir = slGroup->spotLights[i].direction;
+                Vector3 eye = item.position;
+                Vector3 target = { eye.x + dir.x, eye.y + dir.y, eye.z + dir.z };
+                Vector3 up = { 0.0f, 1.0f, 0.0f };
+                if (std::abs(dir.y) > 0.99f) {
+                    up = { 0.0f, 0.0f, 1.0f };
+                }
+
+                DirectX::XMVECTOR eyeV = DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f);
+                DirectX::XMVECTOR targetV = DirectX::XMVectorSet(target.x, target.y, target.z, 1.0f);
+                DirectX::XMVECTOR upV = DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f);
+                DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(eyeV, targetV, upV);
+
+                float fovAngle = (item.angleDeg * 2.0f) * static_cast<float>(std::numbers::pi) / 180.0f;
+                fovAngle = std::clamp(fovAngle, 0.01f, static_cast<float>(std::numbers::pi) * 0.99f);
+
+                float nearZ = 0.1f;
+                float farZ = (item.distance > 0.5f) ? item.distance : 50.0f;
+                DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fovAngle, 1.0f, nearZ, farZ);
+                DirectX::XMMATRIX viewProjMat = DirectX::XMMatrixMultiply(viewMat, projMat);
+
+                DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&slGroup->spotLights[i].viewProjection), viewProjMat);
+                slGroup->spotLights[i].shadowMapIndex = (item.enabled && item.enableShadow) ? 0 : -1;
+                slGroup->spotLights[i].shadowBias = item.shadowBias;
+                slGroup->spotLights[i].shadowIntensity = item.shadowIntensity;
             } else {
                 slGroup->spotLights[i].enable = 0;
+                slGroup->spotLights[i].shadowMapIndex = -1;
             }
         }
     }
@@ -238,6 +267,38 @@ bool LightEditor::CheckAABBHit(const AABB2D& aabb) const {
                     }
                 }
             }
+        }
+    }
+    return false;
+}
+
+bool LightEditor::GetPrimaryShadowViewProjection(Matrix4x4* outViewProj) const {
+    if (!outViewProj) return false;
+    for (const auto& item : spotLights_) {
+        if (item.enabled && item.enableShadow) {
+            Vector3 dir = TransformFunctions::Normalize(item.direction);
+            Vector3 eye = item.position;
+            Vector3 target = { eye.x + dir.x, eye.y + dir.y, eye.z + dir.z };
+            Vector3 up = { 0.0f, 1.0f, 0.0f };
+            if (std::abs(dir.y) > 0.99f) {
+                up = { 0.0f, 0.0f, 1.0f };
+            }
+
+            DirectX::XMVECTOR eyeV = DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f);
+            DirectX::XMVECTOR targetV = DirectX::XMVectorSet(target.x, target.y, target.z, 1.0f);
+            DirectX::XMVECTOR upV = DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f);
+            DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(eyeV, targetV, upV);
+
+            float fovAngle = (item.angleDeg * 2.0f) * static_cast<float>(std::numbers::pi) / 180.0f;
+            fovAngle = std::clamp(fovAngle, 0.01f, static_cast<float>(std::numbers::pi) * 0.99f);
+
+            float nearZ = 0.1f;
+            float farZ = (item.distance > 0.5f) ? item.distance : 50.0f;
+            DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fovAngle, 1.0f, nearZ, farZ);
+            DirectX::XMMATRIX viewProjMat = DirectX::XMMatrixMultiply(viewMat, projMat);
+
+            DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(outViewProj), viewProjMat);
+            return true;
         }
     }
     return false;
@@ -717,6 +778,14 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                 ImGui::TextDisabled("※照射全角の内側(光が当たっている領域全体)がプレイヤーの当たり判定になります。");
 
                 ImGui::Separator();
+                ImGui::Text("シャドウマッピング (影)");
+                ImGui::Checkbox("影を落とす (Enable Shadow)", &light.enableShadow);
+                if (light.enableShadow) {
+                    ImGui::DragFloat("シャドウバイアス (Bias)", &light.shadowBias, 0.0001f, 0.00001f, 0.05f, "%.5f");
+                    ImGui::SliderFloat("影の濃さ (Intensity)", &light.shadowIntensity, 0.0f, 1.0f, "%.2f");
+                }
+
+                ImGui::Separator();
                 ImGui::Text("追従・動作モード");
 
                 const char* followTypes[] = { "固定 (None)", "カメラ追従 (懐中電灯)", "プレイヤー追従", "自動首振り回転" };
@@ -987,6 +1056,9 @@ bool LightEditor::SaveToFile(const std::string& filePath) {
             s["angleDeg"] = item.angleDeg;
             s["falloffDeg"] = item.falloffDeg;
             s["isDangerous"] = item.isDangerous;
+            s["enableShadow"] = item.enableShadow;
+            s["shadowBias"] = item.shadowBias;
+            s["shadowIntensity"] = item.shadowIntensity;
             s["followType"] = static_cast<int>(item.followType);
             s["followOffset"] = {item.followOffset.x, item.followOffset.y, item.followOffset.z};
             s["rotateAxis"] = {item.rotateAxis.x, item.rotateAxis.y, item.rotateAxis.z};
@@ -1080,6 +1152,9 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
                 if (item.contains("angleDeg")) sl.angleDeg = item["angleDeg"];
                 if (item.contains("falloffDeg")) sl.falloffDeg = item["falloffDeg"];
                 if (item.contains("isDangerous")) sl.isDangerous = item["isDangerous"];
+                if (item.contains("enableShadow")) sl.enableShadow = item["enableShadow"];
+                if (item.contains("shadowBias")) sl.shadowBias = item["shadowBias"];
+                if (item.contains("shadowIntensity")) sl.shadowIntensity = item["shadowIntensity"];
                 if (item.contains("followType")) sl.followType = static_cast<LightFollowType>(item["followType"]);
                 if (item.contains("followOffset")) sl.followOffset = {item["followOffset"][0], item["followOffset"][1], item["followOffset"][2]};
                 if (item.contains("rotateAxis")) sl.rotateAxis = {item["rotateAxis"][0], item["rotateAxis"][1], item["rotateAxis"][2]};

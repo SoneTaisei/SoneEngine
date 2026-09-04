@@ -133,6 +133,9 @@ public:
 	// ImGuiを描く直前に、描画先をSwapchainに戻すための関数
     void PreDrawSwapchain();
 
+    // シャドウパス等の後に描画先をRenderTextureに戻すための関数
+    void RestoreMainRenderTarget();
+
 	// RenderTextureを初期化する専用関数
     void InitializeRenderTexture();
     
@@ -143,6 +146,8 @@ public:
     void DrawRenderTexture();
 
 	void CreateSkyboxPipeline();
+    void InitializeShadowMap();
+    void CreateShadowMapPipelines();
     
     // スワップチェーンのサイズ変更
     void ResizeSwapchain(int32_t width, int32_t height);
@@ -187,6 +192,22 @@ public:
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return finalPostProcessSRVHandle_.ptr != 0 ? finalPostProcessSRVHandle_ : postProcessSrvHandleGPU_; }
+    
+    // シャドウマップ関連ゲッター
+    ID3D12Resource* GetShadowMapResource() const { return shadowMapResource_.Get(); }
+    D3D12_CPU_DESCRIPTOR_HANDLE GetShadowMapDsvCPUHandle() const { return shadowMapDsvHandleCPU_; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetShadowMapSrvHandleGPU() const { return shadowMapSrvHandleGPU_; }
+    ID3D12RootSignature* GetShadowMapRootSignature() const { return shadowMapRootSignature_.Get(); }
+    ID3D12PipelineState* GetShadowMapPipelineState() const { return shadowMapPipelineState_.Get(); }
+    ID3D12PipelineState* GetShadowMapSkinningPipelineState() const { return shadowMapSkinningPipelineState_.Get(); }
+    D3D12_GPU_VIRTUAL_ADDRESS GetShadowGlobalGPUAddress() const { return shadowGlobalParamResource_ ? shadowGlobalParamResource_->GetGPUVirtualAddress() : 0; }
+    void SetShadowLightViewProjection(const Matrix4x4& lightVP) {
+        if (shadowGlobalParamData_) {
+            *shadowGlobalParamData_ = lightVP;
+        }
+    }
+    const D3D12_VIEWPORT& GetShadowViewport() const { return shadowViewport_; }
+    const D3D12_RECT& GetShadowScissorRect() const { return shadowScissorRect_; }
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
     GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
@@ -397,6 +418,24 @@ private:
     ProjectionInverseParams* projectionInverseParamsData_ = nullptr;
     D3D12_CPU_DESCRIPTOR_HANDLE depthStencilSrvHandleCPU_{};
     D3D12_GPU_DESCRIPTOR_HANDLE depthStencilSrvHandleGPU_{};
+	
+    // --- シャドウマップ関連 ---
+    static constexpr uint32_t kShadowMapWidth = 2048;
+    static constexpr uint32_t kShadowMapHeight = 2048;
+    Microsoft::WRL::ComPtr<ID3D12Resource> shadowMapResource_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> shadowMapDsvHeap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapDsvHandleCPU_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapSrvHandleCPU_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowMapSrvHandleGPU_{};
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> shadowMapRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> shadowMapPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> shadowMapSkinningPipelineState_;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> shadowGlobalParamResource_;
+    Matrix4x4* shadowGlobalParamData_ = nullptr;
+    D3D12_VIEWPORT shadowViewport_{};
+    D3D12_RECT shadowScissorRect_{};
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

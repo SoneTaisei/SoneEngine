@@ -975,7 +975,63 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #endif
 }
 
+void GameScene::RenderShadowPass() {
+    Matrix4x4 lightVP = TransformFunctions::MakeIdentity4x4();
+    bool hasLightVP = false;
+
+#ifdef USE_IMGUI
+    if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetLightEditor()) {
+        hasLightVP = EditorManager::GetInstance()->GetLightEditor()->GetPrimaryShadowViewProjection(&lightVP);
+    }
+#endif
+
+    if (!hasLightVP && modelCommon_) {
+        SpotLightGroup* slg = modelCommon_->GetSpotLightGroup();
+        if (slg) {
+            for (int32_t i = 0; i < slg->spotLightCount; ++i) {
+                if (slg->spotLights[i].shadowMapIndex >= 0) {
+                    lightVP = slg->spotLights[i].viewProjection;
+                    hasLightVP = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!hasLightVP) {
+        return;
+    }
+
+    Renderer* renderer = Renderer::GetInstance();
+    if (!renderer) {
+        return;
+    }
+
+    // 1. シャドウマップパスの開始（シャドウDSVバインド・深度クリア）
+    renderer->BeginShadowPass(lightVP);
+
+    // 2. キャスター（影を落とすオブジェクト群）の描画
+    if (map_) {
+        map_->Draw();
+    }
+    if (player_) {
+        player_->Draw();
+    }
+    if (chainManager_) {
+        chainManager_->Draw();
+    }
+
+    // コンポーネント（MeshRenderer / PrimitiveRenderer）の描画
+    renderer->RenderComponents();
+
+    // 3. シャドウマップパスの終了（メインレンダーターゲット復元）
+    renderer->EndShadowPass();
+}
+
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // 0. シャドウマップパス（スポットライト視点から深度描画）
+    RenderShadowPass();
+
     // 1. Skyboxの描画
     if (skybox_) {
         skybox_->Draw();

@@ -2,7 +2,9 @@
 
 Texture2D<float4> gTexture : register(t0);
 TextureCube<float4> gEnvironmentMap : register(t1);
+Texture2D<float> gShadowMap : register(t2);
 SamplerState gSampler : register(s0);
+SamplerComparisonState gShadowSampler : register(s1);
 
 ConstantBuffer<Material> gMaterial : register(b0);
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
@@ -192,13 +194,54 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
             float spotNdotL = dot(normal, -spotLightDirOnSurface);
             float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
             float spotCos = spotHalfLambert * spotHalfLambert;
-            diffuseSpotTotal += gMaterial.color.rgb * textureColor.rgb * sl.color.rgb * spotCos * sl.intensity * spotAttenuation * falloffFactor;
+
+            // Shadow mapping evaluation
+            float shadowFactor = 1.0f;
+            if (sl.shadowMapIndex >= 0) {
+                float4 lightSpacePos = mul(float4(input.worldPosition, 1.0f), sl.viewProjection);
+                if (lightSpacePos.w > 0.0f) {
+                    float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+                    float2 shadowUV;
+                    shadowUV.x = projCoords.x * 0.5f + 0.5f;
+                    shadowUV.y = -projCoords.y * 0.5f + 0.5f;
+                    float currentDepth = projCoords.z;
+
+                    if (shadowUV.x >= 0.0f && shadowUV.x <= 1.0f &&
+                        shadowUV.y >= 0.0f && shadowUV.y <= 1.0f &&
+                        currentDepth >= 0.0f && currentDepth <= 1.0f) {
+                        
+                        // Adaptive slope-scale depth bias to prevent shadow acne
+                        float nDotL = saturate(dot(normal, -spotLightDirOnSurface));
+                        float slopeFactor = 1.0f - nDotL;
+                        float bias = max(sl.shadowBias * (1.0f + slopeFactor * 2.0f), 0.0002f);
+                        
+                        // 3x3 Percentage-Closer Filtering (PCF)
+                        float shadow = 0.0f;
+                        float2 texelSize = float2(1.0f / 2048.0f, 1.0f / 2048.0f);
+                        [unroll]
+                        for (int x = -1; x <= 1; ++x) {
+                            [unroll]
+                            for (int y = -1; y <= 1; ++y) {
+                                shadow += gShadowMap.SampleCmpLevelZero(
+                                    gShadowSampler,
+                                    shadowUV + float2(x, y) * texelSize,
+                                    currentDepth - bias
+                                );
+                            }
+                        }
+                        shadow /= 9.0f;
+                        shadowFactor = lerp(1.0f - sl.shadowIntensity, 1.0f, shadow);
+                    }
+                }
+            }
+
+            diffuseSpotTotal += gMaterial.color.rgb * textureColor.rgb * sl.color.rgb * spotCos * sl.intensity * spotAttenuation * falloffFactor * shadowFactor;
             
             float3 spotHalfVector = normalize(-spotLightDirOnSurface + toEye);
             float spotNdotH = dot(normal, spotHalfVector);
             float spotSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(spotNdotH), gMaterial.shininess) : 0.0f;
             float spotSpecularMask = saturate(spotNdotL * 2.0f);
-            specularSpotTotal += sl.color.rgb * sl.intensity * (spotSpecularPow * spotSpecularMask) * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor;
+            specularSpotTotal += sl.color.rgb * sl.intensity * (spotSpecularPow * spotSpecularMask) * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor * shadowFactor;
         }
         
         float3 cameraToPosition = normalize(input.worldPosition - gCamera.worldPosition);

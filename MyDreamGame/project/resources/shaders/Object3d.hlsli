@@ -61,6 +61,11 @@ struct SpotLight {
     float cosAngle;
     float cosFalloffStart;
     int enable;
+    float4x4 viewProjection;
+    int shadowMapIndex;
+    float shadowBias;
+    float shadowIntensity;
+    float padding;
 };
 
 struct SpotLightGroup {
@@ -78,5 +83,5 @@ struct ViewProjection {
 
 struct Camera {
     float3 worldPosition;
-    float padding; // 16バイトアラインメントに合わせる
+    float padding; // Match 16-byte alignment
 };
