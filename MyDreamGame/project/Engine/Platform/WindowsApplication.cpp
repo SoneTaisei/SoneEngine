@@ -223,6 +223,16 @@ void WindowsApplication::Update() {
         showImGui_ = !showImGui_;
     }
 
+    // マップエディター / ゲーム画面の切り替え
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F2)) {
+        if (!showImGui_) {
+            showImGui_ = true;
+        }
+        if (editorManager_) {
+            editorManager_->ToggleMapEditor();
+        }
+    }
+
     // ESCキーの処理 (閉じる / 最小化) - リリース版では無効化
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE)) {
         bool isShiftDown = KeyboardInput::GetInstance()->IsKeyDown(DIK_LSHIFT) || 
@@ -254,8 +264,8 @@ void WindowsApplication::Update() {
             sceneManager_.get());
 
         // 3. カメラの切り替えと入力受付（シーン更新前にアクティブカメラを決定）
-        if (!EditorManager::IsPlaying() && !ReplayManager::GetInstance()->IsPlaying() && editorManager_->GetActiveMainTab() == "マップチップ画面") {
-            // マップエディタ表示時はUseDebugCameraに関係なく常に2D専用のMapEditorCameraを使用（回転を完全に排除）
+        if (editorManager_->GetActiveMainTab() == "マップチップ画面") {
+            // マップエディタ表示時は再生中であっても常に2D専用のMapEditorCameraを使用（回転を完全に排除）
             activeCamera_ = mapEditorCamera_.get();
             isDebugCameraActive_ = false;
             CameraManager::GetInstance()->ClearCullingCameraInfo();
@@ -289,8 +299,9 @@ void WindowsApplication::Update() {
         static bool wasActive = false;
         bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
         bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
+        bool isEditorPaused = EditorManager::IsPlaying() && EditorManager::IsPaused();
 
-        if (isCurrentlyActive && !isTakeoverPausing) {
+        if (isCurrentlyActive && !isTakeoverPausing && !isEditorPaused) {
             if (!wasActive) {
                 // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する
                 if (sceneManager_->GetCurrentScene()) {
@@ -304,8 +315,8 @@ void WindowsApplication::Update() {
             // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
             sceneManager_->Update();
             wasActive = true;
-        } else if (isTakeoverPausing) {
-            // カウントダウン中はシーンを更新しないが、wasActiveは維持する
+        } else if (isTakeoverPausing || isEditorPaused) {
+            // カウントダウン中または一時停止中はシーンを更新しないが、wasActiveは維持する
             wasActive = true; 
             if (sceneManager_->GetCurrentScene()) {
                 sceneManager_->GetCurrentScene()->UpdateEditor();

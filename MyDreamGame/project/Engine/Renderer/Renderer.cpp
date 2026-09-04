@@ -111,7 +111,7 @@ void Renderer::DrawParticle(ParticleManager* particleManager, const Matrix4x4& v
 }
 
 void Renderer::DrawObject3D(Object3D* obj) {
-    if (!obj || !dxCommon_) return;
+    if (!obj || !obj->model_ || !dxCommon_) return;
 
     auto commandList = dxCommon_->GetCommandList();
     *obj->mappedMaterial_ = obj->material_;

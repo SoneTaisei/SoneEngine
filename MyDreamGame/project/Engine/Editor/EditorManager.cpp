@@ -43,6 +43,7 @@ static void ImGuiSrvAlloc(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HA
 }
 
 bool EditorManager::isPlaying_ = false;
+bool EditorManager::isPaused_ = false;
 bool EditorManager::showObjects_ = true;
 bool EditorManager::showEffects_ = true;
 EditorManager* EditorManager::s_Instance = nullptr;
@@ -384,6 +385,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.0f, 1.0f));
             if (ImGui::Button("再生 (PLAY)")) {
                 isPlaying_ = true;
+                isPaused_ = false;
                 useDebugCamera_ = false;
                 ImGui::SetWindowFocus("ゲームビュー");
 
@@ -403,7 +405,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.0f, 0.0f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.0f, 0.0f, 1.0f));
             if (ImGui::Button("停止 (STOP)")) {
-                isPlaying_ = false; // ← ここを修正しました
+                isPlaying_ = false;
+                isPaused_ = false;
                 useDebugCamera_ = true;
                 debugCamera->SetTranslation(gameCamera->GetTranslation());
                 debugCamera->SetRotation(gameCamera->GetRotation());
@@ -427,6 +430,44 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 sceneJustReset_ = true;
             }
             ImGui::PopStyleColor(3);
+
+            // プレイ中の一時停止 (PAUSE / RESUME) ボタン
+            ImGui::SameLine();
+            if (isPaused_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.5f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.6f, 0.1f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.4f, 0.0f, 1.0f));
+                if (ImGui::Button("再開 (RESUME)")) {
+                    isPaused_ = false;
+                }
+                ImGui::PopStyleColor(3);
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.5f, 0.1f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.6f, 0.2f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.4f, 0.0f, 1.0f));
+                if (ImGui::Button("一時停止 (PAUSE)")) {
+                    isPaused_ = true;
+                }
+                ImGui::PopStyleColor(3);
+            }
+        }
+
+        // マップエディター / ゲーム画面 切り替えボタン (F2)
+        ImGui::SameLine();
+        if (activeMainTab_ == "マップチップ画面") {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.45f, 0.7f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.55f, 0.8f, 1.0f));
+            if (ImGui::Button("ゲーム画面へ (F2)")) {
+                FocusGameView();
+            }
+            ImGui::PopStyleColor(2);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.55f, 0.25f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.65f, 0.35f, 1.0f));
+            if (ImGui::Button("マップエディター (F2)")) {
+                FocusMapEditor();
+            }
+            ImGui::PopStyleColor(2);
         }
 
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -506,9 +547,21 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (ImGui::BeginMenu("ウィンドウ")) {
             if (ImGui::MenuItem("インスペクター", nullptr, &showInspector_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_)) { SaveSceneConfig(); }
-            if (ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("ゲームビュー", nullptr, &showGameView_)) {
+                if (showGameView_) {
+                    activeMainTab_ = "ゲームビュー";
+                    focusActiveTabCountdown_ = 5;
+                }
+                SaveSceneConfig();
+            }
             if (ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_)) { SaveSceneConfig(); }
-            if (ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_)) {
+                if (showMapEditor_) {
+                    activeMainTab_ = "マップチップ画面";
+                    focusActiveTabCountdown_ = 5;
+                }
+                SaveSceneConfig();
+            }
             if (ImGui::MenuItem("マップ設定", nullptr, &showMapSettings_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("リプレイエディター", nullptr, &showReplayEditor_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("アニメーションエディター", nullptr, &showAnimEditor_)) { SaveSceneConfig(); }
@@ -3098,4 +3151,35 @@ bool EditorManager::ImportLayoutPresetFromFile(const std::string& filePath) {
         return false;
     }
 }
+
+void EditorManager::FocusMapEditor() {
+    showMapEditor_ = true;
+    showMapSettings_ = true;
+    activeMainTab_ = "マップチップ画面";
+    focusActiveTabCountdown_ = 5;
+    SaveSceneConfig();
+}
+
+void EditorManager::FocusGameView() {
+    showGameView_ = true;
+    activeMainTab_ = "ゲームビュー";
+    focusActiveTabCountdown_ = 5;
+    SaveSceneConfig();
+}
+
+void EditorManager::ToggleMapEditor() {
+    if (activeMainTab_ == "マップチップ画面") {
+        FocusGameView();
+    } else {
+        FocusMapEditor();
+    }
+}
+
+void EditorManager::SyncPlayMapData(MapChip2D* mapChip) {
+    if (!mapChip) return;
+    mapDataStrToLoad_ = mapChip->GetMapDataAsString();
+    savedRoomsForPlay_ = mapChip->GetRooms();
+    mapChip->SaveToFile("resources/json/local/temp_play_map.txt");
+}
+
 #endif

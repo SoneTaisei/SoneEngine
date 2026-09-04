@@ -1,4 +1,4 @@
-﻿#include "MapChip2D.h"
+#include "MapChip2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
@@ -519,12 +519,23 @@ void MapChip2D::ResetMap() {
 void MapChip2D::RebuildChipObjects() {
     if (!isRebuildEnabled_) return;
 
+    // 既に記録対象になっているブロックのIDを安全に退避（objectIdフィールドを参照するのでポインタ逆参照不要）
+    std::unordered_map<uint64_t, bool> wasTracked;
+    for (const auto& entry : replayTrackEntries_) {
+        if (entry.isTracked) {
+            wasTracked[entry.objectId] = true;
+        }
+    }
+
+    // 古いブロックへの生ポインタ参照を即時クリア（ダングリングポインタを完全防止）
+    replayTrackEntries_.clear();
+    replayBlockById_.clear();
+    replayDestroyedIds_.clear();
+
     activeBlocks_.clear();
     activeBlocks_.resize(mapHeight_, std::vector<std::shared_ptr<BaseBlock>>(mapWidth_, nullptr));
     updateBlocks_.clear();
 
-    // ブロックが作り直されたので、リプレイ用の追跡情報も無効化する
-    replayDestroyedIds_.clear();
     blocksRevision_++;
 
     std::vector<std::vector<bool>> visited(mapHeight_, std::vector<bool>(mapWidth_, false));
@@ -603,6 +614,36 @@ void MapChip2D::RebuildChipObjects() {
         }
     }
     CreateBoundaries();
+
+    // 新しく生成された updateBlocks_ を元に追跡テーブルを即座に安全に再構築
+    replayTrackRevision_ = blocksRevision_;
+    replayTrackEntries_.reserve(updateBlocks_.size());
+    for (const auto& blockPtr : updateBlocks_) {
+        BaseBlock* block = blockPtr.get();
+        if (!block) continue;
+
+        ReplayTrackEntry entry;
+        const uint64_t id = block->GetReplayObjectId();
+        entry.objectId = id;
+        entry.block = block;
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                entry.initPosition = transform->GetPosition();
+                entry.initRotation = transform->GetRotation();
+                entry.initScale = transform->GetScale();
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                entry.initColor = renderer->GetMaterial().color;
+            }
+        }
+        entry.isTracked = block->IsReplayTracked();
+        if (wasTracked.find(id) != wasTracked.end()) {
+            entry.isTracked = true;
+        }
+
+        replayBlockById_[id] = block;
+        replayTrackEntries_.push_back(entry);
+    }
 }
 
 void MapChip2D::CreateBoundaries() {
@@ -1069,7 +1110,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             for (const auto& d : customPalette_) {
                 if (d.id == typeId) { def = &d; break; }
             }
-        } else if (typeId >= 1 && typeId <= 9) {
+        } else {
             for (const auto& d : templatePalette_) {
                 if (d.id == typeId) { def = &d; break; }
             }
@@ -1175,8 +1216,8 @@ void MapChip2D::RefreshReplayTrackEntries() {
     // 既に記録対象になっているブロックは、作り直し前の判定を引き継ぐ
     std::unordered_map<uint64_t, bool> wasTracked;
     for (const auto& entry : replayTrackEntries_) {
-        if (entry.isTracked && entry.block) {
-            wasTracked[entry.block->GetReplayObjectId()] = true;
+        if (entry.isTracked) {
+            wasTracked[entry.objectId] = true;
         }
     }
 
@@ -1189,6 +1230,8 @@ void MapChip2D::RefreshReplayTrackEntries() {
         if (!block) continue;
 
         ReplayTrackEntry entry;
+        const uint64_t id = block->GetReplayObjectId();
+        entry.objectId = id;
         entry.block = block;
         if (auto* gameObject = block->GetGameObject()) {
             if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
@@ -1202,7 +1245,6 @@ void MapChip2D::RefreshReplayTrackEntries() {
         }
         entry.isTracked = block->IsReplayTracked();
 
-        const uint64_t id = block->GetReplayObjectId();
         if (wasTracked.find(id) != wasTracked.end()) {
             entry.isTracked = true;
         }
