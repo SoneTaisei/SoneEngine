@@ -58,8 +58,12 @@ public:
     virtual bool AllowsChainSpin() const { return false; }
 
     // 鎖（節・末端の重り）がこのブロックのチップに重なった際の処理（スイッチを鎖で押す等）
-    // pos/radius は節の円、speed は節の速さ（チップ/秒。叩いて作動する仕掛け用）。鎖の物理更新後に毎フレーム呼ばれる
-    virtual void OnChainTouch(const Vector3& pos, float radius, float speed) { (void)pos; (void)radius; (void)speed; }
+    // pos/radius は節の円、velocity は節の速度（チップ/秒）、isWeight は末端の重り（宝石）か。鎖の物理更新後に毎フレーム呼ばれる
+    // 戻り値 true = 当たりを消費した（呼び出し側は宝石の勢いを弱める）
+    virtual bool OnChainTouch(const Vector3& pos, float radius, const Vector3& velocity, bool isWeight) {
+        (void)pos; (void)radius; (void)velocity; (void)isWeight;
+        return false;
+    }
 
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}

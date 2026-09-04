@@ -21,6 +21,8 @@ namespace {
     constexpr float kRodProbeStart = 0.5f;
     // 発射準備完了とみなす上限に対する割合（お宝を明るくする合図）
     constexpr float kLaunchReadyRatio = 0.8f;
+    // 掲げてからこの秒数は A/D を投げ入力にしない（歩きながら W を押した瞬間に投げてしまうのを防ぐ）
+    constexpr float kThrowGrace = 0.15f;
 
     // 振り子の角度を [-π, π] に保つ（一回転しても sin/cos の精度を落とさない）
     float WrapAngle(float a) {
@@ -187,7 +189,9 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
         UpdateSpinTarget(socketWorld);
 
         // A/D で押した方向へ投げる → 振り子開始（回せる場所＝木の板の上でだけ。それ以外では掲げたまま）
-        if (IsSpinAllowed()) {
+        // 掲げた直後は投げない（移動キーを押したまま W を押しても、まず掲げる）
+        holdTime_ += dt;
+        if (IsSpinAllowed() && holdTime_ >= kThrowGrace) {
             if (swingInput_ > 0.5f) {
                 StartThrow(1.0f, socketWorld);
             } else if (swingInput_ < -0.5f) {
@@ -254,6 +258,7 @@ void ChainSpinAction::StartHold(Player2D* player, Chain2D* chain, const Vector3&
     omega_ = 0.0f;
     theta_ = kPi; // 真上
     throwOutTime_ = 0.0f;
+    holdTime_ = 0.0f;
     lastBrokeByTerrain_ = false;
 
     // 飛ぶ速さの上限は通常ジャンプ初速基準（通常ジャンプより高く飛べないので重さのデメリットが残る）

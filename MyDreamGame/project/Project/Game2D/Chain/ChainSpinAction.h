@@ -111,6 +111,7 @@ private:
     float omega_ = 0.0f;        // 角速度（rad/s）
     float radius_ = 0.0f;       // 現在の回転半径（投げた直後は手元から鎖の実長まで伸びる）
     float throwOutTime_ = 0.0f; // 投げてからの経過秒（半径の伸びに使う）
+    float holdTime_ = 0.0f;     // 掲げてからの経過秒（直後の A/D は投げ入力にしない）
     float effMass_ = 1.0f;      // 現在の振りにくさ（ImGui表示用）
     float launchCap_ = 0.0f;    // 飛ぶ速さの上限（構え開始時に決定）
     float cooldownTimer_ = 0.0f;
