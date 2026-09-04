@@ -3,6 +3,7 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Core/Utility/Structs.h"
 #include <vector>
+#include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <unordered_map>
@@ -146,6 +147,23 @@ public:
     // デフォルトマップの構築
     void BuildMap();
 
+    // ===== チップごとのプロパティ上書き =====
+    // パレット（種類ごと）ではなく、置いた1枚ごとに変えたい値（崩れる床の通れる上限など）。
+    // パレットのプロパティに上書きして SetProperties に渡す。ステージファイルに "blockOverrides" として保存される
+    void SetBlockOverride(int x, int y, const nlohmann::json& properties);
+    const nlohmann::json* GetBlockOverride(int x, int y) const;
+    void ClearBlockOverride(int x, int y);
+    // そのチップのパレット定義のプロパティ（上書き前の既定値。無ければ空）
+    nlohmann::json GetPaletteProperties(int x, int y) const;
+    // パレット id からブロック種類名（"FragileBlock" 等）を引く。無ければ空
+    std::string GetBlockTypeName(int typeId) const;
+
+    // ===== 置いた瞬間に付ける上書き =====
+    // 「次に置く崩れる床の上限」のように、エディタで塗った瞬間にそのチップへ上書きを付ける（ファイルには保存しない）
+    void SetPlacementOverride(const std::string& blockType, const nlohmann::json& properties);
+    void ClearPlacementOverride(const std::string& blockType);
+    const nlohmann::json* GetPlacementOverride(const std::string& blockType) const;
+
 public:
     void SetDirty() { isDirty_ = true; }
 private:
@@ -196,6 +214,11 @@ private:
     
     // テンプレートパレット（BasicToolsの設定用）
     std::vector<CustomBlockDef> templatePalette_;
+
+    // チップごとのプロパティ上書き（キー = チップ座標）
+    std::map<std::pair<int, int>, nlohmann::json> blockOverrides_;
+    // 置いた瞬間に付ける上書き（キー = ブロック種類名）
+    std::map<std::string, nlohmann::json> placementOverrides_;
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;

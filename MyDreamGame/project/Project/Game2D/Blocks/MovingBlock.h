@@ -24,6 +24,12 @@ public:
     void DrawImGui() override;
 #endif
 
+    // エディタの重ね描き用（動く範囲の表示）
+    float GetStartX() const { return startX_; }
+    float GetStartY() const { return startY_; }
+    const std::string& GetMoveAxis() const { return moveAxis_; }
+    float GetMoveRange() const { return moveRange_; }
+
 private:
     float startX_ = 0.0f;
     float startY_ = 0.0f;
@@ -34,6 +40,7 @@ private:
     std::string moveAxis_ = "X"; // "X" or "Y"
     float moveRange_ = 3.0f;
     float moveSpeed_ = 2.0f;
+    float phase_ = -1.0f;     // 開始位相（周期の何割ずらすか 0〜1）。負なら置いた位置から自動で決める（従来通り）
     float timer_ = 0.0f;      // ゲーム内時刻（ReplayManager の共有クロックと同期する）
     bool hasPrevPosition_ = false; // 初回更新かどうか（速度の跳ね上がり防止）
 

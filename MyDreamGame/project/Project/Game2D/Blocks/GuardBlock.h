@@ -78,6 +78,12 @@ public:
     /// <summary>今フレーム、プレイヤーが縛れる／取り戻せる位置にいる（ChainManager が毎フレーム立てる。表示を明るくする合図）</summary>
     void SetPrompt(bool on) { prompt_ = on; }
 
+    // エディタの重ね描き用（巡回範囲と初期の向き）
+    float GetStartX() const { return startX_; }
+    float GetStartY() const { return startY_; }
+    float GetMoveRange() const { return moveRange_; }
+    int GetStartDirection() const { return startDirection_; }
+
 private:
     void EnterStunned(float duration);
     void UpdateBoundRing();
