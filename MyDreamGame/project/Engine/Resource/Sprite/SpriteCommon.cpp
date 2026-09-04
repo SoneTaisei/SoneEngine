@@ -153,13 +153,13 @@ void SpriteCommon::CreateGraphicsPipeline() {
     psoDesc.VS = {vsBlob->GetBufferPointer(), vsBlob->GetBufferSize()};
     psoDesc.PS = {psBlob->GetBufferPointer(), psBlob->GetBufferSize()};
 
-    // ブレンド設定 (標準的なアルファブレンド)
+    // ブレンド設定 (標準的なアルファブレンド / レンダーターゲットのAlphaを維持してImGui背景の透過・灰色化を防止)
     psoDesc.BlendState.RenderTarget[0].BlendEnable = TRUE;
     psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
     psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-    psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-    psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+    psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
+    psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
     psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
