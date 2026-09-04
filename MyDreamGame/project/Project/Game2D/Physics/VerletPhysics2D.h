@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Core/Utility/Vector3.h"
 #include "Core/Utility/Structs.h"
 #include <vector>
@@ -14,6 +14,7 @@ struct VerletNode {
     Vector3 prevPos = { 0.0f, 0.0f, 0.0f };  // 前ステップ位置
     float invMass = 1.0f;                    // 質量の逆数。0なら固定ノード（アンカー）
     float radius = 0.1f;                     // 円コリジョン半径
+    bool crushed = false;                    // 静止した地形と動くブロックに挟まれて固定中（閉まるドアに挟まった鎖）
 };
 
 /// <summary>
@@ -34,12 +35,22 @@ public:
     /// </summary>
     static void SolveDistanceConstraint(VerletNode& a, VerletNode& b, float restLength);
 
+    // CollideNodeWithMap の戻り値（接触した相手の種類）
+    static constexpr int kContactStatic = 1; // 静止したブロック（チップ）
+    static constexpr int kContactMoving = 2; // 動くブロック（MovingBlock, DoorBlock 等）
+
     /// <summary>
     /// ノード（円） vs マップチップ(kBlock)のAABB押し出し
     /// 最近接点方式なので角にも滑らかに巻き付く
     /// friction > 0 の場合、接触時に暗黙速度を削る（prevPosをposへ近づける）
+    /// 戻り値：接触した相手の種類（kContactStatic | kContactMoving）
     /// </summary>
-    static void CollideNodeWithMap(VerletNode& node, MapChip2D* map, float friction);
+    static int CollideNodeWithMap(VerletNode& node, MapChip2D* map, float friction);
+
+    /// <summary>点が静止したソリッドブロック（チップ）の中にあるか（押し出し後も残っていれば「挟まれている」）</summary>
+    static bool IsInsideStaticSolid(const Vector3& p, MapChip2D* map);
+    /// <summary>ノードの円が動くソリッドブロックに触れているか（挟まれ判定と、開いた時の解放判定に使う）</summary>
+    static bool IsTouchingMovingSolid(const VerletNode& node, MapChip2D* map);
 
     /// <summary>
     /// ノード（円） vs 任意AABBの押し出し（プレイヤー等の動くコライダ用）

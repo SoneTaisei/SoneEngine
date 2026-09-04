@@ -1,4 +1,4 @@
-#include "VerletPhysics2D.h"
+﻿#include "VerletPhysics2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Core/Utility/TransformFunctions.h"
@@ -46,10 +46,11 @@ void VerletPhysics2D::SolveDistanceConstraint(VerletNode& a, VerletNode& b, floa
     b.pos -= d * (diff * wB);
 }
 
-void VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float friction) {
+int VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float friction) {
     if (!map || node.invMass <= 0.0f) {
-        return;
+        return 0;
     }
+    int contact = 0;
 
     const float r = node.radius;
     const float chipSize = map->GetChipSize();
@@ -87,7 +88,9 @@ void VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float
             float bottom = map->ChipToWorldY(cy);
             AABB2D chipBox = { left, bottom + chipSize, left + chipSize, bottom };
 
-            CollideNodeWithAABB(node, chipBox, friction);
+            if (CollideNodeWithAABB(node, chipBox, friction)) {
+                contact |= kContactStatic;
+            }
         }
     }
 
@@ -98,8 +101,44 @@ void VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float
         }
 
         AABB2D blockAABB = blockPtr->GetAABB();
-        CollideNodeWithAABB(node, blockAABB, friction);
+        if (CollideNodeWithAABB(node, blockAABB, friction)) {
+            contact |= kContactMoving;
+        }
     }
+    return contact;
+}
+
+bool VerletPhysics2D::IsInsideStaticSolid(const Vector3& p, MapChip2D* map) {
+    if (!map) {
+        return false;
+    }
+    int cx = map->WorldToChipX(p.x);
+    int cy = map->WorldToChipY(p.y);
+    if (auto* block = map->GetBlock(cx, cy)) {
+        return block->IsSolid() && !block->IsDestroyed() && !block->IsMoving();
+    }
+    return map->GetChipType(cx, cy) == MapChip2D::ChipType::kBlock;
+}
+
+bool VerletPhysics2D::IsTouchingMovingSolid(const VerletNode& node, MapChip2D* map) {
+    if (!map) {
+        return false;
+    }
+    const float reach = node.radius + 0.02f; // 押し出し直後（ちょうど半径だけ離れている）も「触れている」扱い
+    for (const auto& blockPtr : map->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) {
+            continue;
+        }
+        AABB2D box = blockPtr->GetAABB();
+        float closestX = std::clamp(node.pos.x, box.left, box.right);
+        float closestY = std::clamp(node.pos.y, box.bottom, box.top);
+        float dx = node.pos.x - closestX;
+        float dy = node.pos.y - closestY;
+        if (dx * dx + dy * dy <= reach * reach) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool VerletPhysics2D::CollideNodeWithAABB(VerletNode& node, const AABB2D& aabb, float friction) {

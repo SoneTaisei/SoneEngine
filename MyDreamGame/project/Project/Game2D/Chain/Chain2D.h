@@ -63,6 +63,13 @@ public:
     void ResetDynamics();
 
     /// <summary>
+    /// 鎖を anchor から真下に垂れた姿勢に置き直す（ノード数・繰り出し状態は保つ。速度ゼロ）
+    /// 手元が瞬間移動した時（リスポーン・リプレイの位置合わせ）に、遠くから引きずられて飛んで来ないようにする用
+    /// map を渡すと床やブロックに埋まったノードを押し出す
+    /// </summary>
+    void ResetPoseHanging(const Vector3& anchor, MapChip2D* map);
+
+    /// <summary>
     /// 初期垂下姿勢に戻す（プレイ開始・リプレイ再生開始時の再現性確保用）
     /// </summary>
     void ResetToInitial();
@@ -115,6 +122,12 @@ public:
 
     /// <summary>鎖の実長（繰り出し中は先頭セグメントの現在長を含む）</summary>
     float GetTotalLength() const;
+    /// <summary>伸び：根元から末端までの直線距離 ÷ 実長（1.0 で伸び切り。制約が負けて引き伸ばされると 1 を超える）</summary>
+    float GetSpanRatio() const;
+    /// <summary>静止した地形と動くブロック（閉まるドア等）に挟まれて固定された節があるか</summary>
+    bool HasCrushedNode() const;
+    /// <summary>挟まれ固定を全て解除する（ちぎれた後の手元の鎖・復活時）</summary>
+    void ClearCrushed();
 
     int GetNodeCount() const { return static_cast<int>(nodes_.size()); }
     const Vector3& GetNodePosition(int index) const { return nodes_[index].pos; }
