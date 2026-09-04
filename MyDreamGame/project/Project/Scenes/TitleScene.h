@@ -34,6 +34,11 @@ public:
     std::vector<ParticleManager *> GetParticles() override;
     std::vector<PrimitiveObject *> GetPrimitives() override;
 
+    // 3Dモデル配置JSONファイルパス (タイトル専用: title_obj.json)
+    std::string GetLevelDataJsonPath() const override {
+        return "resources/json/shared/LevelData/title_obj.json";
+    }
+
 private:
     // メンバ変数としてモデル、テクスチャ、座標を持つ
     uint32_t textureHandle_ = 0;
@@ -66,7 +71,36 @@ private:
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
 
-    std::unique_ptr<DebugCamera> debugCamera_;
+    // --- 怪盗タイトルシーン演出用 ---
+    std::unique_ptr<Sprite> titleLogoSprite_;
+    uint32_t titleLogoTextureHandle_ = 0;
+
+    std::vector<std::shared_ptr<GameObject>> searchlightObjects_;
+
+    float titleTimer_ = 0.0f;
+    // --- フェーズ管理 ---
+    enum class Phase {
+        kTitle,              // タイトル画面
+        kTransitionToSelect, // ステージ選択へのカメラ移動演出中
+        kStageSelect,        // ステージ選択画面
+        kTransitionToGame,   // ゲーム遷移中
+    };
+
+    Phase phase_ = Phase::kTitle;
+
+    // ステージ選択時の目標カメラ座標・角度（画像で指定された数値）
+    Vector3 targetSelectPos_ = { -25.60f, 54.64f, -45.55f };
+    Vector3 targetSelectRot_ = { 0.785398f, 0.383972f, 0.0f }; // 45.0°, 22.0°, 0.0°
+
+    // カメラ移動補間用
+    Vector3 transitionStartPos_{};
+    Vector3 transitionStartRot_{};
+    float transitionTimer_ = 0.0f;
+    float transitionDuration_ = 1.8f; // カメラ全体の移動時間（秒）
+    float logoFadeDuration_ = 0.6f;   // ロゴとライトのフェードアウト時間（秒）
+    float titleLogoAlpha_ = 1.0f;
+    float searchlightAlpha_ = 1.0f;
+    bool enableCinematicSway_ = false; // カメラ調整中は固定できるようにする
 
     // --- エディター停止中用 ---
     void UpdateEditor() override;

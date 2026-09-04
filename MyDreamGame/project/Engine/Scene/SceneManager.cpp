@@ -3,6 +3,9 @@
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Effect/ParticleCommon.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#endif
 
 SceneManager::SceneManager() {}
 
@@ -55,6 +58,12 @@ void SceneManager::ProcessSceneTransition() {
         
         // 新しいシーンの開始処理を呼ぶ
         currentScene_->OnEnter(this);
+
+#ifdef USE_IMGUI
+        if (EditorManager::GetInstance()) {
+            EditorManager::GetInstance()->LoadPlacedModelsForScene(currentScene_.get());
+        }
+#endif
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);
@@ -85,6 +94,12 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
 
         currentScene_->Initialize();
         currentScene_->OnEnter(this);
+
+#ifdef USE_IMGUI
+        if (EditorManager::GetInstance()) {
+            EditorManager::GetInstance()->LoadPlacedModelsForScene(currentScene_.get());
+        }
+#endif
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);
@@ -113,6 +128,13 @@ void SceneManager::PushScene(std::unique_ptr<IScene> nextScene) {
 
     currentScene_->Initialize();
     currentScene_->OnEnter(this);
+
+#ifdef USE_IMGUI
+    if (EditorManager::GetInstance()) {
+        EditorManager::GetInstance()->LoadPlacedModelsForScene(currentScene_.get());
+    }
+#endif
+
     currentScene_->Update(this);
 }
 
@@ -132,6 +154,11 @@ void SceneManager::PopScene() {
 
     if (currentScene_) {
         currentScene_->OnEnter(this);
+#ifdef USE_IMGUI
+        if (EditorManager::GetInstance()) {
+            EditorManager::GetInstance()->LoadPlacedModelsForScene(currentScene_.get());
+        }
+#endif
         currentScene_->Update(this);
     }
 }
