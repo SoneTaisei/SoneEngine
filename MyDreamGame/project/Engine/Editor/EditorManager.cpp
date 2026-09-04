@@ -215,7 +215,7 @@ void EditorManager::BeginFrame() {
 }
 
 void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, DebugCamera *debugCamera, Camera **activeCamera, bool &isDebugCameraActive, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, SceneManager *sceneManager) {
-
+    currentDebugCamera_ = debugCamera;
     static bool resetLayout = false;
 
 
@@ -2703,6 +2703,24 @@ void EditorManager::SaveLightingConfig(ModelCommon* modelCommon) {
 void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
     if (lightEditor_) {
         lightEditor_->LoadLightingConfig(modelCommon);
+    }
+}
+
+void EditorManager::LoadPlacedModelsForScene(IScene* scene) {
+    if (!scene || !model3DEditor_ || !model3DEditor_->GetContext()) return;
+    std::string targetPath = scene->GetLevelDataJsonPath();
+    if (targetPath.empty()) return;
+
+    auto context = model3DEditor_->GetContext();
+    if (context->GetCurrentFilePath() == targetPath) {
+        return;
+    }
+
+    context->SetCurrentFilePath(targetPath);
+    if (std::filesystem::exists(targetPath)) {
+        context->LoadFromFile(targetPath);
+    } else {
+        context->ClearObjects();
     }
 }
 

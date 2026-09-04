@@ -27,8 +27,11 @@ class SceneManager;
 class ParticleManager;
 class Object3D;
 class PrimitiveObject;
+class IScene;
 
 class EditorManager {
+public:
+    void LoadPlacedModelsForScene(IScene* scene);
 public:
     enum class MapEditMode {
         Normal,
@@ -89,6 +92,7 @@ public:
 
     bool UseDebugCamera() const { return useDebugCamera_; }
     void SetUseDebugCamera(bool use) { useDebugCamera_ = use; }
+    class DebugCamera* GetDebugCamera() const { return currentDebugCamera_; }
 
     bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
 
@@ -366,6 +370,7 @@ private:
     char newPresetNameBuf_[128] = "";
     std::string presetStatusMessage_ = "";
     float presetStatusMessageTimer_ = 0.0f;
+    DebugCamera* currentDebugCamera_ = nullptr;
 
     static bool showObjects_;
     static bool showEffects_;
