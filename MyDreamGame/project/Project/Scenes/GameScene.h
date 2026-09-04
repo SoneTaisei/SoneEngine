@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"
 #include "Effect/ParticleManager.h"

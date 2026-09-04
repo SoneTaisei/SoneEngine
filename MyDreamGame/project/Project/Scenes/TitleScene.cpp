@@ -63,9 +63,9 @@ void TitleScene::Initialize() {
     sprite->Initialize(spriteCommon_, planeIndex);
 
     // ④ 位置やサイズなどのパラメータを設定
-    // 画面中央付近に配置する例
-    sprite->SetPosition({640.0f, 360.0f}); // 画面中央付近など
-    sprite->SetSize({200.0f, 200.0f});     // しっかり見える大きさにする
+    // 画面中央に中心が来るよう配置（1280x720の中央 = (640, 360)、サイズ 200x200）
+    sprite->SetPosition({640.0f - 100.0f, 360.0f - 100.0f});
+    sprite->SetSize({200.0f, 200.0f});
 
     // ⑤ 管理用の配列に追加して保持する
     //sprites_.push_back(std::move(sprite));
