@@ -76,9 +76,8 @@ void MapEditorCanvas::Draw(
                 ImGui::Image((ImTextureID)renderTextureSrvHandle.ptr, imageSize);
 
                 // グリッド・ルーム・選択・オーバーレイ描画
-                bool isPlaying = EditorManager::IsPlaying() || (ReplayManager::GetInstance() && ReplayManager::GetInstance()->IsPlaying());
                 Camera* camera = activeCamera ? *activeCamera : nullptr;
-                if (camera && !isPlaying) {
+                if (camera) {
                     Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
 
                     auto WorldToScreen = [&](float wx, float wy) -> ImVec2 {
@@ -172,7 +171,7 @@ void MapEditorCanvas::Draw(
                 ImGui::InvisibleButton("MapCanvasImage", imageSize);
                 isMapEditorHovered = ImGui::IsItemHovered();
 
-                if (isMapEditorHovered && !isPlaying) {
+                if (isMapEditorHovered) {
                     ImVec2 mousePos = ImGui::GetIO().MousePos;
                     float localX = mousePos.x - imageScreenPos.x;
                     float localY = mousePos.y - imageScreenPos.y;
@@ -213,9 +212,15 @@ void MapEditorCanvas::Draw(
                     // Undo / Redo
                     if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
                         context_->Undo();
+                        if (EditorManager::IsPlaying()) {
+                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                        }
                     }
                     if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
                         context_->Redo();
+                        if (EditorManager::IsPlaying()) {
+                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                        }
                     }
 
                     if (context_->IsRoomEditMode()) {
@@ -316,6 +321,9 @@ void MapEditorCanvas::Draw(
                             context_->EndRoomHistoryCapture(mapChip);
                             context_->SetDraggingRoomIndex(-1);
                             context_->SetRoomDragHandle(0);
+                            if (EditorManager::IsPlaying()) {
+                                EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                            }
                         }
                     } else {
                         if (camera) {
@@ -378,6 +386,9 @@ void MapEditorCanvas::Draw(
                                         context_->EndMapHistoryCapture(mapChip);
                                         mapChip->SetDirty();
                                         pending.clear();
+                                        if (EditorManager::IsPlaying()) {
+                                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                                        }
                                     }
                                     context_->SetPrevGrid(-1, -1);
                                 }
@@ -447,6 +458,9 @@ void MapEditorCanvas::Draw(
                                         }
                                         context_->EndMapHistoryCapture(mapChip);
                                         mapChip->SetDirty();
+                                        if (EditorManager::IsPlaying()) {
+                                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                                        }
 
                                         context_->SetSelectRect(
                                             context_->GetSelectStartX() + deltaX,
@@ -493,6 +507,9 @@ void MapEditorCanvas::Draw(
                                         }
                                         context_->EndMapHistoryCapture(mapChip);
                                         mapChip->SetDirty();
+                                        if (EditorManager::IsPlaying()) {
+                                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                                        }
                                     }
                                 }
                             } else if (editMode == MapEditorContext::MapEditMode::BucketFill) {
@@ -504,6 +521,9 @@ void MapEditorCanvas::Draw(
                                         mapChip->BucketFill(gridX, gridY, targetType, replacementType);
                                         context_->EndMapHistoryCapture(mapChip);
                                         mapChip->SetDirty();
+                                        if (EditorManager::IsPlaying()) {
+                                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                                        }
                                     }
                                 }
                             }

@@ -126,7 +126,8 @@ void Chain2D::Update(float dt, MapChip2D* map, Player2D* player) {
         nodes_[0].prevPos = newAnchor;
 
         if (teleported) {
-            ResetDynamics();
+            // 瞬間移動先から垂れ下がった姿勢で作り直す（速度リセットだけだと遠くの鎖が制約で引きずられて飛んで来る）
+            ResetPoseHanging(newAnchor, map);
         }
     } else {
         nodes_[0].invMass = 1.0f;
@@ -208,12 +209,12 @@ void Chain2D::ApplyEndWeight() {
     VerletNode& end = nodes_.back();
     if (endWeight_.enabled) {
         end.radius = endWeight_.radius;
-        if (!endFollow_) {
+        if (!endFollow_ && !end.crushed) {
             end.invMass = 1.0f / (std::max)(0.1f, endWeight_.mass);
         }
     } else {
         end.radius = params_.nodeRadius_;
-        if (!endFollow_) {
+        if (!endFollow_ && !end.crushed) {
             end.invMass = 1.0f;
         }
     }
@@ -286,6 +287,31 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
             }
         }
     }
+
+    // 挟まれ判定：押し出しを全部やった後でも中心が静止した地形の中に残り、かつ動くブロックに触れている節は
+    // 「静止した地形と動くブロックに挟まれた」ので、その場に固定する（閉まるドアに鎖が挟まる）。
+    // 固定された節が鎖を止めるので、プレイヤーが離れると鎖が伸び切ってちぎれる。動くブロックが離れたら解放する
+    if (map) {
+        for (size_t i = 1; i < nodes_.size(); ++i) {
+            VerletNode& node = nodes_[i];
+            if (node.crushed) {
+                if (!VerletPhysics2D::IsTouchingMovingSolid(node, map)) {
+                    node.crushed = false; // ドアが開いた
+                    node.invMass = 1.0f;
+                }
+                continue;
+            }
+            if (node.invMass <= 0.0f) {
+                continue;
+            }
+            if (VerletPhysics2D::IsTouchingMovingSolid(node, map) && VerletPhysics2D::IsInsideStaticSolid(node.pos, map)) {
+                node.crushed = true;
+                node.invMass = 0.0f;
+                node.prevPos = node.pos;
+            }
+        }
+        ApplyEndWeight(); // 末端の質量を戻す（挟まれていれば 0 のまま）
+    }
 }
 
 void Chain2D::UpdateLinkTransforms() {
@@ -338,6 +364,27 @@ void Chain2D::Draw() {
         }
         linkObjs_[j]->Draw();
     }
+}
+
+void Chain2D::ResetPoseHanging(const Vector3& anchor, MapChip2D* map) {
+    anchorPos_ = { anchor.x, anchor.y, 0.0f };
+    float y = anchorPos_.y;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        VerletNode& node = nodes_[i];
+        node.pos = { anchorPos_.x, y, 0.0f };
+        // 先頭セグメントは繰り出し中の自然長、以降は節間隔
+        y -= (i == 0) ? headRest_ : restLength_;
+        if (i > 0 && map && node.invMass > 0.0f) {
+            VerletPhysics2D::CollideNodeWithMap(node, map, 0.0f); // 床やブロックに埋まった分だけ押し出す
+        }
+        node.prevPos = node.pos; // 速度ゼロ
+        if (node.crushed) {
+            node.crushed = false; // 置き直したので挟まれ状態は解除
+            node.invMass = 1.0f;
+        }
+    }
+    ApplyEndWeight();
+    UpdateLinkTransforms();
 }
 
 void Chain2D::ResetDynamics() {
@@ -448,7 +495,7 @@ std::vector<VerletNode> Chain2D::RemoveUnitsAtAnchor(int units) {
     removed.insert(removed.begin(), nodes_[0]);
     nodes_.erase(nodes_.begin() + 1, nodes_.begin() + 1 + removeCount);
     for (auto& node : removed) {
-        node.invMass = 1.0f; // 自由ノード化
+        node.invMass = node.crushed ? 0.0f : 1.0f; // 自由ノード化（挟まれた節は固定のまま）
         node.radius = params_.nodeRadius_;
     }
     // 残った新しい先頭セグメントは完全長。残りの揺れは殺さない（ResetDynamicsは呼ばない）
@@ -469,7 +516,7 @@ void Chain2D::InitializeFromNodes(std::vector<VerletNode>&& nodes, const ChainPa
 
     nodes_ = std::move(nodes);
     for (auto& node : nodes_) {
-        node.invMass = 1.0f;
+        node.invMass = node.crushed ? 0.0f : 1.0f; // 挟まれた節は固定のまま
     }
 
     // 落ちている状態として生成（重りなし・繰り出しなし）
@@ -562,15 +609,16 @@ void Chain2D::PlaceNodesOnLine(const Vector3& from, const Vector3& to) {
     for (size_t i = 0; i < n; ++i) {
         float t = static_cast<float>(i) / denom;
         Vector3 p = { from.x + d.x * t, from.y + d.y * t, 0.0f };
+        // prevPos には前フレームの位置を残す（振り回している宝石の速さを「殴る」判定で使う。固定ノードなので積分には影響しない）
+        nodes_[i].prevPos = nodes_[i].pos;
         nodes_[i].pos = p;
-        nodes_[i].prevPos = p;
         nodes_[i].invMass = 0.0f; // 固定（地形・プレイヤー判定も自動的にスキップされる）
     }
 }
 
 void Chain2D::RestoreMasses() {
     for (auto& node : nodes_) {
-        node.invMass = 1.0f;
+        node.invMass = node.crushed ? 0.0f : 1.0f; // 挟まれた節は固定のまま
     }
     if (!nodes_.empty()) {
         nodes_[0].invMass = (anchorMode_ == ChainAnchorMode::kFree) ? 1.0f : 0.0f;
@@ -630,6 +678,15 @@ void Chain2D::SetAllVelocities(const Vector3& velocity, float dt) {
     }
 }
 
+void Chain2D::ScaleNodeVelocity(int index, float factor) {
+    if (index < 0 || index >= static_cast<int>(nodes_.size())) {
+        return;
+    }
+    VerletNode& node = nodes_[index];
+    Vector3 d = node.pos - node.prevPos;
+    node.prevPos = node.pos - d * factor;
+}
+
 Vector3 Chain2D::GetNodeVelocity(int index) const {
     if (index < 0 || index >= static_cast<int>(nodes_.size()) || lastStepDt_ <= 0.0f) {
         return { 0.0f, 0.0f, 0.0f };
@@ -645,6 +702,69 @@ Vector3 Chain2D::GetEndVelocity() const {
     const VerletNode& end = nodes_.back();
     Vector3 d = end.pos - end.prevPos;
     return { d.x / lastStepDt_, d.y / lastStepDt_, 0.0f };
+}
+
+bool Chain2D::HasCrushedNode() const {
+    for (const auto& node : nodes_) {
+        if (node.crushed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Chain2D::ClearCrushed() {
+    for (size_t i = 1; i < nodes_.size(); ++i) {
+        if (nodes_[i].crushed) {
+            nodes_[i].crushed = false;
+            nodes_[i].invMass = 1.0f;
+        }
+    }
+    ApplyEndWeight();
+}
+
+int Chain2D::FindFirstCrushedNode() const {
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        if (nodes_[i].crushed) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+int Chain2D::FindMostStretchedSegment() const {
+    int best = -1;
+    float bestRatio = 0.0f;
+    for (size_t i = 0; i + 1 < nodes_.size(); ++i) {
+        float rest = (std::max)(1e-4f, (i == 0) ? headRest_ : restLength_);
+        Vector3 d = nodes_[i + 1].pos - nodes_[i].pos;
+        float ratio = std::sqrt(d.x * d.x + d.y * d.y) / rest;
+        if (ratio > bestRatio) {
+            bestRatio = ratio;
+            best = static_cast<int>(i);
+        }
+    }
+    return best;
+}
+
+void Chain2D::TruncateNodes(int keepCount) {
+    if (nodes_.size() < 2) {
+        return;
+    }
+    keepCount = std::clamp(keepCount, 2, static_cast<int>(nodes_.size()));
+    nodes_.resize(static_cast<size_t>(keepCount));
+    pendingNodes_ = 0;
+    ApplyEndWeight();
+    UpdateLinkTransforms();
+}
+
+float Chain2D::GetSpanRatio() const {
+    float length = GetTotalLength();
+    if (nodes_.size() < 2 || length <= 1e-4f) {
+        return 0.0f;
+    }
+    Vector3 d = nodes_.back().pos - nodes_[0].pos;
+    return std::sqrt(d.x * d.x + d.y * d.y) / length;
 }
 
 float Chain2D::GetTotalLength() const {

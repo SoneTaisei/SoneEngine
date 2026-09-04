@@ -63,6 +63,13 @@ public:
     void ResetDynamics();
 
     /// <summary>
+    /// 鎖を anchor から真下に垂れた姿勢に置き直す（ノード数・繰り出し状態は保つ。速度ゼロ）
+    /// 手元が瞬間移動した時（リスポーン・リプレイの位置合わせ）に、遠くから引きずられて飛んで来ないようにする用
+    /// map を渡すと床やブロックに埋まったノードを押し出す
+    /// </summary>
+    void ResetPoseHanging(const Vector3& anchor, MapChip2D* map);
+
+    /// <summary>
     /// 初期垂下姿勢に戻す（プレイ開始・リプレイ再生開始時の再現性確保用）
     /// </summary>
     void ResetToInitial();
@@ -115,6 +122,18 @@ public:
 
     /// <summary>鎖の実長（繰り出し中は先頭セグメントの現在長を含む）</summary>
     float GetTotalLength() const;
+    /// <summary>伸び：根元から末端までの直線距離 ÷ 実長（1.0 で伸び切り。制約が負けて引き伸ばされると 1 を超える）</summary>
+    float GetSpanRatio() const;
+    /// <summary>静止した地形と動くブロック（閉まるドア等）に挟まれて固定された節があるか</summary>
+    bool HasCrushedNode() const;
+    /// <summary>挟まれ固定を全て解除する（ちぎれた後の手元の鎖・復活時）</summary>
+    void ClearCrushed();
+    /// <summary>挟まれて固定された最初の節の添字（無ければ -1）</summary>
+    int FindFirstCrushedNode() const;
+    /// <summary>一番伸びているセグメント（i と i+1 の間）の i（ちぎれ位置の決定用。節が2未満なら -1）</summary>
+    int FindMostStretchedSegment() const;
+    /// <summary>先頭 keepCount 個の節だけ残して以降を捨てる（ちぎれで手元側だけ残す用。繰り出し待ちも捨てる）</summary>
+    void TruncateNodes(int keepCount);
 
     int GetNodeCount() const { return static_cast<int>(nodes_.size()); }
     const Vector3& GetNodePosition(int index) const { return nodes_[index].pos; }
@@ -123,6 +142,8 @@ public:
     Vector3 GetEndVelocity() const;
     /// <summary>任意ノードの暗黙速度</summary>
     Vector3 GetNodeVelocity(int index) const;
+    /// <summary>任意ノードの暗黙速度を factor 倍にする（宝石が警備員に当たった時の跳ね返り弱め用）</summary>
+    void ScaleNodeVelocity(int index, float factor);
 
     /// <summary>ノード列（遷移用の複製など、読み取り専用）</summary>
     const std::vector<VerletNode>& GetNodes() const { return nodes_; }

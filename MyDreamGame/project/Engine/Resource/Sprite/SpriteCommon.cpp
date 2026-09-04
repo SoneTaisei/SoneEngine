@@ -7,23 +7,71 @@
 #include "Renderer/SrvManager.h"
 #pragma comment(lib, "d3dcompiler.lib")
 
+void SpriteCommon::SetBaseResolution(float width, float height) {
+    if (width > 0.0f && height > 0.0f) {
+        baseWidth_ = width;
+        baseHeight_ = height;
+        UpdateProjectionMatrix();
+    }
+}
+
+void SpriteCommon::UpdateProjectionMatrix() {
+    if (windowWidth_ <= 0 || windowHeight_ <= 0 || baseWidth_ <= 0.0f || baseHeight_ <= 0.0f) {
+        return;
+    }
+
+    float baseAspect = baseWidth_ / baseHeight_;
+    float currentAspect = static_cast<float>(windowWidth_) / static_cast<float>(windowHeight_);
+
+    float left = 0.0f;
+    float right = baseWidth_;
+    float top = 0.0f;
+    float bottom = baseHeight_;
+
+    // アスペクト比補正:
+    // 画面中央 (baseWidth_/2, baseHeight_/2) を常に描画領域の中心に保ち、
+    // アスペクト比が異なる環境でもスプライトの歪み（縦伸び・横伸び）を防止する
+    if (currentAspect > baseAspect) {
+        // 横長画面（例: ウルトラワイドなど）: 縦を基準に横の仮想範囲を広げる
+        float virtualWidth = baseHeight_ * currentAspect;
+        float offsetX = (virtualWidth - baseWidth_) * 0.5f;
+        left = -offsetX;
+        right = baseWidth_ + offsetX;
+    } else if (currentAspect < baseAspect) {
+        // 縦長画面（例: 16:10 など）: 横を基準に縦の仮想範囲を広げる
+        float virtualHeight = baseWidth_ / currentAspect;
+        float offsetY = (virtualHeight - baseHeight_) * 0.5f;
+        top = -offsetY;
+        bottom = baseHeight_ + offsetY;
+    }
+
+    // 射影行列の計算
+    projectionMatrix_ = TransformFunctions::MakeOrthographicMatrix(
+        left, top, right, bottom, 0.0f, 100.0f);
+}
+
 void SpriteCommon::Initialize(DirectXCommon *dxCommon, int windowWidth, int windowHeight) {
     // ★ポインタを保存
     dxCommon_ = dxCommon;
     // デバイスを DirectXCommon から取得
     device_ = dxCommon_->GetDevice();
 
-    // 射影行列の計算
-    projectionMatrix_ = TransformFunctions::MakeOrthographicMatrix(
-        0.0f, 0.0f, float(windowWidth), float(windowHeight), 0.0f, 100.0f);
+    windowWidth_ = windowWidth;
+    windowHeight_ = windowHeight;
+
+    // 基準解像度と現在解像度から正射影行列を算出
+    UpdateProjectionMatrix();
 
     CreateCommonResources();
     CreateGraphicsPipeline(); // ここで dxCommon_ を使ってコンパイルできるようになります！
 }
 
 void SpriteCommon::SetResolution(int windowWidth, int windowHeight) {
-    projectionMatrix_ = TransformFunctions::MakeOrthographicMatrix(
-        0.0f, 0.0f, float(windowWidth), float(windowHeight), 0.0f, 100.0f);
+    if (windowWidth > 0 && windowHeight > 0) {
+        windowWidth_ = windowWidth;
+        windowHeight_ = windowHeight;
+        UpdateProjectionMatrix();
+    }
 }
 
 void SpriteCommon::Finalize() {

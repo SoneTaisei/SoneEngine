@@ -1,4 +1,4 @@
-﻿#include "BlockFactory.h"
+#include "BlockFactory.h"
 #include "NormalBlock.h"
 #include "DeathBlock.h"
 #include "GoalBlock.h"
@@ -10,6 +10,7 @@
 #include "DoorBlock.h"
 #include "GuardBlock.h"
 #include "ThinPlatformBlock.h"
+#include "JumpBlock.h"
 #include <algorithm>
 
 BlockFactory& BlockFactory::GetInstance() {
@@ -51,6 +52,9 @@ BlockFactory::BlockFactory() {
     });
     Register("ThinPlatformBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<ThinPlatformBlock>(map, x, y);
+    });
+    Register("JumpBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<JumpBlock>(map, x, y);
     });
 }
 

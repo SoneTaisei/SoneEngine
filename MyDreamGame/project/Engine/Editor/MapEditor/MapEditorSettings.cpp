@@ -5,6 +5,7 @@
 #include "Scene/SceneManager.h"
 #include "Scene/IScene.h"
 #include "Game2D/MapChip2D.h"
+#include "Editor/EditorManager.h"
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -78,6 +79,9 @@ void MapEditorSettings::Draw(
                                 if (mapChip->LoadFromFile(context_->GetFullFilePath(context_->GetStageFilename()))) {
                                     context_->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                                     context_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                                    if (EditorManager::IsPlaying()) {
+                                        EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                                    }
                                     if (onSaveSceneConfig) {
                                         onSaveSceneConfig();
                                     }
@@ -96,6 +100,9 @@ void MapEditorSettings::Draw(
                     if (mapChip->LoadFromFile(context_->GetFullFilePath(context_->GetStageFilename()))) {
                         context_->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                         context_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                        if (EditorManager::IsPlaying()) {
+                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                        }
                         if (onSaveSceneConfig) {
                             onSaveSceneConfig();
                         }

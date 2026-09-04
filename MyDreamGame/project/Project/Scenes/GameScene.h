@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"
 #include "Effect/ParticleManager.h"
@@ -83,7 +83,7 @@ private:
     
 
 
-    // ステージクリア遷移で覆い切った後の行き先（stage_config.txt の次のステージ。無ければ同じステージをもう一度）
+    // ステージクリア遷移で覆い切った後の行き先（いったんステージ選択へ戻る）
     void GoToNextStage(SceneManager* sceneManager);
 
     GameState gameState_ = GameState::StartReady;

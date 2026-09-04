@@ -97,14 +97,20 @@ public:
     // --- お宝（ゴール判定・敗北判定・カメラ用のフック） ---
     Treasure2D* GetTreasure() const { return treasure_.get(); }
     Vector3 GetTreasurePosition() const { return treasure_ ? treasure_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f }; }
-    /// <summary>お宝がプレイヤー鎖につながっているか（将来「鎖が途切れる=敗北」用。現状は常に true）</summary>
-    bool IsTreasureConnected() const { return playerChain_ && playerChain_->GetEndWeight().enabled; }
+    /// <summary>お宝がプレイヤー鎖につながっているか（ちぎれていない）</summary>
+    bool IsTreasureConnected() const { return playerChain_ && playerChain_->GetEndWeight().enabled && !tornChain_; }
+    /// <summary>鎖がちぎれてミスになった直後（復活まで）</summary>
+    bool IsTorn() const { return tornChain_ != nullptr; }
 
 private:
     // ソケット（手のジョイント）のワールド座標を取得。ジョイントが無ければプレイヤー座標で代用
     Vector3 ComputeSocketWorld();
     // 範囲内の鎖を拾う（落ちている自由鎖 → 吊り鎖の順）。拾えたら true
     bool TryPickup();
+    // 重なっている警備員を縛る（気絶中か背後から。鎖を1ユニット預ける）。警備員が居れば入力を消費して true
+    bool TryBindGuard();
+    // 重なっている縛られた警備員から鎖を取り戻す。取り戻せたら true
+    bool TryUnbindGuard();
     // unitsPerAction_ ユニットをつながったまま外して自由鎖として世界に落とす
     void DetachUnits();
     // params_ のお宝設定・スピン設定をプレイヤー鎖・表示・アクションに反映する
@@ -115,6 +121,12 @@ private:
     void NotifyBlockContacts(MapChip2D* map);
     // プレイヤーが「回せる場所」（木の板 ThinPlatformBlock の上）にいるかを調べ、スピンの可否を更新する
     void UpdateSpinSpots(MapChip2D* map);
+    // テザー：鎖が張ったらプレイヤーの動きを宝石側へ引き戻す（引きずりで遅くなる、跳んでも鎖の長さで止まる）
+    void UpdateTether();
+    // ちぎれ判定：鎖が伸び切った状態が続いたら鎖をその場に落としてミスにする。復活したら落ちた鎖を消す
+    void UpdateTear(float dt, MapChip2D* map);
+    void Tear(int splitIndex); // splitIndex の節でちぎる（手元側 0..split は手に残り、split..末端は落ちる）
+    void ClearTorn();
 
     Player2D* player_ = nullptr;
     ChainParams params_; // 共有パラメータ（ChainConfigからロード）
@@ -137,4 +149,11 @@ private:
     int initialChainLength_ = 3; // シーン開始時の個数（リセット時に戻す）
     int droppedCounter_ = 0;     // 自由鎖の命名用連番
     bool transitionHidden_ = false; // ステージクリア遷移中（プレイヤー鎖とお宝は遷移側の複製が描かれる）
+    MapChip2D* lastMap_ = nullptr;  // 直近の Update で受け取ったマップ（HandleInput の警備員判定用。非所有）
+    bool tetherTaut_ = false;       // 今フレーム鎖が張っていた（ImGui 表示用）
+
+    // ちぎれ：ちぎれた鎖はその場に落ちたまま残り（tornChain_）、復活まで手元の鎖は描かない
+    std::unique_ptr<Chain2D> tornChain_;
+    float tearTimer_ = 0.0f;
+    bool wasDead_ = false;
 };

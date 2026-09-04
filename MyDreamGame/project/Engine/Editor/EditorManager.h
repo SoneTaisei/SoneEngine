@@ -21,6 +21,7 @@
 #include "MapEditor/MapEditor.h"
 #include "LightEditor/LightEditor.h"
 #include "Model3DEditor/Model3DEditor.h"
+#include "PostEffectEditor/PostEffectEditor.h"
 
 class SceneManager;
 class ParticleManager;
@@ -65,6 +66,16 @@ public:
     // 再生状態の取得・設定
     static bool IsPlaying() { return isPlaying_; }
     static void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
+    static bool IsPaused() { return isPaused_; }
+    static void SetPaused(bool isPaused) { isPaused_ = isPaused; }
+
+    // マップエディターの表示切り替え・フォーカス制御
+    void ToggleMapEditor();
+    void FocusMapEditor();
+    void FocusGameView();
+
+    // プレイ中のマップ変更を一時保存データに同期（Stop時の復元用）
+    void SyncPlayMapData(class MapChip2D* mapChip);
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
@@ -89,6 +100,7 @@ public:
     MapEditor* GetMapEditor() const { return mapEditor_.get(); }
     LightEditor* GetLightEditor() const { return lightEditor_.get(); }
     Model3DEditor* GetModel3DEditor() const { return model3DEditor_.get(); }
+    PostEffectEditor* GetPostEffectEditor() const { return postEffectEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -260,6 +272,7 @@ private:
     char stageFilename_[128] = "map_data.txt";
 
     static bool isPlaying_; // ゲーム再生中かどうか
+    static bool isPaused_;  // ゲーム再生中の一時停止かどうか
     bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
     float takeoverCountdown_ = 0.0f; // 操作引き継ぎ時のカウントダウン
 
@@ -323,6 +336,7 @@ private:
     std::unique_ptr<MapEditor> mapEditor_;
     std::unique_ptr<LightEditor> lightEditor_;
     std::unique_ptr<Model3DEditor> model3DEditor_;
+    std::unique_ptr<PostEffectEditor> postEffectEditor_;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

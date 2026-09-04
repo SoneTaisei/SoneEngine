@@ -1,4 +1,4 @@
-﻿#include "GameScene.h"
+#include "GameScene.h"
 #include <Windows.h>
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -47,33 +47,10 @@ GameScene::~GameScene() {
 }
 
 void GameScene::GoToNextStage(SceneManager* sceneManager) {
-    // ステージセレクトと同じ一覧（stage_config.txt）で今のマップの次を探す
-    std::string current = std::filesystem::path(s_TargetMapFilePath).filename().string();
-    std::string next;
-    std::ifstream ifs("resources/json/shared/stage_config.txt");
-    int count = 0;
-    if (ifs.is_open() && (ifs >> count)) {
-        std::vector<std::string> names;
-        std::string path;
-        for (int i = 0; i < count && (ifs >> path); ++i) {
-            names.push_back(path == "none" ? std::string() : std::filesystem::path(path).filename().string());
-        }
-        for (size_t i = 0; i + 1 < names.size(); ++i) {
-            if (!names[i].empty() && names[i] == current && !names[i + 1].empty()) {
-                next = names[i + 1];
-                break;
-            }
-        }
-    }
-    if (!next.empty()) {
-        s_TargetMapFilePath = "resources/json/shared/MapData/" + next;
-        Log("GameScene: next stage -> " + s_TargetMapFilePath + "\n");
-    } else {
-        // 一覧に無い（エディタで開いたマップ等）か最終ステージ：同じステージをもう一度（宝石を持って降りてくる確認ができる）
-        Log("GameScene: no next stage in stage_config.txt, replaying " + s_TargetMapFilePath + "\n");
-    }
-    sceneManager->SetData("SelectedStagePath", s_TargetMapFilePath);
-    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+    // クリア後はいったんステージ選択へ戻る（持ち越し用の鎖・カメラ操作などの演出状態はここで捨てる）
+    TransitionDirector::GetInstance()->Abort();
+    Log("GameScene: stage clear -> StageSelect\n");
+    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
 }
 
 void GameScene::Initialize() {
@@ -547,10 +524,12 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Pick up chain");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Drop chain");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "W (hold) + A/D on wooden plank : Swing weight");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Take (pick up chain / take back from bound guard)");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Put (drop chain / bind glowing guard, -1 chain)");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "W (hold) : Raise the gem overhead");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D while raised on wooden plank : Throw it -> swing (A/D to pump)");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "Release W : Fly in the weight's direction");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Guard : gem hit = stun / J near glowing guard = bind / K near bound = take back / dropped chain trips");
         ImGui::End();
     }
 

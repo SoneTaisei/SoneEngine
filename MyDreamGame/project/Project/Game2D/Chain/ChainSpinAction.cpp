@@ -21,6 +21,8 @@ namespace {
     constexpr float kRodProbeStart = 0.5f;
     // 発射準備完了とみなす上限に対する割合（お宝を明るくする合図）
     constexpr float kLaunchReadyRatio = 0.8f;
+    // 掲げてからこの秒数は A/D を投げ入力にしない（歩きながら W を押した瞬間に投げてしまうのを防ぐ）
+    constexpr float kThrowGrace = 0.15f;
 
     // 振り子の角度を [-π, π] に保つ（一回転しても sin/cos の精度を落とさない）
     float WrapAngle(float a) {
@@ -28,6 +30,7 @@ namespace {
         while (a < -kPi) a += 2.0f * kPi;
         return a;
     }
+    float EaseOut(float u) { return 1.0f - (1.0f - u) * (1.0f - u); }
 
     // 点がソリッドな地形の中か（静止ブロックはチップ単位、動くブロックはAABB。片方向床などは素通り）
     bool PointBlocked(MapChip2D* map, float x, float y) {
@@ -62,6 +65,7 @@ void ChainSpinAction::Initialize(const ChainParams& params) {
     theta_ = 0.0f;
     omega_ = 0.0f;
     radius_ = 0.0f;
+    throwOutTime_ = 0.0f;
     effMass_ = 1.0f;
     launchCap_ = 0.0f;
     cooldownTimer_ = 0.0f;
@@ -92,6 +96,7 @@ void ChainSpinAction::ResetInputState() {
     theta_ = 0.0f;
     omega_ = 0.0f;
     radius_ = 0.0f;
+    throwOutTime_ = 0.0f;
 }
 
 float ChainSpinAction::GetCurrentThrowSpeed() const {
@@ -112,7 +117,7 @@ float ChainSpinAction::EffectiveMass(Player2D* player) const {
     return (std::max)(0.1f, params_.treasureMass_ + units * params_.chainMassPerUnit_);
 }
 
-float ChainSpinAction::ComputeRadius(Chain2D* chain) const {
+float ChainSpinAction::FullRadius(Chain2D* chain) const {
     // 鎖の実長 × spinRadiusRatio_（1.0 で節間隔ちょうどのピンと張った棒）。長い鎖ほど半径が大きい
     float radius = (std::min)(params_.spinRadiusMax_, chain->GetTotalLength() * params_.spinRadiusRatio_);
     return (std::max)(radius, kMinSpinRadius);
@@ -122,6 +127,13 @@ Vector3 ChainSpinAction::TangentDirection() const {
     // 真下=0 の角度で位置は (sinθ, -cosθ)。接線は (cosθ, sinθ)、向きは角速度の符号
     float sign = (omega_ >= 0.0f) ? 1.0f : -1.0f;
     return { std::cos(theta_) * sign, std::sin(theta_) * sign, 0.0f };
+}
+
+void ChainSpinAction::UpdateSpinTarget(const Vector3& socketWorld) {
+    // 真下=0 の角度なので位置は (sinθ, -cosθ)。鎖全体はソケット→ここの直線上に拘束される
+    spinTarget_ = { socketWorld.x + std::sin(theta_) * radius_,
+                    socketWorld.y - std::cos(theta_) * radius_,
+                    0.0f };
 }
 
 bool ChainSpinAction::IsRodBlocked(MapChip2D* map, const Vector3& socketWorld, float theta, float radius, float endRadius) const {
@@ -158,18 +170,36 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
 
     switch (state_) {
     case State::kIdle:
-        // 地上専用。回せる場所（木の板の上）でだけ。最初の棒が地形に入っているなら始めない
-        if (press && player->IsOnGround() && IsSpinAllowed()) {
-            Vector3 end = chain->GetEndPosition();
-            float dx = end.x - socketWorld.x;
-            float dy = end.y - socketWorld.y;
-            float theta = (dx * dx + dy * dy > 1e-6f) ? WrapAngle(std::atan2(dy, dx) + kPi * 0.5f) : 0.0f;
-            float radius = ComputeRadius(chain);
-            if (!IsRodBlocked(map, socketWorld, theta, radius, chain->GetEndWeight().radius)) {
-                StartStance(player, chain, socketWorld);
+        // 地上ならどこでも宝石を頭上に掲げられる（投げて振り子に入れるのは回せる場所だけ）
+        if (press && player->IsOnGround()) {
+            StartHold(player, chain, socketWorld);
+        }
+        break;
+
+    case State::kHold: {
+        // 持っている間：足場を離れたら落とす。W を離したら投げずに落とす
+        if (!player->IsOnGround() || release || !keyHeld_) {
+            Cancel(player, chain);
+            break;
+        }
+        player->SetActionInputModifier(params_.spinMoveFactor_, true);
+        // 宝石は頭上（手の真上 holdOffset_）に掲げ、鎖はその間に畳まれている
+        radius_ = params_.holdOffset_;
+        theta_ = kPi;
+        UpdateSpinTarget(socketWorld);
+
+        // A/D で押した方向へ投げる → 振り子開始（回せる場所＝木の板の上でだけ。それ以外では掲げたまま）
+        // 掲げた直後は投げない（移動キーを押したまま W を押しても、まず掲げる）
+        holdTime_ += dt;
+        if (IsSpinAllowed() && holdTime_ >= kThrowGrace) {
+            if (swingInput_ > 0.5f) {
+                StartThrow(1.0f, socketWorld);
+            } else if (swingInput_ < -0.5f) {
+                StartThrow(-1.0f, socketWorld);
             }
         }
         break;
+    }
 
     case State::kStance: {
         // 地上専用：構え中に足場を離れたら解除する
@@ -186,12 +216,17 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
         // 構え中は移動不可（A/Dは振りに使う）。ジャンプも無効
         player->SetActionInputModifier(params_.spinMoveFactor_, true);
 
+        // 投げた直後は棒が手元から鎖の実長まで伸びていく
+        float full = FullRadius(chain);
+        throwOutTime_ += dt;
+        float ramp = std::clamp(throwOutTime_ / (std::max)(0.001f, params_.throwOutTime_), 0.0f, 1.0f);
+        radius_ = params_.holdOffset_ + (full - params_.holdOffset_) * EaseOut(ramp);
+        radius_ = (std::max)(radius_, kMinSpinRadius);
+
         // 振り子のシミュレーション（真下=0。重力の復元 + 自分で振る力 ÷ 重さ）
         // 重い（宝石＋鎖）ほど振りにくい。振れている向きに合わせて交互に押すと振幅が増し、やがて一回転する
-        // 振る力は半径で割らない（割ると長い鎖ほど弱くなり「長いほど遠くへ」と逆になる。
-        // 数値検証: S=40 で 1ユニットは上限に届かず、3ユニット≒3.2秒、6ユニット≒2.0秒で上限到達）
+        // 振る力は半径で割らない（割ると長い鎖ほど弱くなり「長いほど遠くへ」と逆になる）
         effMass_ = EffectiveMass(player);
-        radius_ = ComputeRadius(chain);
         float g = std::fabs(params_.gravity_);
         float alphaGravity = -(g / radius_) * std::sin(theta_);
         float alphaSwing = params_.swingStrength_ * swingInput_ / effMass_;
@@ -204,11 +239,7 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
             Break(dt, player, chain, socketWorld);
             break;
         }
-
-        // 真下=0 の角度なので位置は (sinθ, -cosθ)。鎖全体はソケット→ここの直線上に拘束される
-        spinTarget_ = { socketWorld.x + std::sin(theta_) * radius_,
-                        socketWorld.y - std::cos(theta_) * radius_,
-                        0.0f };
+        UpdateSpinTarget(socketWorld);
         break;
     }
 
@@ -222,29 +253,38 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
     }
 }
 
-void ChainSpinAction::StartStance(Player2D* player, Chain2D* chain, const Vector3& socketWorld) {
-    state_ = State::kStance;
+void ChainSpinAction::StartHold(Player2D* player, Chain2D* chain, const Vector3& socketWorld) {
+    state_ = State::kHold;
     omega_ = 0.0f;
+    theta_ = kPi; // 真上
+    throwOutTime_ = 0.0f;
+    holdTime_ = 0.0f;
     lastBrokeByTerrain_ = false;
-
-    // 重りが今ある方向から始める（いきなり跳ばない）。真下=0 の角度に変換
-    Vector3 end = chain->GetEndPosition();
-    float dx = end.x - socketWorld.x;
-    float dy = end.y - socketWorld.y;
-    float angleFromX = (dx * dx + dy * dy > 1e-6f) ? std::atan2(dy, dx) : -kPi * 0.5f;
-    theta_ = WrapAngle(angleFromX + kPi * 0.5f);
 
     // 飛ぶ速さの上限は通常ジャンプ初速基準（通常ジャンプより高く飛べないので重さのデメリットが残る）
     launchCap_ = player->GetParams().jumpPower_ * params_.launchMaxJumpRatio_;
     effMass_ = EffectiveMass(player);
-    radius_ = ComputeRadius(chain);
-    spinTarget_ = { socketWorld.x + std::sin(theta_) * radius_,
-                    socketWorld.y - std::cos(theta_) * radius_,
-                    0.0f };
 
-    // 鎖全体をソケット→重りの直線上に拘束（ピンと張った棒として回す。途中の鎖は物理を止める）
+    // 宝石を頭上に掲げる：鎖全体をソケット→真上 holdOffset_ の直線上に畳む（拘束中は物理を止める）
+    radius_ = params_.holdOffset_;
+    UpdateSpinTarget(socketWorld);
     chain->SetRigidLineTarget(&spinTarget_);
     player->SetActionInputModifier(params_.spinMoveFactor_, true);
+}
+
+void ChainSpinAction::StartThrow(float dirSign, const Vector3& socketWorld) {
+    // 押した方向へ放り出す：投げ角（真下=0。180度で真上＝頭上から振り下ろす）から、投げの角速度で振り子が始まる
+    state_ = State::kStance;
+    theta_ = WrapAngle(dirSign * params_.throwAngleDeg_ * kPi / 180.0f);
+    // 角速度の符号は「宝石が押した方向（左右）へ動く」ように決める
+    // （接線の x 成分は cosθ × sign(ω)。下半分では +ω が右向きだが、上半分（頭上）では -ω が右向きになる）
+    float c = std::cos(theta_);
+    float motionSign = (std::fabs(c) > 0.01f) ? dirSign * ((c > 0.0f) ? 1.0f : -1.0f) : dirSign;
+    omega_ = motionSign * params_.throwOmega_;
+    throwOutTime_ = 0.0f;
+    radius_ = params_.holdOffset_;
+    UpdateSpinTarget(socketWorld);
+    Log("ChainSpinAction: throw dir=" + std::to_string(dirSign) + "\n");
 }
 
 void ChainSpinAction::Launch(float dt, Player2D* player, Chain2D* chain, const Vector3& socketWorld) {
@@ -291,20 +331,21 @@ void ChainSpinAction::Break(float dt, Player2D* player, Chain2D* chain, const Ve
 }
 
 void ChainSpinAction::Cancel(Player2D* player, Chain2D* chain) {
-    if (state_ == State::kStance && chain) {
-        chain->SetRigidLineTarget(nullptr); // 鎖を物理に戻す（速度は注入しない）
+    if ((state_ == State::kHold || state_ == State::kStance) && chain) {
+        chain->SetRigidLineTarget(nullptr); // 鎖を物理に戻す（速度は注入しない。持っていた宝石はその場から落ちる）
     }
     if (player) {
         player->SetActionInputModifier(1.0f, false);
     }
     state_ = State::kIdle;
     omega_ = 0.0f;
+    throwOutTime_ = 0.0f;
     cooldownTimer_ = 0.0f;
 }
 
 void ChainSpinAction::DrawImGui() {
 #ifdef USE_IMGUI
-    const char* stateNames[] = { "Idle", "Stance", "Cooldown" };
+    const char* stateNames[] = { "Idle", "Hold", "Stance", "Cooldown" };
     ImGui::Text("Spin: %s  theta %.2f  omega %.2f  radius %.2f  mass %.2f  swing %+.0f%s",
                 stateNames[static_cast<int>(state_)], theta_, omega_, radius_, effMass_, swingInput_,
                 lastBrokeByTerrain_ ? "  [last: broken by terrain]" : "");

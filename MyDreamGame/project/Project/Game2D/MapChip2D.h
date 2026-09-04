@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Core/Utility/Structs.h"
@@ -177,6 +177,7 @@ private:
     // ===== リプレイ記録用 =====
     // 初期状態から変化したブロックを自動的に記録対象に加えるための追跡情報
     struct ReplayTrackEntry {
+        uint64_t objectId = 0;
         BaseBlock* block = nullptr;
         Vector3 initPosition = {0.0f, 0.0f, 0.0f};
         Vector3 initRotation = {0.0f, 0.0f, 0.0f};

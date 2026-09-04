@@ -51,8 +51,43 @@ void TitleScene::OnExit(SceneManager* sceneManager) {
 }
 
 void TitleScene::Initialize() {
-    Microsoft::WRL::ComPtr<ID3D12Device> device = DirectXCommon::GetInstance()->GetDevice();
-    PrimitiveManager::GetInstance()->Initialize(device.Get());
+
+    Microsoft::WRL::ComPtr<ID3D12Device> device;
+    device = DirectXCommon::GetInstance()->GetDevice();
+
+    cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+
+
+
+    // 1. マネージャからモデル（素材）を取得（なければロードされる）
+    Model *planeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.gltf");
+
+    // 2. GameObject（実体）を生成
+    auto planeObject = std::make_shared<GameObject>("Ground Plane");
+    auto transform = planeObject->AddComponent<TransformComponent>();
+    transform->SetRotation({0.0f, 0.0f, 0.0f});
+
+    // 3. 描画コンポーネントのアタッチとテクスチャの設定
+    auto planeRenderer = planeObject->AddComponent<MeshRendererComponent>();
+    planeRenderer->Initialize(device.Get(), planeModel);
+    uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png");
+    D3D12_GPU_DESCRIPTOR_HANDLE planeTH = TextureManager::GetInstance()->GetGpuHandle(planeIndex);
+    planeRenderer->SetTextureHandle(planeTH);
+    planeModel->SetTextureHandle(planeTH);
+
+    gameObjects_.push_back(planeObject);
+
+    // ② Spriteのインスタンスを生成
+    auto sprite = std::make_unique<Sprite>();
+
+    // ③ 初期化 (spriteCommon_はIScene等で定義されている前提)
+    sprite->Initialize(spriteCommon_, planeIndex);
+
+    // ④ 位置やサイズなどのパラメータを設定
+    // 画面中央に中心が来るよう配置（1280x720の中央 = (640, 360)、サイズ 200x200）
+    sprite->SetPosition({640.0f - 100.0f, 360.0f - 100.0f});
+    sprite->SetSize({200.0f, 200.0f});
+
 
     // -------------------------------------------------------------
     // 1. カメラ初期設定 (夜空を見上げるシネマティックアングル)

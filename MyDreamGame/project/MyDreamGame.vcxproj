@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -80,7 +80,7 @@
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /FS %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
@@ -109,7 +109,7 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /FS %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(ProjectDir)externals;$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
@@ -137,7 +137,7 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /FS %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
@@ -279,6 +279,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
     <ClCompile Include="Engine\Editor\LightEditor\LightEditor.cpp" />
+    <ClCompile Include="Engine\Editor\PostEffectEditor\PostEffectEditor.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
@@ -520,6 +521,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
     <ClInclude Include="Engine\Editor\LightEditor\LightEditor.h" />
+    <ClInclude Include="Engine\Editor\PostEffectEditor\PostEffectEditor.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
