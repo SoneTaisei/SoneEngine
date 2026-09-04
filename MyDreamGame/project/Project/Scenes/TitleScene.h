@@ -68,6 +68,15 @@ private:
 
     std::unique_ptr<DebugCamera> debugCamera_;
 
+    // --- 怪盗タイトルシーン演出用 ---
+    std::unique_ptr<Sprite> titleLogoSprite_;
+    uint32_t titleLogoTextureHandle_ = 0;
+
+    std::vector<std::shared_ptr<GameObject>> searchlightObjects_;
+
+    float titleTimer_ = 0.0f;
+    float startPromptAlpha_ = 1.0f;
+
     // --- エディター停止中用 ---
     void UpdateEditor() override;
 

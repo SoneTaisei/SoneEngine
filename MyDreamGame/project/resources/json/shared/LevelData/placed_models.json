@@ -1,1 +1,58 @@
-[]
+[
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/bil",
+        "modelFileName": "bil.obj",
+        "name": "bil",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            0.5,
+            0.5,
+            0.5
+        ],
+        "texturePath": "",
+        "translation": [
+            5.0,
+            -8.5,
+            30.0
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/gaikotu",
+        "modelFileName": "scene.gltf",
+        "name": "scene",
+        "rotation": [
+            0.0,
+            3.1415927410125732,
+            0.0
+        ],
+        "scale": [
+            0.5,
+            0.5,
+            0.5
+        ],
+        "texturePath": "",
+        "translation": [
+            -1.6122050285339355,
+            4.5108418464660645,
+            -10.963820457458496
+        ]
+    }
+]

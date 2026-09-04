@@ -16,13 +16,18 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"
 #include "Component/TransformComponent.h"
+#include "Component/MeshRendererComponent.h"
+#include "Component/PrimitiveRendererComponent.h"
 #include "GameObject/Object3D.h"
+#include <cmath>
 
 TitleScene::~TitleScene() {
 }
 
 void TitleScene::OnEnter(SceneManager* sceneManager) {
     // シーン遷移時の開始処理
+    isFirstFrame_ = true;
+    titleTimer_ = 0.0f;
 }
 
 void TitleScene::OnExit(SceneManager* sceneManager) {
@@ -30,93 +35,154 @@ void TitleScene::OnExit(SceneManager* sceneManager) {
 }
 
 void TitleScene::Initialize() {
-    
-    Microsoft::WRL::ComPtr<ID3D12Device> device;
-    device = DirectXCommon::GetInstance()->GetDevice();
+    Microsoft::WRL::ComPtr<ID3D12Device> device = DirectXCommon::GetInstance()->GetDevice();
+    PrimitiveManager::GetInstance()->Initialize(device.Get());
 
-    cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+    // -------------------------------------------------------------
+    // 1. カメラ初期設定 (夜空と屋根の怪盗を見上げるシネマティックアングル)
+    // -------------------------------------------------------------
+    cameraTransform_.translate = { 0.0f, 1.2f, -8.5f };
+    cameraTransform_.rotate = { 0.06f, 0.0f, 0.0f };
 
-
-
-    // 1. マネージャからモデル（素材）を取得（なければロードされる）
-    Model *planeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.gltf");
-
-    // 2. GameObject（実体）を生成
-    auto planeObject = std::make_shared<GameObject>("Ground Plane");
-    auto transform = planeObject->AddComponent<TransformComponent>();
-    transform->SetRotation({0.0f, 0.0f, 0.0f});
-
-    // 3. 描画コンポーネントのアタッチとテクスチャの設定
-    auto planeRenderer = planeObject->AddComponent<MeshRendererComponent>();
-    planeRenderer->Initialize(device.Get(), planeModel);
-    uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png");
-    D3D12_GPU_DESCRIPTOR_HANDLE planeTH = TextureManager::GetInstance()->GetGpuHandle(planeIndex);
-    planeRenderer->SetTextureHandle(planeTH);
-    planeModel->SetTextureHandle(planeTH);
-
-    gameObjects_.push_back(planeObject);
-
-    // ② Spriteのインスタンスを生成
-    auto sprite = std::make_unique<Sprite>();
-
-    // ③ 初期化 (spriteCommon_はIScene等で定義されている前提)
-    sprite->Initialize(spriteCommon_, planeIndex);
-
-    // ④ 位置やサイズなどのパラメータを設定
-    // 画面中央付近に配置する例
-    sprite->SetPosition({640.0f, 360.0f}); // 画面中央付近など
-    sprite->SetSize({200.0f, 200.0f});     // しっかり見える大きさにする
-
-    // ⑤ 管理用の配列に追加して保持する
-    //sprites_.push_back(std::move(sprite));
-
-    // ★ Skyboxの初期化処理を追加
-    // 1. テクスチャをロード
+    // -------------------------------------------------------------
+    // 2. Skybox初期化 (以前のqwantani_duskに戻す)
+    // -------------------------------------------------------------
     skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/skybox.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/panoramic-view-beach-sunset.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/School/rostock_laage_airport_4k.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_direct.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds");
-
-    // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
-
-    // 3. 初期化（※dxCommon_ の取得方法はエンジンの設計に合わせてください！）
-    // もし TitleScene に dxCommon_ が無い場合は、DirectXCommon::GetInstance() などを使うか、
-    // SceneManager から引っ張ってくる必要があります。
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 
+    // -------------------------------------------------------------
+    // 3. サーチライト演出 (警察・警備員が夜空を走査する光の筋)
+    // -------------------------------------------------------------
+    searchlightObjects_.clear();
+    Primitive* boxPrim = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box);
+    
+    // サーチライト1 (黄色・左奥から右へスイング)
+    {
+        auto light1 = std::make_shared<GameObject>("Searchlight_Yellow");
+        auto lt1 = light1->AddComponent<TransformComponent>();
+        lt1->SetPosition({ -4.5f, 6.0f, 4.0f });
+        lt1->SetScale({ 0.9f, 22.0f, 0.9f });
+        lt1->SetRotation({ 0.0f, 0.0f, 0.35f });
+
+        auto lr1 = light1->AddComponent<PrimitiveRendererComponent>();
+        lr1->Initialize(device.Get(), boxPrim);
+        lr1->GetMaterial().color = { 1.0f, 0.92f, 0.4f, 0.22f }; // 半透明の光線イエロー
+        lr1->GetMaterial().lightingType = 0; // 自己発光
+
+        gameObjects_.push_back(light1);
+        searchlightObjects_.push_back(light1);
+    }
+
+    // サーチライト2 (シアンブルー・右奥から左へスイング)
+    {
+        auto light2 = std::make_shared<GameObject>("Searchlight_Cyan");
+        auto lt2 = light2->AddComponent<TransformComponent>();
+        lt2->SetPosition({ 4.0f, 6.5f, 6.0f });
+        lt2->SetScale({ 0.8f, 24.0f, 0.8f });
+        lt2->SetRotation({ 0.0f, 0.0f, -0.4f });
+
+        auto lr2 = light2->AddComponent<PrimitiveRendererComponent>();
+        lr2->Initialize(device.Get(), boxPrim);
+        lr2->GetMaterial().color = { 0.3f, 0.85f, 1.0f, 0.18f }; // 半透明のサイバーシアン
+        lr2->GetMaterial().lightingType = 0; // 自己発光
+
+        gameObjects_.push_back(light2);
+        searchlightObjects_.push_back(light2);
+    }
+
+    // -------------------------------------------------------------
+    // 6. タイトルロゴ スプライト (title.png) - 画面中央に配置
+    // -------------------------------------------------------------
+    titleLogoTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/title.png");
+    titleLogoSprite_ = std::make_unique<Sprite>();
+    titleLogoSprite_->Initialize(spriteCommon_, titleLogoTextureHandle_);
+    
+    // 画面解像度 1280x720 の中央上部に配置 (幅600, 高さ266, X=(1280-600)/2=340)
+    const float logoW = 600.0f;
+    const float logoH = 266.0f;
+    titleLogoSprite_->SetSize({ logoW, logoH });
+    titleLogoSprite_->SetPosition({ (1280.0f - logoW) * 0.5f, 70.0f });
+
+    // デバッグカメラ初期化
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(1280, 720);
-
-    PrimitiveManager::GetInstance()->Initialize(device.Get());
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
+    float dt = TimeManager::GetInstance().GetDeltaTime();
+    titleTimer_ += dt;
+
     // シーン遷移直後の同一フレームでのSPACEキー入力を拾わないようにする
     if (isFirstFrame_) {
         isFirstFrame_ = false;
     } else {
-        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) || 
+            KeyboardInput::GetInstance()->IsKeyPressed(DIK_RETURN)) {
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
             return;
         }
     }
 
+    // -------------------------------------------------------------
+    // カメラのシネマティック浮遊アニメーション
+    // -------------------------------------------------------------
+    Vector3 camPos = {
+        sinf(titleTimer_ * 0.4f) * 0.25f,
+        1.2f + sinf(titleTimer_ * 0.7f) * 0.12f,
+        -8.5f + cosf(titleTimer_ * 0.3f) * 0.15f
+    };
+    Vector3 camRot = {
+        0.06f + sinf(titleTimer_ * 0.5f) * 0.015f,
+        sinf(titleTimer_ * 0.3f) * 0.02f,
+        0.0f
+    };
+    cameraTransform_.translate = camPos;
+    cameraTransform_.rotate = camRot;
+
+    Matrix4x4 viewMatrix = TransformFunctions::MakeViewMatrix(cameraTransform_.rotate, cameraTransform_.translate);
+    Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
+    CameraManager::GetInstance()->SetCameraInfo(cameraTransform_.translate, viewMatrix, projectionMatrix);
+
     if (debugCamera_) {
         debugCamera_->Update();
-        // ★ debugCamera_->Update() の中で CameraManager::GetInstance()->SetCameraInfo(...) 
-        //    が自動的に呼ばれるため、ここでの手動セットは不要です。
     }
 
-    // 全オブジェクトの更新（座標変換行列の計算など）
+    // -------------------------------------------------------------
+    // タイトルロゴの浮遊アニメーション (フワフワと微小に上下・中央維持)
+    // -------------------------------------------------------------
+    if (titleLogoSprite_) {
+        float floatOffsetY = sinf(titleTimer_ * 1.6f) * 8.0f;
+        const float logoW = 600.0f;
+        titleLogoSprite_->SetPosition({ (1280.0f - logoW) * 0.5f, 70.0f + floatOffsetY });
+        titleLogoSprite_->Update();
+    }
+
+    // -------------------------------------------------------------
+    // サーチライトの首振り・スイングアニメーション
+    // -------------------------------------------------------------
+    if (searchlightObjects_.size() >= 2) {
+        // サーチライト1 (黄色): 左右にゆっくり首振り
+        if (auto tc1 = searchlightObjects_[0]->GetComponent<TransformComponent>()) {
+            float rotZ1 = sinf(titleTimer_ * 0.85f) * 0.35f + 0.18f;
+            float posX1 = -4.5f + sinf(titleTimer_ * 0.85f) * 0.5f;
+            tc1->SetPosition({ posX1, 6.0f, 4.0f });
+            tc1->SetRotation({ 0.0f, 0.0f, rotZ1 });
+        }
+        // サーチライト2 (シアン): 逆位相で首振り
+        if (auto tc2 = searchlightObjects_[1]->GetComponent<TransformComponent>()) {
+            float rotZ2 = sinf(titleTimer_ * 0.65f + 2.0f) * 0.4f - 0.22f;
+            float posX2 = 4.0f + cosf(titleTimer_ * 0.65f + 2.0f) * 0.6f;
+            tc2->SetPosition({ posX2, 6.5f, 6.0f });
+            tc2->SetRotation({ 0.0f, 0.0f, rotZ2 });
+        }
+    }
+
+    // 全オブジェクトの更新
     for (auto &object : gameObjects_) {
         object->Update();
     }
-
 
     for (auto &sprite : sprites_) {
         sprite->Update();
@@ -128,16 +194,16 @@ void TitleScene::Update(SceneManager *sceneManager) {
 }
 
 void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    // ★ モデル描画の前準備
+    // 1. モデル描画の前準備
     if (modelCommon_) {
         modelCommon_->PreDraw();
     }
 
-    // ★ 3Dオブジェクトの直後にSkyboxを描画！
+    // 2. Skyboxを描画
     if (skybox_) {
         skybox_->Draw();
         
-        // ★ Skyboxの描画後はPSOが切り替わってしまうため、再度モデル用の設定を呼び出す
+        // Skybox描画後はPSOが切り替わるため、再度モデル用の設定を呼び出す
         auto dxCommon = DirectXCommon::GetInstance();
         DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
         DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
@@ -147,7 +213,7 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         }
     }
 
-    // 3Dモデル的描画
+    // 3. 3Dモデル・GameObjectの描画
 #ifdef USE_IMGUI
     if (EditorManager::IsShowObjects()) {
 #endif
@@ -161,9 +227,7 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // コンポーネントの描画を実行
     Renderer::GetInstance()->RenderComponents();
 
-    // -------------------------------------------------
-    // ■ エフェクト/パーティクルの描画
-    // -------------------------------------------------
+    // 4. パーティクルの描画
 #ifdef USE_IMGUI
     if (EditorManager::IsShowEffects()) {
 #endif
@@ -175,8 +239,12 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     }
 #endif
 
+    // 5. 2Dスプライト（タイトルロゴ）の描画
     if (spriteCommon_) {
         spriteCommon_->PreDraw();
+        if (titleLogoSprite_) {
+            titleLogoSprite_->Draw();
+        }
         spriteCommon_->DrawAll();
     }
 }
@@ -201,6 +269,9 @@ void TitleScene::UpdateEditor() {
     for (auto &object : gameObjects_) {
         object->Update();
     }
+    if (titleLogoSprite_) {
+        titleLogoSprite_->Update();
+    }
     for (auto &sprite : sprites_) {
         sprite->Update();
     }
@@ -211,32 +282,6 @@ void TitleScene::UpdateEditor() {
 
 void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
-    // エディター側でプレイ状態になっていないときは、タイトルUIを描画しない
-    if (!EditorManager::IsPlaying()) {
-        return;
-    }
-
-    ImGui::SetNextWindowPos(ImVec2(1280.0f / 2.0f, 720.0f / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::Begin("TitleUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-    
-    ImGui::SetWindowFontScale(4.0f);
-    float windowWidth = ImGui::GetWindowSize().x;
-    const char* titleText = "My Dream Game";
-    float textWidth = ImGui::CalcTextSize(titleText).x;
-    ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", titleText);
-    
-    ImGui::SetWindowFontScale(2.0f);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 50.0f);
-    const char* startText = "Press SPACE to Start";
-    float startTextWidth = ImGui::CalcTextSize(startText).x;
-    ImGui::SetCursorPosX((windowWidth - startTextWidth) * 0.5f);
-    
-    static float time = 0.0f;
-    time += ImGui::GetIO().DeltaTime;
-    float alpha = (sinf(time * 5.0f) + 1.0f) * 0.5f;
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, alpha), "%s", startText);
-    
-    ImGui::End();
+    // 新しいプロンプトUI用（後ほど差し替え）
 #endif
 }
