@@ -43,11 +43,14 @@ void MovingBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("moveSpeed") && properties["moveSpeed"].is_number()) {
         moveSpeed_ = properties["moveSpeed"];
     }
+    if (properties.contains("phase") && properties["phase"].is_number()) {
+        phase_ = properties["phase"];
+    }
 }
 
 Vector3 MovingBlock::CalcPositionAt(float time) const {
-    // 配置された初期座標を元にタイミング（位相）をずらす
-    float phase = startX_ * 0.5f + startY_ * 0.5f;
+    // タイミング（位相）：phase_ が 0 以上ならその割合（0〜1 で1周期）、負なら配置座標から自動で決める
+    float phase = (phase_ >= 0.0f) ? (phase_ * 6.28318530f) : (startX_ * 0.5f + startY_ * 0.5f);
     // 指定した moveSpeed_ が「最大速度」になるように角速度を計算 (v = r * ω より ω = v / r)
     float omega = (moveRange_ > 0.0f) ? (moveSpeed_ / moveRange_) : 0.0f;
     float offset = std::sin(time * omega + phase) * moveRange_;

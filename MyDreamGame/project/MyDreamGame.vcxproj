@@ -198,6 +198,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Scene\SceneFactory.cpp" />
     <ClCompile Include="Engine\Scene\LevelDataLoader.cpp" />
     <ClCompile Include="Project\Scenes\GameScene.cpp" />
+    <ClCompile Include="Project\Scenes\BlockDesignPanel.cpp" />
     <ClCompile Include="Project\Scenes\BlenderLevelTestScene.cpp" />
     <ClCompile Include="Engine\Resource\Model\Model.cpp" />
     <ClCompile Include="Engine\Resource\Sprite\Sprite.cpp" />
@@ -437,6 +438,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Scene\SceneManager.h" />
     <ClInclude Include="Engine\Scene\LevelDataLoader.h" />
     <ClInclude Include="Project\Scenes\GameScene.h" />
+    <ClInclude Include="Project\Scenes\BlockDesignPanel.h" />
     <ClInclude Include="Project\Scenes\BlenderLevelTestScene.h" />
     <ClInclude Include="Engine\Resource\Model\Model.h" />
     <ClInclude Include="Engine\Scene\IScene.h" />
