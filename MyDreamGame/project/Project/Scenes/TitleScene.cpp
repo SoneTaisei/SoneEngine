@@ -9,9 +9,11 @@
 #include <wrl.h>
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"
+#include "Graphics/GameCamera.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
+
 #include "Scene/SceneFactory.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"

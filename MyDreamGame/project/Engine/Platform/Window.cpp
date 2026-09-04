@@ -11,6 +11,35 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
 
+HWND Window::s_Hwnd_ = nullptr;
+HHOOK Window::s_KeyboardHook_ = nullptr;
+bool Window::s_EnableCapsLockSuppression_ = true;
+
+LRESULT CALLBACK Window::LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode >= 0 && s_EnableCapsLockSuppression_) {
+        KBDLLHOOKSTRUCT *kbd = reinterpret_cast<KBDLLHOOKSTRUCT *>(lParam);
+        if (kbd) {
+            // CapsLock(VK_CAPITAL) および IME関連キー(半角/全角、変換、無変換、かな等)
+            bool isTargetKey = (kbd->vkCode == VK_CAPITAL) ||
+                               (kbd->vkCode == VK_KANJI) ||
+                               (kbd->vkCode == VK_OEM_AUTO) ||
+                               (kbd->vkCode == VK_OEM_ENLW) ||
+                               (kbd->vkCode == VK_OEM_COPY) ||
+                               (kbd->vkCode == VK_CONVERT) ||
+                               (kbd->vkCode == VK_NONCONVERT);
+
+            if (isTargetKey) {
+                HWND fgWnd = GetForegroundWindow();
+                // 自ウィンドウまたはその子ウィンドウがフォアグラウンド（アクティブ）にある時だけブロック
+                if (fgWnd && (fgWnd == s_Hwnd_ || IsChild(s_Hwnd_, fgWnd))) {
+                    return 1; // メッセージを破棄してトグル・入力切替を防止
+                }
+            }
+        }
+    }
+    return CallNextHookEx(s_KeyboardHook_, nCode, wParam, lParam);
+}
+
 LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #ifdef USE_IMGUI
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
@@ -18,6 +47,19 @@ LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
 #endif
 
     switch (msg) {
+    case WM_SETFOCUS:
+        // フォーカス復帰時にも確実にIMEを無効化
+        ImmAssociateContext(hwnd, nullptr);
+        return 0;
+    case WM_IME_SETCONTEXT:
+        // OSデフォルトのIME UI（左上の「あ」インジケーターや入力候補枠）を表示させないため、lParam(UIフラグ)を0にして処理
+        return DefWindowProc(hwnd, msg, wparam, 0);
+    case WM_IME_STARTCOMPOSITION:
+    case WM_IME_COMPOSITION:
+    case WM_IME_ENDCOMPOSITION:
+    case WM_IME_NOTIFY:
+        // IME関連の描画・通知メッセージを消費して表示させない
+        return 0;
     case WM_SIZE: {
         int width = LOWORD(lparam);
         int height = HIWORD(lparam);
@@ -35,11 +77,19 @@ LRESULT CALLBACK Window::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
         PostQuitMessage(0);
         return 0;
     case WM_DESTROY:
+        if (s_KeyboardHook_) {
+            UnhookWindowsHookEx(s_KeyboardHook_);
+            s_KeyboardHook_ = nullptr;
+        }
+        if (s_Hwnd_ == hwnd) {
+            s_Hwnd_ = nullptr;
+        }
         PostQuitMessage(0);
         return 0;
     }
     return DefWindowProc(hwnd, msg, wparam, lparam);
 }
+
 
 void Window::Create(const wchar_t *title, int32_t width, int32_t height) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
@@ -59,7 +109,18 @@ void Window::Create(const wchar_t *title, int32_t width, int32_t height) {
         wrc.right - wrc.left, wrc.bottom - wrc.top,
         nullptr, nullptr, hInst, nullptr);
 
+    s_Hwnd_ = hwnd_;
+
+    // IMEコンテキストの関連付けを解除（自ウィンドウ上での「あ」「A」インジケーターや変換窓の表示を完全に無効化）
+    ImmAssociateContext(hwnd_, nullptr);
+
+    // ゲームウィンドウ操作中のみCapsLockおよびIME切替キーを無効化する低レベルフックを設定
+    if (!s_KeyboardHook_) {
+        s_KeyboardHook_ = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInst, 0);
+    }
+
     ShowWindow(hwnd_, SW_SHOW);
+
 }
 
 bool Window::ProcessMessage() {
@@ -79,6 +140,15 @@ bool Window::ProcessMessage() {
 }
 
 Window::~Window() {
+    // 低レベルキーボードフックを解除
+    if (s_KeyboardHook_) {
+        UnhookWindowsHookEx(s_KeyboardHook_);
+        s_KeyboardHook_ = nullptr;
+    }
+    if (s_Hwnd_ == hwnd_) {
+        s_Hwnd_ = nullptr;
+    }
+
     // 1. ウィンドウ本体を破棄する
     if (hwnd_) {
         DestroyWindow(hwnd_);
