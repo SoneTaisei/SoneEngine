@@ -218,6 +218,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Component\AnimatorComponent.cpp" />
     <ClCompile Include="Engine\Component\ColliderComponent.cpp" />
     <ClCompile Include="Engine\Collision\CollisionManager.cpp" />
+    <ClCompile Include="Engine\Collision\CollisionFunctions.cpp" />
     <ClCompile Include="Engine\Component\MeshRendererComponent.cpp" />
     <ClCompile Include="Engine\Component\PrimitiveRendererComponent.cpp" />
     <ClCompile Include="Engine\GameObject\Object3D.cpp" />
@@ -457,6 +458,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Component\AnimatorComponent.h" />
     <ClInclude Include="Engine\Component\ColliderComponent.h" />
     <ClInclude Include="Engine\Collision\CollisionManager.h" />
+    <ClInclude Include="Engine\Collision\CollisionFunctions.h" />
     <ClInclude Include="Engine\Component\MeshRendererComponent.h" />
     <ClInclude Include="Engine\Component\PrimitiveRendererComponent.h" />
     <ClInclude Include="Engine\GameObject\Object3D.h" />
