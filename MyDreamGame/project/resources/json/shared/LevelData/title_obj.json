@@ -1,9 +1,9 @@
 [
     {
         "color": [
-            1.0,
-            1.0,
-            1.0,
+            0.3050193190574646,
+            0.2897094488143921,
+            0.2897094488143921,
             1.0
         ],
         "isDoubleSided": false,
@@ -29,9 +29,9 @@
     },
     {
         "color": [
-            1.0,
-            1.0,
-            1.0,
+            0.061776041984558105,
+            0.061776041984558105,
+            0.061776041984558105,
             1.0
         ],
         "isDoubleSided": false,
@@ -53,6 +53,90 @@
             5.0,
             -8.5,
             30.0
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/select",
+        "modelFileName": "select.obj",
+        "name": "select_2",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            0.5,
+            0.5,
+            0.5
+        ],
+        "texturePath": "",
+        "translation": [
+            0.6499999761581421,
+            -8.800000190734863,
+            -2.611999988555908
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/select",
+        "modelFileName": "select.obj",
+        "name": "select_1",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            0.5,
+            0.5,
+            0.5
+        ],
+        "texturePath": "",
+        "translation": [
+            -18.5,
+            -8.800000190734863,
+            22.93899917602539
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/select",
+        "modelFileName": "select.obj",
+        "name": "select_3",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            0.5,
+            0.5,
+            0.5
+        ],
+        "texturePath": "",
+        "translation": [
+            22.111000061035156,
+            -8.800000190734863,
+            17.44099998474121
         ]
     }
 ]
