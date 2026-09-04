@@ -51,6 +51,12 @@ public:
     // プレイヤーの取得
     Player2D* GetPlayer() override { return player_; }
 
+    // プレイヤー座標を基準とするアイリスイン（フェードイン）演出
+    void StartIrisIn(const Vector3& playerPos, float duration = 1.2f);
+    void UpdateIrisIn(const Vector3& playerPos, float dt);
+    Vector2 WorldToScreenUV(const Vector3& worldPos) const;
+    bool IsIrisInActive() const { return isIrisInActive_; }
+
 private:
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();
@@ -88,5 +94,11 @@ private:
 
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;
-    float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
+    float transitionAlpha_ = 0.0f; // 画面遷移演出用(フェードイン - アイリスインへ置き換え)
+
+    // アイリスイン演出用
+    bool isIrisInActive_ = false;
+    float irisInTimer_ = 0.0f;
+    float irisInDuration_ = 1.2f;
+    float irisInMaxRadius_ = 3.2f; // 約2倍に拡大（画面全体を十分に覆う）
 };

@@ -7,6 +7,7 @@
 #include <string>
 #include <chrono>
 #include "Core/Utility/UtilityFunctions.h"
+#include "Core/Utility/TransformFunctions.h"
 
 class DirectXCommon {
 public:
@@ -22,6 +23,17 @@ public:
         kComposite,
         kDepthBasedOutline,
         kCompositeAndOutline,
+        kIris,
+    };
+
+    struct IrisParams {
+        float center[2] = {0.5f, 0.5f}; // 基準中心座標 (UV: 0.0~1.0)
+        float radius = 1.0f;             // 半径
+        float smoothness = 0.01f;        // 境界のぼかし幅
+        float maskColor[4] = {0.0f, 0.0f, 0.0f, 1.0f}; // 外側の色
+        int isIrisIn = 0;                // 0: Iris Out (閉じる), 1: Iris In (開く)
+        float aspectRatio = 16.0f / 9.0f;// アスペクト比 (幅 / 高さ)
+        float padding[2] = {};
     };
 
     struct VignetteParams {
@@ -86,6 +98,18 @@ public:
 
         float noiseTime = 0.0f;
         float noisePadding[3] = {};
+
+        // Iris (48 bytes aligned)
+        int enableIris = 0;
+        float irisCenter[2] = {0.5f, 0.5f};
+        float irisRadius = 1.0f;
+
+        float irisSmoothness = 0.01f;
+        int isIrisIn = 0; // 0: Iris Out, 1: Iris In
+        float irisAspectRatio = 16.0f / 9.0f;
+        float irisPadding1 = 0.0f;
+
+        float irisMaskColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     };
     
 
@@ -158,6 +182,7 @@ public:
     ID3D12PipelineState *GetVignettePipelineState() const { return vignettePipelineState_.Get(); }
     ID3D12PipelineState *GetSmoothingPipelineState() const { return smoothingPipelineState_.Get(); }
     ID3D12PipelineState *GetGaussianPipelineState() const { return gaussianPipelineState_.Get(); }
+    ID3D12PipelineState *GetIrisPipelineState() const { return irisPipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
@@ -166,6 +191,67 @@ public:
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
     GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
     CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
+    IrisParams* GetIrisParamsData() { return irisParamsData_; }
+
+    void SetIrisCenter(float x, float y) {
+        if (irisParamsData_) {
+            irisParamsData_->center[0] = x;
+            irisParamsData_->center[1] = y;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisCenter[0] = x;
+            compositeParamsData_->irisCenter[1] = y;
+        }
+    }
+    void SetIrisCenterFromWorldPos(const Vector3& worldPos, const Matrix4x4& viewProjectionMatrix) {
+        Vector3 ndc = TransformFunctions::EulerTransform(worldPos, viewProjectionMatrix);
+        float uvX = (ndc.x + 1.0f) * 0.5f;
+        float uvY = (1.0f - ndc.y) * 0.5f;
+        SetIrisCenter(uvX, uvY);
+    }
+    void SetIrisRadius(float radius) {
+        if (irisParamsData_) {
+            irisParamsData_->radius = radius;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisRadius = radius;
+        }
+    }
+    void SetIrisIn(bool isIrisIn) {
+        if (irisParamsData_) {
+            irisParamsData_->isIrisIn = isIrisIn ? 1 : 0;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->isIrisIn = isIrisIn ? 1 : 0;
+        }
+    }
+    void SetIrisSmoothness(float smoothness) {
+        if (irisParamsData_) {
+            irisParamsData_->smoothness = smoothness;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisSmoothness = smoothness;
+        }
+    }
+    void SetIrisMaskColor(float r, float g, float b, float a = 1.0f) {
+        if (irisParamsData_) {
+            irisParamsData_->maskColor[0] = r;
+            irisParamsData_->maskColor[1] = g;
+            irisParamsData_->maskColor[2] = b;
+            irisParamsData_->maskColor[3] = a;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisMaskColor[0] = r;
+            compositeParamsData_->irisMaskColor[1] = g;
+            compositeParamsData_->irisMaskColor[2] = b;
+            compositeParamsData_->irisMaskColor[3] = a;
+        }
+    }
+    void SetCompositeIrisEnabled(bool enabled) {
+        if (compositeParamsData_) {
+            compositeParamsData_->enableIris = enabled ? 1 : 0;
+        }
+    }
 
     void SetDissolveMaskTexture(D3D12_GPU_DESCRIPTOR_HANDLE handle) { dissolveMaskSrvHandleGPU_ = handle; }
 
@@ -270,6 +356,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smoothingPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> compositePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> irisPipelineState_;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vignetteParamResource_;
     VignetteParams* vignetteParamsData_ = nullptr;
@@ -282,6 +369,9 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeParamResource_;
     CompositeParams* compositeParamsData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> irisParamResource_;
+    IrisParams* irisParamsData_ = nullptr;
 
 
     D3D12_GPU_DESCRIPTOR_HANDLE dissolveMaskSrvHandleGPU_{};

@@ -40,6 +40,18 @@ PostEffectItem::PostEffectItem(const std::string& n, PostEffectShaderType type)
     params.noiseScale = 128.0f;
     params.noiseBlendMode = 1;
 
+    params.enableIris = 1;
+    params.irisCenter[0] = 0.5f;
+    params.irisCenter[1] = 0.5f;
+    params.irisRadius = 0.8f;
+    params.irisSmoothness = 0.02f;
+    params.isIrisIn = 0;
+    params.irisAspectRatio = 16.0f / 9.0f;
+    params.irisMaskColor[0] = 0.0f;
+    params.irisMaskColor[1] = 0.0f;
+    params.irisMaskColor[2] = 0.0f;
+    params.irisMaskColor[3] = 1.0f;
+
     params.grayscaleStrength = 1.0f;
     params.sepiaStrength = 0.8f;
 }
@@ -91,6 +103,7 @@ void PostEffectEditor::ApplyToDirectXCommon() {
     target->enableRadialBlur = 0;
     target->enableDissolve = 0;
     target->enableNoise = 0;
+    target->enableIris = 0;
 
     // 有効なポストエフェクトが1つでもあるかチェック
     bool anyEnabled = false;
@@ -169,6 +182,18 @@ void PostEffectEditor::ApplyToDirectXCommon() {
             }
             break;
 
+        case PostEffectShaderType::Iris:
+            if (item.params.enableIris) {
+                target->enableIris = 1;
+                target->irisCenter[0] = item.params.irisCenter[0];
+                target->irisCenter[1] = item.params.irisCenter[1];
+                target->irisRadius = item.params.irisRadius;
+                target->irisSmoothness = item.params.irisSmoothness;
+                target->isIrisIn = item.params.isIrisIn;
+                for (int i = 0; i < 4; ++i) target->irisMaskColor[i] = item.params.irisMaskColor[i];
+            }
+            break;
+
         case PostEffectShaderType::Composite:
             if (item.params.grayscaleStrength > 0.0f) target->grayscaleStrength = (std::max)(target->grayscaleStrength, item.params.grayscaleStrength);
             if (item.params.sepiaStrength > 0.0f) target->sepiaStrength = (std::max)(target->sepiaStrength, item.params.sepiaStrength);
@@ -205,6 +230,15 @@ void PostEffectEditor::ApplyToDirectXCommon() {
                 target->noiseStrength = item.params.noiseStrength;
                 target->noiseScale = item.params.noiseScale;
                 target->noiseBlendMode = item.params.noiseBlendMode;
+            }
+            if (item.params.enableIris) {
+                target->enableIris = 1;
+                target->irisCenter[0] = item.params.irisCenter[0];
+                target->irisCenter[1] = item.params.irisCenter[1];
+                target->irisRadius = item.params.irisRadius;
+                target->irisSmoothness = item.params.irisSmoothness;
+                target->isIrisIn = item.params.isIrisIn;
+                for (int i = 0; i < 4; ++i) target->irisMaskColor[i] = item.params.irisMaskColor[i];
             }
             break;
 
@@ -377,6 +411,14 @@ bool PostEffectEditor::SaveToFile(const std::string& filePath) {
                 {"scale", item.params.noiseScale},
                 {"blendMode", item.params.noiseBlendMode}
             };
+            params["iris"] = {
+                {"enabled", item.params.enableIris != 0},
+                {"center", {item.params.irisCenter[0], item.params.irisCenter[1]}},
+                {"radius", item.params.irisRadius},
+                {"smoothness", item.params.irisSmoothness},
+                {"isIrisIn", item.params.isIrisIn},
+                {"maskColor", {item.params.irisMaskColor[0], item.params.irisMaskColor[1], item.params.irisMaskColor[2], item.params.irisMaskColor[3]}}
+            };
 
             j["params"] = params;
             effectsArray.push_back(j);
@@ -485,6 +527,22 @@ bool PostEffectEditor::LoadFromFile(const std::string& filePath) {
                         item.params.noiseScale = s["noise"].value("scale", 128.0f);
                         item.params.noiseBlendMode = s["noise"].value("blendMode", 1);
                     }
+                    if (s.contains("iris")) {
+                        item.params.enableIris = s["iris"].value("enabled", true) ? 1 : 0;
+                        item.params.irisRadius = s["iris"].value("radius", 0.8f);
+                        item.params.irisSmoothness = s["iris"].value("smoothness", 0.02f);
+                        item.params.isIrisIn = s["iris"].value("isIrisIn", 0);
+                        if (s["iris"].contains("center") && s["iris"]["center"].is_array()) {
+                            for (size_t c = 0; c < 2 && c < s["iris"]["center"].size(); ++c) {
+                                item.params.irisCenter[c] = s["iris"]["center"][c].get<float>();
+                            }
+                        }
+                        if (s["iris"].contains("maskColor") && s["iris"]["maskColor"].is_array()) {
+                            for (size_t c = 0; c < 4 && c < s["iris"]["maskColor"].size(); ++c) {
+                                item.params.irisMaskColor[c] = s["iris"]["maskColor"][c].get<float>();
+                            }
+                        }
+                    }
                 }
                 postEffects_.push_back(item);
             }
@@ -545,6 +603,7 @@ static const char* GetShaderTypeName(PostEffectShaderType type) {
     case PostEffectShaderType::RadialBlur: return "ラジアルブラー";
     case PostEffectShaderType::Dissolve:   return "ディゾルブ";
     case PostEffectShaderType::Noise:      return "ノイズ";
+    case PostEffectShaderType::Iris:       return "アイリス";
     case PostEffectShaderType::Composite:  return "複合";
     default: return "";
     }
@@ -811,6 +870,7 @@ void PostEffectEditor::DrawUI(bool* pOpen) {
         "ラジアルブラー (Radial Blur)",
         "ディゾルブ (Dissolve)",
         "ノイズ (Noise)",
+        "アイリス (Iris)",
         "複合 (Composite)"
     };
 
@@ -1046,6 +1106,48 @@ void PostEffectEditor::DrawUI(bool* pOpen) {
                 };
                 ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                 ImGui::Combo("##NoiseBlendMode", &currentItem->params.noiseBlendMode, blendModeNames, IM_ARRAYSIZE(blendModeNames));
+                ImGui::PopItemWidth();
+            }
+            ImGui::Spacing();
+        }
+        ImGui::Spacing();
+    }
+
+    // --- アイリス ---
+    if (currentItem->shaderType == PostEffectShaderType::Iris || isAll) {
+        if (ImGui::CollapsingHeader("アイリス設定 (Iris)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Spacing();
+            bool enableIris = (currentItem->params.enableIris != 0);
+            if (ImGui::Checkbox("アイリスを有効化", &enableIris)) {
+                currentItem->params.enableIris = enableIris ? 1 : 0;
+            }
+            if (enableIris) {
+                ImGui::Spacing();
+                const char* irisModes[] = {
+                    "アイリスアウト (Iris Out / 閉じる)",
+                    "アイリスイン (Iris In / 開く)"
+                };
+                int currentMode = currentItem->params.isIrisIn;
+                ImGui::Text("アイリスモード (Iris Mode)");
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                if (ImGui::Combo("##IrisMode", &currentMode, irisModes, IM_ARRAYSIZE(irisModes))) {
+                    currentItem->params.isIrisIn = currentMode;
+                }
+                ImGui::PopItemWidth();
+                ImGui::Spacing();
+
+                DrawFloatControl("基準中心 X (Center X)", &currentItem->params.irisCenter[0], 0.0f, 1.0f, 0.005f);
+                ImGui::Spacing();
+                DrawFloatControl("基準中心 Y (Center Y)", &currentItem->params.irisCenter[1], 0.0f, 1.0f, 0.005f);
+                ImGui::Spacing();
+                DrawFloatControl("半径 (Radius)", &currentItem->params.irisRadius, 0.0f, 2.0f, 0.005f);
+                ImGui::Spacing();
+                DrawFloatControl("滑らかさ (Smoothness)", &currentItem->params.irisSmoothness, 0.0f, 0.5f, 0.001f);
+                ImGui::Spacing();
+
+                ImGui::Text("マスクカラー (Mask Color)");
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                ImGui::ColorEdit4("##irisMaskColor", currentItem->params.irisMaskColor);
                 ImGui::PopItemWidth();
             }
             ImGui::Spacing();

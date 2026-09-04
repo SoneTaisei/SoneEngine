@@ -306,6 +306,12 @@ void DirectXCommon::ResizeSwapchain(int32_t width, int32_t height) {
     if (compositeParamsData_) {
         compositeParamsData_->texelSize[0] = 1.0f / (float)width;
         compositeParamsData_->texelSize[1] = 1.0f / (float)height;
+        if (height > 0) {
+            compositeParamsData_->irisAspectRatio = (float)width / (float)height;
+        }
+    }
+    if (irisParamsData_ && height > 0) {
+        irisParamsData_->aspectRatio = (float)width / (float)height;
     }
 }
 
@@ -872,6 +878,7 @@ void DirectXCommon::CreatePostEffectPipelines() {
     Microsoft::WRL::ComPtr<IDxcBlob> psGaussianBlob = CompileShader(L"resources/shaders/GaussianFilter.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psCompositeBlob = CompileShader(L"resources/shaders/CompositePostProcess.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
     Microsoft::WRL::ComPtr<IDxcBlob> psDepthBasedOutlineBlob = CompileShader(L"resources/shaders/DepthBasedOutline.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
+    Microsoft::WRL::ComPtr<IDxcBlob> psIrisBlob = CompileShader(L"resources/shaders/Iris.PS.hlsl", L"ps_6_0", dxcUtils_.Get(), dxcCompiler_.Get(), includeHandler_.Get());
 
 
     // 3. PipelineState (PSO) の作成
@@ -1005,6 +1012,39 @@ void DirectXCommon::CreatePostEffectPipelines() {
     compositeParamsData_->noiseScale = 128.0f;
     compositeParamsData_->noiseTime = 0.0f;
     std::memset(compositeParamsData_->noisePadding, 0, sizeof(compositeParamsData_->noisePadding));
+
+    // Iris in composite
+    compositeParamsData_->enableIris = 0;
+    compositeParamsData_->irisCenter[0] = 0.5f;
+    compositeParamsData_->irisCenter[1] = 0.5f;
+    compositeParamsData_->irisRadius = 1.0f;
+    compositeParamsData_->irisSmoothness = 0.01f;
+    compositeParamsData_->isIrisIn = 0;
+    compositeParamsData_->irisAspectRatio = windowHeight_ > 0 ? ((float)windowWidth_ / (float)windowHeight_) : (16.0f / 9.0f);
+    compositeParamsData_->irisPadding1 = 0.0f;
+    compositeParamsData_->irisMaskColor[0] = 0.0f;
+    compositeParamsData_->irisMaskColor[1] = 0.0f;
+    compositeParamsData_->irisMaskColor[2] = 0.0f;
+    compositeParamsData_->irisMaskColor[3] = 1.0f;
+
+    // Iris 用のPSOを作成
+    psoDesc.PS = {psIrisBlob->GetBufferPointer(), psIrisBlob->GetBufferSize()};
+    hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&irisPipelineState_));
+    assert(SUCCEEDED(hr));
+
+    // Iris 用定数バッファの作成
+    irisParamResource_ = CreateBufferResource(device_.Get(), (sizeof(IrisParams) + 255) & ~255);
+    irisParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&irisParamsData_));
+    irisParamsData_->center[0] = 0.5f;
+    irisParamsData_->center[1] = 0.5f;
+    irisParamsData_->radius = 1.0f;
+    irisParamsData_->smoothness = 0.01f;
+    irisParamsData_->maskColor[0] = 0.0f;
+    irisParamsData_->maskColor[1] = 0.0f;
+    irisParamsData_->maskColor[2] = 0.0f;
+    irisParamsData_->maskColor[3] = 1.0f;
+    irisParamsData_->isIrisIn = 0;
+    irisParamsData_->aspectRatio = windowHeight_ > 0 ? ((float)windowWidth_ / (float)windowHeight_) : (16.0f / 9.0f);
 
     // DepthBasedOutline 用のPSOを作成
     psoDesc.PS = {psDepthBasedOutlineBlob->GetBufferPointer(), psDepthBasedOutlineBlob->GetBufferSize()};
@@ -1219,6 +1259,13 @@ void DirectXCommon::ExecutePostEffect() {
             commandList_->SetPipelineState(compositePipelineState_.Get());
             commandList_->SetGraphicsRootConstantBufferView(1, compositeParamResource_->GetGPUVirtualAddress());
             commandList_->SetGraphicsRootDescriptorTable(2, dissolveMaskSrvHandleGPU_);
+
+        } else if (postEffect_ == PostEffect::kIris) {
+            if (irisParamsData_ && windowHeight_ > 0) {
+                irisParamsData_->aspectRatio = (float)windowWidth_ / (float)windowHeight_;
+            }
+            commandList_->SetPipelineState(irisPipelineState_.Get());
+            commandList_->SetGraphicsRootConstantBufferView(1, irisParamResource_->GetGPUVirtualAddress());
 
         } else {
             // kNone または想定外

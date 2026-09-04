@@ -56,6 +56,20 @@ struct CompositeParams {
     // Vector 11 (16 bytes)
     float noiseTime;         // time factor for noise animation
     float3 noisePadding;     // alignment padding
+
+    // Vector 12 (16 bytes)
+    int enableIris;          // 1 to enable iris, 0 to disable
+    float2 irisCenter;       // center coordinate of iris in UV space
+    float irisRadius;        // radius of iris
+
+    // Vector 13 (16 bytes)
+    float irisSmoothness;    // edge smoothness width
+    int isIrisIn;            // 0: Iris Out (close to mask), 1: Iris In (open to scene)
+    float irisAspectRatio;   // aspect ratio (width / height)
+    float irisPadding1;      // alignment padding
+
+    // Vector 14 (16 bytes)
+    float4 irisMaskColor;    // color of the masked outer region
 };
 ConstantBuffer<CompositeParams> gCompositeParams : register(b0);
 
@@ -76,6 +90,32 @@ float gauss(float x, float y, float sigma) {
     float exponent = -(x * x + y * y) * rcp(2.0f * sigma * sigma);
     float denominator = 2.0f * PI * sigma * sigma;
     return exp(exponent) * rcp(denominator);
+}
+
+// Calculate distance from UV to custom center with aspect ratio correction
+float CalculateIrisDistance(float2 uv, float2 center, float aspectRatio) {
+    float2 diff = uv - center;
+    diff.x *= aspectRatio;
+    return length(diff);
+}
+
+// Calculate iris visibility factor
+float CalculateIrisFactor(float2 uv, float2 center, float radius, float smoothness, float aspectRatio) {
+    float dist = CalculateIrisDistance(uv, center, aspectRatio);
+    float safeSmoothness = max(smoothness, 0.0001f);
+    float halfSmooth = safeSmoothness * 0.5f;
+    float edge0 = max(0.0f, radius - halfSmooth);
+    float edge1 = radius + halfSmooth;
+    return 1.0f - smoothstep(edge0, edge1, dist);
+}
+
+// Iris In / Iris Out function with configurable reference center
+float4 ProcessIris(float4 sceneColor, float2 uv, float2 center, float radius, float smoothness, float aspectRatio, float4 maskColor, int isIrisIn) {
+    float2 refCenter = center; // Configurable reference origin
+    float factor = CalculateIrisFactor(uv, refCenter, radius, smoothness, aspectRatio);
+    float3 rgb = lerp(maskColor.rgb, sceneColor.rgb, factor);
+    float a = lerp(maskColor.a, sceneColor.a, factor);
+    return float4(rgb, a);
 }
 
 PixelShaderOutput main(VertexShaderOutput input) {
@@ -223,6 +263,20 @@ PixelShaderOutput main(VertexShaderOutput input) {
         }
         
         processedColor.rgb = lerp(processedColor.rgb, blendedColor, gCompositeParams.noiseStrength);
+    }
+    
+    // 8. Apply Iris Effect
+    if (gCompositeParams.enableIris != 0) {
+        processedColor = ProcessIris(
+            processedColor,
+            input.texcoord,
+            gCompositeParams.irisCenter,
+            gCompositeParams.irisRadius,
+            gCompositeParams.irisSmoothness,
+            gCompositeParams.irisAspectRatio,
+            gCompositeParams.irisMaskColor,
+            gCompositeParams.isIrisIn
+        );
     }
     
     output.color.rgb = processedColor.rgb;

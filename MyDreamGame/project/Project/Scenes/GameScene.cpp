@@ -153,6 +153,14 @@ void GameScene::Initialize() {
         }
     }
 
+    // 7.6. ゲーム開始時のアイリスイン演出（プレイヤー座標を中心に開く）
+    {
+        TransitionDirector* director = TransitionDirector::GetInstance();
+        if ((!director || !director->IsPlaying()) && player_) {
+            StartIrisIn(player_->GetPosition(), 1.2f);
+        }
+    }
+
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -221,6 +229,8 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             // プレイ開始時はゲーム内クロックを0に戻す（動く床の位相を毎回同じにするため）
             ReplayManager::GetInstance()->ResetPlayClock();
+            // プレイ開始時のアイリスイン演出（プレイヤー座標を中心に開く）
+            StartIrisIn(player_->GetPosition(), 1.2f);
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
@@ -479,6 +489,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     }
 
+    // プレイヤー座標を基準にしたアイリスイン演出の更新
+    if (player_) {
+        UpdateIrisIn(player_->GetPosition(), dt);
+    }
 }
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
@@ -916,5 +930,67 @@ void GameScene::UpdateEditor() {
 
     if (skybox_) {
         skybox_->Update();
+    }
+}
+
+Vector2 GameScene::WorldToScreenUV(const Vector3& worldPos) const {
+    if (!gameCamera_) {
+        return Vector2(0.5f, 0.5f);
+    }
+    // カメラのビュープロジェクション行列を取得
+    Matrix4x4 viewProj = gameCamera_->GetViewMatrix() * gameCamera_->GetProjectionMatrix();
+    Vector3 ndc = TransformFunctions::EulerTransform(worldPos, viewProj);
+
+    // NDC [-1, 1] から テクスチャUV [0, 1] へ変換（Y軸反転）
+    float uvX = (ndc.x + 1.0f) * 0.5f;
+    float uvY = (1.0f - ndc.y) * 0.5f;
+    return Vector2(uvX, uvY);
+}
+
+void GameScene::StartIrisIn(const Vector3& playerPos, float duration) {
+    isIrisInActive_ = true;
+    irisInTimer_ = 0.0f;
+    irisInDuration_ = (duration > 0.0f) ? duration : 1.2f;
+    // 範囲を従来の2倍（3.2f）に設定して画面全体に大きく広がるようにする
+    irisInMaxRadius_ = ParameterManager::GetInstance()->GetValue("GameScene", "irisInMaxRadius", 3.2f);
+
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        Vector2 uv = WorldToScreenUV(playerPos);
+        dxCommon->SetIrisCenter(uv.x, uv.y);
+        dxCommon->SetIrisRadius(0.0f);
+        dxCommon->SetIrisSmoothness(0.03f);
+        dxCommon->SetIrisIn(true); // Iris In (開く)
+        dxCommon->SetIrisMaskColor(0.0f, 0.0f, 0.0f, 1.0f);
+        dxCommon->SetCompositeIrisEnabled(true);
+    }
+
+    transitionAlpha_ = 0.0f;
+}
+
+void GameScene::UpdateIrisIn(const Vector3& playerPos, float dt) {
+    if (!isIrisInActive_) return;
+
+    irisInTimer_ += dt;
+    float t = std::clamp(irisInTimer_ / irisInDuration_, 0.0f, 1.0f);
+
+    // 線形補間（Linear: イーズイン/イーズアウトは不使用）
+    float currentRadius = t * irisInMaxRadius_;
+
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        Vector2 uv = WorldToScreenUV(playerPos);
+        dxCommon->SetIrisCenter(uv.x, uv.y);
+        dxCommon->SetIrisRadius(currentRadius);
+        dxCommon->SetIrisSmoothness(0.03f);
+        dxCommon->SetIrisIn(true);
+        dxCommon->SetCompositeIrisEnabled(true);
+    }
+
+    if (t >= 1.0f) {
+        isIrisInActive_ = false;
+        if (dxCommon) {
+            dxCommon->SetCompositeIrisEnabled(false);
+        }
     }
 }

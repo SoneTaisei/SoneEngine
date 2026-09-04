@@ -18,6 +18,7 @@ enum class PostEffectShaderType {
     RadialBlur,
     Dissolve,
     Noise,
+    Iris,
     Composite,
     Count
 };
