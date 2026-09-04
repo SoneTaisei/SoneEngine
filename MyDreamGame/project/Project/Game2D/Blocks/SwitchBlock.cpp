@@ -73,10 +73,11 @@ void SwitchBlock::OnCollision(Player2D* player) {
     pressedTimer_ = 0.1f;
 }
 
-void SwitchBlock::OnChainTouch(const Vector3& pos, float radius, float speed) {
+bool SwitchBlock::OnChainTouch(const Vector3& pos, float radius, const Vector3& velocity, bool isWeight) {
     // 鎖の節や宝石が乗っている間はプレイヤーと同じく押され続ける（重さスイッチ）
-    (void)pos; (void)radius; (void)speed;
+    (void)pos; (void)radius; (void)velocity; (void)isWeight;
     pressedTimer_ = 0.1f;
+    return false;
 }
 
 void SwitchBlock::Reset() {

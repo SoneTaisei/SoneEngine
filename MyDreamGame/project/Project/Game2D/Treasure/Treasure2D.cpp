@@ -57,7 +57,8 @@ void Treasure2D::UpdateTransform(const Vector3& pos, const Vector3& prevNodePos)
     obj_->SetTranslation({ pos.x, pos.y, drawOffsetZ_ });
     // 向きは最後の節の方向 + 自転（球では見えないが、正式モデルに差し替えた時のため）
     float angle = std::atan2(pos.y - prevNodePos.y, pos.x - prevNodePos.x);
-    obj_->SetRotation({ 0.0f, 0.0f, angle + selfAngle_ });
+    // 宝石の尖った側（モデルの -y）が鎖の外向き＝最後の節の方向を向くように吊る。自転は宝石の対称軸（y）まわり
+    obj_->SetRotation({ 0.0f, selfAngle_, angle + 1.57079632f });
 }
 
 void Treasure2D::Draw() {

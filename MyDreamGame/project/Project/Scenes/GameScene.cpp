@@ -524,11 +524,12 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Pick up chain");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Drop chain");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Take (pick up chain / take back from bound guard)");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Put (drop chain / bind glowing guard, -1 chain)");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "W (hold) : Raise the gem overhead");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D while raised on wooden plank : Throw it -> swing (A/D to pump)");
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "Release W : Fly in the weight's direction");
+        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Guard : gem hit = stun / J near glowing guard = bind / K near bound = take back / dropped chain trips");
         ImGui::End();
     }
 
