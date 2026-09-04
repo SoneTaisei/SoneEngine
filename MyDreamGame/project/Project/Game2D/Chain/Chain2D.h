@@ -128,6 +128,12 @@ public:
     bool HasCrushedNode() const;
     /// <summary>挟まれ固定を全て解除する（ちぎれた後の手元の鎖・復活時）</summary>
     void ClearCrushed();
+    /// <summary>挟まれて固定された最初の節の添字（無ければ -1）</summary>
+    int FindFirstCrushedNode() const;
+    /// <summary>一番伸びているセグメント（i と i+1 の間）の i（ちぎれ位置の決定用。節が2未満なら -1）</summary>
+    int FindMostStretchedSegment() const;
+    /// <summary>先頭 keepCount 個の節だけ残して以降を捨てる（ちぎれで手元側だけ残す用。繰り出し待ちも捨てる）</summary>
+    void TruncateNodes(int keepCount);
 
     int GetNodeCount() const { return static_cast<int>(nodes_.size()); }
     const Vector3& GetNodePosition(int index) const { return nodes_[index].pos; }
@@ -136,6 +142,8 @@ public:
     Vector3 GetEndVelocity() const;
     /// <summary>任意ノードの暗黙速度</summary>
     Vector3 GetNodeVelocity(int index) const;
+    /// <summary>任意ノードの暗黙速度を factor 倍にする（宝石が警備員に当たった時の跳ね返り弱め用）</summary>
+    void ScaleNodeVelocity(int index, float factor);
 
     /// <summary>ノード列（遷移用の複製など、読み取り専用）</summary>
     const std::vector<VerletNode>& GetNodes() const { return nodes_; }

@@ -609,8 +609,9 @@ void Chain2D::PlaceNodesOnLine(const Vector3& from, const Vector3& to) {
     for (size_t i = 0; i < n; ++i) {
         float t = static_cast<float>(i) / denom;
         Vector3 p = { from.x + d.x * t, from.y + d.y * t, 0.0f };
+        // prevPos には前フレームの位置を残す（振り回している宝石の速さを「殴る」判定で使う。固定ノードなので積分には影響しない）
+        nodes_[i].prevPos = nodes_[i].pos;
         nodes_[i].pos = p;
-        nodes_[i].prevPos = p;
         nodes_[i].invMass = 0.0f; // 固定（地形・プレイヤー判定も自動的にスキップされる）
     }
 }
@@ -677,6 +678,15 @@ void Chain2D::SetAllVelocities(const Vector3& velocity, float dt) {
     }
 }
 
+void Chain2D::ScaleNodeVelocity(int index, float factor) {
+    if (index < 0 || index >= static_cast<int>(nodes_.size())) {
+        return;
+    }
+    VerletNode& node = nodes_[index];
+    Vector3 d = node.pos - node.prevPos;
+    node.prevPos = node.pos - d * factor;
+}
+
 Vector3 Chain2D::GetNodeVelocity(int index) const {
     if (index < 0 || index >= static_cast<int>(nodes_.size()) || lastStepDt_ <= 0.0f) {
         return { 0.0f, 0.0f, 0.0f };
@@ -711,6 +721,41 @@ void Chain2D::ClearCrushed() {
         }
     }
     ApplyEndWeight();
+}
+
+int Chain2D::FindFirstCrushedNode() const {
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        if (nodes_[i].crushed) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+int Chain2D::FindMostStretchedSegment() const {
+    int best = -1;
+    float bestRatio = 0.0f;
+    for (size_t i = 0; i + 1 < nodes_.size(); ++i) {
+        float rest = (std::max)(1e-4f, (i == 0) ? headRest_ : restLength_);
+        Vector3 d = nodes_[i + 1].pos - nodes_[i].pos;
+        float ratio = std::sqrt(d.x * d.x + d.y * d.y) / rest;
+        if (ratio > bestRatio) {
+            bestRatio = ratio;
+            best = static_cast<int>(i);
+        }
+    }
+    return best;
+}
+
+void Chain2D::TruncateNodes(int keepCount) {
+    if (nodes_.size() < 2) {
+        return;
+    }
+    keepCount = std::clamp(keepCount, 2, static_cast<int>(nodes_.size()));
+    nodes_.resize(static_cast<size_t>(keepCount));
+    pendingNodes_ = 0;
+    ApplyEndWeight();
+    UpdateLinkTransforms();
 }
 
 float Chain2D::GetSpanRatio() const {

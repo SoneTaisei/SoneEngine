@@ -28,11 +28,17 @@ struct ChainParams {
     int rootCollisionSkip_ = 2;        // 手持ち中に地形判定から除外する根元ノード数（壁張り付き時のジッタ防止）
 
     // --- お宝（重り）の物理: プレイヤー鎖の末端ノード ---
-    float treasureMass_ = 5.0f;        // 質量（鎖物理の invMass = 1/mass、スピンの振りにくさにも使う）
-    float treasureRadius_ = 0.3f;      // 当たり半径（ノード0.1の3倍。段差に引っかかる。見た目のスケールとは独立）
-    float treasureFriction_ = 0.8f;    // 地形との摩擦（引きずると渋い）
+    float treasureMass_ = 8.5f;        // 質量（鎖物理の invMass = 1/mass、スピンの振りにくさにも使う。重いほど鎖が宝石に引かれ、振りにくい）
+    float treasureRadius_ = 0.35f;     // 当たり半径（段差に引っかかる。見た目のスケールとは独立）
+    float treasureFriction_ = 0.95f;    // 地形との摩擦（引きずると渋い。重さの手応え）
     bool treasureIgnorePlayer_ = false; // お宝をプレイヤー衝突から外す（狭い通路で押されて困る時用）
     bool heldChainPlayerCollision_ = false; // 持っている鎖とプレイヤーの当たり判定（false: 判定なし。回した重りや鎖が体に引っかからない）
+
+    // --- テザー（鎖が張るとプレイヤーが宝石に引かれる＝重さの手応え） ---
+    bool tetherEnabled_ = true;        // 鎖が張った時の手応え（本数には依存しない。ジャンプの罰則は chainJumpPenalty_ の1本だけ）
+    float dragFactor_ = 1.0f;          // 地上で宝石を後ろに引きずって離れる向きに歩く時の速度倍率（1.0 = 標準速度のまま。重さは質量と摩擦で出す）
+    float tetherPull_ = 0.6f;          // 宝石が自分より上にある時、離れる向きの落下を毎フレーム削る割合（ぶら下がり感）
+    float tetherSlack_ = 0.02f;        // 「張った」とみなす伸び（実長に対する余裕）
 
     // --- ちぎれ（鎖が伸び切ったらミス） ---
     bool tearEnabled_ = true;          // 宝石が地形に引っかかったまま手元が離れ、鎖が伸び切り続けたらちぎれてミスになる
@@ -41,9 +47,9 @@ struct ChainParams {
     float tearGraceTime_ = 0.35f;      // 「伸びている かつ 宝石が止まっている」がこの秒数続いたらちぎれる（物理の一時的な伸びは無視）
 
     // --- お宝の見た目（物理とは独立。宝石モデルへの差し替えはここを書き換えるだけ） ---
-    std::string treasureModelDir_ = "resources/Object/Original/sphere";
-    std::string treasureModelFile_ = "sphere.obj";
-    float treasureScale_ = 0.3f;       // 表示スケール（sphere.obj は半径1.0なので 0.3 で物理半径と一致）
+    std::string treasureModelDir_ = "resources/Object/Original/jewelry";
+    std::string treasureModelFile_ = "jewelry.obj";
+    float treasureScale_ = 0.28f;      // 表示スケール（jewelry.obj は半径約1.4なので 0.28 で見た目の半径≒0.4。原点は中心に補正済み）
 
     // --- スピンジャンプ（木の板の上で構え、ピンと張った鎖を自分で振り、離すと鎖ごと飛び、プレイヤーも同じ方向へ飛ぶ） ---
     float spinRadiusMax_ = 5.0f;       // 回転半径の上限
