@@ -71,6 +71,12 @@ public:
     // チップを設定
     void SetChip(int x, int y, ChipType type);
 
+    // ブロックを別のマスへ移動（swapがtrueなら移動先ブロックと入れ替え）
+    bool MoveBlock(int fromX, int fromY, int toX, int toY, bool swap = false);
+
+    // マップ全体を指定マス分シフト移動（外壁や全体配置の調整用）
+    bool ShiftMap(int deltaX, int deltaY);
+
     // チップを取得
     ChipType GetChip(int x, int y) const;
 

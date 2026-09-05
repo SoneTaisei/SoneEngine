@@ -483,6 +483,89 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
     }
 }
 
+bool MapChip2D::MoveBlock(int fromX, int fromY, int toX, int toY, bool swap) {
+    if (fromX < 0 || fromX >= mapWidth_ || fromY < 0 || fromY >= mapHeight_) return false;
+    if (toX < 0 || toX >= mapWidth_ || toY < 0 || toY >= mapHeight_) return false;
+    if (fromX == toX && fromY == toY) return true;
+
+    ChipType fromType = mapData_[fromY][fromX];
+    if (fromType == ChipType::kNone) return false;
+
+    ChipType toType = mapData_[toY][toX];
+    if (toType != ChipType::kNone && !swap) {
+        return false; // 移動先にブロックがありswapがfalseなら移動しない
+    }
+
+    // 上書きプロパティの退避
+    nlohmann::json fromOv;
+    bool hasFromOv = false;
+    auto itFrom = blockOverrides_.find({fromX, fromY});
+    if (itFrom != blockOverrides_.end()) {
+        fromOv = itFrom->second;
+        hasFromOv = true;
+        blockOverrides_.erase(itFrom);
+    }
+
+    nlohmann::json toOv;
+    bool hasToOv = false;
+    if (swap && toType != ChipType::kNone) {
+        auto itTo = blockOverrides_.find({toX, toY});
+        if (itTo != blockOverrides_.end()) {
+            toOv = itTo->second;
+            hasToOv = true;
+            blockOverrides_.erase(itTo);
+        }
+    } else {
+        blockOverrides_.erase({toX, toY});
+    }
+
+    mapData_[toY][toX] = fromType;
+    if (hasFromOv) {
+        blockOverrides_[{toX, toY}] = std::move(fromOv);
+    }
+
+    mapData_[fromY][fromX] = swap ? toType : ChipType::kNone;
+    if (swap && hasToOv) {
+        blockOverrides_[{fromX, fromY}] = std::move(toOv);
+    }
+
+    isDirty_ = true;
+    RebuildChipObjects();
+    return true;
+}
+
+bool MapChip2D::ShiftMap(int deltaX, int deltaY) {
+    if (deltaX == 0 && deltaY == 0) return true;
+    if (mapWidth_ <= 0 || mapHeight_ <= 0) return false;
+
+    std::vector<std::vector<ChipType>> newMapData(mapHeight_, std::vector<ChipType>(mapWidth_, ChipType::kNone));
+    std::map<std::pair<int, int>, nlohmann::json> newOverrides;
+
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            ChipType t = mapData_[y][x];
+            if (t == ChipType::kNone) continue;
+
+            int nx = x + deltaX;
+            int ny = y + deltaY;
+            if (nx >= 0 && nx < mapWidth_ && ny >= 0 && ny < mapHeight_) {
+                newMapData[ny][nx] = t;
+                auto it = blockOverrides_.find({x, y});
+                if (it != blockOverrides_.end()) {
+                    newOverrides[{nx, ny}] = it->second;
+                }
+            }
+        }
+    }
+
+    mapData_ = std::move(newMapData);
+    blockOverrides_ = std::move(newOverrides);
+
+    isDirty_ = true;
+    RebuildChipObjects();
+    return true;
+}
+
 MapChip2D::ChipType MapChip2D::GetChip(int x, int y) const {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return ChipType::kNone;
     return mapData_[y][x];

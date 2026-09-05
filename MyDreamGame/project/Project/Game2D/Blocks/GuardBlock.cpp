@@ -1,4 +1,4 @@
-﻿#include "GuardBlock.h"
+#include "GuardBlock.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Player/Player2D.h"
@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <DirectXMath.h>
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -33,6 +34,7 @@ void GuardBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float
     startWidth_ = width;
     startHeight_ = height;
     device_ = device;
+    boxPrimitive_ = boxPrimitive;
 
     gameObject_ = std::make_unique<GameObject>();
     gameObject_->Initialize();
@@ -48,17 +50,29 @@ void GuardBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float
     renderer->GetMaterial().color = kBodyColor;
     renderer->GetMaterial().lightingType = 1;
 
-    // 視界オブジェクト
-    sightObject_ = std::make_unique<GameObject>();
-    sightObject_->Initialize();
-    sightObject_->SetName("GuardSight");
-    auto* sightTransform = sightObject_->AddComponent<TransformComponent>();
-    sightTransform->SetPosition({worldX, worldY, 0.0f});
-    auto* sightRenderer = sightObject_->AddComponent<PrimitiveRendererComponent>();
-    sightRenderer->Initialize(device, boxPrimitive);
-    // 視界の色（半透明の黄色）
-    sightRenderer->GetMaterial().color = {1.0f, 1.0f, 0.0f, 0.3f};
-    sightRenderer->GetMaterial().lightingType = 1;
+    // 懐中電灯本体パーツ（小さな直方体）
+    flashlightBodyObj_ = std::make_unique<GameObject>();
+    flashlightBodyObj_->Initialize();
+    flashlightBodyObj_->SetName("GuardFlashlightBody");
+    auto* flbTransform = flashlightBodyObj_->AddComponent<TransformComponent>();
+    flbTransform->SetPosition({worldX, worldY, 0.0f});
+    flbTransform->SetScale({0.35f, 0.15f, 0.15f});
+    auto* flbRenderer = flashlightBodyObj_->AddComponent<PrimitiveRendererComponent>();
+    flbRenderer->Initialize(device, boxPrimitive);
+    flbRenderer->GetMaterial().color = {0.15f, 0.15f, 0.18f, 1.0f}; // メタリックダークグレー
+    flbRenderer->GetMaterial().lightingType = 1;
+
+    // 懐中電灯レンズ部（先端の発光パーツ）
+    flashlightLensObj_ = std::make_unique<GameObject>();
+    flashlightLensObj_->Initialize();
+    flashlightLensObj_->SetName("GuardFlashlightLens");
+    auto* fllTransform = flashlightLensObj_->AddComponent<TransformComponent>();
+    fllTransform->SetPosition({worldX, worldY, 0.0f});
+    fllTransform->SetScale({0.08f, 0.13f, 0.13f});
+    auto* fllRenderer = flashlightLensObj_->AddComponent<PrimitiveRendererComponent>();
+    fllRenderer->Initialize(device, boxPrimitive);
+    fllRenderer->GetMaterial().color = {1.0f, 1.0f, 0.8f, 1.0f}; // 明るいレンズ色
+    fllRenderer->GetMaterial().lightingType = 0; // 自己発光風
 
     SetupCollider();
 
@@ -98,6 +112,21 @@ void GuardBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("bindFromBehind") && properties["bindFromBehind"].is_boolean()) {
         bindFromBehind_ = properties["bindFromBehind"];
     }
+    // 懐中電灯（スポットライト）
+    readF("lightDistance", lightDistance_);
+    if (!properties.contains("lightDistance")) {
+        lightDistance_ = (std::max)(sightLength_ * 1.6f, 8.0f);
+    }
+    readF("lightAngleDeg", lightAngleDeg_);
+    readF("lightFalloffDeg", lightFalloffDeg_);
+    readF("lightIntensity", lightIntensity_);
+    readF("lightDecay", lightDecay_);
+    // シャドウマッピング
+    if (properties.contains("enableShadow") && properties["enableShadow"].is_boolean()) {
+        enableShadow_ = properties["enableShadow"];
+    }
+    readF("shadowBias", shadowBias_);
+    readF("shadowIntensity", shadowIntensity_);
 }
 
 void GuardBlock::Update() {
@@ -110,19 +139,9 @@ void GuardBlock::Update() {
     Vector3 currentPos = tc->GetPosition();
 
 #ifdef USE_IMGUI
-    // エディタ停止中であっても、視界オブジェクトの位置合わせや更新は行う
+    // エディタ停止中であっても、懐中電灯パーツの位置合わせや更新は行う
     if (!EditorManager::IsPlaying()) {
-        if (sightObject_) {
-            auto* sightTc = sightObject_->GetComponent<TransformComponent>();
-            auto* sightRenderer = sightObject_->GetComponent<PrimitiveRendererComponent>();
-            if (sightTc && sightRenderer) {
-                sightTc->SetScale({sightLength_, sightHeight_, 1.0f});
-                float sightOffsetX = (startWidth_ * 0.5f + sightLength_ * 0.5f) * currentFacing_;
-                sightTc->SetPosition({currentPos.x + sightOffsetX, currentPos.y, 0.0f});
-                sightRenderer->GetMaterial().color = {1.0f, 1.0f, 0.0f, 0.3f};
-            }
-            sightObject_->Update();
-        }
+        UpdateFlashlight(0.0f);
         return;
     }
 #endif
@@ -236,27 +255,8 @@ void GuardBlock::Update() {
         renderer->GetMaterial().color = bodyColor;
     }
 
-    // 視界オブジェクトの更新（気絶・縛られ中は消す）
-    if (sightObject_) {
-        auto* sightTc = sightObject_->GetComponent<TransformComponent>();
-        auto* sightRenderer = sightObject_->GetComponent<PrimitiveRendererComponent>();
-        if (sightTc && sightRenderer) {
-            if (IsIncapacitated()) {
-                sightTc->SetScale({0.0f, 0.0f, 1.0f});
-            } else {
-                // 視界のスケール（前方に伸びる、高さは sightHeight_）
-                sightTc->SetScale({sightLength_, sightHeight_, 1.0f});
-                // 視界の位置（本体の横から前方へ）
-                float sightOffsetX = (startWidth_ * 0.5f + sightLength_ * 0.5f) * currentFacing_;
-                sightTc->SetPosition({newPos.x + sightOffsetX, newPos.y, 0.0f});
-
-                // 色の更新（黄色から赤へ）
-                float alertRatio = maxAlertGauge_ > 0.0f ? (alertGauge_ / maxAlertGauge_) : 0.0f;
-                sightRenderer->GetMaterial().color = {1.0f, 1.0f - alertRatio, 0.0f, 0.4f + alertRatio * 0.3f};
-            }
-        }
-        sightObject_->Update();
-    }
+    // 懐中電灯パーツの更新（位置・向き・倒れ同期、発光部カラー更新）
+    UpdateFlashlight(dt);
 
     if (state_ == State::Bound) {
         UpdateBoundRing();
@@ -302,8 +302,11 @@ void GuardBlock::UpdateBoundRing() {
 
 void GuardBlock::Draw() {
     BaseBlock::Draw();
-    if (sightObject_ && !IsIncapacitated()) {
-        sightObject_->Draw();
+    if (flashlightBodyObj_) {
+        flashlightBodyObj_->Draw();
+    }
+    if (flashlightLensObj_) {
+        flashlightLensObj_->Draw();
     }
     if (state_ == State::Bound) {
         for (auto& link : boundLinks_) {
@@ -320,24 +323,255 @@ void GuardBlock::OnCollision(Player2D* player) {
     }
 }
 
-AABB2D GuardBlock::GetSightAABB() const {
-    if (!gameObject_ || IsIncapacitated()) return {-10000.0f, -10000.0f, -10000.0f, -10000.0f};
-    auto* tc = gameObject_->GetComponent<TransformComponent>();
-    if (!tc) return {-10000.0f, -10000.0f, -10000.0f, -10000.0f};
+namespace {
+    // 2点間の線分上にソリッドブロックが存在するか判定（壁遮蔽判定）
+    bool CheckLineOfSight(MapChip2D* map, const Vector3& from, const Vector3& to) {
+        if (!map) return true;
+        float dx = to.x - from.x;
+        float dy = to.y - from.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (dist < 1e-4f) return true;
 
-    Vector3 pos = tc->GetPosition();
-    float sightLeft, sightRight;
-    if (direction_ == 1) {
-        sightLeft = pos.x + startWidth_ * 0.5f;
-        sightRight = sightLeft + sightLength_;
-    } else {
-        sightRight = pos.x - startWidth_ * 0.5f;
-        sightLeft = sightRight - sightLength_;
+        float chipSize = map->GetChipSize();
+        if (chipSize <= 0.0f) chipSize = 1.0f;
+        // チップサイズの半分以下の刻み幅で細かくサンプリング
+        float stepSize = chipSize * 0.35f;
+        int steps = static_cast<int>(std::ceil(dist / stepSize));
+        if (steps < 2) steps = 2;
+
+        for (int i = 1; i < steps; ++i) {
+            float t = static_cast<float>(i) / static_cast<float>(steps);
+            float sx = from.x + dx * t;
+            float sy = from.y + dy * t;
+
+            int cx = map->WorldToChipX(sx);
+            int cy = map->WorldToChipY(sy);
+
+            if (auto* block = map->GetBlock(cx, cy)) {
+                // 完全ソリッドかつ非一方向床ブロックであれば光を遮る
+                if (block->IsSolid() && !block->IsOneWay()) {
+                    return false; // 遮蔽あり
+                }
+            }
+        }
+        return true; // 遮蔽なし
     }
-    float sightTop = pos.y + sightHeight_ * 0.5f;
-    float sightBottom = pos.y - sightHeight_ * 0.5f;
+}
 
-    return {sightLeft, sightTop, sightRight, sightBottom};
+void GuardBlock::UpdateFlashlight(float dt) {
+    (void)dt;
+    if (!gameObject_) return;
+    auto* tc = gameObject_->GetComponent<TransformComponent>();
+    if (!tc) return;
+
+    Vector3 guardPos = tc->GetPosition();
+    float facing = currentFacing_;
+
+    // 懐中電灯本体の取り付け位置（前面、腰の高さ、少し手前）
+    float handOffsetX = facing * (startWidth_ * 0.5f + 0.15f);
+    float handOffsetY = -0.05f;
+    float handOffsetZ = -0.3f;
+
+    Vector3 bodyPos = { guardPos.x + handOffsetX, guardPos.y + handOffsetY, guardPos.z + handOffsetZ };
+
+    // 向きと倒れの回転
+    float yaw = (1.0f - facing) * 0.5f * kPi;
+    Vector3 flRot = { 0.0f, yaw, -tumble_ * kPi * 0.5f };
+
+    if (flashlightBodyObj_) {
+        if (auto* flTc = flashlightBodyObj_->GetComponent<TransformComponent>()) {
+            flTc->SetPosition(bodyPos);
+            flTc->SetRotation(flRot);
+            flTc->SetScale({0.35f, 0.15f, 0.15f});
+        }
+        flashlightBodyObj_->Update();
+    }
+
+    if (flashlightLensObj_) {
+        // 先端（ボディの先）
+        float lensOffsetX = facing * 0.18f;
+        Vector3 lensPos = { bodyPos.x + lensOffsetX, bodyPos.y, bodyPos.z };
+        if (auto* lensTc = flashlightLensObj_->GetComponent<TransformComponent>()) {
+            lensTc->SetPosition(lensPos);
+            lensTc->SetRotation(flRot);
+            lensTc->SetScale({0.08f, 0.13f, 0.13f});
+        }
+        if (auto* lensRenderer = flashlightLensObj_->GetComponent<PrimitiveRendererComponent>()) {
+            Vector4 lCol = GetCurrentLightColor();
+            if (!IsLightActive()) {
+                lCol = { 0.15f, 0.15f, 0.15f, 1.0f }; // 消灯
+            }
+            lensRenderer->GetMaterial().color = lCol;
+        }
+        flashlightLensObj_->Update();
+    }
+}
+
+Vector3 GuardBlock::GetLightPosition() const {
+    if (!gameObject_) return { startX_, startY_, 0.0f };
+    auto* tc = gameObject_->GetComponent<TransformComponent>();
+    if (!tc) return { startX_, startY_, 0.0f };
+
+    Vector3 p = tc->GetPosition();
+    float facing = currentFacing_;
+    float offsetX = facing * (startWidth_ * 0.5f + 0.35f); // 懐中電灯先端
+    float offsetY = -0.05f;
+    float offsetZ = -0.45f; // 手前から奥に向かって照射し、立体感と背景板への到達を両立
+    return { p.x + offsetX, p.y + offsetY, p.z + offsetZ };
+}
+
+Vector3 GuardBlock::GetLightDirection() const {
+    float facing = currentFacing_;
+    float dirX = (facing >= 0.0f) ? 1.0f : -1.0f;
+    // 奥（Z+0.57f）と床面（Y-0.06f）に向けることで、背景板と足元の床ブロックを鮮やかに照らし出す
+    Vector3 dir = { dirX * 0.82f, -0.06f, 0.57f };
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    if (len > 1e-4f) {
+        return { dir.x / len, dir.y / len, dir.z / len };
+    }
+    return { dirX, 0.0f, 0.0f };
+}
+
+bool GuardBlock::IsLightActive() const {
+    return !IsIncapacitated();
+}
+
+Vector4 GuardBlock::GetCurrentLightColor() const {
+    if (!IsLightActive()) {
+        return { 0.0f, 0.0f, 0.0f, 0.0f };
+    }
+    if (staggerTimer_ > 0.0f) {
+        // よろけ時は点滅
+        float blink = std::sin(wobbleTime_ * 40.0f);
+        if (blink < 0.0f) return { 0.1f, 0.1f, 0.1f, 1.0f };
+    }
+    float alertRatio = (maxAlertGauge_ > 0.0f) ? std::clamp(alertGauge_ / maxAlertGauge_, 0.0f, 1.0f) : 0.0f;
+    Vector4 col;
+    col.x = lightColor_.x + (alertLightColor_.x - lightColor_.x) * alertRatio;
+    col.y = lightColor_.y + (alertLightColor_.y - lightColor_.y) * alertRatio;
+    col.z = lightColor_.z + (alertLightColor_.z - lightColor_.z) * alertRatio;
+    col.w = 1.0f;
+    return col;
+}
+
+VisionCone GuardBlock::GetVisionCone() const {
+    VisionCone cone;
+    cone.eyePosition = GetLightPosition();
+    cone.forward = GetLightDirection();
+    cone.distance = sightLength_;
+    cone.halfAngleRad = lightAngleDeg_ * (std::numbers::pi_v<float> / 180.0f);
+    return cone;
+}
+
+SpotLight GuardBlock::GetSpotLightData() const {
+    SpotLight sl{};
+    if (!IsLightActive()) {
+        sl.enable = 0;
+        sl.shadowMapIndex = -1;
+        return sl;
+    }
+
+    sl.enable = 1;
+    sl.color = GetCurrentLightColor();
+    sl.position = GetLightPosition();
+    sl.direction = GetLightDirection();
+    sl.intensity = lightIntensity_;
+    sl.distance = lightDistance_;
+    sl.decay = lightDecay_;
+    sl.cosAngle = std::cos(lightAngleDeg_ * (std::numbers::pi_v<float> / 180.0f));
+    sl.cosFalloffStart = std::cos(lightFalloffDeg_ * (std::numbers::pi_v<float> / 180.0f));
+    sl.shadowMapIndex = enableShadow_ ? 0 : -1;
+    sl.shadowBias = shadowBias_;
+    sl.shadowIntensity = shadowIntensity_;
+
+    // シャドウマッピング用viewProjection行列の計算
+    Vector3 dir = sl.direction;
+    Vector3 eye = sl.position;
+    Vector3 target = { eye.x + dir.x, eye.y + dir.y, eye.z + dir.z };
+    Vector3 up = { 0.0f, 1.0f, 0.0f };
+    if (std::abs(dir.y) > 0.99f) {
+        up = { 0.0f, 0.0f, 1.0f };
+    }
+
+    DirectX::XMVECTOR eyeV = DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f);
+    DirectX::XMVECTOR targetV = DirectX::XMVectorSet(target.x, target.y, target.z, 1.0f);
+    DirectX::XMVECTOR upV = DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f);
+    DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(eyeV, targetV, upV);
+
+    float fovAngle = (lightAngleDeg_ * 2.0f) * (std::numbers::pi_v<float> / 180.0f);
+    fovAngle = std::clamp(fovAngle, 0.01f, std::numbers::pi_v<float> * 0.99f);
+    DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fovAngle, 1.0f, 0.1f, (sl.distance > 0.5f) ? sl.distance : 20.0f);
+    DirectX::XMMATRIX viewProjMat = DirectX::XMMatrixMultiply(viewMat, projMat);
+    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&sl.viewProjection), viewProjMat);
+
+    return sl;
+}
+
+AABB2D GuardBlock::GetSightAABB() const {
+    if (!IsLightActive()) return {-10000.0f, -10000.0f, -10000.0f, -10000.0f};
+
+    VisionCone cone = GetVisionCone();
+    float x0 = cone.eyePosition.x;
+    float y0 = cone.eyePosition.y;
+
+    float sinHalf = std::sin(cone.halfAngleRad);
+    float dirX = (cone.forward.x >= 0.0f) ? 1.0f : -1.0f;
+    float reachX = x0 + dirX * cone.distance;
+    float spreadY = cone.distance * sinHalf;
+
+    float left = (std::min)(x0, reachX);
+    float right = (std::max)(x0, reachX);
+    float top = y0 + spreadY;
+    float bottom = y0 - spreadY;
+
+    return { left, top, right, bottom };
+}
+
+bool GuardBlock::CheckPlayerInLight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const {
+    if (!IsLightActive()) return false;
+
+    VisionCone cone = GetVisionCone();
+
+    // プレイヤーの主要判定球群（頭部・胸部・足元）
+    float centerY = (playerAABB.top + playerAABB.bottom) * 0.5f;
+    float r = (playerRadius > 0.05f) ? playerRadius : 0.35f;
+
+    const SphereShape playerSpheres[] = {
+        { { playerPos.x, centerY, 0.0f }, r },               // 中心/胸部
+        { { playerPos.x, playerAABB.top - r, 0.0f }, r },    // 頭部
+        { { playerPos.x, playerAABB.bottom + r, 0.0f }, r }, // 足元
+    };
+
+    // 代表点群（四隅や左右端）
+    const Vector3 samplePoints[] = {
+        { playerAABB.left, centerY, 0.0f },
+        { playerAABB.right, centerY, 0.0f },
+        { playerAABB.left, playerAABB.top, 0.0f },
+        { playerAABB.right, playerAABB.top, 0.0f },
+        { playerAABB.left, playerAABB.bottom, 0.0f },
+        { playerAABB.right, playerAABB.bottom, 0.0f },
+    };
+
+    // 1. 球体交差判定 (IsSphereInVisionCone)
+    for (const auto& sphere : playerSpheres) {
+        if (IsSphereInVisionCone(sphere, cone)) {
+            // 光が届いているか壁遮蔽チェック
+            if (CheckLineOfSight(map, cone.eyePosition, sphere.center)) {
+                return true;
+            }
+        }
+    }
+
+    // 2. 代表点判定 (IsPointInVisionCone)
+    for (const auto& pt : samplePoints) {
+        if (IsPointInVisionCone(pt, cone)) {
+            if (CheckLineOfSight(map, cone.eyePosition, pt)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void GuardBlock::OnSpottedPlayer(Player2D* player) {
@@ -472,6 +706,7 @@ void GuardBlock::Reset() {
     state_ = State::Patrol;
     alertGauge_ = 0.0f;
     direction_ = startDirection_;
+    currentFacing_ = static_cast<float>(startDirection_);
     isPlayerInSightThisFrame_ = false;
     waitTimer_ = 0.0f;
     stunTimer_ = 0.0f;
@@ -491,6 +726,7 @@ void GuardBlock::Reset() {
             renderer->GetMaterial().color = kBodyColor;
         }
     }
+    UpdateFlashlight(0.0f);
 }
 
 void GuardBlock::CaptureReplayState(std::vector<float>& outCustom) const {
@@ -534,4 +770,5 @@ void GuardBlock::RestoreReplayState(const std::vector<float>& custom) {
     }
     deltaPosition_ = {0.0f, 0.0f, 0.0f};
     currentVelocity_ = {0.0f, 0.0f, 0.0f};
+    UpdateFlashlight(0.0f);
 }

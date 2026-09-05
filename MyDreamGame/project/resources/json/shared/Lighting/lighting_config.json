@@ -55,6 +55,7 @@
             ],
             "distance": 10.0,
             "enabled": true,
+            "enableShadow": false,
             "falloffDeg": 20.0,
             "followOffset": [
                 0.0,

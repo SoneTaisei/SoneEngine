@@ -59,8 +59,16 @@ namespace {
         {"thickness", "板の厚み"},
         {"patrolSpeed", "巡回の速さ"},
         {"alertSpeed", "追跡の速さ"},
-        {"sightLength", "視界の長さ"},
+        {"sightLength", "視界判定の長さ（プレイヤーが見つかる距離）"},
         {"sightHeight", "視界の高さ"},
+        {"lightDistance", "ライト照射距離（背景や床を照らす光の届く距離）"},
+        {"lightAngleDeg", "ライト照射角度（度数）"},
+        {"lightFalloffDeg", "ライト中心輝度角度（度数）"},
+        {"lightIntensity", "ライトの明るさ（強度）"},
+        {"lightDecay", "ライト減衰率（小さいほど遠くまで明るい）"},
+        {"enableShadow", "影の生成（シャドウマッピング）"},
+        {"shadowBias", "シャドウバイアス（にじみ防止）"},
+        {"shadowIntensity", "影の濃さ（0.0〜1.0）"},
         {"maxAlertGauge", "見つかってからミスまでの秒数"},
         {"startDirection", "初期の向き（1 = 右、-1 = 左）"},
         {"waitTimeAtEdge", "端での待ち秒数"},
@@ -669,6 +677,33 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
                     if (WorldToScreen(camera, {g->GetStartX(), gy, 0.0f}, sxp, syp)) {
                         float d = (g->GetStartDirection() < 0) ? -18.0f : 18.0f;
                         DrawArrow(dl, ImVec2(sxp, syp), ImVec2(sxp + d, syp), col, 2.0f);
+                    }
+
+                    // 懐中電灯の照射コーンを描画
+                    Vector3 eyePos = g->GetLightPosition();
+                    float sxEye, syEye;
+                    if (WorldToScreen(camera, eyePos, sxEye, syEye)) {
+                        float halfAngle = g->GetLightAngleDeg() * (std::numbers::pi_v<float> / 180.0f);
+                        float dir = (g->GetStartDirection() < 0) ? -1.0f : 1.0f;
+                        float baseAngle = (dir < 0) ? std::numbers::pi_v<float> : 0.0f;
+                        float dist = g->GetSightLength();
+
+                        constexpr int kArcSegs = 8;
+                        std::vector<ImVec2> pts;
+                        pts.push_back(ImVec2(sxEye, syEye));
+                        for (int seg = 0; seg <= kArcSegs; ++seg) {
+                            float t = static_cast<float>(seg) / static_cast<float>(kArcSegs);
+                            float ang = baseAngle - halfAngle + (halfAngle * 2.0f) * t;
+                            Vector3 edgePt = { eyePos.x + std::cos(ang) * dist, eyePos.y + std::sin(ang) * dist, 0.0f };
+                            float ex, ey;
+                            if (WorldToScreen(camera, edgePt, ex, ey)) {
+                                pts.push_back(ImVec2(ex, ey));
+                            }
+                        }
+                        if (pts.size() >= 3) {
+                            dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), IM_COL32(255, 230, 80, 160), true, 1.5f);
+                            dl->AddConvexPolyFilled(pts.data(), static_cast<int>(pts.size()), IM_COL32(255, 230, 80, 25));
+                        }
                     }
                 }
             }

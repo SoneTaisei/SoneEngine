@@ -2,12 +2,9 @@
 #include "Component/AnimatorComponent.h"
 #include "DirectXCommon/DirectXCommon.h"
 #include "Resource/Primitive/Primitive.h"
-#include "Renderer.h"
-#include "Component/AnimatorComponent.h"
-#include "DirectXCommon/DirectXCommon.h"
-#include "Resource/Primitive/Primitive.h"
 #include "Resource/Sprite/Sprite.h"
 #include "Resource/Model/Model.h"
+#include "Resource/Model/ModelManager.h"
 #include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
@@ -292,7 +289,8 @@ void Renderer::DrawObject3D(Object3D* obj) {
     commandList->SetGraphicsRootConstantBufferView(0, obj->materialResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
-    if (ModelCommon* mc = obj->model_->GetModelCommon()) {
+    ModelCommon* mc = obj->model_ ? obj->model_->GetModelCommon() : ModelManager::GetInstance()->GetModelCommon();
+    if (mc) {
         if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
         if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
         if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
@@ -406,6 +404,12 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
     commandList->SetGraphicsRootConstantBufferView(1, obj->transformResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(0, obj->materialResource_->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+
+    if (ModelCommon* mc = ModelManager::GetInstance()->GetModelCommon()) {
+        if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
+        if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
+        if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
+    }
     
     if (activeTexture.ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
@@ -437,6 +441,8 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
 
 void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& transform, const Material& material) {
     if (!obj || !dxCommon_ || !obj->primitive_) return;
+    // シャドウパス実行中はゴースト・パーティクル描画を行わない（シャドウパス破壊防止）
+    if (isShadowPass_) return;
     if (obj->currentGhostIndex_ >= PrimitiveObject::kMaxGhosts) return;
 
     auto commandList = dxCommon_->GetCommandList();
@@ -509,6 +515,18 @@ void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& tr
 
     if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
+    }
+
+    if (ModelCommon* mc = ModelManager::GetInstance()->GetModelCommon()) {
+        if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
+        if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
+        if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
+    }
+
+    // 9: ShadowMap SRV
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = dxCommon_->GetShadowMapSrvHandleGPU();
+    if (shadowSrv.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
     }
 
     obj->primitive_->Draw();
@@ -746,6 +764,12 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
     commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
+
+    if (ModelCommon* mc = ModelManager::GetInstance()->GetModelCommon()) {
+        if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
+        if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
+        if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
+    }
     
     if (activeTexture.ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(2, activeTexture);

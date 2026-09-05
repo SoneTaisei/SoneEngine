@@ -12,6 +12,7 @@
 #endif
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/Blocks/FragileBlock.h"
+#include "Game2D/Blocks/GuardBlock.h"
 #include "BlockDesignPanel.h"
 #include "Renderer/Renderer.h"
 #include "Core/TimeManager.h"
@@ -104,6 +105,7 @@ void GameScene::Initialize() {
         mat.color = { 0.28f, 0.30f, 0.35f, 1.0f }; // スポットライトが映えやすい背景色
         mat.shininess = 20.0f;
         backgroundPlane_->Update();
+        LoadBackgroundConfig();
         Log("GameScene::Initialize: BackgroundPlane Initialized\n");
     }
 
@@ -440,6 +442,9 @@ void GameScene::Update(SceneManager *sceneManager) {
                 FragileBlock::SetCurrentChainWeight(player_->GetChainLength()); // 崩れる床の赤い予告用
                 chainManager_->Update(dt, map_.get());
             }
+
+            // 警備員の懐中電灯スポットライトを同期
+            UpdateGuardLights();
 
             // ゴール判定 → ステージクリア遷移の開始（宝石と鎖を遷移側へ渡し、黒い円で絞る）
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
@@ -847,6 +852,63 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         backgroundPlane_->DisplayImGui("Background Plane");
     }
 
+    // 灰色の奥壁（背景板ポリゴン）の調整UI（常にインスペクターから操作可能）
+    if (backgroundPlane_ && ImGui::CollapsingHeader("Background Wall (灰色の壁・背景板)")) {
+        EulerTransform transform = backgroundPlane_->GetTransform();
+        Material& mat = backgroundPlane_->GetMaterial();
+        bool changed = false;
+
+        ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【位置 (Translate)】");
+        if (ImGui::DragFloat("X (左右)##bgX", &transform.translate.x, 0.5f)) changed = true;
+        if (ImGui::DragFloat("Y (上下)##bgY", &transform.translate.y, 0.5f)) changed = true;
+        if (ImGui::DragFloat("Z (奥行き・手前/奥)##bgZ", &transform.translate.z, 0.05f)) changed = true;
+        ImGui::TextDisabled("※ Z=0がブロック・プレイヤー、Z>0が奥（初期値: Z=1.6）");
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【サイズ・回転】");
+        if (ImGui::DragFloat3("スケール (幅/厚み/高さ)##bgScale", &transform.scale.x, 1.0f, 1.0f, 2000.0f)) changed = true;
+        if (ImGui::DragFloat3("回転 (ラジアン)##bgRot", &transform.rotate.x, 0.01f)) changed = true;
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【見た目・色】");
+        if (ImGui::ColorEdit4("壁の色 (Color)##bgColor", &mat.color.x)) changed = true;
+        if (ImGui::DragFloat("光沢 (Shininess)##bgShine", &mat.shininess, 0.5f, 0.1f, 100.0f)) changed = true;
+        bool lightEnabled = (mat.lightingType == 1);
+        if (ImGui::Checkbox("ライティング有効 (光を当てる)##bgLight", &lightEnabled)) {
+            mat.lightingType = lightEnabled ? 1 : 0;
+            changed = true;
+        }
+
+        if (changed) {
+            backgroundPlane_->SetTranslation(transform.translate);
+            backgroundPlane_->SetRotation(transform.rotate);
+            backgroundPlane_->SetScale(transform.scale);
+            backgroundPlane_->Update();
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button("初期値に戻す##bgReset")) {
+            transform.translate = { 100.0f, 20.0f, 1.6f };
+            transform.rotate = { -std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f };
+            transform.scale = { 300.0f, 1.0f, 150.0f };
+            mat.color = { 0.28f, 0.30f, 0.35f, 1.0f };
+            mat.lightingType = 1;
+            mat.shininess = 20.0f;
+            backgroundPlane_->SetTranslation(transform.translate);
+            backgroundPlane_->SetRotation(transform.rotate);
+            backgroundPlane_->SetScale(transform.scale);
+            backgroundPlane_->Update();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("設定を保存 (Save)##bgSave")) {
+            SaveBackgroundConfig();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("設定を再読込 (Load)##bgLoad")) {
+            LoadBackgroundConfig();
+        }
+    }
+
     // 鎖の調整（この関数はエディタの「インスペクター」ウィンドウの中から呼ばれるので、別ウィンドウを開かず折りたたみで出す。
     // ImGui::Begin で別ウィンドウにするとドックの外に浮いてしまう）
     if (chainManager_ && ImGui::CollapsingHeader("Chain Settings")) {
@@ -975,21 +1037,87 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #endif
 }
 
+void GameScene::UpdateGuardLights() {
+    if (!modelCommon_ || !map_) return;
+
+    SpotLightGroup* slGroup = modelCommon_->GetSpotLightGroup();
+    if (!slGroup) return;
+
+    int32_t currentCount = 0;
+#ifdef USE_IMGUI
+    if (auto* editorMgr = EditorManager::GetInstance()) {
+        if (auto* lightEditor = editorMgr->GetLightEditor()) {
+            // LightEditor管理下の静的ライト数を基準とする
+            currentCount = static_cast<int32_t>((std::min)(lightEditor->GetSpotLights().size(), static_cast<size_t>(kMaxSpotLights)));
+        }
+    }
+#endif
+    if (currentCount == 0 && slGroup->spotLightCount > 0) {
+        // USE_IMGUI非定義時やLightEditorがない場合は既存のカウントを基準とする
+        currentCount = (std::min)(slGroup->spotLightCount, static_cast<int32_t>(kMaxSpotLights));
+    }
+
+    // 1. マップ上のアクティブな GuardBlock を収集し、代表シャドウキャスター（プレイヤーに最も近いもの）を決定
+    Vector3 playerPos = player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f};
+    GuardBlock* primaryGuard = nullptr;
+    float closestDistSq = 1e9f;
+
+    std::vector<GuardBlock*> activeGuards;
+    for (const auto& blockPtr : map_->GetUpdateBlocks()) {
+        if (!blockPtr || blockPtr->IsDestroyed()) continue;
+        if (auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get())) {
+            if (guard->IsLightActive()) {
+                activeGuards.push_back(guard);
+                if (guard->IsShadowEnabled()) {
+                    Vector3 guardPos = guard->GetLightPosition();
+                    float dx = guardPos.x - playerPos.x;
+                    float dy = guardPos.y - playerPos.y;
+                    float distSq = dx * dx + dy * dy;
+                    if (distSq < closestDistSq) {
+                        closestDistSq = distSq;
+                        primaryGuard = guard;
+                    }
+                }
+            }
+        }
+    }
+
+    // GuardBlock が影を生成する場合、LightEditor 側の全ライトの影を無効化（単一シャドウマップの競合防止）
+    if (primaryGuard) {
+        for (int32_t i = 0; i < currentCount; ++i) {
+            slGroup->spotLights[i].shadowMapIndex = -1;
+        }
+    }
+
+    // 各 GuardBlock のライトを追加
+    for (auto* guard : activeGuards) {
+        if (currentCount < static_cast<int32_t>(kMaxSpotLights)) {
+            SpotLight sl = guard->GetSpotLightData();
+            if (sl.enable != 0) {
+                // 代表シャドウキャスターのみ shadowMapIndex = 0、それ以外は -1
+                if (guard == primaryGuard) {
+                    sl.shadowMapIndex = 0;
+                } else {
+                    sl.shadowMapIndex = -1;
+                }
+                slGroup->spotLights[currentCount] = sl;
+                currentCount++;
+            }
+        }
+    }
+    slGroup->spotLightCount = currentCount;
+}
+
 void GameScene::RenderShadowPass() {
     Matrix4x4 lightVP = TransformFunctions::MakeIdentity4x4();
     bool hasLightVP = false;
 
-#ifdef USE_IMGUI
-    if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetLightEditor()) {
-        hasLightVP = EditorManager::GetInstance()->GetLightEditor()->GetPrimaryShadowViewProjection(&lightVP);
-    }
-#endif
-
-    if (!hasLightVP && modelCommon_) {
+    // 1. まず SpotLightGroup からシャドウが有効なライト（選定された GuardBlock 等）の viewProjection を取得
+    if (modelCommon_) {
         SpotLightGroup* slg = modelCommon_->GetSpotLightGroup();
         if (slg) {
             for (int32_t i = 0; i < slg->spotLightCount; ++i) {
-                if (slg->spotLights[i].shadowMapIndex >= 0) {
+                if (slg->spotLights[i].enable != 0 && slg->spotLights[i].shadowMapIndex >= 0) {
                     lightVP = slg->spotLights[i].viewProjection;
                     hasLightVP = true;
                     break;
@@ -997,6 +1125,13 @@ void GameScene::RenderShadowPass() {
             }
         }
     }
+
+    // 2. SpotLightGroup になければ、LightEditor の代表ライトを確認
+#ifdef USE_IMGUI
+    if (!hasLightVP && EditorManager::GetInstance() && EditorManager::GetInstance()->GetLightEditor()) {
+        hasLightVP = EditorManager::GetInstance()->GetLightEditor()->GetPrimaryShadowViewProjection(&lightVP);
+    }
+#endif
 
     if (!hasLightVP) {
         return;
@@ -1029,6 +1164,9 @@ void GameScene::RenderShadowPass() {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // 警備員の懐中電灯スポットライトを最新化
+    UpdateGuardLights();
+
     // 0. シャドウマップパス（スポットライト視点から深度描画）
     RenderShadowPass();
 
@@ -1256,6 +1394,99 @@ void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
                     lightEditor->DrawOverlay(viewProjectionMatrix, gameViewPos, gameViewSize, &playerAABB);
                 }
             }
+
+            // 4. 警備員の懐中電灯（VisionCone）の可視化オーバーレイ描画
+            if (map_) {
+                for (const auto& blockPtr : map_->GetUpdateBlocks()) {
+                    if (!blockPtr || blockPtr->IsDestroyed()) continue;
+                    if (auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get())) {
+                        VisionCone cone = guard->GetVisionCone();
+                        Vector3 eyePos = cone.eyePosition;
+                        Vector3 ndcEye = TransformFunctions::EulerTransform(eyePos, viewProjectionMatrix);
+                        if (ndcEye.z >= 0.0f && ndcEye.z <= 1.0f) {
+                            ImVec2 pEye(
+                                gameViewPos.x + (ndcEye.x + 1.0f) * 0.5f * gameViewSize.x,
+                                gameViewPos.y + (1.0f - ndcEye.y) * 0.5f * gameViewSize.y
+                            );
+
+                            Vector4 lightCol = guard->GetCurrentLightColor();
+                            if (!guard->IsLightActive()) {
+                                lightCol = { 0.4f, 0.4f, 0.4f, 0.5f };
+                            }
+                            ImU32 colLine = IM_COL32(
+                                static_cast<int>(lightCol.x * 255),
+                                static_cast<int>(lightCol.y * 255),
+                                static_cast<int>(lightCol.z * 255),
+                                200
+                            );
+                            ImU32 colFill = IM_COL32(
+                                static_cast<int>(lightCol.x * 255),
+                                static_cast<int>(lightCol.y * 255),
+                                static_cast<int>(lightCol.z * 255),
+                                35
+                            );
+
+                            float baseAngle = std::atan2(cone.forward.y, cone.forward.x);
+                            float halfAngle = cone.halfAngleRad;
+                            constexpr int kArcSegs = 16;
+                            std::vector<ImVec2> polyPoints;
+                            polyPoints.reserve(kArcSegs + 2);
+                            polyPoints.push_back(pEye);
+
+                            for (int seg = 0; seg <= kArcSegs; ++seg) {
+                                float t = static_cast<float>(seg) / static_cast<float>(kArcSegs);
+                                float ang = baseAngle - halfAngle + (halfAngle * 2.0f) * t;
+                                Vector3 rimPt = {
+                                    eyePos.x + std::cos(ang) * cone.distance,
+                                    eyePos.y + std::sin(ang) * cone.distance,
+                                    eyePos.z
+                                };
+                                Vector3 ndcRim = TransformFunctions::EulerTransform(rimPt, viewProjectionMatrix);
+                                ImVec2 pRim(
+                                    gameViewPos.x + (ndcRim.x + 1.0f) * 0.5f * gameViewSize.x,
+                                    gameViewPos.y + (1.0f - ndcRim.y) * 0.5f * gameViewSize.y
+                                );
+                                polyPoints.push_back(pRim);
+                            }
+
+                            if (polyPoints.size() >= 3) {
+                                drawList->AddConvexPolyFilled(polyPoints.data(), static_cast<int>(polyPoints.size()), colFill);
+                                drawList->AddPolyline(polyPoints.data(), static_cast<int>(polyPoints.size()), colLine, true, 1.5f);
+                            }
+
+                            // 光の最大到達範囲（外枠ガイド線）
+                            float lightDist = guard->GetLightDistance();
+                            if (lightDist > cone.distance + 0.1f) {
+                                std::vector<ImVec2> lightGuidePoints;
+                                lightGuidePoints.reserve(kArcSegs + 2);
+                                lightGuidePoints.push_back(pEye);
+                                for (int seg = 0; seg <= kArcSegs; ++seg) {
+                                    float t = static_cast<float>(seg) / static_cast<float>(kArcSegs);
+                                    float ang = baseAngle - halfAngle + (halfAngle * 2.0f) * t;
+                                    Vector3 rimPt = {
+                                        eyePos.x + std::cos(ang) * lightDist,
+                                        eyePos.y + std::sin(ang) * lightDist,
+                                        eyePos.z
+                                    };
+                                    Vector3 ndcRim = TransformFunctions::EulerTransform(rimPt, viewProjectionMatrix);
+                                    ImVec2 pRim(
+                                        gameViewPos.x + (ndcRim.x + 1.0f) * 0.5f * gameViewSize.x,
+                                        gameViewPos.y + (1.0f - ndcRim.y) * 0.5f * gameViewSize.y
+                                    );
+                                    lightGuidePoints.push_back(pRim);
+                                }
+                                ImU32 colGuide = IM_COL32(
+                                    static_cast<int>(lightCol.x * 255),
+                                    static_cast<int>(lightCol.y * 255),
+                                    static_cast<int>(lightCol.z * 255),
+                                    70
+                                );
+                                drawList->AddPolyline(lightGuidePoints.data(), static_cast<int>(lightGuidePoints.size()), colGuide, true, 1.0f);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 #endif
@@ -1321,6 +1552,7 @@ void GameScene::UpdateEditor() {
     // エディタ停止中もマップの変更（isDirty_時の再構築など）に追従させる
     if (map_) {
         map_->Update();
+        UpdateGuardLights();
     }
 
     // エディタ停止中もマップの変更に追従してプレイヤー座標を更新
@@ -1404,4 +1636,63 @@ void GameScene::UpdateIrisIn(const Vector3& playerPos, float dt) {
             dxCommon->SetCompositeIrisEnabled(false);
         }
     }
+}
+
+void GameScene::SaveBackgroundConfig() {
+    if (!backgroundPlane_) return;
+    EulerTransform t = backgroundPlane_->GetTransform();
+    Material& m = backgroundPlane_->GetMaterial();
+    nlohmann::json j;
+    j["translate"] = { t.translate.x, t.translate.y, t.translate.z };
+    j["rotate"] = { t.rotate.x, t.rotate.y, t.rotate.z };
+    j["scale"] = { t.scale.x, t.scale.y, t.scale.z };
+    j["color"] = { m.color.x, m.color.y, m.color.z, m.color.w };
+    j["shininess"] = m.shininess;
+    j["lightingType"] = m.lightingType;
+
+    try {
+        std::filesystem::path p("resources/json/shared/background_wall_config.json");
+        if (p.has_parent_path()) {
+            std::filesystem::create_directories(p.parent_path());
+        }
+        std::ofstream ofs(p);
+        if (ofs.is_open()) {
+            ofs << j.dump(4);
+        }
+    } catch (...) {}
+}
+
+void GameScene::LoadBackgroundConfig() {
+    if (!backgroundPlane_) return;
+    try {
+        std::ifstream ifs("resources/json/shared/background_wall_config.json");
+        if (!ifs.is_open()) return;
+        nlohmann::json j;
+        ifs >> j;
+        EulerTransform t = backgroundPlane_->GetTransform();
+        if (j.contains("translate") && j["translate"].is_array() && j["translate"].size() >= 3) {
+            t.translate = { j["translate"][0].get<float>(), j["translate"][1].get<float>(), j["translate"][2].get<float>() };
+        }
+        if (j.contains("rotate") && j["rotate"].is_array() && j["rotate"].size() >= 3) {
+            t.rotate = { j["rotate"][0].get<float>(), j["rotate"][1].get<float>(), j["rotate"][2].get<float>() };
+        }
+        if (j.contains("scale") && j["scale"].is_array() && j["scale"].size() >= 3) {
+            t.scale = { j["scale"][0].get<float>(), j["scale"][1].get<float>(), j["scale"][2].get<float>() };
+        }
+        backgroundPlane_->SetTranslation(t.translate);
+        backgroundPlane_->SetRotation(t.rotate);
+        backgroundPlane_->SetScale(t.scale);
+
+        auto& m = backgroundPlane_->GetMaterial();
+        if (j.contains("color") && j["color"].is_array() && j["color"].size() >= 4) {
+            m.color = { j["color"][0].get<float>(), j["color"][1].get<float>(), j["color"][2].get<float>(), j["color"][3].get<float>() };
+        }
+        if (j.contains("shininess") && j["shininess"].is_number()) {
+            m.shininess = j["shininess"].get<float>();
+        }
+        if (j.contains("lightingType") && j["lightingType"].is_number()) {
+            m.lightingType = j["lightingType"].get<int>();
+        }
+        backgroundPlane_->Update();
+    } catch (...) {}
 }

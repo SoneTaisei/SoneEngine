@@ -1,6 +1,7 @@
 #include "Graphics/TextureManager.h"
 #include "PlayerVisuals.h"
 #include "Core/TimeManager.h"
+#include "Renderer/Renderer.h"
 #include <random>
 #include <cmath>
 
@@ -368,6 +369,11 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
         }
     }
     
+    // シャドウパス実行中はパーティクル（砂埃、ダッシュリング、紙吹雪）を描画しない（不要かつシャドウパス破壊防止）
+    if (Renderer::GetInstance() && Renderer::GetInstance()->IsShadowPass()) {
+        return;
+    }
+
     if (dashRingPrimitive_) {
         dashRingPrimitive_->ResetGhostIndex();
         for (const auto& ring : dashRingParticles_) {

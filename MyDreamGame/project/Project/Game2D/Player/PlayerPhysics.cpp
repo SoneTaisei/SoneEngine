@@ -1,4 +1,4 @@
-﻿#include "PlayerPhysics.h"
+#include "PlayerPhysics.h"
 #include "Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BaseBlock.h"
@@ -484,13 +484,12 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
         }
     }
 
-    // 警備員の視界判定
+    // 警備員の懐中電灯（VisionCone）による視界・当たり判定（壁遮蔽対応）
     AABB2D playerAABB = GetAABB(state_, params_);
     for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
         if (!blockPtr || blockPtr->IsDestroyed()) continue;
         if (auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get())) {
-            AABB2D sight = guard->GetSightAABB();
-            if (CheckAABBCollision(playerAABB, sight)) {
+            if (guard->CheckPlayerInLight(state_.position_, params_.halfWidth_, playerAABB, mapChip)) {
                 guard->OnSpottedPlayer(player);
                 if (state_.isDead_) return;
             }

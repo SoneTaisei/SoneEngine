@@ -1,5 +1,6 @@
-﻿#pragma once
+#pragma once
 #include "BaseBlock.h"
+#include "Collision/CollisionFunctions.h"
 #include <vector>
 
 class Object3D;
@@ -45,8 +46,18 @@ public:
 
     void OnCollision(Player2D* player) override;
 
-    // 視界領域を取得（気絶・縛られ中は無効な領域を返す）
+    // 視界領域を取得（気絶・縛られ中は無効な領域を返す。VisionConeの内包AABB）
     AABB2D GetSightAABB() const;
+
+    // 懐中電灯（スポットライト）のVisionConeを取得
+    VisionCone GetVisionCone() const;
+
+    // プレイヤーが懐中電灯の光（VisionCone）に入っているか判定（壁による遮蔽判定を含む）
+    bool CheckPlayerInLight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const;
+
+    // GPU描画用スポットライトデータを取得
+    SpotLight GetSpotLightData() const;
+    bool IsLightActive() const;
 
     // プレイヤーが視界に入った時に呼ばれる
     void OnSpottedPlayer(Player2D* player);
@@ -78,15 +89,31 @@ public:
     /// <summary>今フレーム、プレイヤーが縛れる／取り戻せる位置にいる（ChainManager が毎フレーム立てる。表示を明るくする合図）</summary>
     void SetPrompt(bool on) { prompt_ = on; }
 
-    // エディタの重ね描き用（巡回範囲と初期の向き）
+    // エディタの重ね描き用（巡回範囲と初期の向き、懐中電灯）
     float GetStartX() const { return startX_; }
     float GetStartY() const { return startY_; }
     float GetMoveRange() const { return moveRange_; }
     int GetStartDirection() const { return startDirection_; }
+    float GetLightAngleDeg() const { return lightAngleDeg_; }
+    float GetSightLength() const { return sightLength_; }
+    float GetLightDistance() const { return lightDistance_; }
+    float GetCurrentFacing() const { return currentFacing_; }
+    Vector3 GetLightPosition() const;
+    Vector3 GetLightDirection() const;
+    Vector4 GetCurrentLightColor() const;
+
+    // シャドウマッピング
+    bool IsShadowEnabled() const { return enableShadow_; }
+    void SetShadowEnabled(bool enabled) { enableShadow_ = enabled; }
+    float GetShadowBias() const { return shadowBias_; }
+    void SetShadowBias(float bias) { shadowBias_ = bias; }
+    float GetShadowIntensity() const { return shadowIntensity_; }
+    void SetShadowIntensity(float intensity) { shadowIntensity_ = intensity; }
 
 private:
     void EnterStunned(float duration);
     void UpdateBoundRing();
+    void UpdateFlashlight(float dt);
 
     float startX_ = 0.0f;
     float startY_ = 0.0f;
@@ -101,11 +128,25 @@ private:
     float moveRange_ = 3.0f;      // 片道への最大移動距離
     float patrolSpeed_ = 1.5f;    // パトロール時の速度
     float alertSpeed_ = 3.0f;     // 警戒時の速度
-    float sightLength_ = 4.0f;    // 視界の長さ
-    float sightHeight_ = 1.0f;    // 視界の高さ
+    float sightLength_ = 5.0f;    // 視界（プレイヤー検知）の判定距離
+    float sightHeight_ = 1.0f;    // 互換用
     float maxAlertGauge_ = 1.5f;  // 見つかってからゲームオーバーになるまでの時間(秒)
     int startDirection_ = 1;      // 初期の向き(1:右, -1:左)
     float waitTimeAtEdge_ = 1.0f; // 端に到達した時の待機時間(秒)
+
+    // 懐中電灯（スポットライト）パラメータ
+    float lightDistance_ = 8.0f;     // スポットライトの照射距離（背景板や床面に届く描画光）
+    float lightAngleDeg_ = 34.0f;    // コーン半角（度数法）
+    float lightFalloffDeg_ = 22.0f;  // フォールオフ開始半角（度数法）
+    float lightIntensity_ = 8.5f;    // 光の強度
+    float lightDecay_ = 0.95f;       // 減衰率
+    Vector4 lightColor_ = {1.0f, 0.98f, 0.85f, 1.0f};      // 通常時の光色（鮮やかな温白色）
+    Vector4 alertLightColor_ = {1.0f, 0.25f, 0.15f, 1.0f};  // 警戒時の光色（赤色）
+
+    // シャドウマッピング（影の生成）設定
+    bool enableShadow_ = true;       // 影を生成するか
+    float shadowBias_ = 0.0005f;     // シャドウバイアス
+    float shadowIntensity_ = 1.0f;   // 影の濃さ (0.0~1.0)
 
     // 鎖で倒すパラメータ（テンプレートの properties で上書き可）
     float stunSpeed_ = 6.0f;      // 宝石がこの速さ以上で当たると気絶（チップ/秒）
@@ -138,10 +179,12 @@ private:
     float wobbleTime_ = 0.0f;
     bool prompt_ = false;         // 縛れる／取り戻せる合図（毎フレーム消費）
 
-    // 視界描画用
-    std::unique_ptr<GameObject> sightObject_;
+    // 懐中電灯ビジュアルパーツ（本体器具＋発光レンズ）
+    std::unique_ptr<GameObject> flashlightBodyObj_;
+    std::unique_ptr<GameObject> flashlightLensObj_;
 
     // 縛られている時に体を囲む鎖のリンク（表示専用）
     std::vector<std::unique_ptr<Object3D>> boundLinks_;
     ID3D12Device* device_ = nullptr;
+    Primitive* boxPrimitive_ = nullptr;
 };

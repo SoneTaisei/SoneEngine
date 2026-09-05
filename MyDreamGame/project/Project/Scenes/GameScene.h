@@ -93,6 +93,13 @@ private:
     // ステージクリア遷移で覆い切った後の行き先（いったんステージ選択へ戻る）
     void GoToNextStage(SceneManager* sceneManager);
 
+    // 灰色の背景壁（BackgroundPlane）の設定保存・読込
+    void SaveBackgroundConfig();
+    void LoadBackgroundConfig();
+
+    // 警備員の懐中電灯スポットライトをModelCommonに同期
+    void UpdateGuardLights();
+
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;
     float transitionAlpha_ = 0.0f; // 画面遷移演出用(フェードイン - アイリスインへ置き換え)
