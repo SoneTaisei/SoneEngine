@@ -533,8 +533,7 @@ namespace {
         std::map<std::pair<int, int>, FragileBlock*> byChip;
         for (const auto& block : map->GetUpdateBlocks()) {
             if (auto* f = dynamic_cast<FragileBlock*>(block.get())) {
-                if (f->IsDestroyed()) continue;
-                floors.push_back(f);
+                floors.push_back(f); // 崩れて消えた床も含める（消えた後も調整・復活できるように）
                 byChip[{f->GetChipX(), f->GetChipY()}] = f;
             }
         }
@@ -612,34 +611,6 @@ namespace {
         return changed;
     }
 
-    // ゲームビューのマウス位置をチップ座標に変換（エディタのキャンバスと同じ手順）。ゲームビューの外なら false
-    bool GameViewMouseToChip(MapChip2D* map, Camera* camera, int& outX, int& outY) {
-        auto* editor = EditorManager::GetInstance();
-        if (!editor || !camera || !map) return false;
-        if (!editor->IsGameViewHovered()) return false;
-        ImVec2 pos = EditorManager::GetGameViewPos();
-        ImVec2 size = EditorManager::GetGameViewSize();
-        if (size.x <= 1.0f || size.y <= 1.0f) return false;
-        ImVec2 m = ImGui::GetIO().MousePos;
-        float u = (m.x - pos.x) / size.x;
-        float v = (m.y - pos.y) / size.y;
-        if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return false;
-        float ndcX = u * 2.0f - 1.0f;
-        float ndcY = 1.0f - v * 2.0f;
-        Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-        Matrix4x4 inv = TransformFunctions::Inverse(viewProj);
-        Vector3 nearP = TransformFunctions::EulerTransform({ndcX, ndcY, 0.0f}, inv);
-        Vector3 farP = TransformFunctions::EulerTransform({ndcX, ndcY, 1.0f}, inv);
-        Vector3 dir = {farP.x - nearP.x, farP.y - nearP.y, farP.z - nearP.z};
-        if (std::abs(dir.z) < 1e-6f) return false;
-        float t = (0.0f - nearP.z) / dir.z;
-        float wx = nearP.x + dir.x * t;
-        float wy = nearP.y + dir.y * t;
-        outX = map->WorldToChipX(wx);
-        outY = map->WorldToChipY(wy);
-        return true;
-    }
-
     void DrawFragileFloorImGui(MapChip2D* map, Camera* camera, const std::string& stagePath) {
         static bool highlightAll = false;
         static int selectedGroupKey = -1;   // 橋ごとの選択
@@ -649,12 +620,22 @@ namespace {
         static int previewCount = 3;
         static bool placementEnabled = false;
         static int placementLimit = 3;
-        static std::string lastSaveMessage;
-        static bool unsaved = false;
 
         // --- 見つける ---
         if (ImGui::Checkbox("崩れる床を全部点滅させる", &highlightAll)) {
             FragileBlock::SetHighlightAll(highlightAll);
+        }
+        static bool debugNoBreak = FragileBlock::IsDebugNoBreak();
+        if (ImGui::Checkbox("デバッグ中は崩れても消えない（震えた後に元に戻る）", &debugNoBreak)) {
+            FragileBlock::SetDebugNoBreak(debugNoBreak);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("消えた床を全部復活")) {
+            for (const auto& block : map->GetUpdateBlocks()) {
+                if (auto* f = dynamic_cast<FragileBlock*>(block.get())) {
+                    if (f->IsDestroyed()) f->Reset();
+                }
+            }
         }
         ImGui::TextDisabled("床の点の数 = 通れる鎖の上限本数（この本数までは乗れる、超えると震えて落ちる）");
 
@@ -696,13 +677,14 @@ namespace {
         auto groups = BuildFragileGroups(map);
         FragileBlock* hovered = nullptr;
         int mx = 0, my = 0;
-        bool debugCam = EditorManager::GetInstance() && EditorManager::GetInstance()->UseDebugCamera();
-        if (!debugCam && GameViewMouseToChip(map, camera, mx, my)) {
+        bool debugCam = false;
+        if (BlockDesignPanel::MouseToChip(map, camera, mx, my)) {
             hovered = dynamic_cast<FragileBlock*>(map->GetBlock(mx, my));
-            if (hovered && hovered->IsDestroyed()) hovered = nullptr;
             if (hovered) {
                 hovered->SetHovered(true);
-                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                bool selectNow = BlockDesignPanel::CanClickSelect() ? ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                                                                   : (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false));
+                if (selectNow) {
                     int key = FragileKey(hovered);
                     for (const auto& g : groups) {
                         for (auto* f : g.members) {
@@ -717,9 +699,7 @@ namespace {
                 }
             }
         }
-        if (debugCam) {
-            ImGui::TextDisabled("ゲームビューのクリック選択はデバッグカメラを切ると使える");
-        } else if (hovered) {
+        if (hovered) {
             ImGui::Text("ゲームビュー: 崩れる床 (%d, %d) にマウス。クリックでその橋を選ぶ", hovered->GetChipX(), hovered->GetChipY());
         } else {
             ImGui::TextDisabled("ゲームビューで床にマウスを乗せると水色に点滅、クリックでその橋を選ぶ");
@@ -759,6 +739,16 @@ namespace {
                 scrollToSelected = false;
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("押すとこの橋が白く点滅する");
+            {
+                int destroyedCount = 0;
+                for (auto* f : g.members) if (f->IsDestroyed()) ++destroyedCount;
+                if (destroyedCount > 0) {
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "%d 枚消えている", destroyedCount);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("復活")) { for (auto* f : g.members) if (f->IsDestroyed()) f->Reset(); }
+                }
+            }
             ImGui::SameLine();
             ImGui::Text("通れる上限");
             ImGui::SameLine();
@@ -767,7 +757,7 @@ namespace {
                 int v = g.minLimit;
                 if (FragileLimitInput("group", v, mixed)) {
                     for (auto* f : g.members) ApplyFragileLimit(map, f, v);
-                    unsaved = true;
+                    BlockDesignPanel::MarkUnsaved();
                 }
             }
             ImGui::SameLine();
@@ -778,7 +768,7 @@ namespace {
             if (!anyOverride) ImGui::BeginDisabled();
             if (ImGui::SmallButton("パレットの値に戻す")) {
                 for (auto* f : g.members) ResetFragileLimit(map, f);
-                unsaved = true;
+                BlockDesignPanel::MarkUnsaved();
             }
             if (!anyOverride) ImGui::EndDisabled();
 
@@ -799,14 +789,14 @@ namespace {
                         int v = f->GetPassLimit();
                         if (FragileLimitInput("one", v, false)) {
                             ApplyFragileLimit(map, f, v);
-                            unsaved = true;
+                            BlockDesignPanel::MarkUnsaved();
                         }
                         ImGui::SameLine();
                         bool ov = (map->GetBlockOverride(f->GetChipX(), f->GetChipY()) != nullptr);
                         if (!ov) ImGui::BeginDisabled();
                         if (ImGui::SmallButton("戻す")) {
                             ResetFragileLimit(map, f);
-                            unsaved = true;
+                            BlockDesignPanel::MarkUnsaved();
                         }
                         if (!ov) ImGui::EndDisabled();
                         ImGui::PopID();
@@ -819,19 +809,7 @@ namespace {
         }
 
         ImGui::Separator();
-        // 保存先はこのシーンが読み込んだステージファイル。エディタで別のステージに切り替えていると食い違うので、押した時だけ保存する
-        if (ImGui::Button("ステージファイルに保存 (Save)")) {
-            bool ok = map->SaveToFile(stagePath);
-            lastSaveMessage = ok ? "保存しました" : "保存に失敗しました";
-            if (ok) unsaved = false;
-        }
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", stagePath.c_str());
-        if (unsaved) {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "未保存の変更があります（エディタ側の自動保存でも書き込まれます）");
-        } else if (!lastSaveMessage.empty()) {
-            ImGui::TextDisabled("%s", lastSaveMessage.c_str());
-        }
+        BlockDesignPanel::DrawSaveRow(map, stagePath, "fragile");
     }
 }
 #endif
@@ -861,6 +839,9 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     // ブロック設計：ゲームビューへの重ね描きとマウス選択は毎フレーム、パネルは開いている時だけ
     if (map_) {
         BlockDesignPanel::DrawOverlays(map_.get(), gameCamera_);
+        if (ImGui::CollapsingHeader("Switch & Door (スイッチとドアの連動)")) {
+            BlockDesignPanel::DrawLinksPanel(map_.get(), gameCamera_, s_TargetMapFilePath);
+        }
         if (ImGui::CollapsingHeader("Block Design (ブロック設計)")) {
             BlockDesignPanel::Draw(map_.get(), gameCamera_, s_TargetMapFilePath);
         }
@@ -976,6 +957,9 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // ブロック設計パネルの重ね描きは、この描画に使われた行列で位置を合わせる（マップチップ画面の専用カメラにも対応）
+    BlockDesignPanel::SetRenderViewProjection(viewProjectionMatrix);
+
     // 1. Skyboxの描画
     if (skybox_) {
         skybox_->Draw();

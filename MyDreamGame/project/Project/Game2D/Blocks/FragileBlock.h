@@ -44,6 +44,9 @@ public:
     static bool IsHighlightAll() { return s_highlightAll; }
     /// <summary>今プレイヤーが持っている鎖の本数（GameScene が毎フレーム渡す。赤い予告表示用。-1 = 不明）</summary>
     static void SetCurrentChainWeight(int units) { s_currentChainWeight = units; }
+    /// <summary>デバッグ用：崩れても消えず、震えた後に元に戻る（何度でも試せる。保存には関係しない）</summary>
+    static void SetDebugNoBreak(bool on) { s_debugNoBreak = on; }
+    static bool IsDebugNoBreak() { return s_debugNoBreak; }
     /// <summary>エディタの「試し本数」。0 以上なら赤い予告をこの本数で判定する（-1 = 実際の本数を使う）</summary>
     static void SetPreviewChainWeight(int units) { s_previewChainWeight = units; }
     static int GetPreviewChainWeight() { return s_previewChainWeight; }
@@ -80,4 +83,5 @@ private:
     static int s_currentChainWeight;
     static int s_previewChainWeight;
     static bool s_highlightAll;
+    static bool s_debugNoBreak;
 };
