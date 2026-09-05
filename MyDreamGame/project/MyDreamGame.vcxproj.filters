@@ -250,6 +250,9 @@
     <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp">
       <Filter>Project\Game2D\Chain</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Security\AlertSystem.cpp">
+      <Filter>Project\Game2D\Security</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Effect\TransitionDirector.cpp">
       <Filter>Application\Transition</Filter>
     </ClCompile>
@@ -572,6 +575,9 @@
     <ClInclude Include="Project\Game2D\Chain\ChainManager.h">
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Security\AlertSystem.h">
+      <Filter>Project\Game2D\Security</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Effect\TransitionDirector.h">
       <Filter>Application\Transition</Filter>
     </ClInclude>
@@ -724,6 +730,9 @@
     </Filter>
     <Filter Include="Project\Game2D\Physics">
       <UniqueIdentifier>{140e8cb0-1ff6-45a4-921f-783e8eee966b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Security">
+      <UniqueIdentifier>{5c1f0a7e-3b2d-4e8f-9a61-7d2c4b9e1f33}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

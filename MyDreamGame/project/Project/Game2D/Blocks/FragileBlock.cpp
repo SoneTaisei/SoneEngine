@@ -1,5 +1,6 @@
 #include "FragileBlock.h"
 #include "Game2D/Player/Player2D.h"
+#include "Game2D/Security/AlertSystem.h"
 #include "Editor/Replay/ReplayManager.h"
 #include <algorithm>
 #include <cmath>
@@ -206,8 +207,11 @@ void FragileBlock::Update() {
                 Reset();
                 return;
             }
-            // 落ちて消える
+            // 落ちて消える（近くに警備員がいれば騒音）
             isDestroyed_ = true;
+            if (auto* alert = AlertSystem::Current()) {
+                alert->AddNoise({startX_, startY_, 0.0f}, map_, "騒音");
+            }
             return;
         }
         // 震える演出：ランダムに揺れ（時間が経つほど激しく）、だんだん赤くなる。この間はまだ乗れる

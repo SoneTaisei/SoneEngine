@@ -1,6 +1,7 @@
 #pragma once
 #include "BaseBlock.h"
 #include "Collision/CollisionFunctions.h"
+#include <algorithm>
 #include <vector>
 
 class Object3D;
@@ -19,10 +20,15 @@ public:
     enum class State {
         Patrol,
         Wait,
-        Alert,
-        Stunned, // 気絶（殴られた／転んだ／縛りを解かれた）
-        Bound,   // 縛られている（鎖を預かっている）
+        Alert,       // 追跡（「！」）：最後に見た場所へ走る。見失って loseSightTime_ 経つと調べに移る
+        Stunned,     // 気絶（殴られた／転んだ／縛りを解かれた）
+        Bound,       // 縛られている（鎖を預かっている）
+        Suspicious,  // 疑う（「？」）：チラ見えで立ち止まって向く。すぐ見失えば巡回に戻る
+        Investigate, // 調べる（「？」）：最後に見た場所まで歩き、少し見回してから巡回に戻る
     };
+
+    /// <summary>頭上の合図（HUD が描く）</summary>
+    enum class Mark { None, Question, Exclamation };
 
     GuardBlock(MapChip2D* map, int chipX, int chipY);
     ~GuardBlock() override;
@@ -67,7 +73,19 @@ public:
     /// <summary>気絶か縛られ中（視界なし・触れても安全・動かない）</summary>
     bool IsIncapacitated() const { return state_ == State::Stunned || state_ == State::Bound; }
     /// <summary>移動中か（転ばせるは動いている相手にだけ効く）</summary>
-    bool IsMovingState() const { return state_ == State::Patrol || state_ == State::Alert; }
+    bool IsMovingState() const { return state_ == State::Patrol || state_ == State::Alert || state_ == State::Investigate; }
+    /// <summary>頭上の合図（疑う・調べる = ？、追跡 = ！）</summary>
+    Mark GetMark() const {
+        if (state_ == State::Alert) return Mark::Exclamation;
+        if (state_ == State::Suspicious || state_ == State::Investigate) return Mark::Question;
+        return Mark::None;
+    }
+    /// <summary>頭上の合図を出す位置（頭の少し上）</summary>
+    Vector3 GetMarkPosition() const;
+    /// <summary>今フレーム視界に入っているか（HUD の「見られている」用）</summary>
+    bool IsPlayerInSight() const { return isPlayerInSightThisFrame_; }
+    /// <summary>追跡中に見られ続けている割合 0〜1（1 でもう1回「発見」）</summary>
+    float GetExposureRatio() const { return (exposureTime_ > 0.0f) ? std::clamp(exposure_ / exposureTime_, 0.0f, 1.0f) : 0.0f; }
 
     /// <summary>
     /// 宝石がぶつかった。速さが stunSpeed_ 以上なら気絶して true（呼び出し側は宝石の速度を弱める）。
@@ -88,6 +106,12 @@ public:
     AABB2D GetFootAABB() const;
     /// <summary>今フレーム、プレイヤーが縛れる／取り戻せる位置にいる（ChainManager が毎フレーム立てる。表示を明るくする合図）</summary>
     void SetPrompt(bool on) { prompt_ = on; }
+    /// <summary>見られゲージを 0 に戻す（復活直後の猶予用。追跡中なら巡回に戻る）</summary>
+    void ResetAlertGauge() {
+        alertGauge_ = 0.0f;
+        isPlayerInSightThisFrame_ = false;
+        if (state_ == State::Alert) state_ = State::Patrol;
+    }
 
     // エディタの重ね描き用（巡回範囲と初期の向き、懐中電灯）
     float GetStartX() const { return startX_; }
@@ -163,6 +187,12 @@ private:
     float unbindStun_ = 1.5f;     // 縛りを解かれた後の気絶（1秒の猶予の後）
     bool bindFromBehind_ = true;  // 背後から縛れる
 
+    // 見つかるまでの3段階
+    float investigateSight_ = 0.5f; // 見られていた時間がこれ以上なら、見失った後に最後の場所を調べに行く（未満なら巡回に戻るだけ）
+    float loseSightTime_ = 3.0f;    // 追跡中に見失ってから諦めるまでの秒数
+    float lookTime_ = 1.5f;         // 最後に見た場所で見回す秒数
+    float exposureTime_ = 2.5f;     // 追跡中に見られ続けてこの秒数で、もう1回「発見」扱い（居座れない）
+
     // 状態
     State state_ = State::Patrol;
     int direction_ = 1;           // 1: 右, -1: 左
@@ -178,6 +208,12 @@ private:
     float tumble_ = 0.0f;         // 倒れ角（表示用。0=立ち、±1=横倒し）
     float wobbleTime_ = 0.0f;
     bool prompt_ = false;         // 縛れる／取り戻せる合図（毎フレーム消費）
+    float lastSeenX_ = 0.0f;      // 最後にプレイヤーを見た X
+    float seenTime_ = 0.0f;       // 今回の視認で見えていた合計秒（疑う→調べるの判定）
+    float lostTimer_ = 0.0f;      // 追跡中に見失ってからの秒数
+    float lookTimer_ = 0.0f;      // 調べる：見回しの残り秒（到着後）
+    bool spottedReported_ = false; // 今回の追跡で発見の加点を済ませた
+    float exposure_ = 0.0f;        // 追跡中に見られ続けている秒数（HUD の「！」の下のゲージ）
 
     // 懐中電灯ビジュアルパーツ（本体器具＋発光レンズ）
     std::unique_ptr<GameObject> flashlightBodyObj_;

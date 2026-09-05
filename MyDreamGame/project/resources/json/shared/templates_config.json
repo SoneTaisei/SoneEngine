@@ -223,6 +223,7 @@
             "properties": {
                 "alertSpeed": 3.0,
                 "bindFromBehind": true,
+                "exposureTime": 2.5,
                 "hitCooldown": 0.3,
                 "lightAngleDeg": 34.0,
                 "lightDecay": 0.95,
@@ -232,6 +233,9 @@
                 "enableShadow": true,
                 "shadowBias": 0.0005,
                 "shadowIntensity": 1.0,
+                "investigateSight": 0.5,
+                "lookTime": 1.5,
+                "loseSightTime": 3.0,
                 "maxAlertGauge": 1.5,
                 "moveRange": 3.0,
                 "patrolSpeed": 1.5,

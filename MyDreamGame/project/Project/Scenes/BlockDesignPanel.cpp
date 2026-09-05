@@ -153,6 +153,10 @@ namespace {
         {"tripFootHeight", "足元判定の高さ"},
         {"unbindStun", "縛りを解かれた後の気絶秒数"},
         {"bindFromBehind", "背後から縛れる"},
+        {"investigateSight", "調べに行く見られ秒数（未満なら巡回に戻る）"},
+        {"loseSightTime", "追跡を諦めるまでの秒数"},
+        {"lookTime", "最後の場所で見回す秒数"},
+        {"exposureTime", "追跡中に見られ続けてもう1回発見になる秒数"},
     };
 
     std::string LabelFor(const std::string& key) {

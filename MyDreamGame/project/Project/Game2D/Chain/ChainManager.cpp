@@ -1,4 +1,5 @@
 ﻿#include "ChainManager.h"
+#include "Game2D/Security/AlertSystem.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
 #include <cmath>
@@ -297,6 +298,24 @@ void ChainManager::Update(float dt, MapChip2D* map) {
 
     // 鎖が乗っているブロックへ通知（スイッチは鎖でも押せる）
     NotifyBlockContacts(map);
+
+    // 騒音：宝石が速いまま急に止まった（着地・壁に当たった）ら、近くの警備員が反応する
+    {
+        auto checkNoise = [&](Chain2D* chain, float& prevSpeed) {
+            if (!chain) { prevSpeed = 0.0f; return; }
+            Vector3 v = chain->GetEndVelocity();
+            float speed = std::sqrt(v.x * v.x + v.y * v.y);
+            if (auto* alert = AlertSystem::Current()) {
+                float threshold = alert->GetParams().noiseSpeed_;
+                if (prevSpeed >= threshold && speed < threshold * 0.35f) {
+                    alert->AddNoise(chain->GetEndPosition(), map, "騒音");
+                }
+            }
+            prevSpeed = speed;
+        };
+        checkNoise(playerChain_.get(), prevGemSpeed_);
+        checkNoise(tornChain_.get(), prevTornGemSpeed_);
+    }
 
     // テザー（鎖が張ったらプレイヤーが宝石に引かれる。重さの手応え）
     UpdateTether();

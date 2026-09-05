@@ -34,6 +34,7 @@
 #include "Input/GamepadInput.h"
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
+bool GameScene::s_QuickRestart = false;
 
 void GameScene::OnEnter(SceneManager* sceneManager) {
     // StageSelectSceneから選択されたステージのパスを受け取る
@@ -65,6 +66,10 @@ GameScene::~GameScene() {
     TransitionDirector::GetInstance()->OnSceneDestroyed(chainManager_.get());
     // リプレイのオブジェクト記録対象から外す（次シーンのマップと混ざらないようにする）
     ReplayManager::GetInstance()->UnregisterObjectProvider(map_.get());
+    if (alert_) {
+        ReplayManager::GetInstance()->UnregisterObjectProvider(alert_.get());
+        alert_->SetAsCurrent(false);
+    }
 }
 
 void GameScene::GoToNextStage(SceneManager* sceneManager) {
@@ -139,6 +144,13 @@ void GameScene::Initialize() {
     // 動く床・扉などの状態をリプレイに記録・復元できるように登録する
     ReplayManager::GetInstance()->RegisterObjectProvider(map_.get());
     Log("GameScene::Initialize: Map Initialized\n");
+
+    // 5.5. 警戒度（ステージ開始で 0。警備員・鎖・崩れる床は AlertSystem::Current() 経由で事象を足す）
+    alert_ = std::make_unique<AlertSystem>();
+    alert_->LoadParams();
+    alert_->Reset();
+    alert_->SetAsCurrent(true);
+    ReplayManager::GetInstance()->RegisterObjectProvider(alert_.get());
 
     // 6. プレイヤーの生成と初期化
     playerObj_ = std::make_unique<GameObject>("Player");
@@ -273,9 +285,30 @@ void GameScene::Update(SceneManager *sceneManager) {
     if (gameState_ == GameState::StartReady) {
         stateTimer_ += dt;
         float startReadyTime = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyTime", 2.0f);
+        if (s_QuickRestart) {
+            // ミス直後のやり直しは待たせない（テンポ優先）
+            startReadyTime = ParameterManager::GetInstance()->GetValue("GameScene", "quickRestartReadyTime", 0.3f);
+        }
         if (stateTimer_ > startReadyTime) {
             gameState_ = GameState::Playing;
             stateTimer_ = 0.0f;
+            s_QuickRestart = false;
+        }
+    } else if (gameState_ == GameState::Captured) {
+        // 捕獲演出（赤フラッシュ → 「捕獲」 → 暗転）の後、ステージ選択へ
+        stateTimer_ += dt;
+        // 捕獲（見つかった回数）は演出を見せる。普通のミスは即やり直し（短い赤フラッシュだけ）
+        float captureTime = capturedByMiss_
+            ? (ParameterManager::GetInstance()->GetValue("Alert", "missPlayTime_", 0.6f) +
+               ParameterManager::GetInstance()->GetValue("Alert", "missRestartTime_", 0.25f))
+            : ParameterManager::GetInstance()->GetValue("Alert", "captureSceneTime_", 2.8f);
+        if (stateTimer_ >= captureTime) {
+            // 失敗：同じステージを最初からやり直す（ステージ選択でこのステージを選んだ時と同じ）
+            TransitionDirector::GetInstance()->Abort();
+            s_QuickRestart = capturedByMiss_;
+            Log("GameScene: captured -> restart same stage\n");
+            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+            return;
         }
     } else if (gameState_ == GameState::Clear) {
         stateTimer_ += dt;
@@ -342,6 +375,14 @@ void GameScene::Update(SceneManager *sceneManager) {
             // プレイ開始時は鎖と個数を初期状態に戻す（毎回同じ初期状態から始めてリプレイ再現性を保つ）
             if (chainManager_) {
                 chainManager_->ResetAll();
+            }
+            // 警戒度もステージ開始として 0 に（死亡のリスポーンでは戻さない）
+            if (alert_) {
+                alert_->Reset();
+            }
+            if (gameState_ == GameState::Captured) {
+                gameState_ = GameState::StartReady;
+                stateTimer_ = 0.0f;
             }
         }
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
@@ -520,12 +561,68 @@ void GameScene::Update(SceneManager *sceneManager) {
                 ReplayManager::GetInstance()->RestoreObjectsAtFrame(replayFrameForThisTick);
             }
 
+            // 警戒度は Playing 中だけ動く（StartReady / Clear / 捕獲後は止める）。再生中は記録から復元されるので進めない
+            if (alert_) {
+                bool alertActive = (gameState_ == GameState::Playing) && !player_->IsGoal();
+                alert_->SetActive(alertActive);
+                if (!ReplayManager::GetInstance()->IsPlaying()) {
+                    alert_->Update(dt);
+                }
+                // 捕獲は死亡より優先（同フレームならステージ失敗の方が重い）
+                if (alertActive && alert_->IsCaptured()) {
+                    gameState_ = GameState::Captured;
+                    capturedByMiss_ = false;
+                    stateTimer_ = 0.0f;
+                    alert_->SetActive(false);
+                    if (ReplayManager::GetInstance()->IsRecording()) {
+                        ReplayManager::GetInstance()->StopRecord();
+                    }
+                    Log("GameScene: captured (alert full)\n");
+                } else if (gameState_ == GameState::Playing && player_->IsDead()) {
+                    // 普通のミス（接触・落下・危険ブロック）も部屋リスポーンではなく、捕獲と同じく最初からやり直し
+                    gameState_ = GameState::Captured;
+                    capturedByMiss_ = true;
+                    stateTimer_ = 0.0f;
+                    alert_->SetActive(false);
+                    if (ReplayManager::GetInstance()->IsRecording()) {
+                        ReplayManager::GetInstance()->StopRecord();
+                    }
+                    Log("GameScene: miss -> restart same stage\n");
+                }
+            }
+            bool worldFrozen = (gameState_ == GameState::Captured);
+            bool playerFrozen = worldFrozen;
+            if (gameState_ == GameState::Captured && capturedByMiss_) {
+                // 普通のミス：すぐ止めずに少しの間そのまま動かす（鎖と宝石が落ち、警備員が動き、カメラが追う）。
+                // プレイヤー自身は死亡アニメの間だけ動かし、リスポーンで飛ぶ前にその場で止める
+                float playTime = ParameterManager::GetInstance()->GetValue("Alert", "missPlayTime_", 0.6f);
+                if (stateTimer_ < playTime) {
+                    worldFrozen = false;
+                    playerFrozen = (stateTimer_ >= player_->GetParams().deathDuration_ - 0.02f);
+                }
+            }
+
             // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
-            if (map_) {
+            if (map_ && !worldFrozen) {
                 map_->Update();
             }
 
-            player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
+            if (!playerFrozen) {
+                player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
+            }
+
+            // 復活直後の猶予：時間経過と加算を止め、警備員の見られゲージを 0 に戻す（復活位置で見られて即 +25 を防ぐ）
+            if (alert_) {
+                alert_->SetPlayerPosition(player_->GetPosition());
+                bool dead = player_->IsDead();
+                if (playerWasDead_ && !dead && map_) {
+                    alert_->StartGrace(alert_->GetParams().respawnGrace_);
+                    for (const auto& block : map_->GetUpdateBlocks()) {
+                        if (auto* guard = dynamic_cast<GuardBlock*>(block.get())) guard->ResetAlertGauge();
+                    }
+                }
+                playerWasDead_ = dead;
+            }
 
             // プレイヤーと危険な光（スポットライト）の当たり判定
             if (gameState_ == GameState::Playing && !player_->IsDead() && !player_->IsGoal()) {
@@ -545,7 +642,7 @@ void GameScene::Update(SceneManager *sceneManager) {
 
 
             // 鎖の更新（K入力 → 個数照合 → 物理。鎖がプレイヤーに反応するため、プレイヤー位置確定後に行う）
-            if (chainManager_) {
+            if (chainManager_ && !worldFrozen) {
                 chainManager_->HandleInput();
                 chainManager_->Reconcile();
                 FragileBlock::SetCurrentChainWeight(player_->GetChainLength()); // 崩れる床の赤い予告用
@@ -928,6 +1025,149 @@ namespace {
 }
 #endif
 
+void GameScene::DrawAlertHud(const ImVec2& viewPos, float viewWidth, float viewHeight) {
+#ifdef USE_IMGUI
+    (void)viewHeight;
+    if (!alert_) return;
+    // StartReady の間も出す（0 のバーが見えていた方が「これが上がる」と分かる）
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    float ratio = std::clamp(alert_->GetRatio(), 0.0f, 1.0f);
+    float pulse = alert_->GetPulse();
+
+    const float barW = 240.0f;
+    const float barH = 14.0f + 6.0f * pulse;
+    const float margin = 16.0f;
+    ImVec2 p0(viewPos.x + viewWidth - margin - barW, viewPos.y + margin);
+    ImVec2 p1(p0.x + barW, p0.y + barH);
+
+    // 色：緑 → 黄 → 赤（連続）
+    auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+    float r, g, b;
+    if (ratio < 0.5f) {
+        float t = ratio / 0.5f;
+        r = lerp(0.25f, 0.95f, t); g = lerp(0.85f, 0.85f, t); b = lerp(0.35f, 0.25f, t);
+    } else {
+        float t = (ratio - 0.5f) / 0.5f;
+        r = lerp(0.95f, 0.92f, t); g = lerp(0.85f, 0.20f, t); b = lerp(0.25f, 0.15f, t);
+    }
+    ImU32 fill = IM_COL32(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255), 235);
+
+    // 下地・バー・枠
+    dl->AddRectFilled(ImVec2(p0.x - 2.0f, p0.y - 2.0f), ImVec2(p1.x + 2.0f, p1.y + 2.0f), IM_COL32(0, 0, 0, 150), 4.0f);
+    dl->AddRectFilled(p0, ImVec2(p0.x + barW * ratio, p1.y), fill, 3.0f);
+    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 200), 3.0f, 0, 1.5f);
+    // 見られている：枠が黄色く点滅して「見られている」（+25 が来る前の猶予を猶予として見せる）
+    if (alert_->IsBeingSeen()) {
+        float blink = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 16.0));
+        dl->AddRect(ImVec2(p0.x - 3.0f, p0.y - 3.0f), ImVec2(p1.x + 3.0f, p1.y + 3.0f), IM_COL32(255, 220, 60, static_cast<int>(230 * blink)), 5.0f, 0, 2.5f);
+        const char* seenText = "見られている";
+        ImVec2 st = ImGui::CalcTextSize(seenText);
+        dl->AddText(ImVec2(p1.x - st.x, p0.y - st.y - 4.0f), IM_COL32(255, 230, 80, 255), seenText);
+    } else if (ratio > 0.8f) {
+        // 満タン付近は枠が赤く点滅
+        float blink = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 10.0));
+        dl->AddRect(ImVec2(p0.x - 3.0f, p0.y - 3.0f), ImVec2(p1.x + 3.0f, p1.y + 3.0f), IM_COL32(255, 60, 60, static_cast<int>(200 * blink)), 5.0f, 0, 2.0f);
+    }
+    // 復活直後の猶予：バーを青く覆う
+    if (alert_->IsInGrace()) {
+        dl->AddRectFilled(p0, p1, IM_COL32(120, 180, 255, 90), 3.0f);
+        const char* graceText = "猶予";
+        ImVec2 gt = ImGui::CalcTextSize(graceText);
+        dl->AddText(ImVec2(p0.x + (barW - gt.x) * 0.5f, p0.y + (barH - gt.y) * 0.5f), IM_COL32(220, 240, 255, 255), graceText);
+    }
+    // 見出し（数字は出さない）
+    ImVec2 ts = ImGui::CalcTextSize("ALERT");
+    dl->AddText(ImVec2(p0.x - ts.x - 8.0f, p0.y + (barH - ts.y) * 0.5f), IM_COL32(255, 255, 255, 220), "ALERT");
+
+    // 加点のポップアップ：バーの下から上へ浮かんで消える
+    float y = p1.y + 6.0f;
+    for (const auto& e : alert_->GetEvents()) {
+        float t = std::clamp(e.age / 1.6f, 0.0f, 1.0f);
+        float alpha = (t < 0.7f) ? 1.0f : (1.0f - (t - 0.7f) / 0.3f);
+        float rise = 14.0f * t;
+        ImVec2 tsz = ImGui::CalcTextSize(e.text.c_str());
+        ImVec2 tp(p1.x - tsz.x, y - rise);
+        dl->AddText(ImVec2(tp.x + 1.0f, tp.y + 1.0f), IM_COL32(0, 0, 0, static_cast<int>(200 * alpha)), e.text.c_str());
+        ImU32 textCol = e.good ? IM_COL32(150, 255, 170, static_cast<int>(255 * alpha)) : IM_COL32(255, 230, 120, static_cast<int>(255 * alpha));
+        dl->AddText(tp, textCol, e.text.c_str());
+        y += tsz.y + 2.0f;
+    }
+#else
+    (void)viewPos; (void)viewWidth; (void)viewHeight;
+#endif
+}
+
+void GameScene::DrawCaptureOverlay(const ImVec2& viewPos, float viewWidth, float viewHeight) {
+#ifdef USE_IMGUI
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    ImVec2 p0 = viewPos;
+    ImVec2 p1(viewPos.x + viewWidth, viewPos.y + viewHeight);
+    float t = stateTimer_;
+
+    if (capturedByMiss_) {
+        // 普通のミス：少しの間そのまま動かした後、一瞬の赤フラッシュだけで即やり直し（文字も暗転も出さない）
+        float playTime = ParameterManager::GetInstance()->GetValue("Alert", "missPlayTime_", 0.6f);
+        float missTime = ParameterManager::GetInstance()->GetValue("Alert", "missRestartTime_", 0.25f);
+        if (t < playTime) {
+            // 動いている間は画面の縁だけ薄く赤くして「ミスした」を伝える
+            float edge = std::clamp(t / 0.1f, 0.0f, 1.0f);
+            dl->AddRect(ImVec2(p0.x + 3.0f, p0.y + 3.0f), ImVec2(p1.x - 3.0f, p1.y - 3.0f), IM_COL32(255, 40, 40, static_cast<int>(200 * edge)), 0.0f, 0, 6.0f);
+            return;
+        }
+        float k = (missTime > 0.0f) ? std::clamp((t - playTime) / missTime, 0.0f, 1.0f) : 1.0f;
+        float flash = 0.7f * (1.0f - k) + 0.3f * k; // 消える直前まで赤く、そのまま読み直しへ
+        dl->AddRectFilled(p0, p1, IM_COL32(255, 30, 30, static_cast<int>(255 * flash)));
+        return;
+    }
+
+    // 赤フラッシュ（警報）：最初は強く、その後は点滅
+    float flash = 0.0f;
+    if (t < 0.35f) {
+        flash = 0.65f * (1.0f - t / 0.35f);
+    } else {
+        flash = 0.18f + 0.12f * static_cast<float>(std::sin(t * 12.0));
+    }
+    dl->AddRectFilled(p0, p1, IM_COL32(255, 30, 30, static_cast<int>(255 * std::clamp(flash, 0.0f, 1.0f))));
+
+    // 「捕獲」
+    if (t > 0.25f) {
+        float a = std::clamp((t - 0.25f) / 0.3f, 0.0f, 1.0f);
+        ImGui::SetNextWindowPos(ImVec2(viewPos.x + viewWidth * 0.5f, viewPos.y + viewHeight * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::Begin("CaptureUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetWindowFontScale(6.0f);
+        ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.2f, a), capturedByMiss_ ? "ミス" : "捕獲");
+        ImGui::SetWindowFontScale(2.0f);
+        if (capturedByMiss_) {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, a * 0.9f), "最初からやり直し");
+        } else if (alert_ && alert_->GetParams().strikeEnabled_ && !alert_->GetParams().enabled_) {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, a * 0.9f), "%d 回見つかった  —  最初からやり直し", alert_->GetStrikes());
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, a * 0.9f), "警戒度が上がりきった  —  最初からやり直し");
+        }
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::End();
+    }
+
+    // 暗転（既存のアイリスの代わりに、中心から絞る黒い円）
+    float captureTime = ParameterManager::GetInstance()->GetValue("Alert", "captureSceneTime_", 2.8f);
+    float darkStart = captureTime - 1.2f;
+    if (t > darkStart) {
+        float k = std::clamp((t - darkStart) / 1.2f, 0.0f, 1.0f);
+        // 画面全体を覆う黒と、中心に残る円（縮む）
+        float maxR = std::sqrt(viewWidth * viewWidth + viewHeight * viewHeight) * 0.5f;
+        float radius = maxR * (1.0f - k);
+        ImVec2 c(viewPos.x + viewWidth * 0.5f, viewPos.y + viewHeight * 0.5f);
+        // 円の外側を黒く：4方向の矩形 + 円の縁は多角形で近似
+        dl->AddRectFilled(p0, p1, IM_COL32(0, 0, 0, static_cast<int>(255 * k * k)));
+        if (radius > 1.0f) {
+            dl->AddCircle(c, radius, IM_COL32(0, 0, 0, 255), 64, 6.0f);
+        }
+    }
+#else
+    (void)viewPos; (void)viewWidth; (void)viewHeight;
+#endif
+}
+
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
 
@@ -1007,6 +1247,11 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         }
     }
 
+    // 警戒度
+    if (alert_ && ImGui::CollapsingHeader("Alert (警戒度)")) {
+        alert_->DrawImGui();
+    }
+
     // ブロック設計：ゲームビューへの重ね描きとマウス選択は毎フレーム、パネルは開いている時だけ
     if (map_) {
         BlockDesignPanel::DrawOverlays(map_.get(), gameCamera_);
@@ -1045,6 +1290,100 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     windowPos = EditorManager::GetGameViewPos();
     windowWidth = EditorManager::GetGameViewSize().x;
     windowHeight = EditorManager::GetGameViewSize().y;
+
+    // 回数制の HUD（右上の目のアイコン）
+    if (alert_ && alert_->GetParams().strikeEnabled_) {
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        int limit = alert_->GetStrikeLimit();
+        int used = alert_->GetStrikes();
+        float pulse = alert_->GetStrikePulse();
+        const float rx = 15.0f, ry = 9.5f, gap = 40.0f, margin = 18.0f;
+        float y = windowPos.y + margin + ry + 4.0f;
+        if (alert_->GetParams().enabled_) y += 34.0f; // バーも出ている時はその下
+        bool lastOne = (limit - used == 1);
+        float blink = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 6.0));
+        for (int i = 0; i < limit; ++i) {
+            float cx = windowPos.x + windowWidth - margin - rx - (limit - 1 - i) * gap;
+            ImVec2 c(cx, y);
+            bool spent = (i < used);
+            bool justSpent = spent && (i == used - 1) && pulse > 0.0f;
+            float scale = justSpent ? (1.0f + 0.5f * pulse) : 1.0f;
+            ImVec2 r(rx * scale, ry * scale);
+            // 縁取り
+            dl->AddEllipseFilled(c, ImVec2(r.x + 2.0f, r.y + 2.0f), IM_COL32(0, 0, 0, 170));
+            if (spent) {
+                // 使った：赤い目に ×
+                dl->AddEllipseFilled(c, r, IM_COL32(200, 40, 40, 230));
+                dl->AddLine(ImVec2(c.x - r.y * 0.7f, c.y - r.y * 0.7f), ImVec2(c.x + r.y * 0.7f, c.y + r.y * 0.7f), IM_COL32(255, 255, 255, 240), 2.5f);
+                dl->AddLine(ImVec2(c.x - r.y * 0.7f, c.y + r.y * 0.7f), ImVec2(c.x + r.y * 0.7f, c.y - r.y * 0.7f), IM_COL32(255, 255, 255, 240), 2.5f);
+            } else {
+                // 残り：白い目。残り1つは点滅
+                int alpha = (lastOne ? static_cast<int>(120 + 135 * blink) : 240);
+                dl->AddEllipseFilled(c, r, IM_COL32(245, 245, 245, alpha));
+                dl->AddCircleFilled(c, r.y * 0.55f, IM_COL32(30, 40, 60, alpha));
+                dl->AddCircleFilled(ImVec2(c.x + r.y * 0.2f, c.y - r.y * 0.2f), r.y * 0.18f, IM_COL32(255, 255, 255, alpha));
+            }
+        }
+        // 発見直後は画面の縁が赤く光る
+        if (pulse > 0.0f) {
+            ImVec2 p0 = windowPos;
+            ImVec2 p1(windowPos.x + windowWidth, windowPos.y + windowHeight);
+            dl->AddRect(ImVec2(p0.x + 4.0f, p0.y + 4.0f), ImVec2(p1.x - 4.0f, p1.y - 4.0f), IM_COL32(255, 40, 40, static_cast<int>(220 * pulse)), 0.0f, 0, 8.0f);
+        }
+        // 「残り N 回」のポップアップ
+        float ty = y + ry + 8.0f;
+        for (const auto& e : alert_->GetEvents()) {
+            float t = std::clamp(e.age / 1.6f, 0.0f, 1.0f);
+            float alpha = (t < 0.7f) ? 1.0f : (1.0f - (t - 0.7f) / 0.3f);
+            ImVec2 tsz = ImGui::CalcTextSize(e.text.c_str());
+            ImVec2 tp(windowPos.x + windowWidth - margin - tsz.x, ty - 14.0f * t);
+            dl->AddText(ImVec2(tp.x + 1.0f, tp.y + 1.0f), IM_COL32(0, 0, 0, static_cast<int>(200 * alpha)), e.text.c_str());
+            dl->AddText(tp, e.good ? IM_COL32(150, 255, 170, static_cast<int>(255 * alpha)) : IM_COL32(255, 200, 120, static_cast<int>(255 * alpha)), e.text.c_str());
+            ty += tsz.y + 2.0f;
+        }
+    }
+
+    // 値の警戒度の HUD（右上のバー。ハードモード用。OFF の時は出さない）
+    if (alert_ && alert_->GetParams().enabled_) {
+        DrawAlertHud(windowPos, windowWidth, windowHeight);
+    }
+    // 捕獲演出（回数制でも値でも同じ）
+    if (alert_ && gameState_ == GameState::Captured) {
+        DrawCaptureOverlay(windowPos, windowWidth, windowHeight);
+    }
+
+    // 警備員の頭上の合図：疑う・調べる =「？」（黄）、追跡 =「！」（赤）。追跡中は出続けるので「まだ追われている」が分かる
+    if (map_) {
+        ImDrawList* markList = ImGui::GetForegroundDrawList();
+        ImFont* font = ImGui::GetFont();
+        for (const auto& block : map_->GetUpdateBlocks()) {
+            auto* guard = dynamic_cast<GuardBlock*>(block.get());
+            if (!guard || guard->IsDestroyed()) continue;
+            GuardBlock::Mark mark = guard->GetMark();
+            if (mark == GuardBlock::Mark::None) continue;
+            float sx, sy;
+            if (!BlockDesignPanel::WorldToScreen(gameCamera_, guard->GetMarkPosition(), sx, sy)) continue;
+            bool excl = (mark == GuardBlock::Mark::Exclamation);
+            const char* text = excl ? "!" : "?";
+            float bob = static_cast<float>(std::sin(ImGui::GetTime() * (excl ? 14.0 : 6.0))) * (excl ? 3.0f : 2.0f);
+            float size = excl ? 44.0f : 36.0f;
+            ImVec2 ts = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
+            ImVec2 pos(sx - ts.x * 0.5f, sy - ts.y + bob);
+            ImU32 col = excl ? IM_COL32(255, 70, 60, 255) : IM_COL32(255, 220, 70, 255);
+            markList->AddText(font, size, ImVec2(pos.x + 2.0f, pos.y + 2.0f), IM_COL32(0, 0, 0, 200), text);
+            markList->AddText(font, size, pos, col, text);
+            // 追跡中に見られ続けているゲージ（満タンでもう1回「発見」）
+            if (excl) {
+                float ratio = guard->GetExposureRatio();
+                if (ratio > 0.0f) {
+                    ImVec2 b0(sx - 20.0f, sy + 4.0f);
+                    ImVec2 b1(sx + 20.0f, sy + 9.0f);
+                    markList->AddRectFilled(ImVec2(b0.x - 1.0f, b0.y - 1.0f), ImVec2(b1.x + 1.0f, b1.y + 1.0f), IM_COL32(0, 0, 0, 180), 2.0f);
+                    markList->AddRectFilled(b0, ImVec2(b0.x + 40.0f * ratio, b1.y), IM_COL32(255, 80, 60, 240), 2.0f);
+                }
+            }
+        }
+    }
 
     // 操作ガイド
     if (player_) {
@@ -1093,6 +1432,26 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textWidth) * 0.5f);
         ImGui::TextColored(ImVec4(1,0.8f,0,1), "%s", clearText);
 
+        // 警戒度の評価（低く保つ理由）
+        if (alert_) {
+            AlertRank r = alert_->ComputeRank();
+            ImGui::SetWindowFontScale(3.0f);
+            char rankText[64];
+            snprintf(rankText, sizeof(rankText), "%s  RANK %c",
+                     (r.rank == 'S') ? "静穏" : (r.rank == 'A') ? "潜入" : (r.rank == 'B') ? "強行" : "騒然", r.rank);
+            float rw = ImGui::CalcTextSize(rankText).x;
+            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - rw) * 0.5f);
+            ImVec4 rankColor = (r.rank == 'S') ? ImVec4(0.6f, 1.0f, 0.8f, 1.0f) : (r.rank == 'A') ? ImVec4(0.7f, 0.9f, 1.0f, 1.0f)
+                             : (r.rank == 'B') ? ImVec4(1.0f, 0.9f, 0.5f, 1.0f) : ImVec4(1.0f, 0.6f, 0.5f, 1.0f);
+            ImGui::TextColored(rankColor, "%s", rankText);
+            ImGui::SetWindowFontScale(1.6f);
+            char detail[128];
+            snprintf(detail, sizeof(detail), "発見 %d 回   通報 %d 回   騒音 %d 回   最大警戒度 %.0f", r.spotted, r.reported, r.noises, r.peak);
+            float dw = ImGui::CalcTextSize(detail).x;
+            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - dw) * 0.5f);
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.9f), "%s", detail);
+        }
+
         ImGui::SetWindowFontScale(2.0f);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 30.0f);
         const char* returnText = "Press SPACE to Return Title";
@@ -1107,7 +1466,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     // Game Over (ミス) 演出
-    if (player_ && player_->IsDead()) {
+    if (player_ && player_->IsDead() && gameState_ != GameState::Captured) {
         ImGui::SetNextWindowPos(windowPos);
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
         ImGui::Begin("GameOverOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
