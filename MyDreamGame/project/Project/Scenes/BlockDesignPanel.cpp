@@ -26,7 +26,8 @@ namespace {
     int s_hoverX = -1;
     int s_hoverY = -1;
     bool s_panelOpen = false;          // 今フレームどちらかの折りたたみが開いていた
-    bool s_showRanges = false;         // 動く床の範囲・巡回範囲・ドアの向き（線が多いので既定 OFF。数字だけ出す）
+    bool s_designMode = false;         // ブロック設計モード：ON の間は折りたたみを閉じていても、プレイ中でも、マウスを乗せて設定できる
+    bool s_showRanges = false;         // 動く床・警備員の範囲とドアの向きを常に出す（既定 OFF。普段はマウスを乗せたブロックだけ）
     bool s_badgesWhilePlaying = true;  // 連動番号のバッジはプレイ中も出す
     int s_highlightLinkId = -1;
     bool s_unsaved = false;
@@ -59,6 +60,10 @@ namespace {
     // 停止直後：再生開始時のマップに戻されるので、プレイ中に変えた上書きを何フレームか戻し続ける
     bool s_wasPlaying = false;
     int s_reapplyFrames = 0;
+
+    // 実際に画面を描いたカメラのビュー射影行列（GameScene::Draw から毎フレーム渡される）
+    Matrix4x4 s_renderViewProj = TransformFunctions::MakeIdentity4x4();
+    bool s_hasRenderViewProj = false;
 
     // ---- 今表示している画面（ゲームビュー or マップチップ画面）の画像の位置と大きさ ----
     // マップチップ画面は Engine 側が画像の位置を公開していないので、同じ計算（編集モードの1行の下に、16:9 で中央寄せ）で求める
@@ -95,12 +100,11 @@ namespace {
         return IsMapTabActive() ? editor->IsMapEditorHovered() : editor->IsGameViewHovered();
     }
 
-    // ゲームビューでデバッグカメラが有効だと変換が合わない。マップチップ画面は常に2Dのゲームカメラで描かれる
+    // 描画に使われた行列を受け取っていれば、どのカメラ（ゲーム／デバッグ／マップ専用）でも位置が合う
     bool IsViewUsable() {
         auto* editor = EditorManager::GetInstance();
         if (!editor) return false;
-        if (IsMapTabActive()) return true;
-        return !editor->UseDebugCamera();
+        return s_hasRenderViewProj;
     }
 
     // ---- プロパティの日本語ラベル ----
@@ -658,6 +662,21 @@ namespace {
         if (!ov) ImGui::EndDisabled();
     }
 
+    void DrawDesignModeToggle(const char* id) {
+        ImGui::PushID(id);
+        bool on = s_designMode;
+        if (ImGui::Checkbox("ブロック設計モード ON", &on)) {
+            s_designMode = on;
+        }
+        ImGui::SameLine();
+        if (s_designMode) {
+            ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.7f, 1.0f), "プレイ中も、この折りたたみを閉じていても、マウスを乗せて設定できる");
+        } else {
+            ImGui::TextDisabled("OFF の間はエディタ中（停止中）だけ。プレイ中に使うなら ON にする");
+        }
+        ImGui::PopID();
+    }
+
     void DrawSaveRow(MapChip2D* map, const std::string& stagePath, const char* id) {
         ImGui::PushID(id);
         if (ImGui::Button("ステージファイルに保存 (Save)")) {
@@ -691,6 +710,11 @@ bool BlockDesignPanel::CanClickSelect() {
     return !IsMapTabActive();
 }
 
+void BlockDesignPanel::SetRenderViewProjection(const Matrix4x4& viewProjection) {
+    s_renderViewProj = viewProjection;
+    s_hasRenderViewProj = true;
+}
+
 bool BlockDesignPanel::MouseToChip(MapChip2D* map, Camera* camera, int& outX, int& outY) {
     auto* editor = EditorManager::GetInstance();
     if (!editor || !camera || !map) return false;
@@ -703,7 +727,8 @@ bool BlockDesignPanel::MouseToChip(MapChip2D* map, Camera* camera, int& outX, in
     if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return false;
     float ndcX = u * 2.0f - 1.0f;
     float ndcY = 1.0f - v * 2.0f;
-    Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+    Matrix4x4 viewProj = s_hasRenderViewProj ? s_renderViewProj
+                                             : TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
     Matrix4x4 inv = TransformFunctions::Inverse(viewProj);
     Vector3 nearP = TransformFunctions::EulerTransform({ndcX, ndcY, 0.0f}, inv);
     Vector3 farP = TransformFunctions::EulerTransform({ndcX, ndcY, 1.0f}, inv);
@@ -721,7 +746,8 @@ bool BlockDesignPanel::WorldToScreen(Camera* camera, const Vector3& world, float
     if (!camera) return false;
     ImVec2 pos, size;
     if (!GetViewRect(pos, size)) return false;
-    Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+    Matrix4x4 viewProj = s_hasRenderViewProj ? s_renderViewProj
+                                             : TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
     Vector3 ndc = TransformFunctions::EulerTransform(world, viewProj);
     outX = pos.x + (ndc.x + 1.0f) * 0.5f * size.x;
     outY = pos.y + (1.0f - ndc.y) * 0.5f * size.y;
@@ -747,6 +773,7 @@ void BlockDesignPanel::DrawLinksPanel(MapChip2D* map, Camera* camera, const std:
     std::sort(switches.begin(), switches.end(), byPos);
     std::sort(doors.begin(), doors.end(), byPos);
 
+    DrawDesignModeToggle("links");
     ImGui::TextWrapped("同じ番号のスイッチを押すと、同じ番号のドアが全部開く。番号はゲームビューで直接変えられる：");
     ImGui::BulletText("スイッチかドアにマウスを乗せると小パネルが出る（− ＋ 空き番号）");
     ImGui::BulletText("マウスを乗せたまま キー 1〜9 でその番号、0 で空き番号");
@@ -754,7 +781,7 @@ void BlockDesignPanel::DrawLinksPanel(MapChip2D* map, Camera* camera, const std:
     if (!s_keyMessage.empty()) ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.7f, 1.0f), "%s", s_keyMessage.c_str());
 
     if (!IsViewUsable()) {
-        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "ゲームビューでデバッグカメラ中はマウス操作が使えません（F3 で切るか、マップチップ画面で）");
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "画面がまだ描かれていません");
     } else if (IsMapTabActive()) {
         ImGui::TextDisabled("マップチップ画面：クリックは塗りになるので、マウスを乗せて小パネルのボタンか数字キーで。選ぶのは Enter");
     }
@@ -902,14 +929,15 @@ void BlockDesignPanel::Draw(MapChip2D* map, Camera* camera, const std::string& s
     if (!map) return;
     s_panelOpen = true;
 
+    DrawDesignModeToggle("design");
     ImGui::TextWrapped("ゲームビューでブロックにマウスを乗せると、その種類の主な設定が小パネルで出る（崩れる床の上限、動く床の範囲、警備員の向き、鎖アイテムの本数…）。数字キーでも変えられる。全項目は下の「選択中」で");
     ImGui::Checkbox("つながっている同じ種類にまとめて適用（崩れる床の橋 / 幅のある動く床 / 長い板）", &s_applyConnected);
-    ImGui::Checkbox("範囲や向きの線も出す（動く床の範囲 / 警備員の巡回範囲 / ドアの開く向き）", &s_showRanges);
-    ImGui::TextDisabled("既定では数字だけ出す");
+    ImGui::Checkbox("動く床と警備員の範囲を常に出す（普段はマウスを乗せたブロックだけ）", &s_showRanges);
+    ImGui::TextDisabled("動く床と警備員は、マウスを乗せると動く範囲が線で出る（両端の短い線が端）");
     if (!s_keyMessage.empty()) ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.7f, 1.0f), "%s", s_keyMessage.c_str());
 
     if (!IsViewUsable()) {
-        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "ゲームビューでデバッグカメラ中はマウス操作が使えません（F3 で切るか、マップチップ画面で）");
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "画面がまだ描かれていません");
     } else if (s_hoverX >= 0) {
         ImGui::Text("(%d, %d) にマウス。%s で選択", s_hoverX, s_hoverY, CanClickSelect() ? "クリック" : "Enter");
     } else if (IsMapTabActive()) {
@@ -953,12 +981,12 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
 
     ImVec2 viewPos, viewSize;
     if (!GetViewRect(viewPos, viewSize)) return;
-    if (!IsViewUsable()) return; // ゲームビューでデバッグカメラ中は変換が合わないので描かない
+    if (!IsViewUsable()) return; // 描画行列をまだ受け取っていない
 
     // ---- マウス（エディタ中はいつでも。プレイ中は折りたたみが開いている時だけ） ----
     BaseBlock* hoveredQuick = nullptr; // 小パネルを出す対象（主な設定がある種類）
     bool mouseInGameView = false;
-    bool mouseActive = panelOpen || !EditorManager::IsPlaying();
+    bool mouseActive = s_designMode || panelOpen || !EditorManager::IsPlaying();
     if (mouseActive) {
         int cx = 0, cy = 0;
         if (MouseToChip(map, camera, cx, cy)) {
@@ -1001,7 +1029,32 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
     bool showRanges = s_showRanges && !playing;
     bool showBadges = !playing || s_badgesWhilePlaying;
 
-    if (showRanges || showBadges) {
+    // マウスを乗せているブロック（つながっている同じ種類も含む）は動く範囲を出す。小パネルを操作中も出したまま
+    std::vector<BaseBlock*> focusBlocks;
+    {
+        BaseBlock* focus = nullptr;
+        if (s_hoverX >= 0) focus = map->GetBlock(s_hoverX, s_hoverY);
+        else if (s_popX >= 0) focus = map->GetBlock(s_popX, s_popY);
+        if (focus) focusBlocks = ConnectedSameType(map, focus);
+    }
+    auto isFocused = [&](BaseBlock* b) {
+        return std::find(focusBlocks.begin(), focusBlocks.end(), b) != focusBlocks.end();
+    };
+    // 動く範囲の線（警備員と同じ見た目：中心が動く範囲を線で、両端に短い線）
+    auto drawRangeLine = [&](const Vector3& a, const Vector3& bpos, bool vertical, ImU32 col) {
+        float x0, y0, x1, y1;
+        if (!WorldToScreen(camera, a, x0, y0) || !WorldToScreen(camera, bpos, x1, y1)) return;
+        dl->AddLine(ImVec2(x0, y0), ImVec2(x1, y1), col, 2.0f);
+        if (vertical) {
+            dl->AddLine(ImVec2(x0 - 6.0f, y0), ImVec2(x0 + 6.0f, y0), col, 2.0f);
+            dl->AddLine(ImVec2(x1 - 6.0f, y1), ImVec2(x1 + 6.0f, y1), col, 2.0f);
+        } else {
+            dl->AddLine(ImVec2(x0, y0 - 6.0f), ImVec2(x0, y0 + 6.0f), col, 2.0f);
+            dl->AddLine(ImVec2(x1, y1 - 6.0f), ImVec2(x1, y1 + 6.0f), col, 2.0f);
+        }
+    };
+
+    if (showRanges || showBadges || !focusBlocks.empty()) {
         for (const auto& b : map->GetUpdateBlocks()) {
             if (!b || b->IsDestroyed()) continue;
             AABB2D box = b->GetAABB();
@@ -1034,25 +1087,20 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
                     DrawBadge(dl, center, IM_COL32(70, 120, 230, 230), d->GetLinkId(), hl);
                 }
             } else if (auto* m = dynamic_cast<MovingBlock*>(b.get())) {
-                if (!showRanges) continue;
-                float w = box.right - box.left;
-                float h = box.top - box.bottom;
+                if (!showRanges && !isFocused(b.get())) continue;
+                // 置いた位置を中心に、片側 moveRange だけ動く（横軸なら左右、縦軸なら上下）
                 float sx = m->GetStartX();
                 float sy = m->GetStartY();
                 float r = m->GetMoveRange();
-                AABB2D travel;
-                if (m->GetMoveAxis() == "Y" || m->GetMoveAxis() == "y") {
-                    travel = {sx - w * 0.5f, sy + r + h * 0.5f, sx + w * 0.5f, sy - r - h * 0.5f};
+                bool vertical = (m->GetMoveAxis() == "Y" || m->GetMoveAxis() == "y");
+                ImU32 col = IM_COL32(255, 220, 130, 230);
+                if (vertical) {
+                    drawRangeLine({sx, sy - r, 0.0f}, {sx, sy + r, 0.0f}, true, col);
                 } else {
-                    travel = {sx - r - w * 0.5f, sy + h * 0.5f, sx + r + w * 0.5f, sy - h * 0.5f};
-                }
-                ImVec2 tmn, tmx;
-                if (AABBToScreen(camera, travel, tmn, tmx)) {
-                    dl->AddRectFilled(tmn, tmx, IM_COL32(255, 160, 40, 40));
-                    dl->AddRect(tmn, tmx, IM_COL32(255, 160, 40, 200), 0.0f, 0, 1.5f);
+                    drawRangeLine({sx - r, sy, 0.0f}, {sx + r, sy, 0.0f}, false, col);
                 }
             } else if (auto* g = dynamic_cast<GuardBlock*>(b.get())) {
-                if (!showRanges) continue;
+                if (!showRanges && !isFocused(b.get())) continue;
                 float gy = g->GetStartY() - (box.top - box.bottom) * 0.5f + 0.15f; // 足元
                 float x0, y0, x1, y1;
                 if (WorldToScreen(camera, {g->GetStartX() - g->GetMoveRange(), gy, 0.0f}, x0, y0) &&

@@ -943,6 +943,9 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    // ブロック設計パネルの重ね描きは、この描画に使われた行列で位置を合わせる（マップチップ画面の専用カメラにも対応）
+    BlockDesignPanel::SetRenderViewProjection(viewProjectionMatrix);
+
     // 1. Skyboxの描画
     if (skybox_) {
         skybox_->Draw();

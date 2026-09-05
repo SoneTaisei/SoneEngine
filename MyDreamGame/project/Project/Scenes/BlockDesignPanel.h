@@ -32,4 +32,10 @@ public:
     static bool WorldToScreen(Camera* camera, const Vector3& world, float& outX, float& outY);
     /// <summary>今マウスが乗っている画面でクリック選択ができるか（マップチップ画面ではクリックが塗りになるので不可）</summary>
     static bool CanClickSelect();
+    /// <summary>
+    /// 実際に画面を描いたカメラのビュー射影行列を渡す（GameScene::Draw で毎フレーム）。
+    /// マップチップ画面は専用の2Dカメラ、ゲームビューはゲームカメラかデバッグカメラで描かれるので、
+    /// シーンのカメラではなく「描画に使われた行列」で位置を合わせる
+    /// </summary>
+    static void SetRenderViewProjection(const Matrix4x4& viewProjection);
 };
