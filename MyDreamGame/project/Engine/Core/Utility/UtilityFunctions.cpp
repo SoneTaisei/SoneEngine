@@ -9,6 +9,7 @@
 #include <assimp/postprocess.h>
 #include "Renderer/SrvManager.h"
 #include <algorithm>
+#include <filesystem>
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #ifdef USE_IMGUI
@@ -312,8 +313,25 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
     OutputDebugStringA(("LoadTexture: " + filePath + "\n").c_str());
 
     DirectX::ScratchImage image{};
+
+    // ファイルが存在しない場合の安全なフォールバック
+    if (!std::filesystem::exists(filePath)) {
+        OutputDebugStringA(("[WARNING] LoadTexture: File not found: " + filePath + ", fallback to 1x1 white texture.\n").c_str());
+        HRESULT hrFallback = image.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+        if (SUCCEEDED(hrFallback)) {
+            uint8_t* pixels = image.GetPixels();
+            if (pixels) {
+                pixels[0] = 255;
+                pixels[1] = 255;
+                pixels[2] = 255;
+                pixels[3] = 255;
+            }
+        }
+        return image;
+    }
+
     std::wstring filePathW = ConvertString(filePath);
-    HRESULT hr;
+    HRESULT hr = E_FAIL;
 
     // 備考1：DDSファイルに対応する
     if (filePathW.ends_with(L".dds")) {
@@ -323,8 +341,20 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
         // それ以外は従来通りWIC（PNGやJPGなど）として読み込む
         hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
+
     if (FAILED(hr)) {
-        throw std::runtime_error("LoadTexture failed to load file: " + filePath);
+        OutputDebugStringA(("[WARNING] LoadTexture failed to load file: " + filePath + ", fallback to 1x1 white texture.\n").c_str());
+        HRESULT hrFallback = image.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+        if (SUCCEEDED(hrFallback)) {
+            uint8_t* pixels = image.GetPixels();
+            if (pixels) {
+                pixels[0] = 255;
+                pixels[1] = 255;
+                pixels[2] = 255;
+                pixels[3] = 255;
+            }
+        }
+        return image;
     }
 
     // 備考2：圧縮フォーマットか判定してミップマップ生成を避ける
@@ -337,7 +367,9 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
         hr = DirectX::GenerateMipMaps(
             image.GetImages(), image.GetImageCount(), image.GetMetadata(),
             DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) や 4 など任意に変更可能
-        assert(SUCCEEDED(hr));
+        if (FAILED(hr)) {
+            return image;
+        }
     }
 
     return mipImages;

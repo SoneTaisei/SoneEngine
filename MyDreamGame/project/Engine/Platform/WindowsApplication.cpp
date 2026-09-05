@@ -287,6 +287,7 @@ void WindowsApplication::Update() {
                                     editorManager_->IsAnimationEditorHovered() || 
                                     editorManager_->IsLightEditorHovered() || 
                                     editorManager_->IsModel3DEditorHovered() || 
+                                    editorManager_->IsGPUParticleEditorHovered() || 
                                     !ImGui::GetIO().WantCaptureMouse;
             debugCamera_->Update(allowCameraInput);
         } else {
