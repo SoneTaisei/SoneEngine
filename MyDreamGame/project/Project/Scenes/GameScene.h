@@ -11,8 +11,10 @@
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Chain/ChainManager.h"
+#include "Game2D/Security/AlertSystem.h"
 
 class GameCamera;
+struct ImVec2;
 
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -22,12 +24,14 @@ class Skybox;
 enum class GameState {
     StartReady,
     Playing,
-    Clear
+    Clear,
+    Captured   // 警戒度が満タン → 捕獲演出 → ステージ選択へ
 };
 
 class GameScene : public IScene {
 public:
     static std::string s_TargetMapFilePath;
+    static bool s_QuickRestart; // ミス直後の読み直し：Ready の待ちを短くする
 
     ~GameScene() override;
 
@@ -70,11 +74,18 @@ private:
 
     // 鎖の管理（プレイヤー鎖 + 吊り鎖 + 落とした自由鎖、ユニット制）
     std::unique_ptr<ChainManager> chainManager_;
+
+    // 警戒度（0〜100。満タンで捕獲）
+    std::unique_ptr<AlertSystem> alert_;
+    void DrawAlertHud(const ImVec2& viewPos, float viewWidth, float viewHeight);
+    void DrawCaptureOverlay(const ImVec2& viewPos, float viewWidth, float viewHeight);
     
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
     bool wasCurrentlyPlaying_ = false;
     bool wasPlayingLastFrame_ = false;
     bool wasRewindingLastFrame_ = false;
+    bool playerWasDead_ = false;      // 復活の検出（警戒度の猶予用）
+    bool capturedByMiss_ = false;     // 捕獲画面の原因（true = 接触・落下などのミス、false = 見つかった回数）
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;

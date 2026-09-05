@@ -260,6 +260,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Chain\Chain2D.cpp" />
     <ClCompile Include="Project\Game2D\Chain\ChainConfig.cpp" />
     <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp" />
+    <ClCompile Include="Project\Game2D\Security\AlertSystem.cpp" />
     <ClCompile Include="Project\Game2D\Chain\ChainSpinAction.cpp" />
     <ClCompile Include="Project\Effect\TransitionDirector.cpp" />
     <ClCompile Include="Project\Game2D\Treasure\Treasure2D.cpp" />
@@ -503,6 +504,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Chain\Chain2D.h" />
     <ClInclude Include="Project\Game2D\Chain\ChainConfig.h" />
     <ClInclude Include="Project\Game2D\Chain\ChainManager.h" />
+    <ClInclude Include="Project\Game2D\Security\AlertSystem.h" />
     <ClInclude Include="Project\Game2D\Chain\ChainSpinAction.h" />
     <ClInclude Include="Project\Effect\TransitionDirector.h" />
     <ClInclude Include="Project\Game2D\Treasure\Treasure2D.h" />

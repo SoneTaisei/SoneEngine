@@ -155,5 +155,7 @@ private:
     // ちぎれ：ちぎれた鎖はその場に落ちたまま残り（tornChain_）、復活まで手元の鎖は描かない
     std::unique_ptr<Chain2D> tornChain_;
     float tearTimer_ = 0.0f;
+    float prevGemSpeed_ = 0.0f;      // 前フレームの宝石の速さ（急に止まったら騒音）
+    float prevTornGemSpeed_ = 0.0f;  // ちぎれた側の宝石
     bool wasDead_ = false;
 };

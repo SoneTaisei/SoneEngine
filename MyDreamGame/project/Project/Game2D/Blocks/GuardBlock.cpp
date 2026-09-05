@@ -2,6 +2,7 @@
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Player/Player2D.h"
+#include "Game2D/Security/AlertSystem.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
 #include <algorithm>
@@ -98,6 +99,10 @@ void GuardBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("bindFromBehind") && properties["bindFromBehind"].is_boolean()) {
         bindFromBehind_ = properties["bindFromBehind"];
     }
+    readF("investigateSight", investigateSight_);
+    readF("loseSightTime", loseSightTime_);
+    readF("lookTime", lookTime_);
+    readF("exposureTime", exposureTime_);
 }
 
 void GuardBlock::Update() {
@@ -156,6 +161,14 @@ void GuardBlock::Update() {
         if (stunTimer_ <= 0.0f) {
             state_ = State::Patrol;
             alertGauge_ = 0.0f;
+            // 起きたら通報（警戒度）。プレイヤーが遠ければ弱い通報
+            if (auto* alert = AlertSystem::Current()) {
+                Vector3 here = {startX_, startY_, 0.0f};
+                if (gameObject_) {
+                    if (auto* tcw = gameObject_->GetComponent<TransformComponent>()) here = tcw->GetPosition();
+                }
+                alert->OnGuardWake(here);
+            }
         }
         isPlayerInSightThisFrame_ = false;
     } else if (state_ == State::Bound) {
@@ -164,20 +177,70 @@ void GuardBlock::Update() {
         bodyColor = kBoundColor;
         isPlayerInSightThisFrame_ = false;
     } else {
-        // 状態の更新
+        // ---- 見つかるまでの3段階 ----
+        // 視界に入っている：疑う（立ち止まる）→ ゲージが満タンで追跡
+        // 見失った：追跡中なら loseSightTime_ の間は最後の場所へ走り、その後「調べる」。疑うだけなら短ければ巡回に戻る
+        AlertSystem* alert = AlertSystem::Current();
         if (isPlayerInSightThisFrame_) {
-            state_ = State::Alert;
-            alertGauge_ += dt;
-            if (alertGauge_ >= maxAlertGauge_) {
-                alertGauge_ = maxAlertGauge_;
+            if (alert) alert->NotifyGuardAlert(); // 静音のカウントを止めるのは実際に見ている間だけ
+            seenTime_ += dt;
+            lostTimer_ = 0.0f;
+            if (state_ == State::Alert) {
+                // 追跡中に見られ続ける：exposureTime_ ごとにもう1回「発見」扱い（見える所に居座るとアウトに近づく）
+                exposure_ += dt;
+                if (exposure_ >= exposureTime_) {
+                    exposure_ = 0.0f;
+                    if (alert) alert->OnExposed();
+                }
+            }
+            if (state_ != State::Alert) {
+                bool wasFull = (alertGauge_ >= maxAlertGauge_);
+                alertGauge_ += dt;
+                if (!wasFull && alert) {
+                    alert->AddContinuous(alert->GetParams().seenPerSec_, dt); // 溜まっている間は「猶予」
+                }
+                if (alertGauge_ >= maxAlertGauge_) {
+                    // 発見確定：追跡へ（「！」）。即ミスではなく、接触で捕まる
+                    alertGauge_ = maxAlertGauge_;
+                    state_ = State::Alert;
+                    if (!spottedReported_ && alert) {
+                        alert->OnSpotted(); // 回数制なら1回、値の警戒度なら +25
+                        spottedReported_ = true;
+                    }
+                } else if (state_ == State::Patrol || state_ == State::Wait || state_ == State::Investigate) {
+                    state_ = State::Suspicious; // チラ見え：立ち止まって向く（「？」）
+                }
             }
         } else {
-            alertGauge_ -= dt * 0.5f; // 見失うと徐々に下がる
-            if (alertGauge_ <= 0.0f) {
-                alertGauge_ = 0.0f;
-                if (state_ == State::Alert) {
-                    state_ = State::Patrol;
+            // 見えていない間は見られ続けのゲージが速めに戻る（一瞬の遮りでは戻り切らない）
+            exposure_ = (std::max)(0.0f, exposure_ - dt * 1.5f);
+            if (state_ == State::Alert) {
+                // 追跡中に見失った：しばらくは最後の場所へ走り、諦めたら調べに切り替える
+                lostTimer_ += dt;
+                if (lostTimer_ >= loseSightTime_) {
+                    state_ = State::Investigate;
+                    lookTimer_ = lookTime_;
+                    lostTimer_ = 0.0f;
+                    alertGauge_ = maxAlertGauge_ * 0.5f; // 調べている間に再び見えたら早く追跡に戻る
                 }
+            } else if (state_ == State::Suspicious) {
+                // 疑っていただけ：少しの間見えていたなら調べに行く、一瞬なら巡回に戻る
+                if (seenTime_ >= investigateSight_) {
+                    state_ = State::Investigate;
+                    lookTimer_ = lookTime_;
+                    alertGauge_ = maxAlertGauge_ * 0.5f;
+                } else {
+                    state_ = State::Patrol;
+                    alertGauge_ = 0.0f;
+                }
+                seenTime_ = 0.0f;
+            } else if (state_ == State::Investigate) {
+                alertGauge_ = (std::max)(alertGauge_, maxAlertGauge_ * 0.5f);
+            } else {
+                alertGauge_ -= dt * 0.5f;
+                if (alertGauge_ < 0.0f) alertGauge_ = 0.0f;
+                spottedReported_ = false;
+                seenTime_ = 0.0f;
             }
         }
 
@@ -191,10 +254,37 @@ void GuardBlock::Update() {
         } else if (staggerTimer_ > 0.0f) {
             // よろけ：一瞬止まる（視界は消えない）
             bodyColor = kStaggerColor;
+        } else if (state_ == State::Suspicious) {
+            // 疑う：立ち止まってプレイヤーの方を向く（向きは OnSpottedPlayer で更新される）
+            moveAmount = 0.0f;
+        } else if (state_ == State::Alert) {
+            // 追跡：最後に見た X へ走る（見えている間は毎フレーム更新される）
+            float dx = lastSeenX_ - currentPos.x;
+            if (std::abs(dx) > 0.15f) {
+                direction_ = (dx > 0.0f) ? 1 : -1;
+                moveAmount = alertSpeed_ * dt * direction_;
+                if (std::abs(moveAmount) > std::abs(dx)) moveAmount = dx;
+            }
+        } else if (state_ == State::Investigate) {
+            // 調べる：最後に見た場所まで歩き、着いたら見回してから巡回に戻る
+            float dx = lastSeenX_ - currentPos.x;
+            if (std::abs(dx) > 0.15f) {
+                direction_ = (dx > 0.0f) ? 1 : -1;
+                moveAmount = patrolSpeed_ * dt * direction_;
+                if (std::abs(moveAmount) > std::abs(dx)) moveAmount = dx;
+            } else {
+                lookTimer_ -= dt;
+                // 見回し：0.5 秒ごとに向きを変える
+                direction_ = (std::fmod(lookTimer_, 1.0f) < 0.5f) ? 1 : -1;
+                if (lookTimer_ <= 0.0f) {
+                    state_ = State::Patrol;
+                    alertGauge_ = 0.0f;
+                    spottedReported_ = false;
+                }
+            }
         } else {
-            // 移動中 (Patrol or Alert)
-            float speed = (state_ == State::Alert) ? alertSpeed_ : patrolSpeed_;
-            moveAmount = speed * dt * direction_;
+            // 巡回
+            moveAmount = patrolSpeed_ * dt * direction_;
         }
     }
 
@@ -250,8 +340,9 @@ void GuardBlock::Update() {
                 float sightOffsetX = (startWidth_ * 0.5f + sightLength_ * 0.5f) * currentFacing_;
                 sightTc->SetPosition({newPos.x + sightOffsetX, newPos.y, 0.0f});
 
-                // 色の更新（黄色から赤へ）
+                // 色の更新（黄色から赤へ。追跡中は赤で固定）
                 float alertRatio = maxAlertGauge_ > 0.0f ? (alertGauge_ / maxAlertGauge_) : 0.0f;
+                if (state_ == State::Alert) alertRatio = 1.0f;
                 sightRenderer->GetMaterial().color = {1.0f, 1.0f - alertRatio, 0.0f, 0.4f + alertRatio * 0.3f};
             }
         }
@@ -343,11 +434,12 @@ AABB2D GuardBlock::GetSightAABB() const {
 void GuardBlock::OnSpottedPlayer(Player2D* player) {
     if (IsIncapacitated()) return;
     isPlayerInSightThisFrame_ = true;
-
-    // ゲージがMAXなら即座にゲームオーバー
-    if (alertGauge_ >= maxAlertGauge_ && player) {
-        player->Kill(false);
+    if (player) {
+        // 最後に見た場所（追跡・調べる の目的地）。巡回範囲の中に収める
+        lastSeenX_ = std::clamp(player->GetPosition().x, startX_ - moveRange_, startX_ + moveRange_);
     }
+
+    // ゲージが満タンでも即ミスにはしない（警戒度 +25 の上で追いかける。捕まるのは接触か警戒度 100）
 
     // プレイヤーの方向に強制的に向きを変えて追跡する
     if (player && gameObject_) {
@@ -376,6 +468,19 @@ void GuardBlock::EnterStunned(float duration) {
     alertGauge_ = 0.0f;
     isPlayerInSightThisFrame_ = false;
     staggerTimer_ = 0.0f;
+    seenTime_ = 0.0f;
+    lostTimer_ = 0.0f;
+    spottedReported_ = false;
+    exposure_ = 0.0f;
+}
+
+Vector3 GuardBlock::GetMarkPosition() const {
+    Vector3 p = {startX_, startY_, 0.0f};
+    if (gameObject_) {
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) p = tc->GetPosition();
+    }
+    p.y += startHeight_ * 0.5f + 0.45f;
+    return p;
 }
 
 bool GuardBlock::HitByTreasure(const Vector3& velocity) {
@@ -443,6 +548,10 @@ bool GuardBlock::CanBind(const Vector3& playerPos) const {
 }
 
 void GuardBlock::Bind(int units) {
+    if (state_ == State::Stunned) {
+        // 気絶中に縛った＝起きて通報するのを防いだ（見返りの合図）
+        if (auto* alert = AlertSystem::Current()) alert->Notice("通報 回避");
+    }
     state_ = State::Bound;
     boundUnits_ = (std::max)(1, units);
     stunTimer_ = 0.0f;
@@ -471,6 +580,12 @@ AABB2D GuardBlock::GetFootAABB() const {
 void GuardBlock::Reset() {
     state_ = State::Patrol;
     alertGauge_ = 0.0f;
+    seenTime_ = 0.0f;
+    lostTimer_ = 0.0f;
+    lookTimer_ = 0.0f;
+    spottedReported_ = false;
+    exposure_ = 0.0f;
+    lastSeenX_ = startX_;
     direction_ = startDirection_;
     isPlayerInSightThisFrame_ = false;
     waitTimer_ = 0.0f;
@@ -506,6 +621,13 @@ void GuardBlock::CaptureReplayState(std::vector<float>& outCustom) const {
     outCustom.push_back(hitTimer_);
     outCustom.push_back(tripTimer_);
     outCustom.push_back(static_cast<float>(boundUnits_));
+    // 見つかるまでの3段階
+    outCustom.push_back(lastSeenX_);
+    outCustom.push_back(seenTime_);
+    outCustom.push_back(lostTimer_);
+    outCustom.push_back(lookTimer_);
+    outCustom.push_back(spottedReported_ ? 1.0f : 0.0f);
+    outCustom.push_back(exposure_);
 }
 
 void GuardBlock::RestoreReplayState(const std::vector<float>& custom) {
@@ -521,6 +643,14 @@ void GuardBlock::RestoreReplayState(const std::vector<float>& custom) {
         hitTimer_ = custom[7];
         tripTimer_ = custom[8];
         boundUnits_ = static_cast<int>(custom[9]);
+        if (custom.size() >= 15) {
+            lastSeenX_ = custom[10];
+            seenTime_ = custom[11];
+            lostTimer_ = custom[12];
+            lookTimer_ = custom[13];
+            spottedReported_ = (custom[14] != 0.0f);
+            exposure_ = (custom.size() >= 16) ? custom[15] : 0.0f;
+        }
     } else {
         stunTimer_ = staggerTimer_ = hitTimer_ = tripTimer_ = 0.0f;
         boundUnits_ = 0;
