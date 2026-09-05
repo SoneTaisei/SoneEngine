@@ -28,6 +28,7 @@ public:
 
     // 2Dモードかどうか
     bool IsOrthographic() const { return isOrthographic_; }
+    void SetOrthographic(bool isOrtho) { isOrthographic_ = isOrtho; }
 
     // 正射影のビューサイズを設定
     void SetOrthoViewSize(float width, float height) { orthoWidth_ = width; orthoHeight_ = height; }

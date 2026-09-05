@@ -25,7 +25,9 @@
 #include "Component/MeshRendererComponent.h"
 #include "Component/PrimitiveRendererComponent.h"
 #include "GameObject/Object3D.h"
+#include "Scenes/GameScene.h"
 #include <cmath>
+#include <filesystem>
 
 TitleScene::~TitleScene() {
 }
@@ -34,12 +36,6 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     // シーン遷移時の開始処理
     isFirstFrame_ = true;
     titleTimer_ = 0.0f;
-    phase_ = Phase::kTitle;
-    titleLogoAlpha_ = 1.0f;
-    searchlightAlpha_ = 1.0f;
-    cameraTransform_.translate = { 0.0f, 1.2f, -8.5f };
-    cameraTransform_.rotate = { 0.06f, 0.0f, 0.0f };
-    selectedStageIndex_ = 0;
     stageSelectPulseTimer_ = 0.0f;
     isIrisOutActive_ = false;
     gameTransitionTimer_ = 0.0f;
@@ -47,6 +43,67 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     cardTimer_ = 0.0f;
     cardShakeTimer_ = 0.0f;
     cameraShakeOffset_ = { 0.0f, 0.0f, 0.0f };
+
+    // ゲームクリア等からステージ選択へ直接戻ってきたか判定
+    bool startAtStageSelect = false;
+    if (sceneManager && sceneManager->HasData("StartAtStageSelect")) {
+        startAtStageSelect = sceneManager->GetData<bool>("StartAtStageSelect");
+        sceneManager->SetData("StartAtStageSelect", false); // フラグを消費
+    }
+
+    if (startAtStageSelect) {
+        // ステージ選択画面から直接開始（ビル群を見下ろすアングル）
+        phase_ = Phase::kStageSelect;
+        cameraTransform_.translate = targetSelectPos_;
+        cameraTransform_.rotate = targetSelectRot_;
+        titleLogoAlpha_ = 0.0f;
+        searchlightAlpha_ = 0.0f;
+    } else {
+        // 通常のタイトル画面から開始（夜空を見上げるアングル）
+        phase_ = Phase::kTitle;
+        selectedStageIndex_ = 0;
+        cameraTransform_.translate = { 0.0f, 1.2f, -8.5f };
+        cameraTransform_.rotate = { 0.06f, 0.0f, 0.0f };
+        titleLogoAlpha_ = 1.0f;
+        searchlightAlpha_ = 1.0f;
+    }
+
+    // カメラをGameCameraおよびCameraManagerに即時反映
+    Matrix4x4 viewMatrix = TransformFunctions::MakeViewMatrix(cameraTransform_.rotate, cameraTransform_.translate);
+    Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
+    CameraManager::GetInstance()->SetCameraInfo(cameraTransform_.translate, viewMatrix, projectionMatrix);
+
+    if (gameCamera_) {
+        gameCamera_->SetOrthographic(false);
+        gameCamera_->SetFollowTarget(nullptr);
+        gameCamera_->SetTranslation(cameraTransform_.translate);
+        gameCamera_->SetRotation(cameraTransform_.rotate);
+        gameCamera_->UpdateMatrix();
+    }
+
+#ifdef USE_IMGUI
+    if (EditorManager::GetInstance()) {
+        // ゲームプレイ中の遷移時のみ、デバッグカメラを解除してゲームビューに合わせる
+        if (EditorManager::IsPlaying()) {
+            EditorManager::GetInstance()->SetUseDebugCamera(false);
+            EditorManager::GetInstance()->FocusGameView();
+        }
+
+        // タイトルシーン用3Dモデル（title_obj.json: ビル群・ステージオブジェクト）を確実に読み込む
+        if (EditorManager::GetInstance()->GetModel3DEditor()) {
+            auto context = EditorManager::GetInstance()->GetModel3DEditor()->GetContext();
+            if (context) {
+                const std::string titleObjPath = "resources/json/shared/LevelData/title_obj.json";
+                if (context->GetObjects().empty() || context->GetCurrentFilePath() != titleObjPath) {
+                    context->SetCurrentFilePath(titleObjPath);
+                    if (std::filesystem::exists(titleObjPath)) {
+                        context->LoadFromFile(titleObjPath);
+                    }
+                }
+            }
+        }
+    }
+#endif
 
     if (callingCardObject_) {
         if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
@@ -60,14 +117,14 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     }
 
     if (titleLogoSprite_) {
-        titleLogoSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+        titleLogoSprite_->SetColor({ 1.0f, 1.0f, 1.0f, titleLogoAlpha_ });
     }
     if (searchlightObjects_.size() >= 2) {
         if (auto prc1 = searchlightObjects_[0]->GetComponent<PrimitiveRendererComponent>()) {
-            prc1->GetMaterial().color.w = 0.22f;
+            prc1->GetMaterial().color.w = 0.22f * searchlightAlpha_;
         }
         if (auto prc2 = searchlightObjects_[1]->GetComponent<PrimitiveRendererComponent>()) {
-            prc2->GetMaterial().color.w = 0.18f;
+            prc2->GetMaterial().color.w = 0.18f * searchlightAlpha_;
         }
     }
 }
@@ -299,6 +356,8 @@ void TitleScene::Update(SceneManager *sceneManager) {
     CameraManager::GetInstance()->SetCameraInfo(camPos, viewMatrix, projectionMatrix);
 
     if (gameCamera_) {
+        gameCamera_->SetOrthographic(false);
+        gameCamera_->SetFollowTarget(nullptr);
         gameCamera_->SetTranslation(camPos);
         gameCamera_->SetRotation(camRot);
         gameCamera_->UpdateMatrix();
@@ -448,6 +507,8 @@ void TitleScene::UpdateEditor() {
     CameraManager::GetInstance()->SetCameraInfo(camPos, viewMatrix, projectionMatrix);
 
     if (gameCamera_) {
+        gameCamera_->SetOrthographic(false);
+        gameCamera_->SetFollowTarget(nullptr);
         gameCamera_->SetTranslation(camPos);
         gameCamera_->SetRotation(camRot);
         gameCamera_->UpdateMatrix();
@@ -930,6 +991,23 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
     if (t >= 1.0f) {
         isIrisOutActive_ = false;
         if (sceneManager) {
+            // 選択されたステージに応じたマップを設定
+            std::string mapPath = "resources/json/shared/MapData/map_data.txt";
+            if (selectedStageIndex_ == 1) {
+                mapPath = "resources/json/shared/MapData/map1.txt";
+            } else if (selectedStageIndex_ == 2) {
+                mapPath = "resources/json/shared/MapData/map_data.txt";
+            }
+            GameScene::s_TargetMapFilePath = mapPath;
+            sceneManager->SetData("SelectedStagePath", mapPath);
+
+#ifdef USE_IMGUI
+            if (EditorManager::GetInstance()) {
+                EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kGame);
+                EditorManager::SetPlaying(true);
+                EditorManager::GetInstance()->SetUseDebugCamera(false);
+            }
+#endif
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
         }
     }
