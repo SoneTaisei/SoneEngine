@@ -1153,15 +1153,17 @@ void GameScene::UpdateGuardLights() {
     if (!slGroup) return;
 
     int32_t currentCount = 0;
+    bool hasLightEditor = false;
 #ifdef USE_IMGUI
     if (auto* editorMgr = EditorManager::GetInstance()) {
         if (auto* lightEditor = editorMgr->GetLightEditor()) {
             // LightEditor管理下の静的ライト数を基準とする
             currentCount = static_cast<int32_t>((std::min)(lightEditor->GetSpotLights().size(), static_cast<size_t>(kMaxSpotLights)));
+            hasLightEditor = true;
         }
     }
 #endif
-    if (currentCount == 0 && slGroup->spotLightCount > 0) {
+    if (!hasLightEditor && slGroup->spotLightCount > 0) {
         // USE_IMGUI非定義時やLightEditorがない場合は既存のカウントを基準とする
         currentCount = (std::min)(slGroup->spotLightCount, static_cast<int32_t>(kMaxSpotLights));
     }

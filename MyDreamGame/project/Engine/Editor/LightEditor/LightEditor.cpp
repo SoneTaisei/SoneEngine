@@ -16,24 +16,27 @@
 #endif
 
 LightEditor::LightEditor() {
-    // デフォルトのスポットライトを1つ生成
-    SpotLightItem defaultSpot;
-    defaultSpot.name = "SpotLight_1";
-    defaultSpot.enabled = true;
-    defaultSpot.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    defaultSpot.position = {0.0f, 0.0f, -5.0f};
-    defaultSpot.direction = {0.0f, 0.0f, 1.0f};
-    defaultSpot.baseDirection = {0.0f, 0.0f, 1.0f};
-    defaultSpot.intensity = 5.0f;
-    defaultSpot.distance = 20.0f;
-    defaultSpot.decay = 1.5f;
-    defaultSpot.angleDeg = 35.0f;
-    defaultSpot.falloffDeg = 20.0f;
-    defaultSpot.followType = LightFollowType::None;
-    defaultSpot.followOffset = {0.0f, 0.0f, 0.0f};
-    spotLights_.push_back(defaultSpot);
-
     Initialize(nullptr);
+
+    // ファイルが存在せず何もロードされなかった場合のみデフォルトを生成
+    if (spotLights_.empty() && availableLightFiles_.empty()) {
+        SpotLightItem defaultSpot;
+        defaultSpot.name = "SpotLight_1";
+        defaultSpot.enabled = true;
+        defaultSpot.color = {1.0f, 1.0f, 1.0f, 1.0f};
+        defaultSpot.position = {0.0f, 0.0f, -5.0f};
+        defaultSpot.direction = {0.0f, 0.0f, 1.0f};
+        defaultSpot.baseDirection = {0.0f, 0.0f, 1.0f};
+        defaultSpot.intensity = 5.0f;
+        defaultSpot.distance = 20.0f;
+        defaultSpot.decay = 1.5f;
+        defaultSpot.angleDeg = 35.0f;
+        defaultSpot.falloffDeg = 20.0f;
+        defaultSpot.followType = LightFollowType::None;
+        defaultSpot.followOffset = {0.0f, 0.0f, 0.0f};
+        spotLights_.push_back(defaultSpot);
+        selectedLightIndex_ = 0;
+    }
 }
 
 void LightEditor::Initialize(ModelCommon* modelCommon) {
@@ -841,6 +844,8 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                     ImGui::DragFloat3("回転軸", &light.rotateAxis.x, 0.01f, -1.0f, 1.0f);
                     ImGui::DragFloat("回転速度 (度/秒)", &light.rotateSpeed, 1.0f, -360.0f, 360.0f, "%.1f");
                 }
+            } else {
+                ImGui::TextDisabled("スポットライトがありません。[+ 追加] ボタンでスポットライトを追加できます。");
             }
 
             ImGui::EndTabItem();
@@ -1136,7 +1141,9 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
             if (j["pLight"].contains("decay")) pointDecay_ = j["pLight"]["decay"];
         }
 
+        bool hasSpotLightKey = false;
         if (j.contains("spotLights") && j["spotLights"].is_array()) {
+            hasSpotLightKey = true;
             spotLights_.clear();
             for (const auto& item : j["spotLights"]) {
                 SpotLightItem sl;
@@ -1163,6 +1170,7 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
             }
         } else if (j.contains("sLight")) {
             // 旧フォーマット互換
+            hasSpotLightKey = true;
             spotLights_.clear();
             SpotLightItem sl;
             sl.name = "SpotLight";
@@ -1179,11 +1187,12 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
             spotLights_.push_back(sl);
         }
 
-        if (spotLights_.empty()) {
+        // スポットライト定義キーが一切存在せず空の場合のみ、初期ライトを1つ生成
+        if (!hasSpotLightKey && spotLights_.empty()) {
             SpotLightItem defaultSpot;
             spotLights_.push_back(defaultSpot);
         }
-        selectedLightIndex_ = 0;
+        selectedLightIndex_ = spotLights_.empty() ? -1 : 0;
 
         currentFilePath_ = path;
         strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), GetCurrentFileName().c_str());
