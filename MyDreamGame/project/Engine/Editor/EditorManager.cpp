@@ -22,6 +22,7 @@
 #include "Game2D/Player/Player2D.h"
 #include "Component/TransformComponent.h"
 #include "Animation/AnimationPreviewScene.h"
+#include "GPUParticle/GPUParticlePreviewScene.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -58,6 +59,8 @@ static void ImGuiSrvFree(ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HAN
 void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQueue *commandQueue) {
     s_Instance = this;
     animationEditor_ = std::make_unique<AnimationEditor>();
+    gpuParticleEditor_ = std::make_unique<GPUParticleEditor>();
+    gpuParticleEditor_->Initialize(device);
     mapEditor_ = std::make_unique<MapEditor>();
     mapEditor_->Initialize();
     model3DEditor_ = std::make_unique<Model3DEditor>();
@@ -179,10 +182,25 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // ドッキング有効化
 
     // =================================================================
-    // 日本語フォントの読み込み設定
+    // 日本語フォント + 記号の読み込み設定
     // =================================================================
-    // Windows標準の「メイリオ」フォントをサイズ18で読み込み、日本語の文字範囲（グリフ）を適用します。
-    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\meiryo.ttc", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
+    // Windows標準の「メイリオ」フォントをサイズ18で読み込みます。
+    // 日本語基本文字に加え、矢印記号や幾何学図形（■, ▲, ▼, ◆等）のグリフ範囲もマージして文字化けを防止します。
+    static const ImWchar extra_ranges[] = {
+        0x2000, 0x206F, // 一般句読点
+        0x2190, 0x21FF, // 矢印記号 (↑, ↓, ←, → 等)
+        0x2200, 0x22FF, // 数学記号 (±, ×, ÷, ∞ 等)
+        0x25A0, 0x25FF, // 幾何学図形 (■, □, ▲, △, ▼, ▽, ◆, ◇ 等)
+        0x2600, 0x26FF, // その他の記号 (★, ☆ 等)
+        0,
+    };
+    ImFontGlyphRangesBuilder builder;
+    builder.AddRanges(io.Fonts->GetGlyphRangesJapanese());
+    builder.AddRanges(extra_ranges);
+    static ImVector<ImWchar> glyph_ranges;
+    glyph_ranges.clear();
+    builder.BuildRanges(&glyph_ranges);
+    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\meiryo.ttc", 18.0f, nullptr, glyph_ranges.Data);
 
     // 3. Win32バックエンドの初期化
     ImGui_ImplWin32_Init(hwnd);
@@ -246,6 +264,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
             sceneManager->PopScene();
             animationEditor_->SetAnimScenePushed(false);
+        }
+        if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) {
+            sceneManager->PopScene();
+            gpuParticleEditor_->SetParticleScenePushed(false);
         }
 
         IScene* activeScene = sceneManager->GetCurrentScene();
@@ -753,6 +775,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
             ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
             ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
+            ImGui::DockBuilderDockWindow("GPUパーティクルエディター", dock_id_main);
             ImGui::DockBuilderDockWindow("ライトエディター", dock_id_main);
             ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
             ImGui::DockBuilderDockWindow("3Dモデル配置", dock_id_main);
@@ -772,7 +795,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
             ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
             ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
-            ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
+            ImGui::DockBuilderDockWindow("GPUパーティクル タイムライン & エミッター階層", dock_id_bottom);
             ImGui::DockBuilderDockWindow("スポットライト", dock_id_bottom);
 
             ImGui::DockBuilderFinish(dockspace_id);
@@ -797,6 +820,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
+                if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) {
+                    sceneManager->PopScene();
+                    gpuParticleEditor_->SetParticleScenePushed(false);
                 }
             }
             isGameViewHovered_ = ImGui::IsWindowHovered();
@@ -842,6 +869,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
+                if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) {
+                    sceneManager->PopScene();
+                    gpuParticleEditor_->SetParticleScenePushed(false);
                 }
             }
             isReplayEditorHovered_ = ImGui::IsWindowHovered();
@@ -892,6 +923,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             if (activeMainTab_ == "アニメーションエディター") {
                 currentMode_ = EditorMode::Animation;
+                if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) {
+                    sceneManager->PopScene();
+                    gpuParticleEditor_->SetParticleScenePushed(false);
+                }
                 if (animationEditor_ && !animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
                     animationEditor_->SetAnimScenePushed(true);
@@ -901,6 +936,40 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             if (animationEditor_) animationEditor_->SetHovered(ImGui::IsWindowHovered());
             if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawMainView(sceneManager, activeCamera, renderTextureSrvHandle); }
+        }
+        ImGui::End();
+    }
+
+    // --- GPU Particle Editor メインウィンドウ (dock_id_main) ---
+    if (gpuParticleEditor_) gpuParticleEditor_->SetHovered(false);
+    if (showGPUParticleEditor_) {
+        if (focusActiveTabCountdown_ > 0 && activeMainTab_ == "GPUパーティクルエディター") {
+            ImGui::SetNextWindowFocus();
+        }
+        if (ImGui::Begin("GPUパーティクルエディター", &showGPUParticleEditor_)) {
+            bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+            if (isFocused && activeMainTab_ != "GPUパーティクルエディター") {
+                activeMainTab_ = "GPUパーティクルエディター";
+                currentMode_ = EditorMode::GPUParticle;
+                SaveSceneConfig();
+            }
+            if (activeMainTab_ == "GPUパーティクルエディター") {
+                currentMode_ = EditorMode::GPUParticle;
+                if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
+                    sceneManager->PopScene();
+                    animationEditor_->SetAnimScenePushed(false);
+                }
+                if (gpuParticleEditor_ && !gpuParticleEditor_->IsParticleScenePushed()) {
+                    auto previewScene = std::make_unique<GPUParticlePreviewScene>();
+                    previewScene->SetParticleSystem(gpuParticleEditor_->GetContext()->GetSystem());
+                    sceneManager->PushScene(std::move(previewScene));
+                    gpuParticleEditor_->SetParticleScenePushed(true);
+                }
+            }
+            if (gpuParticleEditor_) gpuParticleEditor_->SetHovered(ImGui::IsWindowHovered());
+            if (gpuParticleEditor_) {
+                gpuParticleEditor_->DrawMainView(sceneManager, activeCamera, renderTextureSrvHandle);
+            }
         }
         ImGui::End();
     }
@@ -941,6 +1010,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
                 }
+                if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) {
+                    sceneManager->PopScene();
+                    gpuParticleEditor_->SetParticleScenePushed(false);
+                }
             }
             if (activeMainTab_ == "ライトエディター") {
                 currentMode_ = EditorMode::Light;
@@ -965,6 +1038,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (animationEditor_ && animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PopScene();
                     if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
+                }
+                if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) {
+                    sceneManager->PopScene();
+                    gpuParticleEditor_->SetParticleScenePushed(false);
                 }
                 if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "3Dモデル配置") {
                     activeMainTab_ = "3Dモデル配置";
@@ -1301,6 +1378,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
             if (currentMode_ == EditorMode::Animation) {
                 if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawInspectorUI(sceneManager); }
+            } else if (currentMode_ == EditorMode::GPUParticle) {
+                if (gpuParticleEditor_) { gpuParticleEditor_->DrawInspectorUI(sceneManager); }
             } else if (selectedReplayBlock_.IsValid()) {
                 ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "キー入力ノード プロパティ");
                 ImGui::Separator();
@@ -1885,6 +1964,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 sceneManager->PopScene();
                 if (animationEditor_) animationEditor_->SetAnimScenePushed(false);
             }
+            if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) {
+                sceneManager->PopScene();
+                gpuParticleEditor_->SetParticleScenePushed(false);
+            }
             if (focusActiveTabCountdown_ == 0 && activeMainTab_ != "マップチップ画面") {
                 activeMainTab_ = "マップチップ画面";
                 SaveSceneConfig();
@@ -1908,6 +1991,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
     } else if (currentMode_ == EditorMode::Animation) {
         if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawDopeSheetUI(sceneManager); }
+    } else if (currentMode_ == EditorMode::GPUParticle || activeMainTab_ == "GPUパーティクルエディター") {
+        if (gpuParticleEditor_) { gpuParticleEditor_->DrawTimelineUI(sceneManager); }
     } else if (currentMode_ == EditorMode::Replay) {
         if (ImGui::Begin("タイムライン", &showMapSettings_, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 auto replayMgr = ReplayManager::GetInstance();
@@ -2456,6 +2541,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
 
     if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->UpdateAnimationPosePreview(sceneManager); }
+    if (gpuParticleEditor_) { float dt = TimeManager::GetInstance().GetDeltaTime(); gpuParticleEditor_->Update(dt); }
 
     LogManager::GetInstance()->Draw();
 
@@ -2780,6 +2866,7 @@ void EditorManager::ApplyDefaultLayout() {
     ImGui::DockBuilderDockWindow("ゲームビュー", dock_id_main);
     ImGui::DockBuilderDockWindow("リプレイエディター", dock_id_main);
     ImGui::DockBuilderDockWindow("アニメーションエディター", dock_id_main);
+    ImGui::DockBuilderDockWindow("GPUパーティクルエディター", dock_id_main);
     ImGui::DockBuilderDockWindow("ライトエディター", dock_id_main);
     ImGui::DockBuilderDockWindow("マップチップ画面", dock_id_main);
     ImGui::DockBuilderDockWindow("3Dモデル配置", dock_id_main);
@@ -2799,7 +2886,7 @@ void EditorManager::ApplyDefaultLayout() {
     ImGui::DockBuilderDockWindow("ステージセレクトエディター", dock_id_bottom);
     ImGui::DockBuilderDockWindow("タイムライン", dock_id_bottom);
     ImGui::DockBuilderDockWindow("ドープシート (タイムライン)", dock_id_bottom);
-    ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
+    ImGui::DockBuilderDockWindow("GPUパーティクル タイムライン & エミッター階層", dock_id_bottom);
     ImGui::DockBuilderDockWindow("スポットライト", dock_id_bottom);
 
     ImGui::DockBuilderFinish(dockspace_id);

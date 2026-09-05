@@ -1,0 +1,89 @@
+{
+    "duration": 4.599999904632568,
+    "emitters": [
+        {
+            "billboardType": 1,
+            "blendMode": 2,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 2.0,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                0.20000000298023224,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": -9.800000190734863,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 3.0,
+            "initialSpeedMin": 1.0,
+            "initialVelocityDir": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 1.5,
+            "lifetimeMin": 0.800000011920929,
+            "maxParticles": 500,
+            "modelPath": "resources/Object/School/sphere/sphere.obj",
+            "name": "Flash",
+            "renderType": 0,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 0,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 40.0,
+            "startColor": [
+                1.0,
+                0.800000011920929,
+                0.30000001192092896,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Sprite/School/circle.png",
+            "useColorGradient": false,
+            "velocitySpread": 45.0
+        }
+    ],
+    "isLoop": true,
+    "systemName": "NewEffect"
+}

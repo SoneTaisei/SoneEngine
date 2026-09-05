@@ -18,6 +18,7 @@
 #include "Core/Utility/Structs.h"
 #include "Replay/ReplayManager.h"
 #include "Animation/AnimationEditor.h"
+#include "GPUParticle/GPUParticleEditor.h"
 #include "MapEditor/MapEditor.h"
 #include "LightEditor/LightEditor.h"
 #include "Model3DEditor/Model3DEditor.h"
@@ -82,6 +83,7 @@ public:
     bool IsAnimationEditorHovered() const { return animationEditor_ ? animationEditor_->IsHovered() : false; }
     bool IsLightEditorHovered() const { return lightEditor_ ? lightEditor_->IsHovered() : false; }
     bool IsModel3DEditorHovered() const { return model3DEditor_ ? model3DEditor_->IsHovered() : false; }
+    bool IsGPUParticleEditorHovered() const { return gpuParticleEditor_ ? gpuParticleEditor_->IsHovered() : false; }
     bool IsMapEditorVisible() const { return mapEditor_ ? mapEditor_->IsVisible() : false; }
     bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
     bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
@@ -101,6 +103,7 @@ public:
     LightEditor* GetLightEditor() const { return lightEditor_.get(); }
     Model3DEditor* GetModel3DEditor() const { return model3DEditor_.get(); }
     PostEffectEditor* GetPostEffectEditor() const { return postEffectEditor_.get(); }
+    GPUParticleEditor* GetGPUParticleEditor() const { return gpuParticleEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -309,7 +312,8 @@ private:
         Replay,
         Animation,
         Light,
-        ModelPlacement
+        ModelPlacement,
+        GPUParticle
     };
     EditorMode currentMode_ = EditorMode::Normal;
 
@@ -322,6 +326,8 @@ private:
     bool showMapEditor_ = true;
     bool showMapSettings_ = true;
     bool showAnimEditor_ = true;
+    bool showGPUParticleEditor_ = true;
+    bool showGPUParticleTimeline_ = true;
     bool showLightEditor_ = true;
     bool showSpotLightPanel_ = true;
     bool showModelPlacementEditor_ = true;
@@ -334,6 +340,7 @@ private:
 
     // サブエディター専用インスタンス
     std::unique_ptr<AnimationEditor> animationEditor_;
+    std::unique_ptr<GPUParticleEditor> gpuParticleEditor_;
     std::unique_ptr<MapEditor> mapEditor_;
     std::unique_ptr<LightEditor> lightEditor_;
     std::unique_ptr<Model3DEditor> model3DEditor_;
