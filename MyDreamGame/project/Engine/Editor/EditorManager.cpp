@@ -2712,10 +2712,6 @@ void EditorManager::LoadPlacedModelsForScene(IScene* scene) {
     if (targetPath.empty()) return;
 
     auto context = model3DEditor_->GetContext();
-    if (context->GetCurrentFilePath() == targetPath) {
-        return;
-    }
-
     context->SetCurrentFilePath(targetPath);
     if (std::filesystem::exists(targetPath)) {
         context->LoadFromFile(targetPath);

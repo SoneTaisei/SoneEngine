@@ -29,6 +29,9 @@
 #include <algorithm>
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/Camera.h"
+#include "Resource/Sprite/Sprite.h"
+#include "Resource/Sprite/SpriteCommon.h"
+#include "Input/GamepadInput.h"
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
@@ -45,6 +48,16 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
 
 void GameScene::OnExit(SceneManager* sceneManager) {
     (void)sceneManager;
+    isPaused_ = false;
+    isIrisInActive_ = false;
+    if (gameCamera_) {
+        gameCamera_->SetFollowTarget(nullptr);
+        gameCamera_->SetOrthographic(false);
+    }
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        dxCommon->SetCompositeIrisEnabled(false);
+    }
 }
 
 GameScene::~GameScene() {
@@ -55,10 +68,21 @@ GameScene::~GameScene() {
 }
 
 void GameScene::GoToNextStage(SceneManager* sceneManager) {
-    // クリア後はいったんステージ選択へ戻る（持ち越し用の鎖・カメラ操作などの演出状態はここで捨てる）
+    // クリア後はいったんタイトルシーンのステージ選択フェーズへ戻る（持ち越し用の鎖・カメラ操作などの演出状態はここで捨てる）
     TransitionDirector::GetInstance()->Abort();
-    Log("GameScene: stage clear -> StageSelect\n");
-    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
+    Log("GameScene: stage clear -> TitleScene (StageSelect phase)\n");
+
+#ifdef USE_IMGUI
+    if (EditorManager::GetInstance()) {
+        EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
+        EditorManager::GetInstance()->SetUseDebugCamera(false);
+    }
+    EditorManager::SetPlaying(true);
+#endif
+
+    // タイトルシーンに「ステージ選択画面から直接開始する」フラグを渡す
+    sceneManager->SetData("StartAtStageSelect", true);
+    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
 }
 
 void GameScene::Initialize() {
@@ -170,6 +194,47 @@ void GameScene::Initialize() {
         }
     }
 
+    // -------------------------------------------------------------
+    // 8. ポーズメニュー スプライトの初期化 (poseText, restartText, titleText)
+    // -------------------------------------------------------------
+    if (spriteCommon_) {
+        // 暗幕（半透明ブラック）
+        pauseBackdropTexHandle_ = TextureManager::GetInstance()->Load("resources/Object/Original/kusari/kusari_2/white.png");
+        pauseBackdropSprite_ = std::make_unique<Sprite>();
+        pauseBackdropSprite_->Initialize(spriteCommon_, pauseBackdropTexHandle_);
+        pauseBackdropSprite_->SetPosition({ 0.0f, 0.0f });
+        pauseBackdropSprite_->SetSize({ 1280.0f, 720.0f });
+        pauseBackdropSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.65f });
+
+        // 「ポーズ」タイトル (poseText.png: 300x100)
+        pauseTitleTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/poseText.png");
+        pauseTitleSprite_ = std::make_unique<Sprite>();
+        pauseTitleSprite_->Initialize(spriteCommon_, pauseTitleTexHandle_);
+        const float pTitleW = 240.0f;
+        const float pTitleH = 80.0f;
+        pauseTitleSprite_->SetSize({ pTitleW, pTitleH });
+        pauseTitleSprite_->SetPosition({ (1280.0f - pTitleW) * 0.5f, 150.0f });
+        pauseTitleSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        // 「リトライ」項目 (restartText.png: 500x100)
+        pauseRestartTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/restartText.png");
+        pauseRestartSprite_ = std::make_unique<Sprite>();
+        pauseRestartSprite_->Initialize(spriteCommon_, pauseRestartTexHandle_);
+        const float rW = 280.0f;
+        const float rH = 56.0f;
+        pauseRestartSprite_->SetSize({ rW, rH });
+        pauseRestartSprite_->SetPosition({ (1280.0f - rW) * 0.5f, 320.0f });
+
+        // 「タイトル」項目 (titleText.png: 500x100)
+        pauseTitleTextTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/titleText.png");
+        pauseTitleTextSprite_ = std::make_unique<Sprite>();
+        pauseTitleTextSprite_->Initialize(spriteCommon_, pauseTitleTextTexHandle_);
+        const float tW = 280.0f;
+        const float tH = 56.0f;
+        pauseTitleTextSprite_->SetSize({ tW, tH });
+        pauseTitleTextSprite_->SetPosition({ (1280.0f - tW) * 0.5f, 430.0f });
+    }
+
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -214,11 +279,55 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     } else if (gameState_ == GameState::Clear) {
         stateTimer_ += dt;
-        // 遷移演出が動いていない時（中断された場合など）だけ SPACE でタイトルへ戻れる
+        // 遷移演出が動いていない時（中断された場合など）だけ SPACE でタイトル（ステージ選択画面）へ戻れる
         if (!TransitionDirector::GetInstance()->IsPlaying() && KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+#ifdef USE_IMGUI
+            if (EditorManager::GetInstance()) {
+                EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
+                EditorManager::GetInstance()->SetUseDebugCamera(false);
+            }
+            EditorManager::SetPlaying(true);
+#endif
+            sceneManager->SetData("StartAtStageSelect", true);
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
         }
+    }
+
+    // -------------------------------------------------------------
+    // ポーズ入力の監視 (ESC, P, ゲームパッド Startボタン)
+    // -------------------------------------------------------------
+    if (pauseCooldown_ > 0.0f) {
+        pauseCooldown_ -= dt;
+    }
+
+    bool togglePause = false;
+    // プレイ中、またはポーズ中の場合にトグル可能（クリア中・開始直後は無効）
+    if (gameState_ == GameState::Playing || isPaused_) {
+        auto kb = KeyboardInput::GetInstance();
+        auto pad = GamepadInput::GetInstance();
+
+        if (kb->IsKeyPressed(DIK_TAB) || kb->IsKeyPressed(DIK_ESCAPE)) {
+            togglePause = true;
+        }
+        if (pad && (pad->IsButtonPressed(7) || pad->IsButtonPressed(9))) { // Start / Option
+            togglePause = true;
+        }
+
+        if (togglePause && pauseCooldown_ <= 0.0f) {
+            isPaused_ = !isPaused_;
+            pauseCooldown_ = 0.25f;
+            pausePulseTimer_ = 0.0f;
+            if (isPaused_) {
+                pauseMenuIndex_ = 0; // 開いた時は「リトライ」に初期選択
+            }
+        }
+    }
+
+    // ポーズ中ならポーズメニューのみ更新し、ゲーム進行をすべて停止
+    if (isPaused_) {
+        UpdatePauseMenu(dt, sceneManager);
+        return;
     }
 
     // 4. プレイヤーの更新（入力・物理・当たり判定）
@@ -538,8 +647,7 @@ namespace {
         std::map<std::pair<int, int>, FragileBlock*> byChip;
         for (const auto& block : map->GetUpdateBlocks()) {
             if (auto* f = dynamic_cast<FragileBlock*>(block.get())) {
-                if (f->IsDestroyed()) continue;
-                floors.push_back(f);
+                floors.push_back(f); // 崩れて消えた床も含める（消えた後も調整・復活できるように）
                 byChip[{f->GetChipX(), f->GetChipY()}] = f;
             }
         }
@@ -617,34 +725,6 @@ namespace {
         return changed;
     }
 
-    // ゲームビューのマウス位置をチップ座標に変換（エディタのキャンバスと同じ手順）。ゲームビューの外なら false
-    bool GameViewMouseToChip(MapChip2D* map, Camera* camera, int& outX, int& outY) {
-        auto* editor = EditorManager::GetInstance();
-        if (!editor || !camera || !map) return false;
-        if (!editor->IsGameViewHovered()) return false;
-        ImVec2 pos = EditorManager::GetGameViewPos();
-        ImVec2 size = EditorManager::GetGameViewSize();
-        if (size.x <= 1.0f || size.y <= 1.0f) return false;
-        ImVec2 m = ImGui::GetIO().MousePos;
-        float u = (m.x - pos.x) / size.x;
-        float v = (m.y - pos.y) / size.y;
-        if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return false;
-        float ndcX = u * 2.0f - 1.0f;
-        float ndcY = 1.0f - v * 2.0f;
-        Matrix4x4 viewProj = TransformFunctions::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
-        Matrix4x4 inv = TransformFunctions::Inverse(viewProj);
-        Vector3 nearP = TransformFunctions::EulerTransform({ndcX, ndcY, 0.0f}, inv);
-        Vector3 farP = TransformFunctions::EulerTransform({ndcX, ndcY, 1.0f}, inv);
-        Vector3 dir = {farP.x - nearP.x, farP.y - nearP.y, farP.z - nearP.z};
-        if (std::abs(dir.z) < 1e-6f) return false;
-        float t = (0.0f - nearP.z) / dir.z;
-        float wx = nearP.x + dir.x * t;
-        float wy = nearP.y + dir.y * t;
-        outX = map->WorldToChipX(wx);
-        outY = map->WorldToChipY(wy);
-        return true;
-    }
-
     void DrawFragileFloorImGui(MapChip2D* map, Camera* camera, const std::string& stagePath) {
         static bool highlightAll = false;
         static int selectedGroupKey = -1;   // 橋ごとの選択
@@ -654,12 +734,22 @@ namespace {
         static int previewCount = 3;
         static bool placementEnabled = false;
         static int placementLimit = 3;
-        static std::string lastSaveMessage;
-        static bool unsaved = false;
 
         // --- 見つける ---
         if (ImGui::Checkbox("崩れる床を全部点滅させる", &highlightAll)) {
             FragileBlock::SetHighlightAll(highlightAll);
+        }
+        static bool debugNoBreak = FragileBlock::IsDebugNoBreak();
+        if (ImGui::Checkbox("デバッグ中は崩れても消えない（震えた後に元に戻る）", &debugNoBreak)) {
+            FragileBlock::SetDebugNoBreak(debugNoBreak);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("消えた床を全部復活")) {
+            for (const auto& block : map->GetUpdateBlocks()) {
+                if (auto* f = dynamic_cast<FragileBlock*>(block.get())) {
+                    if (f->IsDestroyed()) f->Reset();
+                }
+            }
         }
         ImGui::TextDisabled("床の点の数 = 通れる鎖の上限本数（この本数までは乗れる、超えると震えて落ちる）");
 
@@ -701,13 +791,14 @@ namespace {
         auto groups = BuildFragileGroups(map);
         FragileBlock* hovered = nullptr;
         int mx = 0, my = 0;
-        bool debugCam = EditorManager::GetInstance() && EditorManager::GetInstance()->UseDebugCamera();
-        if (!debugCam && GameViewMouseToChip(map, camera, mx, my)) {
+        bool debugCam = false;
+        if (BlockDesignPanel::MouseToChip(map, camera, mx, my)) {
             hovered = dynamic_cast<FragileBlock*>(map->GetBlock(mx, my));
-            if (hovered && hovered->IsDestroyed()) hovered = nullptr;
             if (hovered) {
                 hovered->SetHovered(true);
-                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                bool selectNow = BlockDesignPanel::CanClickSelect() ? ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+                                                                   : (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false));
+                if (selectNow) {
                     int key = FragileKey(hovered);
                     for (const auto& g : groups) {
                         for (auto* f : g.members) {
@@ -722,9 +813,7 @@ namespace {
                 }
             }
         }
-        if (debugCam) {
-            ImGui::TextDisabled("ゲームビューのクリック選択はデバッグカメラを切ると使える");
-        } else if (hovered) {
+        if (hovered) {
             ImGui::Text("ゲームビュー: 崩れる床 (%d, %d) にマウス。クリックでその橋を選ぶ", hovered->GetChipX(), hovered->GetChipY());
         } else {
             ImGui::TextDisabled("ゲームビューで床にマウスを乗せると水色に点滅、クリックでその橋を選ぶ");
@@ -764,6 +853,16 @@ namespace {
                 scrollToSelected = false;
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("押すとこの橋が白く点滅する");
+            {
+                int destroyedCount = 0;
+                for (auto* f : g.members) if (f->IsDestroyed()) ++destroyedCount;
+                if (destroyedCount > 0) {
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "%d 枚消えている", destroyedCount);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("復活")) { for (auto* f : g.members) if (f->IsDestroyed()) f->Reset(); }
+                }
+            }
             ImGui::SameLine();
             ImGui::Text("通れる上限");
             ImGui::SameLine();
@@ -772,7 +871,7 @@ namespace {
                 int v = g.minLimit;
                 if (FragileLimitInput("group", v, mixed)) {
                     for (auto* f : g.members) ApplyFragileLimit(map, f, v);
-                    unsaved = true;
+                    BlockDesignPanel::MarkUnsaved();
                 }
             }
             ImGui::SameLine();
@@ -783,7 +882,7 @@ namespace {
             if (!anyOverride) ImGui::BeginDisabled();
             if (ImGui::SmallButton("パレットの値に戻す")) {
                 for (auto* f : g.members) ResetFragileLimit(map, f);
-                unsaved = true;
+                BlockDesignPanel::MarkUnsaved();
             }
             if (!anyOverride) ImGui::EndDisabled();
 
@@ -804,14 +903,14 @@ namespace {
                         int v = f->GetPassLimit();
                         if (FragileLimitInput("one", v, false)) {
                             ApplyFragileLimit(map, f, v);
-                            unsaved = true;
+                            BlockDesignPanel::MarkUnsaved();
                         }
                         ImGui::SameLine();
                         bool ov = (map->GetBlockOverride(f->GetChipX(), f->GetChipY()) != nullptr);
                         if (!ov) ImGui::BeginDisabled();
                         if (ImGui::SmallButton("戻す")) {
                             ResetFragileLimit(map, f);
-                            unsaved = true;
+                            BlockDesignPanel::MarkUnsaved();
                         }
                         if (!ov) ImGui::EndDisabled();
                         ImGui::PopID();
@@ -824,19 +923,7 @@ namespace {
         }
 
         ImGui::Separator();
-        // 保存先はこのシーンが読み込んだステージファイル。エディタで別のステージに切り替えていると食い違うので、押した時だけ保存する
-        if (ImGui::Button("ステージファイルに保存 (Save)")) {
-            bool ok = map->SaveToFile(stagePath);
-            lastSaveMessage = ok ? "保存しました" : "保存に失敗しました";
-            if (ok) unsaved = false;
-        }
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", stagePath.c_str());
-        if (unsaved) {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "未保存の変更があります（エディタ側の自動保存でも書き込まれます）");
-        } else if (!lastSaveMessage.empty()) {
-            ImGui::TextDisabled("%s", lastSaveMessage.c_str());
-        }
+        BlockDesignPanel::DrawSaveRow(map, stagePath, "fragile");
     }
 }
 #endif
@@ -923,6 +1010,9 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     // ブロック設計：ゲームビューへの重ね描きとマウス選択は毎フレーム、パネルは開いている時だけ
     if (map_) {
         BlockDesignPanel::DrawOverlays(map_.get(), gameCamera_);
+        if (ImGui::CollapsingHeader("Switch & Door (スイッチとドアの連動)")) {
+            BlockDesignPanel::DrawLinksPanel(map_.get(), gameCamera_, s_TargetMapFilePath);
+        }
         if (ImGui::CollapsingHeader("Block Design (ブロック設計)")) {
             BlockDesignPanel::Draw(map_.get(), gameCamera_, s_TargetMapFilePath);
         }
@@ -931,6 +1021,16 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     // 崩れる床の調整（どれが崩れる床か／1枚ずつの通れる上限／ステージへの保存）
     if (map_ && ImGui::CollapsingHeader("Fragile Floors (崩れる床)")) {
         DrawFragileFloorImGui(map_.get(), gameCamera_, s_TargetMapFilePath);
+    }
+
+    if (ImGui::CollapsingHeader("Pause Menu (ポーズメニュー)")) {
+        ImGui::Checkbox("ポーズ状態 (isPaused)", &isPaused_);
+        const char* menuItems[] = { "0: リトライ (restartText)", "1: タイトル (titleText)" };
+        ImGui::Combo("選択中項目", &pauseMenuIndex_, menuItems, IM_ARRAYSIZE(menuItems));
+        if (ImGui::Button(isPaused_ ? "ポーズ解除 (Resume)" : "ポーズ実行 (Pause)")) {
+            isPaused_ = !isPaused_;
+            pausePulseTimer_ = 0.0f;
+        }
     }
 
     // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
@@ -1032,6 +1132,15 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImVec2 p = ImGui::GetWindowPos();
         drawList->AddRectFilled(p, ImVec2(p.x + windowWidth, p.y + windowHeight), IM_COL32(0, 0, 0, static_cast<int>(transitionAlpha_ * 255.0f)));
+        ImGui::End();
+    }
+
+    // ポーズ中の操作ガイド表示
+    if (isPaused_) {
+        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth * 0.5f, windowPos.y + windowHeight * 0.82f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::Begin("PauseGuideOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::SetWindowFontScale(1.8f);
+        ImGui::TextColored(ImVec4(0.95f, 0.95f, 0.95f, 0.9f), "W / S : 選択    SPACE / ENTER : 決定    TAB : 再開");
         ImGui::End();
     }
 #endif
@@ -1170,6 +1279,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 0. シャドウマップパス（スポットライト視点から深度描画）
     RenderShadowPass();
 
+    // ブロック設計パネルの重ね描きは、この描画に使われた行列で位置を合わせる（マップチップ画面の専用カメラにも対応）
+    BlockDesignPanel::SetRenderViewProjection(viewProjectionMatrix);
+
     // 1. Skyboxの描画
     if (skybox_) {
         skybox_->Draw();
@@ -1287,6 +1399,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     }
 #endif
+
+    // 4. ポーズメニューの描画 (最前面)
+    DrawPauseMenu();
 }
 
 
@@ -1695,4 +1810,135 @@ void GameScene::LoadBackgroundConfig() {
         }
         backgroundPlane_->Update();
     } catch (...) {}
+}
+
+void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
+    pausePulseTimer_ += dt;
+
+    auto kb = KeyboardInput::GetInstance();
+    auto pad = GamepadInput::GetInstance();
+
+    // W / S キーでメニュー項目の切り替え (上下矢印キー・アナログスティックは使用しない)
+    bool moveUp = false;
+    bool moveDown = false;
+
+    if (kb->IsKeyPressed(DIK_W)) {
+        moveUp = true;
+    }
+    if (kb->IsKeyPressed(DIK_S)) {
+        moveDown = true;
+    }
+
+    if (moveUp) {
+        pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+    } else if (moveDown) {
+        pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+    }
+
+    // 決定入力 (Space / Enter / パッド Aボタン)
+    bool isDecision = false;
+    if (kb->IsKeyPressed(DIK_SPACE) || kb->IsKeyPressed(DIK_RETURN) || kb->IsKeyPressed(DIK_NUMPADENTER)) {
+        isDecision = true;
+    }
+    if (pad && pad->IsButtonPressed(0)) {
+        isDecision = true;
+    }
+
+    if (isDecision) {
+        if (pauseMenuIndex_ == 0) {
+            // リトライ: 現在のステージを最初からリスタート
+            isPaused_ = false;
+            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+            return;
+        } else if (pauseMenuIndex_ == 1) {
+            // タイトル: タイトル画面へ遷移
+            isPaused_ = false;
+#ifdef USE_IMGUI
+            if (EditorManager::GetInstance()) {
+                EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
+                EditorManager::GetInstance()->SetUseDebugCamera(false);
+            }
+            EditorManager::SetPlaying(true);
+#endif
+            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+            return;
+        }
+    }
+
+    // 各スプライトのトランスフォーム・カラー更新
+    if (pauseBackdropSprite_) {
+        pauseBackdropSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.65f });
+        pauseBackdropSprite_->Update();
+    }
+    if (pauseTitleSprite_) {
+        pauseTitleSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+        pauseTitleSprite_->Update();
+    }
+
+    // 選択項目のパルス・ハイライト演出
+    float pulse = (sinf(pausePulseTimer_ * 6.0f) * 0.5f + 0.5f) * 0.25f; // 0.0 ~ 0.25
+    Vector4 highlightColor = { 1.0f, 0.88f + pulse * 0.12f, 0.20f, 1.0f }; // ゴールド/イエロー
+    Vector4 unselectedColor = { 0.60f, 0.60f, 0.60f, 0.75f };               // 控えめなグレー/白
+
+    // リトライ項目 (restartText.png: 500x100)
+    if (pauseRestartSprite_) {
+        const float baseW = 280.0f;
+        const float baseH = 56.0f;
+        if (pauseMenuIndex_ == 0) {
+            float scale = 1.08f + pulse * 0.04f;
+            float w = baseW * scale;
+            float h = baseH * scale;
+            pauseRestartSprite_->SetSize({ w, h });
+            pauseRestartSprite_->SetPosition({ (1280.0f - w) * 0.5f, 320.0f - (h - baseH) * 0.5f });
+            pauseRestartSprite_->SetColor(highlightColor);
+        } else {
+            pauseRestartSprite_->SetSize({ baseW, baseH });
+            pauseRestartSprite_->SetPosition({ (1280.0f - baseW) * 0.5f, 320.0f });
+            pauseRestartSprite_->SetColor(unselectedColor);
+        }
+        pauseRestartSprite_->Update();
+    }
+
+    // タイトル項目 (titleText.png: 500x100)
+    if (pauseTitleTextSprite_) {
+        const float baseW = 280.0f;
+        const float baseH = 56.0f;
+        if (pauseMenuIndex_ == 1) {
+            float scale = 1.08f + pulse * 0.04f;
+            float w = baseW * scale;
+            float h = baseH * scale;
+            pauseTitleTextSprite_->SetSize({ w, h });
+            pauseTitleTextSprite_->SetPosition({ (1280.0f - w) * 0.5f, 430.0f - (h - baseH) * 0.5f });
+            pauseTitleTextSprite_->SetColor(highlightColor);
+        } else {
+            pauseTitleTextSprite_->SetSize({ baseW, baseH });
+            pauseTitleTextSprite_->SetPosition({ (1280.0f - baseW) * 0.5f, 430.0f });
+            pauseTitleTextSprite_->SetColor(unselectedColor);
+        }
+        pauseTitleTextSprite_->Update();
+    }
+}
+
+void GameScene::DrawPauseMenu() {
+    if (!isPaused_) return;
+    if (!spriteCommon_) return;
+
+    spriteCommon_->PreDraw();
+
+    // 1. 暗幕背景
+    if (pauseBackdropSprite_) {
+        pauseBackdropSprite_->Draw();
+    }
+    // 2. 「ポーズ」見出し
+    if (pauseTitleSprite_) {
+        pauseTitleSprite_->Draw();
+    }
+    // 3. 「リトライ」項目
+    if (pauseRestartSprite_) {
+        pauseRestartSprite_->Draw();
+    }
+    // 4. 「タイトル」項目
+    if (pauseTitleTextSprite_) {
+        pauseTitleTextSprite_->Draw();
+    }
 }

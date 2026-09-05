@@ -169,6 +169,19 @@ public:
     void SetPlacementOverride(const std::string& blockType, const nlohmann::json& properties);
     void ClearPlacementOverride(const std::string& blockType);
     const nlohmann::json* GetPlacementOverride(const std::string& blockType) const;
+    // 新しく置いたスイッチに、まだ使われていない連動番号を自動で付ける（同じパレットから塗ったスイッチが全部同じ番号になるのを防ぐ）
+    void SetAutoNumberSwitches(bool on) { autoNumberSwitches_ = on; }
+    bool IsAutoNumberSwitches() const { return autoNumberSwitches_; }
+    // 今のステージで使われている連動番号の最大値 + 1（配置済みブロックと上書き設定の両方を見る）
+    int GetNextFreeLinkId() const;
+
+    // ===== プレイ中に変えた上書きの保護 =====
+    // エディタは再生開始時のマップを停止時に読み直すので、プレイ中に変えた上書きはそのままだと消える。
+    // 記録モードの間に変えた上書きを覚えておき、停止後の読み直しの後で ReapplyPlaytimeOverrides で戻す
+    void SetPlaytimeRecording(bool on) { playtimeRecording_ = on; }
+    bool HasPlaytimeOverrides() const { return !playtimeOverrides_.empty(); }
+    void ReapplyPlaytimeOverrides();
+    void ClearPlaytimeOverrides() { playtimeOverrides_.clear(); }
 
 public:
     void SetDirty() { isDirty_ = true; }
@@ -225,6 +238,9 @@ private:
     std::map<std::pair<int, int>, nlohmann::json> blockOverrides_;
     // 置いた瞬間に付ける上書き（キー = ブロック種類名）
     std::map<std::string, nlohmann::json> placementOverrides_;
+    bool autoNumberSwitches_ = true;
+    bool playtimeRecording_ = false;
+    std::map<std::pair<int, int>, nlohmann::json> playtimeOverrides_; // 値が null = 消した
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;

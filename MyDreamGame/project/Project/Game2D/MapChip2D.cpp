@@ -11,6 +11,8 @@
 #include "Blocks/OneWayBlock.h"
 #include "Blocks/ChainItemBlock.h"
 #include "Blocks/BlockFactory.h"
+#include "Blocks/SwitchBlock.h"
+#include "Blocks/DoorBlock.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -473,12 +475,17 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
         mapData_[y][x] = type;
         isDirty_ = true;
 
-        // 置いた瞬間に付ける上書き（例：次に置く崩れる床の上限）
+        // 置いた瞬間に付ける上書き（例：次に置く崩れる床の上限、次に置くスイッチ／ドアの番号）
+        std::string typeName = GetBlockTypeName(static_cast<int>(type));
         if (!placementOverrides_.empty()) {
-            auto it = placementOverrides_.find(GetBlockTypeName(static_cast<int>(type)));
+            auto it = placementOverrides_.find(typeName);
             if (it != placementOverrides_.end() && !it->second.empty()) {
                 blockOverrides_[{x, y}] = it->second;
             }
+        }
+        // 新しく置いたスイッチは空き番号にする（番号を決めていない時だけ）
+        if (autoNumberSwitches_ && typeName == "SwitchBlock" && blockOverrides_.find({x, y}) == blockOverrides_.end()) {
+            blockOverrides_[{x, y}] = {{"linkId", GetNextFreeLinkId()}};
         }
     }
 }
@@ -1196,6 +1203,33 @@ void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json& properties)
     if (!slot.is_object()) slot = nlohmann::json::object();
     slot.update(properties);
     isDirty_ = true;
+    if (playtimeRecording_) {
+        nlohmann::json& rec = playtimeOverrides_[{x, y}];
+        if (!rec.is_object()) rec = nlohmann::json::object();
+        rec.update(properties);
+    }
+}
+
+void MapChip2D::ReapplyPlaytimeOverrides() {
+    for (const auto& [key, props] : playtimeOverrides_) {
+        int x = key.first;
+        int y = key.second;
+        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) continue;
+        if (props.is_null()) {
+            blockOverrides_.erase({x, y});
+        } else {
+            nlohmann::json& slot = blockOverrides_[{x, y}];
+            if (!slot.is_object()) slot = nlohmann::json::object();
+            slot.update(props);
+        }
+        // 置かれているブロックにも即反映
+        if (BaseBlock* b = GetBlock(x, y)) {
+            nlohmann::json merged = GetPaletteProperties(x, y);
+            if (const nlohmann::json* ov = GetBlockOverride(x, y)) merged.update(*ov);
+            b->SetProperties(merged);
+        }
+    }
+    if (!playtimeOverrides_.empty()) isDirty_ = true;
 }
 
 const nlohmann::json* MapChip2D::GetBlockOverride(int x, int y) const {
@@ -1207,6 +1241,9 @@ const nlohmann::json* MapChip2D::GetBlockOverride(int x, int y) const {
 void MapChip2D::ClearBlockOverride(int x, int y) {
     if (blockOverrides_.erase({x, y}) > 0) {
         isDirty_ = true;
+    }
+    if (playtimeRecording_) {
+        playtimeOverrides_[{x, y}] = nullptr;
     }
 }
 
@@ -1225,6 +1262,22 @@ void MapChip2D::SetPlacementOverride(const std::string& blockType, const nlohman
 
 void MapChip2D::ClearPlacementOverride(const std::string& blockType) {
     placementOverrides_.erase(blockType);
+}
+
+int MapChip2D::GetNextFreeLinkId() const {
+    int maxId = 0;
+    for (const auto& b : updateBlocks_) {
+        if (!b || b->IsDestroyed()) continue;
+        if (auto* s = dynamic_cast<SwitchBlock*>(b.get())) maxId = (std::max)(maxId, s->GetLinkId());
+        else if (auto* d = dynamic_cast<DoorBlock*>(b.get())) maxId = (std::max)(maxId, d->GetLinkId());
+    }
+    // まだ組み立て前のチップの上書きも数える（連続で塗った時に同じ番号にならないように）
+    for (const auto& [key, props] : blockOverrides_) {
+        if (props.is_object() && props.contains("linkId") && props["linkId"].is_number()) {
+            maxId = (std::max)(maxId, props["linkId"].get<int>());
+        }
+    }
+    return maxId + 1;
 }
 
 const nlohmann::json* MapChip2D::GetPlacementOverride(const std::string& blockType) const {
