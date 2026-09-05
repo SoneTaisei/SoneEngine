@@ -138,8 +138,9 @@ public:
     void SaveLightingConfig(ModelCommon* modelCommon);
     void LoadLightingConfig(ModelCommon* modelCommon);
 
-    // 現在選択中のシーンタイプを取得
+    // 現在選択中のシーンタイプを取得・設定
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
+    void SetCurrentSceneType(SceneType type) { currentSceneType_ = type; }
 
     // 現在選択中のステージマップファイル名を取得
     const char* GetStageFilename() const { return mapEditor_ ? mapEditor_->GetStageFilename() : ""; }

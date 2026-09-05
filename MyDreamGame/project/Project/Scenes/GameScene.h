@@ -101,4 +101,25 @@ private:
     float irisInTimer_ = 0.0f;
     float irisInDuration_ = 1.2f;
     float irisInMaxRadius_ = 3.2f; // 約2倍に拡大（画面全体を十分に覆う）
+
+    // ---------------------------------------------------
+    // ポーズメニュー関連
+    // ---------------------------------------------------
+    bool isPaused_ = false;
+    int pauseMenuIndex_ = 0; // 0: リトライ (restartText.png), 1: タイトル (titleText.png)
+    float pausePulseTimer_ = 0.0f;
+    float pauseCooldown_ = 0.0f;
+
+    std::unique_ptr<class Sprite> pauseBackdropSprite_;
+    std::unique_ptr<class Sprite> pauseTitleSprite_;
+    std::unique_ptr<class Sprite> pauseRestartSprite_;
+    std::unique_ptr<class Sprite> pauseTitleTextSprite_;
+
+    uint32_t pauseBackdropTexHandle_ = 0;
+    uint32_t pauseTitleTexHandle_ = 0;
+    uint32_t pauseRestartTexHandle_ = 0;
+    uint32_t pauseTitleTextTexHandle_ = 0;
+
+    void UpdatePauseMenu(float dt, SceneManager* sceneManager);
+    void DrawPauseMenu();
 };
