@@ -10,6 +10,7 @@
 #include "Renderer/SrvManager.h"
 #include <algorithm>
 #include <filesystem>
+#include <set>
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #ifdef USE_IMGUI
@@ -577,7 +578,72 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         return modelData;
     }
 
-    // 2. メッシュの解析（備考に基づき、全メッシュをループ）
+    // 2. マテリアルの解析（テクスチャ収集およびマルチマテリアルカラーの抽出）
+    std::vector<std::string> materialTexturePaths(scene->mNumMaterials);
+    std::set<std::string> uniqueTextures;
+    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
+        aiMaterial *material = scene->mMaterials[materialIndex];
+        if (!material) continue;
+        aiString textureFilePath;
+        std::string resolvedPath;
+        if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
+            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
+            resolvedPath = directoryPath + "/" + textureFilePath.C_Str();
+        } else if (material->GetTextureCount(aiTextureType_BASE_COLOR) != 0) {
+            material->GetTexture(aiTextureType_BASE_COLOR, 0, &textureFilePath);
+            resolvedPath = directoryPath + "/" + textureFilePath.C_Str();
+        }
+
+        if (!resolvedPath.empty() && std::filesystem::exists(resolvedPath)) {
+            materialTexturePaths[materialIndex] = resolvedPath;
+            uniqueTextures.insert(resolvedPath);
+        }
+    }
+
+    bool isMultiTextureModel = (uniqueTextures.size() > 1);
+
+    std::vector<aiColor4D> materialColors(scene->mNumMaterials, aiColor4D(1.0f, 1.0f, 1.0f, 1.0f));
+    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
+        aiMaterial *material = scene->mMaterials[materialIndex];
+        if (!material) continue;
+
+        aiColor4D col(1.0f, 1.0f, 1.0f, 1.0f);
+        bool gotColor = false;
+
+        // マルチテクスチャモデルの場合は各テクスチャ画像から代表色を抽出して頂点カラーに焼き込む
+        const std::string& texFile = materialTexturePaths[materialIndex];
+        if (isMultiTextureModel && !texFile.empty()) {
+            try {
+                DirectX::ScratchImage image = LoadTexture(texFile);
+                const DirectX::Image* img = image.GetImage(0, 0, 0);
+                if (img && img->pixels) {
+                    DirectX::ScratchImage converted;
+                    const DirectX::Image* srcImg = img;
+                    if (img->format != DXGI_FORMAT_R32G32B32A32_FLOAT) {
+                        if (SUCCEEDED(DirectX::Convert(*img, DXGI_FORMAT_R32G32B32A32_FLOAT, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, converted))) {
+                            srcImg = converted.GetImage(0, 0, 0);
+                        }
+                    }
+                    if (srcImg && srcImg->pixels) {
+                        size_t midX = srcImg->width / 2;
+                        size_t midY = srcImg->height / 2;
+                        const float* pixel = reinterpret_cast<const float*>(srcImg->pixels + (midY * srcImg->rowPitch) + (midX * sizeof(float) * 4));
+                        col = aiColor4D(pixel[0], pixel[1], pixel[2], pixel[3]);
+                        gotColor = true;
+                    }
+                }
+            } catch (...) {}
+        }
+
+        if (!gotColor) {
+            if (material->Get(AI_MATKEY_BASE_COLOR, col) != AI_SUCCESS) {
+                material->Get(AI_MATKEY_COLOR_DIFFUSE, col);
+            }
+        }
+        materialColors[materialIndex] = col;
+    }
+
+    // 3. メッシュの解析（備考に基づき、全メッシュをループ）
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh *mesh = scene->mMeshes[meshIndex];
         if (!mesh) continue;
@@ -585,8 +651,14 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         // MultiMesh/MultiMaterial対応のため、頂点の開始位置を記録しておく
         uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
 
+        // メッシュに紐づくマテリアルのカラーを取得
+        aiColor4D materialColor = (mesh->mMaterialIndex < materialColors.size())
+            ? materialColors[mesh->mMaterialIndex]
+            : aiColor4D(1.0f, 1.0f, 1.0f, 1.0f);
+
         bool hasNormals = mesh->HasNormals();
         bool hasTexCoords = mesh->HasTextureCoords(0);
+        bool hasColors = mesh->HasVertexColors(0);
 
         // 頂点データの解析
         for (uint32_t vIndex = 0; vIndex < mesh->mNumVertices; ++vIndex) {
@@ -598,7 +670,13 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             vertex.position = {position.x, position.y, position.z, 1.0f};
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
-            vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+            if (hasColors) {
+                aiColor4D &c = mesh->mColors[0][vIndex];
+                vertex.color = {c.r, c.g, c.b, c.a};
+            } else {
+                vertex.color = {materialColor.r, materialColor.g, materialColor.b, materialColor.a};
+            }
             modelData.vertices.push_back(vertex);
         }
 
@@ -647,18 +725,15 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         }
     }
 
-    // 3. マテリアルの解析（Diffuse / BaseColor テクスチャを取得）
-    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
-        aiMaterial *material = scene->mMaterials[materialIndex];
-        if (!material) continue;
-        aiString textureFilePath;
-        if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
-            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
-            modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
-        } else if (material->GetTextureCount(aiTextureType_BASE_COLOR) != 0) {
-            material->GetTexture(aiTextureType_BASE_COLOR, 0, &textureFilePath);
-            modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
-        }
+    // 4. モデル全体のテクスチャパスを決定
+    if (isMultiTextureModel) {
+        // マルチテクスチャモデルの場合は各テクスチャ色を頂点カラーに焼き込んだため、
+        // モデル全体のテクスチャは空（白1x1テクスチャにフォールバック）にして色分けを維持
+        modelData.material.textureFilePath = "";
+    } else if (uniqueTextures.size() == 1) {
+        modelData.material.textureFilePath = *uniqueTextures.begin();
+    } else {
+        modelData.material.textureFilePath = "";
     }
 
     if (scene->mRootNode) {
