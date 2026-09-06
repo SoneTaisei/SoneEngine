@@ -1057,6 +1057,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
 
 void MapChip2D::Resize(int newWidth, int newHeight) {
     if (newWidth <= 0 || newHeight <= 0) return;
+    if (mapWidth_ == newWidth && mapHeight_ == newHeight) return;
 
     // 現在のデータを退避させつつ新しいグリッドを生成する
     std::vector<std::vector<ChipType>> newMapData(newHeight, std::vector<ChipType>(newWidth, ChipType::kNone));
@@ -1076,7 +1077,18 @@ void MapChip2D::Resize(int newWidth, int newHeight) {
     mapWidth_ = newWidth;
     mapHeight_ = newHeight;
 
-    // 描画オブジェクトを再構築
+    // 縮小時に範囲外になったブロック上書き設定をクリーンアップ
+    for (auto it = blockOverrides_.begin(); it != blockOverrides_.end(); ) {
+        if (it->first.first >= newWidth || it->first.second >= newHeight) {
+            it = blockOverrides_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    isDirty_ = true;
+
+    // 描画オブジェクトおよび境界当たり判定を再構築
     RebuildChipObjects();
 }
 

@@ -37,6 +37,16 @@ AnimationEditorContext::AnimationEditorContext() {
 void AnimationEditorContext::Initialize() {
 }
 
+std::string AnimationEditorContext::GetCurrentModelName() const {
+    if (selectedGameObject_) return selectedGameObject_->GetName();
+    if (selectedObject_) return selectedObject_->GetName();
+    return "Player";
+}
+
+std::string AnimationEditorContext::GetModelAnimationDirectory() const {
+    return "resources/json/shared/" + GetCurrentModelName();
+}
+
 AnimatorComponent* AnimationEditorContext::GetTargetAnimator(SceneManager* sceneManager) {
     if (selectedGameObject_) {
         auto* a = selectedGameObject_->GetComponent<AnimatorComponent>();
@@ -171,22 +181,40 @@ void AnimationEditorContext::RefreshAnimationJointList(SceneManager* sceneManage
     if (!found && !currentJointList_.empty()) {
         animEditorSelectedJointName_ = currentJointList_[0];
     }
+
+    // ターゲットモデルが変更された場合、アニメーションファイル一覧を再スキャン
+    std::string currentModel = GetCurrentModelName();
+    if (currentModel != lastTargetModelName_) {
+        lastTargetModelName_ = currentModel;
+        ScanAnimationFiles();
+        if (!availableAnimationFiles_.empty()) {
+            currentAnimFilePath_ = availableAnimationFiles_[0];
+            LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_);
+        } else {
+            editingAnimation_ = Animation{};
+            editingAnimation_.duration = 1.0f;
+        }
+        animTempOverrides_.clear();
+        animEditorTime_ = 0.0f;
+    }
 }
 
 void AnimationEditorContext::ScanAnimationFiles() {
     availableAnimationFiles_.clear();
-    const std::string animDir = "resources/json/shared/Player";
+    const std::string animDir = GetModelAnimationDirectory();
     std::filesystem::create_directories(animDir);
 
-    // 既知の標準プリセットファイルが存在しなければ作成
-    std::string wallClimbPath = animDir + "/wall_climb_animation.json";
-    std::string airDashPath = animDir + "/air_dash_animation.json";
+    // Playerモデルの場合、既知の標準プリセットファイルが存在しなければ作成
+    if (GetCurrentModelName() == "Player") {
+        std::string wallClimbPath = animDir + "/wall_climb_animation.json";
+        std::string airDashPath = animDir + "/air_dash_animation.json";
 
-    if (!std::filesystem::exists(wallClimbPath)) {
-        SaveAnimationToJsonFile(CreateDefaultWallClimbAnimation(), wallClimbPath);
-    }
-    if (!std::filesystem::exists(airDashPath)) {
-        SaveAnimationToJsonFile(CreateDefaultAirDashAnimation(), airDashPath);
+        if (!std::filesystem::exists(wallClimbPath)) {
+            SaveAnimationToJsonFile(CreateDefaultWallClimbAnimation(), wallClimbPath);
+        }
+        if (!std::filesystem::exists(airDashPath)) {
+            SaveAnimationToJsonFile(CreateDefaultAirDashAnimation(), airDashPath);
+        }
     }
 
     // ディレクトリ内のすべての.jsonファイルを列挙
@@ -209,8 +237,7 @@ void AnimationEditorContext::ScanAnimationFiles() {
         if (!availableAnimationFiles_.empty()) {
             currentAnimFilePath_ = availableAnimationFiles_[0];
         } else {
-            currentAnimFilePath_ = wallClimbPath;
-            availableAnimationFiles_.push_back(wallClimbPath);
+            currentAnimFilePath_ = animDir + "/default_animation.json";
         }
     }
 }

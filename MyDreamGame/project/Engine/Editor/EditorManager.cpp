@@ -69,6 +69,8 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     lightEditor_->Initialize(nullptr);
     postEffectEditor_ = std::make_unique<PostEffectEditor>();
     postEffectEditor_->Initialize();
+    animModelSelectModal_ = std::make_unique<ModelSelectModal>();
+    animModelSelectModal_->Initialize();
     postEffectEditor_->SetOnSelectCallback([this]() {
         selectedGameObject_ = nullptr;
         selectedObject_ = nullptr;
@@ -935,7 +937,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 }
             }
             if (animationEditor_) animationEditor_->SetHovered(ImGui::IsWindowHovered());
-            if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawMainView(sceneManager, activeCamera, renderTextureSrvHandle); }
+            if (animationEditor_) {
+                auto* animScene = dynamic_cast<AnimationPreviewScene*>(sceneManager->GetCurrentScene());
+                if (animScene) {
+                    if (!selectedGameObject_ && !animScene->GetGameObjects().empty()) {
+                        selectedGameObject_ = animScene->GetGameObjects()[0];
+                    }
+                    animScene->SetSelectedGameObject(selectedGameObject_);
+                }
+                animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
+                animationEditor_->DrawMainView(sceneManager, activeCamera, renderTextureSrvHandle);
+            }
         }
         ImGui::End();
     }
@@ -1176,9 +1188,113 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (ImGui::Begin("ヒエラルキー", &showHierarchy_)) {
                 IScene *activeScene = sceneManager->GetCurrentScene();
                 if (activeScene) {
-                    bool isModelPlacementActive = (activeMainTab_ == "3Dモデル配置") || showModelPlacementEditor_;
+                    AnimationPreviewScene* animPreviewScene = dynamic_cast<AnimationPreviewScene*>(activeScene);
+                    bool isAnimMode = (currentMode_ == EditorMode::Animation) || (activeMainTab_ == "アニメーションエディター") || (animPreviewScene != nullptr);
 
-                    if (isModelPlacementActive) {
+                    if (animPreviewScene || isAnimMode) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.48f, 0.78f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.60f, 0.95f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.40f, 0.68f, 1.0f));
+                        if (ImGui::Button("+ モデルを追加 (Add Model)", ImVec2(-1.0f, 30.0f))) {
+                            openAnimModelSelectModal_ = true;
+                            if (animModelSelectModal_) {
+                                animModelSelectModal_->RefreshModelList();
+                            }
+                        }
+                        ImGui::PopStyleColor(3);
+
+                        if (animPreviewScene) {
+                            ImGui::Spacing();
+                            float btnWidth = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
+                            if (ImGui::Button("[保存]", ImVec2(btnWidth, 24.0f))) {
+                                animPreviewScene->SaveHierarchyToJson();
+                            }
+                            if (ImGui::IsItemHovered()) ImGui::SetTooltip("追加・編集したオブジェクト状態をJSONに手動保存します");
+
+                            ImGui::SameLine();
+                            if (ImGui::Button("[読込]", ImVec2(btnWidth, 24.0f))) {
+                                animPreviewScene->LoadHierarchyFromJson();
+                                selectedGameObject_ = animPreviewScene->GetSelectedGameObject();
+                                if (animationEditor_) {
+                                    animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
+                                    animationEditor_->RefreshAnimationJointList(sceneManager);
+                                }
+                            }
+                            if (ImGui::IsItemHovered()) ImGui::SetTooltip("JSONからオブジェクト状態を再読み込みします");
+
+                            ImGui::SameLine();
+                            if (ImGui::Button("[初期化]", ImVec2(btnWidth, 24.0f))) {
+                                animPreviewScene->ResetHierarchyToDefault();
+                                selectedGameObject_ = animPreviewScene->GetSelectedGameObject();
+                                if (animationEditor_) {
+                                    animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
+                                    animationEditor_->RefreshAnimationJointList(sceneManager);
+                                }
+                            }
+                            if (ImGui::IsItemHovered()) ImGui::SetTooltip("ヒエラルキーを初期状態（Playerのみ）にリセットします");
+
+                            ImGui::TextDisabled("※モデル追加・削除時は自動保存されます");
+                        }
+
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Spacing();
+
+                        if (ImGui::CollapsingHeader("GameObjects", ImGuiTreeNodeFlags_DefaultOpen)) {
+                            std::shared_ptr<GameObject> animObjToDelete = nullptr;
+                            for (auto &obj : activeScene->GetGameObjects()) {
+                                bool isSelected = (selectedGameObject_ == obj);
+                                if (ImGui::Selectable(obj->GetName().c_str(), isSelected)) {
+                                    selectedGameObject_ = obj;
+                                    selectedObject_ = nullptr;
+                                    selectedParticle_ = nullptr;
+                                    selectedPrimitive_ = nullptr;
+                                    if (animPreviewScene) {
+                                        animPreviewScene->SetSelectedGameObject(obj);
+                                    }
+                                    if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
+                                    if (animationEditor_) {
+                                        animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
+                                        animationEditor_->RefreshAnimationJointList(sceneManager);
+                                    }
+                                }
+
+                                if (animPreviewScene) {
+                                    if (ImGui::BeginPopupContextItem()) {
+                                        if (ImGui::MenuItem("削除 (Delete)")) {
+                                            animObjToDelete = obj;
+                                        }
+                                        ImGui::EndPopup();
+                                    }
+                                }
+                            }
+                            if (animObjToDelete && animPreviewScene) {
+                                if (selectedGameObject_ == animObjToDelete) {
+                                    selectedGameObject_ = nullptr;
+                                    if (animationEditor_) {
+                                        animationEditor_->SetSelectedTargets(nullptr, nullptr, nullptr);
+                                        animationEditor_->RefreshAnimationJointList(sceneManager);
+                                    }
+                                }
+                                animPreviewScene->RemoveGameObject(animObjToDelete);
+                            }
+                        }
+
+                        // 選択中オブジェクトのスケルトンボーン一覧
+                        if (animationEditor_ && !animationEditor_->GetCurrentJointList().empty()) {
+                            ImGui::Spacing();
+                            ImGui::Separator();
+                            if (ImGui::TreeNodeEx("[Bones] ボーン / 関節", ImGuiTreeNodeFlags_DefaultOpen)) {
+                                for (const auto& jointName : animationEditor_->GetCurrentJointList()) {
+                                    bool isJointSelected = (animationEditor_->GetSelectedJointName() == jointName);
+                                    if (ImGui::Selectable(("  " + jointName).c_str(), isJointSelected)) {
+                                        animationEditor_->SetSelectedJointName(jointName);
+                                    }
+                                }
+                                ImGui::TreePop();
+                            }
+                        }
+                    } else if (currentMode_ == EditorMode::ModelPlacement || activeMainTab_ == "3Dモデル配置") {
                         // 3Dモデル配置モード時: GameObjects のみ（および3D配置モデル）をヒエラルキーに表示
                         if (ImGui::CollapsingHeader("GameObjects", ImGuiTreeNodeFlags_DefaultOpen)) {
                             for (auto &obj : activeScene->GetGameObjects()) {
@@ -1224,7 +1340,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                             }
                         }
                     } else {
-                        // 通常・アニメーションモード時: 全カテゴリを表示
+                        // 通常モード時: 全カテゴリを表示
                         // 1. プレイヤー（存在する場合）
                         if (activeScene->GetPlayer()) {
                             auto* player = activeScene->GetPlayer();
@@ -1345,6 +1461,31 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     ImGui::Separator();
                     postEffectEditor_->DrawHierarchy();
                 }
+
+                // アニメーションエディタ用モデル選択モーダルダイアログ
+                if (openAnimModelSelectModal_) {
+                    ImGui::OpenPopup("モデルを選択してオブジェクトを追加##AnimModelSelectModal");
+                }
+                if (animModelSelectModal_) {
+                    animModelSelectModal_->DrawModal("モデルを選択してオブジェクトを追加##AnimModelSelectModal", openAnimModelSelectModal_, [&](const ModelSelectItem& selectedItem) {
+                        auto* pScene = dynamic_cast<AnimationPreviewScene*>(sceneManager->GetCurrentScene());
+                        if (pScene) {
+                            auto newObj = pScene->AddGameObjectFromModel(selectedItem.directoryPath, selectedItem.fileName, selectedItem.displayName);
+                            if (newObj) {
+                                selectedGameObject_ = newObj;
+                                pScene->SetSelectedGameObject(newObj);
+                                selectedObject_ = nullptr;
+                                selectedParticle_ = nullptr;
+                                selectedPrimitive_ = nullptr;
+                                if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
+                                if (animationEditor_) {
+                                    animationEditor_->SetSelectedTargets(nullptr, selectedGameObject_, nullptr);
+                                    animationEditor_->RefreshAnimationJointList(sceneManager);
+                                }
+                            }
+                        }
+                    });
+                }
             }
             ImGui::End();
         }
@@ -1361,31 +1502,60 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             int mapTool = mapEditor_ ? mapEditor_->GetContext()->GetSelectedTool() : 0;
             bool isMapChipSelected = (mapTool >= 100 || (mapTool >= 1 && mapTool <= 12));
             bool isPlacedModelSelected = (model3DEditor_ && model3DEditor_->GetSelectedObject() != nullptr);
-            if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected || selectedReplayBlock_.IsValid() || isPlacedModelSelected) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
-                if (ImGui::Button("グローバル設定を表示", ImVec2(-1, 0))) {
-                    selectedGameObject_ = nullptr;
-                    selectedObject_ = nullptr;
-                    selectedParticle_ = nullptr;
-                    selectedPrimitive_ = nullptr;
-                    selectedReplayBlock_.Clear();
-                    if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
-                    if (mapEditor_) mapEditor_->GetContext()->SetSelectedTool(0);
-                    selectedReplaySeekbar_ = false;
+            if (currentMode_ == EditorMode::Animation) {
+                if (forceShowGlobalSettings_) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.55f, 0.35f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.68f, 0.45f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.42f, 0.28f, 1.0f));
+                    if (ImGui::Button("[ アニメーション設定に戻る ]", ImVec2(-1, 28))) {
+                        forceShowGlobalSettings_ = false;
+                    }
+                    ImGui::PopStyleColor(3);
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.28f, 0.38f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.4f, 0.55f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.22f, 0.3f, 1.0f));
+                    if (ImGui::Button("グローバル設定を表示 (ゲーム全体)", ImVec2(-1, 26))) {
+                        forceShowGlobalSettings_ = true;
+                    }
+                    ImGui::PopStyleColor(3);
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
                 }
-                ImGui::PopStyleColor(3);
-                ImGui::Spacing();
-                ImGui::Separator();
-                ImGui::Spacing();
+            } else {
+                int mapTool = mapEditor_ ? mapEditor_->GetContext()->GetSelectedTool() : 0;
+                bool isMapChipSelected = (mapTool >= 100 || (mapTool >= 1 && mapTool <= 12));
+                bool isPlacedModelSelected = (model3DEditor_ && model3DEditor_->GetSelectedObject() != nullptr);
+                if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected || selectedReplayBlock_.IsValid() || isPlacedModelSelected) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.35f, 0.45f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
+                    if (ImGui::Button("グローバル設定を表示", ImVec2(-1, 0))) {
+                        selectedGameObject_ = nullptr;
+                        selectedObject_ = nullptr;
+                        selectedParticle_ = nullptr;
+                        selectedPrimitive_ = nullptr;
+                        selectedReplayBlock_.Clear();
+                        if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
+                        if (mapEditor_) mapEditor_->GetContext()->SetSelectedTool(0);
+                        selectedReplaySeekbar_ = false;
+                    }
+                    ImGui::PopStyleColor(3);
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                }
             }
 
-            if (currentMode_ == EditorMode::Animation) {
+            if (currentMode_ == EditorMode::Animation && !forceShowGlobalSettings_) {
                 if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->DrawInspectorUI(sceneManager); }
-            } else if (currentMode_ == EditorMode::GPUParticle) {
+            } else if (currentMode_ == EditorMode::GPUParticle && !forceShowGlobalSettings_) {
                 if (gpuParticleEditor_) { gpuParticleEditor_->DrawInspectorUI(sceneManager); }
-            } else if (selectedReplayBlock_.IsValid()) {
+            } else if (selectedReplayBlock_.IsValid() && !forceShowGlobalSettings_) {
                 ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "キー入力ノード プロパティ");
                 ImGui::Separator();
                 ImGui::Spacing();
@@ -1555,15 +1725,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     );
                 }
                 ImGui::PopStyleColor(2);
-            } else if (model3DEditor_ && model3DEditor_->GetSelectedObject()) {
+            } else if (model3DEditor_ && model3DEditor_->GetSelectedObject() && !forceShowGlobalSettings_) {
                 model3DEditor_->DrawInspectorUI(sceneManager);
-            } else if (selectedGameObject_) {
+            } else if (selectedGameObject_ && !forceShowGlobalSettings_) {
                 selectedGameObject_->DisplayImGui();
-            } else if (selectedObject_) {
+            } else if (selectedObject_ && !forceShowGlobalSettings_) {
                 selectedObject_->DisplayImGui("Object Properties");
-            } else if (selectedParticle_) {
+            } else if (selectedParticle_ && !forceShowGlobalSettings_) {
                 selectedParticle_->DrawImGui();
-            } else if (selectedPrimitive_) {
+            } else if (selectedPrimitive_ && !forceShowGlobalSettings_) {
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
             } else {
                 if (currentMode_ == EditorMode::Replay) {
@@ -1797,6 +1967,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         showSpotLightPanel_ = true;
                         activeMainTab_ = "ライトエディター";
                         currentMode_ = EditorMode::Light;
+                        forceShowGlobalSettings_ = false;
                         focusActiveTabCountdown_ = 5;
                         focusSpotLightTabCountdown_ = 5;
                         SaveSceneConfig();
@@ -2596,6 +2767,29 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             if (((ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) || (ctrl && shift && ImGui::IsKeyPressed(ImGuiKey_Z, false)))) {
                 model3DEditor_->GetContext()->Redo();
+            }
+        }
+    }
+
+    // マップエディター用 Undo (Ctrl+Z) / Redo (Ctrl+Y or Ctrl+Shift+Z)
+    if (activeMainTab_ == "マップチップ" || showMapSettings_ || (mapEditor_ && mapEditor_->IsVisible())) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (mapEditor_ && !io.WantTextInput && activeMainTab_ != "3Dモデル配置") {
+            bool ctrl = io.KeyCtrl;
+            bool shift = io.KeyShift;
+            if (ctrl && !shift && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                mapEditor_->GetContext()->Undo();
+                IScene* activeScene = sceneManager ? sceneManager->GetCurrentScene() : nullptr;
+                if (activeScene && activeScene->GetMapChip() && EditorManager::IsPlaying()) {
+                    SyncPlayMapData(activeScene->GetMapChip());
+                }
+            }
+            if (((ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) || (ctrl && shift && ImGui::IsKeyPressed(ImGuiKey_Z, false)))) {
+                mapEditor_->GetContext()->Redo();
+                IScene* activeScene = sceneManager ? sceneManager->GetCurrentScene() : nullptr;
+                if (activeScene && activeScene->GetMapChip() && EditorManager::IsPlaying()) {
+                    SyncPlayMapData(activeScene->GetMapChip());
+                }
             }
         }
     }
