@@ -23,6 +23,7 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["respawnDuration_"] = params.respawnDuration_;
         j["goalWaitTime_"] = params.goalWaitTime_;
         j["chainJumpPenalty_"] = params.chainJumpPenalty_;
+        j["modelScale_"] = params.modelScale_;
         
         std::ofstream file(filepath);
         if (file.is_open()) {
@@ -63,6 +64,7 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         if (j.contains("respawnDuration_")) params.respawnDuration_ = j["respawnDuration_"];
         if (j.contains("goalWaitTime_")) params.goalWaitTime_ = j["goalWaitTime_"];
         if (j.contains("chainJumpPenalty_")) params.chainJumpPenalty_ = j["chainJumpPenalty_"];
+        if (j.contains("modelScale_")) params.modelScale_ = j["modelScale_"];
         
         std::cout << "Player parameters loaded from " << filepath << std::endl;
     } catch (const std::exception& e) {

@@ -764,6 +764,10 @@ Vector3 ChainManager::ComputeSocketWorld() {
     socketValid_ = false;
     if (player_) {
         if (Object3D* model = player_->GetModelObject()) {
+            if (auto pos = model->GetJointWorldPosition("右手")) {
+                socketValid_ = true;
+                return *pos;
+            }
             if (auto pos = model->GetJointWorldPosition(kSocketJointName)) {
                 socketValid_ = true;
                 if (!loggedSocketState_) {

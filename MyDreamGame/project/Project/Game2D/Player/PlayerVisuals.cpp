@@ -22,22 +22,31 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
         animator_->Initialize();
         animator_->SetModelData(playerModel->GetModelData());
 
-        idleAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Idle");
-        walkAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Walk");
-        jumpAnimation_ = LoadAnimationFile("resources/Object/Original/gaikotu", "scene.gltf", "Jump");
+        // 新プレイヤーモデル用のアニメーション読み込み（エディタで保存したJSONを優先読み込み）
+        if (!LoadAnimationFromJsonFile(idleAnimation_, "resources/json/shared/Player/Idle_animation.json")) {
+            idleAnimation_ = LoadAnimationFile("resources/Object/Original/player", "Player.gltf", "Idle");
+        }
+        if (!LoadAnimationFromJsonFile(walkAnimation_, "resources/json/shared/Player/walk_animation.json")) {
+            walkAnimation_ = idleAnimation_;
+        }
+        if (!LoadAnimationFromJsonFile(jumpAnimation_, "resources/json/shared/Player/jump_animation.json")) {
+            jumpAnimation_ = idleAnimation_;
+        }
 
         if (!LoadAnimationFromJsonFile(wallClimbAnimation_, "resources/json/shared/Player/wall_climb_animation.json")) {
-            wallClimbAnimation_ = CreateDefaultWallClimbAnimation();
+            wallClimbAnimation_ = idleAnimation_;
         }
         if (!LoadAnimationFromJsonFile(holdingWallAnimation_, "resources/json/shared/Player/holding_wall.json")) {
             holdingWallAnimation_ = idleAnimation_;
         }
         if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
-            airDashAnimation_ = CreateDefaultAirDashAnimation();
+            airDashAnimation_ = idleAnimation_;
         }
 
         animator_->SetAnimation(idleAnimation_);
         animator_->Play();
+
+        capePhysics_.Initialize(animator_.get());
 
         modelObj_->SetAnimator(animator_.get());
     }
@@ -228,6 +237,8 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         
         modelObj_->SetTranslation(modelPos);
         
+        float baseScale = (params.modelScale_ > 0.0f) ? params.modelScale_ : 2.0f;
+
         if (state.isDashing_) {
             modelObj_->GetMaterial().color = params.colorDashed_;
             Vector3 dashDir = state.velocity_;
@@ -239,7 +250,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             }
             float stretch = 1.0f + (speed * 0.02f);
             float squash = 1.0f / stretch;
-            modelObj_->SetScale({ 1.0f * stretch, 1.0f * squash, 1.0f });
+            modelObj_->SetScale({ baseScale * stretch, baseScale * squash, baseScale });
             modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
         } else {
             if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
@@ -259,12 +270,17 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             } else {
                 modelObj_->GetMaterial().color = params.colorNormal_;
             }
-            modelObj_->SetScale({ 1.0f, 1.0f, 1.0f });
+            modelObj_->SetScale({ baseScale, baseScale, baseScale });
             modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
         }
         
         if (!state.isDead_) {
             modelObj_->Update();
+
+            if (animator_) {
+                capePhysics_.Update(animator_.get(), modelObj_->GetWorldMatrix(), state.velocity_, deltaTime);
+                animator_->UpdateSkeletonAndSkinCluster();
+            }
         }
     }
 
@@ -611,6 +627,16 @@ void PlayerVisuals::DisplayImGui() {
         ImGui::SliderFloat3("右肩回転 (RArm X,Y,Z)", debugRArmRot_, -3.14f, 3.14f);
         ImGui::SliderFloat3("左肘回転 (LForeArm X,Y,Z)", debugLForeArmRot_, -3.14f, 3.14f);
         ImGui::SliderFloat3("右肘回転 (RForeArm X,Y,Z)", debugRForeArmRot_, -3.14f, 3.14f);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("マント揺れもの物理 (Cape Physics)")) {
+        CapeParams& cp = capePhysics_.GetParams();
+        ImGui::SliderFloat("復元バネ力 (Stiffness)", &cp.stiffness, 0.05f, 0.8f);
+        ImGui::SliderFloat("空気抵抗 (Damping)", &cp.damping, 0.5f, 0.98f);
+        ImGui::SliderFloat("慣性追従率 (Inertia)", &cp.inertiaFactor, 0.0f, 2.0f);
+        ImGui::SliderFloat("そよ風の強さ (Wind)", &cp.windStrength, 0.0f, 0.5f);
+        ImGui::SliderFloat3("重力 (Gravity)", &cp.gravity.x, -20.0f, 10.0f);
         ImGui::TreePop();
     }
 }

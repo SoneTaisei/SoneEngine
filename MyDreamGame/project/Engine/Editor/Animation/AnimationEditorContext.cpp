@@ -125,12 +125,11 @@ void AnimationEditorContext::RefreshAnimationJointList(SceneManager* sceneManage
             calcDepth(rootIdx, 0);
         }
 
-        // 開閉フラグの初期化（未設定のノードについて設定: ルートのみ展開し、子は閉じる）
+        // 開閉フラグの初期化（未設定のノードについて設定: デフォルトで全展開）
         for (int32_t i = 0; i < numJoints; ++i) {
             const std::string& name = animJointTreeNodes_[i].name;
             if (animJointExpanded_.find(name) == animJointExpanded_.end()) {
-                bool isRoot = (animJointTreeNodes_[i].parentIndex < 0);
-                animJointExpanded_[name] = isRoot;
+                animJointExpanded_[name] = true;
             }
         }
     }
@@ -165,7 +164,7 @@ void AnimationEditorContext::RefreshAnimationJointList(SceneManager* sceneManage
             }
             animJointTreeNodes_.push_back(node);
             if (animJointExpanded_.find(name) == animJointExpanded_.end()) {
-                animJointExpanded_[name] = (i == 0);
+                animJointExpanded_[name] = true;
             }
         }
     }
@@ -462,7 +461,9 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
                                 (jointA.name.find(".L") != std::string::npos && jointB.name.find(".R") != std::string::npos) ||
                                 (jointA.name.find(".R") != std::string::npos && jointB.name.find(".L") != std::string::npos) ||
                                 (jointA.name.find("left") != std::string::npos && jointB.name.find("right") != std::string::npos) ||
-                                (jointA.name.find("right") != std::string::npos && jointB.name.find("left") != std::string::npos)) {
+                                (jointA.name.find("right") != std::string::npos && jointB.name.find("left") != std::string::npos) ||
+                                (jointA.name.find("左") != std::string::npos && jointB.name.find("右") != std::string::npos) ||
+                                (jointA.name.find("右") != std::string::npos && jointB.name.find("左") != std::string::npos)) {
                                 score += 100.0f;
                             }
                         }
@@ -535,6 +536,7 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
     if (!currentJointList_.empty()) {
         if (axisX) { // X軸対称 (左右: Left <-> Right)
             std::vector<std::pair<std::string, std::string>> patterns = {
+                { "左", "右" },
                 { "Left", "Right" }, { "left", "right" }, { "LEFT", "RIGHT" },
                 { "_L", "_R" }, { "_l", "_r" },
                 { ".L", ".R" }, { ".l", ".r" },
@@ -781,9 +783,9 @@ void AnimationEditorContext::InsertAllJointsSRTKey(SceneManager* sceneManager) {
         if (skel) {
             auto itJ = skel->jointMap.find(jName);
             if (itJ != skel->jointMap.end()) {
-                curQ = skel->joints[itJ->second].defaultTransform.rotate;
-                curT = skel->joints[itJ->second].defaultTransform.translate;
-                curS = skel->joints[itJ->second].defaultTransform.scale;
+                curQ = skel->joints[itJ->second].transform.rotate;
+                curT = skel->joints[itJ->second].transform.translate;
+                curS = skel->joints[itJ->second].transform.scale;
             }
         }
 

@@ -37,21 +37,15 @@ void BlenderLevelTestScene::Initialize() {
         camera_->GetProjectionMatrix()
     );
 
-    // 自キャラ (Player) オブジェクトの生成 (resources/Object/Original/gaikotu を使用)
-    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
+    // 自キャラ (Player) オブジェクトの生成 (resources/Object/Original/player を使用)
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/player", "Player.gltf");
     if (!playerModel) {
-        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "gaikotu.obj");
-    }
-    if (!playerModel) {
-        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/School/multiMesh", "multiMesh.obj");
-    }
-    if (!playerModel) {
-        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/sphere", "sphere.obj");
+        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
     }
     if (playerModel) {
         player_ = std::make_unique<Object3D>();
         player_->Initialize(device, playerModel);
-        player_->SetName("Player (gaikotu)");
+        player_->SetName("Player");
     }
 
     // 2. レベルローダーの初期化とファイルロード

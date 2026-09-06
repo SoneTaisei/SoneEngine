@@ -313,6 +313,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerInput.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp" />
+    <ClCompile Include="Project\Game2D\Player\CapePhysics.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
@@ -558,6 +559,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerPhysics.h" />
+    <ClInclude Include="Project\Game2D\Player\CapePhysics.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

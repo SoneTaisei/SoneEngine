@@ -9,6 +9,7 @@
 
 #include "GameObject/Object3D.h"
 #include "Component/AnimatorComponent.h"
+#include "CapePhysics.h"
 
 struct DustParticle {
     Vector3 position;
@@ -56,8 +57,10 @@ public:
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
     Object3D* GetModelObject() { return modelObj_.get(); }
     AnimatorComponent* GetAnimator() { return animator_.get(); }
+    CapePhysics& GetCapePhysics() { return capePhysics_; }
 
 private:
+    CapePhysics capePhysics_;
     std::unique_ptr<PrimitiveObject> primitiveObj_;
     std::unique_ptr<Object3D> modelObj_;
     std::unique_ptr<AnimatorComponent> animator_;
