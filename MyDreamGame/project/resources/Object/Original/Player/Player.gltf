@@ -8,28 +8,440 @@
 		{
 			"name":"Scene",
 			"nodes":[
-				0
+				20
 			]
 		}
 	],
 	"nodes":[
 		{
-			"mesh":0,
-			"name":"PlayerModel",
+			"name":"\u5de6\u624b",
+			"rotation":[
+				0.9832947850227356,
+				-0.18202032148838043,
+				3.086724404965935e-07,
+				1.3742159410412569e-08
+			],
+			"scale":[
+				1.0000001192092896,
+				1.0000001192092896,
+				1
+			],
+			"translation":[
+				-0.2713368535041809,
+				0.3455928862094879,
+				-6.469174707035563e-08
+			]
+		},
+		{
+			"name":"\u982d",
+			"rotation":[
+				-5.674835890090435e-08,
+				-0.0017123210709542036,
+				9.71580108033443e-11,
+				0.9999985098838806
+			],
 			"translation":[
 				0,
-				0.699999988079071,
+				0.48646658658981323,
 				0
 			]
+		},
+		{
+			"name":"\u53f3\u624b",
+			"rotation":[
+				-0.9103554487228394,
+				-0.1680113524198532,
+				-0.37190598249435425,
+				0.06863728910684586
+			],
+			"scale":[
+				1.000001072883606,
+				1.000000238418579,
+				1.0000001192092896
+			],
+			"translation":[
+				0.271256685256958,
+				0.3463042974472046,
+				6.467263347076369e-08
+			]
+		},
+		{
+			"name":"\u30dc\u30fc\u30f3.004",
+			"rotation":[
+				0.04086202755570412,
+				-2.0889640047600487e-14,
+				9.742270101753547e-09,
+				0.9991648197174072
+			],
+			"scale":[
+				1,
+				1.0000001192092896,
+				1
+			],
+			"translation":[
+				-3.552713678800501e-15,
+				0.14236867427825928,
+				0
+			]
+		},
+		{
+			"children":[
+				3
+			],
+			"name":"\u30dc\u30fc\u30f3.005",
+			"rotation":[
+				0.27723896503448486,
+				-9.244144891836642e-16,
+				6.609893432596436e-08,
+				0.9608010053634644
+			],
+			"scale":[
+				1,
+				0.9999998807907104,
+				1
+			],
+			"translation":[
+				-7.105427357601002e-15,
+				0.09190568327903748,
+				2.9802322387695312e-08
+			]
+		},
+		{
+			"children":[
+				4
+			],
+			"name":"\u30de\u30f3\u30c8\u4e2d\u592e_3",
+			"rotation":[
+				0.91306072473526,
+				1.5563976295913592e-14,
+				2.1769071167909715e-07,
+				0.4078235626220703
+			],
+			"translation":[
+				-3.0495499458993436e-08,
+				0.4962652921676636,
+				0.127907395362854
+			]
+		},
+		{
+			"name":"\u30dc\u30fc\u30f3.008",
+			"rotation":[
+				0.036132462322711945,
+				-0.012076983228325844,
+				0.019082698971033096,
+				0.9990918636322021
+			],
+			"scale":[
+				0.9999999403953552,
+				0.9999999403953552,
+				1
+			],
+			"translation":[
+				9.313225746154785e-10,
+				0.14236867427825928,
+				-2.0023435354232788e-08
+			]
+		},
+		{
+			"children":[
+				6
+			],
+			"name":"\u30dc\u30fc\u30f3.009",
+			"rotation":[
+				0.2076876014471054,
+				-0.21535897254943848,
+				0.18365006148815155,
+				0.9363541007041931
+			],
+			"translation":[
+				-1.862645149230957e-08,
+				0.09190569818019867,
+				-2.60770320892334e-08
+			]
+		},
+		{
+			"children":[
+				7
+			],
+			"name":"\u30de\u30f3\u30c8\u4e2d\u592e_2",
+			"rotation":[
+				0.8846741318702698,
+				0.26276129484176636,
+				0.2259017676115036,
+				0.31189197301864624
+			],
+			"translation":[
+				0.0719049796462059,
+				0.4962652921676636,
+				0.10051314532756805
+			]
+		},
+		{
+			"name":"\u30dc\u30fc\u30f3.011",
+			"rotation":[
+				0.036220211535692215,
+				0.01207545306533575,
+				-0.018915612250566483,
+				0.9990918636322021
+			],
+			"scale":[
+				1,
+				1.0000001192092896,
+				1
+			],
+			"translation":[
+				-3.026798367500305e-08,
+				0.14236868917942047,
+				-3.166496753692627e-08
+			]
+		},
+		{
+			"children":[
+				9
+			],
+			"name":"\u30dc\u30fc\u30f3.012",
+			"rotation":[
+				0.20866192877292633,
+				0.21470142900943756,
+				-0.18254223465919495,
+				0.9365050792694092
+			],
+			"scale":[
+				1.0000001192092896,
+				1,
+				1
+			],
+			"translation":[
+				-7.450580596923828e-09,
+				0.09190567582845688,
+				7.450580596923828e-09
+			]
+		},
+		{
+			"children":[
+				10
+			],
+			"name":"\u30de\u30f3\u30c8\u4e2d\u592e_4",
+			"rotation":[
+				0.8848319053649902,
+				-0.26109686493873596,
+				-0.22528308629989624,
+				0.3132866322994232
+			],
+			"scale":[
+				0.9999999403953552,
+				0.9999997615814209,
+				0.9999997019767761
+			],
+			"translation":[
+				-0.085011325776577,
+				0.4962652921676636,
+				0.10518461465835571
+			]
+		},
+		{
+			"name":"\u30dc\u30fc\u30f3.014",
+			"rotation":[
+				0.012545173987746239,
+				-0.11539025604724884,
+				0.03888867795467377,
+				0.9924794435501099
+			],
+			"scale":[
+				0.9999999403953552,
+				0.9999999403953552,
+				0.9999999403953552
+			],
+			"translation":[
+				7.450580596923828e-09,
+				0.14236865937709808,
+				9.313225746154785e-09
+			]
+		},
+		{
+			"children":[
+				12
+			],
+			"name":"\u30dc\u30fc\u30f3.015",
+			"rotation":[
+				0.004881638567894697,
+				-0.17078198492527008,
+				0.2771960198879242,
+				0.9455009698867798
+			],
+			"scale":[
+				1,
+				1,
+				1.000000238418579
+			],
+			"translation":[
+				-2.60770320892334e-08,
+				0.09190571308135986,
+				-7.450580596923828e-09
+			]
+		},
+		{
+			"children":[
+				13
+			],
+			"name":"\u30de\u30f3\u30c8\u4e2d\u592e_1",
+			"rotation":[
+				0.8691182732582092,
+				0.4032188355922699,
+				0.279845267534256,
+				0.06111158803105354
+			],
+			"scale":[
+				1,
+				0.9999999403953552,
+				1
+			],
+			"translation":[
+				0.10886501520872116,
+				0.4962652921676636,
+				0.05036921799182892
+			]
+		},
+		{
+			"name":"\u30dc\u30fc\u30f3.017",
+			"rotation":[
+				-0.0012383392313495278,
+				0.127317875623703,
+				-0.19003258645534515,
+				0.9734866619110107
+			],
+			"scale":[
+				1,
+				0.9999999403953552,
+				0.9999998807907104
+			],
+			"translation":[
+				1.6763806343078613e-08,
+				0.1773332953453064,
+				4.6566128730773926e-09
+			]
+		},
+		{
+			"children":[
+				15
+			],
+			"name":"\u30dc\u30fc\u30f3.018",
+			"rotation":[
+				0.0711151659488678,
+				0.11889692395925522,
+				-0.15113061666488647,
+				0.9787572622299194
+			],
+			"scale":[
+				1,
+				1,
+				0.9999999403953552
+			],
+			"translation":[
+				-3.725290298461914e-08,
+				0.08387456834316254,
+				-6.05359673500061e-09
+			]
+		},
+		{
+			"children":[
+				16
+			],
+			"name":"\u30de\u30f3\u30c8\u4e2d\u592e_5",
+			"rotation":[
+				0.8971095085144043,
+				-0.35063526034355164,
+				-0.25209492444992065,
+				0.09326092898845673
+			],
+			"scale":[
+				1.000000238418579,
+				1.000000238418579,
+				1
+			],
+			"translation":[
+				-0.11013612151145935,
+				0.49744081497192383,
+				0.05901239439845085
+			]
+		},
+		{
+			"children":[
+				0,
+				1,
+				2,
+				5,
+				8,
+				11,
+				14,
+				17
+			],
+			"name":"\u4f53",
+			"rotation":[
+				0,
+				1.1920928955078125e-07,
+				0,
+				1
+			],
+			"translation":[
+				0,
+				0.03397439792752266,
+				0
+			]
+		},
+		{
+			"mesh":0,
+			"name":"\u30d7\u30ec\u30a4\u30e4\u30fc",
+			"skin":0
+		},
+		{
+			"children":[
+				19,
+				18
+			],
+			"name":"\u30dc\u30fc\u30f3"
 		}
 	],
 	"materials":[
 		{
 			"doubleSided":true,
-			"name":"PlayerMaterial",
+			"name":"\u7d2b",
 			"pbrMetallicRoughness":{
 				"baseColorTexture":{
 					"index":0
+				},
+				"metallicFactor":0,
+				"roughnessFactor":0.5
+			}
+		},
+		{
+			"doubleSided":true,
+			"name":"\u767d",
+			"pbrMetallicRoughness":{
+				"baseColorTexture":{
+					"index":1
+				},
+				"metallicFactor":0,
+				"roughnessFactor":0.5
+			}
+		},
+		{
+			"doubleSided":true,
+			"name":"\u8d64",
+			"pbrMetallicRoughness":{
+				"baseColorTexture":{
+					"index":2
+				},
+				"metallicFactor":0,
+				"roughnessFactor":0.5
+			}
+		},
+		{
+			"doubleSided":true,
+			"name":"\u30b0\u30ec\u30fc",
+			"pbrMetallicRoughness":{
+				"baseColorTexture":{
+					"index":3
 				},
 				"metallicFactor":0,
 				"roughnessFactor":0.5
@@ -38,16 +450,51 @@
 	],
 	"meshes":[
 		{
-			"name":"\u7403",
+			"name":"\u5186\u67f1.005",
 			"primitives":[
 				{
 					"attributes":{
 						"POSITION":0,
 						"NORMAL":1,
-						"TEXCOORD_0":2
+						"TEXCOORD_0":2,
+						"JOINTS_0":3,
+						"WEIGHTS_0":4
 					},
-					"indices":3,
+					"indices":5,
 					"material":0
+				},
+				{
+					"attributes":{
+						"POSITION":6,
+						"NORMAL":7,
+						"TEXCOORD_0":8,
+						"JOINTS_0":9,
+						"WEIGHTS_0":10
+					},
+					"indices":11,
+					"material":1
+				},
+				{
+					"attributes":{
+						"POSITION":12,
+						"NORMAL":13,
+						"TEXCOORD_0":14,
+						"JOINTS_0":15,
+						"WEIGHTS_0":16
+					},
+					"indices":17,
+					"material":2
+				},
+				{
+					"attributes":{
+						"POSITION":18,
+						"NORMAL":19,
+						"TEXCOORD_0":20,
+						"JOINTS_0":21,
+						"WEIGHTS_0":22
+					},
+					"indices":23,
+					"material":3
 				}
 			]
 		}
@@ -56,87 +503,422 @@
 		{
 			"sampler":0,
 			"source":0
+		},
+		{
+			"sampler":0,
+			"source":1
+		},
+		{
+			"sampler":0,
+			"source":2
+		},
+		{
+			"sampler":0,
+			"source":3
 		}
 	],
 	"images":[
 		{
 			"mimeType":"image/png",
-			"name":"Player_Diffuse",
-			"uri":"Player_Diffuse.png"
+			"name":"purple",
+			"uri":"purple.png"
+		},
+		{
+			"mimeType":"image/png",
+			"name":"white",
+			"uri":"white.png"
+		},
+		{
+			"mimeType":"image/png",
+			"name":"red",
+			"uri":"red.png"
+		},
+		{
+			"mimeType":"image/png",
+			"name":"gray",
+			"uri":"gray.png"
+		}
+	],
+	"skins":[
+		{
+			"inverseBindMatrices":24,
+			"joints":[
+				18,
+				0,
+				1,
+				2,
+				5,
+				4,
+				3,
+				8,
+				7,
+				6,
+				11,
+				10,
+				9,
+				14,
+				13,
+				12,
+				17,
+				16,
+				15
+			],
+			"name":"\u30dc\u30fc\u30f3"
 		}
 	],
 	"accessors":[
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":91752,
+			"count":7350,
 			"max":[
-				0.35600000619888306,
-				0.2699631154537201,
-				0.17499998211860657
+				0.26922935247421265,
+				0.9090720415115356,
+				0.26922935247421265
 			],
 			"min":[
-				-0.35599997639656067,
-				-0.5949999690055847,
-				-0.46856066584587097
+				-0.26922935247421265,
+				0.15702486038208008,
+				-0.23868905007839203
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":91752,
+			"count":7350,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":91752,
+			"count":7350,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":3,
-			"componentType":5125,
-			"count":136692,
+			"componentType":5121,
+			"count":7350,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":4,
+			"componentType":5126,
+			"count":7350,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":5,
+			"componentType":5123,
+			"count":39450,
 			"type":"SCALAR"
+		},
+		{
+			"bufferView":6,
+			"componentType":5126,
+			"count":1560,
+			"max":[
+				0.3593711853027344,
+				0.709899365901947,
+				0.07499995082616806
+			],
+			"min":[
+				-0.35964661836624146,
+				0.2132001370191574,
+				-0.16020232439041138
+			],
+			"type":"VEC3"
+		},
+		{
+			"bufferView":7,
+			"componentType":5126,
+			"count":1560,
+			"type":"VEC3"
+		},
+		{
+			"bufferView":8,
+			"componentType":5126,
+			"count":1560,
+			"type":"VEC2"
+		},
+		{
+			"bufferView":9,
+			"componentType":5121,
+			"count":1560,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":10,
+			"componentType":5126,
+			"count":1560,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":11,
+			"componentType":5123,
+			"count":6852,
+			"type":"SCALAR"
+		},
+		{
+			"bufferView":12,
+			"componentType":5126,
+			"count":48,
+			"max":[
+				0.08960378170013428,
+				0.6803528666496277,
+				-0.12565067410469055
+			],
+			"min":[
+				-0.08960385620594025,
+				0.6574742197990417,
+				-0.15370264649391174
+			],
+			"type":"VEC3"
+		},
+		{
+			"bufferView":13,
+			"componentType":5126,
+			"count":48,
+			"type":"VEC3"
+		},
+		{
+			"bufferView":14,
+			"componentType":5126,
+			"count":48,
+			"type":"VEC2"
+		},
+		{
+			"bufferView":15,
+			"componentType":5121,
+			"count":48,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":16,
+			"componentType":5126,
+			"count":48,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":17,
+			"componentType":5123,
+			"count":72,
+			"type":"SCALAR"
+		},
+		{
+			"bufferView":18,
+			"componentType":5126,
+			"count":1118,
+			"max":[
+				0.19999994337558746,
+				0.8308182954788208,
+				0.1999998688697815
+			],
+			"min":[
+				-0.19999980926513672,
+				0.005631566047668457,
+				-0.20000000298023224
+			],
+			"type":"VEC3"
+		},
+		{
+			"bufferView":19,
+			"componentType":5126,
+			"count":1118,
+			"type":"VEC3"
+		},
+		{
+			"bufferView":20,
+			"componentType":5126,
+			"count":1118,
+			"type":"VEC2"
+		},
+		{
+			"bufferView":21,
+			"componentType":5121,
+			"count":1118,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":22,
+			"componentType":5126,
+			"count":1118,
+			"type":"VEC4"
+		},
+		{
+			"bufferView":23,
+			"componentType":5123,
+			"count":5760,
+			"type":"SCALAR"
+		},
+		{
+			"bufferView":24,
+			"componentType":5126,
+			"count":19,
+			"type":"MAT4"
 		}
 	],
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":1101024,
+			"byteLength":88200,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1101024,
-			"byteOffset":1101024,
+			"byteLength":88200,
+			"byteOffset":88200,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":734016,
-			"byteOffset":2202048,
+			"byteLength":58800,
+			"byteOffset":176400,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":546768,
-			"byteOffset":2936064,
+			"byteLength":29400,
+			"byteOffset":235200,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":117600,
+			"byteOffset":264600,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":78900,
+			"byteOffset":382200,
 			"target":34963
+		},
+		{
+			"buffer":0,
+			"byteLength":18720,
+			"byteOffset":461100,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":18720,
+			"byteOffset":479820,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":12480,
+			"byteOffset":498540,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":6240,
+			"byteOffset":511020,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":24960,
+			"byteOffset":517260,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":13704,
+			"byteOffset":542220,
+			"target":34963
+		},
+		{
+			"buffer":0,
+			"byteLength":576,
+			"byteOffset":555924,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":576,
+			"byteOffset":556500,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":384,
+			"byteOffset":557076,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":192,
+			"byteOffset":557460,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":768,
+			"byteOffset":557652,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":144,
+			"byteOffset":558420,
+			"target":34963
+		},
+		{
+			"buffer":0,
+			"byteLength":13416,
+			"byteOffset":558564,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":13416,
+			"byteOffset":571980,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":8944,
+			"byteOffset":585396,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":4472,
+			"byteOffset":594340,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":17888,
+			"byteOffset":598812,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":11520,
+			"byteOffset":616700,
+			"target":34963
+		},
+		{
+			"buffer":0,
+			"byteLength":1216,
+			"byteOffset":628220
 		}
 	],
 	"samplers":[
 		{
-			"magFilter":9728,
-			"minFilter":9984
+			"magFilter":9729,
+			"minFilter":9987
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":3482832,
-			"uri":"Player.bin"
+			"byteLength":629436,
+			"uri":"player.bin"
 		}
 	]
 }
