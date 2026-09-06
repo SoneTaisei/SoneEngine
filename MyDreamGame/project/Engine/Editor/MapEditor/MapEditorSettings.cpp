@@ -113,6 +113,88 @@ void MapEditorSettings::Draw(
                 ImGui::Separator();
                 ImGui::Spacing();
 
+                // ルーム編集モード
+                bool roomEdit = context_->IsRoomEditMode();
+                if (ImGui::Checkbox("ルーム編集モード (カメラ・ステージ範囲)", &roomEdit)) {
+                    context_->SetRoomEditMode(roomEdit);
+                }
+                if (context_->IsRoomEditMode()) {
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "【ルーム編集の操作方法】");
+                    ImGui::BulletText("左ドラッグ: マス目にスナップして作成・移動・リサイズ");
+                    ImGui::BulletText("右ドラッグ: スナップなしで作成・移動・リサイズ");
+                    ImGui::BulletText("Ctrl + クリック: ルームの削除");
+                    ImGui::Spacing();
+                }
+
+                ImGui::Separator();
+
+                // マップサイズ設定
+                ImGui::Text("マップサイズ設定 (1画面 ＝ 幅:20, 高さ:11)");
+                ImGui::TextDisabled("※ ステージを広げたい場合はサイズを拡張してください (Ctrl+ZでUndo可能)");
+
+                ImGui::SetNextItemWidth(90.0f);
+                ImGui::InputInt("幅 (Width)", context_->GetInputWidthPtr());
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(90.0f);
+                ImGui::InputInt("高さ (Height)", context_->GetInputHeightPtr());
+                ImGui::SameLine();
+                if (ImGui::Button("サイズ適用 (Apply)")) {
+                    context_->BeginMapHistoryCapture(mapChip);
+                    int w = context_->GetInputWidth();
+                    int h = context_->GetInputHeight();
+                    if (w < 1) w = 1;
+                    if (h < 1) h = 1;
+                    context_->SetInputSize(w, h);
+                    mapChip->Resize(w, h);
+                    context_->EndMapHistoryCapture(mapChip);
+                    if (EditorManager::IsPlaying()) {
+                        EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                    }
+                }
+
+                // クイック拡張ボタン
+                ImGui::Text("クイック拡張:");
+                ImGui::SameLine();
+                if (ImGui::Button("+1画面 右へ (幅+20)")) {
+                    context_->BeginMapHistoryCapture(mapChip);
+                    int w = mapChip->GetWidth() + 20;
+                    int h = mapChip->GetHeight();
+                    context_->SetInputSize(w, h);
+                    mapChip->Resize(w, h);
+                    context_->EndMapHistoryCapture(mapChip);
+                    if (EditorManager::IsPlaying()) {
+                        EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("+1画面 上へ (高さ+11)")) {
+                    context_->BeginMapHistoryCapture(mapChip);
+                    int w = mapChip->GetWidth();
+                    int h = mapChip->GetHeight() + 11;
+                    context_->SetInputSize(w, h);
+                    mapChip->Resize(w, h);
+                    context_->EndMapHistoryCapture(mapChip);
+                    if (EditorManager::IsPlaying()) {
+                        EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                    }
+                }
+
+                // ルームをマップ全体に合わせるボタン
+                if (ImGui::Button("ルームを現在のマップ全体に合わせる")) {
+                    context_->BeginRoomHistoryCapture(mapChip);
+                    mapChip->GenerateDefaultRooms();
+                    context_->EndRoomHistoryCapture(mapChip);
+                    if (EditorManager::IsPlaying()) {
+                        EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                    }
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("マップサイズを広げた際、カメラのスクロール・追従範囲もマップ全体に拡大します");
+                }
+
+                ImGui::Separator();
+                ImGui::Spacing();
+
                 // 表示設定
                 bool showGrid = context_->IsShowGrid();
                 if (ImGui::Checkbox("グリッド線を表示", &showGrid)) {
@@ -126,6 +208,28 @@ void MapEditorSettings::Draw(
                     mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
                     if (onSaveSceneConfig) {
                         onSaveSceneConfig();
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("クリア")) {
+                    context_->BeginMapHistoryCapture(mapChip);
+                    mapChip->ClearMap();
+                    context_->EndMapHistoryCapture(mapChip);
+                    if (EditorManager::IsPlaying()) {
+                        EditorManager::GetInstance()->SyncPlayMapData(mapChip);
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("初期化")) {
+                    context_->BeginMapHistoryCapture(mapChip);
+                    context_->BeginRoomHistoryCapture(mapChip);
+                    mapChip->ResetMap();
+                    context_->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
+                    context_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                    context_->EndMapHistoryCapture(mapChip);
+                    context_->EndRoomHistoryCapture(mapChip);
+                    if (EditorManager::IsPlaying()) {
+                        EditorManager::GetInstance()->SyncPlayMapData(mapChip);
                     }
                 }
                 ImGui::SameLine();

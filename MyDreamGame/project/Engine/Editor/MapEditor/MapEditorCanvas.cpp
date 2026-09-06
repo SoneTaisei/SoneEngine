@@ -209,20 +209,6 @@ void MapEditorCanvas::Draw(
                         context_->SetEditMode(static_cast<MapEditorContext::MapEditMode>(m));
                     }
 
-                    // Undo / Redo
-                    if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
-                        context_->Undo();
-                        if (EditorManager::IsPlaying()) {
-                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
-                        }
-                    }
-                    if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-                        context_->Redo();
-                        if (EditorManager::IsPlaying()) {
-                            EditorManager::GetInstance()->SyncPlayMapData(mapChip);
-                        }
-                    }
-
                     if (context_->IsRoomEditMode()) {
                         float hitDist = 0.5f;
                         auto& rooms = mapChip->GetRooms();

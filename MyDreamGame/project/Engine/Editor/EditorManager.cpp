@@ -2771,6 +2771,29 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         }
     }
 
+    // マップエディター用 Undo (Ctrl+Z) / Redo (Ctrl+Y or Ctrl+Shift+Z)
+    if (activeMainTab_ == "マップチップ" || showMapSettings_ || (mapEditor_ && mapEditor_->IsVisible())) {
+        ImGuiIO& io = ImGui::GetIO();
+        if (mapEditor_ && !io.WantTextInput && activeMainTab_ != "3Dモデル配置") {
+            bool ctrl = io.KeyCtrl;
+            bool shift = io.KeyShift;
+            if (ctrl && !shift && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+                mapEditor_->GetContext()->Undo();
+                IScene* activeScene = sceneManager ? sceneManager->GetCurrentScene() : nullptr;
+                if (activeScene && activeScene->GetMapChip() && EditorManager::IsPlaying()) {
+                    SyncPlayMapData(activeScene->GetMapChip());
+                }
+            }
+            if (((ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) || (ctrl && shift && ImGui::IsKeyPressed(ImGuiKey_Z, false)))) {
+                mapEditor_->GetContext()->Redo();
+                IScene* activeScene = sceneManager ? sceneManager->GetCurrentScene() : nullptr;
+                if (activeScene && activeScene->GetMapChip() && EditorManager::IsPlaying()) {
+                    SyncPlayMapData(activeScene->GetMapChip());
+                }
+            }
+        }
+    }
+
     // 起動時のアクティブタブ復元
     if (focusActiveTabCountdown_ > 0) {
         if (!activeMainTab_.empty()) {
