@@ -1,4 +1,4 @@
-﻿#include "ChainManager.h"
+#include "ChainManager.h"
 #include "Game2D/Security/AlertSystem.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
@@ -9,10 +9,15 @@
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
 #include "Core/Utility/UtilityFunctions.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 #include <algorithm>
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
+
+ChainManager::ChainManager() = default;
+ChainManager::~ChainManager() = default;
 
 void ChainManager::Initialize(Player2D* player) {
     player_ = player;
@@ -20,6 +25,14 @@ void ChainManager::Initialize(Player2D* player) {
     worldChains_.clear();
     droppedCounter_ = 0;
     loggedSocketState_ = false;
+
+    // 破断エフェクトの読み込み
+    ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
+    if (device) {
+        breakEffect_ = std::make_unique<GPUParticleSystem>();
+        breakEffect_->Initialize(device);
+        breakEffect_->LoadFromFile("resources/json/shared/Particle/FX_ChainBreak.json");
+    }
 
     ChainConfig::Load(params_, ChainConfig::kDefaultFilePath);
 
@@ -228,6 +241,12 @@ void ChainManager::DetachUnits() {
     // 先に個数を減らしてから（同フレームの Reconcile が二重に削らないよう current == target にする）
     player_->AddChainLength(-detach);
 
+    // 外したエフェクト再生
+    if (breakEffect_) {
+        Vector3 detachPos = removed.empty() ? lastSocketWorld_ : removed[0].pos;
+        breakEffect_->PlayAt(detachPos);
+    }
+
     // 切り離したノード列を「つながったままの1本」の自由鎖として生成
     // （pos/prevPos維持 = 切り離し時の速度を引き継ぐ。パラメータは切り離し元のプレイヤー鎖と揃える）
     auto dropped = std::make_unique<Chain2D>();
@@ -343,6 +362,10 @@ void ChainManager::Update(float dt, MapChip2D* map) {
         }
     }
     SyncTreasureTransform();
+
+    if (breakEffect_ && breakEffect_->IsPlaying()) {
+        breakEffect_->Update(dt);
+    }
 }
 
 void ChainManager::Draw() {
@@ -360,6 +383,12 @@ void ChainManager::Draw() {
     }
     if (treasure_ && !transitionHidden_) {
         treasure_->Draw();
+    }
+}
+
+void ChainManager::DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager) {
+    if (breakEffect_ && breakEffect_->IsPlaying()) {
+        breakEffect_->Draw(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
     }
 }
 
@@ -404,6 +433,10 @@ void ChainManager::ResetAll() {
     if (treasure_) {
         treasure_->SetHighlight(false);
     }
+    if (breakEffect_) {
+        breakEffect_->Restart();
+        breakEffect_->Pause();
+    }
     SyncTreasureTransform();
 }
 
@@ -419,6 +452,10 @@ void ChainManager::OnRewindEnd() {
     if (spin_) {
         spin_->Cancel(player_, playerChain_.get());
         spin_->ResetInputState();
+    }
+    if (breakEffect_) {
+        breakEffect_->Restart();
+        breakEffect_->Pause();
     }
     ClearTorn();
     droppedChains_.clear();
@@ -669,8 +706,14 @@ void ChainManager::Tear(int splitIndex) {
     }
     // 分割点：手元側は 0..k、ちぎれる側は k..末端（k の節を両側に持たせて隙間を作らない）。両側とも2節以上残す
     int k = std::clamp(splitIndex, 1, n - 2);
+    Vector3 breakPos = all[k].pos;
     std::vector<VerletNode> tornNodes(all.begin() + k, all.end());
     EndWeight weight = playerChain_->GetEndWeight();
+
+    // 破断エフェクト再生
+    if (breakEffect_) {
+        breakEffect_->PlayAt(breakPos);
+    }
 
     // 手元側：k までを残す。宝石（末端の重り）はちぎれた側へ移る
     playerChain_->TruncateNodes(k + 1);

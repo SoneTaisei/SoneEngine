@@ -136,7 +136,7 @@ void GPUParticleEmitter::SpawnParticle() {
         break;
     }
     }
-    p.position = pos;
+    p.position = { pos.x + position_.x, pos.y + position_.y, pos.z + position_.z };
 
     // 2. 速度ベクトル
     Vector3 baseDir = data_.initialVelocityDir;

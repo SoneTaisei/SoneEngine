@@ -46,6 +46,10 @@ public:
     float GetCurrentTime() const { return systemTime_; }
     void SetCurrentTime(float t);
 
+    // 位置設定
+    void SetPosition(const Vector3& position) { position_ = position; }
+    const Vector3& GetPosition() const { return position_; }
+
 private:
     void ReallocateGpuResources(ID3D12Device* device, uint32_t maxCount);
     void SpawnParticle();
@@ -55,6 +59,7 @@ private:
 private:
     ID3D12Device* device_ = nullptr;
     GPUParticleEmitterData data_;
+    Vector3 position_ = { 0.0f, 0.0f, 0.0f };
 
     std::vector<GPUParticleInstance> particles_;
     uint32_t numActiveParticles_ = 0;

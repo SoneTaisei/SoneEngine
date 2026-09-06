@@ -28,6 +28,17 @@ public:
     void Restart();
     void TriggerBurstAll();
 
+    // 指定位置でリスタートして再生
+    void PlayAt(const Vector3& position) {
+        SetPosition(position);
+        Restart();
+        Play();
+    }
+
+    // 位置設定
+    void SetPosition(const Vector3& position);
+    const Vector3& GetPosition() const { return position_; }
+
     bool IsPlaying() const { return isPlaying_; }
     float GetCurrentTime() const { return systemTime_; }
     void SetCurrentTime(float t) {
@@ -69,6 +80,7 @@ private:
     ID3D12Device* device_ = nullptr;
     GPUParticleSystemData systemData_;
     std::vector<std::unique_ptr<GPUParticleEmitter>> emitters_;
+    Vector3 position_ = { 0.0f, 0.0f, 0.0f };
 
     float systemTime_ = 0.0f;
     bool isPlaying_ = false;

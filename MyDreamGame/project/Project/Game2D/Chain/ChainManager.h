@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Game2D/Chain/Chain2D.h"
 #include "Game2D/Chain/ChainSpinAction.h"
 #include "Game2D/Treasure/Treasure2D.h"
@@ -7,9 +7,13 @@
 #include <string>
 #include <vector>
 
+#include "Effect/GPUParticle/GPUParticleSystem.h"
+
 class Player2D;
 class MapChip2D;
 class Object3D;
+class ParticleCommon;
+class ModelManager;
 
 /// <summary>
 /// 鎖全体の管理（ユニット制）
@@ -25,6 +29,9 @@ class Object3D;
 /// </summary>
 class ChainManager {
 public:
+    ChainManager();
+    ~ChainManager();
+
     // gaikotu 既存ジョイント（右手）。左手なら "LeftHand_Dummy_012"
     static constexpr const char* kSocketJointName = "RightHand_Dummy_017";
 
@@ -61,6 +68,7 @@ public:
     void Update(float dt, MapChip2D* map);
 
     void Draw();
+    void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
 
     /// <summary>
     /// プレイ開始・リプレイ再生開始時のリセット
@@ -158,4 +166,7 @@ private:
     float prevGemSpeed_ = 0.0f;      // 前フレームの宝石の速さ（急に止まったら騒音）
     float prevTornGemSpeed_ = 0.0f;  // ちぎれた側の宝石
     bool wasDead_ = false;
+
+    // 破損エフェクト（ちぎれた時に再生）
+    std::unique_ptr<GPUParticleSystem> breakEffect_;
 };

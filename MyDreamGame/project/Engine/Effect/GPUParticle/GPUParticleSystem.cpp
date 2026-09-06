@@ -49,7 +49,17 @@ void GPUParticleSystem::RebuildEmitters() {
     for (const auto& emitterData : systemData_.emitters) {
         auto emitter = std::make_unique<GPUParticleEmitter>();
         emitter->Initialize(device_, emitterData);
+        emitter->SetPosition(position_);
         emitters_.push_back(std::move(emitter));
+    }
+}
+
+void GPUParticleSystem::SetPosition(const Vector3& position) {
+    position_ = position;
+    for (auto& emitter : emitters_) {
+        if (emitter) {
+            emitter->SetPosition(position_);
+        }
     }
 }
 
@@ -161,6 +171,7 @@ void GPUParticleSystem::AddEmitter(const GPUParticleEmitterData& emitterData) {
     if (!device_) return;
     auto emitter = std::make_unique<GPUParticleEmitter>();
     emitter->Initialize(device_, emitterData);
+    emitter->SetPosition(position_);
     emitters_.push_back(std::move(emitter));
     SyncDataFromEmitters();
 }
@@ -171,6 +182,7 @@ void GPUParticleSystem::DuplicateEmitter(size_t index) {
     copyData.name += " (Copy)";
     auto emitter = std::make_unique<GPUParticleEmitter>();
     emitter->Initialize(device_, copyData);
+    emitter->SetPosition(position_);
     emitters_.insert(emitters_.begin() + index + 1, std::move(emitter));
     SyncDataFromEmitters();
 }
