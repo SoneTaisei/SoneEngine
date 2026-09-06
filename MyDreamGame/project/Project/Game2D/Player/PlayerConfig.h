@@ -18,6 +18,7 @@ struct PlayerParams {
     float goalWaitTime_ = 2.0f;
     float runDustInterval_ = 0.1f;
     float chainJumpPenalty_ = 2.0f;
+    float modelScale_ = 2.0f;
 };
 
 class PlayerConfig {

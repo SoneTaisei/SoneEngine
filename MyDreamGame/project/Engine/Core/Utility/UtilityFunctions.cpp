@@ -1090,7 +1090,9 @@ Animation LoadAnimationFile(const std::string& directoryPath, const std::string&
     Assimp::Importer importer;
     std::string filePath = directoryPath + "/" + filename;
     const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
-    assert(scene && scene->mNumAnimations != 0);
+    if (!scene || scene->mNumAnimations == 0) {
+        return animation;
+    }
 
     aiAnimation* animationAssimp = nullptr;
     for (uint32_t i = 0; i < scene->mNumAnimations; ++i) {

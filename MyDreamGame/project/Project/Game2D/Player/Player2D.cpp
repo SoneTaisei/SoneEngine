@@ -1,4 +1,4 @@
-﻿#include "Player2D.h"
+#include "Player2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"
 #include "Core/Utility/TransformFunctions.h"
@@ -20,11 +20,7 @@ void Player2D::Initialize() {
     uint32_t texHandle = TextureManager::GetInstance()->Load("resources/Object/School/human/white.png");
     Primitive* ringPrimitive = PrimitiveManager::GetInstance()->GetRing(0.8f, 1.0f, 32, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false);
     
-    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
-    if (playerModel) {
-        uint32_t playerTexIndex = TextureManager::GetInstance()->Load("resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png");
-        playerModel->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(playerTexIndex));
-    }
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/player", "Player.gltf");
 
     visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle, playerModel);
 }
@@ -138,6 +134,7 @@ void Player2D::DisplayImGui() {
         ImGui::DragFloat("Half Height", &params_.halfHeight_, 0.01f, 0.05f, 2.0f);
         ImGui::ColorEdit4("Player Color", &params_.colorNormal_.x);
         ImGui::DragFloat("Chain Jump Penalty", &params_.chainJumpPenalty_, 0.1f, 0.0f, 10.0f);
+        ImGui::DragFloat("Model Scale", &params_.modelScale_, 0.05f, 0.5f, 10.0f);
 
         if (ImGui::Button("Save Parameters")) {
             PlayerConfig::Save(params_, "resources/json/shared/Player/player_parameters.json");
@@ -148,5 +145,7 @@ void Player2D::DisplayImGui() {
         }
         ImGui::TreePop();
     }
+
+    visuals_.DisplayImGui();
 #endif
 }
