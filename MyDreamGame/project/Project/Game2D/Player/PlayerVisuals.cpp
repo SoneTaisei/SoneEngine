@@ -5,6 +5,63 @@
 #include <random>
 #include <cmath>
 
+#include "Core/Utility/LogManager.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#endif
+
+void PlayerVisuals::ReloadAnimations() {
+    if (!animator_) return;
+
+    animator_->ClearJointOverrides();
+
+    // 新プレイヤーモデル用のアニメーション読み込み（エディタで保存したJSONを優先読み込み）
+    if (LoadAnimationFromJsonFile(idleAnimation_, "resources/json/shared/Player/Idle_animation.json")) {
+        std::string loadedBones = "";
+        for (const auto& [nodeName, nodeData] : idleAnimation_.nodeAnimations) {
+            if (!nodeData.translate.empty() || !nodeData.rotate.empty() || !nodeData.scale.empty()) {
+                if (!loadedBones.empty()) loadedBones += ", ";
+                loadedBones += nodeName;
+            }
+        }
+        LogManager::GetInstance()->AddLog(LogLevel::Info, "[PlayerVisuals] Loaded Idle_animation.json duration: " + std::to_string(idleAnimation_.duration) + "s, animated bones: [" + loadedBones + "]");
+    } else {
+        idleAnimation_ = LoadAnimationFile("resources/Object/Original/player", "Player.gltf", "Idle");
+        LogManager::GetInstance()->AddLog(LogLevel::Info, "[PlayerVisuals] Fallback to glTF Idle animation.");
+    }
+
+    if (LoadAnimationFromJsonFile(walkAnimation_, "resources/json/shared/Player/walk_animation.json")) {
+        std::string loadedBones = "";
+        for (const auto& [nodeName, nodeData] : walkAnimation_.nodeAnimations) {
+            if (!nodeData.translate.empty() || !nodeData.rotate.empty() || !nodeData.scale.empty()) {
+                if (!loadedBones.empty()) loadedBones += ", ";
+                loadedBones += nodeName;
+            }
+        }
+        LogManager::GetInstance()->AddLog(LogLevel::Info, "[PlayerVisuals] Loaded walk_animation.json duration: " + std::to_string(walkAnimation_.duration) + "s, animated bones: [" + loadedBones + "]");
+    } else {
+        walkAnimation_ = idleAnimation_;
+    }
+    if (!LoadAnimationFromJsonFile(jumpAnimation_, "resources/json/shared/Player/jump_animation.json")) {
+        jumpAnimation_ = idleAnimation_;
+    }
+
+    if (!LoadAnimationFromJsonFile(wallClimbAnimation_, "resources/json/shared/Player/wall_climb_animation.json")) {
+        wallClimbAnimation_ = idleAnimation_;
+    }
+    if (!LoadAnimationFromJsonFile(holdingWallAnimation_, "resources/json/shared/Player/holding_wall.json")) {
+        holdingWallAnimation_ = idleAnimation_;
+    }
+    if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
+        airDashAnimation_ = idleAnimation_;
+    }
+
+    if (currentAnimType_ == PlayerAnimType::Idle || currentAnimType_ == PlayerAnimType::None) {
+        animator_->SetAnimation(idleAnimation_);
+        animator_->Play();
+    }
+}
+
 void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();
     primitiveObj_->Initialize(device, boxPrimitive);
@@ -22,29 +79,7 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
         animator_->Initialize();
         animator_->SetModelData(playerModel->GetModelData());
 
-        // 新プレイヤーモデル用のアニメーション読み込み（エディタで保存したJSONを優先読み込み）
-        if (!LoadAnimationFromJsonFile(idleAnimation_, "resources/json/shared/Player/Idle_animation.json")) {
-            idleAnimation_ = LoadAnimationFile("resources/Object/Original/player", "Player.gltf", "Idle");
-        }
-        if (!LoadAnimationFromJsonFile(walkAnimation_, "resources/json/shared/Player/walk_animation.json")) {
-            walkAnimation_ = idleAnimation_;
-        }
-        if (!LoadAnimationFromJsonFile(jumpAnimation_, "resources/json/shared/Player/jump_animation.json")) {
-            jumpAnimation_ = idleAnimation_;
-        }
-
-        if (!LoadAnimationFromJsonFile(wallClimbAnimation_, "resources/json/shared/Player/wall_climb_animation.json")) {
-            wallClimbAnimation_ = idleAnimation_;
-        }
-        if (!LoadAnimationFromJsonFile(holdingWallAnimation_, "resources/json/shared/Player/holding_wall.json")) {
-            holdingWallAnimation_ = idleAnimation_;
-        }
-        if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
-            airDashAnimation_ = idleAnimation_;
-        }
-
-        animator_->SetAnimation(idleAnimation_);
-        animator_->Play();
+        ReloadAnimations();
 
         capePhysics_.Initialize(animator_.get());
 
@@ -74,6 +109,15 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
+#ifdef USE_IMGUI
+    static bool s_wasPlaying = false;
+    bool isNowPlaying = EditorManager::IsPlaying();
+    if (isNowPlaying && !s_wasPlaying) {
+        ReloadAnimations();
+    }
+    s_wasPlaying = isNowPlaying;
+#endif
+
     visualTime_ += deltaTime;
     
     if (primitiveObj_) {
@@ -190,23 +234,41 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                         targetType = PlayerAnimType::Idle;
                     }
 
-                    // アニメーションが切り替わった場合（落下開始時など）に毎回時間を0.0fにリセット
+                    // アニメーションが切り替わった場合（移動開始・停止、ジャンプなど）
                     if (currentAnimType_ != targetType) {
-                        currentAnimType_ = targetType;
-                        animator_->SetTime(0.0f);
+                        bool isSameAnim = false;
+                        if ((currentAnimType_ == PlayerAnimType::Idle && targetType == PlayerAnimType::Walk) ||
+                            (currentAnimType_ == PlayerAnimType::Walk && targetType == PlayerAnimType::Idle)) {
+                            // walkAnimation_ が未作成で idleAnimation_ が使われている場合は時間を巻き戻さない
+                            if (walkAnimation_.duration == idleAnimation_.duration && walkAnimation_.nodeAnimations.size() == idleAnimation_.nodeAnimations.size()) {
+                                isSameAnim = true;
+                            }
+                        }
 
+                        currentAnimType_ = targetType;
+
+                        const Animation* nextAnim = nullptr;
                         switch (targetType) {
                         case PlayerAnimType::Jump:
-                            animator_->SetAnimation(jumpAnimation_);
+                            nextAnim = &jumpAnimation_;
                             break;
                         case PlayerAnimType::Walk:
-                            animator_->SetAnimation(walkAnimation_);
+                            nextAnim = &walkAnimation_;
                             break;
                         case PlayerAnimType::Idle:
-                            animator_->SetAnimation(idleAnimation_);
+                            nextAnim = &idleAnimation_;
                             break;
                         default:
                             break;
+                        }
+
+                        if (nextAnim) {
+                            if (isSameAnim) {
+                                animator_->SetAnimation(*nextAnim);
+                            } else {
+                                // 0.15秒で滑らかにクロスフェード（歩行停止時などの不自然な姿勢ジャンプを防止）
+                                animator_->CrossFade(*nextAnim, 0.15f);
+                            }
                         }
                     }
                 }

@@ -436,6 +436,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         if (context->GetCurrentJointList().empty() || context->GetAnimJointTreeNodes().empty()) {
             context->RefreshAnimationJointList(sceneManager);
         }
+        context->EnsureJointVisibleInTree(context->GetSelectedJointName());
 
         // 可視トラックの収集 (開いている親の子孫のみ再帰的に追加)
         struct VisibleAnimTrack {

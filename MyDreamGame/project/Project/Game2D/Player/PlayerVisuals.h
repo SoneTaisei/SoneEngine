@@ -45,6 +45,7 @@ struct DashRingParticle {
 class PlayerVisuals {
 public:
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel);
+    void ReloadAnimations();
     void Update(const PlayerState& state, const PlayerParams& params, float deltaTime);
     void Draw(const PlayerState& state, const PlayerParams& params);
 

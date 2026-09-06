@@ -12,6 +12,14 @@ GPUParticleEmitter::GPUParticleEmitter() {
     randomEngine_.seed(rd());
 }
 
+GPUParticleEmitter::~GPUParticleEmitter() {
+    if (instancingSrvHandleCPU_.ptr != 0) {
+        SrvManager::GetInstance()->Free(instancingSrvHandleCPU_, instancingSrvHandleGPU_);
+        instancingSrvHandleCPU_ = {};
+        instancingSrvHandleGPU_ = {};
+    }
+}
+
 void GPUParticleEmitter::Initialize(ID3D12Device* device, const GPUParticleEmitterData& data) {
     device_ = device;
     data_ = data;
@@ -30,10 +38,16 @@ void GPUParticleEmitter::SetData(const GPUParticleEmitterData& data) {
 void GPUParticleEmitter::ReallocateGpuResources(ID3D12Device* device, uint32_t maxCount) {
     if (maxCount == 0) maxCount = 1;
 
+    if (instancingSrvHandleCPU_.ptr != 0) {
+        SrvManager::GetInstance()->Free(instancingSrvHandleCPU_, instancingSrvHandleGPU_);
+        instancingSrvHandleCPU_ = {};
+        instancingSrvHandleGPU_ = {};
+    }
+
     instancingResource_ = CreateBufferResource(device, sizeof(ParticleForGPU) * maxCount);
     instancingResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedInstancingData_));
 
-    SrvManager::GetInstance()->Allocate(&instancingSrvHandleCPU_, &instancingSrvHandleGPU_);
+    SrvManager::GetInstance()->Allocate(&instancingSrvHandleCPU_, &instancingSrvHandleGPU_, "GPUParticleEmitter");
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Format = DXGI_FORMAT_UNKNOWN;

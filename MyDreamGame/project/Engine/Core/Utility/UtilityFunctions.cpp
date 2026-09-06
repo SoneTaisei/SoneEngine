@@ -1235,7 +1235,7 @@ SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const
     skinCluster.mappedPalette = {mappedPalette, skeleton.joints.size()};
 
     // SRVの生成
-    SrvManager::GetInstance()->Allocate(&skinCluster.paletteSrvHandle.first, &skinCluster.paletteSrvHandle.second);
+    SrvManager::GetInstance()->Allocate(&skinCluster.paletteSrvHandle.first, &skinCluster.paletteSrvHandle.second, "CreateSkinCluster");
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -1266,9 +1266,13 @@ SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const
     // ウェイト情報のパース
     for (const auto& jointWeight : modelData.skinClusterData) {
         auto it = skeleton.jointMap.find(jointWeight.first);
-        if (it == skeleton.jointMap.end()) continue; // そのボーンは存在しない
+        if (it == skeleton.jointMap.end()) {
+            LogManager::GetInstance()->AddLog(LogLevel::Warning, "[SkinCluster] Joint NOT FOUND in skeleton: " + jointWeight.first);
+            continue; // そのボーンは存在しない
+        }
 
         int32_t jointIndex = it->second;
+        LogManager::GetInstance()->AddLog(LogLevel::Info, "[SkinCluster] Bound joint [" + jointWeight.first + "] -> index " + std::to_string(jointIndex) + ", weights count: " + std::to_string(jointWeight.second.vertexWeights.size()));
         skinCluster.inverseBindPoseMatrices[jointIndex] = jointWeight.second.inverseBindPoseMatrix;
 
         for (const auto& weightInfo : jointWeight.second.vertexWeights) {

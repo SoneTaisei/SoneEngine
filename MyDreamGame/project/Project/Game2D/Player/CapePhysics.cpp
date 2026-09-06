@@ -209,11 +209,23 @@ void CapePhysics::Update(AnimatorComponent* animator, const Matrix4x4& modelWorl
 
             Quaternion deltaRot = FromToRotation(idealDirLocal, currentDirLocal);
 
-            // 親ボーンのデフォルト回転に差分回転を合成
+            // マントボーンのみ回転をオーバーライド（「体」などの本体ボーンは絶対に上書きしない）
             if (node.parentJointIndex >= 0 && node.parentJointIndex < (int32_t)skeleton.joints.size()) {
                 const Joint& parentJoint = skeleton.joints[node.parentJointIndex];
-                Quaternion targetRot = parentJoint.defaultTransform.rotate * deltaRot;
-                animator->SetJointRotationOverride(parentJoint.name, targetRot, 0.95f);
+                if (parentJoint.name == "体" || parentJoint.name == "Body" || 
+                    parentJoint.name == "プレイヤー" || parentJoint.name == "Root" || 
+                    parentJoint.name == "ボーン") {
+                    // 親がキャラクター本体（体など）の場合は、体は絶対に回転させず、マントの根元ボーン自身を回転させる
+                    if (node.jointIndex >= 0 && node.jointIndex < (int32_t)skeleton.joints.size()) {
+                        const Joint& selfJoint = skeleton.joints[node.jointIndex];
+                        Quaternion targetRot = selfJoint.defaultTransform.rotate * deltaRot;
+                        animator->SetJointRotationOverride(node.boneName, targetRot, 0.95f);
+                    }
+                } else {
+                    // 親もマントボーンであれば親ボーンを回転させる
+                    Quaternion targetRot = parentJoint.defaultTransform.rotate * deltaRot;
+                    animator->SetJointRotationOverride(parentJoint.name, targetRot, 0.95f);
+                }
             }
         }
     }

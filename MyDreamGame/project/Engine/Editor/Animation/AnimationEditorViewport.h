@@ -40,6 +40,7 @@ private:
 
     // ギズモドラッグ状態
     int animGizmoActiveAxis_ = -1; // -1: None, 0: X, 1: Y, 2: Z, 3: Center/XYZ
+    bool isHoveringAnimGizmo_ = false;
     bool isDraggingAnimGizmo_ = false;
     ImVec2 animGizmoDragStartMouse_ = {};
     Vector3 animGizmoStartTranslate_ = {};
