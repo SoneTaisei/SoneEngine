@@ -992,7 +992,7 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
         isIrisOutActive_ = false;
         if (sceneManager) {
             // 選択されたステージに応じたマップを設定
-            std::string mapPath = "resources/json/shared/MapData/map_data.txt";
+            std::string mapPath = "resources/json/shared/MapData/map1.txt";
             if (selectedStageIndex_ == 1) {
                 mapPath = "resources/json/shared/MapData/map1.txt";
             } else if (selectedStageIndex_ == 2) {
