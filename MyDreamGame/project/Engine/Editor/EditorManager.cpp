@@ -964,6 +964,11 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     previewScene->SetParticleSystem(gpuParticleEditor_->GetContext()->GetSystem());
                     sceneManager->PushScene(std::move(previewScene));
                     gpuParticleEditor_->SetParticleScenePushed(true);
+                    if (activeCamera && *activeCamera) {
+                        (*activeCamera)->SetTranslation({ 0.0f, 0.0f, -10.0f });
+                        (*activeCamera)->SetRotation({ 0.0f, 0.0f, 0.0f });
+                        (*activeCamera)->UpdateMatrix();
+                    }
                 }
             }
             if (gpuParticleEditor_) gpuParticleEditor_->SetHovered(ImGui::IsWindowHovered());

@@ -18,14 +18,24 @@ public:
     void Draw(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
 
     // 再生コントロール
-    void Play() { isPlaying_ = true; }
+    void Play() {
+        if (!systemData_.isLoop && systemData_.duration > 0.0f && systemTime_ >= systemData_.duration) {
+            Restart();
+        }
+        isPlaying_ = true;
+    }
     void Pause() { isPlaying_ = false; }
     void Restart();
     void TriggerBurstAll();
 
     bool IsPlaying() const { return isPlaying_; }
     float GetCurrentTime() const { return systemTime_; }
-    void SetCurrentTime(float t) { systemTime_ = t; }
+    void SetCurrentTime(float t) {
+        systemTime_ = t;
+        for (auto& emitter : emitters_) {
+            if (emitter) emitter->SetCurrentTime(t);
+        }
+    }
 
     // エミッター管理
     size_t GetEmitterCount() const { return emitters_.size(); }

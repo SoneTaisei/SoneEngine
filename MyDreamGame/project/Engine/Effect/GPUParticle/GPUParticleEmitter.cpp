@@ -67,14 +67,22 @@ void GPUParticleEmitter::Reset() {
 }
 
 void GPUParticleEmitter::OnLoopCycle() {
-    if (data_.duration > 0.0f) {
-        systemTime_ -= data_.duration;
-        if (systemTime_ < 0.0f) systemTime_ = 0.0f;
-    } else {
-        systemTime_ = 0.0f;
-    }
+    if (!data_.isLoop) return; // エミッター自身が非ループ設定の場合は周回時にも再発火させない
+    systemTime_ = 0.0f;
+    spawnTimer_ = 0.0f;
     burstTriggered_.assign(data_.bursts.size(), false);
     // ※ numActiveParticles_ はリセットしない！既存の生存パーティクルをシームレスに継続描画・更新させる
+}
+
+void GPUParticleEmitter::SetCurrentTime(float t) {
+    systemTime_ = t;
+    float activeTime = systemTime_ - data_.startDelay;
+    if (burstTriggered_.size() != data_.bursts.size()) {
+        burstTriggered_.resize(data_.bursts.size(), false);
+    }
+    for (size_t i = 0; i < data_.bursts.size(); ++i) {
+        burstTriggered_[i] = (activeTime >= data_.bursts[i].time);
+    }
 }
 
 void GPUParticleEmitter::EmitBurst(uint32_t count) {
@@ -192,23 +200,14 @@ void GPUParticleEmitter::SpawnParticle() {
     numActiveParticles_++;
 }
 
-void GPUParticleEmitter::Update(float deltaTime) {
+void GPUParticleEmitter::Update(float deltaTime, bool allowEmit) {
     if (!data_.enabled || data_.mute) return;
 
     systemTime_ += deltaTime;
 
-    // ループ判定
-    if (data_.duration > 0.0f && systemTime_ >= data_.duration + data_.startDelay) {
-        if (data_.isLoop) {
-            systemTime_ -= data_.duration;
-            if (systemTime_ < data_.startDelay) systemTime_ = data_.startDelay;
-            burstTriggered_.assign(data_.bursts.size(), false);
-        }
-    }
-
-    // 稼働中のみ新規発生
-    bool isEmitting = (systemTime_ >= data_.startDelay);
-    if (data_.duration > 0.0f && systemTime_ > (data_.duration + data_.startDelay)) {
+    // 稼働中のみ新規発生（開始遅延後かつ稼働時間内）
+    bool isEmitting = allowEmit && (systemTime_ >= data_.startDelay);
+    if (data_.duration > 0.0f && systemTime_ >= (data_.duration + data_.startDelay)) {
         isEmitting = false;
     }
 

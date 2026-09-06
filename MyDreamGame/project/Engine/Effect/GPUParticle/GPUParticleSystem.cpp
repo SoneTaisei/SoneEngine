@@ -98,9 +98,16 @@ void GPUParticleSystem::Update(float deltaTime) {
             // シームレスループ: 既存の生存パーティクルを消去せず、時間をラップして次周の発生へ継続
             systemTime_ = std::fmod(systemTime_, systemData_.duration);
             for (auto& emitter : emitters_) {
-                if (emitter) {
+                if (emitter && emitter->GetData().isLoop) {
                     emitter->OnLoopCycle();
                 }
+            }
+        } else {
+            // ループOFF: システム時間をdurationでクランプ
+            systemTime_ = systemData_.duration;
+            // 生存パーティクルがすべて消滅したら自動停止
+            if (GetTotalActiveParticles() == 0) {
+                isPlaying_ = false;
             }
         }
     }
@@ -117,7 +124,10 @@ void GPUParticleSystem::Update(float deltaTime) {
     for (auto& emitter : emitters_) {
         if (!emitter) continue;
         if (hasSolo && !emitter->GetData().solo) continue;
-        emitter->Update(deltaTime);
+
+        // システムが非ループの場合、全体のdurationに達していたら新規発生は停止
+        bool allowEmit = systemData_.isLoop || (systemTime_ < systemData_.duration);
+        emitter->Update(deltaTime, allowEmit);
     }
 }
 

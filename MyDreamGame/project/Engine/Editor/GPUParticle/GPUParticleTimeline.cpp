@@ -78,7 +78,13 @@ void GPUParticleTimeline::DrawFileOperations(GPUParticleEditorContext* context) 
         if (sysData.duration < 0.1f) sysData.duration = 0.1f;
     }
     ImGui::SameLine();
-    ImGui::Checkbox("ループ", &sysData.isLoop);
+    if (ImGui::Checkbox("ループ", &sysData.isLoop)) {
+        for (size_t i = 0; i < system->GetEmitterCount(); ++i) {
+            if (auto em = system->GetEmitter(i)) {
+                em->GetData().isLoop = sysData.isLoop;
+            }
+        }
+    }
 
     ImGui::Spacing();
 

@@ -30,7 +30,7 @@ public:
     ~GPUParticleEmitter() = default;
 
     void Initialize(ID3D12Device* device, const GPUParticleEmitterData& data);
-    void Update(float deltaTime);
+    void Update(float deltaTime, bool allowEmit = true);
     void Draw(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
 
     void Reset();
@@ -44,6 +44,7 @@ public:
 
     uint32_t GetActiveParticleCount() const { return numActiveParticles_; }
     float GetCurrentTime() const { return systemTime_; }
+    void SetCurrentTime(float t);
 
 private:
     void ReallocateGpuResources(ID3D12Device* device, uint32_t maxCount);

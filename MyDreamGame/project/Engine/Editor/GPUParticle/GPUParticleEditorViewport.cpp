@@ -12,6 +12,14 @@ void GPUParticleEditorViewport::Initialize() {
     isCameraSnapLerping_ = false;
 }
 
+void GPUParticleEditorViewport::ResetCamera(Camera* cam) {
+    if (!cam) return;
+    isCameraSnapLerping_ = false;
+    cam->SetTranslation(Vector3{ 0.0f, 0.0f, -10.0f });
+    cam->SetRotation(Vector3{ 0.0f, 0.0f, 0.0f });
+    cam->UpdateMatrix();
+}
+
 void GPUParticleEditorViewport::DrawMainView(SceneManager* /*sceneManager*/, Camera** activeCamera, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, GPUParticleEditorContext* context) {
     if (!context) return;
 
@@ -81,20 +89,20 @@ void GPUParticleEditorViewport::DrawMainView(SceneManager* /*sceneManager*/, Cam
     }
 
     // 上部再生コントロール HUD
-    DrawHUD(context, vpPos, vpSize);
+    DrawHUD(context, cam, vpPos, vpSize);
 
     // 右上ステータス HUD
     DrawStatsHUD(context, vpPos, vpSize);
 }
 
-void GPUParticleEditorViewport::DrawHUD(GPUParticleEditorContext* context, ImVec2 vpPos, ImVec2 /*vpSize*/) {
+void GPUParticleEditorViewport::DrawHUD(GPUParticleEditorContext* context, Camera* activeCamera, ImVec2 vpPos, ImVec2 /*vpSize*/) {
     ImGui::SetCursorScreenPos(ImVec2(vpPos.x + 12.0f, vpPos.y + 12.0f));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.13f, 0.85f));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
 
-    if (ImGui::BeginChild("##GPUParticleHUD", ImVec2(660, 42), true, ImGuiWindowFlags_NoScrollbar)) {
+    if (ImGui::BeginChild("##GPUParticleHUD", ImVec2(895, 42), true, ImGuiWindowFlags_NoScrollbar)) {
         // エフェクト選択コンボ (選択されたら即座に自動ロード)
         context->ScanParticleFiles();
         const auto& files = context->GetAvailableParticleFiles();
@@ -162,6 +170,49 @@ void GPUParticleEditorViewport::DrawHUD(GPUParticleEditorContext* context, ImVec
             context->SetPlaybackSpeed(speed);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("再生速度 (0.1x ~ 2.0x)");
+        ImGui::SameLine();
+
+        // カメラリセットボタン
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.40f, 0.65f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.55f, 0.80f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.35f, 0.55f, 1.0f));
+        if (ImGui::Button("[Cam] リセット", ImVec2(105, 26))) {
+            ResetCamera(activeCamera);
+        }
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("カメラの位置と角度を初期位置にリセットします\n(位置: [0, 0, -10], 角度: [0, 0, 0])");
+        }
+        ImGui::SameLine();
+
+        // ループ再生トグルボタン
+        bool isLoop = system ? system->GetData().isLoop : false;
+        if (isLoop) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.55f, 0.85f, 1.0f));
+            if (ImGui::Button("[Loop] ループ: ON", ImVec2(105, 26))) {
+                if (system) {
+                    system->GetData().isLoop = false;
+                    for (size_t i = 0; i < system->GetEmitterCount(); ++i) {
+                        if (auto em = system->GetEmitter(i)) em->GetData().isLoop = false;
+                    }
+                }
+            }
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.35f, 0.40f, 1.0f));
+            if (ImGui::Button("[Loop] ループ: OFF", ImVec2(105, 26))) {
+                if (system) {
+                    system->GetData().isLoop = true;
+                    for (size_t i = 0; i < system->GetEmitterCount(); ++i) {
+                        if (auto em = system->GetEmitter(i)) em->GetData().isLoop = true;
+                    }
+                }
+            }
+            ImGui::PopStyleColor();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("ループ再生のON/OFF切替\n(OFFの場合は1度だけ再生して停止します)");
+        }
     }
     ImGui::EndChild();
 
@@ -330,11 +381,83 @@ void GPUParticleEditorViewport::DrawCameraOrientationGizmo(Camera* activeCamera,
         return a.depth < b.depth;
     });
 
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 mousePos = io.MousePos;
+
+    int clickedAxisIdx = -1;
+    for (int i = 5; i >= 0; --i) {
+        int idx = proj[i].index;
+        float dx = mousePos.x - proj[i].screenPos.x;
+        float dy = mousePos.y - proj[i].screenPos.y;
+        if (dx * dx + dy * dy <= (badgeRadius + 3.0f) * (badgeRadius + 3.0f)) {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                clickedAxisIdx = idx;
+            }
+            break;
+        }
+    }
+
+    if (clickedAxisIdx >= 0) {
+        // すでにほぼ正面を向いている場合は反対軸に反転
+        for (const auto& p : proj) {
+            if (p.index == clickedAxisIdx && p.depth > 0.70f) {
+                clickedAxisIdx = (clickedAxisIdx % 2 == 0) ? (clickedAxisIdx + 1) : (clickedAxisIdx - 1);
+                break;
+            }
+        }
+
+        const auto& snapAxis = axes[clickedAxisIdx];
+        Vector3 target = { 0.0f, 0.0f, 0.0f };
+        Vector3 curCamPos = activeCamera->GetTranslation();
+        Vector3 diff = { curCamPos.x - target.x, curCamPos.y - target.y, curCamPos.z - target.z };
+        float dist = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+        if (dist < 2.0f || dist > 50.0f) dist = 10.0f;
+
+        cameraSnapStartRot_ = activeCamera->GetRotation();
+        cameraSnapStartPos_ = curCamPos;
+
+        auto normalizeAngleDiff = [](float start, float target) {
+            float diff = target - start;
+            while (diff > 3.14159265f) { start += 6.2831853f; diff = target - start; }
+            while (diff < -3.14159265f) { start -= 6.2831853f; diff = target - start; }
+            return start;
+        };
+        cameraSnapStartRot_.x = normalizeAngleDiff(cameraSnapStartRot_.x, snapAxis.snapRotate.x);
+        cameraSnapStartRot_.y = normalizeAngleDiff(cameraSnapStartRot_.y, snapAxis.snapRotate.y);
+        cameraSnapStartRot_.z = normalizeAngleDiff(cameraSnapStartRot_.z, snapAxis.snapRotate.z);
+
+        cameraSnapEndRot_ = snapAxis.snapRotate;
+        cameraSnapEndPos_ = {
+            target.x + snapAxis.camOffsetDir.x * dist,
+            target.y + snapAxis.camOffsetDir.y * dist,
+            target.z + snapAxis.camOffsetDir.z * dist
+        };
+        cameraSnapLerpTimer_ = 0.0f;
+        cameraSnapLerpDuration_ = 0.25f;
+        isCameraSnapLerping_ = true;
+    }
+
     for (const auto& p : proj) {
         const auto& axis = axes[p.index];
         drawList->AddLine(center, p.screenPos, IM_COL32(100, 100, 110, 160), 1.5f);
         drawList->AddCircleFilled(p.screenPos, badgeRadius, axis.color, 16);
         drawList->AddCircle(p.screenPos, badgeRadius, axis.ringColor, 16, 1.5f);
     }
+
+    // ギズモ直下のミニ視点リセットボタン
+    ImVec2 resetBtnPos = ImVec2(center.x - 35.0f, center.y + radius + 12.0f);
+    ImGui::SetCursorScreenPos(resetBtnPos);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.22f, 0.28f, 0.85f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.35f, 0.45f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.16f, 0.22f, 1.0f));
+    if (ImGui::Button("リセット##GizmoReset", ImVec2(70, 22))) {
+        ResetCamera(activeCamera);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("カメラの位置・向きを初期位置にリセット");
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
 }
 #endif

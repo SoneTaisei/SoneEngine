@@ -17,9 +17,10 @@ public:
 
     void Initialize();
     void DrawMainView(SceneManager* sceneManager, Camera** activeCamera, D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandle, GPUParticleEditorContext* context);
+    void ResetCamera(Camera* cam);
 
 private:
-    void DrawHUD(GPUParticleEditorContext* context, ImVec2 vpPos, ImVec2 vpSize);
+    void DrawHUD(GPUParticleEditorContext* context, Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
     void DrawStatsHUD(GPUParticleEditorContext* context, ImVec2 vpPos, ImVec2 vpSize);
     void DrawShapeGizmo(Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize, GPUParticleEditorContext* context);
     void DrawCameraOrientationGizmo(Camera* activeCamera, ImVec2 vpPos, ImVec2 vpSize);
