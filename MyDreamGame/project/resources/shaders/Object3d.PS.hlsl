@@ -252,7 +252,7 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpotTotal) * input.color.rgb;
         float3 specularTotal = (specularDirectional + specularPoint + specularSpotTotal) * input.color.rgb;
         // Ambient light modulated by ambientIntensity (allows creating full pitch black darkness)
-        float3 ambient = gMaterial.color.rgb * textureColor.rgb * (0.35f * gSpotLightGroup.ambientIntensity);
+        float3 ambient = gMaterial.color.rgb * textureColor.rgb * input.color.rgb * (0.35f * gSpotLightGroup.ambientIntensity);
 
         // Add environment map lighting if enabled
         if (gMaterial.enableEnvironmentMap != 0) {
