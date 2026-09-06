@@ -239,6 +239,8 @@ public:
 
     std::vector<std::string>& GetAvailableAnimationFiles() { return availableAnimationFiles_; }
     std::string& GetCurrentAnimFilePath() { return currentAnimFilePath_; }
+    std::string GetCurrentModelName() const;
+    std::string GetModelAnimationDirectory() const;
 
     std::unordered_map<std::string, TempBoneOverride>& GetTempOverrides() { return animTempOverrides_; }
 
@@ -316,6 +318,7 @@ private:
     std::unordered_map<std::string, bool> animJointExpanded_;
     std::vector<std::string> availableAnimationFiles_;
     std::string currentAnimFilePath_ = "resources/json/shared/Player/wall_climb_animation.json";
+    std::string lastTargetModelName_ = "";
 
     char newAnimSaveNameBuf_[kMaxAnimNameBufSize] = "";
     bool openSaveAnimModal_ = false;

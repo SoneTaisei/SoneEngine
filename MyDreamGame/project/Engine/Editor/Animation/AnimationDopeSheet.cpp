@@ -132,7 +132,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
             ImGui::Spacing();
             ImGui::SetNextItemWidth(380.0f);
             ImGui::InputText("##NewAnimFileName", context->GetNewAnimSaveNameBuf(), context->GetNewAnimSaveNameBufSize());
-            ImGui::TextDisabled("保存先: resources/json/shared/Player/%s.json", context->GetNewAnimSaveNameBuf());
+            ImGui::TextDisabled("保存先: %s/%s.json", context->GetModelAnimationDirectory().c_str(), context->GetNewAnimSaveNameBuf());
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
@@ -143,7 +143,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                     if (inputName.size() < 5 || inputName.substr(inputName.size() - 5) != ".json") {
                         inputName += ".json";
                     }
-                    std::string fullPath = "resources/json/shared/Player/" + inputName;
+                    std::string fullPath = context->GetModelAnimationDirectory() + "/" + inputName;
                     SaveAnimationToJsonFile(context->GetEditingAnimation(), fullPath);
                     context->ScanAnimationFiles();
                     context->GetCurrentAnimFilePath() = fullPath;

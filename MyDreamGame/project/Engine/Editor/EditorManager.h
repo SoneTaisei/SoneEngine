@@ -23,6 +23,7 @@
 #include "LightEditor/LightEditor.h"
 #include "Model3DEditor/Model3DEditor.h"
 #include "PostEffectEditor/PostEffectEditor.h"
+#include "Common/ModelSelectModal.h"
 
 class SceneManager;
 class ParticleManager;
@@ -345,6 +346,9 @@ private:
     std::unique_ptr<LightEditor> lightEditor_;
     std::unique_ptr<Model3DEditor> model3DEditor_;
     std::unique_ptr<PostEffectEditor> postEffectEditor_;
+    std::unique_ptr<ModelSelectModal> animModelSelectModal_;
+    bool openAnimModelSelectModal_ = false;
+    bool forceShowGlobalSettings_ = false;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅

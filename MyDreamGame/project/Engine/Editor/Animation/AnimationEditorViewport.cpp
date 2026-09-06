@@ -1069,7 +1069,7 @@ void AnimationEditorViewport::DrawMainView(SceneManager* sceneManager, Camera** 
         ImGui::EndChild();
     } else {
         // 通常（展開）表示
-        ImGui::BeginChild("##AnimViewportHUD", ImVec2(480, 115), true, ImGuiWindowFlags_NoScrollbar);
+        ImGui::BeginChild("##AnimViewportHUD", ImVec2(540, 115), true, ImGuiWindowFlags_NoScrollbar);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 
         // 左上に縮小化ボタンを配置（拡大化ボタンと同じ位置）
@@ -1086,7 +1086,7 @@ void AnimationEditorViewport::DrawMainView(SceneManager* sceneManager, Camera** 
         ImGui::Text("フレーム: %d / %d  (%.3fs)", curF, totF, context->GetAnimEditorTime());
         ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.3f, 1.0f), "選択ボーン: %s%s", context->GetSelectedJointName().c_str(), context->GetIsAnimLocked() ? " [固定中]" : "");
 
-        // ギズモツールバー (SRT / Local-World / Lock)
+        // ギズモツールバー (SRT / Local-World / Lock / Light)
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
         {
             bool isTrans = (context->GetGizmoMode() == 0);
@@ -1118,6 +1118,59 @@ void AnimationEditorViewport::DrawMainView(SceneManager* sceneManager, Camera** 
                 ImGui::PopStyleColor();
             } else {
                 if (ImGui::Button("[L] ロック", ImVec2(75, 20))) context->GetIsAnimLocked() = true;
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("[ライト設定]", ImVec2(80, 20))) {
+                ImGui::OpenPopup("AnimViewportLightPopup");
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("ライティングのクイック調整");
+
+            if (ImGui::BeginPopup("AnimViewportLightPopup")) {
+                auto* animScene = dynamic_cast<AnimationPreviewScene*>(sceneManager ? sceneManager->GetCurrentScene() : nullptr);
+                if (animScene) {
+                    auto& cfg = animScene->GetLightingConfig();
+                    ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.4f, 1.0f), "スタジオライティング設定");
+                    ImGui::Separator();
+
+                    // モード切り替え
+                    ImGui::Checkbox("ゲームシーンのライトを使用", &cfg.useGameLighting);
+
+                    if (!cfg.useGameLighting) {
+                        ImGui::Separator();
+                        ImGui::Text("プリセット:");
+                        const char* pNames[] = { "標準", "明るい", "陰影", "正面", "輪郭" };
+                        for (int i = 0; i < 5; ++i) {
+                            if (i > 0) ImGui::SameLine();
+                            bool isCur = (cfg.currentPresetIndex == i);
+                            if (isCur) {
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.55f, 0.4f, 1.0f));
+                            }
+                            if (ImGui::Button(pNames[i])) {
+                                cfg.ApplyPreset(i);
+                            }
+                            if (isCur) {
+                                ImGui::PopStyleColor();
+                            }
+                        }
+
+                        ImGui::Separator();
+                        ImGui::SliderFloat("全体の明るさ", &cfg.brightness, 0.2f, 3.0f, "%.2f");
+                        if (ImGui::SliderFloat("水平角度", &cfg.horizontalAngleDeg, 0.0f, 360.0f, "%.0f 度")) {
+                            cfg.RecalculateDirection();
+                            cfg.currentPresetIndex = -1;
+                        }
+                    }
+
+                    ImGui::Separator();
+                    if (ImGui::Button("[設定保存]")) animScene->SaveLightingConfig();
+                    ImGui::SameLine();
+                    if (ImGui::Button("[初期値]")) {
+                        animScene->ResetLightingConfig();
+                        animScene->SaveLightingConfig();
+                    }
+                }
+                ImGui::EndPopup();
             }
         }
         ImGui::PopStyleVar(); // ItemSpacing

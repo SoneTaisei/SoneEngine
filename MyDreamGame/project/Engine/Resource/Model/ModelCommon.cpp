@@ -95,27 +95,18 @@ void ModelCommon::PreDraw() {
     }
 
     // 4: DirectionalLight (register b1)
-    if (directionalLightResource_) {
-        D3D12_GPU_VIRTUAL_ADDRESS addr = directionalLightResource_->GetGPUVirtualAddress();
-        if (addr != 0) {
-            commandList_->SetGraphicsRootConstantBufferView(4, addr);
-        }
+    if (auto addr = GetDirectionalLightGPUAddress()) {
+        commandList_->SetGraphicsRootConstantBufferView(4, addr);
     }
 
     // 5: PointLight (register b2)
-    if (pointLightResource_) {
-        D3D12_GPU_VIRTUAL_ADDRESS addr = pointLightResource_->GetGPUVirtualAddress();
-        if (addr != 0) {
-            commandList_->SetGraphicsRootConstantBufferView(5, addr);
-        }
+    if (auto addr = GetPointLightGPUAddress()) {
+        commandList_->SetGraphicsRootConstantBufferView(5, addr);
     }
 
     // 6: SpotLight (register b4)
-    if (spotLightResource_) {
-        D3D12_GPU_VIRTUAL_ADDRESS addr = spotLightResource_->GetGPUVirtualAddress();
-        if (addr != 0) {
-            commandList_->SetGraphicsRootConstantBufferView(6, addr);
-        }
+    if (auto addr = GetSpotLightGPUAddress()) {
+        commandList_->SetGraphicsRootConstantBufferView(6, addr);
     }
 
     // 9: ShadowMap (register t2)

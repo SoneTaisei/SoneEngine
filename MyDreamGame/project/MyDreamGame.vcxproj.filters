@@ -296,6 +296,7 @@
     <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditor.cpp" />
@@ -610,6 +611,7 @@
     <ClInclude Include="Engine\Editor\Animation\AnimationDopeSheet.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationInspector.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationLightingConfig.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleData.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleEmitter.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleSystem.h" />
@@ -630,6 +632,7 @@
     <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\Common\ModelSelectModal.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditor.h" />
