@@ -22,6 +22,13 @@ public:
     /// <summary>回転中の合図（色を明るくする）</summary>
     void SetHighlight(bool highlight);
 
+    /// <summary>
+    /// 押し時の合図（0〜1）。進行方向が弧の窓に近づくほど白っぽく明るく、少し大きくなる。1 で「今押す」
+    /// SetHighlight の後に毎フレーム呼ぶ（0 なら通常色・通常サイズに戻る）
+    /// </summary>
+    void SetGlow(float glow);
+    float GetGlow() const { return glow_; }
+
     /// <summary>描画時の z（既定 -0.25 で鎖(-0.2)よりわずかに手前。遷移用は黒い背景板より手前にする）</summary>
     void SetDrawOffsetZ(float z) { drawOffsetZ_ = z; }
 
@@ -46,7 +53,9 @@ private:
     float scale_ = 0.3f;
     float selfAngle_ = 0.0f;
     bool highlight_ = false;
+    float glow_ = 0.0f;
     float drawOffsetZ_ = -0.25f;
     Vector4 baseColor_ = { 1.0f, 0.45f, 0.08f, 1.0f };
     Vector4 highlightColor_ = { 1.0f, 0.85f, 0.25f, 1.0f };
+    Vector4 glowColor_ = { 1.0f, 1.0f, 0.78f, 1.0f };
 };

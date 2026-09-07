@@ -1,4 +1,4 @@
-#include "AlertSystem.h"
+﻿#include "AlertSystem.h"
 #include "Core/Utility/ParameterManager.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/GuardBlock.h"
