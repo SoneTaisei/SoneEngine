@@ -1757,11 +1757,16 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #endif
         if (!TransitionDirector::GetInstance()->IsCovering()) { // 黒で絞っている間は紙吹雪等を上に描かない
             particleCommon_->DrawAll(viewProjectionMatrix);
-            if (chainManager_) {
+            if (chainManager_ || map_) {
                 auto commandList = DirectXCommon::GetInstance()->GetCommandList();
                 Matrix4x4 cameraMatrix = TransformFunctions::Inverse(CameraManager::GetInstance()->GetViewMatrix());
                 ModelManager* modelManager = ModelManager::GetInstance();
-                chainManager_->DrawParticle(commandList, viewProjectionMatrix, cameraMatrix, particleCommon_, modelManager);
+                if (chainManager_) {
+                    chainManager_->DrawParticle(commandList, viewProjectionMatrix, cameraMatrix, particleCommon_, modelManager);
+                }
+                if (map_) {
+                    map_->DrawParticle(commandList, viewProjectionMatrix, cameraMatrix, particleCommon_, modelManager);
+                }
             }
         }
 #ifdef USE_IMGUI

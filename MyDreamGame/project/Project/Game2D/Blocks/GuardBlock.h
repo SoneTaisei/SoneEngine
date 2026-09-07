@@ -5,6 +5,7 @@
 #include <vector>
 
 class Object3D;
+class GPUParticleSystem;
 
 /// <summary>
 /// 警備員
@@ -36,6 +37,7 @@ public:
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
     void Update() override;
     void Draw() override;
+    void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager) override;
 
     // 警備員本体は触れるとデスするためソリッド（または独自の当たり判定）
     bool IsSolid() const override { return false; }
@@ -134,10 +136,15 @@ public:
     float GetShadowIntensity() const { return shadowIntensity_; }
     void SetShadowIntensity(float intensity) { shadowIntensity_ = intensity; }
 
+#ifdef USE_IMGUI
+    void DrawImGui() override;
+#endif
+
 private:
     void EnterStunned(float duration);
     void UpdateBoundRing();
     void UpdateFlashlight(float dt);
+    Vector3 GetStunParticlePosition() const;
 
     float startX_ = 0.0f;
     float startY_ = 0.0f;
@@ -223,4 +230,14 @@ private:
     std::vector<std::unique_ptr<Object3D>> boundLinks_;
     ID3D12Device* device_ = nullptr;
     Primitive* boxPrimitive_ = nullptr;
+
+    // スタン時のGPUパーティクルエフェクト
+    std::unique_ptr<GPUParticleSystem> stunParticle_;
+
+    // スタンパーティクルのオフセット調整用パラメータ
+    float stunStandingOffsetY_ = 0.3f;      // 立っている時の頭頂部からのYオフセット
+    float stunFallenOffsetY_ = 0.2f;        // 倒れた時の上面からのYオフセット
+    float stunHeadInset_ = 0.12f;           // 倒れた時の頭の先端からの内側オフセット
+    float stunOffsetZ_ = 0.0f;              // Zオフセット（以前の-0.2fから0.2後ろへ調整）
+    Vector3 stunManualOffset_ = {0.0f, 0.0f, 0.0f}; // 追加の微調整オフセット (X, Y, Z)
 };

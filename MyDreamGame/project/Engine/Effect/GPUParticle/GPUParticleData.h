@@ -91,6 +91,10 @@ struct GPUParticleEmitterData {
     float gravity = -9.8f;          // 重力加速度 (Y軸)
     float drag = 0.0f;             // 空気抵抗減速
 
+    // 公転・軌道回転 (Orbital Motion)
+    float orbitalSpeed = 0.0f;      // 中心周りの公転角速度 (度/秒)
+    Vector3 orbitAxis = { 0.0f, 1.0f, 0.0f }; // 公転の回転軸
+
     // 回転
     Vector3 initialRotateMin = { 0.0f, 0.0f, 0.0f };
     Vector3 initialRotateMax = { 0.0f, 0.0f, 0.0f };
@@ -173,6 +177,8 @@ inline void to_json(nlohmann::json& j, const GPUParticleEmitterData& e) {
         {"velocitySpread", e.velocitySpread},
         {"gravity", e.gravity},
         {"drag", e.drag},
+        {"orbitalSpeed", e.orbitalSpeed},
+        {"orbitAxis", {e.orbitAxis.x, e.orbitAxis.y, e.orbitAxis.z}},
         {"initialRotateMin", {e.initialRotateMin.x, e.initialRotateMin.y, e.initialRotateMin.z}},
         {"initialRotateMax", {e.initialRotateMax.x, e.initialRotateMax.y, e.initialRotateMax.z}},
         {"rotateSpeedMin", {e.rotateSpeedMin.x, e.rotateSpeedMin.y, e.rotateSpeedMin.z}},
@@ -219,6 +225,10 @@ inline void from_json(const nlohmann::json& j, GPUParticleEmitterData& e) {
     if (j.contains("velocitySpread")) e.velocitySpread = j.at("velocitySpread").get<float>();
     if (j.contains("gravity")) e.gravity = j.at("gravity").get<float>();
     if (j.contains("drag")) e.drag = j.at("drag").get<float>();
+    if (j.contains("orbitalSpeed")) e.orbitalSpeed = j.at("orbitalSpeed").get<float>();
+    if (j.contains("orbitAxis") && j["orbitAxis"].is_array() && j["orbitAxis"].size() >= 3) {
+        e.orbitAxis = { j["orbitAxis"][0], j["orbitAxis"][1], j["orbitAxis"][2] };
+    }
     if (j.contains("initialRotateMin") && j["initialRotateMin"].size() >= 3) {
         e.initialRotateMin = { j["initialRotateMin"][0], j["initialRotateMin"][1], j["initialRotateMin"][2] };
     }

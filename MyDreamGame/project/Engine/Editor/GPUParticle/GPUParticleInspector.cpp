@@ -287,6 +287,18 @@ void GPUParticleInspector::DrawPhysicsSection(GPUParticleEditorContext* context)
 
         if (ImGui::DragFloat("空気抵抗 (Drag)", &data.drag, 0.01f, 0.0f, 20.0f, "%.2f")) {}
         if (ImGui::IsItemActivated()) context->PushUndoState("Change Drag");
+
+        // 公転 / 軌道回転 (Orbital Motion)
+        ImGui::Separator();
+        ImGui::Text("公転 / 軌道回転 (Orbital Motion):");
+        if (ImGui::DragFloat("公転速度 (Orbital Speed)", &data.orbitalSpeed, 1.0f, -1440.0f, 1440.0f, "%.1f°/s")) {}
+        if (ImGui::IsItemActivated()) context->PushUndoState("Change Orbital Speed");
+
+        float orbitAx[3] = { data.orbitAxis.x, data.orbitAxis.y, data.orbitAxis.z };
+        if (ImGui::DragFloat3("公転回転軸 (Orbit Axis)", orbitAx, 0.05f, -1.0f, 1.0f, "%.2f")) {
+            data.orbitAxis = { orbitAx[0], orbitAx[1], orbitAx[2] };
+        }
+        if (ImGui::IsItemActivated()) context->PushUndoState("Change Orbit Axis");
     }
 }
 
