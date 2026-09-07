@@ -57,11 +57,14 @@ public:
     // プレイヤーの取得
     Player2D* GetPlayer() override { return player_; }
 
-    // プレイヤー座標を基準とするアイリスイン（フェードイン）演出
+    // プレイヤー座標を基準とするアイリスイン（フェードイン）・アイリスアウト演出
     void StartIrisIn(const Vector3& playerPos, float duration = 1.2f);
     void UpdateIrisIn(const Vector3& playerPos, float dt);
+    void StartIrisOut(const Vector3& worldPos, float duration = 0.5f);
+    void UpdateIrisOut(float dt);
     Vector2 WorldToScreenUV(const Vector3& worldPos) const;
     bool IsIrisInActive() const { return isIrisInActive_; }
+    bool IsIrisOutActive() const { return isIrisOutActive_; }
 
 private:
     // カメラ用行列（Updateで必要なためメンバに追加）
@@ -121,6 +124,32 @@ private:
     float irisInTimer_ = 0.0f;
     float irisInDuration_ = 1.2f;
     float irisInMaxRadius_ = 3.2f; // 約2倍に拡大（画面全体を十分に覆う）
+
+    // アイリスアウト演出用
+    bool isIrisOutActive_ = false;
+    float irisOutTimer_ = 0.0f;
+    float irisOutDuration_ = 0.5f;
+    Vector3 irisOutTargetPos_ = { 0.0f, 0.0f, 0.0f };
+
+    // ---------------------------------------------------
+    // 死亡演出（帽子・鎖・宝石の残留、アイリスアウト/インリスポーン）
+    // ---------------------------------------------------
+    std::shared_ptr<GameObject> deathHatObject_;
+    bool isDeathHatActive_ = false;
+    Vector3 deathHatPos_ = { 0.0f, 0.0f, 0.0f };
+    Vector3 deathHatVelocity_ = { 0.0f, 0.0f, 0.0f };
+    float deathHatFloorY_ = 0.0f;
+    float deathHatRotationZ_ = 0.0f;
+    bool isDeathHatGrounded_ = false;
+    float deathHatGroundedTimer_ = 0.0f;
+    bool isIrisOutStarted_ = false;
+
+    bool isDeathSequenceActive_ = false;
+    float deathSequenceTimer_ = 0.0f;
+    Vector3 deathRespawnPos_ = { 0.0f, 0.0f, 0.0f };
+
+    void TriggerDeathSequence();
+    void UpdateDeathSequence(float dt, SceneManager* sceneManager);
 
     // ---------------------------------------------------
     // ポーズメニュー関連

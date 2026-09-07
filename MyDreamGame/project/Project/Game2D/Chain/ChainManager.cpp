@@ -402,7 +402,9 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     }
 
     if (playerChain_) {
-        playerChain_->SyncSocket(socketWorld);
+        if (playerChain_->GetAnchorMode() == ChainAnchorMode::kSocket) {
+            playerChain_->SyncSocket(socketWorld);
+        }
         playerChain_->Update(dt, map, player_);
     }
     if (tornChain_) {
@@ -555,6 +557,21 @@ void ChainManager::ResetAll() {
         breakEffect_->Pause();
     }
     SyncTreasureTransform();
+}
+
+void ChainManager::OnPlayerDeath() {
+    if (spin_) {
+        spin_->Cancel(player_, playerChain_.get());
+        spin_->ResetInputState();
+    }
+    if (playerChain_) {
+        // プレイヤーの手元の拘束を解除し、自由落下（その場の地面に落ちて残る）状態にする
+        playerChain_->SetAnchorMode(ChainAnchorMode::kFree);
+    }
+    if (player_) {
+        player_->SetIsHoldingChain(false);
+        player_->SetIsSwingingChain(false);
+    }
 }
 
 void ChainManager::OnRewindBegin() {

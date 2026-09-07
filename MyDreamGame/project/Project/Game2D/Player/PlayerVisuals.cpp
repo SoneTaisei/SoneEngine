@@ -491,59 +491,9 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
 }
 
 void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
-    if (state.isDead_ && primitiveObj_) {
-        // メインオブジェクトを描画せず、6x6のブロックに対してゴースト描画する
-        primitiveObj_->ResetGhostIndex();
-        float dissolveProgress = state.deathTimer_ / params.deathDuration_;
-        
-        for (int y = 0; y < 6; ++y) {
-            for (int x = 0; x < 6; ++x) {
-                float bx = (float)x;
-                float by = (float)(5 - y);
-                // シェーダーと同じ乱数計算をCPUで行う
-                float dot_val = bx * 12.9898f + by * 78.233f;
-                float s = std::sin(dot_val);
-                float n = s * 43758.5453f;
-                n = n - std::floor(n);
-                
-                float cellW = (params.halfWidth_ * 2.0f) / 6.0f;
-                float cellH = (params.halfHeight_ * 2.0f) / 6.0f;
-                float offsetX = -params.halfWidth_ + cellW * 0.5f + cellW * x;
-                float offsetY = -params.halfHeight_ + cellH * 0.5f + cellH * y;
-                
-                EulerTransform ghostTransform;
-                ghostTransform.scale = { cellW, cellH, 1.0f };
-                ghostTransform.rotate = {0.0f, 0.0f, 0.0f};
-                
-                Vector3 basePos = state.position_;
-                basePos.x += offsetX;
-                basePos.y += offsetY;
-                
-                Material ghostMat = primitiveObj_->GetMaterial();
-                ghostMat.dissolveThreshold = 0.0f; // ゴースト自体はディゾルブさせない
-                
-                if (dissolveProgress > n) {
-                    // ディゾルブ時間を超えたブロックは上に飛んでいく
-                    float timeSinceDissolve = (dissolveProgress - n) * params.deathDuration_;
-                    basePos.y += timeSinceDissolve * 10.0f; 
-                    ghostTransform.rotate.z = timeSinceDissolve * 15.0f; // 回転を加える
-                    
-                    // 徐々に小さくする
-                    float shrink = 1.0f - (timeSinceDissolve / 0.1f);
-                    if (shrink < 0.0f) shrink = 0.0f;
-                    ghostTransform.scale.x *= shrink;
-                    ghostTransform.scale.y *= shrink;
-                    ghostMat.color.w *= shrink; // 透明度も下げる
-                }
-                
-                if (ghostTransform.scale.x > 0.0f) {
-                    ghostTransform.translate = basePos;
-                    // DrawGhostは内部的に引数無しのGetCommandListを使っている想定
-                    primitiveObj_->DrawGhost(ghostTransform, ghostMat);
-                }
-            }
-        }
-    } else if (!state.isDead_ && primitiveObj_) {
+    (void)params;
+    // 死亡時は怪盗の体が消え、帽子と鎖とお宝だけがその場に残る演出のため、プレイヤーモデルを描画しない
+    if (!state.isDead_ && primitiveObj_) {
         if (modelObj_) {
             modelObj_->Draw();
         } else {
