@@ -40,6 +40,7 @@ public:
     void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
+    void Draw2D() override;
     void RenderShadowPass();
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
     void DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) override;

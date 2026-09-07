@@ -142,6 +142,10 @@ public:
     // ポストエフェクトを実行する関数 (RenderTexture -> PostProcessTexture)
     void ExecutePostEffect();
 
+    // ポストエフェクト完了後に最前面2Dスプライトを描画するための準備・完了関数
+    void PreDraw2D();
+    void PostDraw2D();
+
 	// RenderTextureの内容を現在の画面にコピーして描画する関数
     void DrawRenderTexture();
 

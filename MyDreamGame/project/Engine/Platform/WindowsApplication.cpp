@@ -398,10 +398,17 @@ void WindowsApplication::Draw() {
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw();
+
     // ------------------------------------
 
-    // ★ ポストエフェクトを実行 (RenderTexture -> PostProcessTexture)
+    // ★ ポストエフェクトを実行 (3Dシーン・アウトライン・カラー調整など)
     dxCommon_->ExecutePostEffect();
+
+    // ★ ポストエフェクト完了後に、最前面の2Dスプライト・UIを描画！
+    // （これにより、深度アウトラインやポストプロセスが文字の上に被って透けて見える現象を完全に防止）
+    dxCommon_->PreDraw2D();
+    sceneManager_->Draw2D();
+    dxCommon_->PostDraw2D();
 
     // 2. Swapchain（最終画面）への描画準備
     dxCommon_->PreDrawSwapchain();

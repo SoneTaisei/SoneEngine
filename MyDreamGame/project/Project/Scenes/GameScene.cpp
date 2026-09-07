@@ -1641,8 +1641,10 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 0. シャドウマップパス（スポットライト視点から深度描画）
     RenderShadowPass();
 
+#ifdef USE_IMGUI
     // ブロック設計パネルの重ね描きは、この描画に使われた行列で位置を合わせる（マップチップ画面の専用カメラにも対応）
     BlockDesignPanel::SetRenderViewProjection(viewProjectionMatrix);
+#endif
 
     // 1. Skyboxの描画
     if (skybox_) {
@@ -1772,7 +1774,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     }
 #endif
+}
 
+void GameScene::Draw2D() {
     // 4. ポーズメニューの描画 (最前面)
     DrawPauseMenu();
 }

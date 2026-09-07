@@ -1329,6 +1329,53 @@ void DirectXCommon::ExecutePostEffect() {
     }
 }
 
+void DirectXCommon::PreDraw2D() {
+    ID3D12Resource* targetResource = nullptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle{};
+
+    if (finalPostProcessSRVHandle_.ptr == renderTextureSrvHandleGPU_.ptr) {
+        targetResource = renderTextureResource_.Get();
+        rtvHandle = renderTextureRtvHandle_;
+    } else {
+        targetResource = postProcessResource_.Get();
+        rtvHandle = postProcessRtvHandle_;
+    }
+
+    if (targetResource) {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = targetResource;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(1, &barrier);
+
+        // 深度バッファなしでレンダーターゲットをセット (スプライトは2Dのため)
+        commandList_->OMSetRenderTargets(1, &rtvHandle, false, nullptr);
+        commandList_->RSSetViewports(1, &viewport_);
+        commandList_->RSSetScissorRects(1, &scissorRect_);
+    }
+}
+
+void DirectXCommon::PostDraw2D() {
+    ID3D12Resource* targetResource = nullptr;
+    if (finalPostProcessSRVHandle_.ptr == renderTextureSrvHandleGPU_.ptr) {
+        targetResource = renderTextureResource_.Get();
+    } else {
+        targetResource = postProcessResource_.Get();
+    }
+
+    if (targetResource) {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = targetResource;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList_->ResourceBarrier(1, &barrier);
+    }
+}
+
 void DirectXCommon::DrawRenderTexture() {
     // レンダーターゲットがウィンドウ解像度に一致しているため、スワップチェーン全体に1:1で直接描画
     commandList_->RSSetViewports(1, &swapchainViewport_);
