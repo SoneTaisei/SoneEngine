@@ -71,6 +71,7 @@ private:
     Animation wallClimbAnimation_;
     Animation holdingWallAnimation_;
     Animation airDashAnimation_;
+    Animation swingAnimation_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
@@ -86,7 +87,9 @@ private:
         Jump,
         WallClimb,
         HoldingWall,
-        AirDash
+        AirDash,
+        Swing,
+        Hold
     };
 
     PlayerAnimType currentAnimType_ = PlayerAnimType::None;
@@ -96,6 +99,7 @@ private:
     float wallClimbAnimTime_ = 0.0f;
     float holdingWallAnimTime_ = 0.0f;
     float airDashAnimTime_ = 0.0f;
+    float swingAnimTime_ = 0.0f;
 
 public:
     // しがみつき時の腕の調整用パラメータ（親空間での回転：X=ピッチ, Y=ヨー, Z=ロール、ラジアン単位）

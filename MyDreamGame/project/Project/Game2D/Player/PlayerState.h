@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Core/Utility/Structs.h"
 struct PlayerState {
     Vector3 position_ = { 2.0f, 5.0f, 0.0f };
@@ -21,6 +21,13 @@ struct PlayerState {
 
     // 見た目・エフェクト同期用フラグ
     bool isDashing_ = false;
+    bool isHoldingChain_ = false;
+    bool isSwingingChain_ = false;
+    float chainSwingOmega_ = 0.0f;
+    float chainSwingTheta_ = 0.0f;
+    float spinFlipTimer_ = 0.0f;
+    float spinFlipDuration_ = 0.45f;
+    float spinFlipSign_ = -1.0f;
     bool isWallClinging_ = false;
     bool isWallSliding_ = false;
     bool isTouchingWallLeft_ = false;

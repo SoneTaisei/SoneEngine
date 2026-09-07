@@ -55,6 +55,9 @@ void PlayerVisuals::ReloadAnimations() {
     if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
         airDashAnimation_ = idleAnimation_;
     }
+    if (!LoadAnimationFromJsonFile(swingAnimation_, "resources/json/shared/Player/swing_animation.json")) {
+        swingAnimation_ = idleAnimation_;
+    }
 
     if (currentAnimType_ == PlayerAnimType::Idle || currentAnimType_ == PlayerAnimType::None) {
         animator_->SetAnimation(idleAnimation_);
@@ -180,7 +183,96 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 animator_->SetAnimation(airDashAnimation_);
                 animator_->SetTime(airDashAnimTime_);
                 animator_->Stop(); // 手動で時間を制御するため自動更新を停止
+            } else if (state.isSwingingChain_) {
+                airDashAnimTime_ = 0.0f;
+                climbBlendFactor_ = 0.0f;
+                wallClimbAnimTime_ = 0.0f;
+                holdingWallAnimTime_ = 0.0f;
+
+                if (currentAnimType_ != PlayerAnimType::Swing) {
+                    currentAnimType_ = PlayerAnimType::Swing;
+                }
+
+                // 体・足などのベースポーズとして正面構えアニメーションを適用
+                animator_->SetAnimation(swingAnimation_);
+                animator_->SetTime(0.0f);
+                animator_->Stop();
+                animator_->ClearJointOverrides();
+
+                // 振り子の物理シミュレーション角度（真下=0、+で右/反時計回り）から手の位置・回転をプログラムで直接計算
+                float theta = state.chainSwingTheta_;
+                float sinT = std::sin(theta);
+                float cosT = std::cos(theta);
+
+                // 手の位置：プレイヤーは正面（カメラ向き）のため、ワールド右(+X)はモデルのローカル左(-X)に対応
+                // 振り子の物理ベクトル (sinθ, -cosθ) に画面上で完全に一致するよう handX は -sinT とする
+                float swingRadius = 0.16f;
+                float handX = -swingRadius * sinT;
+                float handY = 0.48f - swingRadius * cosT;
+                float handZ = 0.22f + 0.05f * cosT; // 下の時は遠く（前）、上の時は少し手前
+
+                Vector3 handPos = { handX, handY, handZ };
+
+                // 腕の回転：振り子の方向に向くダイナミックな傾き
+                float rPitch = -0.90f + 0.35f * cosT;
+                float rYaw   =  0.15f - 0.30f * sinT;
+                float rRoll  =  0.25f - 0.25f * sinT;
+                Quaternion rRot = MakeEulerQuat(rPitch, rYaw, rRoll);
+                Quaternion lRot = { rRot.x, -rRot.y, -rRot.z, rRot.w };
+
+                // 手だけプログラムで完全同期オーバーライド
+                animator_->SetJointTranslationOverride("右手", handPos, 1.0f);
+                animator_->SetJointRotationOverride("右手", rRot, 1.0f);
+                animator_->SetJointTranslationOverride("左手", handPos, 1.0f);
+                animator_->SetJointRotationOverride("左手", lRot, 1.0f);
+
+                // 体幹も振り子の遠心力・引っ張られる力に合わせて少し踏ん張る
+                float bPitch = 0.15f - 0.05f * cosT;
+                float bYaw   = -0.04f * sinT;
+                float bRoll  =  0.06f * sinT;
+                Quaternion bRot = MakeEulerQuat(bPitch, bYaw, bRoll);
+                animator_->SetJointRotationOverride("体", bRot, 1.0f);
+
+                // 頭は常に正面（カメラ目線）をキープするように相殺
+                Quaternion hRot = MakeEulerQuat(-bPitch, 0.0f, -bRoll);
+                animator_->SetJointRotationOverride("頭", hRot, 1.0f);
+            } else if (state.isHoldingChain_) {
+                airDashAnimTime_ = 0.0f;
+                climbBlendFactor_ = 0.0f;
+                wallClimbAnimTime_ = 0.0f;
+                holdingWallAnimTime_ = 0.0f;
+
+                currentAnimType_ = PlayerAnimType::Hold;
+
+                // ベースポーズとして正面構えアニメーションを適用
+                animator_->SetAnimation(swingAnimation_);
+                animator_->SetTime(0.0f);
+                animator_->Stop();
+                animator_->ClearJointOverrides();
+
+                // 両手で宝石を手前（胸の前）で持つポーズ
+                // 胸元中心: (0.0f, 0.44f, 0.22f)。両手で宝石を大切そうに抱え込む
+                Vector3 rHandPos = {  0.07f, 0.44f, 0.22f };
+                Vector3 lHandPos = { -0.07f, 0.44f, 0.22f };
+
+                // 腕を前に出して内側に向け、両手で挟み込む自然な回転
+                Quaternion rRot = MakeEulerQuat(-0.85f,  0.25f,  0.35f);
+                Quaternion lRot = MakeEulerQuat(-0.85f, -0.25f, -0.35f);
+
+                animator_->SetJointTranslationOverride("右手", rHandPos, 1.0f);
+                animator_->SetJointRotationOverride("右手", rRot, 1.0f);
+                animator_->SetJointTranslationOverride("左手", lHandPos, 1.0f);
+                animator_->SetJointRotationOverride("左手", lRot, 1.0f);
+
+                // 体幹：やや胸を張る自然な立ち姿勢
+                Quaternion bRot = MakeEulerQuat(0.08f, 0.0f, 0.0f);
+                animator_->SetJointRotationOverride("体", bRot, 1.0f);
+
+                // 頭：手元の宝石を優しく見つめるよう少し下を向く
+                Quaternion hRot = MakeEulerQuat(0.12f, 0.0f, 0.0f);
+                animator_->SetJointRotationOverride("頭", hRot, 1.0f);
             } else {
+                swingAnimTime_ = 0.0f;
                 airDashAnimTime_ = 0.0f;
 
                 // しがみつき中ならブレンド率を上げ、それ以外は下げる
@@ -249,6 +341,9 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
 
                         const Animation* nextAnim = nullptr;
                         switch (targetType) {
+                        case PlayerAnimType::Swing:
+                            nextAnim = &swingAnimation_;
+                            break;
                         case PlayerAnimType::Jump:
                             nextAnim = &jumpAnimation_;
                             break;
@@ -289,6 +384,8 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 rotationY = 1.57079632f;
                 modelPos.x += 0.2f; // 左壁から少し離す（右へずらす）
             }
+        } else if (state.isSwingingChain_ || state.isHoldingChain_) {
+            rotationY = 0.0f; // スイング中・宝石持ち中は正面（カメラ目線）
         } else {
             if (state.velocity_.x < -0.01f) {
                 rotationY = 1.57079632f;
@@ -300,6 +397,13 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         modelObj_->SetTranslation(modelPos);
         
         float baseScale = (params.modelScale_ > 0.0f) ? params.modelScale_ : 2.0f;
+
+        float flipAngleZ = 0.0f;
+        if (state.spinFlipTimer_ > 0.0f && state.spinFlipDuration_ > 0.0f) {
+            float p = 1.0f - (state.spinFlipTimer_ / state.spinFlipDuration_);
+            p = std::clamp(p, 0.0f, 1.0f);
+            flipAngleZ = state.spinFlipSign_ * (2.0f * 3.14159265f) * p;
+        }
 
         if (state.isDashing_) {
             modelObj_->GetMaterial().color = params.colorDashed_;
@@ -333,7 +437,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 modelObj_->GetMaterial().color = params.colorNormal_;
             }
             modelObj_->SetScale({ baseScale, baseScale, baseScale });
-            modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
+            modelObj_->SetRotation({ 0.0f, rotationY, flipAngleZ });
         }
         
         if (!state.isDead_) {

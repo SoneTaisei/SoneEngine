@@ -130,6 +130,11 @@ Vector3 ChainSpinAction::TangentDirection() const {
 }
 
 void ChainSpinAction::UpdateSpinTarget(const Vector3& socketWorld) {
+    if (state_ == State::kHold) {
+        // 宝石を両手で手前（胸の前）に抱えて持つ
+        spinTarget_ = { socketWorld.x, socketWorld.y + 0.05f, 0.0f };
+        return;
+    }
     // 真下=0 の角度なので位置は (sinθ, -cosθ)。鎖全体はソケット→ここの直線上に拘束される
     spinTarget_ = { socketWorld.x + std::sin(theta_) * radius_,
                     socketWorld.y - std::cos(theta_) * radius_,
@@ -308,6 +313,7 @@ void ChainSpinAction::Launch(float dt, Player2D* player, Chain2D* chain, const V
     dir.z = 0.0f;
     // 横方向は PlayerState::launchVelocityX_ として着地・壁接触まで残り、通常の移動入力が重なる
     player->Launch({ dir.x * speed, dir.y * speed, 0.0f });
+    player->TriggerSpinFlip(omega_);
     player->SetActionInputModifier(1.0f, false);
 
     lastLaunchSpeed_ = speed;

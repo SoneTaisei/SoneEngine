@@ -72,6 +72,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         std::string currentDisplay = currentStem;
         if (currentStem == "wall_climb_animation") currentDisplay = "壁つかまり (wall_climb)";
         else if (currentStem == "air_dash_animation") currentDisplay = "空中ダッシュ (air_dash)";
+        else if (currentStem == "swing_animation") currentDisplay = "スイング (swing_animation)";
 
         ImGui::SetNextItemWidth(190.0f);
         if (ImGui::BeginCombo("##AnimSelectCombo", currentDisplay.c_str())) {
@@ -80,6 +81,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 std::string displayName = stem;
                 if (stem == "wall_climb_animation") displayName = "壁つかまり (wall_climb)";
                 else if (stem == "air_dash_animation") displayName = "空中ダッシュ (air_dash)";
+                else if (stem == "swing_animation") displayName = "スイング (swing_animation)";
 
                 bool isSel = (context->GetCurrentAnimFilePath() == filePath);
                 if (ImGui::Selectable(displayName.c_str(), isSel)) {

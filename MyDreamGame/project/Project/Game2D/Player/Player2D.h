@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "PlayerConfig.h"
 #include "PlayerPhysics.h"
 #include "PlayerInput.h"
@@ -28,6 +28,14 @@ public:
     Vector3 GetVelocity() const { return state_.velocity_; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
     bool IsOnGround() const { return state_.isOnGround_; }
+    void SetIsHoldingChain(bool holding) { state_.isHoldingChain_ = holding; }
+    bool IsHoldingChain() const { return state_.isHoldingChain_; }
+    void SetIsSwingingChain(bool swinging) { state_.isSwingingChain_ = swinging; }
+    bool IsSwingingChain() const { return state_.isSwingingChain_; }
+    void SetChainSwingOmega(float omega) { state_.chainSwingOmega_ = omega; }
+    float GetChainSwingOmega() const { return state_.chainSwingOmega_; }
+    void SetChainSwingTheta(float theta) { state_.chainSwingTheta_ = theta; }
+    float GetChainSwingTheta() const { return state_.chainSwingTheta_; }
 
     // --- 鎖アクション用フック（物理は触らず、ジャンプ処理と同じ2行で上向き速度を与える） ---
     void LaunchVertical(float velocityY) {
@@ -39,6 +47,17 @@ public:
         state_.velocity_ = { velocity.x, velocity.y, 0.0f };
         state_.launchVelocityX_ = velocity.x;
         state_.isOnGround_ = false;
+    }
+    // 振り子で飛んだ際の一回転（宙返り）を開始
+    void TriggerSpinFlip(float omega) {
+        state_.spinFlipDuration_ = 0.45f;
+        state_.spinFlipTimer_ = state_.spinFlipDuration_;
+        // 飛ぶ向き（横速度）に合わせて回転方向を決定（右へ飛ぶなら時計回り -1.0f、左へ飛ぶなら反時計回り +1.0f）
+        if (std::abs(state_.velocity_.x) > 0.5f) {
+            state_.spinFlipSign_ = (state_.velocity_.x > 0.0f) ? -1.0f : 1.0f;
+        } else {
+            state_.spinFlipSign_ = (omega >= 0.0f) ? 1.0f : -1.0f;
+        }
     }
     // 鎖アクション中（スピンなど）の移動減速・ジャンプ無効。次フレームの入力から反映（1.0f/false で解除）
     void SetActionInputModifier(float moveFactor, bool jumpLocked) {
