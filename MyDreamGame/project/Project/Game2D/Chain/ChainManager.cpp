@@ -943,5 +943,8 @@ void ChainManager::DrawImGui() {
     for (auto& dropped : droppedChains_) {
         dropped.chain->DrawImGui();
     }
+    if (treasure_) {
+        treasure_->DrawImGui();
+    }
 #endif
 }

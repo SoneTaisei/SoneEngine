@@ -1,5 +1,6 @@
-﻿#pragma once
+#pragma once
 #include "Core/Utility/Vector3.h"
+#include "Core/Utility/Vector4.h"
 #include <memory>
 #include <string>
 
@@ -32,6 +33,10 @@ public:
 
     void Draw();
 
+#ifdef USE_IMGUI
+    void DrawImGui();
+#endif
+
     Object3D* GetObject() const { return obj_.get(); }        // ヒエラルキー用
     const Vector3& GetPosition() const { return position_; }   // ゴール判定・敗北判定・カメラ用（z=0）
 
@@ -42,4 +47,6 @@ private:
     float selfAngle_ = 0.0f;
     bool highlight_ = false;
     float drawOffsetZ_ = -0.25f;
+    Vector4 baseColor_ = { 1.0f, 0.45f, 0.08f, 1.0f };
+    Vector4 highlightColor_ = { 1.0f, 0.85f, 0.25f, 1.0f };
 };

@@ -1,17 +1,20 @@
-﻿#include "Treasure2D.h"
+#include "Treasure2D.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include <cmath>
 
 namespace {
-    // 通常色（金）と回転中の合図色（明るい金）
-    constexpr Vector4 kBaseColor = { 1.0f, 0.85f, 0.2f, 1.0f };
-    constexpr Vector4 kHighlightColor = { 1.0f, 1.0f, 0.6f, 1.0f };
+    // ウズシオクリスタル色：鮮やかなサンセットアンバーオレンジ
+    constexpr Vector4 kDefaultBaseColor = { 1.0f, 0.45f, 0.08f, 1.0f };
+    // 回転中の合図色（より輝かしいゴールデンアンバー）
+    constexpr Vector4 kDefaultHighlightColor = { 1.0f, 0.85f, 0.25f, 1.0f };
 }
 
 void Treasure2D::Initialize(const std::string& modelDir, const std::string& modelFile, float scale) {
     scale_ = scale;
+    baseColor_ = kDefaultBaseColor;
+    highlightColor_ = kDefaultHighlightColor;
 
     ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
     Model* model = ModelManager::GetInstance()->GetModel(modelDir, modelFile);
@@ -19,8 +22,15 @@ void Treasure2D::Initialize(const std::string& modelDir, const std::string& mode
     obj_ = std::make_unique<Object3D>();
     obj_->Initialize(device, model);
     obj_->SetName("Treasure");
-    obj_->GetMaterial().color = kBaseColor;
-    obj_->GetMaterial().lightingType = 1;
+
+    // ウズシオクリスタル用シェーディング（lightingType == 2: クリスタル/宝石モード）
+    Material& mat = obj_->GetMaterial();
+    mat.color = baseColor_;
+    mat.lightingType = 2;              // Crystal / Gemstone Shading
+    mat.enableEnvironmentMap = 1;      // 環境キューブマップの反射・フェイク屈折を有効化
+    mat.shininess = 64.0f;             // 鋭い表面スペキュラ
+    mat.environmentCoefficient = 0.8f; // 環境マップ映り込み係数
+
     SetVisualScale(scale_);
 }
 
@@ -37,7 +47,7 @@ void Treasure2D::SetHighlight(bool highlight) {
     }
     highlight_ = highlight;
     if (obj_) {
-        obj_->GetMaterial().color = highlight_ ? kHighlightColor : kBaseColor;
+        obj_->GetMaterial().color = highlight_ ? highlightColor_ : baseColor_;
     }
 }
 
@@ -66,3 +76,30 @@ void Treasure2D::Draw() {
         obj_->Draw();
     }
 }
+
+#ifdef USE_IMGUI
+#include <imgui.h>
+
+void Treasure2D::DrawImGui() {
+    if (!obj_) return;
+    ImGui::SeparatorText("Treasure (Crystal Material)");
+    Material& mat = obj_->GetMaterial();
+    
+    if (ImGui::ColorEdit4("Base Color##Treasure", &baseColor_.x)) {
+        if (!highlight_) mat.color = baseColor_;
+    }
+    if (ImGui::ColorEdit4("Highlight Color##Treasure", &highlightColor_.x)) {
+        if (highlight_) mat.color = highlightColor_;
+    }
+    ImGui::SliderInt("Lighting Type##Treasure", &mat.lightingType, 0, 2);
+    ImGui::SliderFloat("Shininess##Treasure", &mat.shininess, 1.0f, 256.0f);
+    ImGui::SliderFloat("Env Coefficient##Treasure", &mat.environmentCoefficient, 0.0f, 2.0f);
+    bool envMap = mat.enableEnvironmentMap != 0;
+    if (ImGui::Checkbox("Enable Env Map##Treasure", &envMap)) {
+        mat.enableEnvironmentMap = envMap ? 1 : 0;
+    }
+    ImGui::DragFloat("Visual Scale##Treasure", &scale_, 0.01f, 0.05f, 2.0f);
+    if (obj_) obj_->SetScale({ scale_, scale_, scale_ });
+    ImGui::DragFloat("Draw Offset Z##Treasure", &drawOffsetZ_, 0.01f, -2.0f, 2.0f);
+}
+#endif
