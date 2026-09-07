@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include "Blocks/BaseBlock.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 
 /// <summary>
 /// 2Dスクロールゲーム用マップクラス
@@ -39,6 +40,10 @@ public:
     void Update();
     void Draw();
     void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
+
+    // 崩れる床のエフェクト再生
+    void SpawnFragileParticle(const Vector3& worldPos);
+    void ClearFragileParticles();
 
     // 指定座標のブロックを取得する
     BaseBlock* GetBlock(int chipX, int chipY) const;
@@ -252,4 +257,9 @@ private:
     bool isRebuildEnabled_ = true;
     bool isDirty_ = false;
     std::string currentFilePath_ = "";
+
+    // Fragileパーティクル
+    GPUParticleSystemData fragileParticleData_;
+    bool fragileParticleDataLoaded_ = false;
+    std::vector<std::unique_ptr<GPUParticleSystem>> fragileParticles_;
 };

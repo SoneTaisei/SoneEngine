@@ -57,7 +57,7 @@ struct GPUParticleEmitterData {
 
     // レンダラー設定
     GPUParticleRenderType renderType = GPUParticleRenderType::Sprite;
-    std::string modelPath = "resources/Object/School/sphere/sphere.obj";
+    std::string modelPath = "resources/Object/Original/sphere/sphere.obj";
     std::string texturePath = "resources/Sprite/School/circle.png";
     GPUParticleBillboardType billboardType = GPUParticleBillboardType::AllAxis;
     BlendMode blendMode = BlendMode::kBlendModeAdd;
@@ -198,7 +198,14 @@ inline void from_json(const nlohmann::json& j, GPUParticleEmitterData& e) {
     if (j.contains("name")) e.name = j.at("name").get<std::string>();
     if (j.contains("enabled")) e.enabled = j.at("enabled").get<bool>();
     if (j.contains("renderType")) e.renderType = static_cast<GPUParticleRenderType>(j.at("renderType").get<int>());
-    if (j.contains("modelPath")) e.modelPath = j.at("modelPath").get<std::string>();
+    if (j.contains("modelPath")) {
+        e.modelPath = j.at("modelPath").get<std::string>();
+        if (e.modelPath.find("resources/Object/School/sphere") != std::string::npos) {
+            e.modelPath = "resources/Object/Original/sphere/sphere.obj";
+        } else if (e.modelPath.find("resources/Object/School/cube") != std::string::npos) {
+            e.modelPath = "resources/Object/Original/cube/cube.obj";
+        }
+    }
     if (j.contains("texturePath")) e.texturePath = j.at("texturePath").get<std::string>();
     if (j.contains("billboardType")) e.billboardType = static_cast<GPUParticleBillboardType>(j.at("billboardType").get<int>());
     if (j.contains("blendMode")) e.blendMode = static_cast<BlendMode>(j.at("blendMode").get<int>());

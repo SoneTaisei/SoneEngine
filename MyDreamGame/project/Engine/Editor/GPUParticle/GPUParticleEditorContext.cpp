@@ -107,8 +107,8 @@ void GPUParticleEditorContext::ScanAvailableAssets() {
     namespace fs = std::filesystem;
 
     // 基本モデルのフォールバック
-    availableModels_.push_back("resources/Object/School/sphere/sphere.obj");
-    availableModels_.push_back("resources/Object/School/cube/cube.obj");
+    availableModels_.push_back("resources/Object/Original/sphere/sphere.obj");
+    availableModels_.push_back("resources/Object/Original/cube/cube.obj");
 
     // 基本テクスチャのフォールバック
     availableTextures_.push_back("white");

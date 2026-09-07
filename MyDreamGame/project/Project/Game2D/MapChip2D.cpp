@@ -295,6 +295,14 @@ void MapChip2D::Update() {
             blocksRevision_++;
         }
     }
+
+    // Fragile パーティクルの更新
+    float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
+    for (auto& effect : fragileParticles_) {
+        if (effect && effect->IsPlaying()) {
+            effect->Update(dt);
+        }
+    }
 }
 
 void MapChip2D::Draw() {
@@ -334,6 +342,12 @@ void MapChip2D::DrawParticle(ID3D12GraphicsCommandList* commandList, const Matri
     for (const auto& block : updateBlocks_) {
         if (block && !block->IsDestroyed()) {
             block->DrawParticle(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
+        }
+    }
+
+    for (const auto& effect : fragileParticles_) {
+        if (effect && effect->IsPlaying()) {
+            effect->Draw(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
         }
     }
 }
@@ -638,6 +652,7 @@ void MapChip2D::ClearMap() {
 }
 
 void MapChip2D::ResetMap() {
+    ClearFragileParticles();
     if (!currentFilePath_.empty()) {
         LoadFromFile(currentFilePath_);
     } else {
@@ -647,6 +662,7 @@ void MapChip2D::ResetMap() {
 }
 
 void MapChip2D::RebuildChipObjects() {
+    ClearFragileParticles();
     if (!isRebuildEnabled_) return;
 
     // 既に記録対象になっているブロックのIDを安全に退避（objectIdフィールドを参照するのでポインタ逆参照不要）
@@ -1635,3 +1651,48 @@ void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState>& state
         block->RestoreReplayState(state.custom);
     }
 }
+
+void MapChip2D::SpawnFragileParticle(const Vector3& worldPos) {
+    ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
+    if (!device) return;
+
+    if (!fragileParticleDataLoaded_) {
+        if (LoadParticleSystemFromJson(fragileParticleData_, "resources/json/shared/Particle/Fragile.json")) {
+            fragileParticleData_.isLoop = false;
+            for (auto& emitter : fragileParticleData_.emitters) {
+                emitter.isLoop = false;
+                if (emitter.duration > 1.0f) {
+                    emitter.duration = 1.0f;
+                }
+            }
+            fragileParticleDataLoaded_ = true;
+        }
+    }
+    if (!fragileParticleDataLoaded_) return;
+
+    // 停止中のエフェクトをプールから再利用
+    for (auto& effect : fragileParticles_) {
+        if (effect && !effect->IsPlaying()) {
+            effect->PlayAt(worldPos);
+            return;
+        }
+    }
+
+    // プール上限（16個）未満なら新規生成
+    if (fragileParticles_.size() < 16) {
+        auto effect = std::make_unique<GPUParticleSystem>();
+        effect->Initialize(device, fragileParticleData_);
+        effect->PlayAt(worldPos);
+        fragileParticles_.push_back(std::move(effect));
+    }
+}
+
+void MapChip2D::ClearFragileParticles() {
+    for (auto& effect : fragileParticles_) {
+        if (effect) {
+            effect->Restart();
+            effect->Pause();
+        }
+    }
+}
+
