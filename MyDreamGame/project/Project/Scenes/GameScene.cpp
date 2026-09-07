@@ -15,6 +15,7 @@
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/Blocks/FragileBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
+#include "Game2D/Blocks/SavePoint.h"
 #include "BlockDesignPanel.h"
 #include "Renderer/Renderer.h"
 #include "Core/TimeManager.h"
@@ -203,6 +204,17 @@ void GameScene::Initialize() {
     Log("GameScene::Initialize: Player Initialized\n");
     
     player_->FindSpawnPoint(*map_);
+    if (SavePoint::HasActiveSavePoint(s_TargetMapFilePath)) {
+        Vector3 checkpointPos = SavePoint::GetActiveSavePoint(s_TargetMapFilePath);
+        player_->SetStartPosition(checkpointPos);
+        player_->SetPosition(checkpointPos);
+        if (playerObj_) {
+            if (auto* tc = playerObj_->GetComponent<TransformComponent>()) {
+                tc->SetPosition(checkpointPos);
+            }
+        }
+        Log("GameScene::Initialize: Player restored to SavePoint\n");
+    }
     Log("GameScene::Initialize: Player SpawnPoint found\n");
 
     // 6.4. 前のステージから持ち越した鎖の個数を引き継ぐ（遷移用の鎖と同じ長さで生成され、着地の切り替えが見えない）
@@ -426,6 +438,7 @@ void GameScene::Update(SceneManager *sceneManager) {
             EditorManager::SetPlaying(true);
 #endif
             sceneManager->SetData("StartAtStageSelect", true);
+            SavePoint::Clear(s_TargetMapFilePath);
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
         }
@@ -476,6 +489,16 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
+            if (SavePoint::HasActiveSavePoint(s_TargetMapFilePath)) {
+                Vector3 checkpointPos = SavePoint::GetActiveSavePoint(s_TargetMapFilePath);
+                player_->SetStartPosition(checkpointPos);
+                player_->SetPosition(checkpointPos);
+                if (playerObj_) {
+                    if (auto* tc = playerObj_->GetComponent<TransformComponent>()) {
+                        tc->SetPosition(checkpointPos);
+                    }
+                }
+            }
             // プレイ開始時は鎖と個数を初期状態に戻す（毎回同じ初期状態から始めてリプレイ再現性を保つ）
             if (chainManager_) {
                 chainManager_->ResetAll();
@@ -762,6 +785,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                 stateTimer_ = 0.0f;
                 // 今回取った収集アイテムを記録（クリアまで持ち帰った分だけ残る）
                 CollectibleTracker::Get().CommitStageClear();
+                SavePoint::Clear(s_TargetMapFilePath);
                 if (ReplayManager::GetInstance()->IsRecording()) {
                     ReplayManager::GetInstance()->StopRecord(); // 記録はゴール時点で止める
                 }
@@ -2278,6 +2302,7 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
             }
             EditorManager::SetPlaying(true);
 #endif
+            SavePoint::Clear(s_TargetMapFilePath);
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
         }

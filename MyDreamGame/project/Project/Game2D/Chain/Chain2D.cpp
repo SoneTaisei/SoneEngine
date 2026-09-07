@@ -1,4 +1,4 @@
-﻿#include "Chain2D.h"
+#include "Chain2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Player/Player2D.h"
 #include "GameObject/Object3D.h"
@@ -66,10 +66,20 @@ void Chain2D::BuildNodes() {
 
     nodes_.clear();
     nodes_.resize(nodeCount);
+
+    // プレイヤーが持つ鎖（kSocket）は、プレイヤーと重なる位置にスポーンさせる（足場貫通や下層への落下防止）
+    const bool gatherAtAnchor = (anchorMode_ == ChainAnchorMode::kSocket);
+
     for (int i = 0; i < nodeCount; ++i) {
         VerletNode& node = nodes_[i];
-        // アンカーから真下に垂らした姿勢で初期化
-        node.pos = { anchorPos_.x, anchorPos_.y - restLength_ * static_cast<float>(i), 0.0f };
+        if (gatherAtAnchor) {
+            // プレイヤーと重なるようにスポーン（ゼロ除算防止のため微小オフセット）
+            float offset = static_cast<float>(i) * 0.001f;
+            node.pos = { anchorPos_.x, anchorPos_.y - offset, 0.0f };
+        } else {
+            // アンカーから真下に垂らした姿勢で初期化
+            node.pos = { anchorPos_.x, anchorPos_.y - restLength_ * static_cast<float>(i), 0.0f };
+        }
         node.prevPos = node.pos;
         // 先頭ノードがアンカー（固定）。ただしkFree（落ちている状態）なら全ノード自由
         node.invMass = (i == 0 && anchorMode_ != ChainAnchorMode::kFree) ? 0.0f : 1.0f;
@@ -369,14 +379,20 @@ void Chain2D::Draw() {
 
 void Chain2D::ResetPoseHanging(const Vector3& anchor, MapChip2D* map) {
     anchorPos_ = { anchor.x, anchor.y, 0.0f };
+    const bool gatherAtAnchor = (anchorMode_ == ChainAnchorMode::kSocket);
     float y = anchorPos_.y;
     for (size_t i = 0; i < nodes_.size(); ++i) {
         VerletNode& node = nodes_[i];
-        node.pos = { anchorPos_.x, y, 0.0f };
-        // 先頭セグメントは繰り出し中の自然長、以降は節間隔
-        y -= (i == 0) ? headRest_ : restLength_;
-        if (i > 0 && map && node.invMass > 0.0f) {
-            VerletPhysics2D::CollideNodeWithMap(node, map, 0.0f); // 床やブロックに埋まった分だけ押し出す
+        if (gatherAtAnchor) {
+            float offset = static_cast<float>(i) * 0.001f;
+            node.pos = { anchorPos_.x, anchorPos_.y - offset, 0.0f };
+        } else {
+            node.pos = { anchorPos_.x, y, 0.0f };
+            // 先頭セグメントは繰り出し中の自然長、以降は節間隔
+            y -= (i == 0) ? headRest_ : restLength_;
+            if (i > 0 && map && node.invMass > 0.0f) {
+                VerletPhysics2D::CollideNodeWithMap(node, map, 0.0f); // 床やブロックに埋まった分だけ押し出す
+            }
         }
         node.prevPos = node.pos; // 速度ゼロ
         if (node.crushed) {
@@ -393,9 +409,11 @@ void Chain2D::ResetDynamics() {
 }
 
 void Chain2D::ResetToInitial() {
-    // 初期モード・初期アンカーに戻して垂下姿勢を再構築する（繰り出し状態もクリアされる）
+    // 初期モード・初期アンカーに戻して姿勢を再構築する（繰り出し状態もクリアされる）
     anchorMode_ = initialMode_;
-    anchorPos_ = initialAnchorPos_;
+    if (anchorMode_ != ChainAnchorMode::kSocket) {
+        anchorPos_ = initialAnchorPos_;
+    }
     BuildNodes();
     UpdateLinkTransforms();
 }

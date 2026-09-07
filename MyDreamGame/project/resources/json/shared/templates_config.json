@@ -302,6 +302,25 @@
             },
             "textureName": "",
             "type": "CollectibleBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.4552229940891266,
+                "g": 0.2979532480239868,
+                "r": 0.9768339991569519
+            },
+            "id": 19,
+            "modelName": "",
+            "name": "SavePoint",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "SavePoint"
         }
     ]
 }

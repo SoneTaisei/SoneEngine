@@ -233,7 +233,25 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         templatePalette_.push_back(def);
     }
 
-    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate || !hasCollectibleTemplate) {
+    // 中間ポイント（SavePoint）がテンプレートに無ければ自動追加
+    bool hasSavePointTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kSavePoint)) {
+            hasSavePointTemplate = true;
+            break;
+        }
+    }
+    if (!hasSavePointTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kSavePoint);
+        def.name = "SavePoint";
+        def.type = "SavePoint";
+        def.color = {0.25f, 0.70f, 1.0f, 1.0f};
+        def.properties = nlohmann::json::object();
+        templatePalette_.push_back(def);
+    }
+
+    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate || !hasCollectibleTemplate || !hasSavePointTemplate) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
@@ -1382,6 +1400,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = BlockFactory::GetInstance().Create("OneWayBlock", this, x, y);
     } else if (type == ChipType::kChainItemBlock) {
         newBlock = BlockFactory::GetInstance().Create("ChainItemBlock", this, x, y);
+    } else if (type == ChipType::kSavePoint) {
+        newBlock = BlockFactory::GetInstance().Create("SavePoint", this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {

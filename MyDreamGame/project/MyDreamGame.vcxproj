@@ -14,6 +14,7 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
       <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\SavePoint.h" />
 </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -212,6 +213,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\SavePoint.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp" />
     <ClCompile Include="Engine\GameObject\GameObject.cpp" />
     <ClCompile Include="Engine\Component\TransformComponent.cpp" />

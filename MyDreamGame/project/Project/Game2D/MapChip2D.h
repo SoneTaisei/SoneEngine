@@ -33,10 +33,12 @@ public:
         kDoorBlock = 15, // シャッタードア
         kGuardBlock = 16, // 警備員
         kThinPlatform = 17, // 細い足場（板。上にだけ乗れる。鎖は素通り。この上でだけ鎖を回せる）
-        kCollectible = 18  // 収集アイテム（小さい青い宝石。クリアには関係ないやり込み要素。触れると取れる）
+        kCollectible = 18, // 収集アイテム（小さい青い宝石。クリアには関係ないやり込み要素。触れると取れる）
+        kSavePoint = 19    // 中間ポイント（触れるとセーブされ、ミス時にここから再開）
     };
 
     void Initialize(const std::string& mapFilePath);
+    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
     void Update();
     void Draw();
     void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);

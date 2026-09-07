@@ -9,6 +9,7 @@
 #include "Input/KeyboardInput.h"
 #include "Scene/SceneFactory.h"
 #include "GameScene.h"
+#include "Game2D/Blocks/SavePoint.h"
 #include "Core/TimeManager.h"
 #include "Graphics/CameraManager.h"
 #include "Renderer/Renderer.h"
@@ -127,6 +128,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
             GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }
+        SavePoint::Clear(GameScene::s_TargetMapFilePath);
         sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
         return;
     }

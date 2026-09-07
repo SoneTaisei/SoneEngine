@@ -547,7 +547,10 @@ void ChainManager::ResetAll() {
         player_->SetChainLength(initialChainLength_);
     }
     if (playerChain_) {
-        playerChain_->ResetToInitial(); // kSocket・初期ユニット数へ（繰り出し状態もクリア）。次のSyncSocketのワープ検出が手元へ引き寄せる
+        if (player_) {
+            playerChain_->SetAnchorPosition(player_->GetPosition());
+        }
+        playerChain_->ResetToInitial(); // kSocket・初期ユニット数へ（プレイヤー位置に重なるように再生成）
     }
     for (auto& chain : worldChains_) {
         chain->ResetToInitial(); // 使い切って休眠していた吊り鎖もここで復活する
