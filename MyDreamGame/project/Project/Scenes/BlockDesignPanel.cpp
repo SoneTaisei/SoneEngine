@@ -171,6 +171,7 @@ namespace {
         {"NormalBlock", "ブロック"}, {"DeathBlock", "死ぬ床"}, {"GoalBlock", "ゴール"}, {"OneWayBlock", "一方通行"},
         {"ChainItemBlock", "鎖アイテム"}, {"MovingBlock", "動く床"}, {"FragileBlock", "崩れる床"}, {"SwitchBlock", "スイッチ"},
         {"DoorBlock", "ドア"}, {"GuardBlock", "警備員"}, {"ThinPlatformBlock", "細い足場"}, {"JumpBlock", "ジャンプ台"},
+        {"CollectibleBlock", "収集の宝石"},
     };
 
     std::string TypeLabelFor(const std::string& type) {

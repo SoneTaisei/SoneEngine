@@ -36,6 +36,10 @@ public:
     bool IsLatched() const { return latched_; }
     /// <summary>閉じた状態の枠（エディタの重ね描き用。開いていると本体が潰れて見えないため）</summary>
     AABB2D GetClosedAABB() const;
+    // crushKills が OFF のドアは鎖を挟んでもちぎらない（通路に鎖があると閉まらずに待つ）
+    bool CrushesChain() const override { return crushKills_; }
+    // 鎖の当たりは「閉じた時の通路の範囲」で取る（開いている間に通路の鎖を見つけて、閉まるのを待つため）
+    AABB2D GetChainTouchAABB() const override { return GetClosedAABB(); }
 
 private:
     void ApplyTransform();

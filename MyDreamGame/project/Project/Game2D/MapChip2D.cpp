@@ -215,7 +215,25 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         templatePalette_.push_back(def);
     }
 
-    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate) {
+    // 収集アイテム（小さい宝石）がテンプレートに無ければ自動追加
+    bool hasCollectibleTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kCollectible)) {
+            hasCollectibleTemplate = true;
+            break;
+        }
+    }
+    if (!hasCollectibleTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kCollectible);
+        def.name = "Collectible Gem";
+        def.type = "CollectibleBlock";
+        def.color = {0.45f, 0.8f, 1.0f, 1.0f};
+        def.properties = nlohmann::json::object();
+        templatePalette_.push_back(def);
+    }
+
+    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate || !hasCollectibleTemplate) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
@@ -250,7 +268,7 @@ void MapChip2D::Update() {
     for (auto it = updateBlocks_.begin(); it != updateBlocks_.end();) {
         if (*it) {
             (*it)->Update();
-            if ((*it)->IsDestroyed()) {
+            if ((*it)->IsDestroyed() && !(*it)->KeepWhenDestroyed()) {
                 // リプレイ復元用に「破壊済み」であることを覚えておく
                 // （updateBlocks_ から外れると状態を記録できなくなるため）
                 uint64_t destroyedId = (*it)->GetReplayObjectId();
@@ -1217,16 +1235,25 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
 }
 
 
+std::map<std::pair<int, int>, nlohmann::json> MapChip2D::playtimeOverrides_;
+
 void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json& properties) {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
     nlohmann::json& slot = blockOverrides_[{x, y}];
     if (!slot.is_object()) slot = nlohmann::json::object();
     slot.update(properties);
-    isDirty_ = true;
     if (playtimeRecording_) {
+        // プレイ中：マップを作り直さず（作り直すと警備員や崩れた床まで初期化される）、置かれているブロックにだけ反映する
         nlohmann::json& rec = playtimeOverrides_[{x, y}];
         if (!rec.is_object()) rec = nlohmann::json::object();
         rec.update(properties);
+        if (BaseBlock* b = GetBlock(x, y)) {
+            nlohmann::json merged = GetPaletteProperties(x, y);
+            merged.update(slot);
+            b->SetProperties(merged);
+        }
+    } else {
+        isDirty_ = true;
     }
 }
 
@@ -1259,11 +1286,17 @@ const nlohmann::json* MapChip2D::GetBlockOverride(int x, int y) const {
 }
 
 void MapChip2D::ClearBlockOverride(int x, int y) {
-    if (blockOverrides_.erase({x, y}) > 0) {
-        isDirty_ = true;
-    }
+    bool erased = blockOverrides_.erase({x, y}) > 0;
     if (playtimeRecording_) {
         playtimeOverrides_[{x, y}] = nullptr;
+        // プレイ中はマップを作り直さず、置かれているブロックにパレットの値を戻す
+        if (erased) {
+            if (BaseBlock* b = GetBlock(x, y)) {
+                b->SetProperties(GetPaletteProperties(x, y));
+            }
+        }
+    } else if (erased) {
+        isDirty_ = true;
     }
 }
 

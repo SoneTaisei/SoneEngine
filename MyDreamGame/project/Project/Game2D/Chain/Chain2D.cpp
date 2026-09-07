@@ -292,10 +292,11 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
     // 「静止した地形と動くブロックに挟まれた」ので、その場に固定する（閉まるドアに鎖が挟まる）。
     // 固定された節が鎖を止めるので、プレイヤーが離れると鎖が伸び切ってちぎれる。動くブロックが離れたら解放する
     if (map) {
-        for (size_t i = 1; i < nodes_.size(); ++i) {
+        // 手元の節（rootSkip 未満）は地形から押し出していないので、地形の中にあっても「挟まれ」にはしない
+        for (size_t i = (std::max)(rootSkip, static_cast<size_t>(1)); i < nodes_.size(); ++i) {
             VerletNode& node = nodes_[i];
             if (node.crushed) {
-                if (!VerletPhysics2D::IsTouchingMovingSolid(node, map)) {
+                if (!VerletPhysics2D::IsTouchingMovingSolid(node, map, true)) {
                     node.crushed = false; // ドアが開いた
                     node.invMass = 1.0f;
                 }
@@ -304,7 +305,7 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
             if (node.invMass <= 0.0f) {
                 continue;
             }
-            if (VerletPhysics2D::IsTouchingMovingSolid(node, map) && VerletPhysics2D::IsInsideStaticSolid(node.pos, map)) {
+            if (VerletPhysics2D::IsTouchingMovingSolid(node, map, true) && VerletPhysics2D::IsInsideStaticSolid(node.pos, map)) {
                 node.crushed = true;
                 node.invMass = 0.0f;
                 node.prevPos = node.pos;
@@ -631,8 +632,13 @@ void Chain2D::RestoreMasses() {
 
 void Chain2D::SetRigidLineTarget(const Vector3* target) {
     if (rigidLine_ && !target) {
-        // 解除：速度ゼロで物理に戻す（prevPos は PlaceNodesOnLine で pos と同じ）
+        // 解除：速度ゼロで物理に戻す
+        // （PlaceNodesOnLine は「殴る」判定のために prevPos に前フレームの位置を残しているので、ここでそろえないと
+        //   直前の振りの速さがそのまま残り、K/J や死亡で解除した瞬間に宝石が飛んでいた）
         rigidLine_ = nullptr;
+        for (auto& node : nodes_) {
+            node.prevPos = node.pos;
+        }
         RestoreMasses();
         return;
     }

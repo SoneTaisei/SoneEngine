@@ -277,6 +277,11 @@ bool ChainManager::TryUnbindGuard() {
     if (!guard) {
         return false;
     }
+    if (player_->GetChainLength() >= params_.maxUnits_) {
+        // 手元が最大本数なら戻せない（以前は解いた上で本数が増えず、鎖が 1 本消えていた）
+        Log("ChainManager: 鎖が最大本数なので縛った鎖は戻せない\n");
+        return true;
+    }
     int units = guard->Unbind();
     int headroom = params_.maxUnits_ - player_->GetChainLength();
     int gain = std::clamp(units, 0, (std::max)(0, headroom));
@@ -661,6 +666,19 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                     if (block->OnChainTouch(node.pos, r, vel, isWeight) && isWeight) {
                         chain->ScaleNodeVelocity(i, 0.4f);
                     }
+                }
+            }
+            // 動くブロック（ドアなど）は「通路の範囲」で当たりを取る（crushKills OFF のドアが通路の鎖を見て閉まるのを待つため）
+            for (const auto& blockPtr : map->GetUpdateBlocks()) {
+                if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
+                if (dynamic_cast<GuardBlock*>(blockPtr.get())) continue; // 警備員は下で別に扱う
+                AABB2D box = blockPtr->GetChainTouchAABB();
+                if (node.pos.x + r < box.left || node.pos.x - r > box.right ||
+                    node.pos.y + r < box.bottom || node.pos.y - r > box.top) {
+                    continue;
+                }
+                if (blockPtr->OnChainTouch(node.pos, r, vel, isWeight) && isWeight) {
+                    chain->ScaleNodeVelocity(i, 0.4f);
                 }
             }
             for (const auto& blockPtr : map->GetUpdateBlocks()) {

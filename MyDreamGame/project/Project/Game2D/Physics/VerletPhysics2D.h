@@ -50,7 +50,7 @@ public:
     /// <summary>点が静止したソリッドブロック（チップ）の中にあるか（押し出し後も残っていれば「挟まれている」）</summary>
     static bool IsInsideStaticSolid(const Vector3& p, MapChip2D* map);
     /// <summary>ノードの円が動くソリッドブロックに触れているか（挟まれ判定と、開いた時の解放判定に使う）</summary>
-    static bool IsTouchingMovingSolid(const VerletNode& node, MapChip2D* map);
+    static bool IsTouchingMovingSolid(const VerletNode& node, MapChip2D* map, bool forCrush = false);
 
     /// <summary>
     /// ノード（円） vs 任意AABBの押し出し（プレイヤー等の動くコライダ用）

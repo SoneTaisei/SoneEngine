@@ -211,6 +211,12 @@
     <ClCompile Include="Project\Game2D\Blocks\ChainItemBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\CollectibleBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\CollectibleTracker.cpp">
+      <Filter>Project\Game2D</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\MovingBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -544,6 +550,12 @@
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\ChainItemBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\CollectibleBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\CollectibleTracker.h">
+      <Filter>Project\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\MovingBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
