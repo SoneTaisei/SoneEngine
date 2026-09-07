@@ -119,10 +119,11 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
         for (int cx = startChipX; cx <= endChipX; ++cx) {
             auto* block = mapChip->GetBlock(cx, cy);
             if (block && block->IsSolid() && !block->IsDestroyed() && !block->IsMoving()) {
-                float blockLeft = mapChip->ChipToWorldX(cx);
-                float blockRight = blockLeft + mapChip->GetChipSize();
-                float blockBottom = mapChip->ChipToWorldY(cy);
-                float blockTop = blockBottom + mapChip->GetChipSize();
+                AABB2D bAABB = block->GetAABB();
+                float blockLeft = bAABB.left;
+                float blockRight = bAABB.right;
+                float blockBottom = bAABB.bottom;
+                float blockTop = bAABB.top;
 
                 // Y方向の重複チェック
                 if (maxY <= blockBottom || minY >= blockTop) {
@@ -220,10 +221,11 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             for (int cx = startChipX; cx <= endChipX; ++cx) {
                 auto* block = mapChip->GetBlock(cx, cy);
                 if (block && !block->IsDestroyed() && !block->IsMoving()) {
-                    float blockLeft = mapChip->ChipToWorldX(cx);
-                    float blockRight = blockLeft + mapChip->GetChipSize();
-                    float blockBottom = mapChip->ChipToWorldY(cy);
-                    float blockTop = blockBottom + mapChip->GetChipSize();
+                    AABB2D bAABB = block->GetAABB();
+                    float blockLeft = bAABB.left;
+                    float blockRight = bAABB.right;
+                    float blockBottom = bAABB.bottom;
+                    float blockTop = bAABB.top;
 
                     // X方向の重複チェック
                     if (maxX <= blockLeft || minX >= blockRight) {
@@ -317,10 +319,11 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             for (int cx = startChipX; cx <= endChipX; ++cx) {
                 auto* block = mapChip->GetBlock(cx, cy);
                 if (block && block->IsSolid() && !block->IsDestroyed() && !block->IsMoving()) {
-                    float blockLeft = mapChip->ChipToWorldX(cx);
-                    float blockRight = blockLeft + mapChip->GetChipSize();
-                    float blockBottom = mapChip->ChipToWorldY(cy);
-                    float blockTop = blockBottom + mapChip->GetChipSize();
+                    AABB2D bAABB = block->GetAABB();
+                    float blockLeft = bAABB.left;
+                    float blockRight = bAABB.right;
+                    float blockBottom = bAABB.bottom;
+                    float blockTop = bAABB.top;
 
                     // X方向の重なりチェック
                     if (maxX <= blockLeft || minX >= blockRight) {
@@ -460,8 +463,7 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
                 player->Kill();
                 return;
             } else if (type == MapChip2D::ChipType::kGoal) {
-                player->ReachGoal();
-                return;
+                // ゴール判定は GameScene にてプレイヤーと宝石の両方が台座に乗った際に演出開始する
             }
 
             if (auto* block = mapChip->GetBlock(cx, cy)) {
@@ -518,8 +520,11 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
             for (int cx = cStartX; cx <= cEndX; ++cx) {
                 if (auto* block = mapChip->GetBlock(cx, cy)) {
                     if (block->IsSolid() && !block->IsMoving()) {
-                        player->Kill();
-                        return;
+                        AABB2D bAABB = block->GetAABB();
+                        if (cRight > bAABB.left && cLeft < bAABB.right && cTop > bAABB.bottom && cBottom < bAABB.top) {
+                            player->Kill();
+                            return;
+                        }
                     }
                 }
             }

@@ -676,7 +676,7 @@ void DirectXCommon::CreatePipelines() {
     graphicsPipelineStateDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     graphicsPipelineStateDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
     graphicsPipelineStateDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-    graphicsPipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+    graphicsPipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 半透明パーティクルの裏面カリングを防止
     hr = device_->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStateTransparent_));
     assert(SUCCEEDED(hr));
 

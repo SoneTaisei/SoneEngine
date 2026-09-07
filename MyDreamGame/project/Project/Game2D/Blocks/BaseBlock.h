@@ -136,7 +136,7 @@ public:
         }
     }
 
-    AABB2D GetAABB() const {
+    virtual AABB2D GetAABB() const {
         Vector3 pos = {0.0f, 0.0f, 0.0f};
         Vector3 scale = {1.0f, 1.0f, 1.0f};
         if (gameObject_) {

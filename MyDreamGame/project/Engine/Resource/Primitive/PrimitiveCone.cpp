@@ -14,6 +14,7 @@ void PrimitiveCone::GenerateModelData() {
     tip.position = {0.0f, halfH, 0.0f, 1.0f};
     tip.normal = {0.0f, 1.0f, 0.0f};
     tip.texcoord = {0.5f, 0.0f};
+    tip.color = {1.0f, 1.0f, 1.0f, 1.0f};
     modelData_.vertices.push_back(tip);
 
     for (uint32_t i = 0; i <= segments_; ++i) {

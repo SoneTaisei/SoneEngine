@@ -2,6 +2,7 @@
 #include "PlayerVisuals.h"
 #include "Core/TimeManager.h"
 #include "Renderer/Renderer.h"
+#include "Resource/Primitive/PrimitiveManager.h"
 #include <random>
 #include <cmath>
 
@@ -109,6 +110,17 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     confettiPrimitive_->Initialize(device, boxPrimitive);
     confettiPrimitive_->SetName("Confetti");
     confettiPrimitive_->GetMaterial().lightingType = 0;
+
+    smokePrimitive_ = std::make_unique<PrimitiveObject>();
+    smokePrimitive_->Initialize(device, boxPrimitive);
+    smokePrimitive_->SetName("SmokeBomb");
+    uint32_t smokeTex = TextureManager::GetInstance()->Load("resources/Sprite/Original/smoke.png");
+    smokePrimitive_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(smokeTex));
+    smokePrimitive_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    smokePrimitive_->GetMaterial().lightingType = 0;
+    smokePrimitive_->SetIsBillboard(true);
+    smokePrimitive_->SetIsDoubleSided(true);
+    smokePrimitive_->SetBlendMode(BlendMode::kBlendModeNormal); // 通常αブレンド（両面描画で美しく透過）
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
@@ -488,12 +500,29 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             }
         }
     }
+
+    for (auto& smoke : smokeParticles_) {
+        if (smoke.active) {
+            smoke.timer += deltaTime;
+            if (smoke.timer >= smoke.duration) {
+                smoke.active = false;
+            } else {
+                // 初速の爆発から急速にブレーキをかけて煙のドームを形成
+                smoke.velocity.x *= 0.86f;
+                smoke.velocity.y *= 0.86f;
+                smoke.velocity.y += 0.35f * deltaTime; // ふんわりとした上昇気流
+                smoke.position.x += smoke.velocity.x * deltaTime;
+                smoke.position.y += smoke.velocity.y * deltaTime;
+                smoke.rotation += smoke.rotSpeed * deltaTime;
+            }
+        }
+    }
 }
 
 void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
     (void)params;
-    // 死亡時は怪盗の体が消え、帽子と鎖とお宝だけがその場に残る演出のため、プレイヤーモデルを描画しない
-    if (!state.isDead_ && primitiveObj_) {
+    // 死亡時、またはクリア演出で煙幕に紛れて脱出した後はプレイヤーモデルを描画しない
+    if (!state.isDead_ && !state.isClearEscaped_ && primitiveObj_) {
         if (modelObj_) {
             modelObj_->Draw();
         } else {
@@ -501,7 +530,7 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
         }
     }
     
-    // シャドウパス実行中はパーティクル（砂埃、ダッシュリング、紙吹雪）を描画しない（不要かつシャドウパス破壊防止）
+    // シャドウパス実行中はパーティクル（砂埃、ダッシュリング、紙吹雪、煙幕）を描画しない
     if (Renderer::GetInstance() && Renderer::GetInstance()->IsShadowPass()) {
         return;
     }
@@ -563,6 +592,42 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
                 m.color = confetti.color;
                 
                 confettiPrimitive_->DrawGhost(t, m);
+            }
+        }
+    }
+
+    // 煙幕（スモークボム）の描画
+    if (smokePrimitive_) {
+        smokePrimitive_->ResetGhostIndex();
+        for (const auto& smoke : smokeParticles_) {
+            if (smoke.active) {
+                float progress = smoke.timer / smoke.duration;
+                // 最初の0.25秒で一気に爆発的膨張（ドカンと広がる）
+                float expandT = std::clamp(progress / 0.25f, 0.0f, 1.0f);
+                float easedExpand = 1.0f - (1.0f - expandT) * (1.0f - expandT) * (1.0f - expandT);
+                float currentSize = smoke.startSize + (smoke.endSize - smoke.startSize) * easedExpand;
+
+                // 最初0.08秒で急激に白煙が立ち上がり、0.45秒まで怪盗を完全に隠す濃さを維持
+                // その後ふんわりと滑らかに消えていく
+                float alpha = 0.0f;
+                if (progress < 0.08f) {
+                    alpha = (progress / 0.08f) * 0.95f;
+                } else if (progress < 0.45f) {
+                    alpha = 0.95f;
+                } else {
+                    float fadeT = (progress - 0.45f) / 0.55f;
+                    alpha = 0.95f * (1.0f - fadeT * fadeT);
+                }
+
+                EulerTransform t;
+                t.translate = smoke.position;
+                t.scale = { currentSize, currentSize, 0.02f }; // 正方形クアッド板として展開
+                t.rotate = { 0.0f, 0.0f, smoke.rotation };
+
+                Material m = smokePrimitive_->GetMaterial();
+                m.color = { smoke.color.x, smoke.color.y, smoke.color.z, alpha };
+
+                smokePrimitive_->DrawGhost(t, m);
             }
         }
     }
@@ -726,10 +791,73 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
     }
 }
 
+void PlayerVisuals::SpawnSmokeBomb(const Vector3& pos) {
+    Log(std::format("PlayerVisuals: SpawnSmokeBomb called at ({:.2f}, {:.2f}, {:.2f})\n", pos.x, pos.y, pos.z));
+    static std::mt19937 randEngine(std::random_device{}());
+    std::uniform_real_distribution<float> angleDist(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> rotSpeedDist(-3.0f, 3.0f);
+    std::uniform_real_distribution<float> rotInitDist(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> durationDist(1.6f, 2.3f);
+    std::uniform_real_distribution<float> zDist(-0.35f, -0.15f);
+
+    // 1. コア爆発煙（中心から一気に膨らみ、プレイヤーを完全に隠す巨大な白煙の塊）: 20個
+    std::uniform_real_distribution<float> coreSpeed(1.2f, 3.5f);
+    std::uniform_real_distribution<float> coreStartSize(0.8f, 1.2f);
+    std::uniform_real_distribution<float> coreEndSize(3.8f, 5.2f);
+    for (int i = 0; i < 20; ++i) {
+        float angle = angleDist(randEngine);
+        float spd = coreSpeed(randEngine);
+        SmokeParticle p;
+        p.position = { pos.x + std::cos(angle) * 0.15f, pos.y + 0.35f + std::sin(angle) * 0.25f, zDist(randEngine) };
+        p.velocity = { std::cos(angle) * spd, std::sin(angle) * spd * 0.7f + 0.8f, 0.0f };
+        p.color = { 1.0f, 1.0f, 1.0f, 1.0f }; // 純白
+        p.startSize = coreStartSize(randEngine);
+        p.endSize = coreEndSize(randEngine);
+        p.timer = 0.0f;
+        p.duration = durationDist(randEngine);
+        p.rotation = rotInitDist(randEngine);
+        p.rotSpeed = rotSpeedDist(randEngine);
+        p.active = true;
+
+        bool reused = false;
+        for (auto& existing : smokeParticles_) {
+            if (!existing.active) { existing = p; reused = true; break; }
+        }
+        if (!reused) smokeParticles_.push_back(p);
+    }
+
+    // 2. 放射状バースト煙（全方位に勢いよく飛び散り、煙幕の輪郭をダイナミックに広げる）: 44個
+    std::uniform_real_distribution<float> burstSpeed(4.0f, 8.0f);
+    std::uniform_real_distribution<float> burstStartSize(0.6f, 1.0f);
+    std::uniform_real_distribution<float> burstEndSize(2.8f, 4.0f);
+    for (int i = 0; i < 44; ++i) {
+        float angle = angleDist(randEngine);
+        float spd = burstSpeed(randEngine);
+        SmokeParticle p;
+        p.position = { pos.x + std::cos(angle) * 0.2f, pos.y + 0.3f + std::sin(angle) * 0.2f, zDist(randEngine) };
+        p.velocity = { std::cos(angle) * spd, std::sin(angle) * spd * 0.8f + 1.0f, 0.0f };
+        p.color = { 0.98f, 0.98f, 1.0f, 1.0f }; // 純白
+        p.startSize = burstStartSize(randEngine);
+        p.endSize = burstEndSize(randEngine);
+        p.timer = 0.0f;
+        p.duration = durationDist(randEngine);
+        p.rotation = rotInitDist(randEngine);
+        p.rotSpeed = rotSpeedDist(randEngine);
+        p.active = true;
+
+        bool reused = false;
+        for (auto& existing : smokeParticles_) {
+            if (!existing.active) { existing = p; reused = true; break; }
+        }
+        if (!reused) smokeParticles_.push_back(p);
+    }
+}
+
 void PlayerVisuals::ClearEffects() {
     dustParticles_.clear();
     confettiParticles_.clear();
     dashRingParticles_.clear();
+    smokeParticles_.clear();
     currentAnimType_ = PlayerAnimType::None;
 }
 

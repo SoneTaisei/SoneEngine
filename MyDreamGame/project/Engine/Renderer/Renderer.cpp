@@ -389,15 +389,17 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
         } else {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
         }
-    } else {
-        if (obj->material_.color.w < 1.0f) {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
+    } else if (obj->blendMode_ == BlendMode::kBlendModeNormal || obj->material_.color.w < 1.0f) {
+        if (obj->isDoubleSided_) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent()); // αブレンド
         } else {
-            if (obj->isDoubleSided_) {
-                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
-            } else {
-                commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
-            }
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent()); // αブレンド
+        }
+    } else {
+        if (obj->isDoubleSided_) {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+        } else {
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
         }
     }
 
@@ -494,13 +496,11 @@ void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& tr
     if (obj->blendMode_ == BlendMode::kBlendModeAdd) {
         if (obj->isDoubleSided_) commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
         else commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
+    } else if (obj->blendMode_ == BlendMode::kBlendModeNormal || material.color.w < 1.0f) {
+        commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent()); // αブレンド
     } else {
-        if (material.color.w < 1.0f) {
-            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
-        } else {
-            if (obj->isDoubleSided_) commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
-            else commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
-        }
+        if (obj->isDoubleSided_) commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+        else commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
     }
 
     commandList->SetGraphicsRootConstantBufferView(1, obj->ghostTransformResource_->GetGPUVirtualAddress() + transformSize * obj->currentGhostIndex_);

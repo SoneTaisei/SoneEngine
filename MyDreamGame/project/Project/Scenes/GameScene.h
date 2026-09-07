@@ -18,6 +18,7 @@ struct ImVec2;
 
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
+#include "Resource/Primitive/PrimitiveCone.h"
 class Skybox;
 
 
@@ -150,6 +151,26 @@ private:
 
     void TriggerDeathSequence();
     void UpdateDeathSequence(float dt, SceneManager* sceneManager);
+
+    // ---------------------------------------------------
+    // クリア演出（交差スポットライト・煙幕脱出・アイリスアウト）
+    // ---------------------------------------------------
+    std::unique_ptr<class PrimitiveCone> spotBeamCone_;
+    std::unique_ptr<PrimitiveObject> spotBeamObj1_;
+    std::unique_ptr<PrimitiveObject> spotBeamObj2_;
+
+    bool isClearSequenceActive_ = false;
+    bool isClearSequenceFinished_ = false; // クリア演出が完全に終わり、暗転した後にtrueになる
+    float clearSequenceTimer_ = 0.0f;
+    Vector3 clearTargetPos_ = { 0.0f, 0.0f, 0.0f };
+    float clearTargetTopY_ = 0.0f;
+    bool isClearSmokeSpawned_ = false;
+    bool isClearEscaped_ = false;
+    bool isClearIrisStarted_ = false;
+
+    void TriggerClearSequence(const Vector3& goalPos, float goalTopY);
+    void UpdateClearSequence(float dt, SceneManager* sceneManager);
+    void DrawClearSpotlightBeams();
 
     // ---------------------------------------------------
     // ポーズメニュー関連

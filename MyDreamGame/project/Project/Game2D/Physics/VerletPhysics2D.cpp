@@ -1,4 +1,4 @@
-﻿#include "VerletPhysics2D.h"
+#include "VerletPhysics2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Core/Utility/TransformFunctions.h"
@@ -86,7 +86,7 @@ int VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float 
             // ChipToWorldX/Y はチップの左下を返す仕様
             float left = map->ChipToWorldX(cx);
             float bottom = map->ChipToWorldY(cy);
-            AABB2D chipBox = { left, bottom + chipSize, left + chipSize, bottom };
+            AABB2D chipBox = block ? block->GetAABB() : AABB2D{ left, bottom + chipSize, left + chipSize, bottom };
 
             if (CollideNodeWithAABB(node, chipBox, friction)) {
                 contact |= kContactStatic;

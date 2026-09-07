@@ -32,6 +32,19 @@ struct ConfettiParticle {
     bool active;
 };
 
+struct SmokeParticle {
+    Vector3 position;
+    Vector3 velocity;
+    Vector4 color;
+    float startSize;
+    float endSize;
+    float timer;
+    float duration;
+    float rotation;
+    float rotSpeed;
+    bool active;
+};
+
 struct DashRingParticle {
     Vector3 position;
     Vector3 rotation;
@@ -53,6 +66,7 @@ public:
     void SpawnRunDust(const Vector3& basePos, float dirX);
     void SpawnConfetti(const Vector3& pos);
     void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
+    void SpawnSmokeBomb(const Vector3& pos);
     void ClearEffects();
 
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
@@ -75,10 +89,12 @@ private:
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
+    std::unique_ptr<PrimitiveObject> smokePrimitive_;
 
     std::vector<DustParticle> dustParticles_;
     std::vector<ConfettiParticle> confettiParticles_;
     std::vector<DashRingParticle> dashRingParticles_;
+    std::vector<SmokeParticle> smokeParticles_;
 
     enum class PlayerAnimType {
         None,
