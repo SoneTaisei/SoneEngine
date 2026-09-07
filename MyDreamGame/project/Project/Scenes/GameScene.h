@@ -13,6 +13,7 @@
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Chain/ChainManager.h"
 #include "Game2D/Security/AlertSystem.h"
+#include "Effect/TutorialPosterSet.h"
 
 class GameCamera;
 struct ImVec2;
@@ -94,6 +95,12 @@ private:
 
     // マップ背景用板ポリゴン（スポットライト等のライティング視認用）
     std::unique_ptr<PrimitiveObject> backgroundPlane_;
+
+    // 操作説明の映像（ポスター）：マップごとの JSON に保存。無ければ木の板の上に振り子の説明を 1 枚置く
+    std::unique_ptr<TutorialPosterSet> tutorialPosters_;
+    void SetupTutorialPoster();
+    /// <summary>操作説明の映像の保存先を決めるマップのパス（実際に読んだファイル。エディタの一時ファイルの時はエディタで選んでいるファイル名）</summary>
+    std::string ResolvePosterMapPath() const;
 
     // ---------------------------------------------------
     // 共通システム

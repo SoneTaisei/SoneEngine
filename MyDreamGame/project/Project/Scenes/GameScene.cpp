@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "Game2D/CollectibleTracker.h"
+#include "Effect/TutorialPosterSet.h"
 #include <Windows.h>
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -210,6 +211,9 @@ void GameScene::Initialize() {
     chainManager_ = std::make_unique<ChainManager>();
     chainManager_->Initialize(player_);
     Log("GameScene::Initialize: ChainManager Initialized\n");
+
+    // 6.6. 操作説明のポスター（開始位置に一番近い木の板の上の壁に貼る）
+    SetupTutorialPoster();
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
@@ -805,6 +809,13 @@ void GameScene::Update(SceneManager *sceneManager) {
     // プレイヤー座標を基準にしたアイリスイン演出の更新
     if (player_) {
         UpdateIrisIn(player_->GetPosition(), dt);
+        // 操作説明の映像：遊んでいる間だけ、決めた範囲に近づくと出る
+        if (tutorialPosters_) {
+            // エディタの停止→再生ではシーン作成時だけ一時ファイルのパスになるので、本来のマップのパスに毎フレーム付け替える
+            tutorialPosters_->RebindMap(ResolvePosterMapPath());
+            bool posterActive = isPlayingOrReplaying && (gameState_ == GameState::Playing || gameState_ == GameState::StartReady);
+            tutorialPosters_->Update(dt, player_->GetPosition(), posterActive);
+        }
     }
 }
 
@@ -1362,6 +1373,11 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         DrawFragileFloorImGui(map_.get(), gameCamera_, s_TargetMapFilePath);
     }
 
+    // 操作説明の映像（どの映像をどこにどの大きさで置くか。マップごとに保存）
+    if (tutorialPosters_ && ImGui::CollapsingHeader("Tutorial Posters (操作説明の映像)")) {
+        tutorialPosters_->DrawImGui(gameCamera_, player_ ? player_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f });
+    }
+
     if (ImGui::CollapsingHeader("Pause Menu (ポーズメニュー)")) {
         ImGui::Checkbox("ポーズ状態 (isPaused)", &isPaused_);
         const char* menuItems[] = { "0: リトライ (restartText)", "1: タイトル (titleText)" };
@@ -1642,6 +1658,10 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 1.5. 背景板ポリゴンの描画
     if (backgroundPlane_) {
         backgroundPlane_->Draw();
+        // 操作説明の映像（背景板の手前、ブロックの奥）
+        if (tutorialPosters_) {
+            tutorialPosters_->Draw();
+        }
     }
 
     // 2. 3Dモデル（マップ・プレイヤー）の描画準備
@@ -2502,6 +2522,87 @@ void GameScene::DrawHudSprites(const Matrix4x4& viewProjection) {
             gemCompleteSprite_->Draw();
         }
     }
+}
+
+std::string GameScene::ResolvePosterMapPath() const {
+    // 実際に読み込んだマップのファイルを優先（エディタでファイル名を打って読んだ時もこれが本当のファイル）
+    std::string loaded = map_ ? map_->GetCurrentFilePath() : std::string();
+    if (!loaded.empty() && loaded.find("temp_play_map") == std::string::npos) {
+        return loaded;
+    }
+    // エディタの停止→再生では一時ファイル temp_play_map を読むので、エディタで選んでいるファイル名を使う
+    if (EditorManager::GetInstance()) {
+        const char* f = EditorManager::GetInstance()->GetStageFilename();
+        if (f && *f) {
+            return std::string("resources/json/shared/MapData/") + f;
+        }
+    }
+    return s_TargetMapFilePath;
+}
+
+void GameScene::SetupTutorialPoster() {
+    tutorialPosters_.reset();
+    if (!map_ || !player_) return;
+    ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
+    auto set = std::make_unique<TutorialPosterSet>();
+    set->Initialize(device, ResolvePosterMapPath()); // マップごとの JSON があれば読む（空でも「保存済み」として初期配置はしない）
+    if (set->HasConfigFile() || !set->Empty()) {
+        tutorialPosters_ = std::move(set);
+        return;
+    }
+
+    // ---- 保存が無い時の初期配置：木の板（鎖を回せる足場）の上に振り子の説明を 1 枚。ImGui で動かして保存できる ----
+    struct Span { int y; int x0; int x1; };
+    std::vector<Span> spans;
+    const int w = map_->GetWidth();
+    const int h = map_->GetHeight();
+    for (int y = 0; y < h; ++y) {
+        int start = -1;
+        for (int x = 0; x <= w; ++x) {
+            BaseBlock* b = (x < w) ? map_->GetBlock(x, y) : nullptr;
+            bool plank = (b && !b->IsDestroyed() && b->AllowsChainSpin());
+            if (plank && start < 0) start = x;
+            if (!plank && start >= 0) {
+                spans.push_back({ y, start, x - 1 });
+                start = -1;
+            }
+        }
+    }
+    if (spans.empty()) {
+        tutorialPosters_ = std::move(set); // 空のまま（ImGui から追加できる）
+        return;
+    }
+    const Vector3 spawn = player_->GetPosition();
+    const Span* best = nullptr;
+    float bestDist = 1e9f;
+    for (const auto& s : spans) {
+        float cx = (static_cast<float>(s.x0) + static_cast<float>(s.x1) + 1.0f) * 0.5f;
+        float cy = static_cast<float>(s.y) + 1.0f;
+        float d = std::hypot(cx - spawn.x, cy - spawn.y);
+        if (d < bestDist) { bestDist = d; best = &s; }
+    }
+    // 板の上空。板の右側が広いので、中心を右へずらして大きめに貼る。マップの上端（一番上の行）は超えない
+    const float posterW = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterWidth", 17.0f);
+    const float offsetX = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterOffsetX", 5.0f);
+    const float gapY = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterGapY", 1.0f);
+    const float posterH = posterW * 0.5f; // コマは 2:1
+    const float plankTop = static_cast<float>(best->y) + 1.0f;
+    TutorialPosterSet::Entry e;
+    e.name = "振り子で飛ぶ";
+    e.sheet = "resources/Sprite/anim/tutorial_sheet.json";
+    e.width = posterW;
+    e.x = (static_cast<float>(best->x0) + static_cast<float>(best->x1) + 1.0f) * 0.5f + offsetX;
+    e.y = (std::min)(plankTop + gapY + posterH * 0.5f, static_cast<float>(h) - 1.0f - posterH * 0.5f);
+    // 出す範囲は板の範囲（上に立っている・近くにいる）
+    e.triggerX = (static_cast<float>(best->x0) + static_cast<float>(best->x1) + 1.0f) * 0.5f;
+    e.triggerY = plankTop + 1.0f;
+    e.triggerW = static_cast<float>(best->x1 - best->x0 + 1) + 2.0f;
+    e.triggerH = 4.0f;
+    e.showDist = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterShowDist", 3.0f);
+    e.hideDist = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterHideDist", 5.5f);
+    set->Add(e);
+    tutorialPosters_ = std::move(set);
+    Log("GameScene: tutorial poster placed above plank x=" + std::to_string(best->x0) + "-" + std::to_string(best->x1) + " y=" + std::to_string(best->y) + "\n");
 }
 
 void GameScene::DrawPauseMenu() {

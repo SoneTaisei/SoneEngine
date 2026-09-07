@@ -66,6 +66,8 @@ public:
 
     // マップの寸法
     int GetWidth() const { return mapWidth_; }
+    /// <summary>今読み込んでいるマップファイルのパス（エディタの再生では temp_play_map になる）</summary>
+    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
     int GetHeight() const { return mapHeight_; }
     float GetChipSize() const { return chipSize_; }
 
