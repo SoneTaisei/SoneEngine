@@ -57,9 +57,12 @@ public:
     // プロジェクト内の利用可能なアセット一覧のスキャン
     void ScanAvailableAssets();
     void ScanParticleFiles();
+    void ScanAvailableShaders();
     const std::vector<std::string>& GetAvailableModels() const { return availableModels_; }
     const std::vector<std::string>& GetAvailableTextures() const { return availableTextures_; }
     const std::vector<std::string>& GetAvailableParticleFiles() const { return availableParticleFiles_; }
+    const std::vector<std::string>& GetAvailableVsShaders() const { return availableVsShaders_; }
+    const std::vector<std::string>& GetAvailablePsShaders() const { return availablePsShaders_; }
 
 private:
     ID3D12Device* device_ = nullptr;
@@ -81,6 +84,8 @@ private:
     std::vector<std::string> availableModels_;
     std::vector<std::string> availableTextures_;
     std::vector<std::string> availableParticleFiles_;
+    std::vector<std::string> availableVsShaders_;
+    std::vector<std::string> availablePsShaders_;
 
     // Undo / Redo
     std::vector<GPUParticleSystemData> undoStack_;
