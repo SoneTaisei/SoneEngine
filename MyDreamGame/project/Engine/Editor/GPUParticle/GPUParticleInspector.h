@@ -15,7 +15,7 @@ public:
     void DrawInspectorUI(SceneManager* sceneManager, GPUParticleEditorContext* context);
 
 private:
-    void DrawRendererSection(GPUParticleEditorContext* context);
+    void DrawRendererSection(GPUParticleEditorContext* context, SceneManager* sceneManager);
     void DrawSpawnSection(GPUParticleEditorContext* context);
     void DrawShapeSection(GPUParticleEditorContext* context);
     void DrawPhysicsSection(GPUParticleEditorContext* context);

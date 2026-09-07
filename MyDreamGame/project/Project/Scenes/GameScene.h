@@ -12,6 +12,7 @@
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Chain/ChainManager.h"
+#include "Game2D/Chain/PlayerChainPostEffect.h"
 #include "Game2D/Security/AlertSystem.h"
 
 class GameCamera;
@@ -128,6 +129,10 @@ private:
     float irisInTimer_ = 0.0f;
     float irisInDuration_ = 1.2f;
     float irisInMaxRadius_ = 3.2f; // 約2倍に拡大（画面全体を十分に覆う）
+
+    // スペース長押し（鎖エイム）時ポストエフェクト (Player_Chain.json)
+    std::unique_ptr<PlayerChainPostEffect> playerChainPostEffect_;
+    float spaceHoldTimer_ = 0.0f;
 
     // ---------------------------------------------------
     // ポーズメニュー関連
