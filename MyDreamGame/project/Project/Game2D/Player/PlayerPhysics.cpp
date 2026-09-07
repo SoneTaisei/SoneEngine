@@ -25,7 +25,7 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     if (state_.isDead_ || state_.isGoal_) return;
 
     // 4. Y軸移動と床天井押し戻し
-    state_.position_.y += state_.velocity_.y * deltaTime;
+    state_.position_.y += (state_.velocity_.y + state_.platformVelocity_.y) * deltaTime;
     ResolveCollisionY(state_, params_, mapChip, player);
     if (state_.isOnGround_) {
         state_.launchVelocityX_ = 0.0f; // 着地で発射の勢いは消える
@@ -284,7 +284,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             if (blockPtr->IsSolid()) {
                 // 下りの床は先に下がっているので、その分（1 フレームの移動量 + 少し）足元の隙間を許して乗ったままにする
                 // （これが無いと下りの床の上で毎フレーム「空中」になり、ジャンプ入力が落ちていた）。上向きに動いている時は対象外
-                float catchUp = (std::max)(0.0f, -blockPtr->GetVelocity().y * lastDeltaTime_) + 0.02f;
+                float catchUp = (std::max)(0.0f, -blockPtr->GetVelocity().y * lastDeltaTime_) + 0.05f;
                 bool ridingDown = (state_.velocity_.y <= 0.0f) && (minY > blockTop) && (minY <= blockTop + catchUp);
                 if (ridingDown || (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop))) {
                     state_.position_.y = blockTop + params_.halfHeight_;
@@ -300,8 +300,10 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                     if (state_.isDead_) return;
                 }
             } else if (blockPtr->IsOneWay()) {
-                float prevMinY = minY - state_.velocity_.y * lastDeltaTime_; // 前フレームの足の位置（動く片方向床も通過判定）
-                if (state_.velocity_.y <= 0.0f && minY <= blockTop && prevMinY >= blockTop - 0.05f) {
+                float catchUp = (std::max)(0.0f, -blockPtr->GetVelocity().y * lastDeltaTime_) + 0.05f;
+                bool ridingDown = (state_.velocity_.y <= 0.0f) && (minY > blockTop) && (minY <= blockTop + catchUp);
+                float prevMinY = minY - (state_.velocity_.y + state_.platformVelocity_.y) * lastDeltaTime_; // 前フレームの足の位置（動く片方向床も通過判定）
+                if (state_.velocity_.y <= 0.0f && (ridingDown || (minY <= blockTop && prevMinY >= blockTop - 0.05f))) {
                     state_.position_.y = blockTop + params_.halfHeight_;
                     state_.velocity_.y = 0.0f;
                     groundedThisFrame = true;
