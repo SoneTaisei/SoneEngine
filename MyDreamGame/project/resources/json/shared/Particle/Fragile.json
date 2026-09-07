@@ -1,5 +1,5 @@
 {
-    "duration": 3.0,
+    "duration": 1.0,
     "emitters": [
         {
             "billboardType": 0,
@@ -7,7 +7,7 @@
             "bursts": [],
             "colorKeys": [],
             "drag": 0.0,
-            "duration": 3.0,
+            "duration": 1.0,
             "enabled": true,
             "endColor": [
                 0.6911196708679199,
