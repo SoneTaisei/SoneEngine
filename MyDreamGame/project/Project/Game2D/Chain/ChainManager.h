@@ -148,6 +148,7 @@ private:
     struct DroppedChain {
         std::unique_ptr<Chain2D> chain;
         int unitWorth = 1;
+        std::unique_ptr<GPUParticleSystem> effect;
     };
     std::vector<DroppedChain> droppedChains_;
 
@@ -169,4 +170,15 @@ private:
 
     // 破損エフェクト（ちぎれた時に再生）
     std::unique_ptr<GPUParticleSystem> breakEffect_;
+
+    // ドロップした鎖に着けるLuminescenceパーティクル
+    GPUParticleSystemData luminescenceData_;
+    bool luminescenceDataLoaded_ = false;
+    std::vector<std::unique_ptr<GPUParticleSystem>> luminescencePool_;
+
+    std::unique_ptr<GPUParticleSystem> AcquireLuminescenceEffect(const Vector3& pos);
+    void RecycleLuminescenceEffect(std::unique_ptr<GPUParticleSystem> effect);
+    Vector3 CalculateChainCenter(const Chain2D* chain) const;
+    void ClearDroppedChains();
 };
+

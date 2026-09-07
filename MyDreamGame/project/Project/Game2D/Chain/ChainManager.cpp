@@ -17,11 +17,62 @@
 #endif
 
 ChainManager::ChainManager() = default;
-ChainManager::~ChainManager() = default;
+ChainManager::~ChainManager() {
+    ClearDroppedChains();
+}
+
+Vector3 ChainManager::CalculateChainCenter(const Chain2D* chain) const {
+    if (!chain || chain->GetNodeCount() == 0) {
+        return { 0.0f, 0.0f, 0.0f };
+    }
+    Vector3 sum = { 0.0f, 0.0f, 0.0f };
+    const auto& nodes = chain->GetNodes();
+    for (const auto& node : nodes) {
+        sum.x += node.pos.x;
+        sum.y += node.pos.y;
+        sum.z += node.pos.z;
+    }
+    float invCount = 1.0f / static_cast<float>(nodes.size());
+    return { sum.x * invCount, sum.y * invCount, sum.z * invCount };
+}
+
+std::unique_ptr<GPUParticleSystem> ChainManager::AcquireLuminescenceEffect(const Vector3& pos) {
+    if (!luminescencePool_.empty()) {
+        auto effect = std::move(luminescencePool_.back());
+        luminescencePool_.pop_back();
+        effect->PlayAt(pos);
+        return effect;
+    }
+    ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
+    if (device && luminescenceDataLoaded_) {
+        auto effect = std::make_unique<GPUParticleSystem>();
+        effect->Initialize(device, luminescenceData_);
+        effect->PlayAt(pos);
+        return effect;
+    }
+    return nullptr;
+}
+
+void ChainManager::RecycleLuminescenceEffect(std::unique_ptr<GPUParticleSystem> effect) {
+    if (effect) {
+        effect->Restart();
+        effect->Pause();
+        luminescencePool_.push_back(std::move(effect));
+    }
+}
+
+void ChainManager::ClearDroppedChains() {
+    for (auto& dropped : droppedChains_) {
+        if (dropped.effect) {
+            RecycleLuminescenceEffect(std::move(dropped.effect));
+        }
+    }
+    droppedChains_.clear();
+}
 
 void ChainManager::Initialize(Player2D* player) {
     player_ = player;
-    droppedChains_.clear();
+    ClearDroppedChains();
     worldChains_.clear();
     droppedCounter_ = 0;
     loggedSocketState_ = false;
@@ -33,6 +84,9 @@ void ChainManager::Initialize(Player2D* player) {
         breakEffect_->Initialize(device);
         breakEffect_->LoadFromFile("resources/json/shared/Particle/FX_ChainBreak.json");
     }
+
+    // ドロップした鎖用Luminescenceパーティクルデータの読み込み
+    luminescenceDataLoaded_ = LoadParticleSystemFromJson(luminescenceData_, "resources/json/shared/Particle/Luminescence.json");
 
     ChainConfig::Load(params_, ChainConfig::kDefaultFilePath);
 
@@ -125,6 +179,9 @@ bool ChainManager::TryPickup() {
             // 上限を超える分は消滅させる（見えないジャンプペナルティだけが増えるのを防ぐ）
             int gain = (std::min)(droppedChains_[i].unitWorth, headroom);
             player_->AddChainLength(gain);
+            if (droppedChains_[i].effect) {
+                RecycleLuminescenceEffect(std::move(droppedChains_[i].effect));
+            }
             droppedChains_.erase(droppedChains_.begin() + i);
             Log("ChainManager: Picked up dropped chain +" + std::to_string(gain) + " unit(s), chainLength=" +
                 std::to_string(player_->GetChainLength()) + "\n");
@@ -256,7 +313,12 @@ void ChainManager::DetachUnits() {
     dropped->ResetDynamics();
     // 落とした鎖はプレイヤーに蹴られて動かない（拾う判定には影響しない）
     dropped->SetPlayerCollisionEnabled(false);
-    droppedChains_.push_back({ std::move(dropped), detach });
+
+    // ドロップした鎖の中心位置に Luminescence エフェクトを発生
+    Vector3 centerPos = CalculateChainCenter(dropped.get());
+    auto effect = AcquireLuminescenceEffect(centerPos);
+
+    droppedChains_.push_back({ std::move(dropped), detach, std::move(effect) });
 
     Log("ChainManager: Detached " + std::to_string(detach) + " unit(s), chainLength=" +
         std::to_string(player_->GetChainLength()) + "\n");
@@ -290,6 +352,12 @@ void ChainManager::Update(float dt, MapChip2D* map) {
         }
         for (auto& dropped : droppedChains_) {
             dropped.chain->Update(dt, map, player_);
+            if (dropped.effect) {
+                dropped.effect->SetPosition(CalculateChainCenter(dropped.chain.get()));
+                if (dropped.effect->IsPlaying()) {
+                    dropped.effect->Update(dt);
+                }
+            }
         }
         NotifyBlockContacts(map);
         return;
@@ -313,6 +381,12 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     }
     for (auto& dropped : droppedChains_) {
         dropped.chain->Update(dt, map, player_);
+        if (dropped.effect) {
+            dropped.effect->SetPosition(CalculateChainCenter(dropped.chain.get()));
+            if (dropped.effect->IsPlaying()) {
+                dropped.effect->Update(dt);
+            }
+        }
     }
 
     // 鎖が乗っているブロックへ通知（スイッチは鎖でも押せる）
@@ -390,6 +464,11 @@ void ChainManager::DrawParticle(ID3D12GraphicsCommandList* commandList, const Ma
     if (breakEffect_ && breakEffect_->IsPlaying()) {
         breakEffect_->Draw(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
     }
+    for (auto& dropped : droppedChains_) {
+        if (dropped.effect && dropped.effect->IsPlaying()) {
+            dropped.effect->Draw(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
+        }
+    }
 }
 
 void ChainManager::SetTransitionHidden(bool hidden) {
@@ -418,7 +497,7 @@ void ChainManager::ResetAll() {
         spin_->ResetInputState(); // 0フレーム目の縁検出を録画/再生で揃える
     }
     ClearTorn();
-    droppedChains_.clear();
+    ClearDroppedChains();
 
     // 個数を初期値に戻す（リプレイはK入力を録画から再現するため、初期個数の一致が再現性の前提）
     if (player_) {
@@ -458,7 +537,7 @@ void ChainManager::OnRewindEnd() {
         breakEffect_->Pause();
     }
     ClearTorn();
-    droppedChains_.clear();
+    ClearDroppedChains();
     if (playerChain_) {
         playerChain_->ResetDynamics();
     }
