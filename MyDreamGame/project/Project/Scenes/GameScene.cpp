@@ -92,9 +92,16 @@ void GameScene::OnExit(SceneManager* sceneManager) {
     if (dxCommon) {
         dxCommon->SetCompositeIrisEnabled(false);
     }
+    if (playerChainPostEffect_) {
+        playerChainPostEffect_->Reset(dxCommon);
+    }
 }
 
 GameScene::~GameScene() {
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (playerChainPostEffect_) {
+        playerChainPostEffect_->Reset(dxCommon);
+    }
     // 覆い切って次シーンへ持ち越す途中以外は遷移演出を捨てる（このシーンの鎖・マップへの参照を切る）
     TransitionDirector::GetInstance()->OnSceneDestroyed(chainManager_.get());
     // リプレイのオブジェクト記録対象から外す（次シーンのマップと混ざらないようにする）
@@ -207,6 +214,11 @@ void GameScene::Initialize() {
     chainManager_ = std::make_unique<ChainManager>();
     chainManager_->Initialize(player_);
     Log("GameScene::Initialize: ChainManager Initialized\n");
+
+    // 6.6. スペース長押し（鎖エイム）時ポストエフェクトの初期化 (Player_Chain.json)
+    playerChainPostEffect_ = std::make_unique<PlayerChainPostEffect>();
+    playerChainPostEffect_->Initialize("resources/json/shared/PostEffect/Player_Chain.json");
+    spaceHoldTimer_ = 0.0f;
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
@@ -749,6 +761,40 @@ void GameScene::Update(SceneManager *sceneManager) {
     if (player_) {
         UpdateIrisIn(player_->GetPosition(), dt);
     }
+
+    // プレイヤーが鎖を回している時（kStance）にスペース長押し（エイム中）のポストエフェクト更新 (Player_Chain.json)
+    if (playerChainPostEffect_) {
+        auto keyboard = KeyboardInput::GetInstance();
+        auto spinAction = chainManager_ ? chainManager_->GetSpinAction() : nullptr;
+        bool isSpinning = spinAction && (spinAction->GetState() == ChainSpinAction::State::kStance);
+        bool isAiming = spinAction && spinAction->IsAiming();
+        bool isSpaceDown = keyboard ? keyboard->IsKeyDown(DIK_SPACE) : false;
+
+        bool isTriggered = false;
+        bool isPlaying = (gameState_ == GameState::Playing);
+#ifdef USE_IMGUI
+        isPlaying = isPlaying && EditorManager::IsPlaying();
+#endif
+        if (isPlaying && !isPaused_ && player_ && !player_->IsDead() && !player_->IsGoal()) {
+            // 鎖を回しているとき（kStance）にスペースを押している（エイム中）
+            if (isSpinning && (isAiming || isSpaceDown)) {
+                isTriggered = true;
+            }
+        }
+
+        bool isRewinding = false;
+        if (keyboard && (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) &&
+            keyboard->IsKeyDown(DIK_LEFT)) {
+            isRewinding = true;
+        }
+
+        if (isRewinding) {
+            playerChainPostEffect_->Reset(DirectXCommon::GetInstance());
+        } else {
+            playerChainPostEffect_->Update(dt, isTriggered);
+            playerChainPostEffect_->ApplyToDirectXCommon(DirectXCommon::GetInstance());
+        }
+    }
 }
 
 #ifdef USE_IMGUI
@@ -1214,6 +1260,10 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
     if (backgroundPlane_ && backgroundPlane_.get() == selectedPrimitive) {
         backgroundPlane_->DisplayImGui("Background Plane");
+    }
+
+    if (playerChainPostEffect_) {
+        playerChainPostEffect_->DisplayImGui();
     }
 
     // 灰色の奥壁（背景板ポリゴン）の調整UI（常にインスペクターから操作可能）
