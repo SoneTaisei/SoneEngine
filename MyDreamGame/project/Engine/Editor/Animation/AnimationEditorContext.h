@@ -218,9 +218,15 @@ public:
     float& GetAnimEditorFps() { return animEditorFps_; }
     float GetAnimEditorFps() const { return animEditorFps_; }
 
+    void EnsureJointVisibleInTree(const std::string& jointName);
+
     std::string& GetSelectedJointName() { return animEditorSelectedJointName_; }
     const std::string& GetSelectedJointName() const { return animEditorSelectedJointName_; }
-    void SetSelectedJointName(const std::string& name) { animEditorSelectedJointName_ = name; animEditorSelectedKeyIndex_ = -1; }
+    void SetSelectedJointName(const std::string& name) {
+        animEditorSelectedJointName_ = name;
+        animEditorSelectedKeyIndex_ = -1;
+        EnsureJointVisibleInTree(name);
+    }
 
     int& GetSelectedProperty() { return animEditorSelectedProperty_; }
     int GetSelectedProperty() const { return animEditorSelectedProperty_; }

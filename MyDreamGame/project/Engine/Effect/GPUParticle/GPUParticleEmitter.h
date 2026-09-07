@@ -27,7 +27,7 @@ struct GPUParticleInstance {
 class GPUParticleEmitter {
 public:
     GPUParticleEmitter();
-    ~GPUParticleEmitter() = default;
+    ~GPUParticleEmitter();
 
     void Initialize(ID3D12Device* device, const GPUParticleEmitterData& data);
     void Update(float deltaTime, bool allowEmit = true);

@@ -30,6 +30,12 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     if (state_.isOnGround_) {
         state_.launchVelocityX_ = 0.0f; // 着地で発射の勢いは消える
     }
+    if (state_.spinFlipTimer_ > 0.0f) {
+        state_.spinFlipTimer_ -= deltaTime;
+        if (state_.spinFlipTimer_ <= 0.0f || state_.isOnGround_ || state_.isWallClinging_ || state_.isWallSliding_) {
+            state_.spinFlipTimer_ = 0.0f;
+        }
+    }
     if (state_.isDead_ || state_.isGoal_) return;
 
     // 5. 走行中の足元の砂埃エフェクト

@@ -45,6 +45,7 @@ struct DashRingParticle {
 class PlayerVisuals {
 public:
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel);
+    void ReloadAnimations();
     void Update(const PlayerState& state, const PlayerParams& params, float deltaTime);
     void Draw(const PlayerState& state, const PlayerParams& params);
 
@@ -70,6 +71,7 @@ private:
     Animation wallClimbAnimation_;
     Animation holdingWallAnimation_;
     Animation airDashAnimation_;
+    Animation swingAnimation_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
@@ -85,7 +87,9 @@ private:
         Jump,
         WallClimb,
         HoldingWall,
-        AirDash
+        AirDash,
+        Swing,
+        Hold
     };
 
     PlayerAnimType currentAnimType_ = PlayerAnimType::None;
@@ -95,6 +99,7 @@ private:
     float wallClimbAnimTime_ = 0.0f;
     float holdingWallAnimTime_ = 0.0f;
     float airDashAnimTime_ = 0.0f;
+    float swingAnimTime_ = 0.0f;
 
 public:
     // しがみつき時の腕の調整用パラメータ（親空間での回転：X=ピッチ, Y=ヨー, Z=ロール、ラジアン単位）

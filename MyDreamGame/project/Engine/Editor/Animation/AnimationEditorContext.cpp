@@ -38,8 +38,16 @@ void AnimationEditorContext::Initialize() {
 }
 
 std::string AnimationEditorContext::GetCurrentModelName() const {
-    if (selectedGameObject_) return selectedGameObject_->GetName();
-    if (selectedObject_) return selectedObject_->GetName();
+    if (selectedGameObject_) {
+        std::string name = selectedGameObject_->GetName();
+        if (name == "player") return "Player";
+        return name;
+    }
+    if (selectedObject_) {
+        std::string name = selectedObject_->GetName();
+        if (name == "player") return "Player";
+        return name;
+    }
     return "Player";
 }
 
@@ -244,6 +252,9 @@ void AnimationEditorContext::ScanAnimationFiles() {
 void AnimationEditorContext::UpdateAnimationPosePreview(SceneManager* sceneManager) {
     if (!sceneManager || !sceneManager->GetCurrentScene()) return;
     
+    // ゲームプレイ中（PLAY実行中）はゲーム側のアニメーション処理（PlayerVisuals）を優先し、エディターのプレビュー上書きを行わない
+    if (EditorManager::IsPlaying()) return;
+
     if (!animEditorInitialized_) {
         ScanAnimationFiles();
         if (!LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_)) {
@@ -272,8 +283,8 @@ void AnimationEditorContext::UpdateAnimationPosePreview(SceneManager* sceneManag
         }
     }
     
-    // アニメーションをモデルに適用（アニメーションモード時または編集中）
-    if (showAnimEditor_ || EditorManager::IsPlaying()) {
+    // アニメーションをモデルに適用（アニメーションエディター表示時）
+    if (showAnimEditor_) {
         animator->ClearJointOverrides();
         for (const auto& [nodeName, nodeAnim] : editingAnimation_.nodeAnimations) {
             if (!nodeAnim.rotate.empty()) {
@@ -398,12 +409,30 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
     auto startsWith = [](const std::string& str, const std::string& prefix) -> bool {
         return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
     };
+    auto hasSymmetryTagX = [](const std::string& name) -> bool {
+        return (name.find("Left") != std::string::npos || name.find("Right") != std::string::npos ||
+                name.find("left") != std::string::npos || name.find("right") != std::string::npos ||
+                name.find("LEFT") != std::string::npos || name.find("RIGHT") != std::string::npos ||
+                name.find("_L") != std::string::npos || name.find("_R") != std::string::npos ||
+                name.find("_l") != std::string::npos || name.find("_r") != std::string::npos ||
+                name.find(".L") != std::string::npos || name.find(".R") != std::string::npos ||
+                name.find(".l") != std::string::npos || name.find(".r") != std::string::npos ||
+                name.find("L_") != std::string::npos || name.find("R_") != std::string::npos ||
+                name.find("左") != std::string::npos || name.find("右") != std::string::npos);
+    };
 
     // 1. 親子関係の階層構造（Skeleton）を用いた探索
     if (skeleton && !skeleton->joints.empty()) {
         auto itJ = skeleton->jointMap.find(jointName);
         if (itJ != skeleton->jointMap.end()) {
             int32_t curIdx = itJ->second;
+            const auto& curJoint = skeleton->joints[curIdx];
+            Vector3 curPos = { curJoint.skeletonSpaceMatrix.m[3][0], curJoint.skeletonSpaceMatrix.m[3][1], curJoint.skeletonSpaceMatrix.m[3][2] };
+
+            // X軸対称で、中心線上（|X| < 0.015f）かつ名前に左右タグがない正中線ボーン（頭、体など）は対称相手なし
+            if (axisX && !axisY && !axisZ && std::abs(curPos.x) < 0.015f && !hasSymmetryTagX(jointName)) {
+                return "";
+            }
 
             // ルートまでの祖先パス（親インデックスのリスト）を構築: [curIdx, parent, grandParent, ..., root]
             std::vector<int32_t> path;
@@ -437,6 +466,14 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
 
                         const auto& jointB = skeleton->joints[cIdx];
                         Vector3 posB = { jointB.skeletonSpaceMatrix.m[3][0], jointB.skeletonSpaceMatrix.m[3][1], jointB.skeletonSpaceMatrix.m[3][2] };
+
+                        // X軸対称で、両方が中心線上にある、または名前に左右タグがないのに同符号の場合は除外
+                        if (axisX) {
+                            bool aIsCenter = std::abs(posA.x) < 0.015f && !hasSymmetryTagX(jointA.name);
+                            bool bIsCenter = std::abs(posB.x) < 0.015f && !hasSymmetryTagX(jointB.name);
+                            if (aIsCenter || bIsCenter) continue;
+                            if (!hasSymmetryTagX(jointA.name) && !hasSymmetryTagX(jointB.name) && (posA.x * posB.x > 0.0f)) continue;
+                        }
 
                         float score = 0.0f;
                         // 座標の対称性スコア
@@ -628,6 +665,7 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
 void AnimationEditorContext::InsertSelectedJointSRTKey(SceneManager* sceneManager) {
     if (animEditorSelectedJointName_.empty()) return;
 
+    LogManager::GetInstance()->AddLog(LogLevel::Info, "[AnimEditor] InsertSelectedJointSRTKey called for: [" + animEditorSelectedJointName_ + "] at time: " + std::to_string(animEditorTime_));
     PushAnimUndoState("選択ボーンSRTキー挿入");
 
     AnimatorComponent* anim = GetTargetAnimator(sceneManager);
@@ -856,6 +894,19 @@ void AnimationEditorContext::InsertAllJointsSRTKey(SceneManager* sceneManager) {
     UpdateAnimationPosePreview(sceneManager);
 }
 
+void AnimationEditorContext::EnsureJointVisibleInTree(const std::string& jointName) {
+    if (jointName.empty() || animJointTreeNodes_.empty()) return;
 
+    for (size_t i = 0; i < animJointTreeNodes_.size(); ++i) {
+        if (animJointTreeNodes_[i].name == jointName) {
+            int32_t pIdx = animJointTreeNodes_[i].parentIndex;
+            while (pIdx >= 0 && pIdx < static_cast<int32_t>(animJointTreeNodes_.size())) {
+                animJointExpanded_[animJointTreeNodes_[pIdx].name] = true;
+                pIdx = animJointTreeNodes_[pIdx].parentIndex;
+            }
+            break;
+        }
+    }
+}
 
 #endif

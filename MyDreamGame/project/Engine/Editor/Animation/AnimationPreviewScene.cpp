@@ -291,22 +291,22 @@ const char* AnimationPreviewScene::GetDefaultHierarchyJsonPath() {
 
 std::shared_ptr<GameObject> AnimationPreviewScene::CreateDefaultPlayerObject() {
     ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
-    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/player", "Player.gltf");
     if (!playerModel) return nullptr;
 
     auto playerObj = std::make_shared<GameObject>("Player");
     auto playerTransform = playerObj->AddComponent<TransformComponent>();
     playerTransform->SetPosition({ 0.0f, 0.0f, 0.0f });
-    playerTransform->SetScale({ 1.5f, 1.5f, 1.5f });
+    playerTransform->SetScale({ 2.0f, 2.0f, 2.0f });
     playerTransform->SetRotation({ 0.0f, 3.14159265f, 0.0f });
 
-    std::string texPath = "resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png";
+    std::string texPath = "resources/Object/Original/player/white.png";
     uint32_t playerTexIndex = TextureManager::GetInstance()->Load(texPath);
     D3D12_GPU_DESCRIPTOR_HANDLE playerTH = TextureManager::GetInstance()->GetGpuHandle(playerTexIndex);
 
     auto playerRenderer = playerObj->AddComponent<MeshRendererComponent>();
     playerRenderer->Initialize(device, playerModel);
-    playerRenderer->SetModelInfo("resources/Object/Original/gaikotu", "scene.gltf");
+    playerRenderer->SetModelInfo("resources/Object/Original/player", "Player.gltf");
     playerRenderer->SetTexturePath(texPath);
     playerRenderer->SetTextureHandle(playerTH);
     playerModel->SetTextureHandle(playerTH);
@@ -406,8 +406,8 @@ bool AnimationPreviewScene::LoadHierarchyFromJson(const std::string& filePath) {
 
             if (dir.empty() || file.empty()) {
                 if (isPlayer) {
-                    dir = "resources/Object/Original/gaikotu";
-                    file = "scene.gltf";
+                    dir = "resources/Object/Original/player";
+                    file = "Player.gltf";
                 } else {
                     continue;
                 }

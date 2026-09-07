@@ -295,14 +295,31 @@ void ChainManager::Update(float dt, MapChip2D* map) {
         return;
     }
 
+    Vector3 socketWorld = lastSocketWorld_;
+    if (spin_ && spin_->IsInStance() && player_) {
+        // スピン中（振り子構え・スイング中）は、腕のアニメーションによる手の移動で
+        // 振り子の回転中心（ピボット）がブレて円軌道が歪まないよう、安定した支点（胸〜首元の中心）を使用する
+        socketWorld = player_->GetPosition();
+        socketWorld.y += 0.25f;
+        socketWorld.z = 0.0f;
+    }
+
     // スピン：回せる場所（木の板の上）にいるかを先に判定し、末端の拘束先を物理更新の前に決める
     UpdateSpinSpots(map);
     if (spin_) {
-        spin_->Update(dt, map, player_, playerChain_.get(), lastSocketWorld_);
+        spin_->Update(dt, map, player_, playerChain_.get(), socketWorld);
+    }
+    if (player_) {
+        bool isHolding = spin_ && (spin_->GetState() == ChainSpinAction::State::kHold);
+        bool isSwinging = spin_ && (spin_->GetState() == ChainSpinAction::State::kStance);
+        player_->SetIsHoldingChain(isHolding);
+        player_->SetIsSwingingChain(isSwinging);
+        player_->SetChainSwingOmega((spin_ && isSwinging) ? spin_->GetOmega() : 0.0f);
+        player_->SetChainSwingTheta((spin_ && isSwinging) ? spin_->GetTheta() : 0.0f);
     }
 
     if (playerChain_) {
-        playerChain_->SyncSocket(lastSocketWorld_);
+        playerChain_->SyncSocket(socketWorld);
         playerChain_->Update(dt, map, player_);
     }
     if (tornChain_) {
