@@ -775,16 +775,7 @@ bool GuardBlock::HitByTreasure(const Vector3& velocity) {
         } else {
             EnterStunned(duration);
         }
-        // 速度方向へ少しノックバック（巡回範囲でクランプ）
-        if (gameObject_ && speed > 1e-3f) {
-            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
-                Vector3 p = tc->GetPosition();
-                p.x += velocity.x / speed * 0.5f;
-                p.x = std::clamp(p.x, startX_ - moveRange_, startX_ + moveRange_);
-                tc->SetPosition(p);
-                prevPosition_ = p;
-            }
-        }
+        // 位置は動かさない（以前は速度方向へ 0.5 マス動かしていたが、倒れている間に追撃するたびにずれていき、元に戻らなかった）
         hitTimer_ = hitCooldown_;
         return true;
     }

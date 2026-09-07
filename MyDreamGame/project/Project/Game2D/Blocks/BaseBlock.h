@@ -77,6 +77,15 @@ public:
         return false;
     }
 
+    // 破壊された後もマップに残すか（true: 消えた状態のまま updateBlocks_ に残り、Reset() で復活できる。
+    // 収集アイテムの数え上げや崩れる床の「復活」、巻き戻しでの復元に使う。false: 破壊されたら MapChip2D が取り除く）
+    virtual bool KeepWhenDestroyed() const { return false; }
+
+    // 鎖がこのブロック（動くブロック）と静止した地形に挟まれた時、鎖をちぎるか（ドアの crushKills）
+    virtual bool CrushesChain() const { return true; }
+    // 鎖の当たり（OnChainTouch）に使う範囲。動くブロックは今の見た目ではなく「通路」の範囲で取りたい時に上書きする
+    virtual AABB2D GetChainTouchAABB() const { return GetAABB(); }
+
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
 

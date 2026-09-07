@@ -223,22 +223,22 @@
             "properties": {
                 "alertSpeed": 3.0,
                 "bindFromBehind": true,
+                "enableShadow": true,
                 "exposureTime": 2.5,
                 "hitCooldown": 0.3,
+                "investigateSight": 0.5,
                 "lightAngleDeg": 34.0,
                 "lightDecay": 0.95,
                 "lightDistance": 8.0,
                 "lightFalloffDeg": 22.0,
                 "lightIntensity": 8.5,
-                "enableShadow": true,
-                "shadowBias": 0.0005,
-                "shadowIntensity": 1.0,
-                "investigateSight": 0.5,
                 "lookTime": 1.5,
                 "loseSightTime": 3.0,
                 "maxAlertGauge": 1.5,
                 "moveRange": 3.0,
                 "patrolSpeed": 1.5,
+                "shadowBias": 0.0005,
+                "shadowIntensity": 1.0,
                 "sightHeight": 1.0,
                 "sightLength": 5.0,
                 "staggerTime": 0.2,
@@ -283,6 +283,25 @@
             },
             "textureName": "",
             "type": "ThinPlatformBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 1.0,
+                "g": 0.800000011920929,
+                "r": 0.44999998807907104
+            },
+            "id": 18,
+            "modelName": "",
+            "name": "Collectible Gem",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "CollectibleBlock"
         }
     ]
 }

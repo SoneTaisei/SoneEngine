@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include "Game2D/CollectibleTracker.h"
 #include <Windows.h>
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -141,6 +142,8 @@ void GameScene::Initialize() {
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
+    // 収集アイテムの記録を読む（宝石ブロックが Initialize で「以前取ったか」を参照するのでマップより先）
+    CollectibleTracker::Get().BeginStage(s_TargetMapFilePath);
     map_->Initialize( s_TargetMapFilePath);
     // 動く床・扉などの状態をリプレイに記録・復元できるように登録する
     ReplayManager::GetInstance()->RegisterObjectProvider(map_.get());
@@ -246,6 +249,58 @@ void GameScene::Initialize() {
         const float tH = 56.0f;
         pauseTitleTextSprite_->SetSize({ tW, tH });
         pauseTitleTextSprite_->SetPosition({ (1280.0f - tW) * 0.5f, 430.0f });
+
+        // 収集アイテムの HUD（白い画像を SetColor で色付けして使う）
+        gemIconTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_icon.png");
+        gemOutlineTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_icon_outline.png");
+        gemDigitsTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_digits.png");
+        gemLabelTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_label.png");
+        gemCompleteTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_complete.png");
+        constexpr int kGemSpritePool = 8;   // ステージに置ける宝石の表示上限（HUD 用）
+        constexpr int kGemDigitPool = 12;   // 「NN / NN」+ クリア画面用
+        gemIconSprites_.clear();
+        gemOutlineSprites_.clear();
+        gemDigitSprites_.clear();
+        for (int i = 0; i < kGemSpritePool; ++i) {
+            auto icon = std::make_unique<Sprite>();
+            icon->Initialize(spriteCommon_, gemIconTexHandle_);
+            gemIconSprites_.push_back(std::move(icon));
+            auto outline = std::make_unique<Sprite>();
+            outline->Initialize(spriteCommon_, gemOutlineTexHandle_);
+            gemOutlineSprites_.push_back(std::move(outline));
+        }
+        for (int i = 0; i < kGemDigitPool; ++i) {
+            auto digit = std::make_unique<Sprite>();
+            digit->Initialize(spriteCommon_, gemDigitsTexHandle_);
+            gemDigitSprites_.push_back(std::move(digit));
+        }
+        gemLabelSprite_ = std::make_unique<Sprite>();
+        gemLabelSprite_->Initialize(spriteCommon_, gemLabelTexHandle_);
+        gemCompleteSprite_ = std::make_unique<Sprite>();
+        gemCompleteSprite_->Initialize(spriteCommon_, gemCompleteTexHandle_);
+
+        // 目のアイコン・縁の赤・警備員の合図
+        eyeOpenTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/eye_open.png");
+        eyeSpentTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/eye_spent.png");
+        markExclaimTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/mark_exclaim.png");
+        markQuestionTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/mark_question.png");
+        constexpr int kEyePool = 8;
+        constexpr int kMarkPool = 16;
+        auto makePool = [&](std::vector<std::unique_ptr<Sprite>>& pool, uint32_t tex, int count) {
+            pool.clear();
+            for (int i = 0; i < count; ++i) {
+                auto sp = std::make_unique<Sprite>();
+                sp->Initialize(spriteCommon_, tex);
+                pool.push_back(std::move(sp));
+            }
+        };
+        makePool(eyeOpenSprites_, eyeOpenTexHandle_, kEyePool);
+        makePool(eyeSpentSprites_, eyeSpentTexHandle_, kEyePool);
+        makePool(edgeGlowSprites_, pauseBackdropTexHandle_, 4);
+        makePool(markExclaimSprites_, markExclaimTexHandle_, kMarkPool);
+        makePool(markQuestionSprites_, markQuestionTexHandle_, kMarkPool);
+        makePool(markBarBackSprites_, pauseBackdropTexHandle_, kMarkPool);
+        makePool(markBarFillSprites_, pauseBackdropTexHandle_, kMarkPool);
     }
 
     Log("GameScene::Initialize: Finish\n");
@@ -657,6 +712,8 @@ void GameScene::Update(SceneManager *sceneManager) {
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
                 gameState_ = GameState::Clear;
                 stateTimer_ = 0.0f;
+                // 今回取った収集アイテムを記録（クリアまで持ち帰った分だけ残る）
+                CollectibleTracker::Get().CommitStageClear();
                 if (ReplayManager::GetInstance()->IsRecording()) {
                     ReplayManager::GetInstance()->StopRecord(); // 記録はゴール時点で止める
                 }
@@ -1292,58 +1349,6 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     windowWidth = EditorManager::GetGameViewSize().x;
     windowHeight = EditorManager::GetGameViewSize().y;
 
-    // 回数制の HUD（右上の目のアイコン）
-    if (alert_ && alert_->GetParams().strikeEnabled_) {
-        ImDrawList* dl = ImGui::GetForegroundDrawList();
-        int limit = alert_->GetStrikeLimit();
-        int used = alert_->GetStrikes();
-        float pulse = alert_->GetStrikePulse();
-        const float rx = 15.0f, ry = 9.5f, gap = 40.0f, margin = 18.0f;
-        float y = windowPos.y + margin + ry + 4.0f;
-        if (alert_->GetParams().enabled_) y += 34.0f; // バーも出ている時はその下
-        bool lastOne = (limit - used == 1);
-        float blink = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 6.0));
-        for (int i = 0; i < limit; ++i) {
-            float cx = windowPos.x + windowWidth - margin - rx - (limit - 1 - i) * gap;
-            ImVec2 c(cx, y);
-            bool spent = (i < used);
-            bool justSpent = spent && (i == used - 1) && pulse > 0.0f;
-            float scale = justSpent ? (1.0f + 0.5f * pulse) : 1.0f;
-            ImVec2 r(rx * scale, ry * scale);
-            // 縁取り
-            dl->AddEllipseFilled(c, ImVec2(r.x + 2.0f, r.y + 2.0f), IM_COL32(0, 0, 0, 170));
-            if (spent) {
-                // 使った：赤い目に ×
-                dl->AddEllipseFilled(c, r, IM_COL32(200, 40, 40, 230));
-                dl->AddLine(ImVec2(c.x - r.y * 0.7f, c.y - r.y * 0.7f), ImVec2(c.x + r.y * 0.7f, c.y + r.y * 0.7f), IM_COL32(255, 255, 255, 240), 2.5f);
-                dl->AddLine(ImVec2(c.x - r.y * 0.7f, c.y + r.y * 0.7f), ImVec2(c.x + r.y * 0.7f, c.y - r.y * 0.7f), IM_COL32(255, 255, 255, 240), 2.5f);
-            } else {
-                // 残り：白い目。残り1つは点滅
-                int alpha = (lastOne ? static_cast<int>(120 + 135 * blink) : 240);
-                dl->AddEllipseFilled(c, r, IM_COL32(245, 245, 245, alpha));
-                dl->AddCircleFilled(c, r.y * 0.55f, IM_COL32(30, 40, 60, alpha));
-                dl->AddCircleFilled(ImVec2(c.x + r.y * 0.2f, c.y - r.y * 0.2f), r.y * 0.18f, IM_COL32(255, 255, 255, alpha));
-            }
-        }
-        // 発見直後は画面の縁が赤く光る
-        if (pulse > 0.0f) {
-            ImVec2 p0 = windowPos;
-            ImVec2 p1(windowPos.x + windowWidth, windowPos.y + windowHeight);
-            dl->AddRect(ImVec2(p0.x + 4.0f, p0.y + 4.0f), ImVec2(p1.x - 4.0f, p1.y - 4.0f), IM_COL32(255, 40, 40, static_cast<int>(220 * pulse)), 0.0f, 0, 8.0f);
-        }
-        // 「残り N 回」のポップアップ
-        float ty = y + ry + 8.0f;
-        for (const auto& e : alert_->GetEvents()) {
-            float t = std::clamp(e.age / 1.6f, 0.0f, 1.0f);
-            float alpha = (t < 0.7f) ? 1.0f : (1.0f - (t - 0.7f) / 0.3f);
-            ImVec2 tsz = ImGui::CalcTextSize(e.text.c_str());
-            ImVec2 tp(windowPos.x + windowWidth - margin - tsz.x, ty - 14.0f * t);
-            dl->AddText(ImVec2(tp.x + 1.0f, tp.y + 1.0f), IM_COL32(0, 0, 0, static_cast<int>(200 * alpha)), e.text.c_str());
-            dl->AddText(tp, e.good ? IM_COL32(150, 255, 170, static_cast<int>(255 * alpha)) : IM_COL32(255, 200, 120, static_cast<int>(255 * alpha)), e.text.c_str());
-            ty += tsz.y + 2.0f;
-        }
-    }
-
     // 値の警戒度の HUD（右上のバー。ハードモード用。OFF の時は出さない）
     if (alert_ && alert_->GetParams().enabled_) {
         DrawAlertHud(windowPos, windowWidth, windowHeight);
@@ -1351,57 +1356,6 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     // 捕獲演出（回数制でも値でも同じ）
     if (alert_ && gameState_ == GameState::Captured) {
         DrawCaptureOverlay(windowPos, windowWidth, windowHeight);
-    }
-
-    // 警備員の頭上の合図：疑う・調べる =「？」（黄）、追跡 =「！」（赤）。追跡中は出続けるので「まだ追われている」が分かる
-    if (map_) {
-        ImDrawList* markList = ImGui::GetForegroundDrawList();
-        ImFont* font = ImGui::GetFont();
-        for (const auto& block : map_->GetUpdateBlocks()) {
-            auto* guard = dynamic_cast<GuardBlock*>(block.get());
-            if (!guard || guard->IsDestroyed()) continue;
-            GuardBlock::Mark mark = guard->GetMark();
-            if (mark == GuardBlock::Mark::None) continue;
-            float sx, sy;
-            if (!BlockDesignPanel::WorldToScreen(gameCamera_, guard->GetMarkPosition(), sx, sy)) continue;
-            bool excl = (mark == GuardBlock::Mark::Exclamation);
-            const char* text = excl ? "!" : "?";
-            float bob = static_cast<float>(std::sin(ImGui::GetTime() * (excl ? 14.0 : 6.0))) * (excl ? 3.0f : 2.0f);
-            float size = excl ? 44.0f : 36.0f;
-            ImVec2 ts = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
-            ImVec2 pos(sx - ts.x * 0.5f, sy - ts.y + bob);
-            ImU32 col = excl ? IM_COL32(255, 70, 60, 255) : IM_COL32(255, 220, 70, 255);
-            markList->AddText(font, size, ImVec2(pos.x + 2.0f, pos.y + 2.0f), IM_COL32(0, 0, 0, 200), text);
-            markList->AddText(font, size, pos, col, text);
-            // 追跡中に見られ続けているゲージ（満タンでもう1回「発見」）
-            if (excl) {
-                float ratio = guard->GetExposureRatio();
-                if (ratio > 0.0f) {
-                    ImVec2 b0(sx - 20.0f, sy + 4.0f);
-                    ImVec2 b1(sx + 20.0f, sy + 9.0f);
-                    markList->AddRectFilled(ImVec2(b0.x - 1.0f, b0.y - 1.0f), ImVec2(b1.x + 1.0f, b1.y + 1.0f), IM_COL32(0, 0, 0, 180), 2.0f);
-                    markList->AddRectFilled(b0, ImVec2(b0.x + 40.0f * ratio, b1.y), IM_COL32(255, 80, 60, 240), 2.0f);
-                }
-            }
-        }
-    }
-
-    // 操作ガイド
-    if (player_) {
-        ImGui::SetNextWindowPos(ImVec2(windowPos.x + 10.0f, windowPos.y + 10.0f), ImGuiCond_Always);
-        ImGui::Begin("Operation Guide", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
-
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Take (pick up chain / take back from bound guard)");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Put (drop chain / bind glowing guard, -1 chain)");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Q : Hold the gem (Q again : put it down)");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D while holding on wooden plank : Throw it -> swing (A/D to pump)");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE while swinging : Hold = the swing slows so you can see the arrow, release = fly the way the gem is heading (bright arrow = just)");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Guard : gem hit = stun / J near glowing guard = bind / K near bound = take back / dropped chain trips");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "Fragile floor : dots = chain units it can hold / red = too heavy, it shakes then falls");
-        ImGui::End();
     }
 
     // Start Ready 演出
@@ -1774,6 +1728,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #endif
 
     // 4. ポーズメニューの描画 (最前面)
+    DrawHudSprites(viewProjectionMatrix);
     DrawPauseMenu();
 }
 
@@ -2289,6 +2244,223 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
             pauseTitleTextSprite_->SetColor(unselectedColor);
         }
         pauseTitleTextSprite_->Update();
+    }
+}
+
+float GameScene::DrawGemDigits(const char* text, float x, float y, float cellW, float cellH, const Vector4& color, size_t startIndex) {
+    // gem_digits.png は "0123456789/" を 1 マス 40x64 で横に並べた帯。空白はマスの半分だけ進める
+    constexpr float kCellTexW = 40.0f;
+    constexpr float kCellTexH = 64.0f;
+    float cursor = x;
+    size_t used = startIndex;
+    for (const char* c = text; *c != '\0'; ++c) {
+        if (*c == ' ') {
+            cursor += cellW * 0.5f;
+            continue;
+        }
+        int index = (*c == '/') ? 10 : (*c - '0');
+        if (index < 0 || index > 10) continue;
+        if (used >= gemDigitSprites_.size()) break;
+        Sprite* sp = gemDigitSprites_[used++].get();
+        sp->SetTextureRect(kCellTexW * static_cast<float>(index), 0.0f, kCellTexW, kCellTexH);
+        sp->SetSize({ cellW, cellH });
+        sp->SetPosition({ cursor, y });
+        sp->SetColor(color);
+        sp->Update();
+        sp->Draw();
+        cursor += cellW;
+    }
+    return cursor - x;
+}
+
+void GameScene::DrawHudSprites(const Matrix4x4& viewProjection) {
+    if (!spriteCommon_ || !map_) return;
+    const float dt = TimeManager::GetInstance().GetDeltaTime();
+    hudTime_ += dt;
+    spriteCommon_->PreDraw();
+
+    // ---- 目のアイコン（右上。残り回数）と、発見直後の画面の縁の赤 ----
+    if (alert_ && alert_->GetParams().strikeEnabled_ && !eyeOpenSprites_.empty() && gameState_ != GameState::Captured) {
+        const int limit = (std::min)(alert_->GetStrikeLimit(), static_cast<int>(eyeOpenSprites_.size()));
+        const int used = alert_->GetStrikes();
+        const float pulse = alert_->GetStrikePulse();
+        const float eyeW = 36.0f, eyeH = 24.0f, gap = 40.0f, margin = 18.0f;
+        float y = margin + 4.0f;
+        if (alert_->GetParams().enabled_) y += 34.0f; // 値のバーも出ている時はその下
+        const bool lastOne = (limit - used == 1);
+        const float blink = 0.5f + 0.5f * std::sin(hudTime_ * 6.0f);
+        for (int i = 0; i < limit; ++i) {
+            const float cx = 1280.0f - margin - eyeW * 0.5f - static_cast<float>(limit - 1 - i) * gap;
+            const float cy = y + eyeH * 0.5f;
+            const bool spent = (i < used);
+            const bool justSpent = spent && (i == used - 1) && pulse > 0.0f;
+            const float scale = justSpent ? (1.0f + 0.5f * pulse) : 1.0f;
+            const Vector2 size = { eyeW * scale, eyeH * scale };
+            const Vector2 pos = { cx - size.x * 0.5f, cy - size.y * 0.5f };
+            Sprite* sp = spent ? eyeSpentSprites_[i].get() : eyeOpenSprites_[i].get();
+            // 残り 1 つは点滅
+            const float alpha = (!spent && lastOne) ? (0.47f + 0.53f * blink) : 1.0f;
+            sp->SetSize(size);
+            sp->SetPosition(pos);
+            sp->SetColor({ 1.0f, 1.0f, 1.0f, alpha });
+            sp->Update();
+            sp->Draw();
+        }
+        // 発見直後は画面の縁が赤く光る（上下左右の 4 本）
+        if (pulse > 0.0f && edgeGlowSprites_.size() >= 4) {
+            const float t = 8.0f;
+            const Vector4 red = { 1.0f, 0.16f, 0.16f, 0.86f * pulse };
+            const Vector2 rects[4][2] = {
+                { { 0.0f, 0.0f }, { 1280.0f, t } },
+                { { 0.0f, 720.0f - t }, { 1280.0f, t } },
+                { { 0.0f, 0.0f }, { t, 720.0f } },
+                { { 1280.0f - t, 0.0f }, { t, 720.0f } },
+            };
+            for (int i = 0; i < 4; ++i) {
+                Sprite* sp = edgeGlowSprites_[i].get();
+                sp->SetPosition(rects[i][0]);
+                sp->SetSize(rects[i][1]);
+                sp->SetColor(red);
+                sp->Update();
+                sp->Draw();
+            }
+        }
+    }
+
+    // ---- 警備員の頭上の合図：疑う・調べる =「？」（黄）、追跡 =「！」（赤）。追跡中は見られ続けているゲージも ----
+    if (gameState_ != GameState::Captured && !markExclaimSprites_.empty()) {
+        size_t exclUsed = 0, questUsed = 0, barUsed = 0;
+        for (const auto& block : map_->GetUpdateBlocks()) {
+            auto* guard = dynamic_cast<GuardBlock*>(block.get());
+            if (!guard || guard->IsDestroyed()) continue;
+            GuardBlock::Mark mark = guard->GetMark();
+            if (mark == GuardBlock::Mark::None) continue;
+            Vector3 ndc = TransformFunctions::EulerTransform(guard->GetMarkPosition(), viewProjection);
+            if (ndc.z < 0.0f || ndc.z > 1.0f) continue;
+            const float sx = (ndc.x + 1.0f) * 0.5f * 1280.0f;
+            const float sy = (1.0f - ndc.y) * 0.5f * 720.0f;
+            const bool excl = (mark == GuardBlock::Mark::Exclamation);
+            const float bob = std::sin(hudTime_ * (excl ? 14.0f : 6.0f)) * (excl ? 3.0f : 2.0f);
+            const float w = excl ? 40.0f : 34.0f;
+            const float h = excl ? 50.0f : 42.0f;
+            Sprite* sp = nullptr;
+            if (excl) {
+                if (exclUsed < markExclaimSprites_.size()) sp = markExclaimSprites_[exclUsed++].get();
+            } else {
+                if (questUsed < markQuestionSprites_.size()) sp = markQuestionSprites_[questUsed++].get();
+            }
+            if (!sp) continue;
+            sp->SetSize({ w, h });
+            sp->SetPosition({ sx - w * 0.5f, sy - h + bob });
+            sp->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+            sp->Update();
+            sp->Draw();
+            // 追跡中に見られ続けているゲージ（満タンでもう 1 回「発見」）
+            if (excl && barUsed < markBarBackSprites_.size()) {
+                const float ratio = guard->GetExposureRatio();
+                if (ratio > 0.0f) {
+                    Sprite* back = markBarBackSprites_[barUsed].get();
+                    Sprite* fill = markBarFillSprites_[barUsed].get();
+                    ++barUsed;
+                    back->SetPosition({ sx - 21.0f, sy + 3.0f });
+                    back->SetSize({ 42.0f, 7.0f });
+                    back->SetColor({ 0.0f, 0.0f, 0.0f, 0.7f });
+                    back->Update();
+                    back->Draw();
+                    fill->SetPosition({ sx - 20.0f, sy + 4.0f });
+                    fill->SetSize({ 40.0f * ratio, 5.0f });
+                    fill->SetColor({ 1.0f, 0.31f, 0.24f, 0.95f });
+                    fill->Update();
+                    fill->Draw();
+                }
+            }
+        }
+    }
+
+    // ---- 収集アイテム（左下）とクリア画面の「宝石 N / M」 ----
+    if (gemIconSprites_.empty() || gameState_ == GameState::Captured) return;
+    auto& tracker = CollectibleTracker::Get();
+    tracker.TickPulse(dt);
+    CollectibleTracker::Summary s = tracker.Summarize(map_.get());
+    if (s.total <= 0) return; // このステージに宝石が無ければ出さない
+
+    // ---- 左下の HUD：ひし形（取った = 明るい青 / 以前取った = 薄い青 / まだ = 枠だけ）と「N / M」 ----
+    const float icon = 34.0f;
+    const float gap = 42.0f;
+    const float margin = 24.0f;
+    const float baseY = 720.0f - margin - icon;
+    const float x0 = margin;
+    const std::pair<int, int> last = tracker.GetLastCollected();
+    const float pulse = tracker.GetPulse();
+    const int n = (std::min)(s.total, static_cast<int>(gemIconSprites_.size()));
+    for (int i = 0; i < n; ++i) {
+        const auto& e = s.entries[i];
+        const bool isLast = e.collectedNow && (e.x == last.first && e.y == last.second);
+        const float size = icon * (isLast ? (1.0f + 0.5f * pulse) : 1.0f);
+        const float cx = x0 + gap * static_cast<float>(i) + icon * 0.5f;
+        const float cy = baseY + icon * 0.5f;
+        const Vector2 pos = { cx - size * 0.5f, cy - size * 0.5f };
+        if (e.collectedNow) {
+            Sprite* sp = gemIconSprites_[i].get();
+            const float flash = isLast ? pulse : 0.0f;
+            sp->SetSize({ size, size });
+            sp->SetPosition(pos);
+            sp->SetColor({ 0.5f + 0.5f * flash, 0.85f + 0.15f * flash, 1.0f, 1.0f });
+            sp->Update();
+            sp->Draw();
+        } else if (e.collectedBefore) {
+            Sprite* sp = gemIconSprites_[i].get();
+            sp->SetSize({ size, size });
+            sp->SetPosition(pos);
+            sp->SetColor({ 0.5f, 0.85f, 1.0f, 0.35f });
+            sp->Update();
+            sp->Draw();
+            Sprite* ol = gemOutlineSprites_[i].get();
+            ol->SetSize({ size, size });
+            ol->SetPosition(pos);
+            ol->SetColor({ 0.75f, 0.92f, 1.0f, 0.85f });
+            ol->Update();
+            ol->Draw();
+        } else {
+            Sprite* ol = gemOutlineSprites_[i].get();
+            ol->SetSize({ size, size });
+            ol->SetPosition(pos);
+            ol->SetColor({ 0.85f, 0.95f, 1.0f, 0.9f });
+            ol->Update();
+            ol->Draw();
+        }
+    }
+    char countText[16];
+    snprintf(countText, sizeof(countText), "%d / %d", s.collectedNow, s.total);
+    DrawGemDigits(countText, x0 + gap * static_cast<float>(n) + 4.0f, baseY - 2.0f, 22.0f, 36.0f, { 0.9f, 0.96f, 1.0f, 0.95f });
+
+    // ---- クリア画面：中央に「宝石 N / M」、全部取っていれば「コンプリート!」 ----
+    const bool clearScreen = (gameState_ == GameState::Clear && !TransitionDirector::GetInstance()->IsPlaying());
+    if (clearScreen && gemLabelSprite_ && gemCompleteSprite_) {
+        const float labelW = 120.0f, labelH = 48.0f;
+        const float digitW = 30.0f, digitH = 48.0f;
+        // 幅：ラベル + 数字列（"N / M" = 文字数 × digitW、空白は半分）
+        float digitsW = 0.0f;
+        for (const char* c = countText; *c != '\0'; ++c) digitsW += (*c == ' ') ? digitW * 0.5f : digitW;
+        const float totalW = labelW + 12.0f + digitsW;
+        const float lineY = 500.0f;
+        float x = (1280.0f - totalW) * 0.5f;
+        const bool complete = (s.collectedNow >= s.total);
+        const Vector4 color = complete ? Vector4{ 0.7f, 0.95f, 1.0f, 1.0f } : Vector4{ 0.6f, 0.85f, 1.0f, 0.95f };
+        gemLabelSprite_->SetSize({ labelW, labelH });
+        gemLabelSprite_->SetPosition({ x, lineY });
+        gemLabelSprite_->SetColor(color);
+        gemLabelSprite_->Update();
+        gemLabelSprite_->Draw();
+        DrawGemDigits(countText, x + labelW + 12.0f, lineY, digitW, digitH, color, 6); // 左下の数字とは別のスプライトを使う
+        if (complete) {
+            const float cw = 300.0f, ch = 48.0f;
+            gemCompleteSprite_->SetSize({ cw, ch });
+            gemCompleteSprite_->SetPosition({ (1280.0f - cw) * 0.5f, lineY + 56.0f });
+            gemCompleteSprite_->SetColor({ 1.0f, 0.95f, 0.6f, 1.0f });
+            gemCompleteSprite_->Update();
+            gemCompleteSprite_->Draw();
+        }
     }
 }
 

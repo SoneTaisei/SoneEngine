@@ -161,6 +161,7 @@ void PlayerPhysics::ResolveCollisionX(PlayerState& state_, const PlayerParams& p
         if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
         
         AABB2D blockAABB = blockPtr->GetAABB();
+        if (blockAABB.right - blockAABB.left < 0.01f || blockAABB.top - blockAABB.bottom < 0.01f) continue; // 全開のドアなど厚さ 0 は無視
         float blockLeft = blockAABB.left;
         float blockRight = blockAABB.right;
         float blockTop = blockAABB.top;
@@ -269,6 +270,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
             
             AABB2D blockAABB = blockPtr->GetAABB();
+            if (blockAABB.right - blockAABB.left < 0.01f || blockAABB.top - blockAABB.bottom < 0.01f) continue; // 全開のドアなど厚さ 0 は無視
             float blockLeft = blockAABB.left;
             float blockRight = blockAABB.right;
             float blockTop = blockAABB.top;
@@ -280,7 +282,11 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             }
 
             if (blockPtr->IsSolid()) {
-                if (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop)) {
+                // 下りの床は先に下がっているので、その分（1 フレームの移動量 + 少し）足元の隙間を許して乗ったままにする
+                // （これが無いと下りの床の上で毎フレーム「空中」になり、ジャンプ入力が落ちていた）。上向きに動いている時は対象外
+                float catchUp = (std::max)(0.0f, -blockPtr->GetVelocity().y * lastDeltaTime_) + 0.02f;
+                bool ridingDown = (state_.velocity_.y <= 0.0f) && (minY > blockTop) && (minY <= blockTop + catchUp);
+                if (ridingDown || (minY <= blockTop && (minY >= blockBottom - 0.1f || maxY > blockTop))) {
                     state_.position_.y = blockTop + params_.halfHeight_;
                     state_.velocity_.y = 0.0f;
                     groundedThisFrame = true;
@@ -347,6 +353,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
             if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
             
             AABB2D blockAABB = blockPtr->GetAABB();
+            if (blockAABB.right - blockAABB.left < 0.01f || blockAABB.top - blockAABB.bottom < 0.01f) continue; // 全開のドアなど厚さ 0 は無視
             float blockLeft = blockAABB.left;
             float blockRight = blockAABB.right;
             float blockTop = blockAABB.top;
@@ -376,6 +383,7 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
         if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) continue;
         
         AABB2D blockAABB = blockPtr->GetAABB();
+        if (blockAABB.right - blockAABB.left < 0.01f || blockAABB.top - blockAABB.bottom < 0.01f) continue; // 全開のドアなど厚さ 0 は無視
         float blockLeft = blockAABB.left;
         float blockRight = blockAABB.right;
         float blockTop = blockAABB.top;
@@ -436,6 +444,12 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
     float pRight = state_.position_.x + params_.halfWidth_ + margin;
     float pBottom = state_.position_.y - params_.halfHeight_ - margin;
     float pTop = state_.position_.y + params_.halfHeight_ + margin;
+    // 死ぬ床と警備員は「本当に触れた時」だけ。マージン無し（少し内側）の体の範囲で判定する
+    const float kTight = 0.02f;
+    float tLeft = state_.position_.x - params_.halfWidth_ + kTight;
+    float tRight = state_.position_.x + params_.halfWidth_ - kTight;
+    float tBottom = state_.position_.y - params_.halfHeight_ + kTight;
+    float tTop = state_.position_.y + params_.halfHeight_ - kTight;
 
     int startChipX = mapChip->WorldToChipX(pLeft);
     int endChipX   = mapChip->WorldToChipX(pRight);
@@ -457,6 +471,10 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
 
             MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
             if (type == MapChip2D::ChipType::kDeathBlock) {
+                // マージン無しの体で本当に重なっている時だけ死ぬ（隣の床に立っているだけで死なない）
+                if (tRight <= blockLeft || tLeft >= blockRight || tTop <= blockBottom || tBottom >= blockTop) {
+                    continue;
+                }
                 player->Kill();
                 return;
             } else if (type == MapChip2D::ChipType::kGoal) {
@@ -479,8 +497,13 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
         if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
         
         AABB2D blockAABB = blockPtr->GetAABB();
-        if (pRight <= blockAABB.left || pLeft >= blockAABB.right ||
-            pTop <= blockAABB.bottom || pBottom >= blockAABB.top) {
+        if (blockAABB.right - blockAABB.left < 0.01f || blockAABB.top - blockAABB.bottom < 0.01f) continue; // 全開のドアなど
+        // 壁ではない動くもの（警備員）はマージン無しの体で判定する（触れていないのに捕まらないように）
+        const bool tight = !blockPtr->IsSolid();
+        const float useL = tight ? tLeft : pLeft, useR = tight ? tRight : pRight;
+        const float useB = tight ? tBottom : pBottom, useT = tight ? tTop : pTop;
+        if (useR <= blockAABB.left || useL >= blockAABB.right ||
+            useT <= blockAABB.bottom || useB >= blockAABB.top) {
             continue;
         }
 

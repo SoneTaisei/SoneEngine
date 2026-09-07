@@ -6,6 +6,7 @@
 #include "Core/Utility/TransformFunctions.h"
 #include <d3d12.h>
 #include <memory>
+#include <vector>
 
 // 2Dゲーム用クラス
 #include "Game2D/Player/Player2D.h"
@@ -138,6 +139,36 @@ private:
     uint32_t pauseTitleTexHandle_ = 0;
     uint32_t pauseRestartTexHandle_ = 0;
     uint32_t pauseTitleTextTexHandle_ = 0;
+
+    // 収集アイテム（小さい宝石）の HUD。ImGui ではなくゲーム画面にスプライトで描く（左下のひし形と数字、クリア画面の「宝石 N / M」）
+    std::vector<std::unique_ptr<class Sprite>> gemIconSprites_;     // ひし形（塗り）
+    std::vector<std::unique_ptr<class Sprite>> gemOutlineSprites_;  // ひし形（枠だけ）
+    std::vector<std::unique_ptr<class Sprite>> gemDigitSprites_;    // 数字と「/」（gem_digits.png の帯から切り抜く）
+    std::unique_ptr<class Sprite> gemLabelSprite_;                  // 「宝石」（クリア画面）
+    std::unique_ptr<class Sprite> gemCompleteSprite_;               // 「コンプリート!」（クリア画面）
+    uint32_t gemIconTexHandle_ = 0;
+    uint32_t gemOutlineTexHandle_ = 0;
+    uint32_t gemDigitsTexHandle_ = 0;
+    uint32_t gemLabelTexHandle_ = 0;
+    uint32_t gemCompleteTexHandle_ = 0;
+    // 目のアイコン（残り回数）、発見直後の画面の縁の赤、警備員の頭上の「！」「？」と見られているゲージ。ImGui ではなくスプライト
+    std::vector<std::unique_ptr<class Sprite>> eyeOpenSprites_;
+    std::vector<std::unique_ptr<class Sprite>> eyeSpentSprites_;
+    std::vector<std::unique_ptr<class Sprite>> edgeGlowSprites_;   // 上下左右の 4 本
+    std::vector<std::unique_ptr<class Sprite>> markExclaimSprites_;
+    std::vector<std::unique_ptr<class Sprite>> markQuestionSprites_;
+    std::vector<std::unique_ptr<class Sprite>> markBarBackSprites_;
+    std::vector<std::unique_ptr<class Sprite>> markBarFillSprites_;
+    uint32_t eyeOpenTexHandle_ = 0;
+    uint32_t eyeSpentTexHandle_ = 0;
+    uint32_t markExclaimTexHandle_ = 0;
+    uint32_t markQuestionTexHandle_ = 0;
+    float hudTime_ = 0.0f; // 点滅・上下ゆれ用
+    // ゲーム画面の HUD をまとめてスプライトで描く（宝石・目・縁の赤・警備員の合図）。3D と粒子の後、ポーズの前
+    void DrawHudSprites(const Matrix4x4& viewProjection);
+    // 数字列（"0123456789/" と空白）を x, y から並べて描く。戻り値は描いた幅
+    // startIndex: 使うスプライトの先頭番号（同じフレームで二か所に描く時は別の番号から使う。スプライトは描画バッファを 1 つしか持たない）
+    float DrawGemDigits(const char* text, float x, float y, float cellW, float cellH, const Vector4& color, size_t startIndex = 0);
 
     void UpdatePauseMenu(float dt, SceneManager* sceneManager);
     void DrawPauseMenu();

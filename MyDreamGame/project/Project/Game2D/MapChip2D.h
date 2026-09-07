@@ -31,7 +31,8 @@ public:
         kSwitchBlock = 14, // スイッチ
         kDoorBlock = 15, // シャッタードア
         kGuardBlock = 16, // 警備員
-        kThinPlatform = 17 // 細い足場（板。上にだけ乗れる。鎖は素通り。この上でだけ鎖を回せる）
+        kThinPlatform = 17, // 細い足場（板。上にだけ乗れる。鎖は素通り。この上でだけ鎖を回せる）
+        kCollectible = 18  // 収集アイテム（小さい青い宝石。クリアには関係ないやり込み要素。触れると取れる）
     };
 
     void Initialize(const std::string& mapFilePath);
@@ -241,7 +242,8 @@ private:
     std::map<std::string, nlohmann::json> placementOverrides_;
     bool autoNumberSwitches_ = true;
     bool playtimeRecording_ = false;
-    std::map<std::pair<int, int>, nlohmann::json> playtimeOverrides_; // 値が null = 消した
+    // static：エディタの停止でシーンごと作り直されても残す（新しいマップの ReapplyPlaytimeOverrides で戻す）
+    static std::map<std::pair<int, int>, nlohmann::json> playtimeOverrides_; // 値が null = 消した
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
