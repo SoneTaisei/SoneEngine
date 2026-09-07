@@ -46,6 +46,38 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
             // TODO: マップの再読み込みなどをここで行うか、Initializeのタイミングと調整する
         }
     }
+
+    // アニメーション／GPUパーティクルエディターへ切り替えるとプレビューシーンが積まれ（PushScene）、
+    // このシーンの OnExit() が正射影と追従ターゲットを解除してしまう。
+    // 戻る時（PopScene）は Initialize() ではなく OnEnter() しか呼ばれないため、ここで必ず張り直す。
+    SetupGameCamera();
+}
+
+// 2Dゲーム用カメラ（正射影＋プレイヤー追従）をこのシーンのものへ張り直す
+void GameScene::SetupGameCamera() {
+    if (!gameCamera_) {
+        return;
+    }
+    // 追従処理は GameCamera::UpdateMatrixOrthographic() の中にしかないため、
+    // 正射影モードが解除されたままだと「追従カメラが発動しない」状態になる
+    gameCamera_->SetOrthographic(true);
+
+    if (map_) {
+        gameCamera_->SetRooms(map_->GetRooms());
+    }
+
+    // クリア演出中は演出側がカメラを動かすので触らない。
+    // 追従ON/OFF（エディターの「手動固定モード」）はユーザー設定なのでここでは変更しない
+    if (player_ && !TransitionDirector::GetInstance()->IsCameraControlled()) {
+        gameCamera_->SetFollowTarget(&player_->GetPosition());
+    }
+}
+
+// 毎フレームの保険。エディターの操作で正射影が解除されたままだと追従が止まるので戻す
+void GameScene::EnsureGameCameraMode() {
+    if (gameCamera_ && !gameCamera_->IsOrthographic()) {
+        gameCamera_->SetOrthographic(true);
+    }
 }
 
 void GameScene::OnExit(SceneManager* sceneManager) {
@@ -182,8 +214,8 @@ void GameScene::Initialize() {
         float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
         float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
         gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
-        // プレイヤーの位置をカメラ追従ターゲットに設定
-        gameCamera_->SetFollowTarget(&player_->GetPosition());
+        // 正射影・ルーム・追従ターゲット（プレイヤー）をこのシーンのものへ設定
+        SetupGameCamera();
         Log("GameScene::Initialize: Camera configured\n");
     }
 
@@ -265,6 +297,10 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+
+    // このシーンが動いている間はゲームカメラを必ず2D（正射影）に保つ。
+    // タイトル等の他シーンやエディターの都合で解除されると追従処理ごと止まってしまうため
+    EnsureGameCameraMode();
 
     if (skybox_) {
         skybox_->Update();
@@ -2026,6 +2062,10 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 
 void GameScene::UpdateEditor() {
     float dt = TimeManager::GetInstance().GetDeltaTime();
+
+    // エディター停止中も2D（正射影）を維持する。
+    // ここが崩れていると、再生ボタンを押した瞬間から追従カメラが動かない
+    EnsureGameCameraMode();
     // フェードイン演出 (エディタ停止中もフェードインさせる)
     if (transitionAlpha_ > 0.0f) {
         transitionAlpha_ -= dt * 1.5f;

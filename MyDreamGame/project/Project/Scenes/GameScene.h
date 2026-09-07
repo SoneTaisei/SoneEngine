@@ -111,6 +111,13 @@ private:
     // 警備員の懐中電灯スポットライトをModelCommonに同期
     void UpdateGuardLights();
 
+    // 2Dゲーム用カメラ（正射影＋プレイヤー追従）をこのシーンのものへ張り直す。
+    // OnExit() で解除した状態を復帰時に戻すため、Initialize / OnEnter から呼ぶ。
+    void SetupGameCamera();
+
+    // 毎フレームの保険。他エディター等で正射影が解除されたままだと追従処理が走らないため戻す
+    void EnsureGameCameraMode();
+
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;
     float transitionAlpha_ = 0.0f; // 画面遷移演出用(フェードイン - アイリスインへ置き換え)
