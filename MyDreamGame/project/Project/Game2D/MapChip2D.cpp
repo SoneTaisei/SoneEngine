@@ -312,6 +312,14 @@ void MapChip2D::Draw() {
     }
 }
 
+void MapChip2D::DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager) {
+    for (const auto& block : updateBlocks_) {
+        if (block && !block->IsDestroyed()) {
+            block->DrawParticle(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
+        }
+    }
+}
+
 BaseBlock* MapChip2D::GetBlock(int chipX, int chipY) const {
     if (chipX < 0 || chipX >= mapWidth_ || chipY < 0 || chipY >= mapHeight_) {
         return nullptr;

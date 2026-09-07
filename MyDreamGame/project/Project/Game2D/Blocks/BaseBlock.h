@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "GameObject/PrimitiveObject.h"
 #include <memory>
 #include <vector>
@@ -14,7 +14,10 @@
 class Player2D;
 class MapChip2D;
 struct ID3D12Device;
+struct ID3D12GraphicsCommandList;
 class Primitive;
+class ParticleCommon;
+class ModelManager;
 
 class BaseBlock {
 public:
@@ -34,6 +37,15 @@ public:
         if (!isDestroyed_ && gameObject_) {
             gameObject_->Draw(); // Rendererへの登録が行われる
         }
+    }
+
+    virtual void DrawParticle(
+        ID3D12GraphicsCommandList* commandList,
+        const Matrix4x4& viewProjection,
+        const Matrix4x4& cameraMatrix,
+        ParticleCommon* particleCommon,
+        ModelManager* modelManager) {
+        (void)commandList; (void)viewProjection; (void)cameraMatrix; (void)particleCommon; (void)modelManager;
     }
 
     // 当たり判定の性質

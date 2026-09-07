@@ -672,6 +672,8 @@ namespace {
             s_unsaved = true;
         }
         if (!ov) ImGui::EndDisabled();
+
+        block->DrawImGui();
     }
 
     void DrawDesignModeToggle(const char* id) {

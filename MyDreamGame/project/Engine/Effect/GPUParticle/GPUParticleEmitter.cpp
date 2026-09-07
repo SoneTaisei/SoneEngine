@@ -247,6 +247,24 @@ void GPUParticleEmitter::Update(float deltaTime, bool allowEmit) {
         }
     }
 
+    // 公転（軌道回転）パラメータ事前計算
+    bool hasOrbit = (std::abs(data_.orbitalSpeed) > 0.0001f);
+    Vector3 orbitAxisNorm = { 0.0f, 1.0f, 0.0f };
+    float orbitCosA = 1.0f;
+    float orbitSinA = 0.0f;
+    float orbitOneMinusCos = 0.0f;
+    if (hasOrbit) {
+        Vector3 ax = data_.orbitAxis;
+        float axLen = std::sqrt(ax.x * ax.x + ax.y * ax.y + ax.z * ax.z);
+        if (axLen > 0.0001f) {
+            orbitAxisNorm = { ax.x / axLen, ax.y / axLen, ax.z / axLen };
+        }
+        float orbitAngle = (data_.orbitalSpeed * std::numbers::pi_v<float> / 180.0f) * deltaTime;
+        orbitCosA = std::cos(orbitAngle);
+        orbitSinA = std::sin(orbitAngle);
+        orbitOneMinusCos = 1.0f - orbitCosA;
+    }
+
     // 生存パーティクルの更新
     for (uint32_t i = 0; i < numActiveParticles_; ) {
         GPUParticleInstance& p = particles_[i];
@@ -274,6 +292,35 @@ void GPUParticleEmitter::Update(float deltaTime, bool allowEmit) {
         p.position.x += p.velocity.x * deltaTime;
         p.position.y += p.velocity.y * deltaTime;
         p.position.z += p.velocity.z * deltaTime;
+
+        // 公転 (Orbital Motion: エミッター中心周りの旋回)
+        if (hasOrbit) {
+            Vector3 r = { p.position.x - position_.x, p.position.y - position_.y, p.position.z - position_.z };
+            Vector3 crossR = {
+                orbitAxisNorm.y * r.z - orbitAxisNorm.z * r.y,
+                orbitAxisNorm.z * r.x - orbitAxisNorm.x * r.z,
+                orbitAxisNorm.x * r.y - orbitAxisNorm.y * r.x
+            };
+            float dotR = orbitAxisNorm.x * r.x + orbitAxisNorm.y * r.y + orbitAxisNorm.z * r.z;
+            p.position = {
+                position_.x + (r.x * orbitCosA + crossR.x * orbitSinA + orbitAxisNorm.x * dotR * orbitOneMinusCos),
+                position_.y + (r.y * orbitCosA + crossR.y * orbitSinA + orbitAxisNorm.y * dotR * orbitOneMinusCos),
+                position_.z + (r.z * orbitCosA + crossR.z * orbitSinA + orbitAxisNorm.z * dotR * orbitOneMinusCos)
+            };
+
+            // 速度ベクトルも回転軸周りに追従回転
+            Vector3 crossV = {
+                orbitAxisNorm.y * p.velocity.z - orbitAxisNorm.z * p.velocity.y,
+                orbitAxisNorm.z * p.velocity.x - orbitAxisNorm.x * p.velocity.z,
+                orbitAxisNorm.x * p.velocity.y - orbitAxisNorm.y * p.velocity.x
+            };
+            float dotV = orbitAxisNorm.x * p.velocity.x + orbitAxisNorm.y * p.velocity.y + orbitAxisNorm.z * p.velocity.z;
+            p.velocity = {
+                p.velocity.x * orbitCosA + crossV.x * orbitSinA + orbitAxisNorm.x * dotV * orbitOneMinusCos,
+                p.velocity.y * orbitCosA + crossV.y * orbitSinA + orbitAxisNorm.y * dotV * orbitOneMinusCos,
+                p.velocity.z * orbitCosA + crossV.z * orbitSinA + orbitAxisNorm.z * dotV * orbitOneMinusCos
+            };
+        }
 
         // 回転更新
         p.rotate.x += p.rotateSpeed.x * deltaTime;

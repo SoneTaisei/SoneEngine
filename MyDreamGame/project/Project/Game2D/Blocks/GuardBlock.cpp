@@ -5,11 +5,13 @@
 #include "Game2D/Security/AlertSystem.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <DirectXMath.h>
 #ifdef USE_IMGUI
+#include <imgui.h>
 #include "Editor/EditorManager.h"
 #endif
 
@@ -77,6 +79,13 @@ void GuardBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float
 
     SetupCollider();
 
+    // スタン用GPUパーティクルの初期化
+    if (device_) {
+        stunParticle_ = std::make_unique<GPUParticleSystem>();
+        stunParticle_->Initialize(device_);
+        stunParticle_->LoadFromFile("resources/json/shared/Particle/stan.json");
+    }
+
     // プロパティ反映後に初期化
     direction_ = startDirection_;
     prevPosition_ = {worldX, worldY, 0.0f};
@@ -132,6 +141,16 @@ void GuardBlock::SetProperties(const nlohmann::json& properties) {
     readF("loseSightTime", loseSightTime_);
     readF("lookTime", lookTime_);
     readF("exposureTime", exposureTime_);
+    // スタンパーティクルオフセット
+    readF("stunStandingOffsetY", stunStandingOffsetY_);
+    readF("stunFallenOffsetY", stunFallenOffsetY_);
+    readF("stunHeadInset", stunHeadInset_);
+    readF("stunOffsetZ", stunOffsetZ_);
+    if (properties.contains("stunManualOffset") && properties["stunManualOffset"].is_array() && properties["stunManualOffset"].size() >= 3) {
+        stunManualOffset_.x = properties["stunManualOffset"][0];
+        stunManualOffset_.y = properties["stunManualOffset"][1];
+        stunManualOffset_.z = properties["stunManualOffset"][2];
+    }
 }
 
 void GuardBlock::Update() {
@@ -180,6 +199,10 @@ void GuardBlock::Update() {
         if (stunTimer_ <= 0.0f) {
             state_ = State::Patrol;
             alertGauge_ = 0.0f;
+            if (stunParticle_) {
+                stunParticle_->Restart();
+                stunParticle_->Pause();
+            }
             // 起きたら通報（警戒度）。プレイヤーが遠ければ弱い通報
             if (auto* alert = AlertSystem::Current()) {
                 Vector3 here = {startX_, startY_, 0.0f};
@@ -350,6 +373,23 @@ void GuardBlock::Update() {
 
     if (state_ == State::Bound) {
         UpdateBoundRing();
+    }
+
+    // スタンパーティクルの更新
+    if (state_ == State::Stunned) {
+        if (stunParticle_) {
+            if (!stunParticle_->IsPlaying()) {
+                stunParticle_->PlayAt(GetStunParticlePosition());
+            } else {
+                stunParticle_->SetPosition(GetStunParticlePosition());
+            }
+            stunParticle_->Update(dt);
+        }
+    } else {
+        if (stunParticle_ && stunParticle_->IsPlaying()) {
+            stunParticle_->Restart();
+            stunParticle_->Pause();
+        }
     }
 
     // 次のフレームのためのフラグリセット
@@ -705,6 +745,10 @@ void GuardBlock::EnterStunned(float duration) {
     lostTimer_ = 0.0f;
     spottedReported_ = false;
     exposure_ = 0.0f;
+
+    if (stunParticle_) {
+        stunParticle_->PlayAt(GetStunParticlePosition());
+    }
 }
 
 Vector3 GuardBlock::GetMarkPosition() const {
@@ -725,6 +769,9 @@ bool GuardBlock::HitByTreasure(const Vector3& velocity) {
         float duration = std::clamp(stunBase_ + (speed - stunSpeed_) * stunPerSpeed_, 0.0f, stunMax_);
         if (state_ == State::Stunned) {
             stunTimer_ = (std::max)(stunTimer_, duration); // 気絶中に追撃されたら延長
+            if (stunParticle_ && !stunParticle_->IsPlaying()) {
+                stunParticle_->PlayAt(GetStunParticlePosition());
+            }
         } else {
             EnterStunned(duration);
         }
@@ -840,6 +887,10 @@ void GuardBlock::Reset() {
             renderer->GetMaterial().color = kBodyColor;
         }
     }
+    if (stunParticle_) {
+        stunParticle_->Restart();
+        stunParticle_->Pause();
+    }
     UpdateFlashlight(0.0f);
 }
 
@@ -900,4 +951,78 @@ void GuardBlock::RestoreReplayState(const std::vector<float>& custom) {
     deltaPosition_ = {0.0f, 0.0f, 0.0f};
     currentVelocity_ = {0.0f, 0.0f, 0.0f};
     UpdateFlashlight(0.0f);
+
+    // スタンパーティクルのリプレイ同期
+    if (state_ == State::Stunned) {
+        if (stunParticle_) {
+            if (!stunParticle_->IsPlaying()) {
+                stunParticle_->PlayAt(GetStunParticlePosition());
+            } else {
+                stunParticle_->SetPosition(GetStunParticlePosition());
+            }
+        }
+    } else {
+        if (stunParticle_ && stunParticle_->IsPlaying()) {
+            stunParticle_->Restart();
+            stunParticle_->Pause();
+        }
+    }
 }
+
+void GuardBlock::DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager) {
+    if (stunParticle_ && stunParticle_->IsPlaying()) {
+        stunParticle_->Draw(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
+    }
+}
+
+Vector3 GuardBlock::GetStunParticlePosition() const {
+    Vector3 pos = { startX_, startY_, 0.0f };
+    if (gameObject_) {
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            pos = tc->GetPosition();
+        }
+    }
+
+    float absT = std::clamp(std::abs(tumble_), 0.0f, 1.0f);
+
+    // 立っている時の頭上位置（中心 pos から頭頂部 +startHeight_ * 0.5f の少し上）
+    float standX = 0.0f;
+    float standY = startHeight_ * 0.5f + stunStandingOffsetY_;
+
+    // 倒れた時の頭上位置（頭の位置 X と、横倒しになった上面 +startWidth_ * 0.5f の少し上）
+    float fallenX = tumble_ * (startHeight_ * 0.5f - stunHeadInset_);
+    float fallenY = startWidth_ * 0.5f + stunFallenOffsetY_;
+
+    // 姿勢に応じて滑らかに補間
+    float offsetX = std::lerp(standX, fallenX, absT);
+    float offsetY = std::lerp(standY, fallenY, absT);
+
+    pos.x += offsetX + stunManualOffset_.x;
+    pos.y += offsetY + stunManualOffset_.y;
+    pos.z += stunOffsetZ_ + stunManualOffset_.z;
+
+    return pos;
+}
+
+#ifdef USE_IMGUI
+void GuardBlock::DrawImGui() {
+    if (ImGui::TreeNode("Stun Particle Settings")) {
+        ImGui::DragFloat("Standing Y Offset", &stunStandingOffsetY_, 0.02f, -1.0f, 2.0f, "%.2f");
+        ImGui::DragFloat("Fallen Y Offset", &stunFallenOffsetY_, 0.02f, -1.0f, 2.0f, "%.2f");
+        ImGui::DragFloat("Fallen Head Inset", &stunHeadInset_, 0.02f, -1.0f, 1.0f, "%.2f");
+        ImGui::DragFloat("Z Offset", &stunOffsetZ_, 0.02f, -2.0f, 2.0f, "%.2f");
+        ImGui::DragFloat3("Manual Offset (X,Y,Z)", &stunManualOffset_.x, 0.02f, -2.0f, 2.0f, "%.2f");
+
+        if (state_ == State::Stunned) {
+            if (ImGui::Button("Wake Up")) {
+                stunTimer_ = 0.0f;
+            }
+        } else {
+            if (ImGui::Button("Trigger Stun (3s)")) {
+                EnterStunned(3.0f);
+            }
+        }
+        ImGui::TreePop();
+    }
+}
+#endif

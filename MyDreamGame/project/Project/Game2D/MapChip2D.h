@@ -37,6 +37,7 @@ public:
     void Initialize(const std::string& mapFilePath);
     void Update();
     void Draw();
+    void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
 
     // 指定座標のブロックを取得する
     BaseBlock* GetBlock(int chipX, int chipY) const;
