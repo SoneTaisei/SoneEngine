@@ -1,7 +1,8 @@
-﻿#include "FragileBlock.h"
+#include "FragileBlock.h"
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/Security/AlertSystem.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Game2D/MapChip2D.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -209,6 +210,9 @@ void FragileBlock::Update() {
             }
             // 落ちて消える（近くに警備員がいれば騒音）
             isDestroyed_ = true;
+            if (map_) {
+                map_->SpawnFragileParticle({startX_, startY_ - 0.5f, 0.0f});
+            }
             if (auto* alert = AlertSystem::Current()) {
                 alert->AddNoise({startX_, startY_, 0.0f}, map_, "騒音");
             }
@@ -262,6 +266,9 @@ void FragileBlock::OnPlayerStand(Player2D* player) {
     if (player->GetChainLength() >= breakWeight_) {
         isBreaking_ = true;
         breakTimer_ = 0.0f;
+        if (map_) {
+            map_->SpawnFragileParticle({startX_, startY_ - 0.5f, 0.0f});
+        }
     }
 }
 

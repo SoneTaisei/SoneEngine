@@ -468,10 +468,21 @@ void GPUParticleEmitter::Draw(ID3D12GraphicsCommandList* commandList, const Matr
     commandList->SetGraphicsRootDescriptorTable(2, gpuTexHandle);
 
     if (data_.renderType == GPUParticleRenderType::Mesh && modelManager) {
-        std::filesystem::path p(data_.modelPath);
-        std::string dir = p.parent_path().string();
-        if (!dir.empty() && dir.back() != '/' && dir.back() != '\\') dir += "/";
-        std::string filename = p.filename().string();
+        std::string resolvedPath = data_.modelPath;
+        if (!std::filesystem::exists(resolvedPath)) {
+            if (resolvedPath.find("Object/School/") != std::string::npos) {
+                std::string altPath = resolvedPath;
+                size_t pos = altPath.find("Object/School/");
+                altPath.replace(pos, 14, "Object/Original/");
+                if (std::filesystem::exists(altPath)) {
+                    resolvedPath = altPath;
+                }
+            }
+        }
+
+        std::filesystem::path p(resolvedPath);
+        std::string dir = p.parent_path().generic_string();
+        std::string filename = p.filename().generic_string();
 
         Model* model = modelManager->GetModel(dir, filename);
         if (model && model->GetIndexCount() > 0) {
