@@ -70,6 +70,15 @@ struct ChainParams {
     float spinCooldown_ = 0.4f;        // 引かれた後のクールダウン（秒。着地でも解除）
     bool spinAnywhere_ = false;        // false: 木の板（ThinPlatformBlock）の上に立っている時だけ回せる（既定）。true: どこでも回せる（調整用）
 
+    // --- 発射のアシストと狙い（Q 持つ / A・D 投げる・漕ぐ / SPACE 押して振り子をスロー → 離して飛ぶ） ---
+    float launchAngleDeg_ = 60.0f;     // ジャスト時の飛ぶ向き（水平から上向き、度）
+    float justWindowDeg_ = 12.0f;      // ジャスト窓（±度）。広いほど簡単
+    float justBonus_ = 1.1f;           // ジャスト時の速さ倍率（上限は超えない）
+    float coneMinDeg_ = 25.0f;         // 窓の外で離した時の向きの下限（度）
+    float coneMaxDeg_ = 85.0f;         // 同 上限
+    float aimSlow_ = 0.25f;            // SPACE を押している間の振り子の速さ倍率（角度の進みだけ遅くなる。勢いは変わらない）
+    float aimMaxTime_ = 0.8f;          // 押しっぱなしでもこの秒数で飛ぶ
+
     // --- 見た目 ---
     float linkThickness_ = 1.0f;       // リンクモデルの太さ倍率
     float linkOverlap_ = 1.6f;         // 節間隔に対するリンクモデル長の倍率（重なり量）

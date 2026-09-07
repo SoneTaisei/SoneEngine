@@ -132,11 +132,26 @@ void ChainManager::HandleInput() {
     }
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
 
-    // スピン（W / ↑キー）：押し続けて構え、A/D で重りを振り、離して発射。縁の検出は ChainSpinAction 側
-    // （'W'スロットは W と ↑ のみで他用途と競合しない。A/D は 'L'/'R' スロットで録画される）
+    // スピン：Q で宝石を持つ・やめる、A/D で投げる・漕ぐ、SPACE で飛ぶ
+    // （注意：リプレイの記録キーは Engine 側で固定されていて Q は入っていない。再生で振り子を再現するには Engine の記録キーに Q を足す必要がある）
     if (spin_) {
-        bool spinHeld = keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP);
-        spin_->SetKeyHeld(spinHeld);
+        if (keyboard->IsKeyPressed(DIK_Q)) {
+            spin_->OnHoldToggle();
+        }
+        // 漕いでいる最中の SPACE：押している間は振り子がスローになって狙え、離すと発射（押した縁・離した縁は ChainSpinAction 側で見る）
+        spin_->SetLaunchHeld(spin_->GetState() == ChainSpinAction::State::kStance && keyboard->IsKeyDown(DIK_SPACE));
+        if (keyboard->IsKeyPressed(DIK_SPACE)) {
+            if (spin_->IsHolding()) {
+                // 持っている最中の SPACE は落として通常ジャンプ（プレイヤー側のジャンプは構え中に無効なので、ここで跳ばせる）
+                spin_->Cancel(player_, playerChain_.get());
+                if (player_->IsOnGround()) {
+                    const auto& pp = player_->GetParams();
+                    int extraChains = (std::max)(0, player_->GetChainLength() - 3);
+                    float jump = (std::max)(0.0f, pp.jumpPower_ - extraChains * pp.chainJumpPenalty_);
+                    player_->LaunchVertical(jump);
+                }
+            }
+        }
 
         float swing = 0.0f;
         if (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) swing += 1.0f;
@@ -446,8 +461,10 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     }
 
     // お宝の見た目：構え中は振りに合わせて自転させ、発射の勢いが十分な間は明るくして「今離せば強く飛ぶ」合図にする
+    // さらに進行方向が弧の窓に近づくと白っぽく光って大きくなる（光った時に SPACE = ジャスト）
     if (treasure_ && spin_) {
         treasure_->SetHighlight(spin_->IsLaunchReady());
+        treasure_->SetGlow(spin_->GetTimingGlow());
         if (spin_->IsInStance()) {
             treasure_->AddSelfRotation(spin_->GetOmega() * dt);
         }
@@ -474,6 +491,10 @@ void ChainManager::Draw() {
     }
     if (treasure_ && !transitionHidden_) {
         treasure_->Draw();
+    }
+    // 予測線（漕いでいる間だけ）
+    if (spin_ && !transitionHidden_) {
+        spin_->Draw();
     }
 }
 
@@ -973,9 +994,23 @@ void ChainManager::DrawImGui() {
     ImGui::SeparatorText("Spin Jump");
     if (spin_) {
         spin_->DrawImGui();
+        ImGui::SeparatorText("Launch Assist (Q 持つ / A・D 投げる・漕ぐ / SPACE 押してスロー → 離して飛ぶ)");
+        bool assistChanged = false;
+        assistChanged |= ImGui::DragFloat("ジャスト時の向き 度 (launchAngleDeg_)", &params_.launchAngleDeg_, 0.5f, 10.0f, 89.0f);
+        assistChanged |= ImGui::DragFloat("ジャスト窓 ±度 (justWindowDeg_)", &params_.justWindowDeg_, 0.5f, 0.0f, 60.0f);
+        assistChanged |= ImGui::DragFloat("ジャスト倍率 (justBonus_)", &params_.justBonus_, 0.01f, 1.0f, 2.0f);
+        assistChanged |= ImGui::DragFloat("向きの下限 度 (coneMinDeg_)", &params_.coneMinDeg_, 0.5f, 0.0f, 89.0f);
+        assistChanged |= ImGui::DragFloat("向きの上限 度 (coneMaxDeg_)", &params_.coneMaxDeg_, 0.5f, 0.0f, 89.0f);
+        assistChanged |= ImGui::DragFloat("SPACE 押下中の振り子の速さ倍率 (aimSlow_)", &params_.aimSlow_, 0.01f, 0.05f, 1.0f);
+        assistChanged |= ImGui::DragFloat("押しっぱなしで飛ぶまで 秒 (aimMaxTime_)", &params_.aimMaxTime_, 0.05f, 0.1f, 3.0f);
+        if (assistChanged) {
+            params_.coneMaxDeg_ = (std::max)(params_.coneMaxDeg_, params_.coneMinDeg_);
+            spin_->SetParams(params_);
+        }
     }
     bool spinChanged = false;
-    ImGui::TextDisabled("W: どこでも宝石を頭上に掲げる → 木の板の上で A/D: その方向へ振り下ろして振り子開始 → A/D で漕ぐ → W を離すと宝石の進行方向へ飛ぶ（上限 = ジャンプ初速 x Ratio）。棒が地形に当たると解除");
+    ImGui::TextDisabled("Q: どこでも宝石を頭上に掲げる → 木の板の上で A/D: その方向へ振り下ろして振り子開始 → A/D で漕ぐ → SPACE を押すと振り子だけスローになり、離すと宝石の進行方向へ飛ぶ（上限 = ジャンプ初速 x Ratio）。棒が地形に当たると解除");
+    ImGui::TextDisabled("矢じり = 今離したら飛ぶ向き（暗い: 勢い不足 / 金: 飛べる / 白: ジャスト）。宝石の後ろの残像 = 進んでいる向き。宝石はジャストに近づくと光る");
     spinChanged |= ImGui::DragFloat("Spin Radius Max##Spin", &params_.spinRadiusMax_, 0.05f, 0.3f, 10.0f);
     spinChanged |= ImGui::DragFloat("Spin Radius Ratio##Spin", &params_.spinRadiusRatio_, 0.01f, 0.3f, 1.0f);
     spinChanged |= ImGui::DragFloat("Hold Offset (掲げる高さ)##Spin", &params_.holdOffset_, 0.01f, 0.05f, 2.0f);

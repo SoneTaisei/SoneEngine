@@ -1,4 +1,4 @@
-#include "DoorBlock.h"
+﻿#include "DoorBlock.h"
 #include "SwitchBlock.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"

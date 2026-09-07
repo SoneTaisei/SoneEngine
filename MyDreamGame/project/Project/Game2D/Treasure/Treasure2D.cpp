@@ -2,6 +2,7 @@
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -9,6 +10,8 @@ namespace {
     constexpr Vector4 kDefaultBaseColor = { 1.0f, 0.45f, 0.08f, 1.0f };
     // 回転中の合図色（より輝かしいゴールデンアンバー）
     constexpr Vector4 kDefaultHighlightColor = { 1.0f, 0.85f, 0.25f, 1.0f };
+    // 押し時の合図（glow = 1）で大きくなる割合
+    constexpr float kGlowScale = 0.35f;
 }
 
 void Treasure2D::Initialize(const std::string& modelDir, const std::string& modelFile, float scale) {
@@ -49,6 +52,22 @@ void Treasure2D::SetHighlight(bool highlight) {
     if (obj_) {
         obj_->GetMaterial().color = highlight_ ? highlightColor_ : baseColor_;
     }
+}
+
+void Treasure2D::SetGlow(float glow) {
+    glow_ = std::clamp(glow, 0.0f, 1.0f);
+    if (!obj_) {
+        return;
+    }
+    // 色：今の色（通常 or 回転中）から白っぽい金へ。大きさ：最大で kGlowScale だけ大きく
+    const Vector4& from = highlight_ ? highlightColor_ : baseColor_;
+    Vector4 c = { from.x + (glowColor_.x - from.x) * glow_,
+                  from.y + (glowColor_.y - from.y) * glow_,
+                  from.z + (glowColor_.z - from.z) * glow_,
+                  1.0f };
+    obj_->GetMaterial().color = c;
+    float s = scale_ * (1.0f + kGlowScale * glow_);
+    obj_->SetScale({ s, s, s });
 }
 
 void Treasure2D::AddSelfRotation(float deltaAngle) {

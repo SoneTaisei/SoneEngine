@@ -63,6 +63,13 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["spinMoveFactor_"] = params.spinMoveFactor_;
         j["spinCooldown_"] = params.spinCooldown_;
         j["spinAnywhere_"] = params.spinAnywhere_;
+        j["launchAngleDeg_"] = params.launchAngleDeg_;
+        j["justWindowDeg_"] = params.justWindowDeg_;
+        j["justBonus_"] = params.justBonus_;
+        j["coneMinDeg_"] = params.coneMinDeg_;
+        j["coneMaxDeg_"] = params.coneMaxDeg_;
+        j["aimSlow_"] = params.aimSlow_;
+        j["aimMaxTime_"] = params.aimMaxTime_;
         j["linkThickness_"] = params.linkThickness_;
         j["linkOverlap_"] = params.linkOverlap_;
 
@@ -137,6 +144,13 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("spinMoveFactor_")) params.spinMoveFactor_ = j["spinMoveFactor_"];
         if (j.contains("spinCooldown_")) params.spinCooldown_ = j["spinCooldown_"];
         if (j.contains("spinAnywhere_")) params.spinAnywhere_ = j["spinAnywhere_"];
+        if (j.contains("launchAngleDeg_")) params.launchAngleDeg_ = j["launchAngleDeg_"];
+        if (j.contains("justWindowDeg_")) params.justWindowDeg_ = j["justWindowDeg_"];
+        if (j.contains("justBonus_")) params.justBonus_ = j["justBonus_"];
+        if (j.contains("coneMinDeg_")) params.coneMinDeg_ = j["coneMinDeg_"];
+        if (j.contains("coneMaxDeg_")) params.coneMaxDeg_ = j["coneMaxDeg_"];
+        if (j.contains("aimSlow_")) params.aimSlow_ = j["aimSlow_"];
+        if (j.contains("aimMaxTime_")) params.aimMaxTime_ = j["aimMaxTime_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
 
@@ -175,6 +189,13 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         // 上限倍率 1.7 × ジャンプ初速17.5 ≒ 30 u/s。プレイヤーの当たり判定は掃引しないため、これ以上は1チップ壁をすり抜け得る
         params.launchMaxJumpRatio_ = std::clamp(params.launchMaxJumpRatio_, 0.1f, 1.7f);
         params.launchMinUpward_ = std::clamp(params.launchMinUpward_, 0.0f, 1.0f);
+        params.launchAngleDeg_ = std::clamp(params.launchAngleDeg_, 10.0f, 89.0f);
+        params.justWindowDeg_ = std::clamp(params.justWindowDeg_, 0.0f, 60.0f);
+        params.justBonus_ = std::clamp(params.justBonus_, 1.0f, 2.0f);
+        params.coneMinDeg_ = std::clamp(params.coneMinDeg_, 0.0f, 89.0f);
+        params.coneMaxDeg_ = std::clamp(params.coneMaxDeg_, params.coneMinDeg_, 89.0f);
+        params.aimSlow_ = std::clamp(params.aimSlow_, 0.05f, 1.0f);
+        params.aimMaxTime_ = std::clamp(params.aimMaxTime_, 0.1f, 3.0f);
         params.spinMoveFactor_ = std::clamp(params.spinMoveFactor_, 0.0f, 1.0f);
         params.spinCooldown_ = (std::max)(0.0f, params.spinCooldown_);
 
