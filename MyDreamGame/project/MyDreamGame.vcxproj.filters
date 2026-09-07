@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <ItemGroup>
     <FxCompile Include="resources\shaders\Object3d.PS.hlsl">
@@ -25,6 +25,9 @@
   <ItemGroup>
     <ClCompile Include="Project\Core\main.cpp" />
     <ClCompile Include="Project\Scenes\GameScene.cpp">
+      <Filter>Application\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Scenes\BlockDesignPanel.cpp">
       <Filter>Application\Scene</Filter>
     </ClCompile>
     <ClCompile Include="Project\Scenes\StageSelectScene.cpp">
@@ -135,6 +138,9 @@
     <ClCompile Include="Engine\Collision\CollisionManager.cpp">
       <Filter>Engine\Collision</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Collision\CollisionFunctions.cpp">
+      <Filter>Engine\Collision</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Component\MeshRendererComponent.cpp">
       <Filter>Engine\Component</Filter>
     </ClCompile>
@@ -211,12 +217,18 @@
     <ClCompile Include="Project\Game2D\Blocks\FragileBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\ThinPlatformBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\SwitchBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\DoorBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
-    </ClCompile>`n    <ClCompile Include="Project\Game2D\Blocks\GuardBlock.cpp">`n      <Filter>Project\Game2D\Blocks</Filter>`n    </ClCompile>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\GuardBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\DeathBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -237,6 +249,9 @@
     </ClCompile>
     <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp">
       <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Security\AlertSystem.cpp">
+      <Filter>Project\Game2D\Security</Filter>
     </ClCompile>
     <ClCompile Include="Project\Effect\TransitionDirector.cpp">
       <Filter>Application\Transition</Filter>
@@ -262,6 +277,14 @@
     <ClCompile Include="Engine\Editor\Animation\AnimationDopeSheet.cpp" />
     <ClCompile Include="Engine\Editor\Animation\AnimationInspector.cpp" />
     <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
+    <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleEmitter.cpp" />
+    <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleSystem.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditor.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleInspector.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleTimeline.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticlePreviewScene.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditor.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorContext.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorCanvas.cpp" />
@@ -269,9 +292,11 @@
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
     <ClCompile Include="Engine\Editor\LightEditor\LightEditor.cpp" />
+    <ClCompile Include="Engine\Editor\PostEffectEditor\PostEffectEditor.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditor.cpp" />
@@ -315,6 +340,9 @@
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
+      <Filter>Application\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Scenes\BlockDesignPanel.h">
       <Filter>Application\Scene</Filter>
     </ClInclude>
     <ClInclude Include="Project\Scenes\StageSelectScene.h">
@@ -434,6 +462,9 @@
     <ClInclude Include="Engine\Collision\CollisionManager.h">
       <Filter>Engine\Collision</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Collision\CollisionFunctions.h">
+      <Filter>Engine\Collision</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Component\MeshRendererComponent.h">
       <Filter>Engine\Component</Filter>
     </ClInclude>
@@ -520,12 +551,18 @@
     <ClInclude Include="Project\Game2D\Blocks\FragileBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\ThinPlatformBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\SwitchBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\DoorBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
-    </ClInclude>`n    <ClInclude Include="Project\Game2D\Blocks\GuardBlock.h">`n      <Filter>Project\Game2D\Blocks</Filter>`n    </ClInclude>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\GuardBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\DeathBlock.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
@@ -546,6 +583,9 @@
     </ClInclude>
     <ClInclude Include="Project\Game2D\Chain\ChainManager.h">
       <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Security\AlertSystem.h">
+      <Filter>Project\Game2D\Security</Filter>
     </ClInclude>
     <ClInclude Include="Project\Effect\TransitionDirector.h">
       <Filter>Application\Transition</Filter>
@@ -571,6 +611,16 @@
     <ClInclude Include="Engine\Editor\Animation\AnimationDopeSheet.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationInspector.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationLightingConfig.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleData.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleEmitter.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleSystem.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditor.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleInspector.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleTimeline.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticlePreviewScene.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditor.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorContext.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorCanvas.h" />
@@ -578,9 +628,11 @@
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
     <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
     <ClInclude Include="Engine\Editor\LightEditor\LightEditor.h" />
+    <ClInclude Include="Engine\Editor\PostEffectEditor\PostEffectEditor.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\Common\ModelSelectModal.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditor.h" />
@@ -698,6 +750,9 @@
     </Filter>
     <Filter Include="Project\Game2D\Physics">
       <UniqueIdentifier>{140e8cb0-1ff6-45a4-921f-783e8eee966b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Security">
+      <UniqueIdentifier>{5c1f0a7e-3b2d-4e8f-9a61-7d2c4b9e1f33}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

@@ -170,6 +170,11 @@ struct SpotLight {
     float cosAngle;          //!< 照射角度（cos）
     float cosFalloffStart;   //!< フォールオフ開始角度（cos）
     int32_t enable;          //!< 有効フラグ (1: 有効, 0: 無効)
+    Matrix4x4 viewProjection; //!< シャドウマッピング用ビュープロジェクション行列
+    int32_t shadowMapIndex;  //!< シャドウマップのインデックス (0~, -1: 影なし)
+    float shadowBias;        //!< シャドウバイアス
+    float shadowIntensity;   //!< 影の濃さ (0.0~1.0)
+    float padding;           //!< 16バイト境界パディング
 };
 
 struct SpotLightGroup {

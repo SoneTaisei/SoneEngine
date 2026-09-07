@@ -1,0 +1,37 @@
+{
+    "ambientIntensity": 1.0119999647140503,
+    "dIntensity": 1.75,
+    "dLight": {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "direction": [
+            -0.03844712674617767,
+            -0.9625364542007446,
+            0.26841291785240173
+        ]
+    },
+    "enableDirectional": false,
+    "enableFlatShading": false,
+    "enablePoint": false,
+    "pIntensity": 0.07000000029802322,
+    "pLight": {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "decay": 1.0,
+        "position": [
+            0.0,
+            2.0,
+            0.0
+        ],
+        "radius": 10.0
+    },
+    "spotLights": []
+}

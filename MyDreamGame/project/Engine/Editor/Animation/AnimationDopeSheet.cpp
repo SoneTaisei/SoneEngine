@@ -72,6 +72,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         std::string currentDisplay = currentStem;
         if (currentStem == "wall_climb_animation") currentDisplay = "壁つかまり (wall_climb)";
         else if (currentStem == "air_dash_animation") currentDisplay = "空中ダッシュ (air_dash)";
+        else if (currentStem == "swing_animation") currentDisplay = "スイング (swing_animation)";
 
         ImGui::SetNextItemWidth(190.0f);
         if (ImGui::BeginCombo("##AnimSelectCombo", currentDisplay.c_str())) {
@@ -80,6 +81,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 std::string displayName = stem;
                 if (stem == "wall_climb_animation") displayName = "壁つかまり (wall_climb)";
                 else if (stem == "air_dash_animation") displayName = "空中ダッシュ (air_dash)";
+                else if (stem == "swing_animation") displayName = "スイング (swing_animation)";
 
                 bool isSel = (context->GetCurrentAnimFilePath() == filePath);
                 if (ImGui::Selectable(displayName.c_str(), isSel)) {
@@ -132,7 +134,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
             ImGui::Spacing();
             ImGui::SetNextItemWidth(380.0f);
             ImGui::InputText("##NewAnimFileName", context->GetNewAnimSaveNameBuf(), context->GetNewAnimSaveNameBufSize());
-            ImGui::TextDisabled("保存先: resources/json/shared/Player/%s.json", context->GetNewAnimSaveNameBuf());
+            ImGui::TextDisabled("保存先: %s/%s.json", context->GetModelAnimationDirectory().c_str(), context->GetNewAnimSaveNameBuf());
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
@@ -143,7 +145,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                     if (inputName.size() < 5 || inputName.substr(inputName.size() - 5) != ".json") {
                         inputName += ".json";
                     }
-                    std::string fullPath = "resources/json/shared/Player/" + inputName;
+                    std::string fullPath = context->GetModelAnimationDirectory() + "/" + inputName;
                     SaveAnimationToJsonFile(context->GetEditingAnimation(), fullPath);
                     context->ScanAnimationFiles();
                     context->GetCurrentAnimFilePath() = fullPath;
@@ -436,6 +438,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         if (context->GetCurrentJointList().empty() || context->GetAnimJointTreeNodes().empty()) {
             context->RefreshAnimationJointList(sceneManager);
         }
+        context->EnsureJointVisibleInTree(context->GetSelectedJointName());
 
         // 可視トラックの収集 (開いている親の子孫のみ再帰的に追加)
         struct VisibleAnimTrack {

@@ -3,16 +3,19 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Core/Utility/Structs.h"
 #include <vector>
+#include <map>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 #include "Blocks/BaseBlock.h"
+#include "Editor/Replay/ReplayManager.h"
 
 /// <summary>
 /// 2Dスクロールゲーム用マップクラス
 /// 2D配列でマップチップを管理し、PrimitiveObject(Box)で描画する
 /// </summary>
 
-class MapChip2D {
+class MapChip2D : public IReplayObjectProvider {
 public:
     enum class ChipType : int {
         kNone = 0,        // 空気（何もなし）
@@ -27,12 +30,14 @@ public:
         kFragileBlock = 13, // 鎖の重さで崩れる床
         kSwitchBlock = 14, // スイッチ
         kDoorBlock = 15, // シャッタードア
-        kGuardBlock = 16 // 警備員
+        kGuardBlock = 16, // 警備員
+        kThinPlatform = 17 // 細い足場（板。上にだけ乗れる。鎖は素通り。この上でだけ鎖を回せる）
     };
 
     void Initialize(const std::string& mapFilePath);
     void Update();
     void Draw();
+    void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
 
     // 指定座標のブロックを取得する
     BaseBlock* GetBlock(int chipX, int chipY) const;
@@ -66,6 +71,12 @@ public:
 
     // チップを設定
     void SetChip(int x, int y, ChipType type);
+
+    // ブロックを別のマスへ移動（swapがtrueなら移動先ブロックと入れ替え）
+    bool MoveBlock(int fromX, int fromY, int toX, int toY, bool swap = false);
+
+    // マップ全体を指定マス分シフト移動（外壁や全体配置の調整用）
+    bool ShiftMap(int deltaX, int deltaY);
 
     // チップを取得
     ChipType GetChip(int x, int y) const;
@@ -112,6 +123,13 @@ public:
     // 全ブロックのリセット（プレイヤー死亡・リトライ時）
     void ResetBlocks();
 
+    // ===== IReplayObjectProvider =====
+    // 動く床・扉・スイッチなど、状態が変化するブロックをリプレイに記録・復元する。
+    // 変化の検出は共通処理で行うため、ブロックを新しく追加しても登録作業は不要。
+    const char* GetReplayProviderName() const override { return "MapChip2D"; }
+    void CaptureReplayObjects(std::vector<ReplayObjectState>& out) override;
+    void RestoreReplayObjects(const std::vector<ReplayObjectState>& states) override;
+
     struct CustomBlockDef {
         int id = 100;
         std::string name = "New Custom Block";
@@ -136,11 +154,44 @@ public:
     // デフォルトマップの構築
     void BuildMap();
 
+    // ===== チップごとのプロパティ上書き =====
+    // パレット（種類ごと）ではなく、置いた1枚ごとに変えたい値（崩れる床の通れる上限など）。
+    // パレットのプロパティに上書きして SetProperties に渡す。ステージファイルに "blockOverrides" として保存される
+    void SetBlockOverride(int x, int y, const nlohmann::json& properties);
+    const nlohmann::json* GetBlockOverride(int x, int y) const;
+    void ClearBlockOverride(int x, int y);
+    // そのチップのパレット定義のプロパティ（上書き前の既定値。無ければ空）
+    nlohmann::json GetPaletteProperties(int x, int y) const;
+    // パレット id からブロック種類名（"FragileBlock" 等）を引く。無ければ空
+    std::string GetBlockTypeName(int typeId) const;
+
+    // ===== 置いた瞬間に付ける上書き =====
+    // 「次に置く崩れる床の上限」のように、エディタで塗った瞬間にそのチップへ上書きを付ける（ファイルには保存しない）
+    void SetPlacementOverride(const std::string& blockType, const nlohmann::json& properties);
+    void ClearPlacementOverride(const std::string& blockType);
+    const nlohmann::json* GetPlacementOverride(const std::string& blockType) const;
+    // 新しく置いたスイッチに、まだ使われていない連動番号を自動で付ける（同じパレットから塗ったスイッチが全部同じ番号になるのを防ぐ）
+    void SetAutoNumberSwitches(bool on) { autoNumberSwitches_ = on; }
+    bool IsAutoNumberSwitches() const { return autoNumberSwitches_; }
+    // 今のステージで使われている連動番号の最大値 + 1（配置済みブロックと上書き設定の両方を見る）
+    int GetNextFreeLinkId() const;
+
+    // ===== プレイ中に変えた上書きの保護 =====
+    // エディタは再生開始時のマップを停止時に読み直すので、プレイ中に変えた上書きはそのままだと消える。
+    // 記録モードの間に変えた上書きを覚えておき、停止後の読み直しの後で ReapplyPlaytimeOverrides で戻す
+    void SetPlaytimeRecording(bool on) { playtimeRecording_ = on; }
+    bool HasPlaytimeOverrides() const { return !playtimeOverrides_.empty(); }
+    void ReapplyPlaytimeOverrides();
+    void ClearPlaytimeOverrides() { playtimeOverrides_.clear(); }
+
 public:
     void SetDirty() { isDirty_ = true; }
 private:
     std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void CreateChipObjects();
+
+    // リプレイ記録対象の追跡情報を updateBlocks_ に合わせて作り直す
+    void RefreshReplayTrackEntries();
 
 private:
     // マップデータ（左下が(0,0)）
@@ -161,11 +212,36 @@ private:
     // 更新・描画用のユニークなブロックリスト
     std::vector<std::shared_ptr<BaseBlock>> updateBlocks_;
 
+    // ===== リプレイ記録用 =====
+    // 初期状態から変化したブロックを自動的に記録対象に加えるための追跡情報
+    struct ReplayTrackEntry {
+        uint64_t objectId = 0;
+        BaseBlock* block = nullptr;
+        Vector3 initPosition = {0.0f, 0.0f, 0.0f};
+        Vector3 initRotation = {0.0f, 0.0f, 0.0f};
+        Vector3 initScale = {1.0f, 1.0f, 1.0f};
+        Vector4 initColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        bool isTracked = false; // 一度でも変化したブロックは以降ずっと記録する
+    };
+    std::vector<ReplayTrackEntry> replayTrackEntries_;
+    std::unordered_map<uint64_t, BaseBlock*> replayBlockById_;
+    std::vector<uint64_t> replayDestroyedIds_;  // 破壊されて updateBlocks_ から外れたブロックのID
+    uint32_t blocksRevision_ = 0;              // updateBlocks_ が作り直された回数
+    uint32_t replayTrackRevision_ = 0xFFFFFFFFu; // 追跡情報を作った時点の blocksRevision_
+
     // カスタムパレット（自作ブロック定義リスト）
     std::vector<CustomBlockDef> customPalette_;
     
     // テンプレートパレット（BasicToolsの設定用）
     std::vector<CustomBlockDef> templatePalette_;
+
+    // チップごとのプロパティ上書き（キー = チップ座標）
+    std::map<std::pair<int, int>, nlohmann::json> blockOverrides_;
+    // 置いた瞬間に付ける上書き（キー = ブロック種類名）
+    std::map<std::string, nlohmann::json> placementOverrides_;
+    bool autoNumberSwitches_ = true;
+    bool playtimeRecording_ = false;
+    std::map<std::pair<int, int>, nlohmann::json> playtimeOverrides_; // 値が null = 消した
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;

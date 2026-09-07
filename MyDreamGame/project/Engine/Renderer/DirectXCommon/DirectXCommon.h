@@ -7,6 +7,7 @@
 #include <string>
 #include <chrono>
 #include "Core/Utility/UtilityFunctions.h"
+#include "Core/Utility/TransformFunctions.h"
 
 class DirectXCommon {
 public:
@@ -22,6 +23,17 @@ public:
         kComposite,
         kDepthBasedOutline,
         kCompositeAndOutline,
+        kIris,
+    };
+
+    struct IrisParams {
+        float center[2] = {0.5f, 0.5f}; // 基準中心座標 (UV: 0.0~1.0)
+        float radius = 1.0f;             // 半径
+        float smoothness = 0.01f;        // 境界のぼかし幅
+        float maskColor[4] = {0.0f, 0.0f, 0.0f, 1.0f}; // 外側の色
+        int isIrisIn = 0;                // 0: Iris Out (閉じる), 1: Iris In (開く)
+        float aspectRatio = 16.0f / 9.0f;// アスペクト比 (幅 / 高さ)
+        float padding[2] = {};
     };
 
     struct VignetteParams {
@@ -86,6 +98,18 @@ public:
 
         float noiseTime = 0.0f;
         float noisePadding[3] = {};
+
+        // Iris (48 bytes aligned)
+        int enableIris = 0;
+        float irisCenter[2] = {0.5f, 0.5f};
+        float irisRadius = 1.0f;
+
+        float irisSmoothness = 0.01f;
+        int isIrisIn = 0; // 0: Iris Out, 1: Iris In
+        float irisAspectRatio = 16.0f / 9.0f;
+        float irisPadding1 = 0.0f;
+
+        float irisMaskColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     };
     
 
@@ -109,6 +133,9 @@ public:
 	// ImGuiを描く直前に、描画先をSwapchainに戻すための関数
     void PreDrawSwapchain();
 
+    // シャドウパス等の後に描画先をRenderTextureに戻すための関数
+    void RestoreMainRenderTarget();
+
 	// RenderTextureを初期化する専用関数
     void InitializeRenderTexture();
     
@@ -119,6 +146,8 @@ public:
     void DrawRenderTexture();
 
 	void CreateSkyboxPipeline();
+    void InitializeShadowMap();
+    void CreateShadowMapPipelines();
     
     // スワップチェーンのサイズ変更
     void ResizeSwapchain(int32_t width, int32_t height);
@@ -158,14 +187,92 @@ public:
     ID3D12PipelineState *GetVignettePipelineState() const { return vignettePipelineState_.Get(); }
     ID3D12PipelineState *GetSmoothingPipelineState() const { return smoothingPipelineState_.Get(); }
     ID3D12PipelineState *GetGaussianPipelineState() const { return gaussianPipelineState_.Get(); }
+    ID3D12PipelineState *GetIrisPipelineState() const { return irisPipelineState_.Get(); }
     ID3D12RootSignature *GetSkyboxRootSignature() const { return skyboxRootSignature_.Get(); }
     ID3D12PipelineState *GetSkyboxPipelineState() const { return skyboxPipelineState_.Get(); }
     D3D12_GPU_DESCRIPTOR_HANDLE GetRenderTextureSrvHandleGPU() const { return renderTextureSrvHandleGPU_; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessSrvHandleGPU() const { return finalPostProcessSRVHandle_.ptr != 0 ? finalPostProcessSRVHandle_ : postProcessSrvHandleGPU_; }
+    
+    // シャドウマップ関連ゲッター
+    ID3D12Resource* GetShadowMapResource() const { return shadowMapResource_.Get(); }
+    D3D12_CPU_DESCRIPTOR_HANDLE GetShadowMapDsvCPUHandle() const { return shadowMapDsvHandleCPU_; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetShadowMapSrvHandleGPU() const { return shadowMapSrvHandleGPU_; }
+    ID3D12RootSignature* GetShadowMapRootSignature() const { return shadowMapRootSignature_.Get(); }
+    ID3D12PipelineState* GetShadowMapPipelineState() const { return shadowMapPipelineState_.Get(); }
+    ID3D12PipelineState* GetShadowMapSkinningPipelineState() const { return shadowMapSkinningPipelineState_.Get(); }
+    D3D12_GPU_VIRTUAL_ADDRESS GetShadowGlobalGPUAddress() const { return shadowGlobalParamResource_ ? shadowGlobalParamResource_->GetGPUVirtualAddress() : 0; }
+    void SetShadowLightViewProjection(const Matrix4x4& lightVP) {
+        if (shadowGlobalParamData_) {
+            *shadowGlobalParamData_ = lightVP;
+        }
+    }
+    const D3D12_VIEWPORT& GetShadowViewport() const { return shadowViewport_; }
+    const D3D12_RECT& GetShadowScissorRect() const { return shadowScissorRect_; }
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
     SmoothingParams* GetSmoothingParamsData() { return smoothingParamsData_; }
     GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
     CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
+    IrisParams* GetIrisParamsData() { return irisParamsData_; }
+
+    void SetIrisCenter(float x, float y) {
+        if (irisParamsData_) {
+            irisParamsData_->center[0] = x;
+            irisParamsData_->center[1] = y;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisCenter[0] = x;
+            compositeParamsData_->irisCenter[1] = y;
+        }
+    }
+    void SetIrisCenterFromWorldPos(const Vector3& worldPos, const Matrix4x4& viewProjectionMatrix) {
+        Vector3 ndc = TransformFunctions::EulerTransform(worldPos, viewProjectionMatrix);
+        float uvX = (ndc.x + 1.0f) * 0.5f;
+        float uvY = (1.0f - ndc.y) * 0.5f;
+        SetIrisCenter(uvX, uvY);
+    }
+    void SetIrisRadius(float radius) {
+        if (irisParamsData_) {
+            irisParamsData_->radius = radius;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisRadius = radius;
+        }
+    }
+    void SetIrisIn(bool isIrisIn) {
+        if (irisParamsData_) {
+            irisParamsData_->isIrisIn = isIrisIn ? 1 : 0;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->isIrisIn = isIrisIn ? 1 : 0;
+        }
+    }
+    void SetIrisSmoothness(float smoothness) {
+        if (irisParamsData_) {
+            irisParamsData_->smoothness = smoothness;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisSmoothness = smoothness;
+        }
+    }
+    void SetIrisMaskColor(float r, float g, float b, float a = 1.0f) {
+        if (irisParamsData_) {
+            irisParamsData_->maskColor[0] = r;
+            irisParamsData_->maskColor[1] = g;
+            irisParamsData_->maskColor[2] = b;
+            irisParamsData_->maskColor[3] = a;
+        }
+        if (compositeParamsData_) {
+            compositeParamsData_->irisMaskColor[0] = r;
+            compositeParamsData_->irisMaskColor[1] = g;
+            compositeParamsData_->irisMaskColor[2] = b;
+            compositeParamsData_->irisMaskColor[3] = a;
+        }
+    }
+    void SetCompositeIrisEnabled(bool enabled) {
+        if (compositeParamsData_) {
+            compositeParamsData_->enableIris = enabled ? 1 : 0;
+        }
+    }
 
     void SetDissolveMaskTexture(D3D12_GPU_DESCRIPTOR_HANDLE handle) { dissolveMaskSrvHandleGPU_ = handle; }
 
@@ -270,6 +377,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smoothingPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gaussianPipelineState_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> compositePipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> irisPipelineState_;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vignetteParamResource_;
     VignetteParams* vignetteParamsData_ = nullptr;
@@ -282,6 +390,9 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeParamResource_;
     CompositeParams* compositeParamsData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> irisParamResource_;
+    IrisParams* irisParamsData_ = nullptr;
 
 
     D3D12_GPU_DESCRIPTOR_HANDLE dissolveMaskSrvHandleGPU_{};
@@ -307,6 +418,24 @@ private:
     ProjectionInverseParams* projectionInverseParamsData_ = nullptr;
     D3D12_CPU_DESCRIPTOR_HANDLE depthStencilSrvHandleCPU_{};
     D3D12_GPU_DESCRIPTOR_HANDLE depthStencilSrvHandleGPU_{};
+	
+    // --- シャドウマップ関連 ---
+    static constexpr uint32_t kShadowMapWidth = 2048;
+    static constexpr uint32_t kShadowMapHeight = 2048;
+    Microsoft::WRL::ComPtr<ID3D12Resource> shadowMapResource_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> shadowMapDsvHeap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapDsvHandleCPU_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE shadowMapSrvHandleCPU_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE shadowMapSrvHandleGPU_{};
+
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> shadowMapRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> shadowMapPipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> shadowMapSkinningPipelineState_;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> shadowGlobalParamResource_;
+    Matrix4x4* shadowGlobalParamData_ = nullptr;
+    D3D12_VIEWPORT shadowViewport_{};
+    D3D12_RECT shadowScissorRect_{};
 	
 	// フェンス
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;

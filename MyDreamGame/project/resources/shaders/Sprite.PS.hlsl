@@ -24,8 +24,8 @@ float4 main(PixelShaderInput input) : SV_TARGET {
     // テクスチャの色 * マテリアルの色
     float4 outputColor = gMaterialData.color * textureColor;
     
-    // アルファが0なら描画を破棄（透明部分の処理）
-    if (outputColor.a == 0.0) {
+    // アルファが極小なら描画を破棄（透明部分の処理・フェードアウト時の残像防止）
+    if (outputColor.a <= 0.001f) {
         discard;
     }
     

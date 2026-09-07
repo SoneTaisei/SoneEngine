@@ -56,6 +56,20 @@ struct CompositeParams {
     // Vector 11 (16 bytes)
     float noiseTime;         // time factor for noise animation
     float3 noisePadding;     // alignment padding
+
+    // Vector 12 (16 bytes)
+    int enableIris;          // 1 to enable iris, 0 to disable
+    float2 irisCenter;       // center coordinate of iris in UV space
+    float irisRadius;        // radius of iris
+
+    // Vector 13 (16 bytes)
+    float irisSmoothness;    // edge smoothness width
+    int isIrisIn;            // 0: Iris Out (close to mask), 1: Iris In (open to scene)
+    float irisAspectRatio;   // aspect ratio (width / height)
+    float irisPadding1;      // alignment padding
+
+    // Vector 14 (16 bytes)
+    float4 irisMaskColor;    // color of the masked outer region
 };
 ConstantBuffer<CompositeParams> gCompositeParams : register(b0);
 
@@ -76,6 +90,32 @@ float gauss(float x, float y, float sigma) {
     float exponent = -(x * x + y * y) * rcp(2.0f * sigma * sigma);
     float denominator = 2.0f * PI * sigma * sigma;
     return exp(exponent) * rcp(denominator);
+}
+
+// Calculate distance from UV to custom center with aspect ratio correction
+float CalculateIrisDistance(float2 uv, float2 center, float aspectRatio) {
+    float2 diff = uv - center;
+    diff.x *= aspectRatio;
+    return length(diff);
+}
+
+// Calculate iris visibility factor
+float CalculateIrisFactor(float2 uv, float2 center, float radius, float smoothness, float aspectRatio) {
+    float dist = CalculateIrisDistance(uv, center, aspectRatio);
+    float safeSmoothness = max(smoothness, 0.0001f);
+    float halfSmooth = safeSmoothness * 0.5f;
+    float edge0 = max(0.0f, radius - halfSmooth);
+    float edge1 = radius + halfSmooth;
+    return 1.0f - smoothstep(edge0, edge1, dist);
+}
+
+// Iris In / Iris Out function with configurable reference center
+float4 ProcessIris(float4 sceneColor, float2 uv, float2 center, float radius, float smoothness, float aspectRatio, float4 maskColor, int isIrisIn) {
+    float2 refCenter = center; // Configurable reference origin
+    float factor = CalculateIrisFactor(uv, refCenter, radius, smoothness, aspectRatio);
+    float3 rgb = lerp(maskColor.rgb, sceneColor.rgb, factor);
+    float a = lerp(maskColor.a, sceneColor.a, factor);
+    return float4(rgb, a);
 }
 
 PixelShaderOutput main(VertexShaderOutput input) {
@@ -128,14 +168,34 @@ PixelShaderOutput main(VertexShaderOutput input) {
         processedColor.rgb = totalColor.rgb * rcp(weight);
     }
     
-    // 2. Apply Grayscale Effect
+    // 2. Apply Radial Blur (dynamic-sample radial blur overlay)
+    if (gCompositeParams.enableRadialBlur != 0) {
+        int32_t numSamples = clamp(gCompositeParams.radialBlurSamples, 1, 30);
+        
+        // Calculate direction from the center to current uv coordinate.
+        float32_t2 direction = input.texcoord - gCompositeParams.radialBlurCenter;
+        
+        // Use processedColor (including box/gaussian blur if applied) for the first sample
+        float32_t3 totalRadialColor = processedColor.rgb;
+        
+        for (int32_t sampleIndex = 1; sampleIndex < numSamples; ++sampleIndex) {
+            // Step along the direction vector from current uv, scaled by radialBlurWidth
+            float32_t2 texcoord = input.texcoord + direction * gCompositeParams.radialBlurWidth * float32_t(sampleIndex);
+            totalRadialColor.rgb += gTexture.Sample(gSampler, texcoord).rgb;
+        }
+        
+        // Average the accumulated color samples
+        processedColor.rgb = totalRadialColor.rgb * rcp(float32_t(numSamples));
+    }
+    
+    // 3. Apply Grayscale Effect
     if (gCompositeParams.grayscaleStrength > 0.0f) {
         // Calculate luma using BT.709 coefficients
         float32_t luma = dot(processedColor.rgb, float32_t3(0.2125f, 0.7154f, 0.0721f));
         processedColor.rgb = lerp(processedColor.rgb, float32_t3(luma, luma, luma), gCompositeParams.grayscaleStrength);
     }
     
-    // 3. Apply Sepia Effect
+    // 4. Apply Sepia Effect
     if (gCompositeParams.sepiaStrength > 0.0f) {
         // Calculate luma using BT.709 coefficients
         float32_t value = dot(processedColor.rgb, float32_t3(0.2125f, 0.7154f, 0.0721f));
@@ -143,7 +203,7 @@ PixelShaderOutput main(VertexShaderOutput input) {
         processedColor.rgb = lerp(processedColor.rgb, sepiaColor, gCompositeParams.sepiaStrength);
     }
     
-    // 4. Apply Vignette Effect
+    // 5. Apply Vignette Effect
     if (gCompositeParams.enableVignette != 0) {
         // Adjust coordinates so edges are 0 and center is brighter
         float32_t2 correct = input.texcoord * (1.0f - input.texcoord.yx);
@@ -155,31 +215,13 @@ PixelShaderOutput main(VertexShaderOutput input) {
         processedColor.rgb = lerp(gCompositeParams.vignetteColor.rgb, processedColor.rgb, vignette);
     }
     
-    // 5. Apply Radial Blur (dynamic-sample radial blur overlay)
-    if (gCompositeParams.enableRadialBlur != 0) {
-        int32_t numSamples = clamp(gCompositeParams.radialBlurSamples, 1, 30);
-        
-        // Calculate direction from the center to current uv coordinate.
-        float32_t2 direction = input.texcoord - gCompositeParams.radialBlurCenter;
-        
-        float32_t3 totalRadialColor = float32_t3(0.0f, 0.0f, 0.0f);
-        
-        for (int32_t sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex) {
-            // Step along the direction vector from current uv, scaled by radialBlurWidth
-            float32_t2 texcoord = input.texcoord + direction * gCompositeParams.radialBlurWidth * float32_t(sampleIndex);
-            totalRadialColor.rgb += gTexture.Sample(gSampler, texcoord).rgb;
-        }
-        
-        // Average the accumulated color samples
-        processedColor.rgb = totalRadialColor.rgb * rcp(float32_t(numSamples));
-    }
-    
     // 6. Apply Dissolve Effect
     if (gCompositeParams.enableDissolve != 0) {
         float32_t mask = gMaskTexture.Sample(gSampler, input.texcoord).r;
         
-        // Calculate edge highlight intensity
-        float32_t edge = 1.0f - smoothstep(gCompositeParams.dissolveThreshold, gCompositeParams.dissolveThreshold + gCompositeParams.dissolveEdgeWidth, mask);
+        // Calculate edge highlight intensity safely avoiding division by zero
+        float32_t edgeWidth = max(gCompositeParams.dissolveEdgeWidth, 0.0001f);
+        float32_t edge = 1.0f - smoothstep(gCompositeParams.dissolveThreshold, gCompositeParams.dissolveThreshold + edgeWidth, mask);
         processedColor.rgb += edge * gCompositeParams.dissolveEdgeColor;
 
         // Background color replacement (instead of discard, so we can change background color)
@@ -221,6 +263,20 @@ PixelShaderOutput main(VertexShaderOutput input) {
         }
         
         processedColor.rgb = lerp(processedColor.rgb, blendedColor, gCompositeParams.noiseStrength);
+    }
+    
+    // 8. Apply Iris Effect
+    if (gCompositeParams.enableIris != 0) {
+        processedColor = ProcessIris(
+            processedColor,
+            input.texcoord,
+            gCompositeParams.irisCenter,
+            gCompositeParams.irisRadius,
+            gCompositeParams.irisSmoothness,
+            gCompositeParams.irisAspectRatio,
+            gCompositeParams.irisMaskColor,
+            gCompositeParams.isIrisIn
+        );
     }
     
     output.color.rgb = processedColor.rgb;

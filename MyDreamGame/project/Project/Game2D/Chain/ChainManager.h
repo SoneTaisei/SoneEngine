@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Game2D/Chain/Chain2D.h"
 #include "Game2D/Chain/ChainSpinAction.h"
 #include "Game2D/Treasure/Treasure2D.h"
@@ -7,9 +7,13 @@
 #include <string>
 #include <vector>
 
+#include "Effect/GPUParticle/GPUParticleSystem.h"
+
 class Player2D;
 class MapChip2D;
 class Object3D;
+class ParticleCommon;
+class ModelManager;
 
 /// <summary>
 /// 鎖全体の管理（ユニット制）
@@ -25,6 +29,9 @@ class Object3D;
 /// </summary>
 class ChainManager {
 public:
+    ChainManager();
+    ~ChainManager();
+
     // gaikotu 既存ジョイント（右手）。左手なら "LeftHand_Dummy_012"
     static constexpr const char* kSocketJointName = "RightHand_Dummy_017";
 
@@ -61,6 +68,7 @@ public:
     void Update(float dt, MapChip2D* map);
 
     void Draw();
+    void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
 
     /// <summary>
     /// プレイ開始・リプレイ再生開始時のリセット
@@ -97,20 +105,36 @@ public:
     // --- お宝（ゴール判定・敗北判定・カメラ用のフック） ---
     Treasure2D* GetTreasure() const { return treasure_.get(); }
     Vector3 GetTreasurePosition() const { return treasure_ ? treasure_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f }; }
-    /// <summary>お宝がプレイヤー鎖につながっているか（将来「鎖が途切れる=敗北」用。現状は常に true）</summary>
-    bool IsTreasureConnected() const { return playerChain_ && playerChain_->GetEndWeight().enabled; }
+    /// <summary>お宝がプレイヤー鎖につながっているか（ちぎれていない）</summary>
+    bool IsTreasureConnected() const { return playerChain_ && playerChain_->GetEndWeight().enabled && !tornChain_; }
+    /// <summary>鎖がちぎれてミスになった直後（復活まで）</summary>
+    bool IsTorn() const { return tornChain_ != nullptr; }
 
 private:
     // ソケット（手のジョイント）のワールド座標を取得。ジョイントが無ければプレイヤー座標で代用
     Vector3 ComputeSocketWorld();
     // 範囲内の鎖を拾う（落ちている自由鎖 → 吊り鎖の順）。拾えたら true
     bool TryPickup();
+    // 重なっている警備員を縛る（気絶中か背後から。鎖を1ユニット預ける）。警備員が居れば入力を消費して true
+    bool TryBindGuard();
+    // 重なっている縛られた警備員から鎖を取り戻す。取り戻せたら true
+    bool TryUnbindGuard();
     // unitsPerAction_ ユニットをつながったまま外して自由鎖として世界に落とす
     void DetachUnits();
     // params_ のお宝設定・スピン設定をプレイヤー鎖・表示・アクションに反映する
     void ApplyTreasureParams();
     // お宝の表示位置をプレイヤー鎖の末端に合わせる
     void SyncTreasureTransform();
+    // 全ての鎖の節（と宝石）が重なっているブロックへ OnChainTouch を通知する（スイッチを鎖で押す等。物理更新の後に呼ぶ）
+    void NotifyBlockContacts(MapChip2D* map);
+    // プレイヤーが「回せる場所」（木の板 ThinPlatformBlock の上）にいるかを調べ、スピンの可否を更新する
+    void UpdateSpinSpots(MapChip2D* map);
+    // テザー：鎖が張ったらプレイヤーの動きを宝石側へ引き戻す（引きずりで遅くなる、跳んでも鎖の長さで止まる）
+    void UpdateTether();
+    // ちぎれ判定：鎖が伸び切った状態が続いたら鎖をその場に落としてミスにする。復活したら落ちた鎖を消す
+    void UpdateTear(float dt, MapChip2D* map);
+    void Tear(int splitIndex); // splitIndex の節でちぎる（手元側 0..split は手に残り、split..末端は落ちる）
+    void ClearTorn();
 
     Player2D* player_ = nullptr;
     ChainParams params_; // 共有パラメータ（ChainConfigからロード）
@@ -124,6 +148,7 @@ private:
     struct DroppedChain {
         std::unique_ptr<Chain2D> chain;
         int unitWorth = 1;
+        std::unique_ptr<GPUParticleSystem> effect;
     };
     std::vector<DroppedChain> droppedChains_;
 
@@ -133,4 +158,27 @@ private:
     int initialChainLength_ = 3; // シーン開始時の個数（リセット時に戻す）
     int droppedCounter_ = 0;     // 自由鎖の命名用連番
     bool transitionHidden_ = false; // ステージクリア遷移中（プレイヤー鎖とお宝は遷移側の複製が描かれる）
+    MapChip2D* lastMap_ = nullptr;  // 直近の Update で受け取ったマップ（HandleInput の警備員判定用。非所有）
+    bool tetherTaut_ = false;       // 今フレーム鎖が張っていた（ImGui 表示用）
+
+    // ちぎれ：ちぎれた鎖はその場に落ちたまま残り（tornChain_）、復活まで手元の鎖は描かない
+    std::unique_ptr<Chain2D> tornChain_;
+    float tearTimer_ = 0.0f;
+    float prevGemSpeed_ = 0.0f;      // 前フレームの宝石の速さ（急に止まったら騒音）
+    float prevTornGemSpeed_ = 0.0f;  // ちぎれた側の宝石
+    bool wasDead_ = false;
+
+    // 破損エフェクト（ちぎれた時に再生）
+    std::unique_ptr<GPUParticleSystem> breakEffect_;
+
+    // ドロップした鎖に着けるLuminescenceパーティクル
+    GPUParticleSystemData luminescenceData_;
+    bool luminescenceDataLoaded_ = false;
+    std::vector<std::unique_ptr<GPUParticleSystem>> luminescencePool_;
+
+    std::unique_ptr<GPUParticleSystem> AcquireLuminescenceEffect(const Vector3& pos);
+    void RecycleLuminescenceEffect(std::unique_ptr<GPUParticleSystem> effect);
+    Vector3 CalculateChainCenter(const Chain2D* chain) const;
+    void ClearDroppedChains();
 };
+

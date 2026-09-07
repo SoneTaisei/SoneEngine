@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <memory>
 #include "Core/Utility/Structs.h"
 
@@ -39,6 +39,11 @@ public:
     // 描画実行（登録されたコンポーネントを描画し、リストをクリアする）
     void RenderComponents();
 
+    // シャドウパス制御
+    void BeginShadowPass(const Matrix4x4& lightViewProj);
+    void EndShadowPass();
+    bool IsShadowPass() const { return isShadowPass_; }
+
 private:
     void DrawMeshRendererComponent(MeshRendererComponent* comp);
     void DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp);
@@ -54,4 +59,5 @@ private:
     Renderer& operator=(const Renderer&) = delete;
 
     DirectXCommon* dxCommon_ = nullptr;
+    bool isShadowPass_ = false;
 };

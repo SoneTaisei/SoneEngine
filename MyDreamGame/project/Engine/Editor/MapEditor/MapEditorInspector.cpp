@@ -214,7 +214,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
             }
         }
     }
-
+    
     // ブロッククラス固有の ImGui UI (DrawImGui) の表示
     if (BlockFactory::GetInstance().HasType(targetDef->type)) {
         ImGui::Separator();

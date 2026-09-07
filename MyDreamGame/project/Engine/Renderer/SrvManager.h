@@ -14,7 +14,13 @@ public:
     ID3D12DescriptorHeap *GetSrvDescriptorHeap() const { return srvDescriptorHeap_.Get(); }
 
     // 空いているディスクリプタのハンドルを割り当てる関数
-    void Allocate(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle);
+    void Allocate(D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu_handle, const char* caller = "Unknown");
+
+    // 不要になったディスクリプタのハンドルを返却・再利用する関数
+    void Free(D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle);
+
+    uint32_t GetAllocatedCount() const { return nextSrvIndex_; }
+    uint32_t GetMaxCount() const { return kMaxCount; }
 
 private:
     SrvManager() = default;
@@ -26,5 +32,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvDescriptorHeap_;
     uint32_t descriptorSizeSRV_ = 0;
     uint32_t nextSrvIndex_ = 1; // 元のTextureManagerに合わせて1から
-    const uint32_t kMaxCount = 2048;
+    const uint32_t kMaxCount = 65536; // 2048から65536に大幅拡張
+    std::vector<uint32_t> freeList_;
 };

@@ -1,4 +1,4 @@
-#include "ChainConfig.h"
+﻿#include "ChainConfig.h"
 #include <algorithm>
 #include <fstream>
 #include <filesystem>
@@ -36,21 +36,40 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["treasureFriction_"] = params.treasureFriction_;
         j["treasureIgnorePlayer_"] = params.treasureIgnorePlayer_;
         j["heldChainPlayerCollision_"] = params.heldChainPlayerCollision_;
+        j["tetherEnabled_"] = params.tetherEnabled_;
+        j["dragFactor_"] = params.dragFactor_;
+        j["tetherPull_"] = params.tetherPull_;
+        j["tetherSlack_"] = params.tetherSlack_;
+        j["tearEnabled_"] = params.tearEnabled_;
+        j["tearStretchRatio_"] = params.tearStretchRatio_;
+        j["tearStuckSpeed_"] = params.tearStuckSpeed_;
+        j["tearGraceTime_"] = params.tearGraceTime_;
         j["treasureModelDir_"] = params.treasureModelDir_;
         j["treasureModelFile_"] = params.treasureModelFile_;
         j["treasureScale_"] = params.treasureScale_;
         j["spinRadiusMax_"] = params.spinRadiusMax_;
         j["spinRadiusRatio_"] = params.spinRadiusRatio_;
+        j["holdOffset_"] = params.holdOffset_;
+        j["throwOutTime_"] = params.throwOutTime_;
+        j["throwAngleDeg_"] = params.throwAngleDeg_;
+        j["throwOmega_"] = params.throwOmega_;
         j["swingStrength_"] = params.swingStrength_;
         j["swingDamping_"] = params.swingDamping_;
         j["chainMassPerUnit_"] = params.chainMassPerUnit_;
         j["weightThrowScale_"] = params.weightThrowScale_;
-        j["pullDelay_"] = params.pullDelay_;
         j["pullTransfer_"] = params.pullTransfer_;
         j["launchMaxJumpRatio_"] = params.launchMaxJumpRatio_;
         j["launchMinUpward_"] = params.launchMinUpward_;
         j["spinMoveFactor_"] = params.spinMoveFactor_;
         j["spinCooldown_"] = params.spinCooldown_;
+        j["spinAnywhere_"] = params.spinAnywhere_;
+        j["launchAngleDeg_"] = params.launchAngleDeg_;
+        j["justWindowDeg_"] = params.justWindowDeg_;
+        j["justBonus_"] = params.justBonus_;
+        j["coneMinDeg_"] = params.coneMinDeg_;
+        j["coneMaxDeg_"] = params.coneMaxDeg_;
+        j["aimSlow_"] = params.aimSlow_;
+        j["aimMaxTime_"] = params.aimMaxTime_;
         j["linkThickness_"] = params.linkThickness_;
         j["linkOverlap_"] = params.linkOverlap_;
 
@@ -98,21 +117,40 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("treasureFriction_")) params.treasureFriction_ = j["treasureFriction_"];
         if (j.contains("treasureIgnorePlayer_")) params.treasureIgnorePlayer_ = j["treasureIgnorePlayer_"];
         if (j.contains("heldChainPlayerCollision_")) params.heldChainPlayerCollision_ = j["heldChainPlayerCollision_"];
+        if (j.contains("tetherEnabled_")) params.tetherEnabled_ = j["tetherEnabled_"];
+        if (j.contains("dragFactor_")) params.dragFactor_ = j["dragFactor_"];
+        if (j.contains("tetherPull_")) params.tetherPull_ = j["tetherPull_"];
+        if (j.contains("tetherSlack_")) params.tetherSlack_ = j["tetherSlack_"];
+        if (j.contains("tearEnabled_")) params.tearEnabled_ = j["tearEnabled_"];
+        if (j.contains("tearStretchRatio_")) params.tearStretchRatio_ = j["tearStretchRatio_"];
+        if (j.contains("tearStuckSpeed_")) params.tearStuckSpeed_ = j["tearStuckSpeed_"];
+        if (j.contains("tearGraceTime_")) params.tearGraceTime_ = j["tearGraceTime_"];
         if (j.contains("treasureModelDir_")) params.treasureModelDir_ = j["treasureModelDir_"].get<std::string>();
         if (j.contains("treasureModelFile_")) params.treasureModelFile_ = j["treasureModelFile_"].get<std::string>();
         if (j.contains("treasureScale_")) params.treasureScale_ = j["treasureScale_"];
         if (j.contains("spinRadiusMax_")) params.spinRadiusMax_ = j["spinRadiusMax_"];
         if (j.contains("spinRadiusRatio_")) params.spinRadiusRatio_ = j["spinRadiusRatio_"];
+        if (j.contains("holdOffset_")) params.holdOffset_ = j["holdOffset_"];
+        if (j.contains("throwOutTime_")) params.throwOutTime_ = j["throwOutTime_"];
+        if (j.contains("throwAngleDeg_")) params.throwAngleDeg_ = j["throwAngleDeg_"];
+        if (j.contains("throwOmega_")) params.throwOmega_ = j["throwOmega_"];
         if (j.contains("swingStrength_")) params.swingStrength_ = j["swingStrength_"];
         if (j.contains("swingDamping_")) params.swingDamping_ = j["swingDamping_"];
         if (j.contains("chainMassPerUnit_")) params.chainMassPerUnit_ = j["chainMassPerUnit_"];
         if (j.contains("weightThrowScale_")) params.weightThrowScale_ = j["weightThrowScale_"];
-        if (j.contains("pullDelay_")) params.pullDelay_ = j["pullDelay_"];
         if (j.contains("pullTransfer_")) params.pullTransfer_ = j["pullTransfer_"];
         if (j.contains("launchMaxJumpRatio_")) params.launchMaxJumpRatio_ = j["launchMaxJumpRatio_"];
         if (j.contains("launchMinUpward_")) params.launchMinUpward_ = j["launchMinUpward_"];
         if (j.contains("spinMoveFactor_")) params.spinMoveFactor_ = j["spinMoveFactor_"];
         if (j.contains("spinCooldown_")) params.spinCooldown_ = j["spinCooldown_"];
+        if (j.contains("spinAnywhere_")) params.spinAnywhere_ = j["spinAnywhere_"];
+        if (j.contains("launchAngleDeg_")) params.launchAngleDeg_ = j["launchAngleDeg_"];
+        if (j.contains("justWindowDeg_")) params.justWindowDeg_ = j["justWindowDeg_"];
+        if (j.contains("justBonus_")) params.justBonus_ = j["justBonus_"];
+        if (j.contains("coneMinDeg_")) params.coneMinDeg_ = j["coneMinDeg_"];
+        if (j.contains("coneMaxDeg_")) params.coneMaxDeg_ = j["coneMaxDeg_"];
+        if (j.contains("aimSlow_")) params.aimSlow_ = j["aimSlow_"];
+        if (j.contains("aimMaxTime_")) params.aimMaxTime_ = j["aimMaxTime_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
 
@@ -129,19 +167,35 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         params.treasureRadius_ = (std::max)(0.05f, params.treasureRadius_);
         params.treasureFriction_ = std::clamp(params.treasureFriction_, 0.0f, 1.0f);
         params.treasureScale_ = (std::max)(0.01f, params.treasureScale_);
-        if (params.treasureModelDir_.empty()) params.treasureModelDir_ = "resources/Object/Original/sphere";
-        if (params.treasureModelFile_.empty()) params.treasureModelFile_ = "sphere.obj";
+        params.dragFactor_ = std::clamp(params.dragFactor_, 0.0f, 1.0f);
+        params.tetherPull_ = std::clamp(params.tetherPull_, 0.0f, 1.0f);
+        params.tetherSlack_ = std::clamp(params.tetherSlack_, 0.0f, 0.5f);
+        params.tearStretchRatio_ = std::clamp(params.tearStretchRatio_, 1.05f, 5.0f);
+        params.tearGraceTime_ = std::clamp(params.tearGraceTime_, 0.0f, 2.0f);
+        params.tearStuckSpeed_ = std::clamp(params.tearStuckSpeed_, 0.0f, 20.0f);
+        if (params.treasureModelDir_.empty()) params.treasureModelDir_ = "resources/Object/Original/jewelry";
+        if (params.treasureModelFile_.empty()) params.treasureModelFile_ = "jewelry.obj";
         params.spinRadiusMax_ = (std::max)(0.3f, params.spinRadiusMax_);
         params.spinRadiusRatio_ = std::clamp(params.spinRadiusRatio_, 0.3f, 1.0f);
+        params.holdOffset_ = std::clamp(params.holdOffset_, 0.05f, 2.0f);
+        params.throwOutTime_ = std::clamp(params.throwOutTime_, 0.01f, 2.0f);
+        params.throwAngleDeg_ = std::clamp(params.throwAngleDeg_, 0.0f, 180.0f);
+        params.throwOmega_ = std::clamp(params.throwOmega_, 0.0f, 20.0f);
         params.swingStrength_ = (std::max)(0.0f, params.swingStrength_);
         params.swingDamping_ = (std::max)(0.0f, params.swingDamping_);
         params.chainMassPerUnit_ = (std::max)(0.0f, params.chainMassPerUnit_);
         params.weightThrowScale_ = (std::max)(0.0f, params.weightThrowScale_);
-        params.pullDelay_ = std::clamp(params.pullDelay_, 0.0f, 1.0f);
         params.pullTransfer_ = (std::max)(0.0f, params.pullTransfer_);
         // 上限倍率 1.7 × ジャンプ初速17.5 ≒ 30 u/s。プレイヤーの当たり判定は掃引しないため、これ以上は1チップ壁をすり抜け得る
         params.launchMaxJumpRatio_ = std::clamp(params.launchMaxJumpRatio_, 0.1f, 1.7f);
         params.launchMinUpward_ = std::clamp(params.launchMinUpward_, 0.0f, 1.0f);
+        params.launchAngleDeg_ = std::clamp(params.launchAngleDeg_, 10.0f, 89.0f);
+        params.justWindowDeg_ = std::clamp(params.justWindowDeg_, 0.0f, 60.0f);
+        params.justBonus_ = std::clamp(params.justBonus_, 1.0f, 2.0f);
+        params.coneMinDeg_ = std::clamp(params.coneMinDeg_, 0.0f, 89.0f);
+        params.coneMaxDeg_ = std::clamp(params.coneMaxDeg_, params.coneMinDeg_, 89.0f);
+        params.aimSlow_ = std::clamp(params.aimSlow_, 0.05f, 1.0f);
+        params.aimMaxTime_ = std::clamp(params.aimMaxTime_, 0.1f, 3.0f);
         params.spinMoveFactor_ = std::clamp(params.spinMoveFactor_, 0.0f, 1.0f);
         params.spinCooldown_ = (std::max)(0.0f, params.spinCooldown_);
 

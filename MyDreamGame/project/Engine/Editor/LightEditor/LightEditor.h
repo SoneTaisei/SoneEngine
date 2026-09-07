@@ -25,6 +25,11 @@ struct SpotLightItem {
     // 危険度・当たり判定設定
     bool isDangerous = true;        //!< プレイヤーへの当たり判定（当たると即死）
 
+    // シャドウマッピング設定
+    bool enableShadow = true;       //!< シャドウを生成するか
+    float shadowBias = 0.0005f;     //!< シャドウバイアス
+    float shadowIntensity = 1.0f;   //!< 影の濃さ (0.0~1.0)
+
     // 追従・アニメーション設定
     LightFollowType followType = LightFollowType::None;
     Vector3 followOffset = {0.0f, 0.0f, 0.0f};
@@ -47,6 +52,9 @@ public:
     // プレイヤー（点・半径またはAABB）が危険なスポットライトの光に当たっているかチェック
     bool CheckPlayerHit(const Vector3& playerPos, float playerRadius = 0.4f) const;
     bool CheckAABBHit(const AABB2D& aabb) const;
+
+    // シャドウマップ用の代表ライトビュー射影行列を取得（有効なライトがなければfalse）
+    bool GetPrimaryShadowViewProjection(Matrix4x4* outViewProj) const;
 
 #ifdef USE_IMGUI
     // メインタブ画面描画（ゲームビューやリプレイエディターと同じメイン領域に配置：画面プレビューのみ）

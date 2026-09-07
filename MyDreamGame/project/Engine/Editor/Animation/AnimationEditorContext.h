@@ -218,9 +218,15 @@ public:
     float& GetAnimEditorFps() { return animEditorFps_; }
     float GetAnimEditorFps() const { return animEditorFps_; }
 
+    void EnsureJointVisibleInTree(const std::string& jointName);
+
     std::string& GetSelectedJointName() { return animEditorSelectedJointName_; }
     const std::string& GetSelectedJointName() const { return animEditorSelectedJointName_; }
-    void SetSelectedJointName(const std::string& name) { animEditorSelectedJointName_ = name; animEditorSelectedKeyIndex_ = -1; }
+    void SetSelectedJointName(const std::string& name) {
+        animEditorSelectedJointName_ = name;
+        animEditorSelectedKeyIndex_ = -1;
+        EnsureJointVisibleInTree(name);
+    }
 
     int& GetSelectedProperty() { return animEditorSelectedProperty_; }
     int GetSelectedProperty() const { return animEditorSelectedProperty_; }
@@ -239,6 +245,8 @@ public:
 
     std::vector<std::string>& GetAvailableAnimationFiles() { return availableAnimationFiles_; }
     std::string& GetCurrentAnimFilePath() { return currentAnimFilePath_; }
+    std::string GetCurrentModelName() const;
+    std::string GetModelAnimationDirectory() const;
 
     std::unordered_map<std::string, TempBoneOverride>& GetTempOverrides() { return animTempOverrides_; }
 
@@ -316,6 +324,7 @@ private:
     std::unordered_map<std::string, bool> animJointExpanded_;
     std::vector<std::string> availableAnimationFiles_;
     std::string currentAnimFilePath_ = "resources/json/shared/Player/wall_climb_animation.json";
+    std::string lastTargetModelName_ = "";
 
     char newAnimSaveNameBuf_[kMaxAnimNameBufSize] = "";
     bool openSaveAnimModal_ = false;

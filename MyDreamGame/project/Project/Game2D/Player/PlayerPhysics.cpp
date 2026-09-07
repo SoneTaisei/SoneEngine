@@ -8,6 +8,7 @@
 
 void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime, Player2D* player, MapChip2D* mapChip) {
     if (state_.isDead_ || state_.isGoal_) return;
+    lastDeltaTime_ = (deltaTime > 0.0f) ? deltaTime : lastDeltaTime_;
 
     // 1. 左右入力
     HandleMovement(state_, params_, input_, deltaTime, player);
@@ -29,6 +30,12 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     if (state_.isOnGround_) {
         state_.launchVelocityX_ = 0.0f; // 着地で発射の勢いは消える
     }
+    if (state_.spinFlipTimer_ > 0.0f) {
+        state_.spinFlipTimer_ -= deltaTime;
+        if (state_.spinFlipTimer_ <= 0.0f || state_.isOnGround_ || state_.isWallClinging_ || state_.isWallSliding_) {
+            state_.spinFlipTimer_ = 0.0f;
+        }
+    }
     if (state_.isDead_ || state_.isGoal_) return;
 
     // 5. 走行中の足元の砂埃エフェクト
@@ -49,8 +56,8 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
 
 void PlayerPhysics::HandleMovement(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime, Player2D* player) {
     (void)deltaTime;
-    // 左右移動
-    state_.velocity_.x = input_.moveX * params_.moveSpeed_;
+    // 左右移動（鎖アクションの発射横速度 launchVelocityX_ は着地・壁接触まで上乗せされる）
+    state_.velocity_.x = input_.moveX * params_.moveSpeed_ + state_.launchVelocityX_;
 
     // ジャンプ
     if (state_.isOnGround_ && input_.isJumpPressed) {
@@ -238,7 +245,8 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                             if (state_.isDead_) return;
                         }
                     } else if (block->IsOneWay()) {
-                        if (minY <= blockTop && minY >= blockTop - 0.25f) {
+                        float prevMinY = minY - state_.velocity_.y * lastDeltaTime_; // 前フレームの足の位置
+                        if (state_.velocity_.y <= 0.0f && minY <= blockTop && prevMinY >= blockTop - 0.05f) {
                             state_.position_.y = blockTop + params_.halfHeight_;
                             state_.velocity_.y = 0.0f;
                             groundedThisFrame = true;
@@ -286,7 +294,8 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                     if (state_.isDead_) return;
                 }
             } else if (blockPtr->IsOneWay()) {
-                if (minY <= blockTop && minY >= blockTop - 0.25f) {
+                float prevMinY = minY - state_.velocity_.y * lastDeltaTime_; // 前フレームの足の位置（動く片方向床も通過判定）
+                if (state_.velocity_.y <= 0.0f && minY <= blockTop && prevMinY >= blockTop - 0.05f) {
                     state_.position_.y = blockTop + params_.halfHeight_;
                     state_.velocity_.y = 0.0f;
                     groundedThisFrame = true;
@@ -481,13 +490,12 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
         }
     }
 
-    // 警備員の視界判定
+    // 警備員の懐中電灯（VisionCone）による視界・当たり判定（壁遮蔽対応）
     AABB2D playerAABB = GetAABB(state_, params_);
     for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
         if (!blockPtr || blockPtr->IsDestroyed()) continue;
         if (auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get())) {
-            AABB2D sight = guard->GetSightAABB();
-            if (CheckAABBCollision(playerAABB, sight)) {
+            if (guard->CheckPlayerInLight(state_.position_, params_.halfWidth_, playerAABB, mapChip)) {
                 guard->OnSpottedPlayer(player);
                 if (state_.isDead_) return;
             }

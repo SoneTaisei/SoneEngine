@@ -3,6 +3,7 @@
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/Quaternion.h"
+#include <DirectXMath.h>
 #include <fstream>
 #include <filesystem>
 #include <numbers>
@@ -15,24 +16,27 @@
 #endif
 
 LightEditor::LightEditor() {
-    // デフォルトのスポットライトを1つ生成
-    SpotLightItem defaultSpot;
-    defaultSpot.name = "SpotLight_1";
-    defaultSpot.enabled = true;
-    defaultSpot.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    defaultSpot.position = {0.0f, 0.0f, -5.0f};
-    defaultSpot.direction = {0.0f, 0.0f, 1.0f};
-    defaultSpot.baseDirection = {0.0f, 0.0f, 1.0f};
-    defaultSpot.intensity = 5.0f;
-    defaultSpot.distance = 20.0f;
-    defaultSpot.decay = 1.5f;
-    defaultSpot.angleDeg = 35.0f;
-    defaultSpot.falloffDeg = 20.0f;
-    defaultSpot.followType = LightFollowType::None;
-    defaultSpot.followOffset = {0.0f, 0.0f, 0.0f};
-    spotLights_.push_back(defaultSpot);
-
     Initialize(nullptr);
+
+    // ファイルが存在せず何もロードされなかった場合のみデフォルトを生成
+    if (spotLights_.empty() && availableLightFiles_.empty()) {
+        SpotLightItem defaultSpot;
+        defaultSpot.name = "SpotLight_1";
+        defaultSpot.enabled = true;
+        defaultSpot.color = {1.0f, 1.0f, 1.0f, 1.0f};
+        defaultSpot.position = {0.0f, 0.0f, -5.0f};
+        defaultSpot.direction = {0.0f, 0.0f, 1.0f};
+        defaultSpot.baseDirection = {0.0f, 0.0f, 1.0f};
+        defaultSpot.intensity = 5.0f;
+        defaultSpot.distance = 20.0f;
+        defaultSpot.decay = 1.5f;
+        defaultSpot.angleDeg = 35.0f;
+        defaultSpot.falloffDeg = 20.0f;
+        defaultSpot.followType = LightFollowType::None;
+        defaultSpot.followOffset = {0.0f, 0.0f, 0.0f};
+        spotLights_.push_back(defaultSpot);
+        selectedLightIndex_ = 0;
+    }
 }
 
 void LightEditor::Initialize(ModelCommon* modelCommon) {
@@ -128,8 +132,36 @@ void LightEditor::Update(float deltaTime, ModelCommon* modelCommon, const Vector
                 slGroup->spotLights[i].cosAngle = std::cos(item.angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                 slGroup->spotLights[i].cosFalloffStart = std::cos(item.falloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                 slGroup->spotLights[i].enable = item.enabled ? 1 : 0;
+
+                // シャドウマッピング用ビュー射影行列の計算
+                Vector3 dir = slGroup->spotLights[i].direction;
+                Vector3 eye = item.position;
+                Vector3 target = { eye.x + dir.x, eye.y + dir.y, eye.z + dir.z };
+                Vector3 up = { 0.0f, 1.0f, 0.0f };
+                if (std::abs(dir.y) > 0.99f) {
+                    up = { 0.0f, 0.0f, 1.0f };
+                }
+
+                DirectX::XMVECTOR eyeV = DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f);
+                DirectX::XMVECTOR targetV = DirectX::XMVectorSet(target.x, target.y, target.z, 1.0f);
+                DirectX::XMVECTOR upV = DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f);
+                DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(eyeV, targetV, upV);
+
+                float fovAngle = (item.angleDeg * 2.0f) * static_cast<float>(std::numbers::pi) / 180.0f;
+                fovAngle = std::clamp(fovAngle, 0.01f, static_cast<float>(std::numbers::pi) * 0.99f);
+
+                float nearZ = 0.1f;
+                float farZ = (item.distance > 0.5f) ? item.distance : 50.0f;
+                DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fovAngle, 1.0f, nearZ, farZ);
+                DirectX::XMMATRIX viewProjMat = DirectX::XMMatrixMultiply(viewMat, projMat);
+
+                DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&slGroup->spotLights[i].viewProjection), viewProjMat);
+                slGroup->spotLights[i].shadowMapIndex = (item.enabled && item.enableShadow) ? 0 : -1;
+                slGroup->spotLights[i].shadowBias = item.shadowBias;
+                slGroup->spotLights[i].shadowIntensity = item.shadowIntensity;
             } else {
                 slGroup->spotLights[i].enable = 0;
+                slGroup->spotLights[i].shadowMapIndex = -1;
             }
         }
     }
@@ -238,6 +270,38 @@ bool LightEditor::CheckAABBHit(const AABB2D& aabb) const {
                     }
                 }
             }
+        }
+    }
+    return false;
+}
+
+bool LightEditor::GetPrimaryShadowViewProjection(Matrix4x4* outViewProj) const {
+    if (!outViewProj) return false;
+    for (const auto& item : spotLights_) {
+        if (item.enabled && item.enableShadow) {
+            Vector3 dir = TransformFunctions::Normalize(item.direction);
+            Vector3 eye = item.position;
+            Vector3 target = { eye.x + dir.x, eye.y + dir.y, eye.z + dir.z };
+            Vector3 up = { 0.0f, 1.0f, 0.0f };
+            if (std::abs(dir.y) > 0.99f) {
+                up = { 0.0f, 0.0f, 1.0f };
+            }
+
+            DirectX::XMVECTOR eyeV = DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f);
+            DirectX::XMVECTOR targetV = DirectX::XMVectorSet(target.x, target.y, target.z, 1.0f);
+            DirectX::XMVECTOR upV = DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f);
+            DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(eyeV, targetV, upV);
+
+            float fovAngle = (item.angleDeg * 2.0f) * static_cast<float>(std::numbers::pi) / 180.0f;
+            fovAngle = std::clamp(fovAngle, 0.01f, static_cast<float>(std::numbers::pi) * 0.99f);
+
+            float nearZ = 0.1f;
+            float farZ = (item.distance > 0.5f) ? item.distance : 50.0f;
+            DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fovAngle, 1.0f, nearZ, farZ);
+            DirectX::XMMATRIX viewProjMat = DirectX::XMMatrixMultiply(viewMat, projMat);
+
+            DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(outViewProj), viewProjMat);
+            return true;
         }
     }
     return false;
@@ -717,6 +781,14 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                 ImGui::TextDisabled("※照射全角の内側(光が当たっている領域全体)がプレイヤーの当たり判定になります。");
 
                 ImGui::Separator();
+                ImGui::Text("シャドウマッピング (影)");
+                ImGui::Checkbox("影を落とす (Enable Shadow)", &light.enableShadow);
+                if (light.enableShadow) {
+                    ImGui::DragFloat("シャドウバイアス (Bias)", &light.shadowBias, 0.0001f, 0.00001f, 0.05f, "%.5f");
+                    ImGui::SliderFloat("影の濃さ (Intensity)", &light.shadowIntensity, 0.0f, 1.0f, "%.2f");
+                }
+
+                ImGui::Separator();
                 ImGui::Text("追従・動作モード");
 
                 const char* followTypes[] = { "固定 (None)", "カメラ追従 (懐中電灯)", "プレイヤー追従", "自動首振り回転" };
@@ -772,6 +844,8 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                     ImGui::DragFloat3("回転軸", &light.rotateAxis.x, 0.01f, -1.0f, 1.0f);
                     ImGui::DragFloat("回転速度 (度/秒)", &light.rotateSpeed, 1.0f, -360.0f, 360.0f, "%.1f");
                 }
+            } else {
+                ImGui::TextDisabled("スポットライトがありません。[+ 追加] ボタンでスポットライトを追加できます。");
             }
 
             ImGui::EndTabItem();
@@ -987,6 +1061,9 @@ bool LightEditor::SaveToFile(const std::string& filePath) {
             s["angleDeg"] = item.angleDeg;
             s["falloffDeg"] = item.falloffDeg;
             s["isDangerous"] = item.isDangerous;
+            s["enableShadow"] = item.enableShadow;
+            s["shadowBias"] = item.shadowBias;
+            s["shadowIntensity"] = item.shadowIntensity;
             s["followType"] = static_cast<int>(item.followType);
             s["followOffset"] = {item.followOffset.x, item.followOffset.y, item.followOffset.z};
             s["rotateAxis"] = {item.rotateAxis.x, item.rotateAxis.y, item.rotateAxis.z};
@@ -1064,7 +1141,9 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
             if (j["pLight"].contains("decay")) pointDecay_ = j["pLight"]["decay"];
         }
 
+        bool hasSpotLightKey = false;
         if (j.contains("spotLights") && j["spotLights"].is_array()) {
+            hasSpotLightKey = true;
             spotLights_.clear();
             for (const auto& item : j["spotLights"]) {
                 SpotLightItem sl;
@@ -1080,6 +1159,9 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
                 if (item.contains("angleDeg")) sl.angleDeg = item["angleDeg"];
                 if (item.contains("falloffDeg")) sl.falloffDeg = item["falloffDeg"];
                 if (item.contains("isDangerous")) sl.isDangerous = item["isDangerous"];
+                if (item.contains("enableShadow")) sl.enableShadow = item["enableShadow"];
+                if (item.contains("shadowBias")) sl.shadowBias = item["shadowBias"];
+                if (item.contains("shadowIntensity")) sl.shadowIntensity = item["shadowIntensity"];
                 if (item.contains("followType")) sl.followType = static_cast<LightFollowType>(item["followType"]);
                 if (item.contains("followOffset")) sl.followOffset = {item["followOffset"][0], item["followOffset"][1], item["followOffset"][2]};
                 if (item.contains("rotateAxis")) sl.rotateAxis = {item["rotateAxis"][0], item["rotateAxis"][1], item["rotateAxis"][2]};
@@ -1088,6 +1170,7 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
             }
         } else if (j.contains("sLight")) {
             // 旧フォーマット互換
+            hasSpotLightKey = true;
             spotLights_.clear();
             SpotLightItem sl;
             sl.name = "SpotLight";
@@ -1104,11 +1187,12 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
             spotLights_.push_back(sl);
         }
 
-        if (spotLights_.empty()) {
+        // スポットライト定義キーが一切存在せず空の場合のみ、初期ライトを1つ生成
+        if (!hasSpotLightKey && spotLights_.empty()) {
             SpotLightItem defaultSpot;
             spotLights_.push_back(defaultSpot);
         }
-        selectedLightIndex_ = 0;
+        selectedLightIndex_ = spotLights_.empty() ? -1 : 0;
 
         currentFilePath_ = path;
         strcpy_s(saveFileNameBuf_, sizeof(saveFileNameBuf_), GetCurrentFileName().c_str());

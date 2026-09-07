@@ -26,6 +26,9 @@ public:
     // ゲッター
     ModelData GetModelData() const { return modelData_; }
     ModelCommon* GetModelCommon() const { return modelCommon_; }
+    const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return vertexBufferView_; }
+    const D3D12_INDEX_BUFFER_VIEW& GetIndexBufferView() const { return indexBufferView_; }
+    UINT GetIndexCount() const { return static_cast<UINT>(modelData_.indices.size()); }
 
 
 private:

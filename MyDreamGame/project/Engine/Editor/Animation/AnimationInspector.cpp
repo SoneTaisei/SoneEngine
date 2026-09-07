@@ -898,6 +898,155 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         }
     }
 
+    // --- プレビューライティング設定 (Preview Lighting) ---
+    auto* animScene = dynamic_cast<AnimationPreviewScene*>(sceneManager ? sceneManager->GetCurrentScene() : nullptr);
+    if (animScene) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::CollapsingHeader("[ライティング設定] プレビュー照明", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& cfg = animScene->GetLightingConfig();
+
+            // 1. 照明モード切り替え
+            ImGui::Text("照明モード:");
+            ImGui::SameLine();
+            if (!cfg.useGameLighting) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.35f, 1.0f));
+                ImGui::Button("[専用スタジオライト]");
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                if (ImGui::Button("[ゲームシーンのライト]")) {
+                    cfg.useGameLighting = true;
+                }
+                ImGui::TextDisabled("※アニメーションが見やすい専用スタジオ照明を使用しています。");
+            } else {
+                if (ImGui::Button("[専用スタジオライト]")) {
+                    cfg.useGameLighting = false;
+                }
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.45f, 0.65f, 1.0f));
+                ImGui::Button("[ゲームシーンのライト]");
+                ImGui::PopStyleColor();
+                ImGui::TextDisabled("※ゲーム本編のライト設定（平行光・点光源・スポット光）を使用しています。");
+            }
+
+            ImGui::Spacing();
+
+            // 専用スタジオライト時の操作
+            if (!cfg.useGameLighting) {
+                // 2. プリセットボタングループ
+                ImGui::Text("照明プリセット:");
+                const char* presetNames[] = { "標準", "明るい", "陰影強調", "正面光", "輪郭強調" };
+                for (int i = 0; i < 5; ++i) {
+                    if (i > 0) ImGui::SameLine();
+                    bool isCur = (cfg.currentPresetIndex == i);
+                    if (isCur) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.55f, 0.4f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.48f, 1.0f));
+                    }
+                    if (ImGui::Button(presetNames[i])) {
+                        cfg.ApplyPreset(i);
+                    }
+                    if (isCur) {
+                        ImGui::PopStyleColor(2);
+                    }
+                }
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                // 3. 直感スライダー (全体明るさ・向き)
+                ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.4f, 1.0f), "クイック調整 (直感操作)");
+                ImGui::SliderFloat("全体の明るさ", &cfg.brightness, 0.2f, 3.0f, "%.2f");
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("キー光・リム光・環境光の全体の明るさを一括調整します");
+
+                if (ImGui::SliderFloat("光の水平角度 (0~360度)", &cfg.horizontalAngleDeg, 0.0f, 360.0f, "%.0f 度")) {
+                    cfg.RecalculateDirection();
+                    cfg.currentPresetIndex = -1;
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("水平方向から照らす向きを回転させます");
+
+                if (ImGui::SliderFloat("光の高さ (仰角 10~80度)", &cfg.elevationDeg, 10.0f, 80.0f, "%.0f 度")) {
+                    cfg.RecalculateDirection();
+                    cfg.currentPresetIndex = -1;
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("光の高さ（仰角）を調整します");
+
+                ImGui::Spacing();
+
+                // 4. 詳細設定 (折りたたみ)
+                if (ImGui::TreeNode("詳細ライト調整 (キー光・リム光・環境光)")) {
+                    // キーライト (平行光)
+                    ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.4f, 1.0f), "メインキーライト (平行光源)");
+                    ImGui::Checkbox("キーライト有効##EnableKeyLight", &cfg.enableKeyLight);
+                    if (cfg.enableKeyLight) {
+                        ImGui::DragFloat("強度##KeyIntensity", &cfg.keyLightIntensity, 0.05f, 0.0f, 5.0f, "%.2f");
+                        
+                        float color[4] = { cfg.keyLightColor.x, cfg.keyLightColor.y, cfg.keyLightColor.z, cfg.keyLightColor.w };
+                        if (ImGui::ColorEdit4("光色##KeyColor", color, ImGuiColorEditFlags_NoAlpha)) {
+                            cfg.keyLightColor = { color[0], color[1], color[2], color[3] };
+                        }
+
+                        float dir[3] = { cfg.keyLightDirection.x, cfg.keyLightDirection.y, cfg.keyLightDirection.z };
+                        if (ImGui::DragFloat3("光の向き##KeyDir", dir, 0.02f, -1.0f, 1.0f, "%.2f")) {
+                            cfg.keyLightDirection = { dir[0], dir[1], dir[2] };
+                            cfg.currentPresetIndex = -1;
+                        }
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    // リムライト (点光源)
+                    ImGui::TextColored(ImVec4(0.5f, 0.85f, 1.0f, 1.0f), "リムライト / 輪郭強調 (点光源)");
+                    ImGui::Checkbox("リムライト有効##EnableRimLight", &cfg.enableRimLight);
+                    if (cfg.enableRimLight) {
+                        ImGui::DragFloat("強度##RimIntensity", &cfg.rimLightIntensity, 0.05f, 0.0f, 5.0f, "%.2f");
+                        
+                        float rimCol[4] = { cfg.rimLightColor.x, cfg.rimLightColor.y, cfg.rimLightColor.z, cfg.rimLightColor.w };
+                        if (ImGui::ColorEdit4("光色##RimColor", rimCol, ImGuiColorEditFlags_NoAlpha)) {
+                            cfg.rimLightColor = { rimCol[0], rimCol[1], rimCol[2], rimCol[3] };
+                        }
+
+                        float rimPos[3] = { cfg.rimLightPos.x, cfg.rimLightPos.y, cfg.rimLightPos.z };
+                        if (ImGui::DragFloat3("光源位置##RimPos", rimPos, 0.1f, -20.0f, 20.0f, "%.1f")) {
+                            cfg.rimLightPos = { rimPos[0], rimPos[1], rimPos[2] };
+                        }
+                        ImGui::DragFloat("照射半径##RimRadius", &cfg.rimLightRadius, 0.5f, 1.0f, 50.0f, "%.1f");
+                    }
+
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    // 環境光
+                    ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "環境光 (暗部ディテール)");
+                    ImGui::DragFloat("環境光強度##AmbientIntensity", &cfg.ambientIntensity, 0.02f, 0.0f, 2.0f, "%.2f");
+
+                    ImGui::TreePop();
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // 5. 保存・リセットボタン
+            if (ImGui::Button("[ 設定を保存 ]", ImVec2(130, 26))) {
+                animScene->SaveLightingConfig();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("[ 初期値に戻す ]", ImVec2(130, 26))) {
+                animScene->ResetLightingConfig();
+                animScene->SaveLightingConfig();
+            }
+            ImGui::TextDisabled("※設定は resources/json/local/ に保存されます。");
+        }
+    }
+
     // 選択オブジェクト固有のインスペクター（Transform / Material 等）も下部に表示
     if (context->GetSelectedGameObject()) {
         ImGui::Spacing();

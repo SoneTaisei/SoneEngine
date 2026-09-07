@@ -11,7 +11,10 @@
 #include "Blocks/OneWayBlock.h"
 #include "Blocks/ChainItemBlock.h"
 #include "Blocks/BlockFactory.h"
+#include "Blocks/SwitchBlock.h"
+#include "Blocks/DoorBlock.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <string>
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -191,7 +194,28 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         templatePalette_.push_back(def);
     }
 
-    if (!hasDoorTemplate || !hasGuardTemplate) {
+    bool hasThinPlatformTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kThinPlatform)) {
+            hasThinPlatformTemplate = true;
+            break;
+        }
+    }
+    if (!hasThinPlatformTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kThinPlatform);
+        def.name = "Thin Platform";
+        def.type = "ThinPlatformBlock";
+        def.color = {0.62f, 0.42f, 0.22f, 1.0f};
+
+        nlohmann::json props = nlohmann::json::object();
+        props["thickness"] = 0.2f;
+        def.properties = props;
+
+        templatePalette_.push_back(def);
+    }
+
+    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
@@ -227,6 +251,13 @@ void MapChip2D::Update() {
         if (*it) {
             (*it)->Update();
             if ((*it)->IsDestroyed()) {
+                // リプレイ復元用に「破壊済み」であることを覚えておく
+                // （updateBlocks_ から外れると状態を記録できなくなるため）
+                uint64_t destroyedId = (*it)->GetReplayObjectId();
+                if (std::find(replayDestroyedIds_.begin(), replayDestroyedIds_.end(), destroyedId) == replayDestroyedIds_.end()) {
+                    replayDestroyedIds_.push_back(destroyedId);
+                }
+
                 // Remove from mapData_ and activeBlocks_
                 for (int y = 0; y < mapHeight_; ++y) {
                     for (int x = 0; x < mapWidth_; ++x) {
@@ -237,11 +268,13 @@ void MapChip2D::Update() {
                     }
                 }
                 it = updateBlocks_.erase(it);
+                blocksRevision_++;
             } else {
                 ++it;
             }
         } else {
             it = updateBlocks_.erase(it);
+            blocksRevision_++;
         }
     }
 }
@@ -275,6 +308,14 @@ void MapChip2D::Draw() {
             }
 
             block->Draw();
+        }
+    }
+}
+
+void MapChip2D::DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager) {
+    for (const auto& block : updateBlocks_) {
+        if (block && !block->IsDestroyed()) {
+            block->DrawParticle(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
         }
     }
 }
@@ -423,6 +464,11 @@ void MapChip2D::CreateChipObjects() {
 void MapChip2D::SetChip(int x, int y, ChipType type) {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
 
+    // 別の種類に置き換えたら、そのチップの上書き設定は捨てる
+    if (mapData_[y][x] != type) {
+        blockOverrides_.erase({x, y});
+    }
+
     // もしプレイヤー初期位置を置こうとしているなら、他の初期位置を消す
     if (type == ChipType::kPlayerSpawn) {
         for (int cy = 0; cy < mapHeight_; ++cy) {
@@ -436,7 +482,103 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
     if (mapData_[y][x] != type) {
         mapData_[y][x] = type;
         isDirty_ = true;
+
+        // 置いた瞬間に付ける上書き（例：次に置く崩れる床の上限、次に置くスイッチ／ドアの番号）
+        std::string typeName = GetBlockTypeName(static_cast<int>(type));
+        if (!placementOverrides_.empty()) {
+            auto it = placementOverrides_.find(typeName);
+            if (it != placementOverrides_.end() && !it->second.empty()) {
+                blockOverrides_[{x, y}] = it->second;
+            }
+        }
+        // 新しく置いたスイッチは空き番号にする（番号を決めていない時だけ）
+        if (autoNumberSwitches_ && typeName == "SwitchBlock" && blockOverrides_.find({x, y}) == blockOverrides_.end()) {
+            blockOverrides_[{x, y}] = {{"linkId", GetNextFreeLinkId()}};
+        }
     }
+}
+
+bool MapChip2D::MoveBlock(int fromX, int fromY, int toX, int toY, bool swap) {
+    if (fromX < 0 || fromX >= mapWidth_ || fromY < 0 || fromY >= mapHeight_) return false;
+    if (toX < 0 || toX >= mapWidth_ || toY < 0 || toY >= mapHeight_) return false;
+    if (fromX == toX && fromY == toY) return true;
+
+    ChipType fromType = mapData_[fromY][fromX];
+    if (fromType == ChipType::kNone) return false;
+
+    ChipType toType = mapData_[toY][toX];
+    if (toType != ChipType::kNone && !swap) {
+        return false; // 移動先にブロックがありswapがfalseなら移動しない
+    }
+
+    // 上書きプロパティの退避
+    nlohmann::json fromOv;
+    bool hasFromOv = false;
+    auto itFrom = blockOverrides_.find({fromX, fromY});
+    if (itFrom != blockOverrides_.end()) {
+        fromOv = itFrom->second;
+        hasFromOv = true;
+        blockOverrides_.erase(itFrom);
+    }
+
+    nlohmann::json toOv;
+    bool hasToOv = false;
+    if (swap && toType != ChipType::kNone) {
+        auto itTo = blockOverrides_.find({toX, toY});
+        if (itTo != blockOverrides_.end()) {
+            toOv = itTo->second;
+            hasToOv = true;
+            blockOverrides_.erase(itTo);
+        }
+    } else {
+        blockOverrides_.erase({toX, toY});
+    }
+
+    mapData_[toY][toX] = fromType;
+    if (hasFromOv) {
+        blockOverrides_[{toX, toY}] = std::move(fromOv);
+    }
+
+    mapData_[fromY][fromX] = swap ? toType : ChipType::kNone;
+    if (swap && hasToOv) {
+        blockOverrides_[{fromX, fromY}] = std::move(toOv);
+    }
+
+    isDirty_ = true;
+    RebuildChipObjects();
+    return true;
+}
+
+bool MapChip2D::ShiftMap(int deltaX, int deltaY) {
+    if (deltaX == 0 && deltaY == 0) return true;
+    if (mapWidth_ <= 0 || mapHeight_ <= 0) return false;
+
+    std::vector<std::vector<ChipType>> newMapData(mapHeight_, std::vector<ChipType>(mapWidth_, ChipType::kNone));
+    std::map<std::pair<int, int>, nlohmann::json> newOverrides;
+
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            ChipType t = mapData_[y][x];
+            if (t == ChipType::kNone) continue;
+
+            int nx = x + deltaX;
+            int ny = y + deltaY;
+            if (nx >= 0 && nx < mapWidth_ && ny >= 0 && ny < mapHeight_) {
+                newMapData[ny][nx] = t;
+                auto it = blockOverrides_.find({x, y});
+                if (it != blockOverrides_.end()) {
+                    newOverrides[{nx, ny}] = it->second;
+                }
+            }
+        }
+    }
+
+    mapData_ = std::move(newMapData);
+    blockOverrides_ = std::move(newOverrides);
+
+    isDirty_ = true;
+    RebuildChipObjects();
+    return true;
 }
 
 MapChip2D::ChipType MapChip2D::GetChip(int x, int y) const {
@@ -468,6 +610,7 @@ void MapChip2D::BucketFill(int startX, int startY, ChipType targetType, ChipType
 }
 
 void MapChip2D::ClearMap() {
+    blockOverrides_.clear();
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
             mapData_[y][x] = ChipType::kNone;
@@ -488,9 +631,24 @@ void MapChip2D::ResetMap() {
 void MapChip2D::RebuildChipObjects() {
     if (!isRebuildEnabled_) return;
 
+    // 既に記録対象になっているブロックのIDを安全に退避（objectIdフィールドを参照するのでポインタ逆参照不要）
+    std::unordered_map<uint64_t, bool> wasTracked;
+    for (const auto& entry : replayTrackEntries_) {
+        if (entry.isTracked) {
+            wasTracked[entry.objectId] = true;
+        }
+    }
+
+    // 古いブロックへの生ポインタ参照を即時クリア（ダングリングポインタを完全防止）
+    replayTrackEntries_.clear();
+    replayBlockById_.clear();
+    replayDestroyedIds_.clear();
+
     activeBlocks_.clear();
     activeBlocks_.resize(mapHeight_, std::vector<std::shared_ptr<BaseBlock>>(mapWidth_, nullptr));
     updateBlocks_.clear();
+
+    blocksRevision_++;
 
     std::vector<std::vector<bool>> visited(mapHeight_, std::vector<bool>(mapWidth_, false));
 
@@ -568,6 +726,36 @@ void MapChip2D::RebuildChipObjects() {
         }
     }
     CreateBoundaries();
+
+    // 新しく生成された updateBlocks_ を元に追跡テーブルを即座に安全に再構築
+    replayTrackRevision_ = blocksRevision_;
+    replayTrackEntries_.reserve(updateBlocks_.size());
+    for (const auto& blockPtr : updateBlocks_) {
+        BaseBlock* block = blockPtr.get();
+        if (!block) continue;
+
+        ReplayTrackEntry entry;
+        const uint64_t id = block->GetReplayObjectId();
+        entry.objectId = id;
+        entry.block = block;
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                entry.initPosition = transform->GetPosition();
+                entry.initRotation = transform->GetRotation();
+                entry.initScale = transform->GetScale();
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                entry.initColor = renderer->GetMaterial().color;
+            }
+        }
+        entry.isTracked = block->IsReplayTracked();
+        if (wasTracked.find(id) != wasTracked.end()) {
+            entry.isTracked = true;
+        }
+
+        replayBlockById_[id] = block;
+        replayTrackEntries_.push_back(entry);
+    }
 }
 
 void MapChip2D::CreateBoundaries() {
@@ -734,7 +922,21 @@ std::string MapChip2D::GetMapDataAsString() const {
         paletteArray.push_back(p);
     }
     j["customPalette"] = paletteArray;
-    
+
+    // チップごとの上書き（崩れる床の通れる上限など）
+    nlohmann::json overrides = nlohmann::json::array();
+    for (const auto& [key, props] : blockOverrides_) {
+        if (props.empty()) continue;
+        nlohmann::json o;
+        o["x"] = key.first;
+        o["y"] = key.second;
+        o["properties"] = props;
+        overrides.push_back(o);
+    }
+    if (!overrides.empty()) {
+        j["blockOverrides"] = overrides;
+    }
+
     return j.dump();
 }
 
@@ -743,6 +945,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
     
     try {
         nlohmann::json j = nlohmann::json::parse(data);
+        blockOverrides_.clear();
         if (j.contains("mapWidth") && j.contains("mapHeight")) {
             mapWidth_ = j["mapWidth"];
             mapHeight_ = j["mapHeight"];
@@ -822,6 +1025,17 @@ bool MapChip2D::LoadFromString(const std::string& data) {
             }
         }
         
+        // チップごとの上書き
+        if (j.contains("blockOverrides") && j["blockOverrides"].is_array()) {
+            for (const auto& o : j["blockOverrides"]) {
+                if (!o.contains("x") || !o.contains("y") || !o.contains("properties")) continue;
+                int ox = o["x"].get<int>();
+                int oy = o["y"].get<int>();
+                if (ox < 0 || ox >= mapWidth_ || oy < 0 || oy >= mapHeight_) continue;
+                blockOverrides_[{ox, oy}] = o["properties"];
+            }
+        }
+
         RebuildChipObjects();
         return true;
     } catch (const nlohmann::json::parse_error&) {
@@ -851,6 +1065,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
 
 void MapChip2D::Resize(int newWidth, int newHeight) {
     if (newWidth <= 0 || newHeight <= 0) return;
+    if (mapWidth_ == newWidth && mapHeight_ == newHeight) return;
 
     // 現在のデータを退避させつつ新しいグリッドを生成する
     std::vector<std::vector<ChipType>> newMapData(newHeight, std::vector<ChipType>(newWidth, ChipType::kNone));
@@ -870,7 +1085,18 @@ void MapChip2D::Resize(int newWidth, int newHeight) {
     mapWidth_ = newWidth;
     mapHeight_ = newHeight;
 
-    // 描画オブジェクトを再構築
+    // 縮小時に範囲外になったブロック上書き設定をクリーンアップ
+    for (auto it = blockOverrides_.begin(); it != blockOverrides_.end(); ) {
+        if (it->first.first >= newWidth || it->first.second >= newHeight) {
+            it = blockOverrides_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    isDirty_ = true;
+
+    // 描画オブジェクトおよび境界当たり判定を再構築
     RebuildChipObjects();
 }
 
@@ -991,6 +1217,105 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
 }
 
 
+void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json& properties) {
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
+    nlohmann::json& slot = blockOverrides_[{x, y}];
+    if (!slot.is_object()) slot = nlohmann::json::object();
+    slot.update(properties);
+    isDirty_ = true;
+    if (playtimeRecording_) {
+        nlohmann::json& rec = playtimeOverrides_[{x, y}];
+        if (!rec.is_object()) rec = nlohmann::json::object();
+        rec.update(properties);
+    }
+}
+
+void MapChip2D::ReapplyPlaytimeOverrides() {
+    for (const auto& [key, props] : playtimeOverrides_) {
+        int x = key.first;
+        int y = key.second;
+        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) continue;
+        if (props.is_null()) {
+            blockOverrides_.erase({x, y});
+        } else {
+            nlohmann::json& slot = blockOverrides_[{x, y}];
+            if (!slot.is_object()) slot = nlohmann::json::object();
+            slot.update(props);
+        }
+        // 置かれているブロックにも即反映
+        if (BaseBlock* b = GetBlock(x, y)) {
+            nlohmann::json merged = GetPaletteProperties(x, y);
+            if (const nlohmann::json* ov = GetBlockOverride(x, y)) merged.update(*ov);
+            b->SetProperties(merged);
+        }
+    }
+    if (!playtimeOverrides_.empty()) isDirty_ = true;
+}
+
+const nlohmann::json* MapChip2D::GetBlockOverride(int x, int y) const {
+    auto it = blockOverrides_.find({x, y});
+    if (it == blockOverrides_.end() || it->second.empty()) return nullptr;
+    return &it->second;
+}
+
+void MapChip2D::ClearBlockOverride(int x, int y) {
+    if (blockOverrides_.erase({x, y}) > 0) {
+        isDirty_ = true;
+    }
+    if (playtimeRecording_) {
+        playtimeOverrides_[{x, y}] = nullptr;
+    }
+}
+
+std::string MapChip2D::GetBlockTypeName(int typeId) const {
+    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
+    for (const auto& d : palette) {
+        if (d.id == typeId) return d.type;
+    }
+    return std::string();
+}
+
+void MapChip2D::SetPlacementOverride(const std::string& blockType, const nlohmann::json& properties) {
+    if (blockType.empty()) return;
+    placementOverrides_[blockType] = properties;
+}
+
+void MapChip2D::ClearPlacementOverride(const std::string& blockType) {
+    placementOverrides_.erase(blockType);
+}
+
+int MapChip2D::GetNextFreeLinkId() const {
+    int maxId = 0;
+    for (const auto& b : updateBlocks_) {
+        if (!b || b->IsDestroyed()) continue;
+        if (auto* s = dynamic_cast<SwitchBlock*>(b.get())) maxId = (std::max)(maxId, s->GetLinkId());
+        else if (auto* d = dynamic_cast<DoorBlock*>(b.get())) maxId = (std::max)(maxId, d->GetLinkId());
+    }
+    // まだ組み立て前のチップの上書きも数える（連続で塗った時に同じ番号にならないように）
+    for (const auto& [key, props] : blockOverrides_) {
+        if (props.is_object() && props.contains("linkId") && props["linkId"].is_number()) {
+            maxId = (std::max)(maxId, props["linkId"].get<int>());
+        }
+    }
+    return maxId + 1;
+}
+
+const nlohmann::json* MapChip2D::GetPlacementOverride(const std::string& blockType) const {
+    auto it = placementOverrides_.find(blockType);
+    if (it == placementOverrides_.end() || it->second.empty()) return nullptr;
+    return &it->second;
+}
+
+nlohmann::json MapChip2D::GetPaletteProperties(int x, int y) const {
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return nlohmann::json::object();
+    int typeId = static_cast<int>(mapData_[y][x]);
+    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
+    for (const auto& d : palette) {
+        if (d.id == typeId) return d.properties;
+    }
+    return nlohmann::json::object();
+}
+
 std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive* boxPrimitive) {
     float worldX = ChipToWorldX(x) + (spanWidth * chipSize_) * 0.5f;
     float worldY = ChipToWorldY(y) + (spanHeight * chipSize_) * 0.5f;
@@ -1034,14 +1359,21 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             for (const auto& d : customPalette_) {
                 if (d.id == typeId) { def = &d; break; }
             }
-        } else if (typeId >= 1 && typeId <= 9) {
+        } else {
             for (const auto& d : templatePalette_) {
                 if (d.id == typeId) { def = &d; break; }
             }
         }
         
         if (def) {
-            newBlock->SetProperties(def->properties);
+            // パレットのプロパティに、このチップだけの上書きを重ねて渡す
+            if (const nlohmann::json* ov = GetBlockOverride(x, y)) {
+                nlohmann::json merged = def->properties;
+                merged.update(*ov);
+                newBlock->SetProperties(merged);
+            } else {
+                newBlock->SetProperties(def->properties);
+            }
             if (newBlock->GetGameObject()) {
                 if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                     prc->GetMaterial().color = def->color;
@@ -1126,5 +1458,147 @@ void MapChip2D::ResetBlocks() {
         if (block) {
             block->Reset();
         }
+    }
+    replayDestroyedIds_.clear();
+    blocksRevision_++;
+}
+
+// ===== IReplayObjectProvider =====
+
+void MapChip2D::RefreshReplayTrackEntries() {
+    if (replayTrackRevision_ == blocksRevision_) return;
+    replayTrackRevision_ = blocksRevision_;
+
+    // 既に記録対象になっているブロックは、作り直し前の判定を引き継ぐ
+    std::unordered_map<uint64_t, bool> wasTracked;
+    for (const auto& entry : replayTrackEntries_) {
+        if (entry.isTracked) {
+            wasTracked[entry.objectId] = true;
+        }
+    }
+
+    replayTrackEntries_.clear();
+    replayBlockById_.clear();
+    replayTrackEntries_.reserve(updateBlocks_.size());
+
+    for (const auto& blockPtr : updateBlocks_) {
+        BaseBlock* block = blockPtr.get();
+        if (!block) continue;
+
+        ReplayTrackEntry entry;
+        const uint64_t id = block->GetReplayObjectId();
+        entry.objectId = id;
+        entry.block = block;
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                entry.initPosition = transform->GetPosition();
+                entry.initRotation = transform->GetRotation();
+                entry.initScale = transform->GetScale();
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                entry.initColor = renderer->GetMaterial().color;
+            }
+        }
+        entry.isTracked = block->IsReplayTracked();
+
+        if (wasTracked.find(id) != wasTracked.end()) {
+            entry.isTracked = true;
+        }
+
+        replayBlockById_[id] = block;
+        replayTrackEntries_.push_back(entry);
+    }
+}
+
+void MapChip2D::CaptureReplayObjects(std::vector<ReplayObjectState>& out) {
+    RefreshReplayTrackEntries();
+
+    // 初期状態と比べて変化しているか（していれば以降ずっと記録対象にする）
+    const float kEpsilon = 0.0001f;
+    auto isSame = [kEpsilon](float a, float b) { return std::fabs(a - b) <= kEpsilon; };
+
+    std::vector<float> customScratch;
+    for (auto& entry : replayTrackEntries_) {
+        BaseBlock* block = entry.block;
+        if (!block) continue;
+
+        Vector3 position = entry.initPosition;
+        Vector3 rotation = entry.initRotation;
+        Vector3 scale = entry.initScale;
+        Vector4 color = entry.initColor;
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                position = transform->GetPosition();
+                rotation = transform->GetRotation();
+                scale = transform->GetScale();
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                color = renderer->GetMaterial().color;
+            }
+        }
+
+        if (!entry.isTracked) {
+            // 新しく追加したブロックでも、動いた・変色した時点で自動的に記録対象になる
+            bool changed =
+                block->IsDestroyed() ||
+                !isSame(position.x, entry.initPosition.x) || !isSame(position.y, entry.initPosition.y) || !isSame(position.z, entry.initPosition.z) ||
+                !isSame(rotation.x, entry.initRotation.x) || !isSame(rotation.y, entry.initRotation.y) || !isSame(rotation.z, entry.initRotation.z) ||
+                !isSame(scale.x, entry.initScale.x) || !isSame(scale.y, entry.initScale.y) || !isSame(scale.z, entry.initScale.z) ||
+                !isSame(color.x, entry.initColor.x) || !isSame(color.y, entry.initColor.y) || !isSame(color.z, entry.initColor.z) || !isSame(color.w, entry.initColor.w);
+            if (!changed) continue;
+            entry.isTracked = true;
+        }
+
+        ReplayObjectState state;
+        state.id = block->GetReplayObjectId();
+        state.position = position;
+        state.rotation = rotation;
+        state.scale = scale;
+        state.color = color;
+        state.destroyed = block->IsDestroyed();
+
+        customScratch.clear();
+        block->CaptureReplayState(customScratch);
+        state.custom = customScratch;
+
+        out.push_back(std::move(state));
+    }
+
+    // 既に破壊されて updateBlocks_ から外れたブロックも「破壊済み」として記録し続ける
+    for (uint64_t destroyedId : replayDestroyedIds_) {
+        ReplayObjectState state;
+        state.id = destroyedId;
+        state.destroyed = true;
+        out.push_back(std::move(state));
+    }
+}
+
+void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState>& states) {
+    RefreshReplayTrackEntries();
+
+    for (const auto& state : states) {
+        auto it = replayBlockById_.find(state.id);
+        if (it == replayBlockById_.end()) continue;
+        BaseBlock* block = it->second;
+        if (!block) continue;
+
+        if (state.destroyed) {
+            // 破壊済みの記録は破壊フラグだけを復元する（次の Update でマップから取り除かれる）
+            block->Destroy();
+            continue;
+        }
+
+        block->SetDestroyed(false);
+        if (auto* gameObject = block->GetGameObject()) {
+            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+                transform->SetPosition(state.position);
+                transform->SetRotation(state.rotation);
+                transform->SetScale(state.scale);
+            }
+            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+                renderer->GetMaterial().color = state.color;
+            }
+        }
+        block->RestoreReplayState(state.custom);
     }
 }

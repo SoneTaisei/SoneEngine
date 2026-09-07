@@ -19,9 +19,11 @@ struct JointOverride {
 class AnimatorComponent : public IComponent {
 public:
     void Initialize() override;
+    ~AnimatorComponent() override;
     void Update() override;
 
     void SetAnimation(const Animation& animation) { animation_ = animation; }
+    void CrossFade(const Animation& targetAnim, float duration = 0.2f);
     void Play() { isPlaying_ = true; isFinished_ = false; }
     void Stop() { isPlaying_ = false; }
     void SetTime(float time) { animationTime_ = time; }
@@ -101,6 +103,17 @@ private:
     SkinCluster skinCluster_;
     bool hasSkeleton_ = false;
     std::map<std::string, JointOverride> jointOverrides_;
+
+    struct JointPoseSnapshot {
+        Vector3 translate = { 0.0f, 0.0f, 0.0f };
+        Quaternion rotate = { 0.0f, 0.0f, 0.0f, 1.0f };
+        Vector3 scale = { 1.0f, 1.0f, 1.0f };
+    };
+    std::vector<JointPoseSnapshot> transitionFromPose_;
+    float transitionTimer_ = 0.0f;
+    float transitionDuration_ = 0.0f;
+    bool isTransitioning_ = false;
+
 public:
     bool HasSkeleton() const { return hasSkeleton_; }
     std::unique_ptr<SkeletonDebugRenderer> debugRenderer_;

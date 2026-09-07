@@ -29,8 +29,21 @@ public:
     Model* GetModel() const { return model_; }
     void SetModel(Model* model) { model_ = model; }
 
+    // モデル・テクスチャ情報 (シリアライズ用)
+    void SetModelInfo(const std::string& directoryPath, const std::string& fileName) {
+        modelDirectory_ = directoryPath;
+        modelFileName_ = fileName;
+    }
+    const std::string& GetModelDirectory() const { return modelDirectory_; }
+    const std::string& GetModelFileName() const { return modelFileName_; }
+    void SetTexturePath(const std::string& path) { texturePath_ = path; }
+    const std::string& GetTexturePath() const { return texturePath_; }
+
 private:
     Model* model_ = nullptr;
+    std::string modelDirectory_;
+    std::string modelFileName_;
+    std::string texturePath_;
     Material material_;
     BlendMode blendMode_ = BlendMode::kBlendModeNormal;
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};

@@ -1,5 +1,6 @@
 #include "Model.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Renderer/Renderer.h"
 #include "Graphics/TextureManager.h"
 #include <cassert>
 #include <filesystem>
@@ -111,7 +112,15 @@ void Model::Draw(const D3D12_VERTEX_BUFFER_VIEW* weightBufferView, D3D12_GPU_DES
         activeTexture = TextureManager::GetInstance()->GetGpuHandle(defaultWhite);
     }
 
-    commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
+    bool isShadowPass = false;
+    if (auto* renderer = Renderer::GetInstance()) {
+        isShadowPass = renderer->IsShadowPass();
+    }
+
+    // シャドウパス実行中はテクスチャ不要かつスロット2がスキニングパレット用のため上書きしない
+    if (!isShadowPass) {
+        commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
+    }
     
     if (weightBufferView != nullptr) {
         D3D12_VERTEX_BUFFER_VIEW views[] = { vertexBufferView_, *weightBufferView };

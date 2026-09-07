@@ -158,7 +158,6 @@ private:
     void BeginDescend();
     void BeginIrisClose();
     void Finish();
-    void SetOutlineDisabled(bool disabled);
     Vector3 GetGemPosition() const;
 
     // --- シネマティック ---
@@ -230,6 +229,4 @@ private:
     Vector3 landFallback_ = { 0.0f, 0.0f, 0.0f }; // ソケットがまだ計算されていない間の着地目標
     float landDuration_ = 0.8f;
 
-    bool outlineDisabled_ = false;
-    bool outlineWasEnabled_ = true;
 };

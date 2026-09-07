@@ -367,9 +367,10 @@ void AnimationEditorViewport::DrawSkeletonJointsOverlay(SceneManager* sceneManag
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 mousePos = io.MousePos;
     int hoveredJointIdx = -1;
-    float closestDistSq = 20.0f * 20.0f; // クリック判定半径
+    float bestDepth = 1e9f;
+    const float hitRadiusSq = 14.0f * 14.0f; // クリック判定半径（描画半径5pxに対して十分余裕を持たせつつ誤爆を防止）
 
-    // 2. 非選択ジョイントの丸を描画 & ホバー判定
+    // 2. 非選択ジョイントの丸を描画 & ホバー判定 (深度テスト: カメラ手前優先)
     for (size_t i = 0; i < skeleton.joints.size(); ++i) {
         if (!screenJoints[i].isVisible) continue;
         const auto& joint = skeleton.joints[i];
@@ -380,9 +381,12 @@ void AnimationEditorViewport::DrawSkeletonJointsOverlay(SceneManager* sceneManag
         float dy = mousePos.y - p.y;
         float dSq = dx * dx + dy * dy;
 
-        if (dSq < closestDistSq) {
-            closestDistSq = dSq;
-            hoveredJointIdx = static_cast<int>(i);
+        if (dSq <= hitRadiusSq) {
+            // ヒット範囲内にある場合、手前（depthが小さい）のボーンを優先
+            if (screenJoints[i].depth < bestDepth) {
+                bestDepth = screenJoints[i].depth;
+                hoveredJointIdx = static_cast<int>(i);
+            }
         }
 
         if (!isSelected) {
@@ -393,16 +397,15 @@ void AnimationEditorViewport::DrawSkeletonJointsOverlay(SceneManager* sceneManag
         }
     }
 
-    // ホバー時のハイライトとクリック選択（ロック中でない場合のみ他ボーンを選択可能）
-    if (hoveredJointIdx >= 0 && !isDraggingAnimGizmo_ && !context->GetIsAnimLocked()) {
+    // ホバー時のハイライトとクリック選択（ロック中でない場合、かつギズモ操作中・ホバー中でない場合のみ他ボーンを選択可能）
+    if (hoveredJointIdx >= 0 && !isDraggingAnimGizmo_ && !isHoveringAnimGizmo_ && !context->GetIsAnimLocked()) {
         const auto& hJoint = skeleton.joints[hoveredJointIdx];
         if (hJoint.name != context->GetSelectedJointName()) {
             ImVec2 hp = screenJoints[hoveredJointIdx].screenPos;
             drawList->AddCircle(hp, 9.0f, IM_COL32(255, 255, 255, 230), 16, 2.0f);
         }
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && animGizmoActiveAxis_ < 0) {
-            context->GetSelectedJointName() = hJoint.name;
-            context->GetSelectedKeyIndex() = -1;
+            context->SetSelectedJointName(hJoint.name);
         }
     }
 
@@ -410,7 +413,7 @@ void AnimationEditorViewport::DrawSkeletonJointsOverlay(SceneManager* sceneManag
     auto it = skeleton.jointMap.find(context->GetSelectedJointName());
     if (it == skeleton.jointMap.end() && !skeleton.joints.empty()) {
         // 見つからない場合は先頭のボーンにフォールバック
-        context->GetSelectedJointName() = skeleton.joints[0].name;
+        context->SetSelectedJointName(skeleton.joints[0].name);
         it = skeleton.jointMap.find(context->GetSelectedJointName());
     }
 
@@ -630,6 +633,9 @@ void AnimationEditorViewport::DrawBoneTransformGizmo(SceneManager* sceneManager,
 
     if (!isDraggingAnimGizmo_) {
         animGizmoActiveAxis_ = -1;
+        isHoveringAnimGizmo_ = false;
+    } else {
+        isHoveringAnimGizmo_ = true;
     }
 
     // --------------------------------------------------------
@@ -652,6 +658,10 @@ void AnimationEditorViewport::DrawBoneTransformGizmo(SceneManager* sceneManager,
                     hoveredAxis = i;
                 }
             }
+        }
+
+        if (hoveredAxis >= 0) {
+            isHoveringAnimGizmo_ = true;
         }
 
         if (!isDraggingAnimGizmo_ && hoveredAxis >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
@@ -779,6 +789,10 @@ void AnimationEditorViewport::DrawBoneTransformGizmo(SceneManager* sceneManager,
             }
         }
 
+        if (hoveredRing >= 0) {
+            isHoveringAnimGizmo_ = true;
+        }
+
         if (!isDraggingAnimGizmo_ && hoveredRing >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             isDraggingAnimGizmo_ = true;
             animGizmoActiveAxis_ = hoveredRing;
@@ -887,6 +901,10 @@ void AnimationEditorViewport::DrawBoneTransformGizmo(SceneManager* sceneManager,
                     }
                 }
             }
+        }
+
+        if (hoveredAxis >= 0) {
+            isHoveringAnimGizmo_ = true;
         }
 
         if (!isDraggingAnimGizmo_ && hoveredAxis >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
@@ -1069,7 +1087,7 @@ void AnimationEditorViewport::DrawMainView(SceneManager* sceneManager, Camera** 
         ImGui::EndChild();
     } else {
         // 通常（展開）表示
-        ImGui::BeginChild("##AnimViewportHUD", ImVec2(480, 115), true, ImGuiWindowFlags_NoScrollbar);
+        ImGui::BeginChild("##AnimViewportHUD", ImVec2(540, 115), true, ImGuiWindowFlags_NoScrollbar);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
 
         // 左上に縮小化ボタンを配置（拡大化ボタンと同じ位置）
@@ -1086,7 +1104,7 @@ void AnimationEditorViewport::DrawMainView(SceneManager* sceneManager, Camera** 
         ImGui::Text("フレーム: %d / %d  (%.3fs)", curF, totF, context->GetAnimEditorTime());
         ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.3f, 1.0f), "選択ボーン: %s%s", context->GetSelectedJointName().c_str(), context->GetIsAnimLocked() ? " [固定中]" : "");
 
-        // ギズモツールバー (SRT / Local-World / Lock)
+        // ギズモツールバー (SRT / Local-World / Lock / Light)
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
         {
             bool isTrans = (context->GetGizmoMode() == 0);
@@ -1118,6 +1136,59 @@ void AnimationEditorViewport::DrawMainView(SceneManager* sceneManager, Camera** 
                 ImGui::PopStyleColor();
             } else {
                 if (ImGui::Button("[L] ロック", ImVec2(75, 20))) context->GetIsAnimLocked() = true;
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("[ライト設定]", ImVec2(80, 20))) {
+                ImGui::OpenPopup("AnimViewportLightPopup");
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("ライティングのクイック調整");
+
+            if (ImGui::BeginPopup("AnimViewportLightPopup")) {
+                auto* animScene = dynamic_cast<AnimationPreviewScene*>(sceneManager ? sceneManager->GetCurrentScene() : nullptr);
+                if (animScene) {
+                    auto& cfg = animScene->GetLightingConfig();
+                    ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.4f, 1.0f), "スタジオライティング設定");
+                    ImGui::Separator();
+
+                    // モード切り替え
+                    ImGui::Checkbox("ゲームシーンのライトを使用", &cfg.useGameLighting);
+
+                    if (!cfg.useGameLighting) {
+                        ImGui::Separator();
+                        ImGui::Text("プリセット:");
+                        const char* pNames[] = { "標準", "明るい", "陰影", "正面", "輪郭" };
+                        for (int i = 0; i < 5; ++i) {
+                            if (i > 0) ImGui::SameLine();
+                            bool isCur = (cfg.currentPresetIndex == i);
+                            if (isCur) {
+                                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.55f, 0.4f, 1.0f));
+                            }
+                            if (ImGui::Button(pNames[i])) {
+                                cfg.ApplyPreset(i);
+                            }
+                            if (isCur) {
+                                ImGui::PopStyleColor();
+                            }
+                        }
+
+                        ImGui::Separator();
+                        ImGui::SliderFloat("全体の明るさ", &cfg.brightness, 0.2f, 3.0f, "%.2f");
+                        if (ImGui::SliderFloat("水平角度", &cfg.horizontalAngleDeg, 0.0f, 360.0f, "%.0f 度")) {
+                            cfg.RecalculateDirection();
+                            cfg.currentPresetIndex = -1;
+                        }
+                    }
+
+                    ImGui::Separator();
+                    if (ImGui::Button("[設定保存]")) animScene->SaveLightingConfig();
+                    ImGui::SameLine();
+                    if (ImGui::Button("[初期値]")) {
+                        animScene->ResetLightingConfig();
+                        animScene->SaveLightingConfig();
+                    }
+                }
+                ImGui::EndPopup();
             }
         }
         ImGui::PopStyleVar(); // ItemSpacing

@@ -1,6 +1,8 @@
 #pragma once
 #include "GameObject/PrimitiveObject.h"
 #include <memory>
+#include <vector>
+#include <cstdint>
 #include <nlohmann/json.hpp>
 #include "GameObject/Object3D.h"
 #include "Core/Utility/Structs.h"
@@ -12,7 +14,10 @@
 class Player2D;
 class MapChip2D;
 struct ID3D12Device;
+struct ID3D12GraphicsCommandList;
 class Primitive;
+class ParticleCommon;
+class ModelManager;
 
 class BaseBlock {
 public:
@@ -34,6 +39,15 @@ public:
         }
     }
 
+    virtual void DrawParticle(
+        ID3D12GraphicsCommandList* commandList,
+        const Matrix4x4& viewProjection,
+        const Matrix4x4& cameraMatrix,
+        ParticleCommon* particleCommon,
+        ModelManager* modelManager) {
+        (void)commandList; (void)viewProjection; (void)cameraMatrix; (void)particleCommon; (void)modelManager;
+    }
+
     // 当たり判定の性質
     virtual bool IsSolid() const { return false; }
     virtual bool IsOneWay() const { return false; }
@@ -52,16 +66,52 @@ public:
     virtual void OnPlayerTouch() {}
     virtual void OnPlayerTouch(Player2D* player) { OnPlayerTouch(); }
 
+    // このチップの上（または体が重なる位置）でプレイヤーが鎖を振り回せるか（木の板 ThinPlatformBlock が true を返す）
+    virtual bool AllowsChainSpin() const { return false; }
+
+    // 鎖（節・末端の重り）がこのブロックのチップに重なった際の処理（スイッチを鎖で押す等）
+    // pos/radius は節の円、velocity は節の速度（チップ/秒）、isWeight は末端の重り（宝石）か。鎖の物理更新後に毎フレーム呼ばれる
+    // 戻り値 true = 当たりを消費した（呼び出し側は宝石の勢いを弱める）
+    virtual bool OnChainTouch(const Vector3& pos, float radius, const Vector3& velocity, bool isWeight) {
+        (void)pos; (void)radius; (void)velocity; (void)isWeight;
+        return false;
+    }
+
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
 
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
 
+    // ===== リプレイ対応 =====
+    // リプレイに毎フレーム状態を記録する対象かどうか。
+    // 位置・回転・スケール・色・破壊フラグの変化は MapChip2D 側が自動で検出して
+    // 記録対象に加えるため、新しいブロックを追加しても基本的に何もしなくてよい。
+    // 「見た目は変わらないが内部状態を持つ」ブロックだけ、これを true にする。
+    virtual bool IsReplayTracked() const { return IsMoving(); }
+
+    // 派生ブロック固有の内部状態（タイマー・開閉率など）を float 列に詰める。
+    // 位置・回転・スケール・色・破壊フラグは共通で保存されるので、ここには含めなくてよい。
+    virtual void CaptureReplayState(std::vector<float>& outCustom) const { outCustom.clear(); }
+
+    // CaptureReplayState で詰めた内容から内部状態を復元する。
+    virtual void RestoreReplayState(const std::vector<float>& custom) { (void)custom; }
+
+    // リプレイ上でブロックを一意に識別するID（配置チップ座標から生成する）。
+    // マップは録画時の状態から復元されるため、同じ座標のブロックは必ず同じIDになる。
+    virtual uint64_t GetReplayObjectId() const {
+        return (static_cast<uint64_t>(static_cast<uint32_t>(chipX_) & 0xFFFFu) << 16) |
+               (static_cast<uint32_t>(chipY_) & 0xFFFFu);
+    }
+
 #ifdef USE_IMGUI
     // ImGuiによるブロックパラメータの調整やデバッグ操作用UI
     virtual void DrawImGui() {}
 #endif
+
+    // 配置チップ座標（エディタの一覧表示や、チップごとの上書き設定のキーに使う）
+    int GetChipX() const { return chipX_; }
+    int GetChipY() const { return chipY_; }
 
     GameObject* GetGameObject() const { return gameObject_.get(); }
     void SetGameObject(std::unique_ptr<GameObject> obj) { gameObject_ = std::move(obj); }
@@ -69,6 +119,7 @@ public:
     // 消滅フラグ（コイン取得時など）
     bool IsDestroyed() const { return isDestroyed_; }
     void Destroy() { isDestroyed_ = true; }
+    void SetDestroyed(bool destroyed) { isDestroyed_ = destroyed; }
 
     void SetupCollider() {
         if (!gameObject_) return;

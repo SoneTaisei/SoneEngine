@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 
 /// <summary>
@@ -28,31 +28,56 @@ struct ChainParams {
     int rootCollisionSkip_ = 2;        // 手持ち中に地形判定から除外する根元ノード数（壁張り付き時のジッタ防止）
 
     // --- お宝（重り）の物理: プレイヤー鎖の末端ノード ---
-    float treasureMass_ = 5.0f;        // 質量（鎖物理の invMass = 1/mass、スピンの振りにくさにも使う）
-    float treasureRadius_ = 0.3f;      // 当たり半径（ノード0.1の3倍。段差に引っかかる。見た目のスケールとは独立）
-    float treasureFriction_ = 0.8f;    // 地形との摩擦（引きずると渋い）
+    float treasureMass_ = 8.5f;        // 質量（鎖物理の invMass = 1/mass、スピンの振りにくさにも使う。重いほど鎖が宝石に引かれ、振りにくい）
+    float treasureRadius_ = 0.35f;     // 当たり半径（段差に引っかかる。見た目のスケールとは独立）
+    float treasureFriction_ = 0.95f;    // 地形との摩擦（引きずると渋い。重さの手応え）
     bool treasureIgnorePlayer_ = false; // お宝をプレイヤー衝突から外す（狭い通路で押されて困る時用）
     bool heldChainPlayerCollision_ = false; // 持っている鎖とプレイヤーの当たり判定（false: 判定なし。回した重りや鎖が体に引っかからない）
 
-    // --- お宝の見た目（物理とは独立。宝石モデルへの差し替えはここを書き換えるだけ） ---
-    std::string treasureModelDir_ = "resources/Object/Original/sphere";
-    std::string treasureModelFile_ = "sphere.obj";
-    float treasureScale_ = 0.3f;       // 表示スケール（sphere.obj は半径1.0なので 0.3 で物理半径と一致）
+    // --- テザー（鎖が張るとプレイヤーが宝石に引かれる＝重さの手応え） ---
+    bool tetherEnabled_ = true;        // 鎖が張った時の手応え（本数には依存しない。ジャンプの罰則は chainJumpPenalty_ の1本だけ）
+    float dragFactor_ = 1.0f;          // 地上で宝石を後ろに引きずって離れる向きに歩く時の速度倍率（1.0 = 標準速度のまま。重さは質量と摩擦で出す）
+    float tetherPull_ = 0.6f;          // 宝石が自分より上にある時、離れる向きの落下を毎フレーム削る割合（ぶら下がり感）
+    float tetherSlack_ = 0.02f;        // 「張った」とみなす伸び（実長に対する余裕）
 
-    // --- スピンジャンプ（構えて鎖をピンと張った棒として自分で振り、離すと鎖ごと飛び、重りの勢いに引っ張られる） ---
+    // --- ちぎれ（鎖が伸び切ったらミス） ---
+    bool tearEnabled_ = true;          // 宝石が地形に引っかかったまま手元が離れ、鎖が伸び切り続けたらちぎれてミスになる
+    float tearStretchRatio_ = 1.4f;    // ちぎれる伸び（直線距離 ÷ 鎖の実長）。1.0 が伸び切った状態
+    float tearStuckSpeed_ = 1.5f;      // 宝石の速さがこれ未満（引っかかって動けない）の時だけ伸びを数える（チップ/秒）
+    float tearGraceTime_ = 0.35f;      // 「伸びている かつ 宝石が止まっている」がこの秒数続いたらちぎれる（物理の一時的な伸びは無視）
+
+    // --- お宝の見た目（物理とは独立。宝石モデルへの差し替えはここを書き換えるだけ） ---
+    std::string treasureModelDir_ = "resources/Object/Original/jewelry";
+    std::string treasureModelFile_ = "jewelry.obj";
+    float treasureScale_ = 0.28f;      // 表示スケール（jewelry.obj は半径約1.4なので 0.28 で見た目の半径≒0.4。原点は中心に補正済み）
+
+    // --- スピンジャンプ（木の板の上で構え、ピンと張った鎖を自分で振り、離すと鎖ごと飛び、プレイヤーも同じ方向へ飛ぶ） ---
     float spinRadiusMax_ = 5.0f;       // 回転半径の上限
     float spinRadiusRatio_ = 1.0f;     // 回転半径 = 鎖の実長 × これ（1.0 で節間隔ちょうど。下げると縮めた棒になり離した瞬間に伸びる）
+    float holdOffset_ = 0.9f;          // W で宝石を掲げている間の、手から真上の宝石までの距離（鎖はその間に畳まれる）
+    float throwOutTime_ = 0.2f;        // A/D で投げてから棒が鎖の実長まで伸び切るまでの秒数
+    float throwAngleDeg_ = 180.0f;     // 投げ始めの角度（真下=0。180 で真上＝頭上から振り下ろす、90 で真横）
+    float throwOmega_ = 2.0f;          // 投げた瞬間の角速度（rad/s。投げた方向へ回り続ける勢い）
     float swingStrength_ = 40.0f;      // A/Dで振る力。角加速度 = これ ÷ (宝石の質量 + 鎖の質量)
                                        // 40: 押しっぱなしでは弱く(3ユニットで3.5u/s)、交互に漕ぐと約3秒で上限到達
     float swingDamping_ = 0.25f;       // 振りの減衰（1/秒。漕がないと徐々に止まる）
     float chainMassPerUnit_ = 0.5f;    // 鎖1ユニットあたりの質量（宝石の質量に加算。長いほど振りにくい）
     float weightThrowScale_ = 1.0f;    // 離した時に鎖と重りへ与える速度の倍率（角速度 × 半径 × これ）
-    float pullDelay_ = 0.1f;           // 離してから引っ張られるまでの秒数（重りが先に飛んで見える間）
-    float pullTransfer_ = 0.9f;        // 引く速さ = その時点の重りの速さ × これ（壁に当たって減速していれば弱くなる）
+    float pullTransfer_ = 0.9f;        // 離した時にプレイヤーが飛ぶ速さ = 重りの速さ × これ
     float launchMaxJumpRatio_ = 1.0f;  // 引く速さの上限 = 通常ジャンプ初速 × これ（1.0 で通常ジャンプより高くは飛べない）
     float launchMinUpward_ = 0.35f;    // 引く方向の最低上向き成分（真横で引かれても床に貼り付かない）
     float spinMoveFactor_ = 0.0f;      // 構え中の移動速度倍率（0 で移動不可。A/D は振りに使う）
     float spinCooldown_ = 0.4f;        // 引かれた後のクールダウン（秒。着地でも解除）
+    bool spinAnywhere_ = false;        // false: 木の板（ThinPlatformBlock）の上に立っている時だけ回せる（既定）。true: どこでも回せる（調整用）
+
+    // --- 発射のアシストと狙い（Q 持つ / A・D 投げる・漕ぐ / SPACE 押して振り子をスロー → 離して飛ぶ） ---
+    float launchAngleDeg_ = 60.0f;     // ジャスト時の飛ぶ向き（水平から上向き、度）
+    float justWindowDeg_ = 12.0f;      // ジャスト窓（±度）。広いほど簡単
+    float justBonus_ = 1.1f;           // ジャスト時の速さ倍率（上限は超えない）
+    float coneMinDeg_ = 25.0f;         // 窓の外で離した時の向きの下限（度）
+    float coneMaxDeg_ = 85.0f;         // 同 上限
+    float aimSlow_ = 0.25f;            // SPACE を押している間の振り子の速さ倍率（角度の進みだけ遅くなる。勢いは変わらない）
+    float aimMaxTime_ = 0.8f;          // 押しっぱなしでもこの秒数で飛ぶ
 
     // --- 見た目 ---
     float linkThickness_ = 1.0f;       // リンクモデルの太さ倍率

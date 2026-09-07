@@ -40,9 +40,27 @@ public:
     SpotLight *GetSpotLight() { return (mappedSpotLightGroup_ && mappedSpotLightGroup_->spotLightCount > 0) ? &mappedSpotLightGroup_->spotLights[0] : nullptr; }
     CameraForGPU *GetCamera() { return mappedCamera_; }
     
-    D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const { return directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0; }
-    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightGPUAddress() const { return pointLightResource_ ? pointLightResource_->GetGPUVirtualAddress() : 0; }
-    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const { return spotLightResource_ ? spotLightResource_->GetGPUVirtualAddress() : 0; }
+    // カスタムライト（アニメーションエディター専用バッファ等）のアドレスオーバーライド
+    void SetCustomLighting(D3D12_GPU_VIRTUAL_ADDRESS dirAddr, D3D12_GPU_VIRTUAL_ADDRESS pointAddr, D3D12_GPU_VIRTUAL_ADDRESS spotAddr) {
+        customDirLightAddr_ = dirAddr;
+        customPointLightAddr_ = pointAddr;
+        customSpotLightAddr_ = spotAddr;
+    }
+    void ClearCustomLighting() {
+        customDirLightAddr_ = 0;
+        customPointLightAddr_ = 0;
+        customSpotLightAddr_ = 0;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS GetDirectionalLightGPUAddress() const {
+        return customDirLightAddr_ != 0 ? customDirLightAddr_ : (directionalLightResource_ ? directionalLightResource_->GetGPUVirtualAddress() : 0);
+    }
+    D3D12_GPU_VIRTUAL_ADDRESS GetPointLightGPUAddress() const {
+        return customPointLightAddr_ != 0 ? customPointLightAddr_ : (pointLightResource_ ? pointLightResource_->GetGPUVirtualAddress() : 0);
+    }
+    D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightGPUAddress() const {
+        return customSpotLightAddr_ != 0 ? customSpotLightAddr_ : (spotLightResource_ ? spotLightResource_->GetGPUVirtualAddress() : 0);
+    }
 
     // 設定ファイルからの読み込み
     void LoadLightingConfig();
@@ -70,5 +88,9 @@ private:
     std::list<Model *> models_;
 
     Matrix4x4 cameraMatrix_ = TransformFunctions::MakeIdentity4x4();
+
+    D3D12_GPU_VIRTUAL_ADDRESS customDirLightAddr_ = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS customPointLightAddr_ = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS customSpotLightAddr_ = 0;
 };
 

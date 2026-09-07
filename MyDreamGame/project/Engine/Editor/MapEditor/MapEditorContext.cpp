@@ -4,6 +4,7 @@
 #include "Scene/IScene.h"
 #include "Game2D/Player/Player2D.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Editor/EditorManager.h"
 #include <filesystem>
 #include <algorithm>
 
@@ -12,9 +13,10 @@ namespace {
         MapChip2D* mapChip_;
         MapEditorContext::MapState oldState_;
         MapEditorContext::MapState newState_;
+        MapEditorContext* context_;
     public:
-        MapEditCommand(MapChip2D* chip, const MapEditorContext::MapState& oldS, const MapEditorContext::MapState& newS)
-            : mapChip_(chip), oldState_(oldS), newState_(newS) {}
+        MapEditCommand(MapChip2D* chip, const MapEditorContext::MapState& oldS, const MapEditorContext::MapState& newS, MapEditorContext* ctx = nullptr)
+            : mapChip_(chip), oldState_(oldS), newState_(newS), context_(ctx) {}
         void Undo() override {
             if (!mapChip_) return;
             mapChip_->Resize(oldState_.width, oldState_.height);
@@ -24,6 +26,12 @@ namespace {
                 }
             }
             mapChip_->SetDirty();
+            if (context_) {
+                context_->SetInputSize(oldState_.width, oldState_.height);
+            }
+            if (EditorManager::IsPlaying()) {
+                EditorManager::GetInstance()->SyncPlayMapData(mapChip_);
+            }
         }
         void Redo() override {
             if (!mapChip_) return;
@@ -34,6 +42,12 @@ namespace {
                 }
             }
             mapChip_->SetDirty();
+            if (context_) {
+                context_->SetInputSize(newState_.width, newState_.height);
+            }
+            if (EditorManager::IsPlaying()) {
+                EditorManager::GetInstance()->SyncPlayMapData(mapChip_);
+            }
         }
     };
 
@@ -47,10 +61,16 @@ namespace {
         void Undo() override {
             if (!mapChip_) return;
             mapChip_->GetRooms() = oldState_.rooms;
+            if (EditorManager::IsPlaying()) {
+                EditorManager::GetInstance()->SyncPlayMapData(mapChip_);
+            }
         }
         void Redo() override {
             if (!mapChip_) return;
             mapChip_->GetRooms() = newState_.rooms;
+            if (EditorManager::IsPlaying()) {
+                EditorManager::GetInstance()->SyncPlayMapData(mapChip_);
+            }
         }
     };
 
@@ -167,7 +187,7 @@ void MapEditorContext::EndMapHistoryCapture(MapChip2D* mapChip) {
     MapState newState;
     CaptureMapState(mapChip, newState);
     if (oldMapState_.width != newState.width || oldMapState_.height != newState.height || oldMapState_.data != newState.data) {
-        PushCommand(std::make_shared<MapEditCommand>(mapChip, oldMapState_, newState));
+        PushCommand(std::make_shared<MapEditCommand>(mapChip, oldMapState_, newState, this));
     }
 }
 

@@ -128,19 +128,6 @@ void TransitionDirector::EnsureObjects() {
     }
 }
 
-void TransitionDirector::SetOutlineDisabled(bool disabled) {
-    DirectXCommon* dx = DirectXCommon::GetInstance();
-    if (disabled && !outlineDisabled_) {
-        // 深度アウトラインが穴の縁に線を出すので遷移中だけ切る
-        outlineWasEnabled_ = dx->IsDepthBasedOutlineEnabled();
-        dx->SetDepthBasedOutlineEnabled(false);
-        outlineDisabled_ = true;
-    } else if (!disabled && outlineDisabled_) {
-        dx->SetDepthBasedOutlineEnabled(outlineWasEnabled_);
-        outlineDisabled_ = false;
-    }
-}
-
 // ---------------------------------------------------------------------------
 // 持ち越し用の鎖
 // ---------------------------------------------------------------------------
@@ -429,12 +416,12 @@ void TransitionDirector::StartStageClear(ChainManager* chains, MapChip2D* map, P
     CloneCarry(chains);
     chains->SetTransitionHidden(true);
     EnsureObjects();
-    SetOutlineDisabled(true);
     SetBackdropAlpha(0.0f);
     coveredEvent_ = false;
 
     Object3D* actor = GetActor();
     if (params_.clearStyle_ == 0 && actor && camera_) {
+        // シネマティックの間は輪郭線をそのまま残す（切るのは黒い円が出る IrisClose から）
         // シネマティック：カメラを自分で動かす
         FindGoalPosition(map, playerPos);
         camera_->SetFollowTarget(nullptr);
@@ -464,7 +451,6 @@ void TransitionDirector::StartStageOpen(ChainManager* chains, const Vector3& pla
     player_ = nullptr;
     coverRadius_ = orthoWidth + orthoHeight;
     EnsureObjects();
-    SetOutlineDisabled(true);
     SetBackdropAlpha(1.0f); // 黒の中から始める
 
     // 着地目標はプレイヤーの手（ソケット）。最初のフレームはまだ計算されていないのでプレイヤー位置で代用する
@@ -778,7 +764,6 @@ void TransitionDirector::Finish() {
     DestroyFly();
     DestroyCarryVisuals();
     ClearCarryData();
-    SetOutlineDisabled(false);
     SetBackdropAlpha(0.0f);
     chains_ = nullptr;
     map_ = nullptr;

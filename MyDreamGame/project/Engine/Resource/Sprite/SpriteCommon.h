@@ -45,7 +45,15 @@ public:
     // インデックス数のゲッター
     uint32_t GetIndexCount() const { return indexCount_; }
 
+    // 基準解像度のセッター・ゲッター (デフォルト: 1280x720)
+    void SetBaseResolution(float width, float height);
+    float GetBaseWidth() const { return baseWidth_; }
+    float GetBaseHeight() const { return baseHeight_; }
+
 private:
+    // 基準解像度と現在のウィンドウ解像度に基づいて正射影行列を更新する
+    void UpdateProjectionMatrix();
+
     // 共通リソース作成関数
     void CreateCommonResources();
 
@@ -67,6 +75,14 @@ private:
 
     // 射影行列 (画面サイズ依存)
     Matrix4x4 projectionMatrix_{};
+
+    // 仮想基準解像度 (デフォルト: 1280x720)
+    float baseWidth_ = 1280.0f;
+    float baseHeight_ = 720.0f;
+
+    // 現在のウィンドウ/描画ターゲット解像度
+    int windowWidth_ = 1280;
+    int windowHeight_ = 720;
 
     // ★全スプライトのリスト
     std::list<Sprite *> sprites_;

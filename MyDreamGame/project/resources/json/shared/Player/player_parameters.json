@@ -14,5 +14,6 @@
     "jumpPower_": 17.5,
     "maxFallSpeed_": -20.0,
     "moveSpeed_": 6.0,
+    "modelScale_": 2.0,
     "respawnDuration_": 0.5
 }
