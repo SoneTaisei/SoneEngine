@@ -1,23 +1,23 @@
 {
     "Alert": {
         "captureValue_": 100.0,
-        "driftPerSec_": 1.0,
-        "enabled_": false,
+        "driftPerSec_": 0.0,
+        "enabled_": true,
         "noiseAdd_": 5.0,
         "noiseEnabled_": false,
         "noiseRadius_": 6.0,
         "noiseSpeed_": 8.0,
-        "quietDecayPerSec_": 2.0,
-        "quietDelay_": 8.0,
+        "quietDecayPerSec_": 6.0,
+        "quietDelay_": 2.5,
         "respawnGrace_": 3.0,
         "seenPerSec_": 8.0,
+    "spotSpeedBonus_": 1.0,
+    "suspectPerSec_": 4.0,
         "spottedAdd_": 25.0,
         "strikeEnabled_": true,
         "strikeLimit_": 3,
         "strikeMergeTime_": 1.0,
-        "wakeAdd_": 15.0,
-        "wakeFarAdd_": 5.0,
-        "wakeFarDistance_": 8.0
+        "wakeAdd_": 5.0
     },
     "ClearSequence": {
         "beamColorB": 0.949999988079071,

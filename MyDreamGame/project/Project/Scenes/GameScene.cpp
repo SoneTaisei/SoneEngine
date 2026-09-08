@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include <cstring>
 #include "Effect/TutorialPosterSet.h"
 #include "Game2D/CollectibleTracker.h"
 #include "Graphics/CameraManager.h"
@@ -411,7 +412,7 @@ void GameScene::Initialize() {
         gemLabelTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_label.png");
         gemCompleteTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_complete.png");
         constexpr int kGemSpritePool = 8; // ステージに置ける宝石の表示上限（HUD 用）
-        constexpr int kGemDigitPool = 12; // 「NN / NN」+ クリア画面用
+        constexpr int kGemDigitPool = 26; // 「NN / NN」+ クリア画面 + クリアの内訳用
         gemIconSprites_.clear();
         gemOutlineSprites_.clear();
         gemDigitSprites_.clear();
@@ -455,6 +456,48 @@ void GameScene::Initialize() {
         makePool(markQuestionSprites_, markQuestionTexHandle_, kMarkPool);
         makePool(markBarBackSprites_, pauseBackdropTexHandle_, kMarkPool);
         makePool(markBarFillSprites_, pauseBackdropTexHandle_, kMarkPool);
+
+        // 警戒度のバーと文字
+        alertLabelTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/alert_label.png");
+        alertSeenTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/alert_seen.png");
+        alertSuspectTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/alert_suspect.png");
+        makePool(alertBarSprites_, pauseBackdropTexHandle_, 6); // 下地・塗り・枠 4 本
+        alertLabelSprite_ = std::make_unique<Sprite>();
+        alertLabelSprite_->Initialize(spriteCommon_, alertLabelTexHandle_);
+        alertSeenSprite_ = std::make_unique<Sprite>();
+        alertSeenSprite_->Initialize(spriteCommon_, alertSeenTexHandle_);
+        alertSuspectSprite_ = std::make_unique<Sprite>();
+        alertSuspectSprite_->Initialize(spriteCommon_, alertSuspectTexHandle_);
+
+        // 開始・クリア・ポーズの文字
+        auto makeOne = [&](std::unique_ptr<Sprite> &sp, const char *path) {
+            sp = std::make_unique<Sprite>();
+            sp->Initialize(spriteCommon_, TextureManager::GetInstance()->Load(path));
+        };
+        makeOne(readyTextSprite_, "resources/Sprite/Original/UI/ready_text.png");
+        makeOne(goTextSprite_, "resources/Sprite/Original/UI/go_text.png");
+        makeOne(stageClearSprite_, "resources/Sprite/Original/UI/stage_clear.png");
+        makeOne(clearPromptSprite_, "resources/Sprite/Original/UI/clear_prompt.png");
+        makeOne(pauseGuideSprite_, "resources/Sprite/Original/UI/pause_guide.png");
+        makeOne(statSpottedSprite_, "resources/Sprite/Original/UI/stat_spotted.png");
+        makeOne(statReportSprite_, "resources/Sprite/Original/UI/stat_report.png");
+        makeOne(statNoiseSprite_, "resources/Sprite/Original/UI/stat_noise.png");
+        makeOne(statPeakSprite_, "resources/Sprite/Original/UI/stat_peak.png");
+        rankSprites_.clear();
+        for (const char *path : {"resources/Sprite/Original/UI/rank_s.png",
+                                 "resources/Sprite/Original/UI/rank_a.png",
+                                 "resources/Sprite/Original/UI/rank_b.png",
+                                 "resources/Sprite/Original/UI/rank_c.png"}) {
+            auto sp = std::make_unique<Sprite>();
+            sp->Initialize(spriteCommon_, TextureManager::GetInstance()->Load(path));
+            rankSprites_.push_back(std::move(sp));
+        }
+        statTimesSprites_.clear();
+        for (int i = 0; i < 3; ++i) {
+            auto sp = std::make_unique<Sprite>();
+            sp->Initialize(spriteCommon_, TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stat_times.png"));
+            statTimesSprites_.push_back(std::move(sp));
+        }
     }
 
     // 9. 死亡演出用 帽子オブジェクトの初期化 (hat.obj)
@@ -925,7 +968,6 @@ void GameScene::Update(SceneManager *sceneManager) {
 
                 // 復活直後の猶予：時間経過と加算を止め、警備員の見られゲージを 0 に戻す（復活位置で見られて即 +25 を防ぐ）
                 if (alert_) {
-                    alert_->SetPlayerPosition(player_->GetPosition());
                     bool dead = player_->IsDead();
                     if (playerWasDead_ && !dead && map_) {
                         alert_->StartGrace(alert_->GetParams().respawnGrace_);
@@ -1425,85 +1467,6 @@ void DrawFragileFloorImGui(MapChip2D *map, Camera *camera, const std::string &st
 } // namespace
 #endif
 
-void GameScene::DrawAlertHud(const ImVec2 &viewPos, float viewWidth, float viewHeight) {
-#ifdef USE_IMGUI
-    (void)viewHeight;
-    if (!alert_)
-        return;
-    // StartReady の間も出す（0 のバーが見えていた方が「これが上がる」と分かる）
-    ImDrawList *dl = ImGui::GetForegroundDrawList();
-    float ratio = std::clamp(alert_->GetRatio(), 0.0f, 1.0f);
-    float pulse = alert_->GetPulse();
-
-    const float barW = 240.0f;
-    const float barH = 14.0f + 6.0f * pulse;
-    const float margin = 16.0f;
-    ImVec2 p0(viewPos.x + viewWidth - margin - barW, viewPos.y + margin);
-    ImVec2 p1(p0.x + barW, p0.y + barH);
-
-    // 色：緑 → 黄 → 赤（連続）
-    auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
-    float r, g, b;
-    if (ratio < 0.5f) {
-        float t = ratio / 0.5f;
-        r = lerp(0.25f, 0.95f, t);
-        g = lerp(0.85f, 0.85f, t);
-        b = lerp(0.35f, 0.25f, t);
-    } else {
-        float t = (ratio - 0.5f) / 0.5f;
-        r = lerp(0.95f, 0.92f, t);
-        g = lerp(0.85f, 0.20f, t);
-        b = lerp(0.25f, 0.15f, t);
-    }
-    ImU32 fill = IM_COL32(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255), 235);
-
-    // 下地・バー・枠
-    dl->AddRectFilled(ImVec2(p0.x - 2.0f, p0.y - 2.0f), ImVec2(p1.x + 2.0f, p1.y + 2.0f), IM_COL32(0, 0, 0, 150), 4.0f);
-    dl->AddRectFilled(p0, ImVec2(p0.x + barW * ratio, p1.y), fill, 3.0f);
-    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 200), 3.0f, 0, 1.5f);
-    // 見られている：枠が黄色く点滅して「見られている」（+25 が来る前の猶予を猶予として見せる）
-    if (alert_->IsBeingSeen()) {
-        float blink = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 16.0));
-        dl->AddRect(ImVec2(p0.x - 3.0f, p0.y - 3.0f), ImVec2(p1.x + 3.0f, p1.y + 3.0f), IM_COL32(255, 220, 60, static_cast<int>(230 * blink)), 5.0f, 0, 2.5f);
-        const char *seenText = "見られている";
-        ImVec2 st = ImGui::CalcTextSize(seenText);
-        dl->AddText(ImVec2(p1.x - st.x, p0.y - st.y - 4.0f), IM_COL32(255, 230, 80, 255), seenText);
-    } else if (ratio > 0.8f) {
-        // 満タン付近は枠が赤く点滅
-        float blink = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 10.0));
-        dl->AddRect(ImVec2(p0.x - 3.0f, p0.y - 3.0f), ImVec2(p1.x + 3.0f, p1.y + 3.0f), IM_COL32(255, 60, 60, static_cast<int>(200 * blink)), 5.0f, 0, 2.0f);
-    }
-    // 復活直後の猶予：バーを青く覆う
-    if (alert_->IsInGrace()) {
-        dl->AddRectFilled(p0, p1, IM_COL32(120, 180, 255, 90), 3.0f);
-        const char *graceText = "猶予";
-        ImVec2 gt = ImGui::CalcTextSize(graceText);
-        dl->AddText(ImVec2(p0.x + (barW - gt.x) * 0.5f, p0.y + (barH - gt.y) * 0.5f), IM_COL32(220, 240, 255, 255), graceText);
-    }
-    // 見出し（数字は出さない）
-    ImVec2 ts = ImGui::CalcTextSize("ALERT");
-    dl->AddText(ImVec2(p0.x - ts.x - 8.0f, p0.y + (barH - ts.y) * 0.5f), IM_COL32(255, 255, 255, 220), "ALERT");
-
-    // 加点のポップアップ：バーの下から上へ浮かんで消える
-    float y = p1.y + 6.0f;
-    for (const auto &e : alert_->GetEvents()) {
-        float t = std::clamp(e.age / 1.6f, 0.0f, 1.0f);
-        float alpha = (t < 0.7f) ? 1.0f : (1.0f - (t - 0.7f) / 0.3f);
-        float rise = 14.0f * t;
-        ImVec2 tsz = ImGui::CalcTextSize(e.text.c_str());
-        ImVec2 tp(p1.x - tsz.x, y - rise);
-        dl->AddText(ImVec2(tp.x + 1.0f, tp.y + 1.0f), IM_COL32(0, 0, 0, static_cast<int>(200 * alpha)), e.text.c_str());
-        ImU32 textCol = e.good ? IM_COL32(150, 255, 170, static_cast<int>(255 * alpha)) : IM_COL32(255, 230, 120, static_cast<int>(255 * alpha));
-        dl->AddText(tp, textCol, e.text.c_str());
-        y += tsz.y + 2.0f;
-    }
-#else
-    (void)viewPos;
-    (void)viewWidth;
-    (void)viewHeight;
-#endif
-}
-
 void GameScene::DrawCaptureOverlay(const ImVec2 &viewPos, float viewWidth, float viewHeight) {
 #ifdef USE_IMGUI
     ImDrawList *dl = ImGui::GetForegroundDrawList();
@@ -1920,80 +1883,11 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
     windowWidth = EditorManager::GetGameViewSize().x;
     windowHeight = EditorManager::GetGameViewSize().y;
 
-    // 値の警戒度の HUD（右上のバー。ハードモード用。OFF の時は出さない）
-    if (alert_ && alert_->GetParams().enabled_) {
-        DrawAlertHud(windowPos, windowWidth, windowHeight);
-    }
+    // 警戒度の HUD はスプライトで描く（DrawAlertBarSprites）。
+    // ImGui だとエディタのゲームビューにしか出ず、製品版では消えてしまうため
     // 捕獲演出（回数制でも値でも同じ）
     if (alert_ && gameState_ == GameState::Captured) {
         DrawCaptureOverlay(windowPos, windowWidth, windowHeight);
-    }
-
-    // Start Ready 演出
-    if (gameState_ == GameState::StartReady) {
-        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::Begin("ReadyUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::SetWindowFontScale(6.0f);
-        if (stateTimer_ < 1.0f) {
-            const char *text = "READY...";
-            float textW = ImGui::CalcTextSize(text).x;
-            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textW) * 0.5f);
-            ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "%s", text);
-        } else {
-            const char *text = "GO!";
-            float textW = ImGui::CalcTextSize(text).x;
-            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textW) * 0.5f);
-            ImGui::TextColored(ImVec4(0, 1, 0, 1), "%s", text);
-        }
-        ImGui::End();
-    }
-
-    // Clear 演出：ゴール演出（スポットライト・煙玉・怪盗消滅・暗転）が完全に終わってから表示
-    // ※アイリスアウト開始後はUIを隠し、画面中央へ閉じるアイリスアウトを美しく見せる
-    if (gameState_ == GameState::Clear && isClearSequenceFinished_ && !isClearExitIrisActive_) {
-        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::Begin("ClearUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::SetWindowFontScale(6.0f);
-        const char *clearText = "STAGE CLEAR!";
-        float textWidth = ImGui::CalcTextSize(clearText).x;
-        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textWidth) * 0.5f);
-        ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "%s", clearText);
-
-        // 警戒度の評価（低く保つ理由）
-        if (alert_) {
-            AlertRank r = alert_->ComputeRank();
-            ImGui::SetWindowFontScale(3.0f);
-            char rankText[64];
-            snprintf(rankText, sizeof(rankText), "%s  RANK %c",
-                     (r.rank == 'S') ? "静穏" : (r.rank == 'A') ? "潜入"
-                                            : (r.rank == 'B')   ? "強行"
-                                                                : "騒然",
-                     r.rank);
-            float rw = ImGui::CalcTextSize(rankText).x;
-            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - rw) * 0.5f);
-            ImVec4 rankColor = (r.rank == 'S') ? ImVec4(0.6f, 1.0f, 0.8f, 1.0f) : (r.rank == 'A') ? ImVec4(0.7f, 0.9f, 1.0f, 1.0f)
-                                                                              : (r.rank == 'B')   ? ImVec4(1.0f, 0.9f, 0.5f, 1.0f)
-                                                                                                  : ImVec4(1.0f, 0.6f, 0.5f, 1.0f);
-            ImGui::TextColored(rankColor, "%s", rankText);
-            ImGui::SetWindowFontScale(1.6f);
-            char detail[128];
-            snprintf(detail, sizeof(detail), "発見 %d 回   通報 %d 回   騒音 %d 回   最大警戒度 %.0f", r.spotted, r.reported, r.noises, r.peak);
-            float dw = ImGui::CalcTextSize(detail).x;
-            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - dw) * 0.5f);
-            ImGui::TextColored(ImVec4(1, 1, 1, 0.9f), "%s", detail);
-        }
-
-        ImGui::SetWindowFontScale(2.0f);
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 30.0f);
-        const char *returnText = "Press SPACE / A to Stage Select";
-        float returnWidth = ImGui::CalcTextSize(returnText).x;
-        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - returnWidth) * 0.5f);
-
-        static float time = 0.0f;
-        time += ImGui::GetIO().DeltaTime;
-        float alpha = (sinf(time * 5.0f) + 1.0f) * 0.5f;
-        ImGui::TextColored(ImVec4(1, 1, 1, alpha), "%s", returnText);
-        ImGui::End();
     }
 
     // フェードイン/アウト画面遷移演出
@@ -2007,14 +1901,6 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
         ImGui::End();
     }
 
-    // ポーズ中の操作ガイド表示
-    if (isPaused_) {
-        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth * 0.5f, windowPos.y + windowHeight * 0.82f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::Begin("PauseGuideOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::SetWindowFontScale(1.8f);
-        ImGui::TextColored(ImVec4(0.95f, 0.95f, 0.95f, 0.9f), "W / S : 選択    SPACE / ENTER : 決定    TAB : 再開");
-        ImGui::End();
-    }
 #endif
 }
 
@@ -3499,12 +3385,230 @@ float GameScene::DrawGemDigits(const char *text, float x, float y, float cellW, 
     return cursor - x;
 }
 
+bool GameScene::IsGamePlaying() const {
+    // エディタで編集しているだけの間は、ゲーム中の表示（READY / 警戒度など）を出さない。
+    // 製品版にはエディタが無いので常に動いている扱い
+#ifdef USE_IMGUI
+    if (EditorManager::IsPlaying()) return true;
+    if (ReplayManager::GetInstance() && ReplayManager::GetInstance()->IsPlaying()) return true;
+    return false;
+#else
+    return true;
+#endif
+}
+
+void GameScene::DrawAlertBarSprites() {
+    if (!IsGamePlaying()) return;
+    // 警戒度のバーと文字。ImGui ではなくスプライトで描くので、エディタでも製品版でも同じように出る
+    if (!alert_ || !alert_->GetParams().enabled_) return;
+    if (alertBarSprites_.size() < 6 || !alertLabelSprite_) return;
+    if (gameState_ == GameState::Captured) return;
+
+    const float ratio = std::clamp(alert_->GetRatio(), 0.0f, 1.0f);
+    const float pulse = alert_->GetPulse();
+    const float barW = 240.0f;
+    const float barH = 14.0f + 6.0f * pulse;
+    const float margin = 18.0f;
+    const float x0 = 1280.0f - margin - barW;
+    const float y0 = margin;
+
+    // 色：緑 → 黄 → 赤（ImGui 版と同じ）
+    auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+    float r, g, b;
+    if (ratio < 0.5f) {
+        const float t = ratio / 0.5f;
+        r = lerp(0.25f, 0.95f, t);
+        g = 0.85f;
+        b = lerp(0.35f, 0.25f, t);
+    } else {
+        const float t = (ratio - 0.5f) / 0.5f;
+        r = lerp(0.95f, 0.92f, t);
+        g = lerp(0.85f, 0.20f, t);
+        b = lerp(0.25f, 0.15f, t);
+    }
+
+    size_t used = 0;
+    auto rect = [&](float x, float y, float w, float h, const Vector4 &color) {
+        if (used >= alertBarSprites_.size() || w <= 0.0f || h <= 0.0f) return;
+        Sprite *sp = alertBarSprites_[used++].get();
+        sp->SetPosition({x, y});
+        sp->SetSize({w, h});
+        sp->SetColor(color);
+        sp->Update();
+        sp->Draw();
+    };
+
+    // 下地 → 中身 → 枠（4 本の細い帯）
+    rect(x0 - 2.0f, y0 - 2.0f, barW + 4.0f, barH + 4.0f, {0.0f, 0.0f, 0.0f, 0.6f});
+    rect(x0, y0, barW * ratio, barH, {r, g, b, 0.92f});
+
+    // 見られている間は枠が黄色く点滅する
+    Vector4 frameColor = {1.0f, 1.0f, 1.0f, 0.8f};
+    if (alert_->IsBeingSeen()) {
+        const float blink = 0.5f + 0.5f * std::sin(hudTime_ * 16.0f);
+        frameColor = {1.0f, 0.86f, 0.24f, 0.55f + 0.45f * blink};
+    } else if (ratio > 0.8f) {
+        const float blink = 0.5f + 0.5f * std::sin(hudTime_ * 10.0f);
+        frameColor = {1.0f, 0.24f, 0.24f, 0.5f + 0.5f * blink};
+    }
+    constexpr float kEdge = 1.5f;
+    rect(x0, y0, barW, kEdge, frameColor);
+    rect(x0, y0 + barH - kEdge, barW, kEdge, frameColor);
+    rect(x0, y0, kEdge, barH, frameColor);
+    rect(x0 + barW - kEdge, y0, kEdge, barH, frameColor);
+
+    // 「警戒度」の文字はバーの左に置く
+    {
+        constexpr float kLabelH = 22.0f;
+        const float w = kLabelH * (160.0f / 72.0f);
+        alertLabelSprite_->SetSize({w, kLabelH});
+        alertLabelSprite_->SetPosition({x0 - 8.0f - w, y0 + (barH - kLabelH) * 0.5f});
+        alertLabelSprite_->SetColor({1.0f, 1.0f, 1.0f, 0.95f});
+        alertLabelSprite_->Update();
+        alertLabelSprite_->Draw();
+    }
+
+    // 今なぜ上がっているかをバーの下に出す
+    Sprite *state = nullptr;
+    float aspect = 1.0f;
+    if (alert_->IsBeingSeen()) {
+        state = alertSeenSprite_.get();
+        aspect = 232.0f / 60.0f;
+    } else if (alert_->IsBeingSuspected()) {
+        state = alertSuspectSprite_.get();
+        aspect = 264.0f / 60.0f;
+    }
+    if (state) {
+        constexpr float kTextH = 20.0f;
+        const float w = kTextH * aspect;
+        const float blink = 0.6f + 0.4f * std::sin(hudTime_ * 8.0f);
+        state->SetSize({w, kTextH});
+        state->SetPosition({1280.0f - margin - w, y0 + barH + 6.0f});
+        state->SetColor({1.0f, 1.0f, 1.0f, blink});
+        state->Update();
+        state->Draw();
+    }
+}
+
+void GameScene::DrawStageStateSprites() {
+    if (!IsGamePlaying()) return; // エディタで編集中は「READY...」などを出さない
+    // 開始・クリア・ポーズの文字。文字の画像は白で作ってあるので、色は掛け算で付ける
+    auto drawCentered = [&](Sprite *sp, float aspect, float height, float centerY, const Vector4 &color) {
+        if (!sp) return;
+        const float w = height * aspect;
+        sp->SetSize({w, height});
+        sp->SetPosition({(1280.0f - w) * 0.5f, centerY - height * 0.5f});
+        sp->SetColor(color);
+        sp->Update();
+        sp->Draw();
+    };
+
+    // ---- 開始（READY... → GO!）----
+    if (gameState_ == GameState::StartReady) {
+        if (stateTimer_ < 1.0f) {
+            drawCentered(readyTextSprite_.get(), 516.0f / 124.0f, 92.0f, 300.0f, {1.0f, 0.55f, 0.12f, 1.0f});
+        } else {
+            drawCentered(goTextSprite_.get(), 248.0f / 128.0f, 104.0f, 300.0f, {0.35f, 1.0f, 0.45f, 1.0f});
+        }
+    }
+
+    // ---- クリア（演出が終わってから。アイリスアウトが始まったら隠す）----
+    if (gameState_ == GameState::Clear && isClearSequenceFinished_ && !isClearExitIrisActive_) {
+        drawCentered(stageClearSprite_.get(), 856.0f / 128.0f, 88.0f, 190.0f, {1.0f, 0.82f, 0.15f, 1.0f});
+
+        if (alert_ && rankSprites_.size() >= 4) {
+            const AlertRank r = alert_->ComputeRank();
+            const int idx = (r.rank == 'S') ? 0 : (r.rank == 'A') ? 1 : (r.rank == 'B') ? 2 : 3;
+            static const Vector4 kRankColors[4] = {
+                {0.60f, 1.00f, 0.80f, 1.0f}, // 静穏
+                {0.70f, 0.90f, 1.00f, 1.0f}, // 潜入
+                {1.00f, 0.90f, 0.50f, 1.0f}, // 強行
+                {1.00f, 0.60f, 0.50f, 1.0f}, // 騒然
+            };
+            drawCentered(rankSprites_[idx].get(), 444.0f / 92.0f, 46.0f, 288.0f, kRankColors[idx]);
+            DrawClearStatLine(r, 352.0f);
+        }
+
+        const float blink = 0.30f + 0.70f * (0.5f + 0.5f * std::sin(hudTime_ * 5.0f));
+        drawCentered(clearPromptSprite_.get(), 732.0f / 76.0f, 30.0f, 615.0f, {1.0f, 1.0f, 1.0f, blink});
+    }
+
+    // ---- ポーズ中の操作ガイド ----
+    if (isPaused_) {
+        drawCentered(pauseGuideSprite_.get(), 964.0f / 68.0f, 28.0f, 720.0f * 0.82f, {0.95f, 0.95f, 0.95f, 0.9f});
+    }
+}
+
+void GameScene::DrawClearStatLine(const AlertRank &rank, float centerY) {
+    // 「発見 N 回   通報 N 回   騒音 N 回   最大警戒度 N」を中央に並べる。
+    // 数字は宝石と同じ数字帯を使う（先頭 12 個は宝石の表示で使っているのでその後ろから借りる）
+    if (!statSpottedSprite_ || statTimesSprites_.size() < 3) return;
+
+    const float h = 24.0f;
+    const float cellW = 15.0f;
+    const float pad = 5.0f;   // 語と数字の間
+    const float group = 26.0f; // 項目どうしの間
+
+    char num[4][8];
+    snprintf(num[0], sizeof(num[0]), "%d", rank.spotted);
+    snprintf(num[1], sizeof(num[1]), "%d", rank.reported);
+    snprintf(num[2], sizeof(num[2]), "%d", rank.noises);
+    snprintf(num[3], sizeof(num[3]), "%d", static_cast<int>(rank.peak + 0.5f));
+
+    struct Part { Sprite *sp; float aspect; const char *digits; float lead; };
+    const Part parts[] = {
+        {statSpottedSprite_.get(), 100.0f / 64.0f, nullptr, 0.0f},
+        {nullptr, 0.0f, num[0], pad},
+        {statTimesSprites_[0].get(), 1.0f, nullptr, pad},
+        {statReportSprite_.get(), 100.0f / 64.0f, nullptr, group},
+        {nullptr, 0.0f, num[1], pad},
+        {statTimesSprites_[1].get(), 1.0f, nullptr, pad},
+        {statNoiseSprite_.get(), 100.0f / 64.0f, nullptr, group},
+        {nullptr, 0.0f, num[2], pad},
+        {statTimesSprites_[2].get(), 1.0f, nullptr, pad},
+        {statPeakSprite_.get(), 200.0f / 64.0f, nullptr, group},
+        {nullptr, 0.0f, num[3], pad},
+    };
+    const int count = static_cast<int>(sizeof(parts) / sizeof(parts[0]));
+
+    float total = 0.0f;
+    for (int i = 0; i < count; ++i) {
+        total += parts[i].lead;
+        total += parts[i].digits ? cellW * static_cast<float>(strlen(parts[i].digits)) : h * parts[i].aspect;
+    }
+
+    const Vector4 color = {1.0f, 1.0f, 1.0f, 0.9f};
+    float x = (1280.0f - total) * 0.5f;
+    const float y = centerY - h * 0.5f;
+    size_t digitIndex = 12; // 宝石の表示（0〜11）とぶつからない番号から使う
+    for (int i = 0; i < count; ++i) {
+        x += parts[i].lead;
+        if (parts[i].digits) {
+            x += DrawGemDigits(parts[i].digits, x, y, cellW, h, color, digitIndex);
+            digitIndex += strlen(parts[i].digits);
+            continue;
+        }
+        Sprite *sp = parts[i].sp;
+        if (!sp) continue;
+        const float w = h * parts[i].aspect;
+        sp->SetSize({w, h});
+        sp->SetPosition({x, y});
+        sp->SetColor(color);
+        sp->Update();
+        sp->Draw();
+        x += w;
+    }
+}
+
 void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
     if (!spriteCommon_ || !map_)
         return;
     const float dt = TimeManager::GetInstance().GetDeltaTime();
     hudTime_ += dt;
     spriteCommon_->PreDraw();
+
+    // ---- 警戒度のバー（右上） ----
+    DrawAlertBarSprites();
 
     // ---- 目のアイコン（右上。残り回数）と、発見直後の画面の縁の赤 ----
     if (alert_ && alert_->GetParams().strikeEnabled_ && !eyeOpenSprites_.empty() && gameState_ != GameState::Captured) {
@@ -3514,7 +3618,7 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
         const float eyeW = 36.0f, eyeH = 24.0f, gap = 40.0f, margin = 18.0f;
         float y = margin + 4.0f;
         if (alert_->GetParams().enabled_)
-            y += 34.0f; // 値のバーも出ている時はその下
+            y += 58.0f; // 警戒度のバーと文字が出ている時はその下
         const bool lastOne = (limit - used == 1);
         const float blink = 0.5f + 0.5f * std::sin(hudTime_ * 6.0f);
         for (int i = 0; i < limit; ++i) {
@@ -3610,6 +3714,9 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
             }
         }
     }
+
+    // ---- 開始・クリア・ポーズの文字 ----
+    DrawStageStateSprites();
 
     // ---- 収集アイテム（左下）とクリア画面の「宝石 N / M」 ----
     if (gemIconSprites_.empty() || gameState_ == GameState::Captured)
