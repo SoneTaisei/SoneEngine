@@ -1,4 +1,4 @@
-﻿#include "DoorBlock.h"
+#include "DoorBlock.h"
 #include "LinkColor.h"
 #include "SwitchBlock.h"
 #include "Editor/Replay/ReplayManager.h"
@@ -110,14 +110,16 @@ void DoorBlock::Update() {
     blockedThisFrame_ = false;
 
     // 連動番号ごとの色。開くほど明るくして、動いているのが分かるようにする
+    Vector4 closed = LinkColor::Dark(linkId_);
+    Vector4 opened = LinkColor::Bright(linkId_);
+    float t = openProgress_;
+    Vector4 currentColor = { closed.x + (opened.x - closed.x) * t,
+                             closed.y + (opened.y - closed.y) * t,
+                             closed.z + (opened.z - closed.z) * t,
+                             closed.w };
+
     if (auto* renderer = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
-        Vector4 closed = LinkColor::Dark(linkId_);
-        Vector4 opened = LinkColor::Bright(linkId_);
-        float t = openProgress_;
-        renderer->GetMaterial().color = { closed.x + (opened.x - closed.x) * t,
-                                          closed.y + (opened.y - closed.y) * t,
-                                          closed.z + (opened.z - closed.z) * t,
-                                          closed.w };
+        renderer->GetMaterial().color = currentColor;
     }
 
     ApplyTransform();
@@ -152,7 +154,8 @@ void DoorBlock::ApplyTransform() {
         w = remain;
         cx = (startX_ + startWidth_ * 0.5f) - w * 0.5f;
     }
-    tc->SetScale({w, h, 1.0f});
+    float sz = tc->GetScale().z;
+    tc->SetScale({w, h, sz});
     tc->SetPosition({cx, cy, 0.0f});
 }
 
@@ -172,7 +175,8 @@ void DoorBlock::Reset() {
     if (gameObject_) {
         auto* tc = gameObject_->GetComponent<TransformComponent>();
         if (tc) {
-            tc->SetScale({startWidth_, startHeight_, 1.0f});
+            float sz = tc->GetScale().z;
+            tc->SetScale({startWidth_, startHeight_, sz});
             tc->SetPosition({startX_, startY_, 0.0f});
         }
     }

@@ -725,6 +725,15 @@ void MapChip2D::RebuildChipObjects() {
             bool canMerge = false;
             if (typeId < 100) {
                 canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
+                const CustomBlockDef* def = nullptr;
+                for (const auto& d : templatePalette_) {
+                    if (d.id == typeId) { def = &d; break; }
+                }
+                // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
+                // （ただしDoorBlockは扉として1つに結合して伸縮・開閉するためマージを許可する）
+                if (def && !def->modelName.empty() && def->type != "DoorBlock") {
+                    canMerge = false;
+                }
             } else {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 const CustomBlockDef* def = nullptr;
@@ -734,7 +743,8 @@ void MapChip2D::RebuildChipObjects() {
                 if (def) {
                     canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "DoorBlock");
                     // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
-                    if (!def->modelName.empty()) {
+                    // （ただしDoorBlockは扉として1つに結合して伸縮・開閉するためマージを許可する）
+                    if (!def->modelName.empty() && def->type != "DoorBlock") {
                         canMerge = false;
                     }
                 }
@@ -1527,7 +1537,12 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
 
                     // モデル用の位置・スケールと「立方体を消す」設定を覚えさせ、
                     // 死亡リセット後にも同じ見た目へ戻せるようにする
-                    newBlock->SetModelVisualOverride({ worldX, worldY, 0.0f }, def->scale);
+                    Vector3 modelScale = {
+                        spanWidth * chipSize_ * def->scale.x,
+                        spanHeight * chipSize_ * def->scale.y,
+                        def->scale.z
+                    };
+                    newBlock->SetModelVisualOverride({ worldX, worldY, 0.0f }, modelScale);
                     newBlock->ApplyModelVisualOverride();
                 }
             }
