@@ -2997,7 +2997,12 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
             if (gameCamera_) {
                 gameCamera_->SetScale(deathCameraStartScale_); // 寄せた分を元に戻す
                 gameCamera_->SetFollowTarget(&player_->GetPosition());
-                gameCamera_->SetTranslation(deathRespawnPos_);
+                // リスポーン地点へカメラを移すのはXYだけ。
+                // Zにプレイヤーの座標（0）を入れるとカメラがブロックと同じ平面に入り込み、
+                // 正射影のニアクリップ（0.1）でブロックの手前側が切り取られて
+                // 3Dモデルが破綻して見えるため、カメラの奥行きは維持する
+                const Vector3 currentCamPos = gameCamera_->GetTranslation();
+                gameCamera_->SetTranslation({deathRespawnPos_.x, deathRespawnPos_.y, currentCamPos.z});
             }
         }
 

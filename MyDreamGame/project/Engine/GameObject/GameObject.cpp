@@ -14,6 +14,7 @@ void GameObject::Update() {
 
 void GameObject::Draw() {
     for (auto& comp : components_) {
+        if (!comp->IsEnabled()) continue;
         comp->Draw();
     }
 }
