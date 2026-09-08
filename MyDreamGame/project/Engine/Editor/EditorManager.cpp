@@ -285,9 +285,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
         if (activeScene && activeScene->GetMapChip()) {
             MapChip2D* mapChip = activeScene->GetMapChip();
-            // 前回読み込んでいたマップをロード
-            const char* currentStageName = mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt";
-            bool loaded = mapChip->LoadFromStageName(currentStageName);
+            // シーンが自分でマップを読み込み済みなら、それを上書きしない。
+            // （タイトルから選んで入ったステージを「前回のマップ」で差し替えてしまうため。
+            //   MapChip2D::Initialize は読み込めなかった時も自前で代わりのマップまで用意するので、
+            //   ここを通っていればマップは必ず有効）
+            bool loaded = !mapChip->GetCurrentFilePath().empty();
+            if (!loaded) {
+                // まだ何も読んでいないシーン：前回読み込んでいたマップをロード
+                const char* currentStageName = mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt";
+                loaded = mapChip->LoadFromStageName(currentStageName);
+            }
             if (!loaded) {
                 // 前回のマップが存在しない場合はデフォルトマップを表示
                 if (mapEditor_) mapEditor_->SetStageFilename("map_data.txt");

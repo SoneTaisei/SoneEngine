@@ -14,6 +14,7 @@
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
 #include "Editor/EditorManager.h"
+#include "Editor/MapEditor/MapEditor.h"
 #endif
 #include "BlockDesignPanel.h"
 #include "Component/MeshRendererComponent.h"
@@ -239,6 +240,25 @@ void GameScene::Initialize() {
     // 収集アイテムの記録を読む（宝石ブロックが Initialize で「以前取ったか」を参照するのでマップより先）
     CollectibleTracker::Get().BeginStage(s_TargetMapFilePath);
     map_->Initialize(s_TargetMapFilePath);
+
+#ifdef USE_IMGUI
+    // 遊び始めたステージの名前をエディタにも伝える。
+    // 伝えないと、エディタが起動後に1回だけ走る「前回のマップを読み直す」処理が、
+    // タイトルから入ったステージ（map1.txt など）を別のマップに差し替えてしまう
+    {
+        const std::string loadedPath = map_->GetCurrentFilePath();
+        if (!loadedPath.empty() && loadedPath.find("temp_play_map") == std::string::npos) {
+            const std::string loadedName = std::filesystem::path(loadedPath).filename().string();
+            if (!loadedName.empty()) {
+                if (EditorManager *em = EditorManager::GetInstance()) {
+                    if (MapEditor *me = em->GetMapEditor()) {
+                        me->SetStageFilename(loadedName);
+                    }
+                }
+            }
+        }
+    }
+#endif
     // 動く床・扉などの状態をリプレイに記録・復元できるように登録する
     ReplayManager::GetInstance()->RegisterObjectProvider(map_.get());
     Log("GameScene::Initialize: Map Initialized\n");
