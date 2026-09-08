@@ -229,6 +229,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.name = "Collectible Gem";
         def.type = "CollectibleBlock";
         def.color = {0.45f, 0.8f, 1.0f, 1.0f};
+        def.shaderMode = kShaderGem;
         def.properties = nlohmann::json::object();
         templatePalette_.push_back(def);
     }
@@ -970,6 +971,7 @@ std::string MapChip2D::GetMapDataAsString() const {
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
         p["textureName"] = def.textureName;
+        p["shaderMode"] = def.shaderMode;
         p["properties"] = def.properties;
         paletteArray.push_back(p);
     }
@@ -1035,6 +1037,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
+                if (p.contains("shaderMode")) def.shaderMode = p["shaderMode"].get<int>();
                 if (p.contains("properties")) def.properties = p["properties"];
                 
                 bool found = false;
@@ -1217,6 +1220,7 @@ bool MapChip2D::SaveTemplatesToFile(const std::string& filepath) {
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
         p["textureName"] = def.textureName;
+        p["shaderMode"] = def.shaderMode;
         p["properties"] = def.properties;
         templatesArray.push_back(p);
     }
@@ -1258,6 +1262,7 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
+                if (p.contains("shaderMode")) def.shaderMode = p["shaderMode"].get<int>();
                 if (p.contains("properties")) def.properties = p["properties"];
                 templatePalette_.push_back(def);
             }
@@ -1443,9 +1448,25 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             } else {
                 newBlock->SetProperties(def->properties);
             }
+            // シェーダー設定（通常 / 宝石）をマテリアルに反映するラムダ
+            auto applyShaderSettings = [&](Material& mat) {
+                if (def->shaderMode == kShaderGem) {
+                    mat.lightingType = 2;              // クリスタル/宝石シェーディングモード
+                    mat.enableEnvironmentMap = 1;      // 環境キューブマップ反射・屈折を有効化
+                    mat.shininess = 64.0f;             // 鋭い表面スペキュラ
+                    mat.environmentCoefficient = 0.8f; // 環境マップ映り込み係数
+                } else {
+                    mat.lightingType = 1;              // 通常ライティングモード
+                    mat.enableEnvironmentMap = 0;
+                    mat.shininess = 50.0f;
+                    mat.environmentCoefficient = 1.0f;
+                }
+            };
+
             if (newBlock->GetGameObject()) {
                 if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                     prc->GetMaterial().color = def->color;
+                    applyShaderSettings(prc->GetMaterial());
                     
                     if (!def->textureName.empty()) {
                         std::string fullTex = (def->textureName.find("resources/") == 0) ? def->textureName : ("resources/" + def->textureName);
@@ -1501,6 +1522,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                         mrc->SetTextureHandle(gpuHandle_);
                     }
                     mrc->GetMaterial().color = def->color;
+                    applyShaderSettings(mrc->GetMaterial());
 
                     if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
                         tc->SetPosition({ worldX, worldY, 0.0f });

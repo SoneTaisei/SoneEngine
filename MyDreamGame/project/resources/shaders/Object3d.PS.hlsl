@@ -292,20 +292,30 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         float fresnel = 1.0f - NdotV;
         float fresnelPow = pow(fresnel, 2.5f);
 
+        // Base tint from material color and texture
+        float3 baseColor = gMaterial.color.rgb * textureColor.rgb;
+        float baseLum = max(baseColor.r, max(baseColor.g, baseColor.b));
+
         // 3. Multi-band Iridescence (Thin-film interference / Prism dispersion)
-        // Dynamically shifts between base amber, vivid pink/magenta, deep purple, and golden yellow based on viewing angle
+        // Dynamically shifts colors based on viewing angle and surface facet normal
         float dispersionShift = frac(fresnel * 1.35f + dot(normal, float3(0.35f, 0.65f, 0.25f)) * 0.45f);
-        float3 iridColor;
-        if (dispersionShift < 0.33f) {
-            float t = dispersionShift / 0.33f;
-            iridColor = lerp(gMaterial.color.rgb, float3(1.0f, 0.12f, 0.58f), t); // Amber to Vivid Pink
-        } else if (dispersionShift < 0.66f) {
-            float t = (dispersionShift - 0.33f) / 0.33f;
-            iridColor = lerp(float3(1.0f, 0.12f, 0.58f), float3(0.65f, 0.18f, 0.95f), t); // Pink to Violet
-        } else {
-            float t = (dispersionShift - 0.66f) / 0.34f;
-            iridColor = lerp(float3(0.65f, 0.18f, 0.95f), float3(1.0f, 0.90f, 0.35f), t); // Violet to Golden Yellow
-        }
+
+        // Pure spectral rainbow dispersion (cyan -> violet -> amber/pink)
+        float3 spectralColor = 0.5f + 0.5f * cos(6.28318f * (dispersionShift + float3(0.0f, 0.33f, 0.67f)));
+
+        // Hue-shifted color revolving around baseColor (+/- 54 degrees)
+        float angle = (dispersionShift - 0.5f) * 1.9f;
+        const float3 kNorm = float3(0.57735f, 0.57735f, 0.57735f);
+        float cosA = cos(angle);
+        float sinA = sin(angle);
+        float3 hueShiftedColor = baseColor * cosA + cross(kNorm, baseColor) * sinA + kNorm * dot(kNorm, baseColor) * (1.0f - cosA);
+        hueShiftedColor = max(hueShiftedColor, 0.0f);
+
+        // Blend hue-shifted base color with spectral dispersion.
+        // Modulation by baseLum ensures dark/black gems smoothly fade out internal prism illumination.
+        float colorSat = saturate((max(baseColor.r, max(baseColor.g, baseColor.b)) - min(baseColor.r, min(baseColor.g, baseColor.b))) * 2.5f);
+        float3 spectralMod = spectralColor * baseLum;
+        float3 iridColor = lerp(spectralMod, hueShiftedColor, colorSat * 0.75f + 0.25f);
 
         // 4. Incident Lighting and Ambient Illumination evaluation
         // Calculate the light energy arriving at the crystal so it darkens proportionally with scene lighting.
@@ -417,7 +427,7 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
 
         // 5. Inner glow (scaled by lightingScale so it darkens in dark environments, but retains 100% of original vibrant look when lit)
         float innerGlowFactor = pow(NdotV, 1.2f) * 0.75f + 0.35f;
-        float3 baseInnerGlow = lerp(gMaterial.color.rgb, iridColor, 0.55f) * innerGlowFactor;
+        float3 baseInnerGlow = lerp(baseColor, iridColor, 0.55f) * innerGlowFactor;
         float3 litInnerGlow = baseInnerGlow * lightingScale;
 
         // 6. Fake Refraction modulated by lighting scale
@@ -432,12 +442,17 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         // 7. Environment Mirror Reflection modulated by lighting scale
         float3 reflectDir = reflect(-toEye, normal);
         float4 envReflectColor = gEnvironmentMap.Sample(gSampler, reflectDir);
-        float3 envSpecular = envReflectColor.rgb * envCoeff * (fresnelPow * 0.85f + 0.15f) * lightingScale;
+        // For black/dark crystals, suppress constant baseline reflection so the core remains pitch black, keeping sharp grazing-angle reflections
+        float envF0 = 0.04f * saturate(baseLum * 2.0f);
+        float3 envSpecular = envReflectColor.rgb * envCoeff * (fresnelPow * (1.0f - envF0) + envF0) * lightingScale;
 
         // 8. Outer Rim Highlight modulated by lighting scale
-        float rimFactor = pow(fresnel, 3.0f);
-        float3 rimColor = lerp(float3(0.20f, 0.85f, 1.0f), float3(1.0f, 0.35f, 0.80f), dispersionShift);
-        float3 rimLight = rimColor * rimFactor * 1.4f * lightingScale;
+        float rimFactor = pow(fresnel, 3.5f);
+        // Base rim color follows crystal body tint without artificial white offset
+        float3 rimColor = lerp(baseColor * 1.5f, iridColor * 1.3f, dispersionShift);
+        // For dark crystals (black/onyx), subtle sharp specular rim to define the silhouette
+        float darkSilhouetteRim = (1.0f - saturate(baseLum * 2.5f)) * 0.18f;
+        float3 rimLight = (rimColor + darkSilhouetteRim) * rimFactor * 1.4f * lightingScale;
 
         // 9. Final Color Composition
         // In standard lit conditions (lightingScale == 1.0), this matches the original crystal visual 1:1.

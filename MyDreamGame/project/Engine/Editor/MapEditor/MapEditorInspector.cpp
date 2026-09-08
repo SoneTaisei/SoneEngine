@@ -208,6 +208,24 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         }
     }
 
+    // --- シェーダー設定UI ---
+    const char* shaderItems[] = { "通常 (Standard)", "宝石 (Gem / Crystal)" };
+    int currentShader = targetDef->shaderMode;
+    if (currentShader < 0 || currentShader >= IM_ARRAYSIZE(shaderItems)) {
+        currentShader = 0;
+    }
+    if (ImGui::Combo("シェーダー (Shader)", &currentShader, shaderItems, IM_ARRAYSIZE(shaderItems))) {
+        targetDef->shaderMode = currentShader;
+        changed = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "オブジェクトの描画シェーダープリセットを切り替えます。\n"
+            "・通常 (Standard): 一般的な拡散光・陰影・シャドウ・環境光\n"
+            "・宝石 (Gem / Crystal): ウズシオクリスタルと同じ薄膜干渉虹色、擬似屈折、インナーグロー、表面光沢"
+        );
+    }
+
     ImGui::Separator();
     ImGui::Text("プロパティ:");
     auto getJpKey = [](const std::string& k) {
@@ -292,6 +310,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
                 targetDef->scale = t.scale;
                 targetDef->modelName = t.modelName;
                 targetDef->textureName = t.textureName;
+                targetDef->shaderMode = t.shaderMode;
                 targetDef->properties = t.properties;
                 changed = true;
                 break;
