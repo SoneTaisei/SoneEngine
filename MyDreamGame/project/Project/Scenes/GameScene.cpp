@@ -93,6 +93,7 @@ void GameScene::EnsureGameCameraMode() {
 
 void GameScene::OnExit(SceneManager* sceneManager) {
     (void)sceneManager;
+    AudioManager::StopAllLoopSE();
     isPaused_ = false;
     isIrisInActive_ = false;
     isIrisOutActive_ = false;
@@ -488,6 +489,7 @@ void GameScene::Update(SceneManager *sceneManager) {
     } else if (gameState_ == GameState::Clear && isClearSequenceFinished_) {
         stateTimer_ += dt;
         if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+            AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
 #ifdef USE_IMGUI
             if (EditorManager::GetInstance()) {
                 EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
@@ -2586,6 +2588,7 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager* sceneManager) {
 void GameScene::TriggerClearSequence(const Vector3& goalPos, float goalTopY) {
     if (isClearSequenceActive_) return;
 
+    AudioManager::Play("resources/Sound/10Dyas/SE/SpotLight.mp3", 0.75f);
     isClearSequenceActive_ = true;
     isClearSequenceFinished_ = false;
     clearSequenceTimer_ = 0.0f;
@@ -2642,7 +2645,12 @@ void GameScene::TriggerClearSequence(const Vector3& goalPos, float goalTopY) {
 void GameScene::UpdateClearSequence(float dt, SceneManager* sceneManager) {
     if (!isClearSequenceActive_) return;
 
+    float prevTimer = clearSequenceTimer_;
     clearSequenceTimer_ += dt;
+
+    if (prevTimer < 0.35f && clearSequenceTimer_ >= 0.35f) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/SpotLight.mp3", 0.75f);
+    }
 
     // 左右交互に照らし、そのあと交差して怪盗を捕捉する
     // 0.0s〜0.35s: 左ライト点灯
@@ -2830,8 +2838,10 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
 
     if (moveUp) {
         pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     } else if (moveDown) {
         pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
 
     // Bボタンでポーズ解除
@@ -2851,6 +2861,7 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
     }
 
     if (isDecision) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
         if (pauseMenuIndex_ == 0) {
             // リトライ: 現在のステージを最初からリスタート
             isPaused_ = false;

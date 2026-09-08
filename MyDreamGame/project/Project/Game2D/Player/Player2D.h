@@ -14,7 +14,7 @@ class GameCamera;
 class Player2D : public IComponent {
 public:
     Player2D() = default;
-    ~Player2D() override = default;
+    ~Player2D() override;
 
     void Initialize() override;
     void Update() override;

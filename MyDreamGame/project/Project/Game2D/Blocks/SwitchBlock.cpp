@@ -1,5 +1,6 @@
-﻿#include "SwitchBlock.h"
+#include "SwitchBlock.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Resource/Audio/AudioManager.h"
 
 SwitchBlock::SwitchBlock(MapChip2D* map, int chipX, int chipY)
     : BaseBlock(map, chipX, chipY) {}
@@ -42,11 +43,15 @@ void SwitchBlock::Update() {
     float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
     
     // タイマーを減らす
+    bool wasPressed = isPressed_;
     if (pressedTimer_ > 0.0f) {
         pressedTimer_ -= dt;
         isPressed_ = true;
     } else {
         isPressed_ = false;
+    }
+    if (!wasPressed && isPressed_) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Switch.mp3", 0.75f);
     }
 
     // 見た目の更新

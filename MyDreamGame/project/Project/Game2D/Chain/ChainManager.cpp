@@ -2,6 +2,7 @@
 #include "Game2D/Security/AlertSystem.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
+#include "Resource/Audio/AudioManager.h"
 #include <cmath>
 
 #include "Game2D/Player/Player2D.h"
@@ -216,6 +217,7 @@ bool ChainManager::TryPickup() {
             // 上限を超える分は消滅させる（見えないジャンプペナルティだけが増えるのを防ぐ）
             int gain = (std::min)(droppedChains_[i].unitWorth, headroom);
             player_->AddChainLength(gain);
+            AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
             if (droppedChains_[i].effect) {
                 RecycleLuminescenceEffect(std::move(droppedChains_[i].effect));
             }
@@ -233,6 +235,7 @@ bool ChainManager::TryPickup() {
             if (take > 0) {
                 chain->RemoveUnitsAtAnchor(take);
                 player_->AddChainLength(take);
+                AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
                 // 使い切った吊り鎖も消さずに残す（アンカー1ノードだけの休眠状態＝描画も物理も判定も無効）
                 // ResetToInitial() が初期ユニット数へ復元するので、リプレイ再生や2回目のプレイで世界がずれない
                 return true;
@@ -287,6 +290,7 @@ bool ChainManager::TryBindGuard() {
     }
     guard->Bind(1);
     player_->AddChainLength(-1); // Reconcile が手元側から1ユニット縮める
+    AudioManager::Play("resources/Sound/10Dyas/SE/LosingChain.mp3", 0.75f);
     Log("ChainManager: guard bound, chainLength=" + std::to_string(player_->GetChainLength()) + "\n");
     return true;
 }
@@ -309,6 +313,7 @@ bool ChainManager::TryUnbindGuard() {
     int gain = std::clamp(units, 0, (std::max)(0, headroom));
     if (gain > 0) {
         player_->AddChainLength(gain); // 増えた分は Reconcile が手元から繰り出す
+        AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
     }
     Log("ChainManager: guard unbound +" + std::to_string(gain) + " unit(s)\n");
     return true;
@@ -339,6 +344,7 @@ void ChainManager::DetachUnits() {
     }
     // 先に個数を減らしてから（同フレームの Reconcile が二重に削らないよう current == target にする）
     player_->AddChainLength(-detach);
+    AudioManager::Play("resources/Sound/10Dyas/SE/LosingChain.mp3", 0.75f);
 
     // 外したエフェクト再生
     if (breakEffect_) {

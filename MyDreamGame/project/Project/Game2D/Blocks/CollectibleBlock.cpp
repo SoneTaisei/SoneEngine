@@ -1,8 +1,9 @@
-﻿#include "CollectibleBlock.h"
+#include "CollectibleBlock.h"
 #include "Game2D/CollectibleTracker.h"
 #include "Game2D/Player/Player2D.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
+#include "Resource/Audio/AudioManager.h"
 #include "Core/TimeManager.h"
 #include <algorithm>
 #include <cmath>
@@ -119,6 +120,7 @@ void CollectibleBlock::Draw() {
 void CollectibleBlock::OnCollision(Player2D* player) {
     if (isDestroyed_ || collectTimer_ >= 0.0f || !player) return;
     collectTimer_ = 0.0f;
+    AudioManager::Play("resources/Sound/10Dyas/SE/GetItem.mp3", 0.75f);
     CollectibleTracker::Get().OnCollected(chipX_, chipY_);
 }
 

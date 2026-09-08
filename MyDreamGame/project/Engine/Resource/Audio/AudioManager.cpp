@@ -7,6 +7,7 @@ Microsoft::WRL::ComPtr<IXAudio2> AudioManager::xAudio2_ = nullptr;
 std::unique_ptr<IXAudio2MasteringVoice, MasteringVoiceDeleter> AudioManager::masterVoice_ = nullptr;
 std::list<std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter>> AudioManager::playingVoices_;
 std::map<std::string, std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter>> AudioManager::bgmVoices_;
+std::map<std::string, std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter>> AudioManager::loopSeVoices_;
 std::map<std::string, AudioManager::BGMRequest> AudioManager::requestedBGMs_;
 bool AudioManager::isBgmPlaybackAllowed_ = true;
 std::map<std::string, SoundData> AudioManager::soundDatas_;
@@ -37,7 +38,10 @@ void AudioManager::Finalize() {
     // 1. 再生中のBGMをすべて停止・消去
     StopAllBGM();
 
-    // 2. 再生中のSEボイスをすべて消す
+    // 2. 再生中のループSEをすべて停止・消去
+    StopAllLoopSE();
+
+    // 3. 再生中のSEボイスをすべて消す
     playingVoices_.clear();
 
     // 3. 読み込んだサウンドデータを解放
@@ -286,6 +290,97 @@ void AudioManager::SetBGMPlaybackAllowed(bool allowed) {
 
 bool AudioManager::IsBGMPlaybackAllowed() {
 	return isBgmPlaybackAllowed_;
+}
+
+void AudioManager::PlayLoopSE(const std::string &filename, float volume) {
+	// すでに再生中であれば音量のみ更新
+	auto it = loopSeVoices_.find(filename);
+	if (it != loopSeVoices_.end() && it->second) {
+		XAUDIO2_VOICE_STATE state{};
+		it->second->GetState(&state);
+		if (state.BuffersQueued > 0) {
+			it->second->SetVolume(volume);
+			return;
+		}
+		it->second->Stop();
+		loopSeVoices_.erase(it);
+	}
+
+	// 事前にロード
+	LoadSound(filename);
+
+	auto itData = soundDatas_.find(filename);
+	if (itData == soundDatas_.end()) {
+		return;
+	}
+
+	const SoundData &soundData = itData->second;
+	HRESULT result;
+
+	// SourceVoiceを生成
+	IXAudio2SourceVoice *pSourceVoiceRaw = nullptr;
+	result = xAudio2_->CreateSourceVoice(&pSourceVoiceRaw, &soundData.wfex);
+	if (FAILED(result)) {
+		return;
+	}
+
+	std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter> pSourceVoice(pSourceVoiceRaw);
+
+	// バッファ設定（無限ループ）
+	XAUDIO2_BUFFER buf{};
+	buf.pAudioData = soundData.pBuffer.get();
+	buf.AudioBytes = soundData.bufferSize;
+	buf.Flags = XAUDIO2_END_OF_STREAM;
+	buf.LoopCount = XAUDIO2_LOOP_INFINITE;
+
+	result = pSourceVoice->SubmitSourceBuffer(&buf);
+	if (FAILED(result)) {
+		return;
+	}
+
+	pSourceVoice->SetVolume(volume);
+	result = pSourceVoice->Start();
+	if (FAILED(result)) {
+		return;
+	}
+
+	loopSeVoices_[filename] = std::move(pSourceVoice);
+}
+
+void AudioManager::StopLoopSE(const std::string &filename) {
+	auto it = loopSeVoices_.find(filename);
+	if (it != loopSeVoices_.end()) {
+		if (it->second) {
+			it->second->Stop();
+		}
+		loopSeVoices_.erase(it);
+	}
+}
+
+void AudioManager::StopAllLoopSE() {
+	for (auto &pair : loopSeVoices_) {
+		if (pair.second) {
+			pair.second->Stop();
+		}
+	}
+	loopSeVoices_.clear();
+}
+
+bool AudioManager::IsLoopSEPlaying(const std::string &filename) {
+	auto it = loopSeVoices_.find(filename);
+	if (it != loopSeVoices_.end() && it->second) {
+		XAUDIO2_VOICE_STATE state{};
+		it->second->GetState(&state);
+		return state.BuffersQueued > 0;
+	}
+	return false;
+}
+
+void AudioManager::SetLoopSEVolume(const std::string &filename, float volume) {
+	auto it = loopSeVoices_.find(filename);
+	if (it != loopSeVoices_.end() && it->second) {
+		it->second->SetVolume(volume);
+	}
 }
 
 void AudioManager::Update() {

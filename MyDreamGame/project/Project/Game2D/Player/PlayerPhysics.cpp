@@ -3,6 +3,7 @@
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 #include <cmath>
 
@@ -61,6 +62,7 @@ void PlayerPhysics::HandleMovement(PlayerState& state_, const PlayerParams& para
 
     // ジャンプ
     if (state_.isOnGround_ && input_.isJumpPressed) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/PlayerJump.mp3", 0.7f);
         // 鎖の数が3個を超えた分だけジャンプ力を低下させる
         int extraChains = (std::max)(0, state_.chainLength_ - 3);
         float actualJumpPower = params_.jumpPower_ - (extraChains * params_.chainJumpPenalty_);

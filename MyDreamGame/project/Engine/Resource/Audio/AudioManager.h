@@ -64,6 +64,21 @@ public:
     static void SetBGMPlaybackAllowed(bool allowed);
     static bool IsBGMPlaybackAllowed();
 
+    // ループSE再生（足音や環境音など、明示的に停止するまでループ再生するSE）
+    static void PlayLoopSE(const std::string & filename, float volume = 1.0f);
+
+    // 特定のループSEを停止
+    static void StopLoopSE(const std::string & filename);
+
+    // すべてのループSEを停止
+    static void StopAllLoopSE();
+
+    // 特定のループSEが再生中か確認
+    static bool IsLoopSEPlaying(const std::string & filename);
+
+    // 特定のループSEの音量設定
+    static void SetLoopSEVolume(const std::string & filename, float volume);
+
     // 毎フレームの更新処理（再生が終わったボイスを破棄する）
     static void Update();
 
@@ -86,6 +101,9 @@ private:
 
     // 再生中のBGMボイスを管理するマップ（曲ごとに独立して管理、複数同時再生に対応）
     static std::map<std::string, std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter>> bgmVoices_;
+
+    // 再生中のループSEボイスを管理するマップ
+    static std::map<std::string, std::unique_ptr<IXAudio2SourceVoice, SourceVoiceDeleter>> loopSeVoices_;
 
     // シーン等からリクエストされたBGM（エディタ停止中などでも保持し、PLAY時に即時再生するための情報）
     static std::map<std::string, BGMRequest> requestedBGMs_;

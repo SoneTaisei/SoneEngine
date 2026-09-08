@@ -282,15 +282,21 @@ void TitleScene::Update(SceneManager *sceneManager) {
             // ※ ゲームパッドのPOVハットスイッチは未入力時に0を返す環境があり、常時上入力と誤判定されて
             //    勝手に選択が切り替わり続ける原因となっていたため（ポーズメニュー時と同様）、
             //    キーボードの確実な押下 (IsKeyPressed) で制御し、直接インデックスを指定します。
+            int prevMenu = selectedTitleMenu_;
             if (kb->IsKeyPressed(DIK_UP) || kb->IsKeyPressed(DIK_W)) {
                 selectedTitleMenu_ = 0; // 上: スタート
             } else if (kb->IsKeyPressed(DIK_DOWN) || kb->IsKeyPressed(DIK_S)) {
                 selectedTitleMenu_ = 1; // 下: クレジット
             }
+            if (prevMenu != selectedTitleMenu_) {
+                AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
+            }
 
             // タイトル画面で決定ボタン押下時
             if (isDecisionPressed) {
                 if (selectedTitleMenu_ == 0) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/TitleCameraMove.mp3", 0.7f);
+
                     // 「スタート」選択時: ステージ選択カメラへの移動フェーズを開始
                     phase_ = Phase::kTransitionToSelect;
                     transitionStartPos_ = cameraTransform_.translate;
@@ -306,6 +312,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
         } else if (phase_ == Phase::kStageSelect) {
             // ステージ選択画面で決定ボタン押下時: 選択中ステージオブジェクトへ向けて予告状突き刺し演出を開始
             if (isDecisionPressed && cardPhase_ == CardThrowPhase::kNone) {
+                AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
                 phase_ = Phase::kTransitionToGame;
 
                 // 選択中のオブジェクト（select_1, select_2, select_3）のワールド座標を取得
@@ -682,6 +689,7 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
             }
         }
 
+        int prevStageIdx = selectedStageIndex_;
         if (prevStage) {
             selectedStageIndex_ = (selectedStageIndex_ + 2) % 3; // 0 -> 2, 1 -> 0, 2 -> 1
         }
@@ -696,6 +704,10 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
             selectedStageIndex_ = 1;
         } else if (kb->IsKeyPressed(DIK_3) || kb->IsKeyPressed(DIK_NUMPAD3)) {
             selectedStageIndex_ = 2;
+        }
+
+        if (prevStageIdx != selectedStageIndex_) {
+            AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
         }
     }
 
@@ -1161,6 +1173,7 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
 }
 
 void TitleScene::StartCallingCardThrow(const Vector3& targetPos) {
+    AudioManager::Play("resources/Sound/10Dyas/SE/ThrowCard.mp3", 0.75f);
     cardPhase_ = CardThrowPhase::kFlying;
     cardTimer_ = 0.0f;
     cardShakeTimer_ = 0.0f;
@@ -1229,6 +1242,7 @@ void TitleScene::UpdateCallingCardThrow(float dt, SceneManager* sceneManager) {
         }
 
         if (t >= 1.0f) {
+            AudioManager::Play("resources/Sound/10Dyas/SE/CardStuck.mp3", 0.85f);
             cardPhase_ = CardThrowPhase::kStuckWobble;
             cardTimer_ = 0.0f;
             cardShakeTimer_ = 0.22f; // カメラシェイク開始

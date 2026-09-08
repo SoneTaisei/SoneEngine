@@ -1,4 +1,4 @@
-﻿#include "ChainSpinAction.h"
+#include "ChainSpinAction.h"
 #include "Game2D/Chain/Chain2D.h"
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
@@ -7,6 +7,7 @@
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -88,6 +89,7 @@ void ChainSpinAction::Initialize(const ChainParams& params) {
     effMass_ = 1.0f;
     launchCap_ = 0.0f;
     cooldownTimer_ = 0.0f;
+    spinAccumAngle_ = 0.0f;
     lastLaunchSpeed_ = 0.0f;
     lastLaunchDir_ = { 0.0f, 0.0f, 0.0f };
     lastBrokeByTerrain_ = false;
@@ -110,6 +112,7 @@ void ChainSpinAction::ResetInputState() {
     radius_ = 0.0f;
     throwOutTime_ = 0.0f;
     holdTime_ = 0.0f;
+    spinAccumAngle_ = 0.0f;
     arrowVisible_ = false;
     trailVisible_ = 0;
 }
@@ -337,7 +340,23 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
         float alphaSwing = params_.swingStrength_ * swing / effMass_;
         omega_ += (alphaGravity + alphaSwing) * simDt;
         omega_ *= (std::max)(0.0f, 1.0f - params_.swingDamping_ * simDt);
-        theta_ = WrapAngle(theta_ + omega_ * simDt);
+        const float dTheta = omega_ * simDt;
+        theta_ = WrapAngle(theta_ + dTheta);
+
+        // チェーンが1回転（360度 = 2π rad）するたびに SE を鳴らす
+        if (dTheta * spinAccumAngle_ < 0.0f) {
+            // 振り子のように回転方向が逆転した場合は累積をリセット
+            spinAccumAngle_ = 0.0f;
+        }
+        spinAccumAngle_ += dTheta;
+        while (std::fabs(spinAccumAngle_) >= 2.0f * kPi) {
+            AudioManager::Play("resources/Sound/10Dyas/SE/TurnChain.mp3", 0.75f);
+            if (spinAccumAngle_ > 0.0f) {
+                spinAccumAngle_ -= 2.0f * kPi;
+            } else {
+                spinAccumAngle_ += 2.0f * kPi;
+            }
+        }
 
         if (IsRodBlocked(map, socketWorld, theta_, radius_, chain->GetEndWeight().radius)) {
             Break(dt, player, chain, socketWorld);
@@ -368,6 +387,7 @@ void ChainSpinAction::StartHold(Player2D* player, Chain2D* chain, const Vector3&
     aiming_ = false;
     aimTimer_ = 0.0f;
     lastBrokeByTerrain_ = false;
+    spinAccumAngle_ = 0.0f;
 
     launchCap_ = player->GetParams().jumpPower_ * params_.launchMaxJumpRatio_;
     effMass_ = EffectiveMass(player);
@@ -388,6 +408,7 @@ void ChainSpinAction::StartThrow(float dirSign, const Vector3& socketWorld) {
     radius_ = params_.holdOffset_;
     aiming_ = false;
     aimTimer_ = 0.0f;
+    spinAccumAngle_ = 0.0f;
     // 投げた瞬間に SPACE を押していても、押した縁を作らない（離した時に飛ばないように）
     launchHeldPrev_ = launchHeld_;
     UpdateSpinTarget(socketWorld);
@@ -418,6 +439,7 @@ void ChainSpinAction::Launch(float dt, Player2D* player, Chain2D* chain, const V
     lastBrokeByTerrain_ = false;
     aiming_ = false;
     aimTimer_ = 0.0f;
+    spinAccumAngle_ = 0.0f;
     state_ = State::kCooldown;
     cooldownTimer_ = params_.spinCooldown_;
     Log("ChainSpinAction: Launch speed=" + std::to_string(speed) + " / cap " + std::to_string(launchCap_) +
@@ -431,6 +453,7 @@ void ChainSpinAction::Break(float dt, Player2D* player, Chain2D* chain, const Ve
     lastBrokeByTerrain_ = true;
     aiming_ = false;
     aimTimer_ = 0.0f;
+    spinAccumAngle_ = 0.0f;
     state_ = State::kCooldown;
     cooldownTimer_ = params_.spinCooldown_;
     Log("ChainSpinAction: stance broken (terrain/airborne/cancel) omega=" + std::to_string(omega_) + "\n");
@@ -449,6 +472,7 @@ void ChainSpinAction::Cancel(Player2D* player, Chain2D* chain) {
     cooldownTimer_ = 0.0f;
     aiming_ = false;
     aimTimer_ = 0.0f;
+    spinAccumAngle_ = 0.0f;
     arrowVisible_ = false;
     trailVisible_ = 0;
 }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Game2D/Chain/ChainConfig.h"
 #include "Core/Utility/Vector3.h"
 #include <memory>
@@ -157,6 +157,7 @@ private:
     float effMass_ = 1.0f;      // 現在の振りにくさ（ImGui表示用）
     float launchCap_ = 0.0f;    // 飛ぶ速さの上限（構え開始時に決定）
     float cooldownTimer_ = 0.0f;
+    float spinAccumAngle_ = 0.0f; // 1回転(360度)判定用の累積回転角（rad）
 
     // 直近の発射（ImGui確認用）
     float lastLaunchSpeed_ = 0.0f;

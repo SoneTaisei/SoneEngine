@@ -1,7 +1,8 @@
-﻿#include "DoorBlock.h"
+#include "DoorBlock.h"
 #include "SwitchBlock.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 
 DoorBlock::DoorBlock(MapChip2D* map, int chipX, int chipY)
@@ -92,6 +93,9 @@ void DoorBlock::Update() {
     float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
 
     if (wantOpen) {
+        if (openProgress_ <= 0.0f) {
+            AudioManager::Play("resources/Sound/10Dyas/SE/OpenDoor.mp3", 0.75f);
+        }
         openProgress_ += dt * openSpeed_;
         if (openProgress_ > 1.0f) openProgress_ = 1.0f;
     } else {

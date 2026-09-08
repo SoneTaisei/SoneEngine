@@ -142,18 +142,21 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         if (currentStageIndex_ < 0) {
             currentStageIndex_ = stageCount_ - 1;
         }
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
     if (moveNext) {
         currentStageIndex_++;
         if (currentStageIndex_ >= stageCount_) {
             currentStageIndex_ = 0;
         }
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
 
     bool isDecision = keyboard->IsKeyPressed(DIK_SPACE) || keyboard->IsKeyPressed(DIK_RETURN) ||
                       (pad && (pad->IsButtonPressed(GamepadButton::A) || pad->IsButtonPressed(0)));
 
     if (isDecision) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
             GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }
