@@ -11,11 +11,12 @@
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"
 #include "Graphics/GameCamera.h"
+// 配置モデル(レベルデータ)はエディター非搭載ビルドでも参照するためガード外に置く
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
+#include "Editor/Model3DEditor/PlacedObject3D.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #include "Editor/Model3DEditor/Model3DEditor.h"
-#include "Editor/Model3DEditor/Model3DEditorContext.h"
-#include "Editor/Model3DEditor/PlacedObject3D.h"
 #endif
 
 #include "Scene/SceneFactory.h"
@@ -106,22 +107,10 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
             EditorManager::GetInstance()->SetUseDebugCamera(false);
             EditorManager::GetInstance()->FocusGameView();
         }
-
-        // タイトルシーン用3Dモデル（title_obj.json: ビル群・ステージオブジェクト）を確実に読み込む
-        if (EditorManager::GetInstance()->GetModel3DEditor()) {
-            auto context = EditorManager::GetInstance()->GetModel3DEditor()->GetContext();
-            if (context) {
-                const std::string titleObjPath = "resources/json/shared/LevelData/title_obj.json";
-                if (context->GetObjects().empty() || context->GetCurrentFilePath() != titleObjPath) {
-                    context->SetCurrentFilePath(titleObjPath);
-                    if (std::filesystem::exists(titleObjPath)) {
-                        context->LoadFromFile(titleObjPath);
-                    }
-                }
-            }
-        }
     }
 #endif
+    // タイトル用3Dモデル(title_obj.json: ビル群・ステージ選択オブジェクト)は
+    // SceneManager が GetLevelDataJsonPath() を見て読み込むため、ここでは何もしない
 
     if (callingCardObject_) {
         if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
@@ -174,7 +163,7 @@ void TitleScene::Initialize() {
     // -------------------------------------------------------------
     // 2. Skybox初期化 (qwantani_dusk)
     // -------------------------------------------------------------
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/temp_cube.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
@@ -399,20 +388,16 @@ void TitleScene::Update(SceneManager *sceneManager) {
 
                 // 選択中のオブジェクト（select_1, select_2, select_3）のワールド座標を取得
                 Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1 の位置
-#ifdef USE_IMGUI
-                if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetModel3DEditor()) {
-                    auto context = EditorManager::GetInstance()->GetModel3DEditor()->GetContext();
-                    if (context) {
-                        std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-                        for (const auto& obj : context->GetObjects()) {
-                            if (obj && obj->GetName() == targetName) {
-                                targetWorldPos = obj->GetTranslation();
-                                break;
-                            }
+                {
+                    auto context = Model3DEditorContext::GetInstance();
+                    std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
+                    for (const auto& obj : context->GetObjects()) {
+                        if (obj && obj->GetName() == targetName) {
+                            targetWorldPos = obj->GetTranslation();
+                            break;
                         }
                     }
                 }
-#endif
                 StartCallingCardThrow(targetWorldPos);
             }
         }
@@ -933,12 +918,8 @@ void TitleScene::UpdateEditor() {
 void TitleScene::UpdateStageSelectInteraction(float dt) {
     stageSelectPulseTimer_ += dt;
 
-#ifdef USE_IMGUI
-    if (!EditorManager::GetInstance() || !EditorManager::GetInstance()->GetModel3DEditor()) {
-        return;
-    }
-    auto context = EditorManager::GetInstance()->GetModel3DEditor()->GetContext();
-    if (!context) return;
+    // 配置モデルはエディター非搭載ビルドでも共有コンテキストから参照できる
+    auto context = Model3DEditorContext::GetInstance();
 
     // ステージ選択フェーズ中のみ、キーボード・パッドで選択インデックスを切り替える
     if (phase_ == Phase::kStageSelect) {
@@ -1021,7 +1002,6 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
             }
         }
     }
-#endif
 }
 
 void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
@@ -1354,20 +1334,16 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
             if (tc->GetScale().x > 0.001f && cardPhase_ == CardThrowPhase::kNone) {
                 Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-#ifdef USE_IMGUI
-                if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetModel3DEditor()) {
-                    auto context = EditorManager::GetInstance()->GetModel3DEditor()->GetContext();
-                    if (context) {
-                        std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-                        for (const auto& obj : context->GetObjects()) {
-                            if (obj && obj->GetName() == targetName) {
-                                targetWorldPos = obj->GetTranslation();
-                                break;
-                            }
+                {
+                    auto context = Model3DEditorContext::GetInstance();
+                    std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
+                    for (const auto& obj : context->GetObjects()) {
+                        if (obj && obj->GetName() == targetName) {
+                            targetWorldPos = obj->GetTranslation();
+                            break;
                         }
                     }
                 }
-#endif
                 tc->SetPosition({
                     targetWorldPos.x + cardTargetOffset_.x,
                     targetWorldPos.y + cardTargetOffset_.y,
@@ -1381,20 +1357,16 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
     if (ImGui::Button("刺さり位置に予告状を配置して確認")) {
         Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-#ifdef USE_IMGUI
-        if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetModel3DEditor()) {
-            auto context = EditorManager::GetInstance()->GetModel3DEditor()->GetContext();
-            if (context) {
-                std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-                for (const auto& obj : context->GetObjects()) {
-                    if (obj && obj->GetName() == targetName) {
-                        targetWorldPos = obj->GetTranslation();
-                        break;
-                    }
+        {
+            auto context = Model3DEditorContext::GetInstance();
+            std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
+            for (const auto& obj : context->GetObjects()) {
+                if (obj && obj->GetName() == targetName) {
+                    targetWorldPos = obj->GetTranslation();
+                    break;
                 }
             }
         }
-#endif
         if (callingCardObject_) {
             if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
                 tc->SetPosition({
@@ -1420,20 +1392,16 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     if (ImGui::Button("▶ 決定演出 (予告状突き刺し＆暗転) をテスト再生")) {
         phase_ = Phase::kTransitionToGame;
         Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-#ifdef USE_IMGUI
-        if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetModel3DEditor()) {
-            auto context = EditorManager::GetInstance()->GetModel3DEditor()->GetContext();
-            if (context) {
-                std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-                for (const auto& obj : context->GetObjects()) {
-                    if (obj && obj->GetName() == targetName) {
-                        targetWorldPos = obj->GetTranslation();
-                        break;
-                    }
+        {
+            auto context = Model3DEditorContext::GetInstance();
+            std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
+            for (const auto& obj : context->GetObjects()) {
+                if (obj && obj->GetName() == targetName) {
+                    targetWorldPos = obj->GetTranslation();
+                    break;
                 }
             }
         }
-#endif
         StartCallingCardThrow(targetWorldPos);
     }
 

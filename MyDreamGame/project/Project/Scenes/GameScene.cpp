@@ -65,6 +65,15 @@ void GameScene::OnEnter(SceneManager *sceneManager) {
     // 戻る時（PopScene）は Initialize() ではなく OnEnter() しか呼ばれないため、ここで必ず張り直す。
     SetupGameCamera();
 
+    // 深度ベース・アウトライン（ポストエフェクトのシェーダーで輪郭を描くパス）はゲームシーンの標準の見た目。
+    // これまでエディター（PostEffectEditor）でしかONにしていなかったため、
+    // USE_IMGUI が定義されないReleaseビルドでは誰もONにできず消えていた。
+    // 製品ビルドでも必ず出るよう、シーンに入るたびにここで有効化する。
+    // （メッシュ拡張アウトラインは別物なので触らない。クリア演出の煙幕でOFFにする処理もそのまま）
+    if (DirectXCommon *dxCommon = DirectXCommon::GetInstance()) {
+        dxCommon->SetDepthBasedOutlineEnabled(true);
+    }
+
     // ゲーム用BGMの再生（前シーンのBGMを停止し、Game.mp3をループ再生）
     AudioManager::StopAllBGM();
     AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Game.mp3", true, 0.4f);

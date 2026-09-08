@@ -27,6 +27,7 @@
 #endif
 #include "Editor/Replay/ReplayManager.h"
 
+
 void MapChip2D::Initialize(const std::string& mapFilePath) {
     device_ = DirectXCommon::GetInstance()->GetDevice();
     currentFilePath_ = mapFilePath;
@@ -722,33 +723,27 @@ void MapChip2D::RebuildChipObjects() {
             int spanHeight = 1;
             int typeId = static_cast<int>(type);
             
+            const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
+
             bool canMerge = false;
             if (typeId < 100) {
                 canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
-                const CustomBlockDef* def = nullptr;
-                for (const auto& d : templatePalette_) {
-                    if (d.id == typeId) { def = &d; break; }
-                }
-                // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
-                // （ただしDoorBlockは扉として1つに結合して伸縮・開閉するためマージを許可する）
-                if (def && !def->modelName.empty() && def->type != "DoorBlock") {
-                    canMerge = false;
-                }
-            } else {
+const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
+
+            bool canMerge = false;
+            if (typeId < 100) {
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
+            } else if (paletteDef) {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
-                const CustomBlockDef* def = nullptr;
-                for (const auto& d : customPalette_) {
-                    if (d.id == typeId) { def = &d; break; }
-                }
-                if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "DoorBlock");
-                    // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
-                    // （ただしDoorBlockは扉として1つに結合して伸縮・開閉するためマージを許可する）
-                    if (!def->modelName.empty() && def->type != "DoorBlock") {
-                        canMerge = false;
-                    }
-                }
+                canMerge = (paletteDef->type == "NormalBlock" || paletteDef->type == "DeathBlock" || paletteDef->type == "OneWayBlock" || paletteDef->type == "DoorBlock");
             }
+            
+            // モデルが設定されている場合は、引き伸ばされて1個の塊にならないようマージを無効化する
+            // （ただしDoorBlockは扉として1つに結合して伸縮・開閉するためマージを許可する）
+            if (paletteDef && !paletteDef->modelName.empty() && paletteDef->type != "DoorBlock") {
+                canMerge = false;
+            }
+            
 
             if (canMerge) {
                 // 水平方向のスパンを探索
@@ -1392,11 +1387,18 @@ const nlohmann::json* MapChip2D::GetPlacementOverride(const std::string& blockTy
 nlohmann::json MapChip2D::GetPaletteProperties(int x, int y) const {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return nlohmann::json::object();
     int typeId = static_cast<int>(mapData_[y][x]);
-    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
-    for (const auto& d : palette) {
-        if (d.id == typeId) return d.properties;
+    if (const CustomBlockDef* def = FindPaletteDef(typeId)) {
+        return def->properties;
     }
     return nlohmann::json::object();
+}
+
+const MapChip2D::CustomBlockDef* MapChip2D::FindPaletteDef(int typeId) const {
+    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
+    for (const auto& d : palette) {
+        if (d.id == typeId) return &d;
+    }
+    return nullptr;
 }
 
 std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive* boxPrimitive) {
@@ -1418,38 +1420,14 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = BlockFactory::GetInstance().Create("ChainItemBlock", this, x, y);
     } else if (type == ChipType::kSavePoint) {
         newBlock = BlockFactory::GetInstance().Create("SavePoint", this, x, y);
-    } else if (typeId >= 100) {
-        const CustomBlockDef* def = nullptr;
-        for (const auto& d : customPalette_) {
-            if (d.id == typeId) { def = &d; break; }
-        }
-        if (def) {
-            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
-        }
-    } else {
-        const CustomBlockDef* def = nullptr;
-        for (const auto& d : templatePalette_) {
-            if (d.id == typeId) { def = &d; break; }
-        }
-        if (def) {
-            newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
-        }
+    } else if (const CustomBlockDef* d = FindPaletteDef(typeId)) {
+        newBlock = BlockFactory::GetInstance().Create(d->type, this, x, y);
     }
 
     if (newBlock) {
         newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, spanWidth * chipSize_, spanHeight * chipSize_);
-        
-        const CustomBlockDef* def = nullptr;
-        if (typeId >= 100) {
-            for (const auto& d : customPalette_) {
-                if (d.id == typeId) { def = &d; break; }
-            }
-        } else {
-            for (const auto& d : templatePalette_) {
-                if (d.id == typeId) { def = &d; break; }
-            }
-        }
-        
+
+        const CustomBlockDef* def = FindPaletteDef(typeId);
         if (def) {
             // パレットのプロパティに、このチップだけの上書きを重ねて渡す
             if (const nlohmann::json* ov = GetBlockOverride(x, y)) {

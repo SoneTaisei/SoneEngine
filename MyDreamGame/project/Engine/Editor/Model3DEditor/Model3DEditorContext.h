@@ -1,5 +1,4 @@
 #pragma once
-#ifdef USE_IMGUI
 #include <vector>
 #include <memory>
 #include <string>
@@ -24,6 +23,11 @@ public:
 
     Model3DEditorContext();
     ~Model3DEditorContext();
+
+    // エディター有無に関わらず配置モデルを保持する実体を1つだけ共有する
+    // (USE_IMGUI 未定義のリリースビルドでもシーンごとのJSONを読み込み・描画するため)
+    static Model3DEditorContext* GetInstance();
+    static void DestroyInstance();
 
     void Initialize(ID3D12Device* device);
     void Update();
@@ -62,6 +66,8 @@ public:
     bool SaveToFile(const std::string& filePath = "");
     bool LoadFromFile(const std::string& filePath = "");
     bool DeleteFile(const std::string& filePath = "");
+    // シーンに紐づくレベルデータJSONを読み込む (存在しない場合は配置を空にする)
+    void LoadLevelData(const std::string& filePath);
     void NewScene();
     void ScanLevelFiles();
 
@@ -146,4 +152,3 @@ private:
     // 3D Depth-Tested Procedural Grid Floor Object
     std::unique_ptr<class PrimitiveObject> gridFloorObj_;
 };
-#endif

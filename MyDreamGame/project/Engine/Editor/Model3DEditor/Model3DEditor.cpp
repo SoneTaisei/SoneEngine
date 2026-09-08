@@ -2,10 +2,10 @@
 #include "Model3DEditor.h"
 
 Model3DEditor::Model3DEditor() {
-    context_ = std::make_unique<Model3DEditorContext>();
-    viewport_ = std::make_unique<Model3DEditorViewport>(context_.get());
-    palette_ = std::make_unique<Model3DEditorPalette>(context_.get());
-    inspector_ = std::make_unique<Model3DEditorInspector>(context_.get());
+    context_ = Model3DEditorContext::GetInstance();
+    viewport_ = std::make_unique<Model3DEditorViewport>(context_);
+    palette_ = std::make_unique<Model3DEditorPalette>(context_);
+    inspector_ = std::make_unique<Model3DEditorInspector>(context_);
 }
 
 void Model3DEditor::Initialize(ID3D12Device* device) {
