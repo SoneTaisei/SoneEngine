@@ -236,6 +236,14 @@ void TitleScene::Initialize() {
     // 6.2 スタートテキスト スプライト (startText.png)
     // -------------------------------------------------------------
     startTextTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/startText.png");
+    // 決定の操作案内（右下）。位置と大きさは描く直前に決める
+    padPromptTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/A_select.png");
+    padPromptSprite_ = std::make_unique<Sprite>();
+    padPromptSprite_->Initialize(spriteCommon_, padPromptTextureHandle_);
+    keyPromptTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/space_select.png");
+    keyPromptSprite_ = std::make_unique<Sprite>();
+    keyPromptSprite_->Initialize(spriteCommon_, keyPromptTextureHandle_);
+
     startTextSprite_ = std::make_unique<Sprite>();
     startTextSprite_->Initialize(spriteCommon_, startTextTextureHandle_);
     startTextSprite_->SetSize(startTextSize_);
@@ -287,6 +295,26 @@ void TitleScene::Update(SceneManager *sceneManager) {
     bool isDecisionPressed = kb->IsKeyPressed(DIK_SPACE) || 
                              kb->IsKeyPressed(DIK_RETURN) || 
                              (pad && pad->IsButtonPressed(0)); // Aボタン
+
+    // 右下の操作案内を、直前に触った方に合わせる（パッドを触れば A、キーを触れば SPACE）
+    if (pad && pad->IsConnected()) {
+        const Vector2 stick = pad->GetLeftStick();
+        bool padTouched = pad->IsDPadUp() || pad->IsDPadDown() || pad->IsDPadLeft() || pad->IsDPadRight() ||
+                          std::abs(stick.x) > 0.3f || std::abs(stick.y) > 0.3f;
+        for (int b = 0; b < 12 && !padTouched; ++b) {
+            if (pad->IsButtonDown(b)) {
+                padTouched = true;
+            }
+        }
+        if (padTouched) {
+            usePadPrompt_ = true;
+        }
+    }
+    if (kb && (kb->IsKeyPressed(DIK_SPACE) || kb->IsKeyPressed(DIK_RETURN) ||
+               kb->IsKeyPressed(DIK_W) || kb->IsKeyPressed(DIK_S) ||
+               kb->IsKeyPressed(DIK_UP) || kb->IsKeyPressed(DIK_DOWN))) {
+        usePadPrompt_ = false;
+    }
 
     // シーン遷移直後の同一フレームでの入力誤爆防止
     if (isFirstFrame_) {
@@ -769,6 +797,25 @@ void TitleScene::Draw2D() {
         }
         for (auto &sprite : sprites_) {
             sprite->Draw();
+        }
+
+        // 決定の操作案内（右下）。カメラが動いている間は出さず、止まったらまた出す
+        const bool cameraMoving = (phase_ == Phase::kTransitionToSelect ||
+                                   phase_ == Phase::kTransitionToGame ||
+                                   phase_ == Phase::kTransitionToCredit ||
+                                   phase_ == Phase::kTransitionFromCredit);
+        if (!cameraMoving) {
+            Sprite *prompt = usePadPrompt_ ? padPromptSprite_.get() : keyPromptSprite_.get();
+            if (prompt) {
+                // 画像は A が 300x100、SPACE が 500x100。高さをそろえて幅を比率から出す
+                const float aspect = usePadPrompt_ ? (300.0f / 100.0f) : (500.0f / 100.0f);
+                const float w = promptHeight_ * aspect;
+                prompt->SetSize({w, promptHeight_});
+                prompt->SetPosition({1280.0f - promptMargin_ - w, 720.0f - promptMargin_ - promptHeight_});
+                prompt->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+                prompt->Update();
+                prompt->Draw();
+            }
         }
     }
 }

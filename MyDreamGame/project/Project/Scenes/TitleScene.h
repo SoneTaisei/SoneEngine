@@ -87,6 +87,15 @@ private:
     Vector2 creditTextPos_ = { 512.5f, 520.0f };
     Vector2 creditTextSize_ = { 255.0f, 50.0f };
 
+    // --- 決定の操作案内（右下）。パッドを触れば A、キーボードを触れば SPACE ---
+    std::unique_ptr<Sprite> padPromptSprite_;  // A:決定
+    std::unique_ptr<Sprite> keyPromptSprite_;  // SPACE:決定
+    uint32_t padPromptTextureHandle_ = 0;
+    uint32_t keyPromptTextureHandle_ = 0;
+    bool usePadPrompt_ = false;    // 直前に触ったのがパッドか
+    float promptHeight_ = 44.0f;   // 案内の高さ（画像の比率から幅を出す）
+    float promptMargin_ = 28.0f;   // 画面の端からの余白
+
     // --- クレジット画面表示用 (credit.png) ---
     std::unique_ptr<Sprite> creditSprite_;
     uint32_t creditTextureHandle_ = 0;
