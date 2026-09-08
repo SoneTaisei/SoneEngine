@@ -101,6 +101,8 @@ void GuardBlock::SetProperties(const nlohmann::json& properties) {
     readF("alertSpeed", alertSpeed_);
     readF("sightLength", sightLength_);
     readF("sightHeight", sightHeight_);
+    readF("spotNearDistance", spotNearDistance_);
+    readF("spotFarTimeScale", spotFarTimeScale_);
     readF("maxAlertGauge", maxAlertGauge_);
     if (properties.contains("startDirection") && properties["startDirection"].is_number()) {
         startDirection_ = properties["startDirection"];
@@ -238,7 +240,18 @@ void GuardBlock::Update() {
             }
             if (state_ != State::Alert) {
                 bool wasFull = (alertGauge_ >= maxAlertGauge_);
-                alertGauge_ += dt;
+                // 明るい所に入った時だけ発見が進む。薄暗い縁は「？」になるだけ。
+                // 近いほど速く、遠いほどゆっくり溜まる（遠くなら逃げる時間がある）
+                if (sightLevel_ == SightLevel::Spotted) {
+                    if (sightDistance_ <= spotNearDistance_) {
+                        alertGauge_ = maxAlertGauge_; // 目の前：溜めなしで一発
+                    } else {
+                        float span = (std::max)(0.01f, lightDistance_ - spotNearDistance_);
+                        float t = std::clamp((sightDistance_ - spotNearDistance_) / span, 0.0f, 1.0f);
+                        float scale = 1.0f + (spotFarTimeScale_ - 1.0f) * t;
+                        alertGauge_ += dt / (std::max)(0.01f, scale);
+                    }
+                }
                 if (!wasFull && alert) {
                     alert->AddContinuous(alert->GetParams().seenPerSec_, dt); // 溜まっている間は「猶予」
                 }
@@ -400,6 +413,7 @@ void GuardBlock::Update() {
 
     // 次のフレームのためのフラグリセット
     isPlayerInSightThisFrame_ = false;
+    sightLevel_ = SightLevel::None;
 }
 
 void GuardBlock::UpdateBoundRing() {
@@ -591,10 +605,22 @@ Vector4 GuardBlock::GetCurrentLightColor() const {
 }
 
 VisionCone GuardBlock::GetVisionCone() const {
+    // 判定はプレイヤーと同じ平面（Z=0）の平らな扇にする。
+    // 描画の光は奥の壁と床を照らすために斜めに傾けてあるが、その軸のまま判定すると
+    // 「光っているのに当たらない」ずれが出るため、判定だけ真横へ向ける。
+    // 距離も見えている光（lightDistance_）にそろえる
     VisionCone cone;
-    cone.eyePosition = GetLightPosition();
-    cone.forward = GetLightDirection();
-    cone.distance = sightLength_;
+    Vector3 eye = GetLightPosition();
+    cone.eyePosition = { eye.x, eye.y, 0.0f };
+    cone.forward = { (currentFacing_ >= 0.0f) ? 1.0f : -1.0f, 0.0f, 0.0f };
+    cone.distance = lightDistance_;
+    cone.halfAngleRad = lightFalloffDeg_ * (std::numbers::pi_v<float> / 180.0f); // 明るい内側
+    return cone;
+}
+
+VisionCone GuardBlock::GetFringeCone() const {
+    // 薄暗い縁まで含めた外側。ここは「？」になるだけで追跡には入らない
+    VisionCone cone = GetVisionCone();
     cone.halfAngleRad = lightAngleDeg_ * (std::numbers::pi_v<float> / 180.0f);
     return cone;
 }
@@ -664,9 +690,34 @@ AABB2D GuardBlock::GetSightAABB() const {
 }
 
 bool GuardBlock::CheckPlayerInLight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const {
-    if (!IsLightActive()) return false;
+    return CheckPlayerSight(playerPos, playerRadius, playerAABB, map, nullptr) != SightLevel::None;
+}
 
+GuardBlock::SightLevel GuardBlock::CheckPlayerSight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map, float* outDistance) const {
+    if (outDistance) *outDistance = 0.0f;
+    if (!IsLightActive()) return SightLevel::None;
+
+    // 明るい内側に入っていれば発見、薄暗い縁だけなら「？」
+    if (CheckPlayerInCone(GetVisionCone(), playerPos, playerRadius, playerAABB, map)) {
+        if (outDistance) *outDistance = DistanceToPlayer(playerPos, playerAABB);
+        return SightLevel::Spotted;
+    }
+    if (CheckPlayerInCone(GetFringeCone(), playerPos, playerRadius, playerAABB, map)) {
+        if (outDistance) *outDistance = DistanceToPlayer(playerPos, playerAABB);
+        return SightLevel::Fringe;
+    }
+    return SightLevel::None;
+}
+
+float GuardBlock::DistanceToPlayer(const Vector3& playerPos, const AABB2D& playerAABB) const {
     VisionCone cone = GetVisionCone();
+    float centerY = (playerAABB.top + playerAABB.bottom) * 0.5f;
+    float dx = playerPos.x - cone.eyePosition.x;
+    float dy = centerY - cone.eyePosition.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+bool GuardBlock::CheckPlayerInCone(const VisionCone& cone, const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const {
 
     // プレイヤーの主要判定球群（頭部・胸部・足元）
     float centerY = (playerAABB.top + playerAABB.bottom) * 0.5f;
@@ -710,9 +761,11 @@ bool GuardBlock::CheckPlayerInLight(const Vector3& playerPos, float playerRadius
     return false;
 }
 
-void GuardBlock::OnSpottedPlayer(Player2D* player) {
+void GuardBlock::OnSpottedPlayer(Player2D* player, SightLevel level, float distance) {
     if (IsIncapacitated()) return;
     isPlayerInSightThisFrame_ = true;
+    sightLevel_ = level;
+    sightDistance_ = distance;
     if (player) {
         // 最後に見た場所（追跡・調べる の目的地）。巡回範囲の中に収める
         lastSeenX_ = std::clamp(player->GetPosition().x, startX_ - moveRange_, startX_ + moveRange_);

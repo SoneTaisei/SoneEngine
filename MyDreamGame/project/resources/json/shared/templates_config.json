@@ -242,6 +242,8 @@
                 "shadowIntensity": 1.0,
                 "sightHeight": 1.0,
                 "sightLength": 5.0,
+                "spotFarTimeScale": 2.5,
+                "spotNearDistance": 3.0,
                 "staggerTime": 0.2,
                 "startDirection": 1,
                 "stunBase": 2.0,
