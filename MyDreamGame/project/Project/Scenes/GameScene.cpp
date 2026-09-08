@@ -47,6 +47,7 @@
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 bool GameScene::s_QuickRestart = false;
+bool GameScene::s_ResumeFromSavePoint = false;
 
 void GameScene::OnEnter(SceneManager *sceneManager) {
     // StageSelectSceneから選択されたステージのパスを受け取る
@@ -245,9 +246,18 @@ void GameScene::Initialize() {
     player_->SetCamera(gameCamera_); // 画面揺れ連携用にカメラを渡す
     Log("GameScene::Initialize: Player Initialized\n");
 
+    // 中間ポイントの記録は「同じ回の続き」でだけ残す。
+    // 新しく始めた回（エディタの再生し直し・ステージ選択やタイトルから入り直し）では捨てて、必ずスポーン地点から始める。
+    // エディタの停止→再生では一時ファイルを読むので、鍵は必ず本当のステージ名に直してから触る
+    const std::string stagePath = ResolveCurrentMapPath();
+    if (!s_ResumeFromSavePoint) {
+        SavePoint::Clear(stagePath);
+    }
+    s_ResumeFromSavePoint = false;
+
     player_->FindSpawnPoint(*map_);
-    if (SavePoint::HasActiveSavePoint(s_TargetMapFilePath)) {
-        Vector3 checkpointPos = SavePoint::GetActiveSavePoint(s_TargetMapFilePath);
+    if (SavePoint::HasActiveSavePoint(stagePath)) {
+        Vector3 checkpointPos = SavePoint::GetActiveSavePoint(stagePath);
         player_->SetStartPosition(checkpointPos);
         player_->SetPosition(checkpointPos);
         if (playerObj_) {
@@ -264,6 +274,15 @@ void GameScene::Initialize() {
         TransitionDirector *director = TransitionDirector::GetInstance();
         if (director->HasCarry() && director->GetParams().carryChainLength_) {
             player_->SetChainLength(director->GetCarryUnits());
+        }
+    }
+
+    // 6.45. セーブポイントから再開する時は、そこを通った時の鎖の本数に戻す（持ち越しより優先）
+    if (SavePoint::HasActiveSavePoint(stagePath)) {
+        const int savedChain = SavePoint::GetActiveChainLength(stagePath);
+        if (savedChain > 0) {
+            player_->SetChainLength(savedChain);
+            Log("GameScene::Initialize: chain restored from SavePoint = " + std::to_string(savedChain) + "\n");
         }
     }
 
@@ -395,6 +414,13 @@ void GameScene::Initialize() {
         const float rH = 56.0f;
         pauseRestartSprite_->SetSize({rW, rH});
         pauseRestartSprite_->SetPosition({(1280.0f - rW) * 0.5f, 320.0f});
+
+        // 「セーブポイント」項目 (pause_savepoint.png: 500x100)。記録がある時だけ出す
+        pauseSaveTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/pause_savepoint.png");
+        pauseSaveSprite_ = std::make_unique<Sprite>();
+        pauseSaveSprite_->Initialize(spriteCommon_, pauseSaveTexHandle_);
+        pauseSaveSprite_->SetSize({280.0f, 56.0f});
+        pauseSaveSprite_->SetPosition({(1280.0f - 280.0f) * 0.5f, 300.0f});
 
         // 「タイトル」項目 (titleText.png: 500x100)
         pauseTitleTextTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/titleText.png");
@@ -666,7 +692,7 @@ void GameScene::Update(SceneManager *sceneManager) {
             pauseCooldown_ = 0.25f;
             pausePulseTimer_ = 0.0f;
             if (isPaused_) {
-                pauseMenuIndex_ = 0; // 開いた時は「リトライ」に初期選択
+                pauseMenuIndex_ = 0; // 開いた時は一番上（記録があれば「セーブポイント」、無ければ「リトライ」）
             }
         }
     }
@@ -686,8 +712,9 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
-            if (SavePoint::HasActiveSavePoint(s_TargetMapFilePath)) {
-                Vector3 checkpointPos = SavePoint::GetActiveSavePoint(s_TargetMapFilePath);
+            const std::string playStagePath = ResolveCurrentMapPath();
+            if (SavePoint::HasActiveSavePoint(playStagePath)) {
+                Vector3 checkpointPos = SavePoint::GetActiveSavePoint(playStagePath);
                 player_->SetStartPosition(checkpointPos);
                 player_->SetPosition(checkpointPos);
                 if (playerObj_) {
@@ -1847,7 +1874,7 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
 
     if (ImGui::CollapsingHeader("Pause Menu (ポーズメニュー)")) {
         ImGui::Checkbox("ポーズ状態 (isPaused)", &isPaused_);
-        const char *menuItems[] = {"0: リトライ (restartText)", "1: タイトル (titleText)"};
+        const char *menuItems[] = {"0", "1", "2"}; // 記録があれば セーブポイント / リトライ / タイトル、無ければ リトライ / タイトル
         ImGui::Combo("選択中項目", &pauseMenuIndex_, menuItems, IM_ARRAYSIZE(menuItems));
         if (ImGui::Button(isPaused_ ? "ポーズ解除 (Resume)" : "ポーズ実行 (Pause)")) {
             isPaused_ = !isPaused_;
@@ -2907,6 +2934,11 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
         // 鎖とマップブロックをリセット
         if (chainManager_) {
             chainManager_->ResetAll();
+            // 中間ポイントを通っていれば、そこで持っていた本数に戻す（ステージ開始時の本数ではなく）
+            const int savedChain = SavePoint::GetActiveChainLength(ResolveCurrentMapPath());
+            if (savedChain > 0 && player_) {
+                player_->SetChainLength(savedChain);
+            }
         }
         if (map_) {
             map_->ResetBlocks();
@@ -3255,11 +3287,17 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager *sceneManager) {
         }
     }
 
+    // セーブポイントの記録がある時だけ項目が 3 つになる
+    const bool hasSaveItem = HasSavePointItem();
+    const int itemCount = hasSaveItem ? 3 : 2;
+    if (pauseMenuIndex_ >= itemCount || pauseMenuIndex_ < 0) {
+        pauseMenuIndex_ = 0;
+    }
     if (moveUp) {
-        pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+        pauseMenuIndex_ = (pauseMenuIndex_ + itemCount - 1) % itemCount;
         AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     } else if (moveDown) {
-        pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+        pauseMenuIndex_ = (pauseMenuIndex_ + 1) % itemCount;
         AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
 
@@ -3281,13 +3319,23 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager *sceneManager) {
 
     if (isDecision) {
         AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
-        if (pauseMenuIndex_ == 0) {
-            // リトライ: 現在のステージを最初からリスタート
+        // 記録が無い時は「セーブポイント」の分だけ番号をずらす（0 = リトライ になる）
+        const int action = hasSaveItem ? pauseMenuIndex_ : (pauseMenuIndex_ + 1);
+        if (action == 0) {
+            // セーブポイント: 記録を残したまま作り直す（位置も鎖の本数もそこから再開）
             isPaused_ = false;
-            s_TargetMapFilePath = ResolveCurrentMapPath(); // 別のマップにならないように
+            s_ResumeFromSavePoint = true; // 作り直した先で記録を捨てさせない
+            s_TargetMapFilePath = ResolveCurrentMapPath();
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;
-        } else if (pauseMenuIndex_ == 1) {
+        } else if (action == 1) {
+            // リトライ: セーブポイントの記録を捨てて、ステージの最初からやり直す
+            isPaused_ = false;
+            s_TargetMapFilePath = ResolveCurrentMapPath(); // 別のマップにならないように
+            SavePoint::Clear(s_TargetMapFilePath);
+            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+            return;
+        } else if (action == 2) {
             // タイトル: タイトル画面へ遷移
             isPaused_ = false;
 #ifdef USE_IMGUI
@@ -3318,43 +3366,40 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager *sceneManager) {
     Vector4 highlightColor = {1.0f, 0.88f + pulse * 0.12f, 0.20f, 1.0f}; // ゴールド/イエロー
     Vector4 unselectedColor = {0.60f, 0.60f, 0.60f, 0.75f};              // 控えめなグレー/白
 
-    // リトライ項目 (restartText.png: 500x100)
-    if (pauseRestartSprite_) {
-        const float baseW = 280.0f;
-        const float baseH = 56.0f;
-        if (pauseMenuIndex_ == 0) {
-            float scale = 1.08f + pulse * 0.04f;
-            float w = baseW * scale;
-            float h = baseH * scale;
-            pauseRestartSprite_->SetSize({w, h});
-            pauseRestartSprite_->SetPosition({(1280.0f - w) * 0.5f, 320.0f - (h - baseH) * 0.5f});
-            pauseRestartSprite_->SetColor(highlightColor);
-        } else {
-            pauseRestartSprite_->SetSize({baseW, baseH});
-            pauseRestartSprite_->SetPosition({(1280.0f - baseW) * 0.5f, 320.0f});
-            pauseRestartSprite_->SetColor(unselectedColor);
-        }
-        pauseRestartSprite_->Update();
-    }
+    // 項目を上から順に並べる（セーブポイントの記録がある時だけ 3 つ）
+    Sprite *items[3] = {};
+    int count = 0;
+    if (hasSaveItem) items[count++] = pauseSaveSprite_.get();
+    items[count++] = pauseRestartSprite_.get();
+    items[count++] = pauseTitleTextSprite_.get();
 
-    // タイトル項目 (titleText.png: 500x100)
-    if (pauseTitleTextSprite_) {
-        const float baseW = 280.0f;
-        const float baseH = 56.0f;
-        if (pauseMenuIndex_ == 1) {
-            float scale = 1.08f + pulse * 0.04f;
-            float w = baseW * scale;
-            float h = baseH * scale;
-            pauseTitleTextSprite_->SetSize({w, h});
-            pauseTitleTextSprite_->SetPosition({(1280.0f - w) * 0.5f, 430.0f - (h - baseH) * 0.5f});
-            pauseTitleTextSprite_->SetColor(highlightColor);
+    const float baseW = 280.0f;
+    const float baseH = 56.0f;
+    const float top = (count >= 3) ? 300.0f : 320.0f;
+    const float step = (count >= 3) ? 95.0f : 110.0f;
+    for (int i = 0; i < count; ++i) {
+        Sprite *sp = items[i];
+        if (!sp) continue;
+        const float y = top + step * static_cast<float>(i);
+        if (pauseMenuIndex_ == i) {
+            const float scale = 1.08f + pulse * 0.04f;
+            const float w = baseW * scale;
+            const float h = baseH * scale;
+            sp->SetSize({w, h});
+            sp->SetPosition({(1280.0f - w) * 0.5f, y - (h - baseH) * 0.5f});
+            sp->SetColor(highlightColor);
         } else {
-            pauseTitleTextSprite_->SetSize({baseW, baseH});
-            pauseTitleTextSprite_->SetPosition({(1280.0f - baseW) * 0.5f, 430.0f});
-            pauseTitleTextSprite_->SetColor(unselectedColor);
+            sp->SetSize({baseW, baseH});
+            sp->SetPosition({(1280.0f - baseW) * 0.5f, y});
+            sp->SetColor(unselectedColor);
         }
-        pauseTitleTextSprite_->Update();
+        sp->Update();
     }
+}
+
+bool GameScene::HasSavePointItem() const {
+    // セーブポイントを通っていれば、ポーズに「セーブポイント」の項目を出す
+    return SavePoint::HasActiveSavePoint(s_TargetMapFilePath);
 }
 
 float GameScene::DrawGemDigits(const char *text, float x, float y, float cellW, float cellH, const Vector4 &color, size_t startIndex) {
@@ -3917,7 +3962,11 @@ void GameScene::DrawPauseMenu() {
     if (pauseTitleSprite_) {
         pauseTitleSprite_->Draw();
     }
-    // 3. 「リトライ」項目
+    // 3. 「セーブポイント」項目（記録がある時だけ）
+    if (pauseSaveSprite_ && HasSavePointItem()) {
+        pauseSaveSprite_->Draw();
+    }
+    // 4. 「リトライ」項目
     if (pauseRestartSprite_) {
         pauseRestartSprite_->Draw();
     }
