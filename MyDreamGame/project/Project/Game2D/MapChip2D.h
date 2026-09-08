@@ -138,6 +138,11 @@ public:
     void CaptureReplayObjects(std::vector<ReplayObjectState>& out) override;
     void RestoreReplayObjects(const std::vector<ReplayObjectState>& states) override;
 
+    enum ShaderPreset : int {
+        kShaderStandard = 0, // 通常シェーダー (Standard / LightingType 1)
+        kShaderGem = 1      // 宝石シェーダー (Gem / Crystal / LightingType 2)
+    };
+
     struct CustomBlockDef {
         int id = 100;
         std::string name = "New Custom Block";
@@ -147,6 +152,7 @@ public:
         Vector3 scale = {1.0f, 1.0f, 1.0f};
         std::string modelName = "";
         std::string textureName = "";
+        int shaderMode = kShaderStandard;
     };
 
     std::vector<CustomBlockDef>& GetCustomPalette() { return customPalette_; }

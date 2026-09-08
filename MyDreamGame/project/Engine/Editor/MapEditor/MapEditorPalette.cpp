@@ -28,6 +28,7 @@ namespace {
         Model* modelPtr = nullptr;
         D3D12_GPU_DESCRIPTOR_HANDLE textureGpuHandle = {};
         bool hasTexture = false;
+        int shaderMode = 0;
     };
 
     std::tuple<Model*, D3D12_GPU_DESCRIPTOR_HANDLE, bool> ResolveToolResource(const std::string& texName, const std::string& mdlName) {
@@ -298,15 +299,15 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
     ImGui::Spacing();
 
     std::vector<ToolIcon> systemTools = {
-        { 6, "Spawn", "PlayerSpawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f, "", "", nullptr, {}, false },
-        { 10, "RoomSpawn", "RoomRespawn", ImVec4(0.2f, 0.8f, 1.0f, 1.0f), 1.0f, "", "", nullptr, {}, false },
-        { 0, "Erase", "Erase", ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, "", "", nullptr, {}, false }
+        { 6, "Spawn", "PlayerSpawn", ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f, "", "", nullptr, {}, false, 0 },
+        { 10, "RoomSpawn", "RoomRespawn", ImVec4(0.2f, 0.8f, 1.0f, 1.0f), 1.0f, "", "", nullptr, {}, false, 0 },
+        { 0, "Erase", "Erase", ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 1.0f, "", "", nullptr, {}, false, 0 }
     };
 
     std::vector<ToolIcon> templateTools;
     for (const auto& def : mapChip->GetTemplatePalette()) {
         auto [mdl, gpuH, hasTex] = ResolveToolResource(def.textureName, def.modelName);
-        templateTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex });
+        templateTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex, def.shaderMode });
     }
 
     std::set<std::string> availableTypes;
@@ -321,7 +322,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
             continue;
         }
         auto [mdl, gpuH, hasTex] = ResolveToolResource(def.textureName, def.modelName);
-        customTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex });
+        customTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex, def.shaderMode });
     }
 
     float cardWidth = 84.0f;
@@ -405,6 +406,15 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                     drawList->AddText(ImVec2(badgeMin.x + 3.0f, badgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "3D");
                 }
 
+                if (tool.shaderMode == MapChip2D::kShaderGem) {
+                    float bx = !tool.modelName.empty() ? (p.x + 30.0f) : (p.x + 5.0f);
+                    ImVec2 gemBadgeMin(bx, p.y + 5.0f);
+                    ImVec2 gemBadgeMax(bx + 28.0f, p.y + 18.0f);
+                    drawList->AddRectFilled(gemBadgeMin, gemBadgeMax, IM_COL32(180, 50, 180, 230), 3.0f);
+                    drawList->AddRect(gemBadgeMin, gemBadgeMax, IM_COL32(255, 150, 255, 200), 3.0f);
+                    drawList->AddText(ImVec2(gemBadgeMin.x + 3.0f, gemBadgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "GEM");
+                }
+
                 drawList->PushClipRect(ImVec2(p.x + 2.0f, p.y + 2.0f), ImVec2(p.x + cardWidth - 2.0f, p.y + cardHeight - 2.0f), true);
 
                 std::string dispText = GetEllipsisText(tool.name, cardWidth - 8.0f);
@@ -422,6 +432,11 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                     ImGui::Text("ID: %d", tool.id);
                     if (!tool.type.empty()) {
                         ImGui::Text("Type: %s", tool.type.c_str());
+                    }
+                    if (tool.shaderMode == MapChip2D::kShaderGem) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.9f, 1.0f), "Shader: 宝石 (Gem / Crystal)");
+                    } else {
+                        ImGui::TextDisabled("Shader: 通常 (Standard)");
                     }
                     if (!tool.modelName.empty()) {
                         ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Model: %s", tool.modelName.c_str());
