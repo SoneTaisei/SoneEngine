@@ -244,8 +244,10 @@ void GameScene::Initialize() {
 #ifdef USE_IMGUI
     // 遊び始めたステージの名前をエディタにも伝える。
     // 伝えないと、エディタが起動後に1回だけ走る「前回のマップを読み直す」処理が、
-    // タイトルから入ったステージ（map1.txt など）を別のマップに差し替えてしまう
-    {
+    // タイトルから入ったステージ（map1.txt など）を別のマップに差し替えてしまう。
+    // 遊んでいる時だけにするのが大事：編集中にシーンを作り直しただけの時まで伝えると、
+    // マップ設定で選んでいたファイル名を黙って書き換えてしまう
+    if (EditorManager::IsPlaying()) {
         const std::string loadedPath = map_->GetCurrentFilePath();
         if (!loadedPath.empty() && loadedPath.find("temp_play_map") == std::string::npos) {
             const std::string loadedName = std::filesystem::path(loadedPath).filename().string();
@@ -519,6 +521,14 @@ void GameScene::Initialize() {
         alertSeenSprite_->Initialize(spriteCommon_, alertSeenTexHandle_);
         alertSuspectSprite_ = std::make_unique<Sprite>();
         alertSuspectSprite_->Initialize(spriteCommon_, alertSuspectTexHandle_);
+
+        // ゴールの方向を指す矢印
+        goalArrowTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/goal_arrow.png");
+        goalArrowSprite_ = std::make_unique<Sprite>();
+        goalArrowSprite_->Initialize(spriteCommon_, goalArrowTexHandle_);
+        goalLabelTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/goal_label.png");
+        goalLabelSprite_ = std::make_unique<Sprite>();
+        goalLabelSprite_->Initialize(spriteCommon_, goalLabelTexHandle_);
 
         // 開始・クリア・ポーズの文字
         auto makeOne = [&](std::unique_ptr<Sprite> &sp, const char *path) {
@@ -3630,6 +3640,93 @@ void GameScene::DrawAlertBarSprites() {
     }
 }
 
+void GameScene::DrawGoalArrowSprite(const Matrix4x4 &viewProjection) {
+    // ゴールがどこにあるか分かるように矢印を出す。
+    // 画面の外にある時は端に寄せてその方向を指し、見えている時は台座の上で下を指す
+    if (!goalArrowSprite_ || !map_ || !player_) return;
+    if (!IsGamePlaying()) return;
+    if (gameState_ == GameState::Captured || gameState_ == GameState::Clear) return;
+    if (isClearSequenceActive_ || isDeathSequenceActive_ || isPaused_) return;
+
+    const GoalBlock *goal = nullptr;
+    for (const auto &block : map_->GetUpdateBlocks()) {
+        if (const auto *g = dynamic_cast<const GoalBlock *>(block.get())) {
+            goal = g;
+            break;
+        }
+    }
+    if (!goal) return;
+
+    const AABB2D box = goal->GetAABB();
+    const Vector3 goalPos = {(box.left + box.right) * 0.5f, box.top + 0.6f, 0.0f};
+
+    const Vector3 ndc = TransformFunctions::EulerTransform(goalPos, viewProjection);
+    const float gx = (ndc.x + 1.0f) * 0.5f * 1280.0f;
+    const float gy = (1.0f - ndc.y) * 0.5f * 720.0f;
+
+    constexpr float kEdge = 72.0f;   // 画面の端の余白（この内側なら「見えている」）
+    constexpr float kSize = 56.0f;   // 矢印の大きさ
+    const bool inView = (gx > kEdge && gx < 1280.0f - kEdge && gy > kEdge && gy < 720.0f - kEdge);
+
+    float cx = 0.0f, cy = 0.0f, rot = 0.0f, alpha = 0.9f;
+    float dirX = 0.0f, dirY = 1.0f; // 矢印が指している向き（「G」を反対側へ置くのに使う）
+    const float bob = std::sin(hudTime_ * 4.0f);
+
+    if (inView) {
+        // 見えている：台座の少し上で、ゆっくり上下しながら下を指す
+        cx = gx;
+        cy = gy - kSize * 0.9f + bob * 5.0f;
+        rot = 3.14159265f; // 下向き
+        alpha = 0.75f;
+        dirX = 0.0f;
+        dirY = 1.0f;
+    } else {
+        // 画面の外：中心からゴールへの向きを指しながら、画面の端に貼り付く
+        const float dx = gx - 640.0f;
+        const float dy = gy - 360.0f;
+        const float len = std::sqrt(dx * dx + dy * dy);
+        if (len < 1.0f) return;
+        const float ux = dx / len;
+        const float uy = dy / len;
+        // 端の内側に収まるところまで進める
+        const float limitX = (640.0f - kEdge) / (std::max)(0.0001f, std::abs(ux));
+        const float limitY = (360.0f - kEdge) / (std::max)(0.0001f, std::abs(uy));
+        const float t = (std::min)(limitX, limitY) + bob * 4.0f;
+        cx = 640.0f + ux * t;
+        cy = 360.0f + uy * t;
+        rot = std::atan2(ux, -uy); // 画像は上向きなので、上をこの向きへ回す
+        dirX = ux;
+        dirY = uy;
+    }
+
+    // スプライトは左上を軸に回るので、回した後の中心が cx, cy に来るように置く
+    const float c = std::cos(rot);
+    const float s = std::sin(rot);
+    const float half = kSize * 0.5f;
+    const float ox = half * c - half * s;
+    const float oy = half * s + half * c;
+
+    goalArrowSprite_->SetSize({kSize, kSize});
+    goalArrowSprite_->SetRotation(rot);
+    goalArrowSprite_->SetPosition({cx - ox, cy - oy});
+    goalArrowSprite_->SetColor({1.0f, 0.85f, 0.25f, alpha});
+    goalArrowSprite_->Update();
+    goalArrowSprite_->Draw();
+
+    // 「G」は矢印の指す向きの反対側に置く。文字なので回さない（回すと逆さまになって読めない）
+    if (goalLabelSprite_) {
+        constexpr float kLabel = 34.0f;
+        const float lx = cx - dirX * kSize * 0.78f;
+        const float ly = cy - dirY * kSize * 0.78f;
+        goalLabelSprite_->SetSize({kLabel, kLabel});
+        goalLabelSprite_->SetRotation(0.0f);
+        goalLabelSprite_->SetPosition({lx - kLabel * 0.5f, ly - kLabel * 0.5f});
+        goalLabelSprite_->SetColor({1.0f, 0.9f, 0.35f, alpha});
+        goalLabelSprite_->Update();
+        goalLabelSprite_->Draw();
+    }
+}
+
 void GameScene::DrawStageStateSprites() {
     if (!IsGamePlaying()) return; // エディタで編集中は「READY...」などを出さない
     // 開始・クリア・ポーズの文字。文字の画像は白で作ってあるので、色は掛け算で付ける
@@ -3854,6 +3951,9 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
             }
         }
     }
+
+    // ---- ゴールの方向を指す矢印 ----
+    DrawGoalArrowSprite(viewProjection);
 
     // ---- 開始・クリア・ポーズの文字 ----
     DrawStageStateSprites();
