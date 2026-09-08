@@ -9,6 +9,7 @@
 #include "Graphics/GameCamera.h"
 #include "Graphics/CameraManager.h"
 #include "Scene/SceneFactory.h"
+#include "Resource/Audio/AudioManager.h"
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
 #include "Editor/EditorManager.h"
@@ -58,6 +59,10 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
     // このシーンの OnExit() が正射影と追従ターゲットを解除してしまう。
     // 戻る時（PopScene）は Initialize() ではなく OnEnter() しか呼ばれないため、ここで必ず張り直す。
     SetupGameCamera();
+
+    // ゲーム用BGMの再生（前シーンのBGMを停止し、Game.mp3をループ再生）
+    AudioManager::StopAllBGM();
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Game.mp3", true, 0.4f);
 }
 
 // 2Dゲーム用カメラ（正射影＋プレイヤー追従）をこのシーンのものへ張り直す
@@ -1544,6 +1549,21 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         if (ImGui::Button(isPaused_ ? "ポーズ解除 (Resume)" : "ポーズ実行 (Pause)")) {
             isPaused_ = !isPaused_;
             pausePulseTimer_ = 0.0f;
+        }
+    }
+
+    if (ImGui::CollapsingHeader("BGM Control (音楽設定)")) {
+        static float gameBgmVol = 0.4f;
+        if (ImGui::SliderFloat("Game BGM 音量", &gameBgmVol, 0.0f, 1.0f, "%.2f")) {
+            AudioManager::SetBGMVolume("resources/Sound/10Dyas/BGM/Game.mp3", gameBgmVol);
+        }
+        ImGui::Text("Game BGM: %s", AudioManager::IsBGMPlaying("resources/Sound/10Dyas/BGM/Game.mp3") ? "再生中" : "停止中");
+        if (ImGui::Button("BGM 再生")) {
+            AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Game.mp3", true, gameBgmVol);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("BGM 停止")) {
+            AudioManager::StopBGM("resources/Sound/10Dyas/BGM/Game.mp3");
         }
     }
 

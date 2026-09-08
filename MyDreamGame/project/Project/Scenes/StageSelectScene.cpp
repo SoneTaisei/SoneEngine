@@ -9,6 +9,7 @@
 #include "Input/KeyboardInput.h"
 #include "Input/GamepadInput.h"
 #include "Scene/SceneFactory.h"
+#include "Resource/Audio/AudioManager.h"
 #include "GameScene.h"
 #include "Game2D/Blocks/SavePoint.h"
 #include "Core/TimeManager.h"
@@ -25,6 +26,9 @@ StageSelectScene::~StageSelectScene() {}
 
 void StageSelectScene::OnEnter(SceneManager* sceneManager) {
     // シーン開始時に、可能なら前回の選択ステージなどを復元する
+    AudioManager::StopAllBGM();
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Title.mp3", true, 0.4f);
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
 }
 
 void StageSelectScene::OnExit(SceneManager* sceneManager) {
