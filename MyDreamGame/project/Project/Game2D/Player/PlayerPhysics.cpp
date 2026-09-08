@@ -304,10 +304,15 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
                     if (state_.isDead_) return;
                 }
             } else if (blockPtr->IsOneWay()) {
-                float catchUp = (std::max)(0.0f, -blockPtr->GetVelocity().y * lastDeltaTime_) + 0.05f;
-                bool ridingDown = (state_.velocity_.y <= 0.0f) && (minY > blockTop) && (minY <= blockTop + catchUp);
-                float prevMinY = minY - (state_.velocity_.y + state_.platformVelocity_.y) * lastDeltaTime_; // 前フレームの足の位置（動く片方向床も通過判定）
-                if (state_.velocity_.y <= 0.0f && (ridingDown || (minY <= blockTop && prevMinY >= blockTop - 0.05f))) {
+                // 板も 1 フレームで動くので、「前フレームの足」と「前フレームの板の上端」で比べる。
+                // 今の上端と比べると、上へ動く板が足を追い越した時にすり抜けてしまう
+                const float blockVelY = blockPtr->GetVelocity().y;
+                const float prevBlockTop = blockTop - blockVelY * lastDeltaTime_;
+                const float catchUp = (std::max)(0.0f, -blockVelY * lastDeltaTime_) + 0.05f;
+                const bool ridingDown = (state_.velocity_.y <= 0.0f) && (minY > blockTop) && (minY <= blockTop + catchUp);
+                const float prevMinY = minY - (state_.velocity_.y + state_.platformVelocity_.y) * lastDeltaTime_; // 前フレームの足の位置
+                const float tol = 0.05f + std::fabs(blockVelY) * lastDeltaTime_; // 速い板ほど拾える幅を広げる
+                if (state_.velocity_.y <= 0.0f && (ridingDown || (minY <= blockTop && prevMinY >= prevBlockTop - tol))) {
                     state_.position_.y = blockTop + params_.halfHeight_;
                     state_.velocity_.y = 0.0f;
                     groundedThisFrame = true;

@@ -212,7 +212,7 @@ void GuardBlock::Update() {
                 if (gameObject_) {
                     if (auto* tcw = gameObject_->GetComponent<TransformComponent>()) here = tcw->GetPosition();
                 }
-                alert->OnGuardWake(here);
+                alert->OnGuardWake();
             }
         }
         isPlayerInSightThisFrame_ = false;
@@ -242,6 +242,11 @@ void GuardBlock::Update() {
                 bool wasFull = (alertGauge_ >= maxAlertGauge_);
                 // 明るい所に入った時だけ発見が進む。薄暗い縁は「？」になるだけ。
                 // 近いほど速く、遠いほどゆっくり溜まる（遠くなら逃げる時間がある）
+                // 全体の警戒度が高いほど、見つかるまでが速くなる
+                float alertSpeed = 1.0f;
+                if (alert && alert->GetParams().enabled_) {
+                    alertSpeed = 1.0f + alert->GetRatio() * alert->GetParams().spotSpeedBonus_;
+                }
                 if (sightLevel_ == SightLevel::Spotted) {
                     if (sightDistance_ <= spotNearDistance_) {
                         alertGauge_ = maxAlertGauge_; // 目の前：溜めなしで一発
@@ -249,11 +254,11 @@ void GuardBlock::Update() {
                         float span = (std::max)(0.01f, lightDistance_ - spotNearDistance_);
                         float t = std::clamp((sightDistance_ - spotNearDistance_) / span, 0.0f, 1.0f);
                         float scale = 1.0f + (spotFarTimeScale_ - 1.0f) * t;
-                        alertGauge_ += dt / (std::max)(0.01f, scale);
+                        alertGauge_ += dt * alertSpeed / (std::max)(0.01f, scale);
                     }
                 }
-                if (!wasFull && alert) {
-                    alert->AddContinuous(alert->GetParams().seenPerSec_, dt); // 溜まっている間は「猶予」
+                if (!wasFull && alert && sightLevel_ == SightLevel::Spotted) {
+                    alert->AddContinuous(alert->GetParams().seenPerSec_, dt); // 明るい光の中に居る間
                 }
                 if (alertGauge_ >= maxAlertGauge_) {
                     // 発見確定：追跡へ（「！」）。即ミスではなく、接触で捕まる
@@ -303,6 +308,13 @@ void GuardBlock::Update() {
                 spottedReported_ = false;
                 seenTime_ = 0.0f;
             }
+        }
+
+        // 「？」が出ている間は、見えていなくても全体の警戒度が少しずつ上がる
+        // （明るい光の中は上の視認で上げているので、そちらとは重ねない）
+        if (alert && sightLevel_ != SightLevel::Spotted &&
+            (state_ == State::Suspicious || state_ == State::Investigate)) {
+            alert->AddSuspicion(alert->GetParams().suspectPerSec_, dt);
         }
 
         if (state_ == State::Wait) {

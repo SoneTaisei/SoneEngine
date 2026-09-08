@@ -3,9 +3,9 @@
         {
             "color": {
                 "a": 1.0,
-                "b": 0.3019607961177826,
-                "g": 0.7019608020782471,
-                "r": 0.3019607961177826
+                "b": 1.0,
+                "g": 1.0,
+                "r": 1.0
             },
             "id": 1,
             "modelName": "",
@@ -17,7 +17,7 @@
                 "z": 3.0
             },
             "shaderMode": 0,
-            "textureName": "",
+            "textureName": "Object/Original/Block/Brick.png",
             "type": "NormalBlock"
         },
         {

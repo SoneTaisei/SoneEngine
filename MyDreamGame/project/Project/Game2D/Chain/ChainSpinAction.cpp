@@ -603,6 +603,10 @@ void ChainSpinAction::Break(float dt, Player2D* player, Chain2D* chain, const Ve
 void ChainSpinAction::Cancel(Player2D* player, Chain2D* chain) {
     if ((state_ == State::kHold || state_ == State::kStance) && chain) {
         chain->SetRigidLineTarget(nullptr);
+        // 手の速度を宝石に引き継がない。
+        // 引き継ぐと、跳んだ勢いのまま落とした宝石が上へ飛んでいってしまう
+        // （勢いをそのまま渡したい時は Break を使う。こちらは「落とす」側）
+        chain->ResetDynamics();
     }
     if (player) {
         player->SetActionInputModifier(1.0f, false);

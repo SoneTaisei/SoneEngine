@@ -37,20 +37,20 @@ void AlertSystem::LoadParams() {
     params_.strikeLimit_ = pm->GetValue(kGroup, "strikeLimit_", 3);
     params_.strikeMergeTime_ = pm->GetValue(kGroup, "strikeMergeTime_", 1.0f);
     params_.strikeLimit_ = (std::max)(params_.strikeLimit_, 1);
-    params_.enabled_ = pm->GetValue(kGroup, "enabled_", false);
+    params_.enabled_ = pm->GetValue(kGroup, "enabled_", true);
     params_.seenPerSec_ = pm->GetValue(kGroup, "seenPerSec_", 8.0f);
+    params_.suspectPerSec_ = pm->GetValue(kGroup, "suspectPerSec_", 4.0f);
+    params_.spotSpeedBonus_ = pm->GetValue(kGroup, "spotSpeedBonus_", 1.0f);
     params_.spottedAdd_ = pm->GetValue(kGroup, "spottedAdd_", 25.0f);
-    params_.wakeAdd_ = pm->GetValue(kGroup, "wakeAdd_", 15.0f);
+    params_.wakeAdd_ = pm->GetValue(kGroup, "wakeAdd_", 5.0f);
     params_.noiseEnabled_ = pm->GetValue(kGroup, "noiseEnabled_", false);
     params_.noiseAdd_ = pm->GetValue(kGroup, "noiseAdd_", 5.0f);
     params_.noiseRadius_ = pm->GetValue(kGroup, "noiseRadius_", 6.0f);
     params_.noiseSpeed_ = pm->GetValue(kGroup, "noiseSpeed_", 8.0f);
-    params_.driftPerSec_ = pm->GetValue(kGroup, "driftPerSec_", 1.0f);
-    params_.quietDelay_ = pm->GetValue(kGroup, "quietDelay_", 8.0f);
-    params_.quietDecayPerSec_ = pm->GetValue(kGroup, "quietDecayPerSec_", 2.0f);
+    params_.driftPerSec_ = pm->GetValue(kGroup, "driftPerSec_", 0.0f);
+    params_.quietDelay_ = pm->GetValue(kGroup, "quietDelay_", 2.5f);
+    params_.quietDecayPerSec_ = pm->GetValue(kGroup, "quietDecayPerSec_", 6.0f);
     params_.captureValue_ = pm->GetValue(kGroup, "captureValue_", 100.0f);
-    params_.wakeFarDistance_ = pm->GetValue(kGroup, "wakeFarDistance_", 8.0f);
-    params_.wakeFarAdd_ = pm->GetValue(kGroup, "wakeFarAdd_", 5.0f);
     params_.respawnGrace_ = pm->GetValue(kGroup, "respawnGrace_", 3.0f);
     params_.captureValue_ = (std::max)(params_.captureValue_, 1.0f);
 }
@@ -58,6 +58,8 @@ void AlertSystem::LoadParams() {
 void AlertSystem::SaveParams() {
     ParameterManager* pm = ParameterManager::GetInstance();
     pm->SetValue(kGroup, "seenPerSec_", params_.seenPerSec_);
+    pm->SetValue(kGroup, "suspectPerSec_", params_.suspectPerSec_);
+    pm->SetValue(kGroup, "spotSpeedBonus_", params_.spotSpeedBonus_);
     pm->SetValue(kGroup, "spottedAdd_", params_.spottedAdd_);
     pm->SetValue(kGroup, "wakeAdd_", params_.wakeAdd_);
     pm->SetValue(kGroup, "strikeEnabled_", params_.strikeEnabled_);
@@ -72,8 +74,6 @@ void AlertSystem::SaveParams() {
     pm->SetValue(kGroup, "quietDelay_", params_.quietDelay_);
     pm->SetValue(kGroup, "quietDecayPerSec_", params_.quietDecayPerSec_);
     pm->SetValue(kGroup, "captureValue_", params_.captureValue_);
-    pm->SetValue(kGroup, "wakeFarDistance_", params_.wakeFarDistance_);
-    pm->SetValue(kGroup, "wakeFarAdd_", params_.wakeFarAdd_);
     pm->SetValue(kGroup, "respawnGrace_", params_.respawnGrace_);
     pm->Save();
 }
@@ -91,6 +91,7 @@ void AlertSystem::Reset() {
     strikePulse_ = 0.0f;
     graceTimer_ = 0.0f;
     seenTimer_ = 0.0f;
+    suspectTimer_ = 0.0f;
     peak_ = 0.0f;
     events_.clear();
     totals_.clear();
@@ -113,6 +114,7 @@ void AlertSystem::Update(float dt) {
     pulse_ = (std::max)(0.0f, pulse_ - kPulseDecay * dt);
     strikePulse_ = (std::max)(0.0f, strikePulse_ - kPulseDecay * dt);
     seenTimer_ = (std::max)(0.0f, seenTimer_ - dt);
+    suspectTimer_ = (std::max)(0.0f, suspectTimer_ - dt);
     clock_ += dt;
 
     // 復活直後の猶予は回数制でも進める（この間は発見を数えない）
@@ -178,6 +180,18 @@ void AlertSystem::AddContinuous(float amountPerSec, float dt) {
     Clamp();
 }
 
+void AlertSystem::AddSuspicion(float amountPerSec, float dt) {
+    if (!params_.enabled_) return;
+    if (!active_ || captured_ || amountPerSec <= 0.0f || dt <= 0.0f) return;
+    suspectTimer_ = 0.25f; // 「怪しまれている」の合図
+    if (graceTimer_ > 0.0f) return;
+    value_ += amountPerSec * dt;
+    eventThisFrame_ = true;
+    quietTimer_ = 0.0f;
+    totals_["疑い"] += amountPerSec * dt;
+    Clamp();
+}
+
 void AlertSystem::Notice(const char* text) {
     if (!active_ || captured_ || !text) return;
     events_.push_back({text, 0.0f, true});
@@ -185,15 +199,9 @@ void AlertSystem::Notice(const char* text) {
     counts_[text] += 1;
 }
 
-void AlertSystem::OnGuardWake(const Vector3& guardPos) {
-    float dx = guardPos.x - playerPos_.x;
-    float dy = guardPos.y - playerPos_.y;
-    float dist = std::sqrt(dx * dx + dy * dy);
-    if (dist >= params_.wakeFarDistance_) {
-        Add(params_.wakeFarAdd_, "通報(遠い)");
-    } else {
-        Add(params_.wakeAdd_, "通報");
-    }
+void AlertSystem::OnGuardWake() {
+    // 起こしてしまった、という 1 つの事実として扱う。距離では変えない
+    Add(params_.wakeAdd_, "通報");
 }
 
 void AlertSystem::OnSpotted() {
@@ -214,6 +222,16 @@ void AlertSystem::OnSpotted() {
         if (events_.size() > 4) events_.erase(events_.begin());
         if (strikes_ >= params_.strikeLimit_) {
             captured_ = true; // 上限に達した瞬間に捕獲
+        }
+        // 回数制と全体の警戒度を両方使っている時は、見つかった分を警戒度にも足す
+        // （ポップアップは上の「発見 残り N 回」があるので、ここでは出さない）
+        if (params_.enabled_) {
+            value_ += params_.spottedAdd_;
+            totals_["発見"] += params_.spottedAdd_;
+            eventThisFrame_ = true;
+            quietTimer_ = 0.0f;
+            pulse_ = 1.0f;
+            Clamp();
         }
         return;
     }
@@ -250,7 +268,7 @@ AlertRank AlertSystem::ComputeRank() const {
         return (it == counts_.end()) ? 0 : it->second;
     };
     r.spotted = count("発見");
-    r.reported = count("通報") + count("通報(遠い)");
+    r.reported = count("通報");
     r.noises = count("騒音");
     r.peak = peak_;
     if (r.spotted == 0 && r.reported == 0) r.rank = 'S';
@@ -346,7 +364,9 @@ void AlertSystem::DrawImGui() {
 
     bool changed = false;
     ImGui::SeparatorText("上がる");
-    changed |= ImGui::DragFloat("視界に入っている間 /秒 (seenPerSec_)", &params_.seenPerSec_, 0.1f, 0.0f, 50.0f);
+    changed |= ImGui::DragFloat("明るい光の中 /秒 (seenPerSec_)", &params_.seenPerSec_, 0.1f, 0.0f, 50.0f);
+    changed |= ImGui::DragFloat("「？」が出ている間 /秒 (suspectPerSec_)", &params_.suspectPerSec_, 0.1f, 0.0f, 50.0f);
+    changed |= ImGui::DragFloat("満タン時に見つかる速さ +倍 (spotSpeedBonus_)", &params_.spotSpeedBonus_, 0.1f, 0.0f, 5.0f);
     changed |= ImGui::DragFloat("発見確定 (spottedAdd_)", &params_.spottedAdd_, 0.5f, 0.0f, 100.0f);
     changed |= ImGui::DragFloat("起きて通報 (wakeAdd_)", &params_.wakeAdd_, 0.5f, 0.0f, 100.0f);
     changed |= ImGui::Checkbox("騒音を数える (noiseEnabled_)", &params_.noiseEnabled_);
@@ -355,11 +375,9 @@ void AlertSystem::DrawImGui() {
     changed |= ImGui::DragFloat("騒音になる宝石の速さ (noiseSpeed_)", &params_.noiseSpeed_, 0.1f, 0.0f, 40.0f);
     changed |= ImGui::DragFloat("時間経過 /秒 (driftPerSec_)", &params_.driftPerSec_, 0.05f, 0.0f, 10.0f);
     ImGui::SeparatorText("下がる");
-    changed |= ImGui::DragFloat("静かにしてから下がるまで 秒 (quietDelay_)", &params_.quietDelay_, 0.1f, 0.0f, 60.0f);
-    changed |= ImGui::DragFloat("静かな時の減少 /秒 (quietDecayPerSec_)", &params_.quietDecayPerSec_, 0.1f, 0.0f, 20.0f);
+    changed |= ImGui::DragFloat("見つかっていない時間がこれを超えると下がる 秒 (quietDelay_)", &params_.quietDelay_, 0.1f, 0.0f, 60.0f);
+    changed |= ImGui::DragFloat("下がる速さ /秒 (quietDecayPerSec_)", &params_.quietDecayPerSec_, 0.1f, 0.0f, 20.0f);
     ImGui::SeparatorText("見返り・猶予");
-    changed |= ImGui::DragFloat("遠くで起きたと見なす距離 (wakeFarDistance_)", &params_.wakeFarDistance_, 0.1f, 0.0f, 40.0f);
-    changed |= ImGui::DragFloat("遠くで起きた時の通報 (wakeFarAdd_)", &params_.wakeFarAdd_, 0.5f, 0.0f, 100.0f);
     changed |= ImGui::DragFloat("復活直後の猶予 秒 (respawnGrace_)", &params_.respawnGrace_, 0.1f, 0.0f, 10.0f);
     ImGui::SeparatorText("捕獲");
     changed |= ImGui::DragFloat("捕獲になる値 (captureValue_)", &params_.captureValue_, 1.0f, 1.0f, 1000.0f);
@@ -367,6 +385,8 @@ void AlertSystem::DrawImGui() {
         params_.captureValue_ = (std::max)(params_.captureValue_, 1.0f);
         ParameterManager* pm = ParameterManager::GetInstance();
         pm->SetValue(kGroup, "seenPerSec_", params_.seenPerSec_);
+        pm->SetValue(kGroup, "suspectPerSec_", params_.suspectPerSec_);
+        pm->SetValue(kGroup, "spotSpeedBonus_", params_.spotSpeedBonus_);
         pm->SetValue(kGroup, "spottedAdd_", params_.spottedAdd_);
         pm->SetValue(kGroup, "wakeAdd_", params_.wakeAdd_);
         pm->SetValue(kGroup, "noiseEnabled_", params_.noiseEnabled_);
@@ -377,8 +397,6 @@ void AlertSystem::DrawImGui() {
         pm->SetValue(kGroup, "quietDelay_", params_.quietDelay_);
         pm->SetValue(kGroup, "quietDecayPerSec_", params_.quietDecayPerSec_);
         pm->SetValue(kGroup, "captureValue_", params_.captureValue_);
-        pm->SetValue(kGroup, "wakeFarDistance_", params_.wakeFarDistance_);
-        pm->SetValue(kGroup, "wakeFarAdd_", params_.wakeFarAdd_);
         pm->SetValue(kGroup, "respawnGrace_", params_.respawnGrace_);
     }
     if (ImGui::Button("パラメータを保存 (Alert)")) {

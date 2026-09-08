@@ -20,6 +20,9 @@ public:
 
     // 震えている間はまだ足場。落ちて消えたら無くなる
     bool IsSolid() const override { return !isDestroyed_; }
+    // 震えるのは見た目だけ。当たり判定は置かれた場所のまま返す
+    // （判定まで揺らすと、乗っている足が一瞬浮いてジャンプできないフレームが出る）
+    AABB2D GetAABB() const override;
     // 崩れた後もマップに残す（エディタの「復活」、巻き戻しでの復元、プレイ中の保存で床が消えないように）
     bool KeepWhenDestroyed() const override { return true; }
     void OnPlayerStand(Player2D* player) override;

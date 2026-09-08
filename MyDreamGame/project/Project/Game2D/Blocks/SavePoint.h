@@ -16,14 +16,17 @@ public:
         Vector3 spawnPosition = { 0.0f, 0.0f, 0.0f };
         int chipX = -1;
         int chipY = -1;
+        int chainLength = -1; // 通った時に持っていた鎖の本数（-1 = 記録なし）
     };
 
     // --- 静的セーブデータ管理 ---
-    static void SetActiveSavePoint(const std::string& stagePath, const Vector3& pos, int chipX, int chipY);
+    static void SetActiveSavePoint(const std::string& stagePath, const Vector3& pos, int chipX, int chipY, int chainLength = -1);
     static bool HasActiveSavePoint(const std::string& stagePath);
     static Vector3 GetActiveSavePoint(const std::string& stagePath);
     static int GetActiveChipX(const std::string& stagePath);
     static int GetActiveChipY(const std::string& stagePath);
+    /// <summary>そのセーブポイントを通った時の鎖の本数。記録が無ければ -1</summary>
+    static int GetActiveChainLength(const std::string& stagePath);
     static void Clear(const std::string& stagePath = "");
     static void ClearAll();
     static std::string NormalizeStageKey(const std::string& stagePath);

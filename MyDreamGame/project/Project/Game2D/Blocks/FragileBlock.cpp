@@ -58,6 +58,23 @@ std::unique_ptr<GameObject> FragileBlock::MakePart(const Vector3& scale, const V
     return part;
 }
 
+AABB2D FragileBlock::GetAABB() const {
+    // 震えている最中でも、判定は置いた場所の箱を返す。
+    // 大きさは変わらないので、今の見た目のスケールをそのまま使う
+    Vector3 scale = { 1.0f, 1.0f, 1.0f };
+    if (gameObject_) {
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            scale = tc->GetScale();
+        }
+    }
+    return {
+        startX_ - scale.x * 0.5f,
+        startY_ + scale.y * 0.5f,
+        startX_ + scale.x * 0.5f,
+        startY_ - scale.y * 0.5f
+    };
+}
+
 void FragileBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     startX_ = worldX;
     startY_ = worldY;
