@@ -188,8 +188,13 @@ void Chain2D::UpdatePayout(float dt) {
     float feed = params_.payoutSpeed_ * dt;
 
     if (pendingNodes_ <= 0) {
-        // キューが空でも、最後に挿入した節が伸び切るまで先頭セグメントを伸ばし続ける
-        headRest_ = (std::min)(headRest_ + feed, restLength_);
+        if (headRest_ > restLength_) {
+            // 外した直後で隙間が空いている：繰り出しと同じ速さで巻き取る（一気に縮めると吹き飛ぶ）
+            headRest_ = (std::max)(restLength_, headRest_ - feed);
+        } else {
+            // キューが空でも、最後に挿入した節が伸び切るまで先頭セグメントを伸ばし続ける
+            headRest_ = (std::min)(headRest_ + feed, restLength_);
+        }
         return;
     }
 
@@ -469,7 +474,7 @@ void Chain2D::QueueUnits(int units) {
 }
 
 bool Chain2D::IsPayingOut() const {
-    return pendingNodes_ > 0 || headRest_ < restLength_ - 1e-4f;
+    return pendingNodes_ > 0 || std::fabs(headRest_ - restLength_) > 1e-4f; // 繰り出し中と巻き取り中
 }
 
 void Chain2D::AddUnitsAtAnchor(int units) {
@@ -530,8 +535,15 @@ std::vector<VerletNode> Chain2D::RemoveUnitsAtAnchor(int units) {
         node.invMass = node.crushed ? 0.0f : 1.0f; // 自由ノード化（挟まれた節は固定のまま）
         node.radius = params_.nodeRadius_;
     }
-    // 残った新しい先頭セグメントは完全長。残りの揺れは殺さない（ResetDynamicsは呼ばない）
+    // 外した分だけ、手と残った鎖の間に隙間が空く。
+    // ここで自然長を 1 節分に戻すと距離制約が一気に縮めにかかり、残りの鎖と宝石が吹き飛ぶ。
+    // いまの隙間をそのまま自然長にしておき、UpdatePayout で少しずつ巻き取る（残りの揺れは殺さない）
     headRest_ = restLength_;
+    if (nodes_.size() >= 2) {
+        const float dx = nodes_[1].pos.x - nodes_[0].pos.x;
+        const float dy = nodes_[1].pos.y - nodes_[0].pos.y;
+        headRest_ = (std::max)(restLength_, std::sqrt(dx * dx + dy * dy));
+    }
 
     ApplyEndWeight();
     UpdateLinkTransforms();
