@@ -18,8 +18,8 @@ public:
     Vector3 GetPosition() const { return { worldX_, worldY_, 0.0f }; }
     float GetWidth() const { return width_; }
 
-    // プレイヤーと宝石の両方が台座の上に乗っているか判定
-    bool CheckClearCondition(const Vector3& playerPos, float playerHalfHeight, const Vector3& gemPos) const;
+    // プレイヤーと宝石の両方が台座の上に乗っているか判定（空中にいる場合は無効）
+    bool CheckClearCondition(const Vector3& playerPos, float playerHalfHeight, bool isOnGround, const Vector3& gemPos) const;
 
 private:
     float worldX_ = 0.0f;

@@ -86,12 +86,13 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.id = static_cast<int>(ChipType::kMovingBlock);
         def.name = "Moving Floor";
         def.type = "MovingBlock";
-        def.color = {0.8f, 0.5f, 0.1f, 1.0f};
+        def.color = {0.42f, 0.58f, 0.78f, 1.0f}; // 金属の板の色。木の細い足場と見分けが付くようにする
         
         nlohmann::json props = nlohmann::json::object();
         props["moveAxis"] = "X";
         props["moveRange"] = 3.0f;
         props["moveSpeed"] = 2.0f;
+        props["thickness"] = 0.2f; // 板の厚み（細い足場と同じ既定値）
         def.properties = props;
         
         templatePalette_.push_back(def);

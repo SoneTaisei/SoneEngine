@@ -780,10 +780,24 @@ void ChainManager::UpdateSpinSpots(MapChip2D* map) {
         for (int cy = y0; cy <= y1; ++cy) {
             for (int cx = x0; cx <= x1; ++cx) {
                 BaseBlock* block = map->GetBlock(cx, cy);
-                if (!block || block->IsDestroyed() || !block->AllowsChainSpin()) {
+                if (!block || block->IsDestroyed() || block->IsMoving() || !block->AllowsChainSpin()) {
+                    continue; // 動く板は置いたチップから離れるので、下のループで今いる場所を見る
+                }
+                allowed = true;
+            }
+        }
+        // 動く板（動く床）はチップではなく、今いる場所（AABB）で足元を見る
+        if (!allowed) {
+            for (const auto& blockPtr : map->GetUpdateBlocks()) {
+                if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->AllowsChainSpin()) {
+                    continue;
+                }
+                AABB2D b = blockPtr->GetAABB();
+                if (box.right < b.left || box.left > b.right || box.top < b.bottom || (box.bottom - 0.1f) > b.top) {
                     continue;
                 }
                 allowed = true;
+                break;
             }
         }
     }
