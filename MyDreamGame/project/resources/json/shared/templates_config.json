@@ -8,7 +8,7 @@
                 "r": 1.0
             },
             "id": 1,
-            "modelName": "",
+            "modelName": "Object/Original/Block/Block.obj",
             "name": "Block",
             "properties": {},
             "scale": {
@@ -17,7 +17,7 @@
                 "z": 3.0
             },
             "shaderMode": 0,
-            "textureName": "Object/Original/Block/Brick.png",
+            "textureName": "",
             "type": "NormalBlock"
         },
         {

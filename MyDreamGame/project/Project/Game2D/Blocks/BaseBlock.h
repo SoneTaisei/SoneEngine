@@ -92,6 +92,31 @@ public:
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
 
+    // ===== 3Dモデル差し替え時の見た目 =====
+    // モデルを設定したブロックは、立方体プリミティブを消してモデルだけを表示する。
+    // 派生ブロックの Reset() が色やスケールを初期値へ戻すと立方体が復活してしまうため、
+    // 設定内容をここに覚えておき、Reset() の後（MapChip2D::ResetBlocks）で再適用する。
+    void SetModelVisualOverride(const Vector3& position, const Vector3& scale) {
+        hasModelVisual_ = true;
+        modelPosition_ = position;
+        modelScale_ = scale;
+    }
+    bool HasModelVisual() const { return hasModelVisual_; }
+
+    void ApplyModelVisualOverride() {
+        if (!hasModelVisual_ || !gameObject_) return;
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            tc->SetPosition(modelPosition_);
+            tc->SetScale(modelScale_);
+        }
+        // 立方体プリミティブは描画自体を止める（アルファ0だけだと Reset() で色が戻り、
+        // モデルとブロックが重なって見えてしまう）
+        if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+            prc->SetEnabled(false);
+            prc->GetMaterial().color.w = 0.0f;
+        }
+    }
+
     // ===== リプレイ対応 =====
     // リプレイに毎フレーム状態を記録する対象かどうか。
     // 位置・回転・スケール・色・破壊フラグの変化は MapChip2D 側が自動で検出して
@@ -168,4 +193,9 @@ protected:
     int chipY_ = 0;
     std::unique_ptr<GameObject> gameObject_;
     bool isDestroyed_ = false;
+
+    // 3Dモデル差し替え時の見た目（MapChip2D が設定する）
+    bool hasModelVisual_ = false;
+    Vector3 modelPosition_ = {0.0f, 0.0f, 0.0f};
+    Vector3 modelScale_ = {1.0f, 1.0f, 1.0f};
 };

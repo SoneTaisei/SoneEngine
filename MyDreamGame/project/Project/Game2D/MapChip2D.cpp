@@ -1525,15 +1525,10 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     mrc->GetMaterial().color = def->color;
                     applyShaderSettings(mrc->GetMaterial());
 
-                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
-                        tc->SetPosition({ worldX, worldY, 0.0f });
-                        tc->SetScale(def->scale);
-                    }
-                    
-                    // モデルがある場合はプリミティブを非表示または削除（コンポーネントを取り除く機能がない場合はアルファ0にする等）
-                    if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                        prc->GetMaterial().color.w = 0.0f; // 透明にして見えなくする
-                    }
+                    // モデル用の位置・スケールと「立方体を消す」設定を覚えさせ、
+                    // 死亡リセット後にも同じ見た目へ戻せるようにする
+                    newBlock->SetModelVisualOverride({ worldX, worldY, 0.0f }, def->scale);
+                    newBlock->ApplyModelVisualOverride();
                 }
             }
         }
@@ -1559,6 +1554,8 @@ void MapChip2D::ResetBlocks() {
     for (auto& block : updateBlocks_) {
         if (block) {
             block->Reset();
+            // Reset() が色やスケールを初期値へ戻すため、モデル差し替えの見た目を再適用する
+            block->ApplyModelVisualOverride();
         }
     }
     replayDestroyedIds_.clear();
