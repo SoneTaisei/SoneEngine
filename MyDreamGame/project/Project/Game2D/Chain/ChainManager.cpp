@@ -785,8 +785,8 @@ void ChainManager::UpdateTether() {
     if (!player_ || !playerChain_) {
         return;
     }
-    // 構え中はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
-    if (spin_ && spin_->IsInStance()) {
+    // 構え中と、板以外で投げた直後はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
+    if (spin_ && (spin_->IsInStance() || spin_->IsThrowLocked())) {
         return;
     }
     if (!params_.tetherEnabled_ || tornChain_ || transitionHidden_ || player_->IsDead() || player_->IsGoal()) {
@@ -1082,6 +1082,11 @@ void ChainManager::DrawImGui() {
         ImGui::SameLine();
         ImGui::TextDisabled(spin_->IsSpinAllowed() ? "[on plank]" : "[not on plank]");
     }
+    ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【板以外の床で投げる（Q で持って A/D）】");
+    spinChanged |= ImGui::DragFloat("Ground Throw Speed (投げる速さ)##Spin", &params_.groundThrowSpeed_, 0.5f, 0.0f, 40.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Up (上向き成分)##Spin", &params_.groundThrowUp_, 0.05f, 0.0f, 2.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Recover (投げた後動けない秒数)##Spin", &params_.groundThrowRecover_, 0.05f, 0.0f, 2.0f);
+    ImGui::TextDisabled("※ 警備員が気絶する速さは Stun Speed（既定 6）。それより速く投げること");
     spinChanged |= ImGui::DragFloat("Swing Strength##Spin", &params_.swingStrength_, 0.5f, 0.0f, 200.0f);
     spinChanged |= ImGui::DragFloat("Swing Damping##Spin", &params_.swingDamping_, 0.01f, 0.0f, 5.0f);
     spinChanged |= ImGui::DragFloat("Chain Mass Per Unit##Spin", &params_.chainMassPerUnit_, 0.05f, 0.0f, 10.0f);
@@ -1099,6 +1104,9 @@ void ChainManager::DrawImGui() {
         params_.throwOutTime_ = std::clamp(params_.throwOutTime_, 0.01f, 2.0f);
         params_.throwAngleDeg_ = std::clamp(params_.throwAngleDeg_, 0.0f, 180.0f);
         params_.throwOmega_ = std::clamp(params_.throwOmega_, 0.0f, 20.0f);
+        params_.groundThrowSpeed_ = std::clamp(params_.groundThrowSpeed_, 0.0f, 40.0f);
+        params_.groundThrowUp_ = std::clamp(params_.groundThrowUp_, 0.0f, 2.0f);
+        params_.groundThrowRecover_ = std::clamp(params_.groundThrowRecover_, 0.0f, 2.0f);
         params_.swingStrength_ = (std::max)(0.0f, params_.swingStrength_);
         params_.swingDamping_ = (std::max)(0.0f, params_.swingDamping_);
         params_.chainMassPerUnit_ = (std::max)(0.0f, params_.chainMassPerUnit_);

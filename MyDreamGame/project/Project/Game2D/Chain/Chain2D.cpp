@@ -685,6 +685,26 @@ void Chain2D::ReleaseRigidLine(const Vector3& center, float omega, float velocit
     }
 }
 
+void Chain2D::ThrowWeight(const Vector3& velocity, float dt) {
+    rigidLine_ = nullptr;
+    RestoreMasses();
+    if (nodes_.size() < 2) {
+        return;
+    }
+    float subDt = dt / static_cast<float>((std::max)(1, params_.subSteps_));
+    const float last = static_cast<float>(nodes_.size() - 1);
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        VerletNode& node = nodes_[i];
+        node.prevPos = node.pos; // 拘束中の残留変位を消してから注入
+        if (node.invMass <= 0.0f) {
+            continue; // アンカー等の固定ノード
+        }
+        // 手元（0）から先端（1）へ向かって速度を増やす。先端の重りが一番速い
+        float t = (last > 0.0f) ? static_cast<float>(i) / last : 1.0f;
+        VerletPhysics2D::ApplyVelocity(node, velocity, subDt, t);
+    }
+}
+
 void Chain2D::TranslateNodes(const Vector3& delta) {
     Vector3 d = { delta.x, delta.y, 0.0f };
     for (auto& node : nodes_) {

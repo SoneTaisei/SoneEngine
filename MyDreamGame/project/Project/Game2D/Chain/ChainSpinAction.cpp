@@ -28,6 +28,8 @@ namespace {
     constexpr float kThrowGrace = 0.15f;
     // やめた後、再び持てるまで（Q 連打の防止）
     constexpr float kHoldBlock = 0.2f;
+    // 板以外で投げた後、宝石が飛んでいる間は拾い直せないようにする待ち時間（秒）
+    constexpr float kGroundThrowBlock = 0.45f;
     // 矢じり：円錐の半径（高さはその 2 倍）、体の中心からの隙間、勢い最大の時の長さ倍率
     constexpr float kArrowSize = 0.18f;
     constexpr float kArrowGap = 0.25f;
@@ -78,6 +80,7 @@ void ChainSpinAction::Initialize(const ChainParams& params) {
     aiming_ = false;
     aimTimer_ = 0.0f;
     holdBlockTimer_ = 0.0f;
+    throwLockTime_ = -1.0f;
     swingInput_ = 0.0f;
     spinAllowed_ = false;
     theta_ = 0.0f;
@@ -102,6 +105,7 @@ void ChainSpinAction::ResetInputState() {
     aiming_ = false;
     aimTimer_ = 0.0f;
     holdBlockTimer_ = 0.0f;
+    throwLockTime_ = -1.0f;
     swingInput_ = 0.0f;
     spinAllowed_ = false;
     // 振り子の状態も入力から決まるので一緒に戻す（前回のプレイ/再生ループの値が残ると0フレーム目からずれる）
@@ -258,7 +262,27 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
         if (state_ != State::kIdle) {
             Cancel(player, chain);
         }
+        if (throwLockTime_ >= 0.0f) {
+            player->SetFaceDirection(0.0f);
+            throwLockTime_ = -1.0f;
+        }
         return;
+    }
+
+    // 板以外で投げた直後：投げた勢いのまま歩き出さないよう、少しの間だけ動けなくする
+    // 投げるのに押した A/D を押しっぱなしの間は解除しない（離せば歩ける。長すぎないよう上限あり）
+    if (throwLockTime_ >= 0.0f) {
+        throwLockTime_ += dt;
+        const bool stillHolding = (throwLockDir_ > 0.0f) ? (swingInput_ > 0.5f) : (swingInput_ < -0.5f);
+        const float maxLock = params_.groundThrowRecover_ * 4.0f;
+        if (throwLockTime_ < params_.groundThrowRecover_ || (stillHolding && throwLockTime_ < maxLock)) {
+            player->SetActionInputModifier(0.0f, true);
+            player->SetFaceDirection(throwLockDir_); // 動かないので、向きだけ投げた方へ
+        } else {
+            player->SetActionInputModifier(1.0f, false);
+            player->SetFaceDirection(0.0f);
+            throwLockTime_ = -1.0f;
+        }
     }
 
     switch (state_) {
@@ -281,13 +305,17 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
         theta_ = kPi;
         UpdateSpinTarget(socketWorld);
 
-        // A/D で押した方向へ投げる → 振り子開始（回せる場所＝木の板の上でだけ）。持った直後は投げない
+        // A/D で押した方向へ投げる。持った直後は投げない
+        // 木の板の上なら振り子に入り、それ以外の床なら回さずにその場から放る（警備員に当てやすくするため）
         holdTime_ += dt;
-        if (IsSpinAllowed() && holdTime_ >= kThrowGrace) {
-            if (swingInput_ > 0.5f) {
-                StartThrow(1.0f, socketWorld);
-            } else if (swingInput_ < -0.5f) {
-                StartThrow(-1.0f, socketWorld);
+        if (holdTime_ >= kThrowGrace) {
+            float dir = (swingInput_ > 0.5f) ? 1.0f : ((swingInput_ < -0.5f) ? -1.0f : 0.0f);
+            if (dir != 0.0f) {
+                if (IsSpinAllowed()) {
+                    StartThrow(dir, socketWorld);
+                } else {
+                    ThrowFromGround(dir, dt, player, chain);
+                }
             }
         }
         break;
@@ -392,6 +420,40 @@ void ChainSpinAction::StartThrow(float dirSign, const Vector3& socketWorld) {
     launchHeldPrev_ = launchHeld_;
     UpdateSpinTarget(socketWorld);
     Log("ChainSpinAction: throw dir=" + std::to_string(dirSign) + "\n");
+}
+
+void ChainSpinAction::ThrowFromGround(float dirSign, float dt, Player2D* player, Chain2D* chain) {
+    if (!chain) {
+        return;
+    }
+    // 押した方向へ、少し上向きに放る。鎖は繋がったままなので伸び切ると戻ってくる
+    Vector3 dir = { dirSign, params_.groundThrowUp_, 0.0f };
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    if (len > 1e-6f) { dir.x /= len; dir.y /= len; }
+    chain->ThrowWeight({ dir.x * params_.groundThrowSpeed_, dir.y * params_.groundThrowSpeed_, 0.0f }, dt);
+
+    // 投げた直後は動けないままにする（A/D を押しっぱなしで投げるので、そのまま歩き出さないように）
+    throwLockTime_ = 0.0f;
+    throwLockDir_ = dirSign;
+    if (player) {
+        player->SetFaceDirection(dirSign); // 投げた方を向く
+    }
+    if (player && params_.groundThrowRecover_ <= 0.0f) {
+        player->SetActionInputModifier(1.0f, false);
+        throwLockTime_ = -1.0f;
+    }
+    state_ = State::kIdle;
+    omega_ = 0.0f;
+    theta_ = 0.0f;
+    radius_ = 0.0f;
+    throwOutTime_ = 0.0f;
+    holdTime_ = 0.0f;
+    aiming_ = false;
+    aimTimer_ = 0.0f;
+    arrowVisible_ = false;
+    trailVisible_ = 0;
+    holdBlockTimer_ = kGroundThrowBlock; // 投げた直後に Q で拾い直せないようにする
+    Log("ChainSpinAction: ground throw dir=" + std::to_string(dirSign) + "\n");
 }
 
 void ChainSpinAction::Launch(float dt, Player2D* player, Chain2D* chain, const Vector3& socketWorld, bool just) {

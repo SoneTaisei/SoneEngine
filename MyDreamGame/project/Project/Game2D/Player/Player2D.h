@@ -28,6 +28,8 @@ public:
     Vector3 GetVelocity() const { return state_.velocity_; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
     bool IsOnGround() const { return state_.isOnGround_; }
+    /// <summary>見た目の向きを指定する（-1 左 / +1 右 / 0 は速度まかせ）。動かずに向きだけ変えたい時に使う</summary>
+    void SetFaceDirection(float dirX) { state_.faceDirX_ = dirX; }
     void SetIsHoldingChain(bool holding) { state_.isHoldingChain_ = holding; }
     bool IsHoldingChain() const { return state_.isHoldingChain_; }
     void SetIsSwingingChain(bool swinging) { state_.isSwingingChain_ = swinging; }

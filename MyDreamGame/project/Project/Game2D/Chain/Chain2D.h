@@ -119,6 +119,12 @@ public:
     /// </summary>
     void ReleaseRigidLine(const Vector3& center, float omega, float velocityScale, float dt);
 
+    /// <summary>
+    /// 直線拘束を解除し、先端（重り）へ velocity を与えて物理に戻す（回さずにその場から投げる用）
+    /// 手元は 0、先端で velocity 全部になるよう配分する。全ノードに同じ速度を与えると鎖ごと飛んでいってしまうため
+    /// </summary>
+    void ThrowWeight(const Vector3& velocity, float dt);
+
 
     /// <summary>鎖の実長（繰り出し中は先頭セグメントの現在長を含む）</summary>
     float GetTotalLength() const;
