@@ -1,8 +1,8 @@
 {
   "title": "宝石で気絶させて鎖で縛る",
-  "texture": "resources/Sprite/anim/guard_stun_bind.png",
-  "cellW": 480,
-  "cellH": 240,
+  "texture": "resources/Sprite/anim/guard_stun_bind.dds",
+  "cellW": 640,
+  "cellH": 320,
   "cols": 8,
   "frames": 114,
   "fps": 9,

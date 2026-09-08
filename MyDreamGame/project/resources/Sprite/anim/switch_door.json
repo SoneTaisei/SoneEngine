@@ -1,8 +1,8 @@
 {
   "title": "スイッチとドア（鎖を落として押さえる）",
-  "texture": "resources/Sprite/anim/switch_door.png",
-  "cellW": 480,
-  "cellH": 240,
+  "texture": "resources/Sprite/anim/switch_door.dds",
+  "cellW": 640,
+  "cellH": 320,
   "cols": 8,
   "frames": 126,
   "fps": 9,

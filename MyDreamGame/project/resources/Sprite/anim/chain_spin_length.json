@@ -1,8 +1,8 @@
 {
   "title": "鎖の本数と振り子（長いほど大きく回って遠くへ）",
-  "texture": "resources/Sprite/anim/chain_spin_length.png",
-  "cellW": 480,
-  "cellH": 240,
+  "texture": "resources/Sprite/anim/chain_spin_length.dds",
+  "cellW": 640,
+  "cellH": 320,
   "cols": 8,
   "frames": 174,
   "fps": 9,

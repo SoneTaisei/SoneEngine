@@ -16,6 +16,8 @@ namespace {
     constexpr float kFadeSpeed = 4.0f;
     // ブロック（z = 0、厚み 1）の奥、背景板（z = 1.6）の手前
     constexpr float kPosterZ = 1.2f;
+    // 枠は映像のさらに少し奥（同じ z だと重なってちらつく）
+    constexpr float kFrameZ = 1.25f;
 }
 
 TutorialPoster::TutorialPoster() = default;
@@ -23,6 +25,7 @@ TutorialPoster::~TutorialPoster() = default;
 
 void TutorialPoster::Initialize(ID3D12Device* device, const std::string& metaPath) {
     obj_.reset();
+    frameObj_.reset();
     if (!device) return;
 
     // ---- メタ JSON ----
@@ -73,9 +76,26 @@ void TutorialPoster::Initialize(ID3D12Device* device, const std::string& metaPat
     mat.enableEnvironmentMap = 0;
     mat.enableBoxMapping = 0.0f;
     mat.color = { 1.0f, 1.0f, 1.0f, 0.0f };
+
+    // ---- 枠（映像の外側に一回り大きい単色の板を置く。ステージの背景と見分けるため） ----
+    if (frameMargin_ > 0.0f) {
+        frameObj_ = std::make_unique<PrimitiveObject>();
+        frameObj_->Initialize(device, plane);
+        frameObj_->SetName("TutorialPosterFrame");
+        frameObj_->SetRotation({ -std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f });
+        frameObj_->SetIsBillboard(false);
+        frameObj_->SetIsDoubleSided(true);
+        Material& fmat = frameObj_->GetMaterial();
+        fmat.lightingType = 0;
+        fmat.enableEnvironmentMap = 0;
+        fmat.enableBoxMapping = 0.0f;
+        fmat.color = { frameColor_.x, frameColor_.y, frameColor_.z, 0.0f };
+    }
+
     SetPlacement(center_, width_, height_);
     ApplyFrame(0);
     obj_->Update();
+    if (frameObj_) frameObj_->Update();
 }
 
 void TutorialPoster::SetPlacement(const Vector3& center, float width, float height) {
@@ -86,6 +106,10 @@ void TutorialPoster::SetPlacement(const Vector3& center, float width, float heig
     // Plane は XZ 面：X が横、Z が縦（回転後は Y）
     obj_->SetScale({ width_, 1.0f, height_ });
     obj_->SetTranslation({ center_.x, center_.y, kPosterZ });
+    if (frameObj_) {
+        frameObj_->SetScale({ width_ + frameMargin_ * 2.0f, 1.0f, height_ + frameMargin_ * 2.0f });
+        frameObj_->SetTranslation({ center_.x, center_.y, kFrameZ });
+    }
 }
 
 void TutorialPoster::ApplyFrame(int frame) {
@@ -142,9 +166,14 @@ void TutorialPoster::Update(float dt, const Vector3& playerPos, bool active) {
     }
     obj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, alpha_ };
     obj_->Update();
+    if (frameObj_) {
+        frameObj_->GetMaterial().color = { frameColor_.x, frameColor_.y, frameColor_.z, alpha_ };
+        frameObj_->Update();
+    }
 }
 
 void TutorialPoster::Draw() {
     if (!obj_ || alpha_ <= 0.001f) return;
+    if (frameObj_) frameObj_->Draw(); // 先に枠、その手前に映像
     obj_->Draw();
 }

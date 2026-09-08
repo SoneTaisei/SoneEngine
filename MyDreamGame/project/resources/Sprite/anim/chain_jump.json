@@ -1,8 +1,8 @@
 {
   "title": "鎖の本数とジャンプ（J で落とす / K で拾う）",
-  "texture": "resources/Sprite/anim/chain_jump.png",
-  "cellW": 480,
-  "cellH": 240,
+  "texture": "resources/Sprite/anim/chain_jump.dds",
+  "cellW": 640,
+  "cellH": 320,
   "cols": 8,
   "frames": 126,
   "fps": 9,

@@ -29,6 +29,9 @@ public:
         std::vector<int> sequence;
     };
 
+    /// <summary>枠の太さ（マス）と色。0 にすると枠を出さない</summary>
+    void SetFrame(float margin, const Vector3& color) { frameMargin_ = margin; frameColor_ = color; }
+
     TutorialPoster();
     ~TutorialPoster(); // PrimitiveObject の完全な型が見える .cpp 側で定義する（unique_ptr の削除子のため）
 
@@ -63,10 +66,13 @@ private:
 
     Meta meta_;
     std::unique_ptr<PrimitiveObject> obj_;
+    std::unique_ptr<PrimitiveObject> frameObj_; // 映像の外側に出す枠（ステージと見分けるため）
     Vector3 center_ = { 0.0f, 0.0f, 0.0f };
     float width_ = 14.0f;
     float height_ = 7.0f;
     float tMinX_ = 0.0f, tMaxX_ = 0.0f, tMinY_ = 0.0f, tMaxY_ = 0.0f;
+    float frameMargin_ = 0.18f;
+    Vector3 frameColor_ = { 0.93f, 0.95f, 1.0f };
     float showDist_ = 3.0f;
     float hideDist_ = 5.0f;
     bool shown_ = false;
