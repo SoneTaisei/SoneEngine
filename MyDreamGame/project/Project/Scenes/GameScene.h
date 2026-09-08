@@ -87,7 +87,6 @@ private:
 
     // 警戒度（0〜100。満タンで捕獲）
     std::unique_ptr<AlertSystem> alert_;
-    void DrawAlertHud(const ImVec2& viewPos, float viewWidth, float viewHeight);
     void DrawCaptureOverlay(const ImVec2& viewPos, float viewWidth, float viewHeight);
     
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
@@ -240,9 +239,37 @@ private:
     uint32_t eyeSpentTexHandle_ = 0;
     uint32_t markExclaimTexHandle_ = 0;
     uint32_t markQuestionTexHandle_ = 0;
+    // 警戒度のバーと文字。ImGui だとエディタのゲームビューにしか出ず、製品版では消えるのでスプライトで描く
+    std::vector<std::unique_ptr<class Sprite>> alertBarSprites_; // 下地・塗り・枠の 4 本
+    std::unique_ptr<class Sprite> alertLabelSprite_;             // 「警戒度」
+    std::unique_ptr<class Sprite> alertSeenSprite_;              // 「見られている」
+    std::unique_ptr<class Sprite> alertSuspectSprite_;           // 「怪しまれている」
+    // 開始・クリア・ポーズの文字。これも ImGui だと製品版で消えるのでスプライトで描く
+    std::unique_ptr<class Sprite> readyTextSprite_;    // 「READY...」
+    std::unique_ptr<class Sprite> goTextSprite_;       // 「GO!」
+    std::unique_ptr<class Sprite> stageClearSprite_;   // 「STAGE CLEAR!」
+    std::unique_ptr<class Sprite> clearPromptSprite_;  // 「Press SPACE / A to Stage Select」
+    std::unique_ptr<class Sprite> pauseGuideSprite_;   // ポーズ中の操作ガイド
+    std::vector<std::unique_ptr<class Sprite>> rankSprites_;      // 静穏 / 潜入 / 強行 / 騒然
+    std::unique_ptr<class Sprite> statSpottedSprite_;  // 「発見」
+    std::unique_ptr<class Sprite> statReportSprite_;   // 「通報」
+    std::unique_ptr<class Sprite> statNoiseSprite_;    // 「騒音」
+    std::unique_ptr<class Sprite> statPeakSprite_;     // 「最大警戒度」
+    std::vector<std::unique_ptr<class Sprite>> statTimesSprites_; // 「回」を 3 個
+    uint32_t alertLabelTexHandle_ = 0;
+    uint32_t alertSeenTexHandle_ = 0;
+    uint32_t alertSuspectTexHandle_ = 0;
     float hudTime_ = 0.0f; // 点滅・上下ゆれ用
     // ゲーム画面の HUD をまとめてスプライトで描く（宝石・目・縁の赤・警備員の合図）。3D と粒子の後、ポーズの前
     void DrawHudSprites(const Matrix4x4& viewProjection);
+    // ゲームが動いているか（エディタで編集しているだけの間は false）。ゲーム中の表示を出すかの判断に使う
+    bool IsGamePlaying() const;
+    // 警戒度のバーと文字（右上）。DrawHudSprites から呼ぶ
+    void DrawAlertBarSprites();
+    // 開始・クリア・ポーズの文字。DrawHudSprites から呼ぶ
+    void DrawStageStateSprites();
+    // クリア画面の内訳「発見 N 回 …」を中央に並べる
+    void DrawClearStatLine(const struct AlertRank& rank, float centerY);
     // 数字列（"0123456789/" と空白）を x, y から並べて描く。戻り値は描いた幅
     // startIndex: 使うスプライトの先頭番号（同じフレームで二か所に描く時は別の番号から使う。スプライトは描画バッファを 1 つしか持たない）
     float DrawGemDigits(const char* text, float x, float y, float cellW, float cellH, const Vector4& color, size_t startIndex = 0);
