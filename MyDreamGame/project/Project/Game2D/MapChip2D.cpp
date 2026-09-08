@@ -728,15 +728,22 @@ void MapChip2D::RebuildChipObjects() {
             bool canMerge = false;
             if (typeId < 100) {
                 canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
+const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
+
+            bool canMerge = false;
+            if (typeId < 100) {
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
             } else if (paletteDef) {
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 canMerge = (paletteDef->type == "NormalBlock" || paletteDef->type == "DeathBlock" || paletteDef->type == "OneWayBlock" || paletteDef->type == "DoorBlock");
             }
+            
             // モデルが設定されている場合は、引き伸ばされて1個の塊にならないようマージを無効化する
-            // （ベーシックツールもテンプレートパレットでモデルを設定できるため、カスタムと同じ扱いにする）
-            if (paletteDef && !paletteDef->modelName.empty()) {
+            // （ただしDoorBlockは扉として1つに結合して伸縮・開閉するためマージを許可する）
+            if (paletteDef && !paletteDef->modelName.empty() && paletteDef->type != "DoorBlock") {
                 canMerge = false;
             }
+            
 
             if (canMerge) {
                 // 水平方向のスパンを探索
@@ -1508,7 +1515,12 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
 
                     // モデル用の位置・スケールと「立方体を消す」設定を覚えさせ、
                     // 死亡リセット後にも同じ見た目へ戻せるようにする
-                    newBlock->SetModelVisualOverride({ worldX, worldY, 0.0f }, def->scale);
+                    Vector3 modelScale = {
+                        spanWidth * chipSize_ * def->scale.x,
+                        spanHeight * chipSize_ * def->scale.y,
+                        def->scale.z
+                    };
+                    newBlock->SetModelVisualOverride({ worldX, worldY, 0.0f }, modelScale);
                     newBlock->ApplyModelVisualOverride();
                 }
             }
