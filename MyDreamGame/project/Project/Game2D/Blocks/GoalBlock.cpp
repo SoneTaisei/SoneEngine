@@ -39,22 +39,30 @@ void GoalBlock::OnCollision(Player2D* player) {
     (void)player;
 }
 
-bool GoalBlock::CheckClearCondition(const Vector3& playerPos, float playerHalfHeight, const Vector3& gemPos) const {
-    float topY = GetTopY(); // 台座の上面Y座標
-    float halfW = width_ * 0.85f; // 台座の上面判定幅（余裕を持たせる）
+bool GoalBlock::CheckClearCondition(const Vector3& playerPos, float playerHalfHeight, bool isOnGround, const Vector3& gemPos) const {
+    // プレイヤーが空中にいる（ジャンプ中・落下中など）場合はクリア判定にしない
+    if (!isOnGround) {
+        return false;
+    }
 
-    // 1. プレイヤーが台座の上に立っている / 乗っているか（ジャンプ着地や縁立ちも許容）
+    float topY = GetTopY(); // 台座の上面Y座標
+    float halfW = (width_ * 0.5f) * 0.80f; // 台座の上面天面幅（しっかり台座の上に乗っていること）
+
+    // 1. プレイヤーが台座の上にしっかり着地・接地しているか（足元が台座上面付近にあること）
     float playerFeetY = playerPos.y - playerHalfHeight;
     bool playerOnPedestal = (std::abs(playerPos.x - worldX_) <= halfW) &&
-                            (playerFeetY >= topY - 0.40f && playerFeetY <= topY + 1.20f);
+                            (std::abs(playerFeetY - topY) <= 0.25f);
+
+    if (!playerOnPedestal) {
+        return false;
+    }
 
     // 2. 宝石が台座の上に乗っているか、またはプレイヤーが身につけて一緒に台座に乗っているか
-    // （プレイヤーが宝石を持っていれば playerPos と gemPos が近いため即成立、置いてある場合も台座上判定で成立）
     float gemDistToPlayer = std::sqrt((gemPos.x - playerPos.x) * (gemPos.x - playerPos.x) + 
                                       (gemPos.y - playerPos.y) * (gemPos.y - playerPos.y));
     bool gemWithPlayer = (gemDistToPlayer <= 2.8f);
-    bool gemOnPedestal = (std::abs(gemPos.x - worldX_) <= width_ * 1.0f) &&
-                         (gemPos.y >= topY - 0.50f && gemPos.y <= topY + 2.50f);
+    bool gemOnPedestal = (std::abs(gemPos.x - worldX_) <= width_ * 0.90f) &&
+                         (gemPos.y >= topY - 0.40f && gemPos.y <= topY + 2.50f);
 
-    return playerOnPedestal && (gemWithPlayer || gemOnPedestal);
+    return (gemWithPlayer || gemOnPedestal);
 }

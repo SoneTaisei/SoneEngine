@@ -104,6 +104,7 @@ public:
     void SetClearEscaped(bool escaped) { state_.isClearEscaped_ = escaped; }
     bool IsClearEscaped() const { return state_.isClearEscaped_; }
     void UpdateVisualsOnly(float deltaTime) { visuals_.Update(state_, params_, deltaTime); }
+    void UpdateClearAnimation(float clearTimer, float deltaTime) { visuals_.UpdateClearAnimation(state_, params_, clearTimer, deltaTime); }
 
     bool IsGoalComplete() const { return state_.isGoal_ && state_.goalTimer_ >= params_.goalWaitTime_; }
 

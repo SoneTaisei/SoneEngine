@@ -59,6 +59,8 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
         titleLogoAlpha_ = 0.0f;
         titleMenuAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
+        // ステージクリア後の画面遷移：画面中央から円が開いてステージ選択画面が現れる！
+        StartIrisIn({ 0.5f, 0.5f }, 0.7f);
     } else {
         // 通常のタイトル画面から開始（夜空を見上げるアングル）
         phase_ = Phase::kTitle;
@@ -115,7 +117,7 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     }
 
     DirectXCommon* dxCommon = DirectXCommon::GetInstance();
-    if (dxCommon) {
+    if (dxCommon && !isIrisInActive_) {
         dxCommon->SetCompositeIrisEnabled(false);
     }
 
@@ -498,6 +500,9 @@ void TitleScene::Update(SceneManager *sceneManager) {
     if (phase_ == Phase::kTransitionToGame) {
         UpdateCallingCardThrow(dt, sceneManager);
     }
+
+    // ステージクリアから復帰時のアイリスイン（円が開く）演出を更新
+    UpdateIrisIn(dt);
 }
 
 void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
@@ -1064,6 +1069,51 @@ Vector2 TitleScene::WorldToScreenUV(const Vector3& worldPos) const {
     if (uvX < 0.0f) uvX = 0.0f; else if (uvX > 1.0f) uvX = 1.0f;
     if (uvY < 0.0f) uvY = 0.0f; else if (uvY > 1.0f) uvY = 1.0f;
     return Vector2(uvX, uvY);
+}
+
+void TitleScene::StartIrisIn(const Vector2& centerUV, float duration) {
+    isIrisInActive_ = true;
+    irisInTimer_ = 0.0f;
+    irisInDuration_ = (duration > 0.0f) ? duration : 0.7f;
+    irisInCenterUV_ = centerUV;
+
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        dxCommon->SetIrisCenter(irisInCenterUV_.x, irisInCenterUV_.y);
+        dxCommon->SetIrisRadius(0.0f); // 初期は完全に閉じた状態（黒画面）から開始
+        dxCommon->SetIrisSmoothness(0.03f);
+        dxCommon->SetIrisIn(true); // 1: Iris In (円が開く)
+        dxCommon->SetIrisMaskColor(0.0f, 0.0f, 0.0f, 1.0f);
+        dxCommon->SetCompositeIrisEnabled(true);
+    }
+}
+
+void TitleScene::UpdateIrisIn(float dt) {
+    if (!isIrisInActive_) return;
+
+    irisInTimer_ += dt;
+    float t = irisInTimer_ / irisInDuration_;
+    if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+
+    // スムーズステップで滑らかに開く (0.0 -> 1.0)
+    float ease = t * t * (3.0f - 2.0f * t);
+    float currentRadius = ease * irisMaxRadius_;
+
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        dxCommon->SetIrisCenter(irisInCenterUV_.x, irisInCenterUV_.y);
+        dxCommon->SetIrisRadius(currentRadius);
+        dxCommon->SetIrisSmoothness(0.03f);
+        dxCommon->SetIrisIn(true);
+        dxCommon->SetCompositeIrisEnabled(true);
+    }
+
+    if (t >= 1.0f) {
+        isIrisInActive_ = false;
+        if (dxCommon) {
+            dxCommon->SetCompositeIrisEnabled(false); // 完全に開いたらポストプロセスを解除
+        }
+    }
 }
 
 void TitleScene::StartIrisOut(const Vector2& centerUV, float duration) {

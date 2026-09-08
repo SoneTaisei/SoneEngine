@@ -64,6 +64,7 @@ public:
     void StartIrisIn(const Vector3& playerPos, float duration = 1.2f);
     void UpdateIrisIn(const Vector3& playerPos, float dt);
     void StartIrisOut(const Vector3& worldPos, float duration = 0.5f);
+    void StartIrisOutUV(const Vector2& centerUV, float duration = 0.7f);
     void UpdateIrisOut(float dt);
     Vector2 WorldToScreenUV(const Vector3& worldPos) const;
     bool IsIrisInActive() const { return isIrisInActive_; }
@@ -140,6 +141,7 @@ private:
     float irisOutTimer_ = 0.0f;
     float irisOutDuration_ = 0.5f;
     Vector3 irisOutTargetPos_ = { 0.0f, 0.0f, 0.0f };
+    Vector2 irisOutCenterUV_ = { 0.5f, 0.5f };
 
     // ---------------------------------------------------
     // 死亡演出（帽子・鎖・宝石の残留、アイリスアウト/インリスポーン）
@@ -176,9 +178,13 @@ private:
     bool isClearSmokeSpawned_ = false;
     bool isClearEscaped_ = false;
     bool isClearIrisStarted_ = false;
+    float clearCameraStartScale_ = 1.0f;
+    Vector3 clearCameraStartPos_ = { 0.0f, 0.0f, -10.0f };
+    bool isClearExitIrisActive_ = false; // クリア画面でSPACEを押した後のタイトル遷移用アイリスアウト
 
     void TriggerClearSequence(const Vector3& goalPos, float goalTopY);
     void UpdateClearSequence(float dt, SceneManager* sceneManager);
+    void UpdateSpotBeams(const Vector3& targetPos, float targetTopY, float progress1, float progress2, float alpha1, float alpha2);
     void DrawClearSpotlightBeams();
 
     // スペース長押し（鎖エイム）時ポストエフェクト (Player_Chain.json)

@@ -435,7 +435,7 @@ private:
 
     PostEffect postEffect_ = PostEffect::kComposite;
     bool isPostEffectEnabled_ = true;
-    bool isDepthBasedOutlineEnabled_ = true;
+    bool isDepthBasedOutlineEnabled_ = false;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;
@@ -443,7 +443,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateOutline_;
     Microsoft::WRL::ComPtr<ID3D12Resource> outlineParamResource_;
     OutlineParams* outlineParamsData_ = nullptr;
-    bool isOutlineEnabled_ = true;
+    bool isOutlineEnabled_ = false;
 
     // --- DepthBasedOutline ポストエフェクト関連 ---
     struct ProjectionInverseParams {

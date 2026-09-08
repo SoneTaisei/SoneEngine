@@ -30,6 +30,8 @@
 #include <set>
 #include <map>
 #include <algorithm>
+#include <numbers>
+#include <format>
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/Camera.h"
 #include "Resource/Sprite/Sprite.h"
@@ -68,6 +70,9 @@ void GameScene::SetupGameCamera() {
     // 正射影モードが解除されたままだと「追従カメラが発動しない」状態になる
     gameCamera_->SetOrthographic(true);
 
+    // 通常プレイ用のカメラ設定（視野スケール・オフセット等）を確実にロードして復元
+    gameCamera_->LoadConfig();
+
     if (map_) {
         gameCamera_->SetRooms(map_->GetRooms());
     }
@@ -96,6 +101,7 @@ void GameScene::OnExit(SceneManager* sceneManager) {
     isClearEscaped_ = false;
     isClearSmokeSpawned_ = false;
     isClearIrisStarted_ = false;
+    isClearExitIrisActive_ = false;
     clearSequenceTimer_ = 0.0f;
     gameState_ = GameState::StartReady;
     if (player_) {
@@ -107,11 +113,16 @@ void GameScene::OnExit(SceneManager* sceneManager) {
     }
     if (gameCamera_) {
         gameCamera_->SetFollowTarget(nullptr);
+        gameCamera_->LoadConfig();
         gameCamera_->SetOrthographic(false);
     }
     DirectXCommon* dxCommon = DirectXCommon::GetInstance();
     if (dxCommon) {
-        dxCommon->SetCompositeIrisEnabled(false);
+        if (!isClearExitIrisActive_) {
+            dxCommon->SetCompositeIrisEnabled(false);
+        }
+        dxCommon->SetDepthBasedOutlineEnabled(false);
+        dxCommon->SetOutlineEnabled(false);
     }
     if (playerChainPostEffect_) {
         playerChainPostEffect_->Reset(dxCommon);
@@ -120,6 +131,10 @@ void GameScene::OnExit(SceneManager* sceneManager) {
 
 GameScene::~GameScene() {
     DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        dxCommon->SetDepthBasedOutlineEnabled(false);
+        dxCommon->SetOutlineEnabled(false);
+    }
     if (playerChainPostEffect_) {
         playerChainPostEffect_->Reset(dxCommon);
     }
@@ -263,6 +278,61 @@ void GameScene::Initialize() {
         // 正射影・ルーム・追従ターゲット（プレイヤー）をこのシーンのものへ設定
         SetupGameCamera();
         Log("GameScene::Initialize: Camera configured\n");
+    }
+
+    // 7.1. パラメータのロードとクリア演出パラメータ初期登録
+    {
+        ParameterManager* pm = ParameterManager::GetInstance();
+        pm->Load("resources/json/shared/Global/parameters.json");
+
+        float defaultY = pm->GetValue("ClearSequence", "roofYOffset", 12.1f);
+        float defaultX = pm->GetValue("ClearSequence", "lightOffsetX", 4.1f);
+
+        // ライトビーム開始地点（台座天面・中心からの相対オフセット X, Y, Z）
+        pm->GetValue("ClearSequence", "leftBeamStartX", -defaultX);
+        pm->GetValue("ClearSequence", "leftBeamStartY", defaultY);
+        pm->GetValue("ClearSequence", "leftBeamStartZ", -0.20f);
+
+        pm->GetValue("ClearSequence", "rightBeamStartX", defaultX);
+        pm->GetValue("ClearSequence", "rightBeamStartY", defaultY);
+        pm->GetValue("ClearSequence", "rightBeamStartZ", -0.20f);
+
+        // 照射目標位置（怪盗を狙うターゲット：台座天面からの相対オフセット X, Y, Z）
+        pm->GetValue("ClearSequence", "beamTargetX", 0.0f);
+        pm->GetValue("ClearSequence", "beamTargetY", 0.4f);
+        pm->GetValue("ClearSequence", "beamTargetZ", 0.0f);
+
+        // プレビュー表示フラグ
+        pm->GetValue("ClearSequence", "previewBeams", false);
+
+        // スポットライト（光源＆影）
+        pm->GetValue("ClearSequence", "syncSpotToBeam", true);
+        pm->GetValue("ClearSequence", "leftSpotX", -defaultX);
+        pm->GetValue("ClearSequence", "leftSpotY", defaultY);
+        pm->GetValue("ClearSequence", "leftSpotZ", -0.20f);
+        pm->GetValue("ClearSequence", "rightSpotX", defaultX);
+        pm->GetValue("ClearSequence", "rightSpotY", defaultY);
+        pm->GetValue("ClearSequence", "rightSpotZ", -0.20f);
+
+        pm->GetValue("ClearSequence", "lightIntensity", 12.0f);
+        pm->GetValue("ClearSequence", "lightAngleDeg", 16.0f);
+        pm->GetValue("ClearSequence", "lightFalloffDeg", 8.0f);
+        pm->GetValue("ClearSequence", "lightDecay", 0.6f);
+        pm->GetValue("ClearSequence", "lightDistance", 14.0f);
+        pm->GetValue("ClearSequence", "lightColorR", 1.0f);
+        pm->GetValue("ClearSequence", "lightColorG", 1.0f);
+        pm->GetValue("ClearSequence", "lightColorB", 0.95f);
+        pm->GetValue("ClearSequence", "shadowIntensity", 0.85f);
+        pm->GetValue("ClearSequence", "shadowBias", 0.0005f);
+
+        // ライトビーム（光線コーンメッシュ）
+        pm->GetValue("ClearSequence", "beamWidth", 0.42f);
+        pm->GetValue("ClearSequence", "beamLengthScale", 1.0f);
+        pm->GetValue("ClearSequence", "beamExtendDuration", 0.15f);
+        pm->GetValue("ClearSequence", "beamMaxAlpha", 0.65f);
+        pm->GetValue("ClearSequence", "beamColorR", 1.0f);
+        pm->GetValue("ClearSequence", "beamColorG", 1.0f);
+        pm->GetValue("ClearSequence", "beamColorB", 0.95f);
     }
 
 
@@ -482,18 +552,33 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     } else if (gameState_ == GameState::Clear && isClearSequenceFinished_) {
         stateTimer_ += dt;
-        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
-#ifdef USE_IMGUI
-            if (EditorManager::GetInstance()) {
-                EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
-                EditorManager::GetInstance()->SetUseDebugCamera(false);
+        if (!isClearExitIrisActive_) {
+            auto kb = KeyboardInput::GetInstance();
+            auto pad = GamepadInput::GetInstance();
+            bool pressedSubmit = (kb && (kb->IsKeyPressed(DIK_SPACE) || kb->IsKeyPressed(DIK_RETURN) || kb->IsKeyPressed(DIK_NUMPADENTER))) ||
+                                 (pad && (pad->IsButtonPressed(0) || pad->IsButtonPressed(1) || pad->IsButtonPressed(7)));
+            if (pressedSubmit) {
+                isClearExitIrisActive_ = true;
+                // 画面中央（ズームした台座・怪盗）に向かってアイリスアウト（0.7秒）を開始！
+                StartIrisOutUV(Vector2(0.5f, 0.5f), 0.7f);
+                Log("GameScene: Stage Clear -> Start Iris Out transition to TitleScene (StageSelect phase)\n");
             }
-            EditorManager::SetPlaying(true);
+        } else {
+            // アイリスアウトの進行
+            UpdateIrisOut(dt);
+            if (irisOutTimer_ >= irisOutDuration_) {
+#ifdef USE_IMGUI
+                if (EditorManager::GetInstance()) {
+                    EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
+                    EditorManager::GetInstance()->SetUseDebugCamera(false);
+                }
+                EditorManager::SetPlaying(true);
 #endif
-            sceneManager->SetData("StartAtStageSelect", true);
-            SavePoint::Clear(s_TargetMapFilePath);
-            sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
-            return;
+                sceneManager->SetData("StartAtStageSelect", true);
+                SavePoint::Clear(s_TargetMapFilePath);
+                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+                return;
+            }
         }
     }
 
@@ -794,6 +879,12 @@ void GameScene::Update(SceneManager *sceneManager) {
                     map_->Update();
                 }
                 UpdateGuardLights();
+            } else if (gameState_ == GameState::Clear) {
+                // クリア演出完了後、スペースキーでステージ選択に戻る待機中（プレイヤーや鎖のキー入力・物理更新は行わない）
+                if (map_) {
+                    map_->Update();
+                }
+                UpdateGuardLights();
             } else {
                 bool worldFrozen = (gameState_ == GameState::Captured);
                 bool playerFrozen = worldFrozen;
@@ -869,7 +960,7 @@ void GameScene::Update(SceneManager *sceneManager) {
 
                     for (const auto& block : map_->GetUpdateBlocks()) {
                         if (auto* goal = dynamic_cast<GoalBlock*>(block.get())) {
-                            if (goal->CheckClearCondition(pPos, halfH, gemPos)) {
+                            if (goal->CheckClearCondition(pPos, halfH, player_->IsOnGround(), gemPos)) {
                                 Log("GameScene: Goal clear condition satisfied! Triggering clear sequence\n");
                                 TriggerClearSequence(goal->GetPosition(), goal->GetTopY());
                                 break;
@@ -960,6 +1051,15 @@ void GameScene::Update(SceneManager *sceneManager) {
             playerChainPostEffect_->Update(dt, isTriggered);
             playerChainPostEffect_->ApplyToDirectXCommon(DirectXCommon::GetInstance());
         }
+    }
+
+    // クリア演出ライトビームの常時プレビュー更新（エディタ操作時にリアルタイムで位置確認可能）
+    ParameterManager* pm = ParameterManager::GetInstance();
+    if (!isClearSequenceActive_ && pm && pm->GetValue("ClearSequence", "previewBeams", false)) {
+        Vector3 basePos = player_ ? player_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f };
+        float maxAlpha = pm->GetValue("ClearSequence", "beamMaxAlpha", 0.65f);
+        UpdateSpotBeams(basePos, basePos.y, 1.0f, 1.0f, maxAlpha, maxAlpha);
+        UpdateGuardLights();
     }
 }
 
@@ -1432,6 +1532,202 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         playerChainPostEffect_->DisplayImGui();
     }
 
+    // クリア演出・スポットライト＆影設定（常時インスペクターから操作可能）
+    if (ImGui::CollapsingHeader("クリア演出・スポットライト＆影設定 (ClearSequence)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ParameterManager* pm = ParameterManager::GetInstance();
+        static std::string saveStatusMsg = "";
+        static float saveStatusTimer = 0.0f;
+
+        // 1. スポットライト（3Dシーン光源＆シャドウ）
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "【スポットライト（3D光源・照射・影）】");
+        
+        float lightIntensity = pm->GetValue("ClearSequence", "lightIntensity", 12.0f);
+        if (ImGui::SliderFloat("照度 (lightIntensity)", &lightIntensity, 0.0f, 50.0f, "%.1f")) {
+            pm->SetValue("ClearSequence", "lightIntensity", lightIntensity);
+        }
+
+        float lightAngleDeg = pm->GetValue("ClearSequence", "lightAngleDeg", 16.0f);
+        if (ImGui::SliderFloat("照射角度・度 (lightAngleDeg)", &lightAngleDeg, 1.0f, 60.0f, "%.1f deg")) {
+            pm->SetValue("ClearSequence", "lightAngleDeg", lightAngleDeg);
+        }
+
+        float lightFalloffDeg = pm->GetValue("ClearSequence", "lightFalloffDeg", 8.0f);
+        if (ImGui::SliderFloat("減衰開始角・度 (lightFalloffDeg)", &lightFalloffDeg, 0.0f, lightAngleDeg, "%.1f deg")) {
+            pm->SetValue("ClearSequence", "lightFalloffDeg", lightFalloffDeg);
+        }
+
+        float lightDecay = pm->GetValue("ClearSequence", "lightDecay", 0.6f);
+        if (ImGui::SliderFloat("距離減衰率 (lightDecay)", &lightDecay, 0.0f, 5.0f, "%.2f")) {
+            pm->SetValue("ClearSequence", "lightDecay", lightDecay);
+        }
+
+        float lightDistance = pm->GetValue("ClearSequence", "lightDistance", 10.0f);
+        if (ImGui::SliderFloat("照射距離 (lightDistance)", &lightDistance, 1.0f, 30.0f, "%.1f")) {
+            pm->SetValue("ClearSequence", "lightDistance", lightDistance);
+        }
+
+        float lightColor[3] = {
+            pm->GetValue("ClearSequence", "lightColorR", 1.0f),
+            pm->GetValue("ClearSequence", "lightColorG", 1.0f),
+            pm->GetValue("ClearSequence", "lightColorB", 0.95f)
+        };
+        if (ImGui::ColorEdit3("光の色 (lightColor)", lightColor)) {
+            pm->SetValue("ClearSequence", "lightColorR", lightColor[0]);
+            pm->SetValue("ClearSequence", "lightColorG", lightColor[1]);
+            pm->SetValue("ClearSequence", "lightColorB", lightColor[2]);
+        }
+
+        float shadowIntensity = pm->GetValue("ClearSequence", "shadowIntensity", 0.85f);
+        if (ImGui::SliderFloat("怪盗の影の濃さ (shadowIntensity)", &shadowIntensity, 0.0f, 1.0f, "%.2f")) {
+            pm->SetValue("ClearSequence", "shadowIntensity", shadowIntensity);
+        }
+
+        float shadowBias = pm->GetValue("ClearSequence", "shadowBias", 0.0005f);
+        if (ImGui::DragFloat("シャドウバイアス (shadowBias)", &shadowBias, 0.0001f, 0.00001f, 0.01f, "%.5f")) {
+            pm->SetValue("ClearSequence", "shadowBias", shadowBias);
+        }
+
+        bool syncSpotToBeam = pm->GetValue("ClearSequence", "syncSpotToBeam", true);
+        if (ImGui::Checkbox("スポットライト光源位置をビーム開始地点と連動##syncSpot", &syncSpotToBeam)) {
+            pm->SetValue("ClearSequence", "syncSpotToBeam", syncSpotToBeam);
+        }
+        if (!syncSpotToBeam) {
+            float leftSpot[3] = {
+                pm->GetValue("ClearSequence", "leftSpotX", -4.1f),
+                pm->GetValue("ClearSequence", "leftSpotY", 12.1f),
+                pm->GetValue("ClearSequence", "leftSpotZ", -0.20f)
+            };
+            if (ImGui::DragFloat3("左スポットライト位置 (X,Y,Z)##leftSpot", leftSpot, 0.05f, -30.0f, 30.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "leftSpotX", leftSpot[0]);
+                pm->SetValue("ClearSequence", "leftSpotY", leftSpot[1]);
+                pm->SetValue("ClearSequence", "leftSpotZ", leftSpot[2]);
+            }
+            float rightSpot[3] = {
+                pm->GetValue("ClearSequence", "rightSpotX", 4.1f),
+                pm->GetValue("ClearSequence", "rightSpotY", 12.1f),
+                pm->GetValue("ClearSequence", "rightSpotZ", -0.20f)
+            };
+            if (ImGui::DragFloat3("右スポットライト位置 (X,Y,Z)##rightSpot", rightSpot, 0.05f, -30.0f, 30.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "rightSpotX", rightSpot[0]);
+                pm->SetValue("ClearSequence", "rightSpotY", rightSpot[1]);
+                pm->SetValue("ClearSequence", "rightSpotZ", rightSpot[2]);
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // 2. ライトビーム（空間に浮かび上がる可視光線コーン）
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "【ライトビーム（可視光線コーン）】");
+
+        bool previewBeams = pm->GetValue("ClearSequence", "previewBeams", false);
+        if (ImGui::Checkbox("ライトビームを常時プレビュー表示##previewBeams", &previewBeams)) {
+            pm->SetValue("ClearSequence", "previewBeams", previewBeams);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(※エディタ上でビームの開始地点や照射角度を確認できます)");
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.7f, 1.0f), "--- ライトビーム開始地点 (照射元) ---");
+        ImGui::TextDisabled("※X:左右, Y:上下(正が天井), Z:奥行き(台座/怪盗基準)");
+
+        float leftPos[3] = {
+            pm->GetValue("ClearSequence", "leftBeamStartX", -4.1f),
+            pm->GetValue("ClearSequence", "leftBeamStartY", 12.1f),
+            pm->GetValue("ClearSequence", "leftBeamStartZ", -0.20f)
+        };
+        if (ImGui::DragFloat3("左ビーム開始地点 (X, Y, Z)##leftBeamStart", leftPos, 0.05f, -30.0f, 30.0f, "%.2f")) {
+            pm->SetValue("ClearSequence", "leftBeamStartX", leftPos[0]);
+            pm->SetValue("ClearSequence", "leftBeamStartY", leftPos[1]);
+            pm->SetValue("ClearSequence", "leftBeamStartZ", leftPos[2]);
+        }
+
+        float rightPos[3] = {
+            pm->GetValue("ClearSequence", "rightBeamStartX", 4.1f),
+            pm->GetValue("ClearSequence", "rightBeamStartY", 12.1f),
+            pm->GetValue("ClearSequence", "rightBeamStartZ", -0.20f)
+        };
+        if (ImGui::DragFloat3("右ビーム開始地点 (X, Y, Z)##rightBeamStart", rightPos, 0.05f, -30.0f, 30.0f, "%.2f")) {
+            pm->SetValue("ClearSequence", "rightBeamStartX", rightPos[0]);
+            pm->SetValue("ClearSequence", "rightBeamStartY", rightPos[1]);
+            pm->SetValue("ClearSequence", "rightBeamStartZ", rightPos[2]);
+        }
+
+        float targetPos[3] = {
+            pm->GetValue("ClearSequence", "beamTargetX", 0.0f),
+            pm->GetValue("ClearSequence", "beamTargetY", 0.4f),
+            pm->GetValue("ClearSequence", "beamTargetZ", 0.0f)
+        };
+        if (ImGui::DragFloat3("照射目標ターゲット (X, Y, Z)##beamTarget", targetPos, 0.05f, -10.0f, 10.0f, "%.2f")) {
+            pm->SetValue("ClearSequence", "beamTargetX", targetPos[0]);
+            pm->SetValue("ClearSequence", "beamTargetY", targetPos[1]);
+            pm->SetValue("ClearSequence", "beamTargetZ", targetPos[2]);
+        }
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.7f, 1.0f), "--- ライトビーム形状・演出 ---");
+
+        float beamWidth = pm->GetValue("ClearSequence", "beamWidth", 0.42f);
+        if (ImGui::SliderFloat("ビームの太さ (beamWidth)", &beamWidth, 0.05f, 2.5f, "%.2f")) {
+            pm->SetValue("ClearSequence", "beamWidth", beamWidth);
+        }
+
+        float beamLengthScale = pm->GetValue("ClearSequence", "beamLengthScale", 1.0f);
+        if (ImGui::SliderFloat("ビームの長さ倍率 (beamLengthScale)", &beamLengthScale, 0.1f, 3.0f, "%.2f")) {
+            pm->SetValue("ClearSequence", "beamLengthScale", beamLengthScale);
+        }
+
+        float beamExtendDuration = pm->GetValue("ClearSequence", "beamExtendDuration", 0.15f);
+        if (ImGui::SliderFloat("伸びるアニメーション時間 (beamExtendDuration)", &beamExtendDuration, 0.0f, 1.0f, "%.2f 秒")) {
+            pm->SetValue("ClearSequence", "beamExtendDuration", beamExtendDuration);
+        }
+
+        float beamMaxAlpha = pm->GetValue("ClearSequence", "beamMaxAlpha", 0.65f);
+        if (ImGui::SliderFloat("ビーム透明度 (beamMaxAlpha)", &beamMaxAlpha, 0.0f, 1.0f, "%.2f")) {
+            pm->SetValue("ClearSequence", "beamMaxAlpha", beamMaxAlpha);
+        }
+
+        float beamColor[3] = {
+            pm->GetValue("ClearSequence", "beamColorR", 1.0f),
+            pm->GetValue("ClearSequence", "beamColorG", 1.0f),
+            pm->GetValue("ClearSequence", "beamColorB", 0.95f)
+        };
+        if (ImGui::ColorEdit3("ビームの色 (beamColor)", beamColor)) {
+            pm->SetValue("ClearSequence", "beamColorR", beamColor[0]);
+            pm->SetValue("ClearSequence", "beamColorG", beamColor[1]);
+            pm->SetValue("ClearSequence", "beamColorB", beamColor[2]);
+        }
+
+        float clearCameraZoomScale = pm->GetValue("ClearSequence", "clearCameraZoomScale", 1.8f);
+        if (ImGui::SliderFloat("カメラズーム倍率 (clearCameraZoomScale)", &clearCameraZoomScale, 1.0f, 3.5f, "%.2f 倍")) {
+            pm->SetValue("ClearSequence", "clearCameraZoomScale", clearCameraZoomScale);
+        }
+
+        float clearCameraZoomDuration = pm->GetValue("ClearSequence", "clearCameraZoomDuration", 1.2f);
+        if (ImGui::SliderFloat("カメラズーム時間 (clearCameraZoomDuration)", &clearCameraZoomDuration, 0.2f, 3.0f, "%.2f 秒")) {
+            pm->SetValue("ClearSequence", "clearCameraZoomDuration", clearCameraZoomDuration);
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button("設定をJSON保存 (Save Parameters)", ImVec2(220, 28))) {
+            pm->Save();
+            saveStatusMsg = "設定をJSON保存しました！";
+            saveStatusTimer = 3.0f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("設定をJSON読込 (Load Parameters)", ImVec2(220, 28))) {
+            pm->Load("resources/json/shared/Global/parameters.json");
+            saveStatusMsg = "JSONから設定を再読込しました！";
+            saveStatusTimer = 3.0f;
+        }
+
+        if (saveStatusTimer > 0.0f) {
+            saveStatusTimer -= ImGui::GetIO().DeltaTime;
+            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.3f, 1.0f), "%s", saveStatusMsg.c_str());
+        }
+    }
+
     // 灰色の奥壁（背景板ポリゴン）の調整UI（常にインスペクターから操作可能）
     if (backgroundPlane_ && ImGui::CollapsingHeader("Background Wall (灰色の壁・背景板)")) {
         EulerTransform transform = backgroundPlane_->GetTransform();
@@ -1573,7 +1869,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     // Clear 演出：ゴール演出（スポットライト・煙玉・怪盗消滅・暗転）が完全に終わってから表示
-    if (gameState_ == GameState::Clear && isClearSequenceFinished_) {
+    // ※アイリスアウト開始後はUIを隠し、画面中央へ閉じるアイリスアウトを美しく見せる
+    if (gameState_ == GameState::Clear && isClearSequenceFinished_ && !isClearExitIrisActive_) {
         ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::Begin("ClearUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::SetWindowFontScale(6.0f);
@@ -1604,7 +1901,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
         ImGui::SetWindowFontScale(2.0f);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 30.0f);
-        const char* returnText = "Press SPACE to Return Title";
+        const char* returnText = "Press SPACE / A to Stage Select";
         float returnWidth = ImGui::CalcTextSize(returnText).x;
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x - returnWidth) * 0.5f);
         
@@ -1645,51 +1942,134 @@ void GameScene::UpdateGuardLights() {
     SpotLightGroup* slGroup = modelCommon_->GetSpotLightGroup();
     if (!slGroup) return;
 
-    if (isClearSequenceActive_) {
-        // クリア演出中：天井の左右から交互に照らし、そのあと交差して怪盗を捕捉する細いサーチライト
+    ParameterManager* pm = ParameterManager::GetInstance();
+    bool previewBeams = pm ? pm->GetValue("ClearSequence", "previewBeams", false) : false;
+
+    if (isClearSequenceActive_ || previewBeams) {
+        // クリア演出中またはプレビュー中：天井の左右から交互に照らし、そのあと交差して怪盗を捕捉する細いサーチライト＆リアルタイムシャドウ
         int32_t clearLightCount = 0;
 
-        float roofY = clearTargetTopY_ + 4.2f;
-        Vector3 target = { clearTargetPos_.x, clearTargetTopY_ + 0.4f, 0.0f };
+        bool syncSpotToBeam = pm->GetValue("ClearSequence", "syncSpotToBeam", true);
+        float leftX, leftY, leftZ, rightX, rightY, rightZ;
+        if (syncSpotToBeam) {
+            leftX = pm->GetValue("ClearSequence", "leftBeamStartX", -4.1f);
+            leftY = pm->GetValue("ClearSequence", "leftBeamStartY", 12.1f);
+            leftZ = pm->GetValue("ClearSequence", "leftBeamStartZ", -0.20f);
+            rightX = pm->GetValue("ClearSequence", "rightBeamStartX", 4.1f);
+            rightY = pm->GetValue("ClearSequence", "rightBeamStartY", 12.1f);
+            rightZ = pm->GetValue("ClearSequence", "rightBeamStartZ", -0.20f);
+        } else {
+            leftX = pm->GetValue("ClearSequence", "leftSpotX", -4.1f);
+            leftY = pm->GetValue("ClearSequence", "leftSpotY", 12.1f);
+            leftZ = pm->GetValue("ClearSequence", "leftSpotZ", -0.20f);
+            rightX = pm->GetValue("ClearSequence", "rightSpotX", 4.1f);
+            rightY = pm->GetValue("ClearSequence", "rightSpotY", 12.1f);
+            rightZ = pm->GetValue("ClearSequence", "rightSpotZ", -0.20f);
+        }
+
+        float targetX = pm->GetValue("ClearSequence", "beamTargetX", 0.0f);
+        float targetY = pm->GetValue("ClearSequence", "beamTargetY", 0.4f);
+        float targetZ = pm->GetValue("ClearSequence", "beamTargetZ", 0.0f);
+
+        Vector3 basePos = isClearSequenceActive_ ? clearTargetPos_ : (player_ ? player_->GetPosition() : Vector3{0.0f, 0.0f, 0.0f});
+        float baseTopY = isClearSequenceActive_ ? clearTargetTopY_ : basePos.y;
+
+        Vector3 posLeft = { basePos.x + leftX, baseTopY + leftY, leftZ };
+        Vector3 posRight = { basePos.x + rightX, baseTopY + rightY, rightZ };
+        Vector3 target = { basePos.x + targetX, baseTopY + targetY, targetZ };
+
+        float lightIntensity = pm->GetValue("ClearSequence", "lightIntensity", 12.0f);
+        float lightAngleDeg = pm->GetValue("ClearSequence", "lightAngleDeg", 16.0f);
+        float lightFalloffDeg = pm->GetValue("ClearSequence", "lightFalloffDeg", 8.0f);
+        float lightDecay = pm->GetValue("ClearSequence", "lightDecay", 0.6f);
+        float lightDistance = pm->GetValue("ClearSequence", "lightDistance", 14.0f);
+        Vector4 lightColor = {
+            pm->GetValue("ClearSequence", "lightColorR", 1.0f),
+            pm->GetValue("ClearSequence", "lightColorG", 1.0f),
+            pm->GetValue("ClearSequence", "lightColorB", 0.95f),
+            1.0f
+        };
+        float shadowIntensity = pm->GetValue("ClearSequence", "shadowIntensity", 0.85f);
+        float shadowBias = pm->GetValue("ClearSequence", "shadowBias", 0.0005f);
 
         // タイムライン判定:
-        // 0.0s〜0.35s: 左ライトのみ点灯
-        // 0.35s〜0.70s: 右ライトのみ点灯
-        // 0.70s以降: 左右同時に交差照射
-        bool leftOn = (clearSequenceTimer_ < 0.35f) || (clearSequenceTimer_ >= 0.70f);
-        bool rightOn = (clearSequenceTimer_ >= 0.35f);
+        // 0.00s〜0.35s: まず右ライトが点灯（左は消灯）
+        // 0.35s以降: 右ライトは消さず、左ライトも点灯（両方点灯）
+        bool rightOn = previewBeams || (clearSequenceTimer_ >= 0.0f);
+        bool leftOn = previewBeams || (clearSequenceTimer_ >= 0.35f);
+
+        // シャドウキャスター（影を生成する代表ライト）の選定
+        // 最初は右ライトから影を落とし、左ライトが点灯したら左ライトから影を落とす
+        bool rightIsShadow = previewBeams || (clearSequenceTimer_ < 0.35f);
+        bool leftIsShadow = (!rightIsShadow) && leftOn;
+
+        auto computeSpotVP = [](const Vector3& eye, const Vector3& lookAt, float fovDeg, float dist) -> Matrix4x4 {
+            Vector3 diff = { lookAt.x - eye.x, lookAt.y - eye.y, lookAt.z - eye.z };
+            Vector3 d = TransformFunctions::Normalize(diff);
+            Vector3 targetPt = { eye.x + d.x, eye.y + d.y, eye.z + d.z };
+            Vector3 up = { 0.0f, 1.0f, 0.0f };
+            if (std::abs(d.y) > 0.99f) {
+                up = { 0.0f, 0.0f, 1.0f };
+            }
+            DirectX::XMVECTOR eyeV = DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f);
+            DirectX::XMVECTOR targetV = DirectX::XMVectorSet(targetPt.x, targetPt.y, targetPt.z, 1.0f);
+            DirectX::XMVECTOR upV = DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f);
+            DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(eyeV, targetV, upV);
+
+            float fov = DirectX::XMConvertToRadians(fovDeg * 2.0f);
+            fov = std::clamp(fov, 0.01f, static_cast<float>(std::numbers::pi) * 0.99f);
+            float nearZ = 0.1f;
+            float farZ = (dist > 0.5f) ? dist : 50.0f;
+            DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fov, 1.0f, nearZ, farZ);
+            DirectX::XMMATRIX vpMat = DirectX::XMMatrixMultiply(viewMat, projMat);
+
+            Matrix4x4 result;
+            DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&result), vpMat);
+            return result;
+        };
+
+        float cosA = cosf(DirectX::XMConvertToRadians(lightAngleDeg));
+        float cosF = cosf(DirectX::XMConvertToRadians(lightFalloffDeg));
 
         if (leftOn) {
             SpotLight sl1 = {};
-            sl1.color = { 1.0f, 1.0f, 0.95f, 1.0f };
-            sl1.position = { clearTargetPos_.x - 2.2f, roofY, -0.3f };
+            sl1.color = lightColor;
+            sl1.position = posLeft;
             Vector3 diff1 = { target.x - sl1.position.x, target.y - sl1.position.y, target.z - sl1.position.z };
-            float lightDist = std::sqrt(diff1.x * diff1.x + diff1.y * diff1.y + diff1.z * diff1.z);
             sl1.direction = TransformFunctions::Normalize(diff1);
-            sl1.intensity = 10.0f;
-            sl1.distance = lightDist + 1.8f; // 台座と怪盗をしっかり照らす
-            sl1.decay = 0.6f;
-            sl1.cosAngle = cosf(DirectX::XMConvertToRadians(14.0f));       // しっかり怪盗を捉える角度
-            sl1.cosFalloffStart = cosf(DirectX::XMConvertToRadians(7.0f));
+            sl1.intensity = lightIntensity;
+            sl1.distance = lightDistance;
+            sl1.decay = lightDecay;
+            sl1.cosAngle = cosA;
+            sl1.cosFalloffStart = cosF;
             sl1.enable = 1;
-            sl1.shadowMapIndex = -1;
+            sl1.shadowMapIndex = leftIsShadow ? 0 : -1;
+            sl1.shadowBias = shadowBias;
+            sl1.shadowIntensity = shadowIntensity;
+            if (leftIsShadow) {
+                sl1.viewProjection = computeSpotVP(sl1.position, target, lightAngleDeg * 1.25f, sl1.distance);
+            }
             slGroup->spotLights[clearLightCount++] = sl1;
         }
 
         if (rightOn) {
             SpotLight sl2 = {};
-            sl2.color = { 1.0f, 1.0f, 0.95f, 1.0f };
-            sl2.position = { clearTargetPos_.x + 2.2f, roofY, -0.3f };
+            sl2.color = lightColor;
+            sl2.position = posRight;
             Vector3 diff2 = { target.x - sl2.position.x, target.y - sl2.position.y, target.z - sl2.position.z };
-            float lightDist = std::sqrt(diff2.x * diff2.x + diff2.y * diff2.y + diff2.z * diff2.z);
             sl2.direction = TransformFunctions::Normalize(diff2);
-            sl2.intensity = 10.0f;
-            sl2.distance = lightDist + 1.8f; // 台座と怪盗をしっかり照らす
-            sl2.decay = 0.6f;
-            sl2.cosAngle = cosf(DirectX::XMConvertToRadians(14.0f));       // しっかり怪盗を捉える角度
-            sl2.cosFalloffStart = cosf(DirectX::XMConvertToRadians(7.0f));
+            sl2.intensity = lightIntensity;
+            sl2.distance = lightDistance;
+            sl2.decay = lightDecay;
+            sl2.cosAngle = cosA;
+            sl2.cosFalloffStart = cosF;
             sl2.enable = 1;
-            sl2.shadowMapIndex = -1;
+            sl2.shadowMapIndex = rightIsShadow ? 0 : -1;
+            sl2.shadowBias = shadowBias;
+            sl2.shadowIntensity = shadowIntensity;
+            if (rightIsShadow) {
+                sl2.viewProjection = computeSpotVP(sl2.position, target, lightAngleDeg * 1.25f, sl2.distance);
+            }
             slGroup->spotLights[clearLightCount++] = sl2;
         }
 
@@ -2333,19 +2713,26 @@ void GameScene::UpdateIrisIn(const Vector3& playerPos, float dt) {
 }
 
 void GameScene::StartIrisOut(const Vector3& worldPos, float duration) {
+    irisOutTargetPos_ = worldPos;
+    Vector2 uv = WorldToScreenUV(irisOutTargetPos_);
+    uv.x = std::clamp(uv.x, 0.05f, 0.95f);
+    uv.y = std::clamp(uv.y, 0.05f, 0.95f);
+    StartIrisOutUV(uv, duration);
+}
+
+void GameScene::StartIrisOutUV(const Vector2& centerUV, float duration) {
     isIrisOutActive_ = true;
     irisOutTimer_ = 0.0f;
-    irisOutDuration_ = (duration > 0.0f) ? duration : 0.5f;
-    irisOutTargetPos_ = worldPos;
+    irisOutDuration_ = (duration > 0.0f) ? duration : 0.7f;
+    irisOutCenterUV_ = centerUV;
 
     DirectXCommon* dxCommon = DirectXCommon::GetInstance();
     if (dxCommon) {
-        Vector2 uv = WorldToScreenUV(irisOutTargetPos_);
-        dxCommon->SetIrisCenter(uv.x, uv.y);
+        dxCommon->SetIrisCenter(irisOutCenterUV_.x, irisOutCenterUV_.y);
         float maxRadius = ParameterManager::GetInstance()->GetValue("GameScene", "irisInMaxRadius", 3.2f);
         dxCommon->SetIrisRadius(maxRadius);
         dxCommon->SetIrisSmoothness(0.03f);
-        dxCommon->SetIrisIn(false); // Iris Out (閉じる)
+        dxCommon->SetIrisIn(false); // Iris Out (円が閉じる)
         dxCommon->SetIrisMaskColor(0.0f, 0.0f, 0.0f, 1.0f);
         dxCommon->SetCompositeIrisEnabled(true);
     }
@@ -2357,13 +2744,14 @@ void GameScene::UpdateIrisOut(float dt) {
     irisOutTimer_ += dt;
     float t = std::clamp(irisOutTimer_ / irisOutDuration_, 0.0f, 1.0f);
 
+    // スムーズステップで滑らかに収縮 (1.0 -> 0.0)
+    float ease = 1.0f - (t * t * (3.0f - 2.0f * t));
     float maxRadius = ParameterManager::GetInstance()->GetValue("GameScene", "irisInMaxRadius", 3.2f);
-    float currentRadius = (1.0f - t) * maxRadius;
+    float currentRadius = ease * maxRadius;
 
     DirectXCommon* dxCommon = DirectXCommon::GetInstance();
     if (dxCommon) {
-        Vector2 uv = WorldToScreenUV(irisOutTargetPos_);
-        dxCommon->SetIrisCenter(uv.x, uv.y);
+        dxCommon->SetIrisCenter(irisOutCenterUV_.x, irisOutCenterUV_.y);
         dxCommon->SetIrisRadius(currentRadius);
         dxCommon->SetIrisSmoothness(0.03f);
         dxCommon->SetIrisIn(false);
@@ -2373,6 +2761,9 @@ void GameScene::UpdateIrisOut(float dt) {
     if (t >= 1.0f) {
         isIrisOutActive_ = false;
         // 完全に閉じたら画面は黒のまま保持
+        if (dxCommon) {
+            dxCommon->SetIrisRadius(0.0f);
+        }
     }
 }
 
@@ -2576,46 +2967,101 @@ void GameScene::TriggerClearSequence(const Vector3& goalPos, float goalTopY) {
     isClearIrisStarted_ = false;
     gameState_ = GameState::Clear;
 
-    // スポットライト光線コーン（天井から台座に向けて斜め照射＆交差）
-    float roofY = clearTargetTopY_ + 4.2f;
-    Vector3 target = { clearTargetPos_.x, clearTargetTopY_ + 0.4f, -0.15f };
-
-    // コーン1（天井左上から台座へ）
-    if (spotBeamObj1_ && spotBeamCone_) {
-        Vector3 pos1 = { clearTargetPos_.x - 2.2f, roofY, -0.20f };
-        Vector3 center = { (pos1.x + target.x) * 0.5f, (pos1.y + target.y) * 0.5f, -0.18f };
-        Vector3 dir = { target.x - pos1.x, target.y - pos1.y, 0.0f };
-        float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-        float rotZ = std::atan2(dir.x, -dir.y);
-
-        spotBeamObj1_->SetTranslation(center);
-        spotBeamObj1_->SetRotation({ 0.0f, 0.0f, rotZ });
-        // 美しく引き締まったサーチライトビーム（太さ0.42f）
-        spotBeamObj1_->SetScale({ 0.42f, dist / spotBeamCone_->GetHeight(), 0.42f });
-        spotBeamObj1_->GetMaterial().color = { 1.0f, 1.0f, 0.95f, 0.0f };
-        spotBeamObj1_->GetMaterial().lightingType = 0;
-        spotBeamObj1_->Update();
+    if (player_) {
+        player_->ReachGoal();
     }
 
-    // コーン2（天井右上から台座へ）
-    if (spotBeamObj2_ && spotBeamCone_) {
-        Vector3 pos2 = { clearTargetPos_.x + 2.2f, roofY, -0.20f };
-        Vector3 center = { (pos2.x + target.x) * 0.5f, (pos2.y + target.y) * 0.5f, -0.18f };
-        Vector3 dir = { target.x - pos2.x, target.y - pos2.y, 0.0f };
-        float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-        float rotZ = std::atan2(dir.x, -dir.y);
-
-        spotBeamObj2_->SetTranslation(center);
-        spotBeamObj2_->SetRotation({ 0.0f, 0.0f, rotZ });
-        // 美しく引き締まったサーチライトビーム（太さ0.42f）
-        spotBeamObj2_->SetScale({ 0.42f, dist / spotBeamCone_->GetHeight(), 0.42f });
+    if (spotBeamObj1_) {
+        spotBeamObj1_->GetMaterial().color = { 1.0f, 1.0f, 0.95f, 0.0f };
+        spotBeamObj1_->Update();
+    }
+    if (spotBeamObj2_) {
         spotBeamObj2_->GetMaterial().color = { 1.0f, 1.0f, 0.95f, 0.0f };
-        spotBeamObj2_->GetMaterial().lightingType = 0;
         spotBeamObj2_->Update();
     }
 
     if (gameCamera_) {
         gameCamera_->SetFollowTarget(nullptr);
+        clearCameraStartScale_ = gameCamera_->GetScale();
+        clearCameraStartPos_ = gameCamera_->GetTranslation();
+    }
+}
+
+void GameScene::UpdateSpotBeams(const Vector3& targetPos, float targetTopY, float progress1, float progress2, float alpha1, float alpha2) {
+    ParameterManager* pm = ParameterManager::GetInstance();
+    float leftX = pm->GetValue("ClearSequence", "leftBeamStartX", -4.1f);
+    float leftY = pm->GetValue("ClearSequence", "leftBeamStartY", 12.1f);
+    float leftZ = pm->GetValue("ClearSequence", "leftBeamStartZ", -0.20f);
+
+    float rightX = pm->GetValue("ClearSequence", "rightBeamStartX", 4.1f);
+    float rightY = pm->GetValue("ClearSequence", "rightBeamStartY", 12.1f);
+    float rightZ = pm->GetValue("ClearSequence", "rightBeamStartZ", -0.20f);
+
+    float targetX = pm->GetValue("ClearSequence", "beamTargetX", 0.0f);
+    float targetY = pm->GetValue("ClearSequence", "beamTargetY", 0.4f);
+    float targetZ = pm->GetValue("ClearSequence", "beamTargetZ", 0.0f);
+
+    float beamWidth = pm->GetValue("ClearSequence", "beamWidth", 0.42f);
+    float beamLengthScale = pm->GetValue("ClearSequence", "beamLengthScale", 1.0f);
+    Vector3 beamColor = {
+        pm->GetValue("ClearSequence", "beamColorR", 1.0f),
+        pm->GetValue("ClearSequence", "beamColorG", 1.0f),
+        pm->GetValue("ClearSequence", "beamColorB", 0.95f)
+    };
+
+    Vector3 target = { targetPos.x + targetX, targetTopY + targetY, targetZ };
+    Vector3 pos1 = { targetPos.x + leftX, targetTopY + leftY, leftZ };
+    Vector3 pos2 = { targetPos.x + rightX, targetTopY + rightY, rightZ };
+
+    if (spotBeamObj1_ && spotBeamCone_) {
+        Vector3 dir = { target.x - pos1.x, target.y - pos1.y, target.z - pos1.z };
+        float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+        if (dist > 0.001f) {
+            Vector3 dirNorm = { dir.x / dist, dir.y / dist, dir.z / dist };
+            float totalLen = dist * beamLengthScale;
+            float currentLen = (totalLen * progress1 > 0.001f) ? (totalLen * progress1) : 0.001f;
+            Vector3 center = {
+                pos1.x + dirNorm.x * (currentLen * 0.5f),
+                pos1.y + dirNorm.y * (currentLen * 0.5f),
+                pos1.z + dirNorm.z * (currentLen * 0.5f)
+            };
+            float rotZ = std::atan2(dir.x, -dir.y);
+            float rotX = std::atan2(-dir.z, std::sqrt(dir.x * dir.x + dir.y * dir.y));
+
+            spotBeamObj1_->SetTranslation(center);
+            spotBeamObj1_->SetRotation({ rotX, 0.0f, rotZ });
+            float coneH = spotBeamCone_->GetHeight();
+            float scaleY = (coneH > 0.0001f) ? (currentLen / coneH) : currentLen;
+            spotBeamObj1_->SetScale({ beamWidth, scaleY, beamWidth });
+            spotBeamObj1_->GetMaterial().color = { beamColor.x, beamColor.y, beamColor.z, alpha1 };
+            spotBeamObj1_->GetMaterial().lightingType = 0;
+            spotBeamObj1_->Update();
+        }
+    }
+    if (spotBeamObj2_ && spotBeamCone_) {
+        Vector3 dir = { target.x - pos2.x, target.y - pos2.y, target.z - pos2.z };
+        float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+        if (dist > 0.001f) {
+            Vector3 dirNorm = { dir.x / dist, dir.y / dist, dir.z / dir.z };
+            float totalLen = dist * beamLengthScale;
+            float currentLen = (totalLen * progress2 > 0.001f) ? (totalLen * progress2) : 0.001f;
+            Vector3 center = {
+                pos2.x + dirNorm.x * (currentLen * 0.5f),
+                pos2.y + dirNorm.y * (currentLen * 0.5f),
+                pos2.z + dirNorm.z * (currentLen * 0.5f)
+            };
+            float rotZ = std::atan2(dir.x, -dir.y);
+            float rotX = std::atan2(-dir.z, std::sqrt(dir.x * dir.x + dir.y * dir.y));
+
+            spotBeamObj2_->SetTranslation(center);
+            spotBeamObj2_->SetRotation({ rotX, 0.0f, rotZ });
+            float coneH = spotBeamCone_->GetHeight();
+            float scaleY = (coneH > 0.0001f) ? (currentLen / coneH) : currentLen;
+            spotBeamObj2_->SetScale({ beamWidth, scaleY, beamWidth });
+            spotBeamObj2_->GetMaterial().color = { beamColor.x, beamColor.y, beamColor.z, alpha2 };
+            spotBeamObj2_->GetMaterial().lightingType = 0;
+            spotBeamObj2_->Update();
+        }
     }
 }
 
@@ -2624,43 +3070,66 @@ void GameScene::UpdateClearSequence(float dt, SceneManager* sceneManager) {
 
     clearSequenceTimer_ += dt;
 
-    // 左右交互に照らし、そのあと交差して怪盗を捕捉する
-    // 0.0s〜0.35s: 左ライト点灯
-    // 0.35s〜0.70s: 右ライト点灯
-    // 0.70s以降: 両ライトが交差して台座の怪盗を捉える
     float beam1Alpha = 0.0f;
     float beam2Alpha = 0.0f;
-    const float kBeamMaxAlpha = 0.65f;
+    ParameterManager* pm = ParameterManager::GetInstance();
+    float beamExtendDuration = pm->GetValue("ClearSequence", "beamExtendDuration", 0.15f);
+    float beamMaxAlpha = pm->GetValue("ClearSequence", "beamMaxAlpha", 0.65f);
 
+    float progress1 = 1.0f; // 左ビーム伸長率
+    float progress2 = 1.0f; // 右ビーム伸長率
+
+    // 0.00s〜0.35s: まず右ライトが点灯（左は消灯）
+    // 0.35s〜: 右ライトは消さず、左ライトも点灯（両方点灯で挟み撃ち）
     if (clearSequenceTimer_ < 0.35f) {
-        beam1Alpha = std::clamp(clearSequenceTimer_ / 0.08f, 0.0f, 1.0f) * kBeamMaxAlpha;
-        beam2Alpha = 0.0f;
-    } else if (clearSequenceTimer_ < 0.70f) {
         beam1Alpha = 0.0f;
-        beam2Alpha = std::clamp((clearSequenceTimer_ - 0.35f) / 0.08f, 0.0f, 1.0f) * kBeamMaxAlpha;
+        progress1 = 0.0f;
+
+        beam2Alpha = std::clamp(clearSequenceTimer_ / 0.08f, 0.0f, 1.0f) * beamMaxAlpha;
+        float t2 = (beamExtendDuration > 0.0001f) ? std::clamp(clearSequenceTimer_ / beamExtendDuration, 0.0f, 1.0f) : 1.0f;
+        progress2 = 1.0f - (1.0f - t2) * (1.0f - t2);
     } else {
-        beam1Alpha = std::clamp((clearSequenceTimer_ - 0.70f) / 0.08f, 0.0f, 1.0f) * kBeamMaxAlpha;
-        beam2Alpha = kBeamMaxAlpha;
+        // 右ライトは消さずに点灯を維持
+        beam2Alpha = beamMaxAlpha;
+        progress2 = 1.0f;
+
+        // 左ライトも点灯
+        beam1Alpha = std::clamp((clearSequenceTimer_ - 0.35f) / 0.08f, 0.0f, 1.0f) * beamMaxAlpha;
+        float t1 = (beamExtendDuration > 0.0001f) ? std::clamp((clearSequenceTimer_ - 0.35f) / beamExtendDuration, 0.0f, 1.0f) : 1.0f;
+        progress1 = 1.0f - (1.0f - t1) * (1.0f - t1);
     }
 
-    if (spotBeamObj1_) {
-        spotBeamObj1_->GetMaterial().color.w = beam1Alpha;
-        spotBeamObj1_->GetMaterial().lightingType = 0;
-        spotBeamObj1_->Update();
-    }
-    if (spotBeamObj2_) {
-        spotBeamObj2_->GetMaterial().color.w = beam2Alpha;
-        spotBeamObj2_->GetMaterial().lightingType = 0;
-        spotBeamObj2_->Update();
-    }
+    UpdateSpotBeams(clearTargetPos_, clearTargetTopY_, progress1, progress2, beam1Alpha, beam2Alpha);
 
-    // プレイヤーの待機モーション・煙エフェクトの更新
+    // プレイヤーのクリア演出（右見上げ→左見上げ→正面キメ＆一拍置き→煙玉投擲）アニメーション
     if (player_) {
-        player_->UpdateVisualsOnly(dt);
+        player_->UpdateClearAnimation(clearSequenceTimer_, dt);
     }
 
-    // 1. スモークボム（煙玉）炸裂（0.95s: 交差して怪盗が見つかった瞬間！）
-    if (!isClearSmokeSpawned_ && clearSequenceTimer_ >= 0.95f) {
+    // カメラのズームイン処理（クリアした時にカメラを怪盗・台座へ寄せる）
+    if (gameCamera_) {
+        float targetZoomScale = pm->GetValue("ClearSequence", "clearCameraZoomScale", 1.8f);
+        float zoomDuration = pm->GetValue("ClearSequence", "clearCameraZoomDuration", 1.2f);
+        float zoomT = (zoomDuration > 0.001f) ? std::clamp(clearSequenceTimer_ / zoomDuration, 0.0f, 1.0f) : 1.0f;
+        // 滑らかなイーズアウト
+        float easedZoom = 1.0f - (1.0f - zoomT) * (1.0f - zoomT);
+
+        float currentScale = clearCameraStartScale_ + (targetZoomScale - clearCameraStartScale_) * easedZoom;
+        gameCamera_->SetScale(currentScale);
+
+        // 目標カメラ位置（怪盗・台座の中心、少し上を映す）
+        Vector3 targetCamPos = { clearTargetPos_.x, clearTargetTopY_ + 0.5f, clearCameraStartPos_.z };
+        Vector3 currentCamPos = {
+            clearCameraStartPos_.x + (targetCamPos.x - clearCameraStartPos_.x) * easedZoom,
+            clearCameraStartPos_.y + (targetCamPos.y - clearCameraStartPos_.y) * easedZoom,
+            clearCameraStartPos_.z
+        };
+        gameCamera_->SetTranslation(currentCamPos);
+        gameCamera_->UpdateMatrix();
+    }
+
+    // 1. スモークボム（煙玉）炸裂（1.25s: 一拍置いて足元へ投下した瞬間！）
+    if (!isClearSmokeSpawned_ && clearSequenceTimer_ >= 1.25f) {
         isClearSmokeSpawned_ = true;
         if (player_) {
             Vector3 smokePos = player_->GetPosition();
@@ -2668,10 +3137,17 @@ void GameScene::UpdateClearSequence(float dt, SceneManager* sceneManager) {
             Log(std::format("GameScene: ClearSequence timer={:.2f}, spawning smoke bomb at ({:.2f}, {:.2f}, {:.2f})\n", clearSequenceTimer_, smokePos.x, smokePos.y, smokePos.z));
             player_->SpawnSmokeBomb(smokePos);
         }
+        // 煙幕が炸裂した瞬間、怪盗の黒いアウトライン（深度エッジ検出＆メッシュ拡張）をOFFにして
+        // 煙の中で怪盗のシルエットが浮き出てしまう現象を完全に解消する！
+        DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+        if (dxCommon) {
+            dxCommon->SetDepthBasedOutlineEnabled(false);
+            dxCommon->SetOutlineEnabled(false);
+        }
     }
 
-    // 2. 煙が広がり全身が包まれた瞬間、プレイヤーと宝石・鎖が消滅（脱出！）（1.35s）
-    if (!isClearEscaped_ && clearSequenceTimer_ >= 1.35f) {
+    // 2. 煙が広がり全身が包まれた瞬間、プレイヤーと宝石・鎖が消滅（脱出！）（1.70s）
+    if (!isClearEscaped_ && clearSequenceTimer_ >= 1.70f) {
         isClearEscaped_ = true;
         if (player_) {
             player_->SetClearEscaped(true);
@@ -2681,32 +3157,19 @@ void GameScene::UpdateClearSequence(float dt, SceneManager* sceneManager) {
         }
     }
 
-    // 3. もぬけの殻の台座を照らし出してから、台座を中心にアイリスアウト開始（1.90s）
-    if (!isClearIrisStarted_ && clearSequenceTimer_ >= 1.90f) {
-        isClearIrisStarted_ = true;
-        StartIrisOut(clearTargetPos_, 0.6f);
-    }
-
-    // アイリスアウト更新
-    UpdateIrisOut(dt);
-
-    // 4. 暗転完了（2.50s）でクリア演出終了。暗転画面の上にリザルトUI（STAGE CLEAR! & ランク）を表示！
-    // ユーザーは SPACEキー を押してタイトル（ステージ選択）へ戻れる
-    if (isClearIrisStarted_ && clearSequenceTimer_ >= 2.50f) {
+    // 3. もぬけの殻の台座をスポットライトが照らし出し、煙が晴れる余韻（2.50s）で演出完了！
+    // ※アイリスアウトはここでは行わず、ステージ選択へ戻る時（SPACE押下後）に実行する
+    if (clearSequenceTimer_ >= 2.50f) {
         isClearSequenceActive_ = false;
         isClearSequenceFinished_ = true; // 演出完了！
-        Log("GameScene: Clear sequence finished, displaying STAGE CLEAR UI\n");
-        // アイリスアウトの暗転マスクを維持して画面を黒のまま保つ
-        DirectXCommon* dxCommon = DirectXCommon::GetInstance();
-        if (dxCommon) {
-            dxCommon->SetIrisRadius(0.0f);
-            dxCommon->SetCompositeIrisEnabled(true);
-        }
+        Log("GameScene: Clear sequence finished, displaying STAGE CLEAR UI on illuminated stage\n");
     }
 }
 
 void GameScene::DrawClearSpotlightBeams() {
-    if (!isClearSequenceActive_) return;
+    ParameterManager* pm = ParameterManager::GetInstance();
+    bool previewBeams = pm ? pm->GetValue("ClearSequence", "previewBeams", false) : false;
+    if (!isClearSequenceActive_ && !isClearSequenceFinished_ && !previewBeams) return;
 
     if (spotBeamObj1_) {
         spotBeamObj1_->Draw();

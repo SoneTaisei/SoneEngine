@@ -23,6 +23,7 @@
 #include "Component/TransformComponent.h"
 #include "Animation/AnimationPreviewScene.h"
 #include "GPUParticle/GPUParticlePreviewScene.h"
+#include "Core/Utility/ParameterManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -621,6 +622,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             if (ImGui::MenuItem("3Dモデル配置", nullptr, &showModelPlacementEditor_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("3Dモデルパレット", nullptr, &showModelPalette_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("パラメータ調整 (ParameterManager)", nullptr, &showParameterManager_)) { SaveSceneConfig(); }
             ImGui::Separator();
             if (ImGui::BeginMenu("レイアウトプリセット")) {
                 if (layoutPresets_.empty()) {
@@ -2125,6 +2127,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (postEffectEditor_) {
                 postEffectEditor_->DrawUI(&showPostEffect_);
             }
+        }
+        ImGui::End();
+    }
+
+    // --- ParameterManager ウィンドウ ---
+    if (showParameterManager_) {
+        if (ImGui::Begin("パラメータ調整 (ParameterManager)", &showParameterManager_)) {
+            ParameterManager::GetInstance()->DisplayImGui();
         }
         ImGui::End();
     }

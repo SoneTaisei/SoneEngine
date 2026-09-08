@@ -333,6 +333,7 @@ private:
     bool showSpotLightPanel_ = true;
     bool showModelPlacementEditor_ = true;
     bool showModelPalette_ = true;
+    bool showParameterManager_ = false;
 
     // 前回選択されていたメインタブ（次回起動時に復元）
     std::string activeMainTab_ = "ゲームビュー";
