@@ -57,14 +57,17 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
         cameraTransform_.translate = targetSelectPos_;
         cameraTransform_.rotate = targetSelectRot_;
         titleLogoAlpha_ = 0.0f;
+        titleMenuAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
     } else {
         // 通常のタイトル画面から開始（夜空を見上げるアングル）
         phase_ = Phase::kTitle;
         selectedStageIndex_ = 0;
+        selectedTitleMenu_ = 0;
         cameraTransform_.translate = { 0.0f, 1.2f, -8.5f };
         cameraTransform_.rotate = { 0.06f, 0.0f, 0.0f };
         titleLogoAlpha_ = 1.0f;
+        titleMenuAlpha_ = 1.0f;
         searchlightAlpha_ = 1.0f;
     }
 
@@ -215,6 +218,24 @@ void TitleScene::Initialize() {
     titleLogoSprite_->SetPosition({ (1280.0f - logoW) * 0.5f, 70.0f });
 
     // -------------------------------------------------------------
+    // 6.2 スタートテキスト スプライト (startText.png)
+    // -------------------------------------------------------------
+    startTextTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/startText.png");
+    startTextSprite_ = std::make_unique<Sprite>();
+    startTextSprite_->Initialize(spriteCommon_, startTextTextureHandle_);
+    startTextSprite_->SetSize(startTextSize_);
+    startTextSprite_->SetPosition(startTextPos_);
+
+    // -------------------------------------------------------------
+    // 6.3 クレジットテキスト スプライト (credit.png)
+    // -------------------------------------------------------------
+    creditTextTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/credit.png");
+    creditTextSprite_ = std::make_unique<Sprite>();
+    creditTextSprite_->Initialize(spriteCommon_, creditTextTextureHandle_);
+    creditTextSprite_->SetSize(creditTextSize_);
+    creditTextSprite_->SetPosition(creditTextPos_);
+
+    // -------------------------------------------------------------
     // 7. 予告状オブジェクト (callingCard.obj) の準備
     // -------------------------------------------------------------
     Model* cardModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/callingCard", "callingCard.obj");
@@ -247,12 +268,27 @@ void TitleScene::Update(SceneManager *sceneManager) {
         isFirstFrame_ = false;
     } else {
         if (phase_ == Phase::kTitle) {
-            // タイトル画面で決定ボタン押下時: ステージ選択カメラへの移動フェーズを開始
+            // メニュー項目の上下選択 (W/S, ↑/↓)
+            // ※ ゲームパッドのPOVハットスイッチは未入力時に0を返す環境があり、常時上入力と誤判定されて
+            //    勝手に選択が切り替わり続ける原因となっていたため（ポーズメニュー時と同様）、
+            //    キーボードの確実な押下 (IsKeyPressed) で制御し、直接インデックスを指定します。
+            if (kb->IsKeyPressed(DIK_UP) || kb->IsKeyPressed(DIK_W)) {
+                selectedTitleMenu_ = 0; // 上: スタート
+            } else if (kb->IsKeyPressed(DIK_DOWN) || kb->IsKeyPressed(DIK_S)) {
+                selectedTitleMenu_ = 1; // 下: クレジット
+            }
+
+            // タイトル画面で決定ボタン押下時
             if (isDecisionPressed) {
-                phase_ = Phase::kTransitionToSelect;
-                transitionStartPos_ = cameraTransform_.translate;
-                transitionStartRot_ = cameraTransform_.rotate;
-                transitionTimer_ = 0.0f;
+                if (selectedTitleMenu_ == 0) {
+                    // 「スタート」選択時: ステージ選択カメラへの移動フェーズを開始
+                    phase_ = Phase::kTransitionToSelect;
+                    transitionStartPos_ = cameraTransform_.translate;
+                    transitionStartRot_ = cameraTransform_.rotate;
+                    transitionTimer_ = 0.0f;
+                } else if (selectedTitleMenu_ == 1) {
+                    // 「クレジット」選択時（将来のクレジット画面展開用）
+                }
             }
         } else if (phase_ == Phase::kStageSelect) {
             // ステージ選択画面で決定ボタン押下時: 選択中ステージオブジェクトへ向けて予告状突き刺し演出を開始
@@ -296,6 +332,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
             camRot.y += sinf(titleTimer_ * 0.3f) * 0.02f;
         }
         titleLogoAlpha_ = 1.0f;
+        titleMenuAlpha_ = 1.0f;
         searchlightAlpha_ = 1.0f;
     } else if (phase_ == Phase::kTransitionToSelect) {
         // ステージ選択位置へ滑らかにカメラを補間移動 (Smoothstep)
@@ -317,7 +354,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
         cameraTransform_.translate = camPos;
         cameraTransform_.rotate = camRot;
 
-        // タイトルロゴとサーチライトを素早く自然にフェードアウト (logoFadeDuration_ 秒で完了)
+        // タイトルロゴ、メニューテキスト、サーチライトを素早く自然にフェードアウト (logoFadeDuration_ 秒で完了)
         float fadeT = std::clamp(transitionTimer_ / logoFadeDuration_, 0.0f, 1.0f);
         float remain = 1.0f - fadeT;
         float fadeAlpha = remain * remain; // スッと自然に消える2乗減衰
@@ -325,6 +362,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
             fadeAlpha = 0.0f;
         }
         titleLogoAlpha_ = fadeAlpha;
+        titleMenuAlpha_ = fadeAlpha;
         searchlightAlpha_ = fadeAlpha;
 
         if (t >= 1.0f) {
@@ -334,6 +372,7 @@ void TitleScene::Update(SceneManager *sceneManager) {
             camPos = targetSelectPos_;
             camRot = targetSelectRot_;
             titleLogoAlpha_ = 0.0f;
+            titleMenuAlpha_ = 0.0f;
             searchlightAlpha_ = 0.0f;
         }
     } else if (phase_ == Phase::kStageSelect || phase_ == Phase::kTransitionToGame) {
@@ -343,7 +382,45 @@ void TitleScene::Update(SceneManager *sceneManager) {
         cameraTransform_.translate = targetSelectPos_;
         cameraTransform_.rotate = targetSelectRot_;
         titleLogoAlpha_ = 0.0f;
+        titleMenuAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
+    }
+
+    // タイトルメニューテキストのビジュアル更新（完全不透明、選択中の拡大・ゴールド強調）
+    titleMenuPulseTimer_ += dt;
+
+    if (startTextSprite_) {
+        if (selectedTitleMenu_ == 0) {
+            // 選択中: 鮮やかなゴールド、少し拡大 (1.08倍)
+            const float scale = 1.08f;
+            Vector2 sz = { startTextSize_.x * scale, startTextSize_.y * scale };
+            Vector2 pos = { startTextPos_.x - (sz.x - startTextSize_.x) * 0.5f, startTextPos_.y - (sz.y - startTextSize_.y) * 0.5f };
+            startTextSprite_->SetSize(sz);
+            startTextSprite_->SetPosition(pos);
+            startTextSprite_->SetColor({ 1.0f, 0.92f, 0.35f, titleMenuAlpha_ }); // 完全不透明ゴールド
+        } else {
+            // 非選択時: 通常サイズ、完全不透明な白（背景のビルが透けない）
+            startTextSprite_->SetSize(startTextSize_);
+            startTextSprite_->SetPosition(startTextPos_);
+            startTextSprite_->SetColor({ 0.85f, 0.85f, 0.85f, titleMenuAlpha_ }); // 完全不透明ホワイト
+        }
+    }
+
+    if (creditTextSprite_) {
+        if (selectedTitleMenu_ == 1) {
+            // 選択中: 鮮やかなゴールド、少し拡大 (1.08倍)
+            const float scale = 1.08f;
+            Vector2 sz = { creditTextSize_.x * scale, creditTextSize_.y * scale };
+            Vector2 pos = { creditTextPos_.x - (sz.x - creditTextSize_.x) * 0.5f, creditTextPos_.y - (sz.y - creditTextSize_.y) * 0.5f };
+            creditTextSprite_->SetSize(sz);
+            creditTextSprite_->SetPosition(pos);
+            creditTextSprite_->SetColor({ 1.0f, 0.92f, 0.35f, titleMenuAlpha_ }); // 完全不透明ゴールド
+        } else {
+            // 非選択時: 通常サイズ、完全不透明な白（背景のビルが透けない）
+            creditTextSprite_->SetSize(creditTextSize_);
+            creditTextSprite_->SetPosition(creditTextPos_);
+            creditTextSprite_->SetColor({ 0.85f, 0.85f, 0.85f, titleMenuAlpha_ }); // 完全不透明ホワイト
+        }
     }
 
     // カメラシェイク (着弾時の微小振動) の反映
@@ -468,12 +545,23 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     }
 #endif
+}
 
-    // 5. 2Dスプライト（タイトルロゴ）の描画
+void TitleScene::Draw2D() {
+    // 2Dスプライト（タイトルロゴ・メニューテキスト）の最前面描画
+    // ※ 3Dモデル配置（Placed Models）やパーティクルよりも後に描画されるため、ビル群等に隠れません
     if (spriteCommon_) {
         spriteCommon_->PreDraw();
         if (titleLogoSprite_ && titleLogoAlpha_ > 0.001f) {
             titleLogoSprite_->Draw();
+        }
+        if (titleMenuAlpha_ > 0.001f) {
+            if (startTextSprite_) {
+                startTextSprite_->Draw();
+            }
+            if (creditTextSprite_) {
+                creditTextSprite_->Draw();
+            }
         }
         for (auto &sprite : sprites_) {
             sprite->Draw();
@@ -637,6 +725,32 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     if (phase_ == Phase::kTransitionToSelect) phaseStr = "ステージ選択カメラへ移動中...";
     else if (phase_ == Phase::kStageSelect) phaseStr = "ステージ選択画面 (待機中)";
     ImGui::Text("【現在の状態】: %s", phaseStr);
+    ImGui::Separator();
+
+    // タイトルメニューテキスト調整
+    ImGui::Text("【タイトルメニュー (スタート / クレジット) 調整】");
+    ImGui::Text("現在の選択: %s", (selectedTitleMenu_ == 0) ? "スタート" : "クレジット");
+    if (ImGui::Button("選択: スタート")) { selectedTitleMenu_ = 0; }
+    ImGui::SameLine();
+    if (ImGui::Button("選択: クレジット")) { selectedTitleMenu_ = 1; }
+
+    bool menuSpriteChanged = false;
+    if (ImGui::DragFloat2("スタート 位置 (px)", &startTextPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
+    if (ImGui::DragFloat2("スタート サイズ (px)", &startTextSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
+    if (ImGui::DragFloat2("クレジット 位置 (px)", &creditTextPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
+    if (ImGui::DragFloat2("クレジット サイズ (px)", &creditTextSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
+
+    if (menuSpriteChanged) {
+        if (startTextSprite_) {
+            startTextSprite_->SetPosition(startTextPos_);
+            startTextSprite_->SetSize(startTextSize_);
+        }
+        if (creditTextSprite_) {
+            creditTextSprite_->SetPosition(creditTextPos_);
+            creditTextSprite_->SetSize(creditTextSize_);
+        }
+    }
+
     ImGui::Separator();
 
     // 1. タイトルカメラ現在値

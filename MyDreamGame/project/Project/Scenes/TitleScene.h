@@ -27,6 +27,7 @@ public:
     void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
+    void Draw2D() override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
 
     // ヒエラルキー用
@@ -74,6 +75,21 @@ private:
     // --- 怪盗タイトルシーン演出用 ---
     std::unique_ptr<Sprite> titleLogoSprite_;
     uint32_t titleLogoTextureHandle_ = 0;
+
+    // --- タイトルメニュー用（スタート / クレジット） ---
+    std::unique_ptr<Sprite> startTextSprite_;
+    uint32_t startTextTextureHandle_ = 0;
+    Vector2 startTextPos_ = { 515.0f, 430.0f };
+    Vector2 startTextSize_ = { 250.0f, 50.0f };
+
+    std::unique_ptr<Sprite> creditTextSprite_;
+    uint32_t creditTextTextureHandle_ = 0;
+    Vector2 creditTextPos_ = { 512.5f, 520.0f };
+    Vector2 creditTextSize_ = { 255.0f, 50.0f };
+
+    int selectedTitleMenu_ = 0; // 0: スタート, 1: クレジット
+    float titleMenuPulseTimer_ = 0.0f;
+    float titleMenuAlpha_ = 1.0f;
 
     std::vector<std::shared_ptr<GameObject>> searchlightObjects_;
 

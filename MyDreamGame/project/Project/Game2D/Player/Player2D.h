@@ -97,9 +97,13 @@ public:
             state_.goalTimer_ = 0.0f;
             state_.velocity_ = { 0.0f, 0.0f, 0.0f };
             state_.launchVelocityX_ = 0.0f;
-            visuals_.SpawnConfetti(state_.position_);
         }
     }
+
+    void SpawnSmokeBomb(const Vector3& pos) { visuals_.SpawnSmokeBomb(pos); }
+    void SetClearEscaped(bool escaped) { state_.isClearEscaped_ = escaped; }
+    bool IsClearEscaped() const { return state_.isClearEscaped_; }
+    void UpdateVisualsOnly(float deltaTime) { visuals_.Update(state_, params_, deltaTime); }
 
     bool IsGoalComplete() const { return state_.isGoal_ && state_.goalTimer_ >= params_.goalWaitTime_; }
 
@@ -108,7 +112,10 @@ public:
     int GetChainLength() const { return state_.chainLength_; }
 
     void ResetState(const Vector3& initPos);
-    void ClearEffects() { visuals_.ClearEffects(); }
+    void ClearEffects() { 
+        state_.isClearEscaped_ = false;
+        visuals_.ClearEffects(); 
+    }
 
     AABB2D GetAABB() const { return physics_.GetAABB(state_, params_); }
     bool IsDead() const { return state_.isDead_; }
