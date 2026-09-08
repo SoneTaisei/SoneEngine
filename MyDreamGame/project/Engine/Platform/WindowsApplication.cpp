@@ -2,6 +2,7 @@
 #include "Editor/Replay/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -166,6 +167,9 @@ void WindowsApplication::Initialize() {
 #else
     // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
     modelCommon_->LoadLightingConfig();
+    // エディター非搭載ビルドでは配置モデルの実体をここで初期化する
+    // (エディター搭載時は EditorManager -> Model3DEditor 経由で初期化される)
+    Model3DEditorContext::GetInstance()->Initialize(device);
 #endif
 
     // 音声の初期化
@@ -379,6 +383,8 @@ void WindowsApplication::Update() {
 #else
     // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
+    // シーンごとに読み込んだ3Dモデル配置(レベルデータ)のワールド行列を更新する
+    Model3DEditorContext::GetInstance()->Update();
     gameCamera_->Update();
     CameraManager::GetInstance()->ClearCullingCameraInfo();
     AudioManager::SetBGMPlaybackAllowed(true);
@@ -412,6 +418,9 @@ void WindowsApplication::Draw() {
     if (editorManager_) {
         editorManager_->Draw3D();
     }
+#else
+    // エディター非搭載ビルドでもシーンのレベルデータを描画する (グリッド床は描かない)
+    Model3DEditorContext::GetInstance()->Draw(false);
 #endif
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
@@ -483,6 +492,9 @@ void WindowsApplication::Finalize() {
         editorManager_.reset(); // ★ここで確実に破棄
     }
 #endif
+
+    // 配置モデル(レベルデータ)の実体を解放する
+    Model3DEditorContext::DestroyInstance();
 
     ModelManager::GetInstance()->Finalize();
 

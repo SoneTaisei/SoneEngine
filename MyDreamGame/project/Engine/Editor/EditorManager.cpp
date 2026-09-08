@@ -3003,17 +3003,9 @@ void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
 }
 
 void EditorManager::LoadPlacedModelsForScene(IScene* scene) {
-    if (!scene || !model3DEditor_ || !model3DEditor_->GetContext()) return;
-    std::string targetPath = scene->GetLevelDataJsonPath();
-    if (targetPath.empty()) return;
-
-    auto context = model3DEditor_->GetContext();
-    context->SetCurrentFilePath(targetPath);
-    if (std::filesystem::exists(targetPath)) {
-        context->LoadFromFile(targetPath);
-    } else {
-        context->ClearObjects();
-    }
+    // 実処理は Model3DEditorContext 側に集約されている (SceneManager がビルド構成を問わず呼び出す)
+    if (!scene) return;
+    Model3DEditorContext::GetInstance()->LoadLevelData(scene->GetLevelDataJsonPath());
 }
 
 void EditorManager::Undo() {

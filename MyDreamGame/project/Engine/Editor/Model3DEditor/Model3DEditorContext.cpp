@@ -1,4 +1,3 @@
-#ifdef USE_IMGUI
 #include "Model3DEditorContext.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Core/Utility/TransformFunctions.h"
@@ -12,6 +11,21 @@
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
+
+namespace {
+    std::unique_ptr<Model3DEditorContext> g_instance;
+}
+
+Model3DEditorContext* Model3DEditorContext::GetInstance() {
+    if (!g_instance) {
+        g_instance = std::make_unique<Model3DEditorContext>();
+    }
+    return g_instance.get();
+}
+
+void Model3DEditorContext::DestroyInstance() {
+    g_instance.reset();
+}
 
 Model3DEditorContext::Model3DEditorContext() {
 }
@@ -441,6 +455,19 @@ bool Model3DEditorContext::LoadFromFile(const std::string& filePath) {
     }
 }
 
+void Model3DEditorContext::LoadLevelData(const std::string& filePath) {
+    if (filePath.empty()) return;
+
+    SetCurrentFilePath(filePath);
+    if (std::filesystem::exists(currentFilePath_)) {
+        LoadFromFile(currentFilePath_);
+    } else {
+        // 対応するJSONが無いシーンでは前のシーンの配置を残さない
+        ClearObjects();
+        ClearUndoRedo();
+    }
+}
+
 bool Model3DEditorContext::DeleteFile(const std::string& filePath) {
     std::string path = ResolveFilePath(filePath);
     try {
@@ -482,4 +509,3 @@ PlacedObject3D* Model3DEditorContext::PickObject(const Vector3& rayOrigin, const
     outDist = closestDist;
     return closestObj;
 }
-#endif
