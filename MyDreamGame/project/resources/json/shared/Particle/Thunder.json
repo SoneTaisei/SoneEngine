@@ -1,0 +1,277 @@
+{
+    "duration": 3.0,
+    "emitters": [
+        {
+            "billboardType": 1,
+            "blendMode": 2,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 3.0,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                0.20000000298023224,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 1.5,
+            "lifetimeMin": 0.800000011920929,
+            "maxParticles": 200,
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
+            "name": "Flash",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/Particle.PS.hlsl",
+            "renderType": 0,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                7.300000190734863
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 1,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 0.5,
+            "spawnRate": 10.0,
+            "startColor": [
+                1.0,
+                0.800000011920929,
+                0.30000001192092896,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Sprite/Original/Thunder.png",
+            "useColorGradient": false,
+            "velocitySpread": 180.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        },
+        {
+            "billboardType": 1,
+            "blendMode": 2,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 3.0,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                0.20000000298023224,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 1.5,
+            "lifetimeMin": 0.800000011920929,
+            "maxParticles": 200,
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
+            "name": "Flash (Copy)",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/Particle.PS.hlsl",
+            "renderType": 0,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                7.300000190734863
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 1,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 0.5,
+            "spawnRate": 10.0,
+            "startColor": [
+                0.30000001192092896,
+                1.0,
+                0.6189188957214355,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Sprite/Original/Thunder.png",
+            "useColorGradient": false,
+            "velocitySpread": 180.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        },
+        {
+            "billboardType": 1,
+            "blendMode": 2,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 3.0,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                0.20000000298023224,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 1.5,
+            "lifetimeMin": 0.800000011920929,
+            "maxParticles": 200,
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
+            "name": "Flash (Copy) (Copy)",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/Particle.PS.hlsl",
+            "renderType": 0,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                7.300000190734863
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 1,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 0.5,
+            "spawnRate": 10.0,
+            "startColor": [
+                0.4837838411331177,
+                1.0,
+                0.30000001192092896,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Sprite/Original/Thunder.png",
+            "useColorGradient": false,
+            "velocitySpread": 180.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        }
+    ],
+    "isLoop": true,
+    "systemName": "Thunder"
+}
