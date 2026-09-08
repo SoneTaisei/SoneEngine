@@ -128,9 +128,11 @@ namespace {
         {"thickness", "板の厚み"},
         {"patrolSpeed", "巡回の速さ"},
         {"alertSpeed", "追跡の速さ"},
-        {"sightLength", "視界判定の長さ（プレイヤーが見つかる距離）"},
+        {"sightLength", "（未使用。見つかる距離はライト照射距離を使う）"},
+        {"spotNearDistance", "一発で見つかる距離（これより近いと溜めなし）"},
+        {"spotFarTimeScale", "遠い時の見つかりにくさ（何倍の時間をかけるか）"},
         {"sightHeight", "視界の高さ"},
-        {"lightDistance", "ライト照射距離（背景や床を照らす光の届く距離）"},
+        {"lightDistance", "ライト照射距離（見つかる距離もこれ）"},
         {"lightAngleDeg", "ライト照射角度（度数）"},
         {"lightFalloffDeg", "ライト中心輝度角度（度数）"},
         {"lightIntensity", "ライトの明るさ（強度）"},
@@ -194,7 +196,7 @@ namespace {
         {"DoorBlock", {"linkId", "openDirection", "latch", "crushKills"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
         {"FragileBlock", {"breakWeight", "breakDuration"}, "breakWeight", "キー 0〜8 = 通れる上限本数"},
         {"MovingBlock", {"moveAxis", "moveRange", "moveSpeed", "phase", "thickness"}, "moveRange", "キー 1〜9 = 動く範囲"},
-        {"GuardBlock", {"startDirection", "moveRange", "sightLength", "patrolSpeed"}, "moveRange", "キー 1〜9 = 巡回範囲"},
+        {"GuardBlock", {"startDirection", "moveRange", "lightDistance", "spotNearDistance"}, "moveRange", "キー 1〜9 = 巡回範囲"},
         {"ChainItemBlock", {"units"}, "units", "キー 1〜8 = もらえる本数"},
         {"ThinPlatformBlock", {"thickness"}, nullptr, nullptr},
     };
@@ -1216,31 +1218,36 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
                         DrawArrow(dl, ImVec2(sxp, syp), ImVec2(sxp + d, syp), col, 2.0f);
                     }
 
-                    // 懐中電灯の照射コーンを描画
-                    Vector3 eyePos = g->GetLightPosition();
+                    // 光の判定を描く。薄い線だけ＝気付かれかけ、塗り＝見つかる、内側の橙＝一発で見つかる
+                    Vector3 lightPos = g->GetLightPosition();
+                    Vector3 eyePos = { lightPos.x, lightPos.y, 0.0f }; // 判定はプレイヤーと同じ平面で行う
                     float sxEye, syEye;
                     if (WorldToScreen(camera, eyePos, sxEye, syEye)) {
-                        float halfAngle = g->GetLightAngleDeg() * (std::numbers::pi_v<float> / 180.0f);
                         float dir = (g->GetStartDirection() < 0) ? -1.0f : 1.0f;
                         float baseAngle = (dir < 0) ? std::numbers::pi_v<float> : 0.0f;
-                        float dist = g->GetSightLength();
-
                         constexpr int kArcSegs = 8;
-                        std::vector<ImVec2> pts;
-                        pts.push_back(ImVec2(sxEye, syEye));
-                        for (int seg = 0; seg <= kArcSegs; ++seg) {
-                            float t = static_cast<float>(seg) / static_cast<float>(kArcSegs);
-                            float ang = baseAngle - halfAngle + (halfAngle * 2.0f) * t;
-                            Vector3 edgePt = { eyePos.x + std::cos(ang) * dist, eyePos.y + std::sin(ang) * dist, 0.0f };
-                            float ex, ey;
-                            if (WorldToScreen(camera, edgePt, ex, ey)) {
-                                pts.push_back(ImVec2(ex, ey));
+                        auto drawFan = [&](float halfAngle, float dist, ImU32 line, ImU32 fill) {
+                            std::vector<ImVec2> pts;
+                            pts.push_back(ImVec2(sxEye, syEye));
+                            for (int seg = 0; seg <= kArcSegs; ++seg) {
+                                float t = static_cast<float>(seg) / static_cast<float>(kArcSegs);
+                                float ang = baseAngle - halfAngle + (halfAngle * 2.0f) * t;
+                                Vector3 edgePt = { eyePos.x + std::cos(ang) * dist, eyePos.y + std::sin(ang) * dist, 0.0f };
+                                float ex, ey;
+                                if (WorldToScreen(camera, edgePt, ex, ey)) {
+                                    pts.push_back(ImVec2(ex, ey));
+                                }
                             }
-                        }
-                        if (pts.size() >= 3) {
-                            dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), IM_COL32(255, 230, 80, 160), true, 1.5f);
-                            dl->AddConvexPolyFilled(pts.data(), static_cast<int>(pts.size()), IM_COL32(255, 230, 80, 25));
-                        }
+                            if (pts.size() < 3) return;
+                            if (fill != 0) {
+                                dl->AddConvexPolyFilled(pts.data(), static_cast<int>(pts.size()), fill);
+                            }
+                            dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), line, true, 1.5f);
+                        };
+                        constexpr float kToRad = std::numbers::pi_v<float> / 180.0f;
+                        drawFan(g->GetLightAngleDeg() * kToRad, g->GetSightLength(), IM_COL32(255, 230, 80, 80), 0);
+                        drawFan(g->GetSpotAngleDeg() * kToRad, g->GetSightLength(), IM_COL32(255, 230, 80, 160), IM_COL32(255, 230, 80, 25));
+                        drawFan(g->GetSpotAngleDeg() * kToRad, g->GetNearSpotDistance(), IM_COL32(255, 130, 70, 200), IM_COL32(255, 130, 70, 45));
                     }
                 }
             }

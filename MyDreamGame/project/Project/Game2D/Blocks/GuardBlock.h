@@ -55,6 +55,13 @@ public:
     void OnCollision(Player2D* player) override;
 
     // 視界領域を取得（気絶・縛られ中は無効な領域を返す。VisionConeの内包AABB）
+    /// <summary>光の中でのプレイヤーの見え方</summary>
+    enum class SightLevel {
+        None,    // 見えていない
+        Fringe,  // 光の薄暗い縁。気付かれかけ（「？」）だけで、追跡には入らない
+        Spotted  // 光の明るい所。ここに居ると発見までのゲージが溜まる
+    };
+
     AABB2D GetSightAABB() const;
 
     // 懐中電灯（スポットライト）のVisionConeを取得
@@ -62,13 +69,17 @@ public:
 
     // プレイヤーが懐中電灯の光（VisionCone）に入っているか判定（壁による遮蔽判定を含む）
     bool CheckPlayerInLight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const;
+    /// <summary>見え方の段階を返す。outDistance には目からプレイヤーまでの距離が入る</summary>
+    SightLevel CheckPlayerSight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map, float* outDistance) const;
+    /// <summary>薄暗い縁まで含めた外側のコーン（判定用。GetVisionCone は明るい内側）</summary>
+    VisionCone GetFringeCone() const;
 
     // GPU描画用スポットライトデータを取得
     SpotLight GetSpotLightData() const;
     bool IsLightActive() const;
 
     // プレイヤーが視界に入った時に呼ばれる
-    void OnSpottedPlayer(Player2D* player);
+    void OnSpottedPlayer(Player2D* player, SightLevel level = SightLevel::Spotted, float distance = 0.0f);
 
     // --- 鎖で倒す ---
     State GetState() const { return state_; }
@@ -121,7 +132,12 @@ public:
     float GetMoveRange() const { return moveRange_; }
     int GetStartDirection() const { return startDirection_; }
     float GetLightAngleDeg() const { return lightAngleDeg_; }
-    float GetSightLength() const { return sightLength_; }
+    /// <summary>発見する明るい内側の角度（薄暗い縁は lightAngleDeg_ まで）</summary>
+    float GetSpotAngleDeg() const { return lightFalloffDeg_; }
+    /// <summary>見つかる距離。見えている光の長さと同じにそろえてある</summary>
+    float GetSightLength() const { return lightDistance_; }
+    /// <summary>この距離より近い所で明るい光に入ると、溜めなしで一発で見つかる</summary>
+    float GetNearSpotDistance() const { return spotNearDistance_; }
     float GetLightDistance() const { return lightDistance_; }
     float GetCurrentFacing() const { return currentFacing_; }
     Vector3 GetLightPosition() const;
@@ -141,6 +157,10 @@ public:
 #endif
 
 private:
+    // 1 つのコーンにプレイヤーが入っているか（壁の遮りも見る）
+    bool CheckPlayerInCone(const VisionCone& cone, const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const;
+    // 目からプレイヤーの体の中心までの距離
+    float DistanceToPlayer(const Vector3& playerPos, const AABB2D& playerAABB) const;
     void EnterStunned(float duration);
     void UpdateBoundRing();
     void UpdateFlashlight(float dt);
@@ -159,8 +179,10 @@ private:
     float moveRange_ = 3.0f;      // 片道への最大移動距離
     float patrolSpeed_ = 1.5f;    // パトロール時の速度
     float alertSpeed_ = 3.0f;     // 警戒時の速度
-    float sightLength_ = 5.0f;    // 視界（プレイヤー検知）の判定距離
+    float sightLength_ = 5.0f;    // 互換用（判定の距離は lightDistance_ にそろえた）
     float sightHeight_ = 1.0f;    // 互換用
+    float spotNearDistance_ = 3.0f;  // これより近い所で明るい光に入ると一発で見つかる
+    float spotFarTimeScale_ = 2.5f;  // 一番遠い所では、見つかるまでの時間がこの倍になる
     float maxAlertGauge_ = 1.5f;  // 見つかってからゲームオーバーになるまでの時間(秒)
     int startDirection_ = 1;      // 初期の向き(1:右, -1:左)
     float waitTimeAtEdge_ = 1.0f; // 端に到達した時の待機時間(秒)
@@ -207,6 +229,8 @@ private:
     float alertGauge_ = 0.0f;
     float waitTimer_ = 0.0f;
     bool isPlayerInSightThisFrame_ = false;
+    SightLevel sightLevel_ = SightLevel::None; // 今フレームの見え方
+    float sightDistance_ = 0.0f;               // 今フレームの目からの距離
     float stunTimer_ = 0.0f;
     float staggerTimer_ = 0.0f;
     float hitTimer_ = 0.0f;

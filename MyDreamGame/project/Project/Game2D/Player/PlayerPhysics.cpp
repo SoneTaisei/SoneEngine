@@ -524,8 +524,10 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
     for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
         if (!blockPtr || blockPtr->IsDestroyed()) continue;
         if (auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get())) {
-            if (guard->CheckPlayerInLight(state_.position_, params_.halfWidth_, playerAABB, mapChip)) {
-                guard->OnSpottedPlayer(player);
+            float sightDist = 0.0f;
+            GuardBlock::SightLevel level = guard->CheckPlayerSight(state_.position_, params_.halfWidth_, playerAABB, mapChip, &sightDist);
+            if (level != GuardBlock::SightLevel::None) {
+                guard->OnSpottedPlayer(player, level, sightDist);
                 if (state_.isDead_) return;
             }
         }
