@@ -136,10 +136,9 @@ void ChainManager::HandleInput() {
     GamepadInput* pad = GamepadInput::GetInstance();
     bool padConnected = pad && pad->IsConnected();
 
-    // スピン：Q / パッドX または LB で宝石を持つ・やめる、A/D / スティック / D-Pad で投げる・漕ぐ、SPACE / パッドA または RT で飛ぶ
-    // （注意：リプレイの記録キーは Engine 側で固定されていて Q は入っていない。再生で振り子を再現するには Engine の記録キーに Q を足す必要がある）
+    // スピン：E / パッドX または LB で宝石を持つ・やめる、A/D / スティック / D-Pad で投げる・回す、SPACE / パッドA または RT で飛ぶ
     if (spin_) {
-        bool toggleSpin = keyboard->IsKeyPressed(DIK_Q) || 
+        bool toggleSpin = keyboard->IsKeyPressed(DIK_E) || 
                           (padConnected && (pad->IsButtonPressed(GamepadButton::X) || pad->IsButtonPressed(GamepadButton::LB)));
         if (toggleSpin) {
             spin_->OnHoldToggle();

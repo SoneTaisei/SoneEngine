@@ -166,7 +166,6 @@ void PlayerChainPostEffect::ApplyToDirectXCommon(DirectXCommon* dxCommon) {
 
     if (currentAlpha_ > 0.001f) {
         wasApplied_ = true;
-        dxCommon->SetPostEffectEnabled(true);
         dxCommon->SetPostEffect(DirectXCommon::PostEffect::kComposite);
 
         for (const auto& item : postEffects_) {
@@ -178,7 +177,7 @@ void PlayerChainPostEffect::ApplyToDirectXCommon(DirectXCommon* dxCommon) {
             if (item.shaderType == PostEffectShaderType::Letterbox || isAll) {
                 if (item.params.enableLetterbox) {
                     target->enableLetterbox = 1;
-                    target->letterboxHeight = (std::max)(target->letterboxHeight, item.params.letterboxHeight * currentAlpha_);
+                    target->letterboxHeight = item.params.letterboxHeight * currentAlpha_;
                     target->letterboxSmoothness = item.params.letterboxSmoothness;
                     for (int i = 0; i < 3; ++i) {
                         target->letterboxColor[i] = item.params.letterboxColor[i];
@@ -192,7 +191,7 @@ void PlayerChainPostEffect::ApplyToDirectXCommon(DirectXCommon* dxCommon) {
                 if (item.params.enableVignette) {
                     target->enableVignette = 1;
                     target->vignetteScale = item.params.vignetteScale;
-                    target->vignettePower = (std::max)(target->vignettePower, item.params.vignettePower * currentAlpha_);
+                    target->vignettePower = item.params.vignettePower * currentAlpha_;
                     for (int i = 0; i < 4; ++i) {
                         target->vignetteColor[i] = item.params.vignetteColor[i];
                     }
@@ -215,7 +214,7 @@ void PlayerChainPostEffect::ApplyToDirectXCommon(DirectXCommon* dxCommon) {
                     target->enableRadialBlur = 1;
                     target->radialBlurCenter[0] = item.params.radialBlurCenter[0];
                     target->radialBlurCenter[1] = item.params.radialBlurCenter[1];
-                    target->radialBlurWidth = (std::max)(target->radialBlurWidth, item.params.radialBlurWidth * currentAlpha_);
+                    target->radialBlurWidth = item.params.radialBlurWidth * currentAlpha_;
                     target->radialBlurSamples = item.params.radialBlurSamples;
                 }
             }
@@ -223,14 +222,14 @@ void PlayerChainPostEffect::ApplyToDirectXCommon(DirectXCommon* dxCommon) {
             // Grayscale
             if (item.shaderType == PostEffectShaderType::Grayscale || isAll) {
                 if (item.params.grayscaleStrength > 0.0f) {
-                    target->grayscaleStrength = (std::max)(target->grayscaleStrength, item.params.grayscaleStrength * currentAlpha_);
+                    target->grayscaleStrength = item.params.grayscaleStrength * currentAlpha_;
                 }
             }
 
             // Sepia
             if (item.shaderType == PostEffectShaderType::Sepia || isAll) {
                 if (item.params.sepiaStrength > 0.0f) {
-                    target->sepiaStrength = (std::max)(target->sepiaStrength, item.params.sepiaStrength * currentAlpha_);
+                    target->sepiaStrength = item.params.sepiaStrength * currentAlpha_;
                 }
             }
 
@@ -272,15 +271,15 @@ void PlayerChainPostEffect::ApplyToDirectXCommon(DirectXCommon* dxCommon) {
                 }
             }
         }
-    } else if (wasApplied_) {
-        // 完全オフになったフレームで確実にリセット
+    } else {
+        // currentAlpha_ <= 0.001f の時は常に確実にオフにする
         Reset(dxCommon);
     }
 }
 
 void PlayerChainPostEffect::Reset(DirectXCommon* dxCommon) {
     currentAlpha_ = 0.0f;
-    if (wasApplied_ && dxCommon) {
+    if (dxCommon) {
         auto target = dxCommon->GetCompositeParamsData();
         if (target) {
             target->enableLetterbox = 0;
