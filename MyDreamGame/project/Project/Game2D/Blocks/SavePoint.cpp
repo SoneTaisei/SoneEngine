@@ -30,10 +30,19 @@ std::string SavePoint::NormalizeStageKey(const std::string& stagePath) {
     }
 }
 
-void SavePoint::SetActiveSavePoint(const std::string& stagePath, const Vector3& pos, int chipX, int chipY) {
+void SavePoint::SetActiveSavePoint(const std::string& stagePath, const Vector3& pos, int chipX, int chipY, int chainLength) {
     std::string key = NormalizeStageKey(stagePath);
     if (key.empty()) return;
-    s_ActiveCheckpoints[key] = { true, pos, chipX, chipY };
+    s_ActiveCheckpoints[key] = { true, pos, chipX, chipY, chainLength };
+}
+
+int SavePoint::GetActiveChainLength(const std::string& stagePath) {
+    std::string key = NormalizeStageKey(stagePath);
+    auto it = s_ActiveCheckpoints.find(key);
+    if (it == s_ActiveCheckpoints.end() || !it->second.isValid) {
+        return -1;
+    }
+    return it->second.chainLength;
 }
 
 bool SavePoint::HasActiveSavePoint(const std::string& stagePath) {
@@ -85,10 +94,10 @@ void SavePoint::ClearAll() {
 }
 
 std::string SavePoint::GetCurrentStageKey() const {
-    if (map_ && !map_->GetCurrentFilePath().empty()) {
-        return NormalizeStageKey(map_->GetCurrentFilePath());
-    }
-    return NormalizeStageKey(GameScene::s_TargetMapFilePath);
+    // 鍵の決め方は GameScene に一本化する。
+    // ここだけ別の決め方をすると、記録する時と探す時で鍵が食い違い、
+    // セーブポイントを通ったのに無い扱いになってしまう
+    return NormalizeStageKey(GameScene::ResolveStagePath(map_));
 }
 
 bool SavePoint::CheckIfCurrentActive() const {
@@ -221,7 +230,8 @@ void SavePoint::Activate(Player2D* player) {
     // スポーン位置はセーブポイントの中心（必要に応じてオフセット付与）
     Vector3 spawnPos = { centerX_, centerY_ + customSpawnOffsetY_, 0.0f };
     std::string key = GetCurrentStageKey();
-    SetActiveSavePoint(key, spawnPos, chipX_, chipY_);
+    // 通った時の鎖の本数も一緒に覚える（ここから再開した時に同じ本数で始められる）
+    SetActiveSavePoint(key, spawnPos, chipX_, chipY_, player->GetChainLength());
 
     // プレイヤーの復帰開始位置を更新
     player->SetStartPosition(spawnPos);

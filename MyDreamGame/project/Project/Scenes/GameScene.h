@@ -36,6 +36,9 @@ class GameScene : public IScene {
 public:
     static std::string s_TargetMapFilePath;
     static bool s_QuickRestart; // ミス直後の読み直し：Ready の待ちを短くする
+    // 作り直した後も中間ポイントの記録を残すか。
+    // 同じ回の続き（ポーズの「セーブポイント」）だけ true。新しく始めた回は false のままで記録を捨てる
+    static bool s_ResumeFromSavePoint;
 
     ~GameScene() override;
 
@@ -107,6 +110,11 @@ private:
     void SetupTutorialPoster();
     /// <summary>今遊んでいるマップのパス（実際に読んだファイル。エディタの一時ファイルの時はエディタで選んでいるファイル名）。やり直しと映像の保存先に使う</summary>
     std::string ResolveCurrentMapPath() const;
+public:
+    // マップと編集中のファイル名から、記録の鍵に使う「本当のステージのパス」を決める。
+    // セーブポイント側も同じ関数を使うことで、書く時と読む時で鍵が食い違わないようにする
+    static std::string ResolveStagePath(const class MapChip2D* map);
+private:
 
     // ---------------------------------------------------
     // 共通システム
@@ -210,10 +218,14 @@ private:
     std::unique_ptr<class Sprite> pauseTitleSprite_;
     std::unique_ptr<class Sprite> pauseRestartSprite_;
     std::unique_ptr<class Sprite> pauseTitleTextSprite_;
+    std::unique_ptr<class Sprite> pauseSaveSprite_; // 「セーブポイント」。記録がある時だけ出す
 
     uint32_t pauseBackdropTexHandle_ = 0;
     uint32_t pauseTitleTexHandle_ = 0;
     uint32_t pauseRestartTexHandle_ = 0;
+    uint32_t pauseSaveTexHandle_ = 0;
+    // ポーズの項目に「セーブポイント」を出すか（記録があるか）。更新と描画で同じ判断を使う
+    bool HasSavePointItem() const;
     uint32_t pauseTitleTextTexHandle_ = 0;
 
     // 収集アイテム（小さい宝石）の HUD。ImGui ではなくゲーム画面にスプライトで描く（左下のひし形と数字、クリア画面の「宝石 N / M」）
