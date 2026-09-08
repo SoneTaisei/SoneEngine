@@ -260,6 +260,11 @@ void GameScene::Initialize() {
     // 記録を引く鍵。エディタの停止→再生では一時ファイルを読むので、必ず本当のステージ名に直してから触る
     const std::string stagePath = ResolveCurrentMapPath();
 
+    // 開始演出をここから始める（着地するまで黒帯 ＋ 操作止め）
+    stageIntroActive_ = true;
+    stageIntroTimer_ = 0.0f;
+    player_->SetIntroLocked(true);
+
     player_->FindSpawnPoint(*map_);
     if (SavePoint::HasActiveSavePoint(stagePath)) {
         Vector3 checkpointPos = SavePoint::GetActiveSavePoint(stagePath);
@@ -381,13 +386,8 @@ void GameScene::Initialize() {
         }
     }
 
-    // 7.6. ゲーム開始時のアイリスイン演出（プレイヤー座標を中心に開く）
-    {
-        TransitionDirector *director = TransitionDirector::GetInstance();
-        if ((!director || !director->IsPlaying()) && player_) {
-            StartIrisIn(player_->GetPosition(), 1.2f);
-        }
-    }
+    // 7.6. 開始時の円が開く演出はやめた（着地までの黒帯に置き換えたため、二重に演出しない）。
+    //      アイリスは死亡・復活・クリアの時だけ使う。ここでは 128 行目で切ったままにしておく
 
     // -------------------------------------------------------------
     // 8. ポーズメニュー スプライトの初期化 (poseText, restartText, titleText)
@@ -729,6 +729,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                     }
                 }
             }
+            // 開始演出もやり直す（エディタの再生開始ではシーンが作り直されないため、ここで戻す）
+            stageIntroActive_ = true;
+            stageIntroTimer_ = 0.0f;
+            player_->SetIntroLocked(true);
             // プレイ開始時は鎖と個数を初期状態に戻す（毎回同じ初期状態から始めてリプレイ再現性を保つ）
             if (chainManager_) {
                 chainManager_->ResetAll();
@@ -759,8 +763,14 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             // プレイ開始時はゲーム内クロックを0に戻す（動く床の位相を毎回同じにするため）
             ReplayManager::GetInstance()->ResetPlayClock();
-            // プレイ開始時のアイリスイン演出（プレイヤー座標を中心に開く）
-            StartIrisIn(player_->GetPosition(), 1.2f);
+            // 開始時の円は出さない。前の回のアイリスが残っていると画面が欠けるので確実に切る
+            isIrisInActive_ = false;
+            isIrisOutActive_ = false;
+            isIrisOutStarted_ = false;
+            transitionAlpha_ = 0.0f;
+            if (DirectXCommon *dx = DirectXCommon::GetInstance()) {
+                dx->SetCompositeIrisEnabled(false);
+            }
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
@@ -995,6 +1005,20 @@ void GameScene::Update(SceneManager *sceneManager) {
                     map_->Update();
                 }
 
+                // 開始演出：着地するまで操作を止める。落下と着地は進み、警備員などは今まで通り動く
+                if (stageIntroActive_) {
+                    constexpr float kIntroMinTime = 0.35f; // 地上から始まる面でも黒帯が一瞬で消えないように
+                    constexpr float kIntroMaxTime = 5.0f;  // 保険：着地できない置き方でも必ず解ける
+                    stageIntroTimer_ += dt;
+                    const bool landed = player_->IsOnGround() && stageIntroTimer_ >= kIntroMinTime;
+                    if (landed || stageIntroTimer_ >= kIntroMaxTime || player_->IsDead() || player_->IsGoal()) {
+                        stageIntroActive_ = false;
+                        player_->SetIntroLocked(false);
+                    } else {
+                        player_->SetIntroLocked(true);
+                    }
+                }
+
                 if (!playerFrozen) {
                     player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
                 }
@@ -1127,9 +1151,20 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         bool isTriggered = false;
         bool isPlaying = (gameState_ == GameState::Playing);
+        bool isRunning = true; // エディタで再生中か（製品版は常に true）
 #ifdef USE_IMGUI
-        isPlaying = isPlaying && EditorManager::IsPlaying();
+        isRunning = EditorManager::IsPlaying();
+        isPlaying = isPlaying && isRunning;
 #endif
+        // 開始演出の黒帯（StartReady の間も出したいので gameState_ は見ない）
+        if (stageIntroActive_ && isRunning && !isPaused_ && player_ && !player_->IsDead() && !player_->IsGoal()) {
+            isTriggered = true;
+        }
+        // クリア演出の黒帯。煙で消えて「STAGE CLEAR」の文字が出るところで引く
+        // （isClearSequenceActive_ が false になる瞬間 = 文字が出る瞬間なので、この条件そのままで合う）
+        if (isClearSequenceActive_ && isRunning && !isPaused_) {
+            isTriggered = true;
+        }
         if (isPlaying && !isPaused_ && player_ && !player_->IsDead() && !player_->IsGoal()) {
             // 鎖を回しているとき（kStance）に実際にスローモーションが効いている時のみ黒帯エフェクトを適用
             bool isSlowActive = spinAction && spinAction->IsSlowActive();
@@ -2785,6 +2820,15 @@ void GameScene::TriggerDeathSequence() {
     deathHatRotationZ_ = 0.0f;
     isDeathHatActive_ = true;
 
+    // 死亡演出の間はカメラを帽子へ寄せる。
+    // 追従に任せるとルームの内側に収める制限と、追従のラープでずれるので、
+    // クリア演出と同じく追従を切って位置を直接動かす
+    if (gameCamera_) {
+        deathCameraStartScale_ = gameCamera_->GetScale();
+        deathCameraStartPos_ = gameCamera_->GetTranslation();
+        gameCamera_->SetFollowTarget(nullptr);
+    }
+
     if (chainManager_) {
         chainManager_->OnPlayerDeath();
     }
@@ -2804,6 +2848,24 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
         return;
 
     deathSequenceTimer_ += dt;
+
+    // カメラを帽子へ寄せる。寄り切ると帽子の位置そのものになるので、落ちていく帽子を画面の中心で追い続ける
+    if (gameCamera_) {
+        ParameterManager *pm = ParameterManager::GetInstance();
+        const float targetScale = pm->GetValue("GameScene", "deathCameraZoomScale", 1.7f);
+        const float zoomDuration = pm->GetValue("GameScene", "deathCameraZoomDuration", 0.6f);
+        const float zoomT = (zoomDuration > 0.001f) ? std::clamp(deathSequenceTimer_ / zoomDuration, 0.0f, 1.0f) : 1.0f;
+        const float eased = 1.0f - (1.0f - zoomT) * (1.0f - zoomT); // 滑らかなイーズアウト
+
+        gameCamera_->SetScale(deathCameraStartScale_ + (targetScale - deathCameraStartScale_) * eased);
+
+        const Vector3 camPos = {
+            deathCameraStartPos_.x + (deathHatPos_.x - deathCameraStartPos_.x) * eased,
+            deathCameraStartPos_.y + (deathHatPos_.y - deathCameraStartPos_.y) * eased,
+            deathCameraStartPos_.z};
+        gameCamera_->SetTranslation(camPos);
+        gameCamera_->UpdateMatrix();
+    }
 
     // 帽子の物理挙動（放物線落下・床/ギミック接地）
     if (isDeathHatActive_) {
@@ -2933,6 +2995,7 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
             player_->ResetState(deathRespawnPos_);
             player_->ClearEffects();
             if (gameCamera_) {
+                gameCamera_->SetScale(deathCameraStartScale_); // 寄せた分を元に戻す
                 gameCamera_->SetFollowTarget(&player_->GetPosition());
                 gameCamera_->SetTranslation(deathRespawnPos_);
             }
