@@ -1,34 +1,33 @@
 #include "MapChip2D.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h"
-#include "Core/Utility/TransformFunctions.h"
-#include "Graphics/TextureManager.h"
-#include <fstream>
-#include <sstream>
-#include <iostream>
-#include "Blocks/NormalBlock.h"
-#include "Blocks/DeathBlock.h"
-#include "Blocks/GoalBlock.h"
-#include "Blocks/OneWayBlock.h"
-#include "Blocks/ChainItemBlock.h"
 #include "Blocks/BlockFactory.h"
-#include "Blocks/SwitchBlock.h"
+#include "Blocks/ChainItemBlock.h"
+#include "Blocks/DeathBlock.h"
 #include "Blocks/DoorBlock.h"
+#include "Blocks/GoalBlock.h"
+#include "Blocks/NormalBlock.h"
+#include "Blocks/OneWayBlock.h"
+#include "Blocks/SwitchBlock.h"
+#include "Collision/CollisionManager.h"
+#include "Component/ColliderComponent.h"
+#include "Core/Utility/TransformFunctions.h"
+#include "Graphics/CameraManager.h"
+#include "Graphics/TextureManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Resource/Model/ModelManager.h"
+#include "Resource/Primitive/PrimitiveManager.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 #include <string>
-#include "Resource/Primitive/PrimitiveManager.h"
-#include "Resource/Model/ModelManager.h"
-#include "Graphics/CameraManager.h"
-#include "Component/ColliderComponent.h"
-#include "Collision/CollisionManager.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
 
-
-void MapChip2D::Initialize(const std::string& mapFilePath) {
+void MapChip2D::Initialize(const std::string &mapFilePath) {
     device_ = DirectXCommon::GetInstance()->GetDevice();
     currentFilePath_ = mapFilePath;
 
@@ -39,7 +38,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
     // テンプレートの読み込み（なければデフォルト生成して保存）
     if (!LoadTemplatesFromFile("resources/json/shared/templates_config.json") || templatePalette_.empty()) {
         templatePalette_.clear();
-        auto addTemplate = [&](int id, const std::string& name, const std::string& type, Vector4 color, nlohmann::json props, const std::string& tex = "") {
+        auto addTemplate = [&](int id, const std::string &name, const std::string &type, Vector4 color, nlohmann::json props, const std::string &tex = "") {
             CustomBlockDef def;
             def.id = id;
             def.name = name;
@@ -59,7 +58,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
 
     // チェーンアイテムがテンプレートに無ければ自動追加
     bool hasChainTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kChainItemBlock)) {
             hasChainTemplate = true;
             break;
@@ -76,7 +75,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
     }
 
     bool hasMovingTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kMovingBlock)) {
             hasMovingTemplate = true;
             break;
@@ -88,20 +87,20 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.name = "Moving Floor";
         def.type = "MovingBlock";
         def.color = {0.42f, 0.58f, 0.78f, 1.0f}; // 金属の板の色。木の細い足場と見分けが付くようにする
-        
+
         nlohmann::json props = nlohmann::json::object();
         props["moveAxis"] = "X";
         props["moveRange"] = 3.0f;
         props["moveSpeed"] = 2.0f;
         props["thickness"] = 0.2f; // 板の厚み（細い足場と同じ既定値）
         def.properties = props;
-        
+
         templatePalette_.push_back(def);
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
     bool hasFragileTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kFragileBlock)) {
             hasFragileTemplate = true;
             break;
@@ -113,18 +112,18 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.name = "Fragile Floor";
         def.type = "FragileBlock";
         def.color = {0.4f, 0.4f, 0.4f, 1.0f};
-        
+
         nlohmann::json props = nlohmann::json::object();
         props["breakWeight"] = 4;
         props["breakDuration"] = 0.5f;
         def.properties = props;
-        
+
         templatePalette_.push_back(def);
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
     bool hasSwitchTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kSwitchBlock)) {
             hasSwitchTemplate = true;
             break;
@@ -136,17 +135,17 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.name = "Switch";
         def.type = "SwitchBlock";
         def.color = {0.8f, 0.2f, 0.2f, 1.0f};
-        
+
         nlohmann::json props = nlohmann::json::object();
         props["linkId"] = 1;
         def.properties = props;
-        
+
         templatePalette_.push_back(def);
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
     bool hasDoorTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kDoorBlock)) {
             hasDoorTemplate = true;
             break;
@@ -158,18 +157,18 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.name = "Door";
         def.type = "DoorBlock";
         def.color = {0.5f, 0.6f, 0.7f, 1.0f};
-        
+
         nlohmann::json props = nlohmann::json::object();
         props["linkId"] = 1;
         props["openSpeed"] = 2.0f;
         props["closeSpeed"] = 2.0f;
         def.properties = props;
-        
+
         templatePalette_.push_back(def);
     }
 
     bool hasGuardTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kGuardBlock)) {
             hasGuardTemplate = true;
             break;
@@ -181,7 +180,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         def.name = "Guard";
         def.type = "GuardBlock";
         def.color = {0.1f, 0.2f, 0.5f, 1.0f};
-        
+
         nlohmann::json props = nlohmann::json::object();
         props["moveRange"] = 3.0f;
         props["patrolSpeed"] = 1.5f;
@@ -192,12 +191,12 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         props["startDirection"] = 1;
         props["waitTimeAtEdge"] = 1.0f;
         def.properties = props;
-        
+
         templatePalette_.push_back(def);
     }
 
     bool hasThinPlatformTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kThinPlatform)) {
             hasThinPlatformTemplate = true;
             break;
@@ -219,7 +218,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
 
     // 収集アイテム（小さい宝石）がテンプレートに無ければ自動追加
     bool hasCollectibleTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kCollectible)) {
             hasCollectibleTemplate = true;
             break;
@@ -238,7 +237,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
 
     // 中間ポイント（SavePoint）がテンプレートに無ければ自動追加
     bool hasSavePointTemplate = false;
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         if (def.id == static_cast<int>(ChipType::kSavePoint)) {
             hasSavePointTemplate = true;
             break;
@@ -271,7 +270,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
 
     // 古いファイル等で CustomPalette が空の場合、テンプレートのブロックを CustomBlocks として登録する
     if (customPalette_.empty()) {
-        for (const auto& def : templatePalette_) {
+        for (const auto &def : templatePalette_) {
             CustomBlockDef newDef = def;
             newDef.id = 100 + static_cast<int>(customPalette_.size());
             newDef.name = "Custom " + def.name;
@@ -319,7 +318,7 @@ void MapChip2D::Update() {
 
     // Fragile パーティクルの更新
     float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
-    for (auto& effect : fragileParticles_) {
+    for (auto &effect : fragileParticles_) {
         if (effect && effect->IsPlaying()) {
             effect->Update(dt);
         }
@@ -329,18 +328,18 @@ void MapChip2D::Update() {
 void MapChip2D::Draw() {
     auto cameraMgr = CameraManager::GetInstance();
     Matrix4x4 vp = TransformFunctions::Multiply(cameraMgr->GetCullingViewMatrix(), cameraMgr->GetCullingProjectionMatrix());
-    
+
     std::array<Vector4, 6> planes;
     TransformFunctions::ExtractFrustumPlanes(vp, planes);
 
-    for (const auto& block : updateBlocks_) {
+    for (const auto &block : updateBlocks_) {
         if (block) {
             Vector3 center = {0, 0, 0};
             float radius = 0.0f;
             bool shouldCheck = false;
 
             if (block->GetGameObject()) {
-                if (auto* tc = block->GetGameObject()->GetComponent<TransformComponent>()) {
+                if (auto *tc = block->GetGameObject()->GetComponent<TransformComponent>()) {
                     center = tc->GetPosition();
                     Vector3 scale = tc->GetScale();
                     radius = (std::max)({scale.x, scale.y, scale.z}) * 2.0f; // Safe radius
@@ -359,21 +358,21 @@ void MapChip2D::Draw() {
     }
 }
 
-void MapChip2D::DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager) {
-    for (const auto& block : updateBlocks_) {
+void MapChip2D::DrawParticle(ID3D12GraphicsCommandList *commandList, const Matrix4x4 &viewProjection, const Matrix4x4 &cameraMatrix, ParticleCommon *particleCommon, ModelManager *modelManager) {
+    for (const auto &block : updateBlocks_) {
         if (block && !block->IsDestroyed()) {
             block->DrawParticle(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
         }
     }
 
-    for (const auto& effect : fragileParticles_) {
+    for (const auto &effect : fragileParticles_) {
         if (effect && effect->IsPlaying()) {
             effect->Draw(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
         }
     }
 }
 
-BaseBlock* MapChip2D::GetBlock(int chipX, int chipY) const {
+BaseBlock *MapChip2D::GetBlock(int chipX, int chipY) const {
     if (chipX < 0 || chipX >= mapWidth_ || chipY < 0 || chipY >= mapHeight_) {
         return nullptr;
     }
@@ -405,7 +404,7 @@ bool MapChip2D::HasPlayerSpawn() const {
     return GetPlayerSpawnChipPosition(x, y);
 }
 
-bool MapChip2D::GetPlayerSpawnChipPosition(int& outX, int& outY) const {
+bool MapChip2D::GetPlayerSpawnChipPosition(int &outX, int &outY) const {
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
             if (mapData_[y][x] == ChipType::kPlayerSpawn) {
@@ -418,21 +417,20 @@ bool MapChip2D::GetPlayerSpawnChipPosition(int& outX, int& outY) const {
     return false;
 }
 
-Vector3 MapChip2D::GetPlayerSpawnWorldPosition(const Vector3& defaultPos) const {
+Vector3 MapChip2D::GetPlayerSpawnWorldPosition(const Vector3 &defaultPos) const {
     int x, y;
     if (GetPlayerSpawnChipPosition(x, y)) {
         return Vector3{
             ChipToWorldX(x) + chipSize_ * 0.5f,
             ChipToWorldY(y) + chipSize_ * 0.5f,
-            0.0f
-        };
+            0.0f};
     }
     return defaultPos;
 }
 
-std::vector<PrimitiveObject*> MapChip2D::GetPrimitiveObjects() {
+std::vector<PrimitiveObject *> MapChip2D::GetPrimitiveObjects() {
     // 互換性のため空を返すか、必要な場合は GameObject から収集する
-    std::vector<PrimitiveObject*> list;
+    std::vector<PrimitiveObject *> list;
     return list;
 }
 
@@ -515,7 +513,8 @@ void MapChip2D::CreateChipObjects() {
 }
 
 void MapChip2D::SetChip(int x, int y, ChipType type) {
-    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_)
+        return;
 
     // 別の種類に置き換えたら、そのチップの上書き設定は捨てる
     if (mapData_[y][x] != type) {
@@ -552,12 +551,16 @@ void MapChip2D::SetChip(int x, int y, ChipType type) {
 }
 
 bool MapChip2D::MoveBlock(int fromX, int fromY, int toX, int toY, bool swap) {
-    if (fromX < 0 || fromX >= mapWidth_ || fromY < 0 || fromY >= mapHeight_) return false;
-    if (toX < 0 || toX >= mapWidth_ || toY < 0 || toY >= mapHeight_) return false;
-    if (fromX == toX && fromY == toY) return true;
+    if (fromX < 0 || fromX >= mapWidth_ || fromY < 0 || fromY >= mapHeight_)
+        return false;
+    if (toX < 0 || toX >= mapWidth_ || toY < 0 || toY >= mapHeight_)
+        return false;
+    if (fromX == toX && fromY == toY)
+        return true;
 
     ChipType fromType = mapData_[fromY][fromX];
-    if (fromType == ChipType::kNone) return false;
+    if (fromType == ChipType::kNone)
+        return false;
 
     ChipType toType = mapData_[toY][toX];
     if (toType != ChipType::kNone && !swap) {
@@ -603,8 +606,10 @@ bool MapChip2D::MoveBlock(int fromX, int fromY, int toX, int toY, bool swap) {
 }
 
 bool MapChip2D::ShiftMap(int deltaX, int deltaY) {
-    if (deltaX == 0 && deltaY == 0) return true;
-    if (mapWidth_ <= 0 || mapHeight_ <= 0) return false;
+    if (deltaX == 0 && deltaY == 0)
+        return true;
+    if (mapWidth_ <= 0 || mapHeight_ <= 0)
+        return false;
 
     std::vector<std::vector<ChipType>> newMapData(mapHeight_, std::vector<ChipType>(mapWidth_, ChipType::kNone));
     std::map<std::pair<int, int>, nlohmann::json> newOverrides;
@@ -612,7 +617,8 @@ bool MapChip2D::ShiftMap(int deltaX, int deltaY) {
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
             ChipType t = mapData_[y][x];
-            if (t == ChipType::kNone) continue;
+            if (t == ChipType::kNone)
+                continue;
 
             int nx = x + deltaX;
             int ny = y + deltaY;
@@ -635,14 +641,18 @@ bool MapChip2D::ShiftMap(int deltaX, int deltaY) {
 }
 
 MapChip2D::ChipType MapChip2D::GetChip(int x, int y) const {
-    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return ChipType::kNone;
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_)
+        return ChipType::kNone;
     return mapData_[y][x];
 }
 
 void MapChip2D::BucketFill(int startX, int startY, ChipType targetType, ChipType replacementType) {
-    if (startX < 0 || startX >= mapWidth_ || startY < 0 || startY >= mapHeight_) return;
-    if (targetType == replacementType) return;
-    if (mapData_[startY][startX] != targetType) return;
+    if (startX < 0 || startX >= mapWidth_ || startY < 0 || startY >= mapHeight_)
+        return;
+    if (targetType == replacementType)
+        return;
+    if (mapData_[startY][startX] != targetType)
+        return;
 
     std::vector<std::pair<int, int>> queue;
     queue.push_back({startX, startY});
@@ -651,7 +661,8 @@ void MapChip2D::BucketFill(int startX, int startY, ChipType targetType, ChipType
         auto [x, y] = queue.back();
         queue.pop_back();
 
-        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) continue;
+        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_)
+            continue;
         if (mapData_[y][x] == targetType) {
             SetChip(x, y, replacementType);
             queue.push_back({x + 1, y});
@@ -684,11 +695,12 @@ void MapChip2D::ResetMap() {
 
 void MapChip2D::RebuildChipObjects() {
     ClearFragileParticles();
-    if (!isRebuildEnabled_) return;
+    if (!isRebuildEnabled_)
+        return;
 
     // 既に記録対象になっているブロックのIDを安全に退避（objectIdフィールドを参照するのでポインタ逆参照不要）
     std::unordered_map<uint64_t, bool> wasTracked;
-    for (const auto& entry : replayTrackEntries_) {
+    for (const auto &entry : replayTrackEntries_) {
         if (entry.isTracked) {
             wasTracked[entry.objectId] = true;
         }
@@ -707,11 +719,12 @@ void MapChip2D::RebuildChipObjects() {
 
     std::vector<std::vector<bool>> visited(mapHeight_, std::vector<bool>(mapWidth_, false));
 
-    Primitive* boxPrimitive = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f);
+    Primitive *boxPrimitive = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box, 1.0f);
 
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
-            if (visited[y][x]) continue;
+            if (visited[y][x])
+                continue;
 
             ChipType type = mapData_[y][x];
             if (type == ChipType::kNone || type == ChipType::kPlayerSpawn || type == ChipType::kRoomRespawn) {
@@ -722,13 +735,8 @@ void MapChip2D::RebuildChipObjects() {
             int spanWidth = 1;
             int spanHeight = 1;
             int typeId = static_cast<int>(type);
-            
-            const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
 
-            bool canMerge = false;
-            if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kDoorBlock);
-const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
+            const CustomBlockDef *paletteDef = FindPaletteDef(typeId);
 
             bool canMerge = false;
             if (typeId < 100) {
@@ -737,17 +745,24 @@ const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
                 // カスタムブロックの場合、ベースの型がマージ可能であればマージする
                 canMerge = (paletteDef->type == "NormalBlock" || paletteDef->type == "DeathBlock" || paletteDef->type == "OneWayBlock" || paletteDef->type == "DoorBlock");
             }
-            
+
             // モデルが設定されている場合は、引き伸ばされて1個の塊にならないようマージを無効化する
             // （ただしDoorBlockは扉として1つに結合して伸縮・開閉するためマージを許可する）
             if (paletteDef && !paletteDef->modelName.empty() && paletteDef->type != "DoorBlock") {
                 canMerge = false;
             }
-            
 
             if (canMerge) {
+                auto isSameProperties = [&](int x1, int y1, int x2, int y2) {
+                    const nlohmann::json *ov1 = GetBlockOverride(x1, y1);
+                    const nlohmann::json *ov2 = GetBlockOverride(x2, y2);
+                    if (!ov1 && !ov2) return true;
+                    if (!ov1 || !ov2) return false;
+                    return (*ov1 == *ov2);
+                };
+
                 // 水平方向のスパンを探索
-                while (x + spanWidth < mapWidth_ && mapData_[y][x + spanWidth] == type && !visited[y][x + spanWidth]) {
+                while (x + spanWidth < mapWidth_ && mapData_[y][x + spanWidth] == type && !visited[y][x + spanWidth] && isSameProperties(x, y, x + spanWidth, y)) {
                     spanWidth++;
                 }
 
@@ -756,7 +771,7 @@ const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
                 while (y + spanHeight < mapHeight_ && canExpandUp) {
                     // 追加する行が全て同じ種類で未訪問かチェック
                     for (int w = 0; w < spanWidth; ++w) {
-                        if (mapData_[y + spanHeight][x + w] != type || visited[y + spanHeight][x + w]) {
+                        if (mapData_[y + spanHeight][x + w] != type || visited[y + spanHeight][x + w] || !isSameProperties(x, y, x + w, y + spanHeight)) {
                             canExpandUp = false;
                             break;
                         }
@@ -789,21 +804,22 @@ const CustomBlockDef* paletteDef = FindPaletteDef(typeId);
     // 新しく生成された updateBlocks_ を元に追跡テーブルを即座に安全に再構築
     replayTrackRevision_ = blocksRevision_;
     replayTrackEntries_.reserve(updateBlocks_.size());
-    for (const auto& blockPtr : updateBlocks_) {
-        BaseBlock* block = blockPtr.get();
-        if (!block) continue;
+    for (const auto &blockPtr : updateBlocks_) {
+        BaseBlock *block = blockPtr.get();
+        if (!block)
+            continue;
 
         ReplayTrackEntry entry;
         const uint64_t id = block->GetReplayObjectId();
         entry.objectId = id;
         entry.block = block;
-        if (auto* gameObject = block->GetGameObject()) {
-            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+        if (auto *gameObject = block->GetGameObject()) {
+            if (auto *transform = gameObject->GetComponent<TransformComponent>()) {
                 entry.initPosition = transform->GetPosition();
                 entry.initRotation = transform->GetRotation();
                 entry.initScale = transform->GetScale();
             }
-            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+            if (auto *renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
                 entry.initColor = renderer->GetMaterial().color;
             }
         }
@@ -822,49 +838,50 @@ void MapChip2D::CreateBoundaries() {
         if (!boundaries_[i]) {
             boundaries_[i] = std::make_unique<GameObject>("Boundary" + std::to_string(i));
             boundaries_[i]->AddComponent<TransformComponent>();
-            auto* cc = boundaries_[i]->AddComponent<ColliderComponent>();
+            auto *cc = boundaries_[i]->AddComponent<ColliderComponent>();
             cc->SetLayerMask(kLayerBlock);
             cc->SetIsSolid(true);
         }
     }
-    
+
     float w = mapWidth_ * chipSize_;
     float h = mapHeight_ * chipSize_;
     float thickness = 100.0f; // トンネル防止用
 
     // Bottom
-    auto* tc0 = boundaries_[0]->GetComponent<TransformComponent>();
+    auto *tc0 = boundaries_[0]->GetComponent<TransformComponent>();
     tc0->SetPosition({w * 0.5f, -thickness * 0.5f, 0.0f});
     tc0->SetScale({w + thickness * 2, thickness, 1.0f});
     boundaries_[0]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 
     // Top
-    auto* tc1 = boundaries_[1]->GetComponent<TransformComponent>();
+    auto *tc1 = boundaries_[1]->GetComponent<TransformComponent>();
     tc1->SetPosition({w * 0.5f, h + thickness * 0.5f, 0.0f});
     tc1->SetScale({w + thickness * 2, thickness, 1.0f});
     boundaries_[1]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 
     // Left
-    auto* tc2 = boundaries_[2]->GetComponent<TransformComponent>();
+    auto *tc2 = boundaries_[2]->GetComponent<TransformComponent>();
     tc2->SetPosition({-thickness * 0.5f, h * 0.5f, 0.0f});
     tc2->SetScale({thickness, h, 1.0f});
     boundaries_[2]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 
     // Right
-    auto* tc3 = boundaries_[3]->GetComponent<TransformComponent>();
+    auto *tc3 = boundaries_[3]->GetComponent<TransformComponent>();
     tc3->SetPosition({w + thickness * 0.5f, h * 0.5f, 0.0f});
     tc3->SetScale({thickness, h, 1.0f});
     boundaries_[3]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 }
 
-bool MapChip2D::SaveToFile(const std::string& filepath) {
+bool MapChip2D::SaveToFile(const std::string &filepath) {
     std::filesystem::path path(filepath);
     if (path.has_parent_path()) {
         std::filesystem::create_directories(path.parent_path());
     }
 
     std::ofstream ofs(filepath);
-    if (!ofs.is_open()) return false;
+    if (!ofs.is_open())
+        return false;
 
     // JSON文字列として保存
     std::string data = GetMapDataAsString();
@@ -880,8 +897,9 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
     return true;
 }
 
-bool MapChip2D::LoadFromStageName(const std::string& stageName) {
-    if (stageName.empty()) return false;
+bool MapChip2D::LoadFromStageName(const std::string &stageName) {
+    if (stageName.empty())
+        return false;
 
     // 1. そのままのパスで存在するか試す
     if (std::filesystem::exists(stageName) && LoadFromFile(stageName)) {
@@ -900,10 +918,9 @@ bool MapChip2D::LoadFromStageName(const std::string& stageName) {
         "resources/json/shared/MapData/" + stem + ".json",
         "resources/json/shared/Map/" + filename,
         "resources/json/shared/Map/" + stem + ".json",
-        "resources/json/shared/Map/" + stem + ".txt"
-    };
+        "resources/json/shared/Map/" + stem + ".txt"};
 
-    for (const auto& path : candidatePaths) {
+    for (const auto &path : candidatePaths) {
         if (std::filesystem::exists(path) && LoadFromFile(path)) {
             return true;
         }
@@ -912,9 +929,10 @@ bool MapChip2D::LoadFromStageName(const std::string& stageName) {
     return false;
 }
 
-bool MapChip2D::LoadFromFile(const std::string& filepath) {
+bool MapChip2D::LoadFromFile(const std::string &filepath) {
     std::ifstream ifs(filepath);
-    if (!ifs.is_open()) return false;
+    if (!ifs.is_open())
+        return false;
 
     std::stringstream buffer;
     buffer << ifs.rdbuf();
@@ -926,7 +944,7 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
         std::filesystem::path mapPath(filepath);
         std::string stem = mapPath.stem().string();
         std::string boundsPath = "resources/json/shared/MapBounds/" + stem + "_bounds.txt";
-        
+
         bool loadedRooms = false;
         if (std::filesystem::exists(boundsPath)) {
             loadedRooms = LoadRoomsFromFile(boundsPath);
@@ -944,13 +962,13 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
                 loadedRooms = LoadRoomsFromFile(oldBoundsPath);
             }
         }
-        
+
         if (!loadedRooms) {
             // ファイルがなければデフォルトを生成
             GenerateDefaultRooms();
         }
     }
-    
+
     return result;
 }
 
@@ -958,7 +976,7 @@ std::string MapChip2D::GetMapDataAsString() const {
     nlohmann::json j;
     j["mapWidth"] = mapWidth_;
     j["mapHeight"] = mapHeight_;
-    
+
     std::vector<std::vector<int>> terrain(mapHeight_, std::vector<int>(mapWidth_, 0));
     for (int y = 0; y < mapHeight_; ++y) {
         for (int x = 0; x < mapWidth_; ++x) {
@@ -966,9 +984,9 @@ std::string MapChip2D::GetMapDataAsString() const {
         }
     }
     j["terrain"] = terrain;
-    
+
     nlohmann::json paletteArray = nlohmann::json::array();
-    for (const auto& def : customPalette_) {
+    for (const auto &def : customPalette_) {
         nlohmann::json p;
         p["id"] = def.id;
         p["name"] = def.name;
@@ -985,8 +1003,9 @@ std::string MapChip2D::GetMapDataAsString() const {
 
     // チップごとの上書き（崩れる床の通れる上限など）
     nlohmann::json overrides = nlohmann::json::array();
-    for (const auto& [key, props] : blockOverrides_) {
-        if (props.empty()) continue;
+    for (const auto &[key, props] : blockOverrides_) {
+        if (props.empty())
+            continue;
         nlohmann::json o;
         o["x"] = key.first;
         o["y"] = key.second;
@@ -1000,9 +1019,10 @@ std::string MapChip2D::GetMapDataAsString() const {
     return j.dump();
 }
 
-bool MapChip2D::LoadFromString(const std::string& data) {
-    if (data.empty()) return false;
-    
+bool MapChip2D::LoadFromString(const std::string &data) {
+    if (data.empty())
+        return false;
+
     try {
         nlohmann::json j = nlohmann::json::parse(data);
         blockOverrides_.clear();
@@ -1010,7 +1030,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
             mapWidth_ = j["mapWidth"];
             mapHeight_ = j["mapHeight"];
         }
-        
+
         mapData_.assign(mapHeight_, std::vector<ChipType>(mapWidth_, ChipType::kNone));
         if (j.contains("terrain")) {
             auto terrain = j["terrain"];
@@ -1021,15 +1041,18 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 }
             }
         }
-        
+
         // customPalette_.clear(); // クリアせず統合する
         if (j.contains("customPalette")) {
             auto paletteArray = j["customPalette"];
-            for (const auto& p : paletteArray) {
+            for (const auto &p : paletteArray) {
                 CustomBlockDef def;
-                if (p.contains("id")) def.id = p["id"];
-                if (p.contains("name")) def.name = p["name"];
-                if (p.contains("type")) def.type = p["type"];
+                if (p.contains("id"))
+                    def.id = p["id"];
+                if (p.contains("name"))
+                    def.name = p["name"];
+                if (p.contains("type"))
+                    def.type = p["type"];
                 if (p.contains("color")) {
                     def.color.x = p["color"]["r"];
                     def.color.y = p["color"]["g"];
@@ -1041,13 +1064,17 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                     def.scale.y = p["scale"]["y"];
                     def.scale.z = p["scale"]["z"];
                 }
-                if (p.contains("modelName")) def.modelName = p["modelName"];
-                if (p.contains("textureName")) def.textureName = p["textureName"];
-                if (p.contains("shaderMode")) def.shaderMode = p["shaderMode"].get<int>();
-                if (p.contains("properties")) def.properties = p["properties"];
-                
+                if (p.contains("modelName"))
+                    def.modelName = p["modelName"];
+                if (p.contains("textureName"))
+                    def.textureName = p["textureName"];
+                if (p.contains("shaderMode"))
+                    def.shaderMode = p["shaderMode"].get<int>();
+                if (p.contains("properties"))
+                    def.properties = p["properties"];
+
                 bool found = false;
-                for (auto& existing : customPalette_) {
+                for (auto &existing : customPalette_) {
                     if (existing.id == def.id) {
                         existing = def;
                         found = true;
@@ -1058,24 +1085,24 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                     customPalette_.push_back(def);
                 }
             }
-            
+
             // 読み込んだ Custom Block のプロパティ構造をテンプレート（Basic）に合わせる
-            for (auto& def : customPalette_) {
-                for (const auto& t : templatePalette_) {
+            for (auto &def : customPalette_) {
+                for (const auto &t : templatePalette_) {
                     if (t.type == def.type) {
                         // テンプレートに存在しない古いプロパティは削除する
                         std::vector<std::string> keysToRemove;
-                        for (auto& [key, val] : def.properties.items()) {
+                        for (auto &[key, val] : def.properties.items()) {
                             if (!t.properties.contains(key)) {
                                 keysToRemove.push_back(key);
                             }
                         }
-                        for (const auto& key : keysToRemove) {
+                        for (const auto &key : keysToRemove) {
                             def.properties.erase(key);
                         }
-                        
+
                         // テンプレートに存在するが Custom Block に無いプロパティは追加する
-                        for (auto& [key, val] : t.properties.items()) {
+                        for (auto &[key, val] : t.properties.items()) {
                             if (!def.properties.contains(key)) {
                                 def.properties[key] = val;
                             }
@@ -1085,26 +1112,30 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 }
             }
         }
-        
+
         // チップごとの上書き
         if (j.contains("blockOverrides") && j["blockOverrides"].is_array()) {
-            for (const auto& o : j["blockOverrides"]) {
-                if (!o.contains("x") || !o.contains("y") || !o.contains("properties")) continue;
+            for (const auto &o : j["blockOverrides"]) {
+                if (!o.contains("x") || !o.contains("y") || !o.contains("properties"))
+                    continue;
                 int ox = o["x"].get<int>();
                 int oy = o["y"].get<int>();
-                if (ox < 0 || ox >= mapWidth_ || oy < 0 || oy >= mapHeight_) continue;
+                if (ox < 0 || ox >= mapWidth_ || oy < 0 || oy >= mapHeight_)
+                    continue;
                 blockOverrides_[{ox, oy}] = o["properties"];
             }
         }
 
         RebuildChipObjects();
         return true;
-    } catch (const nlohmann::json::parse_error&) {
+    } catch (const nlohmann::json::parse_error &) {
         // フォールバック（古いテキスト形式の読み込み）
         std::stringstream iss(data);
         int w, h;
-        if (!(iss >> w >> h)) return false;
-        if (w < 1 || h < 1) return false;
+        if (!(iss >> w >> h))
+            return false;
+        if (w < 1 || h < 1)
+            return false;
 
         mapWidth_ = w;
         mapHeight_ = h;
@@ -1125,8 +1156,10 @@ bool MapChip2D::LoadFromString(const std::string& data) {
 }
 
 void MapChip2D::Resize(int newWidth, int newHeight) {
-    if (newWidth <= 0 || newHeight <= 0) return;
-    if (mapWidth_ == newWidth && mapHeight_ == newHeight) return;
+    if (newWidth <= 0 || newHeight <= 0)
+        return;
+    if (mapWidth_ == newWidth && mapHeight_ == newHeight)
+        return;
 
     // 現在のデータを退避させつつ新しいグリッドを生成する
     std::vector<std::vector<ChipType>> newMapData(newHeight, std::vector<ChipType>(newWidth, ChipType::kNone));
@@ -1147,7 +1180,7 @@ void MapChip2D::Resize(int newWidth, int newHeight) {
     mapHeight_ = newHeight;
 
     // 縮小時に範囲外になったブロック上書き設定をクリーンアップ
-    for (auto it = blockOverrides_.begin(); it != blockOverrides_.end(); ) {
+    for (auto it = blockOverrides_.begin(); it != blockOverrides_.end();) {
         if (it->first.first >= newWidth || it->first.second >= newHeight) {
             it = blockOverrides_.erase(it);
         } else {
@@ -1165,7 +1198,7 @@ void MapChip2D::GenerateDefaultRooms() {
     rooms_.clear();
     float totalWidth = mapWidth_ * chipSize_;
     float totalHeight = mapHeight_ * chipSize_;
-    
+
     StageRoom room;
     room.x = 0.0f;
     room.y = 0.0f;
@@ -1174,29 +1207,32 @@ void MapChip2D::GenerateDefaultRooms() {
     rooms_.push_back(room);
 }
 
-bool MapChip2D::SaveRoomsToFile(const std::string& filepath) {
+bool MapChip2D::SaveRoomsToFile(const std::string &filepath) {
     std::filesystem::path path(filepath);
     if (path.has_parent_path()) {
         std::filesystem::create_directories(path.parent_path());
     }
 
     std::ofstream ofs(filepath);
-    if (!ofs.is_open()) return false;
+    if (!ofs.is_open())
+        return false;
 
     ofs << rooms_.size() << "\n";
-    for (const auto& r : rooms_) {
+    for (const auto &r : rooms_) {
         ofs << r.x << " " << r.y << " " << r.width << " " << r.height << "\n";
     }
     ofs.close();
     return true;
 }
 
-bool MapChip2D::LoadRoomsFromFile(const std::string& filepath) {
+bool MapChip2D::LoadRoomsFromFile(const std::string &filepath) {
     std::ifstream ifs(filepath);
-    if (!ifs.is_open()) return false;
+    if (!ifs.is_open())
+        return false;
 
     size_t size = 0;
-    if (!(ifs >> size)) return false;
+    if (!(ifs >> size))
+        return false;
 
     rooms_.clear();
     for (size_t i = 0; i < size; ++i) {
@@ -1209,15 +1245,15 @@ bool MapChip2D::LoadRoomsFromFile(const std::string& filepath) {
     return true;
 }
 
-bool MapChip2D::SaveTemplatesToFile(const std::string& filepath) {
+bool MapChip2D::SaveTemplatesToFile(const std::string &filepath) {
     std::filesystem::path path(filepath);
     if (path.has_parent_path()) {
         std::filesystem::create_directories(path.parent_path());
     }
-    
+
     nlohmann::json j;
     auto templatesArray = nlohmann::json::array();
-    for (const auto& def : templatePalette_) {
+    for (const auto &def : templatePalette_) {
         nlohmann::json p;
         p["id"] = def.id;
         p["name"] = def.name;
@@ -1233,28 +1269,33 @@ bool MapChip2D::SaveTemplatesToFile(const std::string& filepath) {
     j["templates"] = templatesArray;
 
     std::ofstream ofs(filepath);
-    if (!ofs.is_open()) return false;
+    if (!ofs.is_open())
+        return false;
     ofs << j.dump(4);
     ofs.close();
     return true;
 }
 
-bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
+bool MapChip2D::LoadTemplatesFromFile(const std::string &filepath) {
     std::ifstream ifs(filepath);
-    if (!ifs.is_open()) return false;
+    if (!ifs.is_open())
+        return false;
 
     try {
         nlohmann::json j;
         ifs >> j;
-        
+
         templatePalette_.clear();
         if (j.contains("templates")) {
             auto paletteArray = j["templates"];
-            for (const auto& p : paletteArray) {
+            for (const auto &p : paletteArray) {
                 CustomBlockDef def;
-                if (p.contains("id")) def.id = p["id"];
-                if (p.contains("name")) def.name = p["name"];
-                if (p.contains("type")) def.type = p["type"];
+                if (p.contains("id"))
+                    def.id = p["id"];
+                if (p.contains("name"))
+                    def.name = p["name"];
+                if (p.contains("type"))
+                    def.type = p["type"];
                 if (p.contains("color")) {
                     def.color.x = p["color"]["r"];
                     def.color.y = p["color"]["g"];
@@ -1266,10 +1307,14 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                     def.scale.y = p["scale"]["y"];
                     def.scale.z = p["scale"]["z"];
                 }
-                if (p.contains("modelName")) def.modelName = p["modelName"];
-                if (p.contains("textureName")) def.textureName = p["textureName"];
-                if (p.contains("shaderMode")) def.shaderMode = p["shaderMode"].get<int>();
-                if (p.contains("properties")) def.properties = p["properties"];
+                if (p.contains("modelName"))
+                    def.modelName = p["modelName"];
+                if (p.contains("textureName"))
+                    def.textureName = p["textureName"];
+                if (p.contains("shaderMode"))
+                    def.shaderMode = p["shaderMode"].get<int>();
+                if (p.contains("properties"))
+                    def.properties = p["properties"];
                 templatePalette_.push_back(def);
             }
         }
@@ -1279,20 +1324,22 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
     }
 }
 
-
 std::map<std::pair<int, int>, nlohmann::json> MapChip2D::playtimeOverrides_;
 
-void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json& properties) {
-    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
-    nlohmann::json& slot = blockOverrides_[{x, y}];
-    if (!slot.is_object()) slot = nlohmann::json::object();
+void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json &properties) {
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_)
+        return;
+    nlohmann::json &slot = blockOverrides_[{x, y}];
+    if (!slot.is_object())
+        slot = nlohmann::json::object();
     slot.update(properties);
     if (playtimeRecording_) {
         // プレイ中：マップを作り直さず（作り直すと警備員や崩れた床まで初期化される）、置かれているブロックにだけ反映する
-        nlohmann::json& rec = playtimeOverrides_[{x, y}];
-        if (!rec.is_object()) rec = nlohmann::json::object();
+        nlohmann::json &rec = playtimeOverrides_[{x, y}];
+        if (!rec.is_object())
+            rec = nlohmann::json::object();
         rec.update(properties);
-        if (BaseBlock* b = GetBlock(x, y)) {
+        if (BaseBlock *b = GetBlock(x, y)) {
             nlohmann::json merged = GetPaletteProperties(x, y);
             merged.update(slot);
             b->SetProperties(merged);
@@ -1303,30 +1350,35 @@ void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json& properties)
 }
 
 void MapChip2D::ReapplyPlaytimeOverrides() {
-    for (const auto& [key, props] : playtimeOverrides_) {
+    for (const auto &[key, props] : playtimeOverrides_) {
         int x = key.first;
         int y = key.second;
-        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) continue;
+        if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_)
+            continue;
         if (props.is_null()) {
             blockOverrides_.erase({x, y});
         } else {
-            nlohmann::json& slot = blockOverrides_[{x, y}];
-            if (!slot.is_object()) slot = nlohmann::json::object();
+            nlohmann::json &slot = blockOverrides_[{x, y}];
+            if (!slot.is_object())
+                slot = nlohmann::json::object();
             slot.update(props);
         }
         // 置かれているブロックにも即反映
-        if (BaseBlock* b = GetBlock(x, y)) {
+        if (BaseBlock *b = GetBlock(x, y)) {
             nlohmann::json merged = GetPaletteProperties(x, y);
-            if (const nlohmann::json* ov = GetBlockOverride(x, y)) merged.update(*ov);
+            if (const nlohmann::json *ov = GetBlockOverride(x, y))
+                merged.update(*ov);
             b->SetProperties(merged);
         }
     }
-    if (!playtimeOverrides_.empty()) isDirty_ = true;
+    if (!playtimeOverrides_.empty())
+        isDirty_ = true;
 }
 
-const nlohmann::json* MapChip2D::GetBlockOverride(int x, int y) const {
+const nlohmann::json *MapChip2D::GetBlockOverride(int x, int y) const {
     auto it = blockOverrides_.find({x, y});
-    if (it == blockOverrides_.end() || it->second.empty()) return nullptr;
+    if (it == blockOverrides_.end() || it->second.empty())
+        return nullptr;
     return &it->second;
 }
 
@@ -1336,7 +1388,7 @@ void MapChip2D::ClearBlockOverride(int x, int y) {
         playtimeOverrides_[{x, y}] = nullptr;
         // プレイ中はマップを作り直さず、置かれているブロックにパレットの値を戻す
         if (erased) {
-            if (BaseBlock* b = GetBlock(x, y)) {
+            if (BaseBlock *b = GetBlock(x, y)) {
                 b->SetProperties(GetPaletteProperties(x, y));
             }
         }
@@ -1346,31 +1398,36 @@ void MapChip2D::ClearBlockOverride(int x, int y) {
 }
 
 std::string MapChip2D::GetBlockTypeName(int typeId) const {
-    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
-    for (const auto& d : palette) {
-        if (d.id == typeId) return d.type;
+    const auto &palette = (typeId >= 100) ? customPalette_ : templatePalette_;
+    for (const auto &d : palette) {
+        if (d.id == typeId)
+            return d.type;
     }
     return std::string();
 }
 
-void MapChip2D::SetPlacementOverride(const std::string& blockType, const nlohmann::json& properties) {
-    if (blockType.empty()) return;
+void MapChip2D::SetPlacementOverride(const std::string &blockType, const nlohmann::json &properties) {
+    if (blockType.empty())
+        return;
     placementOverrides_[blockType] = properties;
 }
 
-void MapChip2D::ClearPlacementOverride(const std::string& blockType) {
+void MapChip2D::ClearPlacementOverride(const std::string &blockType) {
     placementOverrides_.erase(blockType);
 }
 
 int MapChip2D::GetNextFreeLinkId() const {
     int maxId = 0;
-    for (const auto& b : updateBlocks_) {
-        if (!b || b->IsDestroyed()) continue;
-        if (auto* s = dynamic_cast<SwitchBlock*>(b.get())) maxId = (std::max)(maxId, s->GetLinkId());
-        else if (auto* d = dynamic_cast<DoorBlock*>(b.get())) maxId = (std::max)(maxId, d->GetLinkId());
+    for (const auto &b : updateBlocks_) {
+        if (!b || b->IsDestroyed())
+            continue;
+        if (auto *s = dynamic_cast<SwitchBlock *>(b.get()))
+            maxId = (std::max)(maxId, s->GetLinkId());
+        else if (auto *d = dynamic_cast<DoorBlock *>(b.get()))
+            maxId = (std::max)(maxId, d->GetLinkId());
     }
     // まだ組み立て前のチップの上書きも数える（連続で塗った時に同じ番号にならないように）
-    for (const auto& [key, props] : blockOverrides_) {
+    for (const auto &[key, props] : blockOverrides_) {
         if (props.is_object() && props.contains("linkId") && props["linkId"].is_number()) {
             maxId = (std::max)(maxId, props["linkId"].get<int>());
         }
@@ -1378,30 +1435,33 @@ int MapChip2D::GetNextFreeLinkId() const {
     return maxId + 1;
 }
 
-const nlohmann::json* MapChip2D::GetPlacementOverride(const std::string& blockType) const {
+const nlohmann::json *MapChip2D::GetPlacementOverride(const std::string &blockType) const {
     auto it = placementOverrides_.find(blockType);
-    if (it == placementOverrides_.end() || it->second.empty()) return nullptr;
+    if (it == placementOverrides_.end() || it->second.empty())
+        return nullptr;
     return &it->second;
 }
 
 nlohmann::json MapChip2D::GetPaletteProperties(int x, int y) const {
-    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return nlohmann::json::object();
+    if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_)
+        return nlohmann::json::object();
     int typeId = static_cast<int>(mapData_[y][x]);
-    if (const CustomBlockDef* def = FindPaletteDef(typeId)) {
+    if (const CustomBlockDef *def = FindPaletteDef(typeId)) {
         return def->properties;
     }
     return nlohmann::json::object();
 }
 
-const MapChip2D::CustomBlockDef* MapChip2D::FindPaletteDef(int typeId) const {
-    const auto& palette = (typeId >= 100) ? customPalette_ : templatePalette_;
-    for (const auto& d : palette) {
-        if (d.id == typeId) return &d;
+const MapChip2D::CustomBlockDef *MapChip2D::FindPaletteDef(int typeId) const {
+    const auto &palette = (typeId >= 100) ? customPalette_ : templatePalette_;
+    for (const auto &d : palette) {
+        if (d.id == typeId)
+            return &d;
     }
     return nullptr;
 }
 
-std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive* boxPrimitive) {
+std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive *boxPrimitive) {
     float worldX = ChipToWorldX(x) + (spanWidth * chipSize_) * 0.5f;
     float worldY = ChipToWorldY(y) + (spanHeight * chipSize_) * 0.5f;
 
@@ -1420,17 +1480,17 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = BlockFactory::GetInstance().Create("ChainItemBlock", this, x, y);
     } else if (type == ChipType::kSavePoint) {
         newBlock = BlockFactory::GetInstance().Create("SavePoint", this, x, y);
-    } else if (const CustomBlockDef* d = FindPaletteDef(typeId)) {
+    } else if (const CustomBlockDef *d = FindPaletteDef(typeId)) {
         newBlock = BlockFactory::GetInstance().Create(d->type, this, x, y);
     }
 
     if (newBlock) {
         newBlock->Initialize(device_.Get(), boxPrimitive, worldX, worldY, spanWidth * chipSize_, spanHeight * chipSize_);
 
-        const CustomBlockDef* def = FindPaletteDef(typeId);
+        const CustomBlockDef *def = FindPaletteDef(typeId);
         if (def) {
             // パレットのプロパティに、このチップだけの上書きを重ねて渡す
-            if (const nlohmann::json* ov = GetBlockOverride(x, y)) {
+            if (const nlohmann::json *ov = GetBlockOverride(x, y)) {
                 nlohmann::json merged = def->properties;
                 merged.update(*ov);
                 newBlock->SetProperties(merged);
@@ -1438,14 +1498,14 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                 newBlock->SetProperties(def->properties);
             }
             // シェーダー設定（通常 / 宝石）をマテリアルに反映するラムダ
-            auto applyShaderSettings = [&](Material& mat) {
+            auto applyShaderSettings = [&](Material &mat) {
                 if (def->shaderMode == kShaderGem) {
                     mat.lightingType = 2;              // クリスタル/宝石シェーディングモード
                     mat.enableEnvironmentMap = 1;      // 環境キューブマップ反射・屈折を有効化
                     mat.shininess = 64.0f;             // 鋭い表面スペキュラ
                     mat.environmentCoefficient = 0.8f; // 環境マップ映り込み係数
                 } else {
-                    mat.lightingType = 1;              // 通常ライティングモード
+                    mat.lightingType = 1; // 通常ライティングモード
                     mat.enableEnvironmentMap = 0;
                     mat.shininess = 50.0f;
                     mat.environmentCoefficient = 1.0f;
@@ -1453,29 +1513,26 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             };
 
             if (newBlock->GetGameObject()) {
-                if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                if (auto *prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                     prc->GetMaterial().color = def->color;
                     applyShaderSettings(prc->GetMaterial());
-                    
+
                     if (!def->textureName.empty()) {
                         std::string fullTex = (def->textureName.find("resources/") == 0) ? def->textureName : ("resources/" + def->textureName);
                         uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
                         prc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
                     }
-                    
 
-                    if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
-                        tc->SetScale({ 
-                            tc->GetScale().x * def->scale.x, 
-                            tc->GetScale().y * def->scale.y, 
-                            tc->GetScale().z * def->scale.z 
-                        });
+                    if (auto *tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+                        tc->SetScale({tc->GetScale().x * def->scale.x,
+                                      tc->GetScale().y * def->scale.y,
+                                      tc->GetScale().z * def->scale.z});
                     }
                 }
             }
-            
+
             if (!def->modelName.empty()) {
-                Model* model = nullptr;
+                Model *model = nullptr;
                 if (def->modelName.length() >= 4 && def->modelName.substr(def->modelName.length() - 4) == ".obj") {
                     std::string fullPath = (def->modelName.find("resources/") == 0) ? def->modelName : ("resources/" + def->modelName);
                     std::filesystem::path p(fullPath);
@@ -1489,12 +1546,12 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                         model = ModelManager::GetInstance()->GetModel("resources/models", def->modelName + ".obj");
                     }
                 }
-                
+
                 if (model && newBlock->GetGameObject()) {
                     // PrimitiveRendererComponent を無効化する代わりに、MeshRendererComponent を追加
-                    auto* mrc = newBlock->GetGameObject()->AddComponent<MeshRendererComponent>();
+                    auto *mrc = newBlock->GetGameObject()->AddComponent<MeshRendererComponent>();
                     mrc->Initialize(device_.Get(), model);
-                    
+
                     if (!def->textureName.empty()) {
                         std::string fullTex = (def->textureName.find("resources/") == 0) ? def->textureName : ("resources/" + def->textureName);
                         uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
@@ -1518,9 +1575,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     Vector3 modelScale = {
                         spanWidth * chipSize_ * def->scale.x,
                         spanHeight * chipSize_ * def->scale.y,
-                        def->scale.z
-                    };
-                    newBlock->SetModelVisualOverride({ worldX, worldY, 0.0f }, modelScale);
+                        def->scale.z};
+                    newBlock->SetModelVisualOverride({worldX, worldY, 0.0f}, modelScale);
                     newBlock->ApplyModelVisualOverride();
                 }
             }
@@ -1528,8 +1584,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
 
         if (newBlock->GetGameObject()) {
             newBlock->GetGameObject()->SetName("MapChip_" + std::to_string(x) + "_" + std::to_string(y));
-            if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
+            if (auto *prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+                if (auto *tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
                     float tileX = tc->GetScale().x / chipSize_;
                     float tileY = tc->GetScale().y / chipSize_;
                     float tileZ = tc->GetScale().z / chipSize_;
@@ -1544,7 +1600,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
 }
 
 void MapChip2D::ResetBlocks() {
-    for (auto& block : updateBlocks_) {
+    for (auto &block : updateBlocks_) {
         if (block) {
             block->Reset();
             // Reset() が色やスケールを初期値へ戻すため、モデル差し替えの見た目を再適用する
@@ -1558,12 +1614,13 @@ void MapChip2D::ResetBlocks() {
 // ===== IReplayObjectProvider =====
 
 void MapChip2D::RefreshReplayTrackEntries() {
-    if (replayTrackRevision_ == blocksRevision_) return;
+    if (replayTrackRevision_ == blocksRevision_)
+        return;
     replayTrackRevision_ = blocksRevision_;
 
     // 既に記録対象になっているブロックは、作り直し前の判定を引き継ぐ
     std::unordered_map<uint64_t, bool> wasTracked;
-    for (const auto& entry : replayTrackEntries_) {
+    for (const auto &entry : replayTrackEntries_) {
         if (entry.isTracked) {
             wasTracked[entry.objectId] = true;
         }
@@ -1573,21 +1630,22 @@ void MapChip2D::RefreshReplayTrackEntries() {
     replayBlockById_.clear();
     replayTrackEntries_.reserve(updateBlocks_.size());
 
-    for (const auto& blockPtr : updateBlocks_) {
-        BaseBlock* block = blockPtr.get();
-        if (!block) continue;
+    for (const auto &blockPtr : updateBlocks_) {
+        BaseBlock *block = blockPtr.get();
+        if (!block)
+            continue;
 
         ReplayTrackEntry entry;
         const uint64_t id = block->GetReplayObjectId();
         entry.objectId = id;
         entry.block = block;
-        if (auto* gameObject = block->GetGameObject()) {
-            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+        if (auto *gameObject = block->GetGameObject()) {
+            if (auto *transform = gameObject->GetComponent<TransformComponent>()) {
                 entry.initPosition = transform->GetPosition();
                 entry.initRotation = transform->GetRotation();
                 entry.initScale = transform->GetScale();
             }
-            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+            if (auto *renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
                 entry.initColor = renderer->GetMaterial().color;
             }
         }
@@ -1602,7 +1660,7 @@ void MapChip2D::RefreshReplayTrackEntries() {
     }
 }
 
-void MapChip2D::CaptureReplayObjects(std::vector<ReplayObjectState>& out) {
+void MapChip2D::CaptureReplayObjects(std::vector<ReplayObjectState> &out) {
     RefreshReplayTrackEntries();
 
     // 初期状態と比べて変化しているか（していれば以降ずっと記録対象にする）
@@ -1610,21 +1668,22 @@ void MapChip2D::CaptureReplayObjects(std::vector<ReplayObjectState>& out) {
     auto isSame = [kEpsilon](float a, float b) { return std::fabs(a - b) <= kEpsilon; };
 
     std::vector<float> customScratch;
-    for (auto& entry : replayTrackEntries_) {
-        BaseBlock* block = entry.block;
-        if (!block) continue;
+    for (auto &entry : replayTrackEntries_) {
+        BaseBlock *block = entry.block;
+        if (!block)
+            continue;
 
         Vector3 position = entry.initPosition;
         Vector3 rotation = entry.initRotation;
         Vector3 scale = entry.initScale;
         Vector4 color = entry.initColor;
-        if (auto* gameObject = block->GetGameObject()) {
-            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+        if (auto *gameObject = block->GetGameObject()) {
+            if (auto *transform = gameObject->GetComponent<TransformComponent>()) {
                 position = transform->GetPosition();
                 rotation = transform->GetRotation();
                 scale = transform->GetScale();
             }
-            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+            if (auto *renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
                 color = renderer->GetMaterial().color;
             }
         }
@@ -1637,7 +1696,8 @@ void MapChip2D::CaptureReplayObjects(std::vector<ReplayObjectState>& out) {
                 !isSame(rotation.x, entry.initRotation.x) || !isSame(rotation.y, entry.initRotation.y) || !isSame(rotation.z, entry.initRotation.z) ||
                 !isSame(scale.x, entry.initScale.x) || !isSame(scale.y, entry.initScale.y) || !isSame(scale.z, entry.initScale.z) ||
                 !isSame(color.x, entry.initColor.x) || !isSame(color.y, entry.initColor.y) || !isSame(color.z, entry.initColor.z) || !isSame(color.w, entry.initColor.w);
-            if (!changed) continue;
+            if (!changed)
+                continue;
             entry.isTracked = true;
         }
 
@@ -1665,14 +1725,16 @@ void MapChip2D::CaptureReplayObjects(std::vector<ReplayObjectState>& out) {
     }
 }
 
-void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState>& states) {
+void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState> &states) {
     RefreshReplayTrackEntries();
 
-    for (const auto& state : states) {
+    for (const auto &state : states) {
         auto it = replayBlockById_.find(state.id);
-        if (it == replayBlockById_.end()) continue;
-        BaseBlock* block = it->second;
-        if (!block) continue;
+        if (it == replayBlockById_.end())
+            continue;
+        BaseBlock *block = it->second;
+        if (!block)
+            continue;
 
         if (state.destroyed) {
             // 破壊済みの記録は破壊フラグだけを復元する（次の Update でマップから取り除かれる）
@@ -1681,13 +1743,13 @@ void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState>& state
         }
 
         block->SetDestroyed(false);
-        if (auto* gameObject = block->GetGameObject()) {
-            if (auto* transform = gameObject->GetComponent<TransformComponent>()) {
+        if (auto *gameObject = block->GetGameObject()) {
+            if (auto *transform = gameObject->GetComponent<TransformComponent>()) {
                 transform->SetPosition(state.position);
                 transform->SetRotation(state.rotation);
                 transform->SetScale(state.scale);
             }
-            if (auto* renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
+            if (auto *renderer = gameObject->GetComponent<PrimitiveRendererComponent>()) {
                 renderer->GetMaterial().color = state.color;
             }
         }
@@ -1695,14 +1757,15 @@ void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState>& state
     }
 }
 
-void MapChip2D::SpawnFragileParticle(const Vector3& worldPos) {
-    ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
-    if (!device) return;
+void MapChip2D::SpawnFragileParticle(const Vector3 &worldPos) {
+    ID3D12Device *device = DirectXCommon::GetInstance()->GetDevice();
+    if (!device)
+        return;
 
     if (!fragileParticleDataLoaded_) {
         if (LoadParticleSystemFromJson(fragileParticleData_, "resources/json/shared/Particle/Fragile.json")) {
             fragileParticleData_.isLoop = false;
-            for (auto& emitter : fragileParticleData_.emitters) {
+            for (auto &emitter : fragileParticleData_.emitters) {
                 emitter.isLoop = false;
                 if (emitter.duration > 1.0f) {
                     emitter.duration = 1.0f;
@@ -1711,10 +1774,11 @@ void MapChip2D::SpawnFragileParticle(const Vector3& worldPos) {
             fragileParticleDataLoaded_ = true;
         }
     }
-    if (!fragileParticleDataLoaded_) return;
+    if (!fragileParticleDataLoaded_)
+        return;
 
     // 停止中のエフェクトをプールから再利用
-    for (auto& effect : fragileParticles_) {
+    for (auto &effect : fragileParticles_) {
         if (effect && !effect->IsPlaying()) {
             effect->PlayAt(worldPos);
             return;
@@ -1731,11 +1795,10 @@ void MapChip2D::SpawnFragileParticle(const Vector3& worldPos) {
 }
 
 void MapChip2D::ClearFragileParticles() {
-    for (auto& effect : fragileParticles_) {
+    for (auto &effect : fragileParticles_) {
         if (effect) {
             effect->Restart();
             effect->Pause();
         }
     }
 }
-
