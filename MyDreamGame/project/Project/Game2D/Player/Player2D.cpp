@@ -88,6 +88,12 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
         currentInput_.isJumpPressed = false;
         currentInput_.isJumpHeld = false;
     }
+    // 開始演出中は入力を全部捨てる（鎖側が毎フレーム修飾を上書きしても、こちらが最後に効く）
+    if (introLocked_) {
+        currentInput_.moveX = 0.0f;
+        currentInput_.isJumpPressed = false;
+        currentInput_.isJumpHeld = false;
+    }
 
     // 物理・移動・当たり判定の更新
     physics_.Update(state_, params_, currentInput_, deltaTime, this, &map);

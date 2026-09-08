@@ -97,6 +97,9 @@ private:
     bool wasPlayingLastFrame_ = false;
     bool wasRewindingLastFrame_ = false;
     bool playerWasDead_ = false;      // 復活の検出（警戒度の猶予用）
+    // 開始演出：着地するまで黒帯を出し、その間は操作を受け付けない（警備員などは今まで通り動く）
+    bool stageIntroActive_ = true;
+    float stageIntroTimer_ = 0.0f;
     bool capturedByMiss_ = false;     // 捕獲画面の原因（true = 接触・落下などのミス、false = 見つかった回数）
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
@@ -192,6 +195,9 @@ private:
     bool isClearSmokeSpawned_ = false;
     bool isClearEscaped_ = false;
     bool isClearIrisStarted_ = false;
+    // 死亡演出に入る前のカメラ倍率と位置。復活する時にここへ戻す
+    float deathCameraStartScale_ = 1.0f;
+    Vector3 deathCameraStartPos_ = { 0.0f, 0.0f, -10.0f };
     float clearCameraStartScale_ = 1.0f;
     Vector3 clearCameraStartPos_ = { 0.0f, 0.0f, -10.0f };
     bool isClearExitIrisActive_ = false; // クリア画面でSPACEを押した後のタイトル遷移用アイリスアウト
@@ -219,11 +225,15 @@ private:
     std::unique_ptr<class Sprite> pauseRestartSprite_;
     std::unique_ptr<class Sprite> pauseTitleTextSprite_;
     std::unique_ptr<class Sprite> pauseSaveSprite_; // 「セーブポイント」。記録がある時だけ出す
+    std::unique_ptr<class Sprite> goalArrowSprite_; // ゴールの方向を指す矢印
+    std::unique_ptr<class Sprite> goalLabelSprite_; // 矢印に添える「G」。矢印と違って回さない
 
     uint32_t pauseBackdropTexHandle_ = 0;
     uint32_t pauseTitleTexHandle_ = 0;
     uint32_t pauseRestartTexHandle_ = 0;
     uint32_t pauseSaveTexHandle_ = 0;
+    uint32_t goalArrowTexHandle_ = 0;
+    uint32_t goalLabelTexHandle_ = 0;
     // ポーズの項目に「セーブポイント」を出すか（記録があるか）。更新と描画で同じ判断を使う
     bool HasSavePointItem() const;
     uint32_t pauseTitleTextTexHandle_ = 0;
@@ -280,6 +290,8 @@ private:
     void DrawAlertBarSprites();
     // 開始・クリア・ポーズの文字。DrawHudSprites から呼ぶ
     void DrawStageStateSprites();
+    // ゴールの方向を指す矢印。画面の外なら端で方向を指し、見えていれば台座の上で下を指す
+    void DrawGoalArrowSprite(const Matrix4x4& viewProjection);
     // クリア画面の内訳「発見 N 回 …」を中央に並べる
     void DrawClearStatLine(const struct AlertRank& rank, float centerY);
     // 数字列（"0123456789/" と空白）を x, y から並べて描く。戻り値は描いた幅

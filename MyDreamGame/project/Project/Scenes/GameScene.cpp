@@ -14,6 +14,7 @@
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
 #include "Editor/EditorManager.h"
+#include "Editor/MapEditor/MapEditor.h"
 #endif
 #include "BlockDesignPanel.h"
 #include "Component/MeshRendererComponent.h"
@@ -239,6 +240,27 @@ void GameScene::Initialize() {
     // 収集アイテムの記録を読む（宝石ブロックが Initialize で「以前取ったか」を参照するのでマップより先）
     CollectibleTracker::Get().BeginStage(s_TargetMapFilePath);
     map_->Initialize(s_TargetMapFilePath);
+
+#ifdef USE_IMGUI
+    // 遊び始めたステージの名前をエディタにも伝える。
+    // 伝えないと、エディタが起動後に1回だけ走る「前回のマップを読み直す」処理が、
+    // タイトルから入ったステージ（map1.txt など）を別のマップに差し替えてしまう。
+    // 遊んでいる時だけにするのが大事：編集中にシーンを作り直しただけの時まで伝えると、
+    // マップ設定で選んでいたファイル名を黙って書き換えてしまう
+    if (EditorManager::IsPlaying()) {
+        const std::string loadedPath = map_->GetCurrentFilePath();
+        if (!loadedPath.empty() && loadedPath.find("temp_play_map") == std::string::npos) {
+            const std::string loadedName = std::filesystem::path(loadedPath).filename().string();
+            if (!loadedName.empty()) {
+                if (EditorManager *em = EditorManager::GetInstance()) {
+                    if (MapEditor *me = em->GetMapEditor()) {
+                        me->SetStageFilename(loadedName);
+                    }
+                }
+            }
+        }
+    }
+#endif
     // 動く床・扉などの状態をリプレイに記録・復元できるように登録する
     ReplayManager::GetInstance()->RegisterObjectProvider(map_.get());
     Log("GameScene::Initialize: Map Initialized\n");
@@ -259,6 +281,11 @@ void GameScene::Initialize() {
 
     // 記録を引く鍵。エディタの停止→再生では一時ファイルを読むので、必ず本当のステージ名に直してから触る
     const std::string stagePath = ResolveCurrentMapPath();
+
+    // 開始演出をここから始める（着地するまで黒帯 ＋ 操作止め）
+    stageIntroActive_ = true;
+    stageIntroTimer_ = 0.0f;
+    player_->SetIntroLocked(true);
 
     player_->FindSpawnPoint(*map_);
     if (SavePoint::HasActiveSavePoint(stagePath)) {
@@ -381,13 +408,8 @@ void GameScene::Initialize() {
         }
     }
 
-    // 7.6. ゲーム開始時のアイリスイン演出（プレイヤー座標を中心に開く）
-    {
-        TransitionDirector *director = TransitionDirector::GetInstance();
-        if ((!director || !director->IsPlaying()) && player_) {
-            StartIrisIn(player_->GetPosition(), 1.2f);
-        }
-    }
+    // 7.6. 開始時の円が開く演出はやめた（着地までの黒帯に置き換えたため、二重に演出しない）。
+    //      アイリスは死亡・復活・クリアの時だけ使う。ここでは 128 行目で切ったままにしておく
 
     // -------------------------------------------------------------
     // 8. ポーズメニュー スプライトの初期化 (poseText, restartText, titleText)
@@ -499,6 +521,14 @@ void GameScene::Initialize() {
         alertSeenSprite_->Initialize(spriteCommon_, alertSeenTexHandle_);
         alertSuspectSprite_ = std::make_unique<Sprite>();
         alertSuspectSprite_->Initialize(spriteCommon_, alertSuspectTexHandle_);
+
+        // ゴールの方向を指す矢印
+        goalArrowTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/goal_arrow.png");
+        goalArrowSprite_ = std::make_unique<Sprite>();
+        goalArrowSprite_->Initialize(spriteCommon_, goalArrowTexHandle_);
+        goalLabelTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/goal_label.png");
+        goalLabelSprite_ = std::make_unique<Sprite>();
+        goalLabelSprite_->Initialize(spriteCommon_, goalLabelTexHandle_);
 
         // 開始・クリア・ポーズの文字
         auto makeOne = [&](std::unique_ptr<Sprite> &sp, const char *path) {
@@ -729,6 +759,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                     }
                 }
             }
+            // 開始演出もやり直す（エディタの再生開始ではシーンが作り直されないため、ここで戻す）
+            stageIntroActive_ = true;
+            stageIntroTimer_ = 0.0f;
+            player_->SetIntroLocked(true);
             // プレイ開始時は鎖と個数を初期状態に戻す（毎回同じ初期状態から始めてリプレイ再現性を保つ）
             if (chainManager_) {
                 chainManager_->ResetAll();
@@ -759,8 +793,14 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             // プレイ開始時はゲーム内クロックを0に戻す（動く床の位相を毎回同じにするため）
             ReplayManager::GetInstance()->ResetPlayClock();
-            // プレイ開始時のアイリスイン演出（プレイヤー座標を中心に開く）
-            StartIrisIn(player_->GetPosition(), 1.2f);
+            // 開始時の円は出さない。前の回のアイリスが残っていると画面が欠けるので確実に切る
+            isIrisInActive_ = false;
+            isIrisOutActive_ = false;
+            isIrisOutStarted_ = false;
+            transitionAlpha_ = 0.0f;
+            if (DirectXCommon *dx = DirectXCommon::GetInstance()) {
+                dx->SetCompositeIrisEnabled(false);
+            }
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
@@ -995,6 +1035,20 @@ void GameScene::Update(SceneManager *sceneManager) {
                     map_->Update();
                 }
 
+                // 開始演出：着地するまで操作を止める。落下と着地は進み、警備員などは今まで通り動く
+                if (stageIntroActive_) {
+                    constexpr float kIntroMinTime = 0.35f; // 地上から始まる面でも黒帯が一瞬で消えないように
+                    constexpr float kIntroMaxTime = 5.0f;  // 保険：着地できない置き方でも必ず解ける
+                    stageIntroTimer_ += dt;
+                    const bool landed = player_->IsOnGround() && stageIntroTimer_ >= kIntroMinTime;
+                    if (landed || stageIntroTimer_ >= kIntroMaxTime || player_->IsDead() || player_->IsGoal()) {
+                        stageIntroActive_ = false;
+                        player_->SetIntroLocked(false);
+                    } else {
+                        player_->SetIntroLocked(true);
+                    }
+                }
+
                 if (!playerFrozen) {
                     player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
                 }
@@ -1127,9 +1181,20 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         bool isTriggered = false;
         bool isPlaying = (gameState_ == GameState::Playing);
+        bool isRunning = true; // エディタで再生中か（製品版は常に true）
 #ifdef USE_IMGUI
-        isPlaying = isPlaying && EditorManager::IsPlaying();
+        isRunning = EditorManager::IsPlaying();
+        isPlaying = isPlaying && isRunning;
 #endif
+        // 開始演出の黒帯（StartReady の間も出したいので gameState_ は見ない）
+        if (stageIntroActive_ && isRunning && !isPaused_ && player_ && !player_->IsDead() && !player_->IsGoal()) {
+            isTriggered = true;
+        }
+        // クリア演出の黒帯。煙で消えて「STAGE CLEAR」の文字が出るところで引く
+        // （isClearSequenceActive_ が false になる瞬間 = 文字が出る瞬間なので、この条件そのままで合う）
+        if (isClearSequenceActive_ && isRunning && !isPaused_) {
+            isTriggered = true;
+        }
         if (isPlaying && !isPaused_ && player_ && !player_->IsDead() && !player_->IsGoal()) {
             // 鎖を回しているとき（kStance）に実際にスローモーションが効いている時のみ黒帯エフェクトを適用
             bool isSlowActive = spinAction && spinAction->IsSlowActive();
@@ -2785,6 +2850,15 @@ void GameScene::TriggerDeathSequence() {
     deathHatRotationZ_ = 0.0f;
     isDeathHatActive_ = true;
 
+    // 死亡演出の間はカメラを帽子へ寄せる。
+    // 追従に任せるとルームの内側に収める制限と、追従のラープでずれるので、
+    // クリア演出と同じく追従を切って位置を直接動かす
+    if (gameCamera_) {
+        deathCameraStartScale_ = gameCamera_->GetScale();
+        deathCameraStartPos_ = gameCamera_->GetTranslation();
+        gameCamera_->SetFollowTarget(nullptr);
+    }
+
     if (chainManager_) {
         chainManager_->OnPlayerDeath();
     }
@@ -2804,6 +2878,24 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
         return;
 
     deathSequenceTimer_ += dt;
+
+    // カメラを帽子へ寄せる。寄り切ると帽子の位置そのものになるので、落ちていく帽子を画面の中心で追い続ける
+    if (gameCamera_) {
+        ParameterManager *pm = ParameterManager::GetInstance();
+        const float targetScale = pm->GetValue("GameScene", "deathCameraZoomScale", 1.7f);
+        const float zoomDuration = pm->GetValue("GameScene", "deathCameraZoomDuration", 0.6f);
+        const float zoomT = (zoomDuration > 0.001f) ? std::clamp(deathSequenceTimer_ / zoomDuration, 0.0f, 1.0f) : 1.0f;
+        const float eased = 1.0f - (1.0f - zoomT) * (1.0f - zoomT); // 滑らかなイーズアウト
+
+        gameCamera_->SetScale(deathCameraStartScale_ + (targetScale - deathCameraStartScale_) * eased);
+
+        const Vector3 camPos = {
+            deathCameraStartPos_.x + (deathHatPos_.x - deathCameraStartPos_.x) * eased,
+            deathCameraStartPos_.y + (deathHatPos_.y - deathCameraStartPos_.y) * eased,
+            deathCameraStartPos_.z};
+        gameCamera_->SetTranslation(camPos);
+        gameCamera_->UpdateMatrix();
+    }
 
     // 帽子の物理挙動（放物線落下・床/ギミック接地）
     if (isDeathHatActive_) {
@@ -2933,6 +3025,7 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
             player_->ResetState(deathRespawnPos_);
             player_->ClearEffects();
             if (gameCamera_) {
+                gameCamera_->SetScale(deathCameraStartScale_); // 寄せた分を元に戻す
                 gameCamera_->SetFollowTarget(&player_->GetPosition());
                 // リスポーン地点へカメラを移すのはXYだけ。
                 // Zにプレイヤーの座標（0）を入れるとカメラがブロックと同じ平面に入り込み、
@@ -3547,6 +3640,93 @@ void GameScene::DrawAlertBarSprites() {
     }
 }
 
+void GameScene::DrawGoalArrowSprite(const Matrix4x4 &viewProjection) {
+    // ゴールがどこにあるか分かるように矢印を出す。
+    // 画面の外にある時は端に寄せてその方向を指し、見えている時は台座の上で下を指す
+    if (!goalArrowSprite_ || !map_ || !player_) return;
+    if (!IsGamePlaying()) return;
+    if (gameState_ == GameState::Captured || gameState_ == GameState::Clear) return;
+    if (isClearSequenceActive_ || isDeathSequenceActive_ || isPaused_) return;
+
+    const GoalBlock *goal = nullptr;
+    for (const auto &block : map_->GetUpdateBlocks()) {
+        if (const auto *g = dynamic_cast<const GoalBlock *>(block.get())) {
+            goal = g;
+            break;
+        }
+    }
+    if (!goal) return;
+
+    const AABB2D box = goal->GetAABB();
+    const Vector3 goalPos = {(box.left + box.right) * 0.5f, box.top + 0.6f, 0.0f};
+
+    const Vector3 ndc = TransformFunctions::EulerTransform(goalPos, viewProjection);
+    const float gx = (ndc.x + 1.0f) * 0.5f * 1280.0f;
+    const float gy = (1.0f - ndc.y) * 0.5f * 720.0f;
+
+    constexpr float kEdge = 72.0f;   // 画面の端の余白（この内側なら「見えている」）
+    constexpr float kSize = 56.0f;   // 矢印の大きさ
+    const bool inView = (gx > kEdge && gx < 1280.0f - kEdge && gy > kEdge && gy < 720.0f - kEdge);
+
+    float cx = 0.0f, cy = 0.0f, rot = 0.0f, alpha = 0.9f;
+    float dirX = 0.0f, dirY = 1.0f; // 矢印が指している向き（「G」を反対側へ置くのに使う）
+    const float bob = std::sin(hudTime_ * 4.0f);
+
+    if (inView) {
+        // 見えている：台座の少し上で、ゆっくり上下しながら下を指す
+        cx = gx;
+        cy = gy - kSize * 0.9f + bob * 5.0f;
+        rot = 3.14159265f; // 下向き
+        alpha = 0.75f;
+        dirX = 0.0f;
+        dirY = 1.0f;
+    } else {
+        // 画面の外：中心からゴールへの向きを指しながら、画面の端に貼り付く
+        const float dx = gx - 640.0f;
+        const float dy = gy - 360.0f;
+        const float len = std::sqrt(dx * dx + dy * dy);
+        if (len < 1.0f) return;
+        const float ux = dx / len;
+        const float uy = dy / len;
+        // 端の内側に収まるところまで進める
+        const float limitX = (640.0f - kEdge) / (std::max)(0.0001f, std::abs(ux));
+        const float limitY = (360.0f - kEdge) / (std::max)(0.0001f, std::abs(uy));
+        const float t = (std::min)(limitX, limitY) + bob * 4.0f;
+        cx = 640.0f + ux * t;
+        cy = 360.0f + uy * t;
+        rot = std::atan2(ux, -uy); // 画像は上向きなので、上をこの向きへ回す
+        dirX = ux;
+        dirY = uy;
+    }
+
+    // スプライトは左上を軸に回るので、回した後の中心が cx, cy に来るように置く
+    const float c = std::cos(rot);
+    const float s = std::sin(rot);
+    const float half = kSize * 0.5f;
+    const float ox = half * c - half * s;
+    const float oy = half * s + half * c;
+
+    goalArrowSprite_->SetSize({kSize, kSize});
+    goalArrowSprite_->SetRotation(rot);
+    goalArrowSprite_->SetPosition({cx - ox, cy - oy});
+    goalArrowSprite_->SetColor({1.0f, 0.85f, 0.25f, alpha});
+    goalArrowSprite_->Update();
+    goalArrowSprite_->Draw();
+
+    // 「G」は矢印の指す向きの反対側に置く。文字なので回さない（回すと逆さまになって読めない）
+    if (goalLabelSprite_) {
+        constexpr float kLabel = 34.0f;
+        const float lx = cx - dirX * kSize * 0.78f;
+        const float ly = cy - dirY * kSize * 0.78f;
+        goalLabelSprite_->SetSize({kLabel, kLabel});
+        goalLabelSprite_->SetRotation(0.0f);
+        goalLabelSprite_->SetPosition({lx - kLabel * 0.5f, ly - kLabel * 0.5f});
+        goalLabelSprite_->SetColor({1.0f, 0.9f, 0.35f, alpha});
+        goalLabelSprite_->Update();
+        goalLabelSprite_->Draw();
+    }
+}
+
 void GameScene::DrawStageStateSprites() {
     if (!IsGamePlaying()) return; // エディタで編集中は「READY...」などを出さない
     // 開始・クリア・ポーズの文字。文字の画像は白で作ってあるので、色は掛け算で付ける
@@ -3771,6 +3951,9 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
             }
         }
     }
+
+    // ---- ゴールの方向を指す矢印 ----
+    DrawGoalArrowSprite(viewProjection);
 
     // ---- 開始・クリア・ポーズの文字 ----
     DrawStageStateSprites();

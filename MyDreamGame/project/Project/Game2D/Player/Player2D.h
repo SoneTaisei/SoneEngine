@@ -67,6 +67,11 @@ public:
         actionJumpLocked_ = jumpLocked;
     }
 
+    // 開始演出中の操作止め。鎖アクションの入力修飾より強く、移動もジャンプも一切受け付けない。
+    // 物理は止めないので、落下と着地はそのまま進む
+    void SetIntroLocked(bool locked) { introLocked_ = locked; }
+    bool IsIntroLocked() const { return introLocked_; }
+
     const Vector3& GetPosition() const { return state_.position_; }
     void SetPosition(const Vector3& pos) { state_.position_ = pos; }
     const Vector3& GetStartPosition() const { return state_.startPosition_; }
@@ -133,6 +138,7 @@ private:
     InputState currentInput_;
     float actionMoveFactor_ = 1.0f;  // 鎖アクションによる移動倍率
     bool actionJumpLocked_ = false;  // 鎖アクション中のジャンプ無効
+    bool introLocked_ = false;       // 開始演出中（着地するまで）の操作止め
     PlayerPhysics physics_;
     GameCamera* camera_ = nullptr;
 };
