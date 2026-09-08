@@ -1529,7 +1529,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 }
             } else {
                 int mapTool = mapEditor_ ? mapEditor_->GetContext()->GetSelectedTool() : 0;
-                bool isMapChipSelected = (mapTool >= 100 || (mapTool >= 1 && mapTool <= 12));
+                bool isMapChipSelected = (mapTool >= 1 && mapTool != 6 && mapTool != 10);
                 bool isPlacedModelSelected = (model3DEditor_ && model3DEditor_->GetSelectedObject() != nullptr);
                 if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected || selectedReplayBlock_.IsValid() || isPlacedModelSelected) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));

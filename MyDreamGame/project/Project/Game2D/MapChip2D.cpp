@@ -1448,7 +1448,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     prc->GetMaterial().color = def->color;
                     
                     if (!def->textureName.empty()) {
-                        uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
+                        std::string fullTex = (def->textureName.find("resources/") == 0) ? def->textureName : ("resources/" + def->textureName);
+                        uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
                         prc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
                     }
                     
@@ -1466,7 +1467,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             if (!def->modelName.empty()) {
                 Model* model = nullptr;
                 if (def->modelName.length() >= 4 && def->modelName.substr(def->modelName.length() - 4) == ".obj") {
-                    std::string fullPath = "resources/" + def->modelName;
+                    std::string fullPath = (def->modelName.find("resources/") == 0) ? def->modelName : ("resources/" + def->modelName);
                     std::filesystem::path p(fullPath);
                     std::string dirPath = p.parent_path().string();
                     std::string fileName = p.filename().string();
@@ -1485,8 +1486,17 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     mrc->Initialize(device_.Get(), model);
                     
                     if (!def->textureName.empty()) {
-                        uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
+                        std::string fullTex = (def->textureName.find("resources/") == 0) ? def->textureName : ("resources/" + def->textureName);
+                        uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
                         mrc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+                    } else if (model) {
+                        std::string modelTexPath = model->GetModelData().material.textureFilePath;
+                        if (!modelTexPath.empty() && std::filesystem::exists(modelTexPath)) {
+                            uint32_t handle = TextureManager::GetInstance()->Load(modelTexPath);
+                            mrc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+                        } else {
+                            mrc->SetTextureHandle(gpuHandle_);
+                        }
                     } else {
                         mrc->SetTextureHandle(gpuHandle_);
                     }
