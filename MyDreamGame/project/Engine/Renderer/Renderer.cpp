@@ -10,6 +10,7 @@
 #include "GameObject/PrimitiveObject.h"
 #include "GameObject/Object3D.h"
 #include "Component/MeshRendererComponent.h"
+#include "Renderer/ConstantBufferPool.h"
 #include "Component/PrimitiveRendererComponent.h"
 #include "Component/TransformComponent.h"
 #include "GameObject/GameObject.h"
@@ -576,6 +577,7 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
     // TODO: Parent logic if needed
 
     TransformMatrix* mappedTransform = comp->GetMappedTransform();
+    if (!mappedTransform) return; // 定数バッファを確保できていない（未初期化）ものは描かない
     mappedTransform->World = worldMatrix;
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
 
@@ -586,14 +588,14 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         bool useSkinning = (animator != nullptr && animator->HasSkeleton());
         if (useSkinning) {
             commandList->SetPipelineState(dxCommon_->GetShadowMapSkinningPipelineState());
-            commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformResource()->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformGPUAddress());
             commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
             const SkinCluster& skinCluster = animator->GetSkinCluster();
             commandList->SetGraphicsRootDescriptorTable(2, skinCluster.paletteSrvHandle.second);
             comp->GetModel()->Draw(&skinCluster.influenceBufferView, comp->GetTextureHandle());
         } else {
             commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
-            commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformResource()->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformGPUAddress());
             commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
             comp->GetModel()->Draw(nullptr, comp->GetTextureHandle());
         }
@@ -609,8 +611,8 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         commandList->SetGraphicsRootSignature(dxCommon_->GetSkinningRootSignature());
         commandList->SetPipelineState(dxCommon_->GetSkinningPipelineState());
         
-        commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
-        commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformGPUAddress());
+        commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialGPUAddress());
         commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
         
         if (ModelCommon* mc = comp->GetModel()->GetModelCommon()) {
@@ -654,8 +656,8 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
             }
         }
 
-        commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
-        commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformGPUAddress());
+        commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialGPUAddress());
         commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
         if (ModelCommon* mc = comp->GetModel()->GetModelCommon()) {
@@ -721,6 +723,7 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
     Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
     
     TransformMatrix* mappedTransform = comp->GetMappedTransform();
+    if (!mappedTransform) return; // 定数バッファを確保できていない（未初期化）ものは描かない
     mappedTransform->World = worldMatrix;
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
 
@@ -728,7 +731,7 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
     if (isShadowPass_) {
         if (comp->GetMaterial().color.w <= 0.0f) return;
         commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
-        commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformResource()->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformGPUAddress());
         commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
         comp->GetPrimitive()->Draw();
         return;
@@ -761,8 +764,8 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
         }
     }
 
-    commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformResource()->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(1, comp->GetTransformGPUAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialGPUAddress());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
     if (ModelCommon* mc = ModelManager::GetInstance()->GetModelCommon()) {

@@ -11,14 +11,17 @@ PrimitiveRendererComponent::PrimitiveRendererComponent() {
 }
 
 PrimitiveRendererComponent::~PrimitiveRendererComponent() {
+    ConstantBufferPool::GetInstance()->Free(materialCB_);
+    ConstantBufferPool::GetInstance()->Free(transformCB_);
 }
 
 void PrimitiveRendererComponent::Initialize(ID3D12Device* device, Primitive* primitive) {
     primitive_ = primitive;
     
-    // マテリアル用バッファ生成
-    materialResource_ = CreateBufferResource(device, (sizeof(Material) + 255) & ~255u);
-    materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedMaterial_));
+    // マテリアル用バッファ確保
+    materialCB_ = ConstantBufferPool::GetInstance()->Allocate(device, sizeof(Material));
+    mappedMaterial_ = reinterpret_cast<Material*>(materialCB_.cpu);
+    if (!mappedMaterial_) return;
 
     // デフォルトマテリアル設定
     material_.color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -33,18 +36,25 @@ void PrimitiveRendererComponent::Initialize(ID3D12Device* device, Primitive* pri
     material_.enableBoxMapping = 0.0f;
     *mappedMaterial_ = material_;
 
-    // Transform用バッファ生成
-    transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
-    transformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTransform_));
+    // Transform用バッファ確保
+    transformCB_ = ConstantBufferPool::GetInstance()->Allocate(device, sizeof(TransformMatrix));
+    mappedTransform_ = reinterpret_cast<TransformMatrix*>(transformCB_.cpu);
 
-    // 残像用バッファの生成
+    // 残像用バッファはここでは作らない。
+    // 1コンポーネントあたり数MBになるため、残像を実際に使うまで確保を遅らせる（EnsureGhostResources）
+    device_ = device;
+}
+
+void PrimitiveRendererComponent::EnsureGhostResources() {
+    if (mappedGhostTransform_ || !device_) return;
+
     uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
     uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
 
-    ghostTransformResource_ = CreateBufferResource(device, transformSize * kMaxGhosts);
+    ghostTransformResource_ = CreateBufferResource(device_, transformSize * kMaxGhosts);
     ghostTransformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedGhostTransform_));
 
-    ghostMaterialResource_ = CreateBufferResource(device, materialSize * kMaxGhosts);
+    ghostMaterialResource_ = CreateBufferResource(device_, materialSize * kMaxGhosts);
     ghostMaterialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedGhostMaterial_));
 }
 
@@ -53,7 +63,9 @@ void PrimitiveRendererComponent::Initialize() {
 }
 
 void PrimitiveRendererComponent::Update() {
-    *mappedMaterial_ = material_;
+    if (mappedMaterial_) {
+        *mappedMaterial_ = material_;
+    }
 
     if (showTrail_ && gameObject_) {
         if (auto transformComp = gameObject_->GetComponent<TransformComponent>()) {
@@ -63,6 +75,8 @@ void PrimitiveRendererComponent::Update() {
 }
 
 void PrimitiveRendererComponent::UpdateGhost(const EulerTransform& currentTransform) {
+    EnsureGhostResources();
+    if (!mappedGhostTransform_ || !mappedGhostMaterial_) return;
     if (currentGhostIndex_ < kMaxGhosts) {
         uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
         uint32_t materialSize = (sizeof(Material) + 255) & ~255u;

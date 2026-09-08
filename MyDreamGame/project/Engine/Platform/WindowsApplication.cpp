@@ -1,7 +1,9 @@
 #include "Platform/WindowsApplication.h"
+#include "Renderer/ConstantBufferPool.h"
 #include "Editor/Replay/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -166,6 +168,9 @@ void WindowsApplication::Initialize() {
 #else
     // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
     modelCommon_->LoadLightingConfig();
+    // エディター非搭載ビルドでは配置モデルの実体をここで初期化する
+    // (エディター搭載時は EditorManager -> Model3DEditor 経由で初期化される)
+    Model3DEditorContext::GetInstance()->Initialize(device);
 #endif
 
     // 音声の初期化
@@ -379,6 +384,8 @@ void WindowsApplication::Update() {
 #else
     // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
+    // シーンごとに読み込んだ3Dモデル配置(レベルデータ)のワールド行列を更新する
+    Model3DEditorContext::GetInstance()->Update();
     gameCamera_->Update();
     CameraManager::GetInstance()->ClearCullingCameraInfo();
     AudioManager::SetBGMPlaybackAllowed(true);
@@ -412,6 +419,9 @@ void WindowsApplication::Draw() {
     if (editorManager_) {
         editorManager_->Draw3D();
     }
+#else
+    // エディター非搭載ビルドでもシーンのレベルデータを描画する (グリッド床は描かない)
+    Model3DEditorContext::GetInstance()->Draw(false);
 #endif
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
@@ -484,6 +494,9 @@ void WindowsApplication::Finalize() {
     }
 #endif
 
+    // 配置モデル(レベルデータ)の実体を解放する
+    Model3DEditorContext::DestroyInstance();
+
     ModelManager::GetInstance()->Finalize();
 
     // 2. ゲーム層のマネージャー・共通部の解放
@@ -510,6 +523,10 @@ void WindowsApplication::Finalize() {
     // 6. Windows API 関連のクリーンアップ
     // timeBeginPeriod(1) に対応する解除
     timeEndPeriod(1); // ★追加：タイマー精度を元に戻す
+
+    // 定数バッファの置き場（サブアロケータ）を解放する。
+    // 使う側（コンポーネント）は上でシーンごと破棄済みなので、デバイスを消す直前に片付ける
+    ConstantBufferPool::GetInstance()->Shutdown();
 
     // 7. 最後にすべての土台である DirectXCommon を消す
     if (dxCommon_) {
