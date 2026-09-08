@@ -7,6 +7,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include "Scene/SceneFactory.h"
 #include "GameScene.h"
 #include "Game2D/Blocks/SavePoint.h"
@@ -111,20 +112,44 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
     }
 
     auto keyboard = KeyboardInput::GetInstance();
-    if (keyboard->IsKeyPressed(DIK_A)) {
+    auto pad = GamepadInput::GetInstance();
+
+    static float s_stageSelectPadCooldown = 0.0f;
+    if (s_stageSelectPadCooldown > 0.0f) {
+        s_stageSelectPadCooldown -= TimeManager::GetInstance().GetDeltaTime();
+    }
+
+    bool movePrev = keyboard->IsKeyPressed(DIK_A) || keyboard->IsKeyPressed(DIK_LEFT);
+    bool moveNext = keyboard->IsKeyPressed(DIK_D) || keyboard->IsKeyPressed(DIK_RIGHT);
+
+    if (pad && pad->IsConnected() && s_stageSelectPadCooldown <= 0.0f) {
+        float stickX = pad->GetLeftStick().x;
+        if (pad->IsDPadLeft() || stickX < -0.5f) {
+            movePrev = true;
+            s_stageSelectPadCooldown = 0.25f;
+        } else if (pad->IsDPadRight() || stickX > 0.5f) {
+            moveNext = true;
+            s_stageSelectPadCooldown = 0.25f;
+        }
+    }
+
+    if (movePrev) {
         currentStageIndex_--;
         if (currentStageIndex_ < 0) {
             currentStageIndex_ = stageCount_ - 1;
         }
     }
-    if (keyboard->IsKeyPressed(DIK_D)) {
+    if (moveNext) {
         currentStageIndex_++;
         if (currentStageIndex_ >= stageCount_) {
             currentStageIndex_ = 0;
         }
     }
 
-    if (keyboard->IsKeyPressed(DIK_SPACE)) {
+    bool isDecision = keyboard->IsKeyPressed(DIK_SPACE) || keyboard->IsKeyPressed(DIK_RETURN) ||
+                      (pad && (pad->IsButtonPressed(GamepadButton::A) || pad->IsButtonPressed(0)));
+
+    if (isDecision) {
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
             GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }

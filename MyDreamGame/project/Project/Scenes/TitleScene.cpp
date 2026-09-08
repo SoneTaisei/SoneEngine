@@ -571,10 +571,11 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
         }
 
         if (pad && s_padCooldown <= 0.0f) {
-            if (pad->IsDPadLeft()) {
+            float stickX = pad->GetLeftStick().x;
+            if (pad->IsDPadLeft() || stickX < -0.5f) {
                 prevStage = true;
                 s_padCooldown = 0.25f;
-            } else if (pad->IsDPadRight()) {
+            } else if (pad->IsDPadRight() || stickX > 0.5f) {
                 nextStage = true;
                 s_padCooldown = 0.25f;
             }

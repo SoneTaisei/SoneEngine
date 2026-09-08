@@ -53,7 +53,7 @@ void WindowsApplication::Initialize() {
 
     // 窓の作成を任せる
     window_ = std::make_unique<Window>();
-    window_->Create(L"MyDreamGameEngine", kWindowWidth_, kWindowHeight_);
+    window_->Create(L"3023_怪盗チェーン", kWindowWidth_, kWindowHeight_);
 
     LoadWindowConfig();
 
@@ -210,6 +210,7 @@ void WindowsApplication::Update() {
 
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
+    GamepadInput::GetInstance()->Update();
 
     // フルスクリーン切り替え
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F11)) {

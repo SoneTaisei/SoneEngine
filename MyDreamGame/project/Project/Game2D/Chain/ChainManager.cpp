@@ -8,6 +8,7 @@
 #include "Game2D/MapChip2D.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/GPUParticle/GPUParticleSystem.h"
@@ -131,18 +132,28 @@ void ChainManager::HandleInput() {
         return;
     }
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
+    GamepadInput* pad = GamepadInput::GetInstance();
+    bool padConnected = pad && pad->IsConnected();
 
-    // スピン：Q で宝石を持つ・やめる、A/D で投げる・漕ぐ、SPACE で飛ぶ
+    // スピン：Q / パッドX または LB で宝石を持つ・やめる、A/D / スティック / D-Pad で投げる・漕ぐ、SPACE / パッドA または RT で飛ぶ
     // （注意：リプレイの記録キーは Engine 側で固定されていて Q は入っていない。再生で振り子を再現するには Engine の記録キーに Q を足す必要がある）
     if (spin_) {
-        if (keyboard->IsKeyPressed(DIK_Q)) {
+        bool toggleSpin = keyboard->IsKeyPressed(DIK_Q) || 
+                          (padConnected && (pad->IsButtonPressed(GamepadButton::X) || pad->IsButtonPressed(GamepadButton::LB)));
+        if (toggleSpin) {
             spin_->OnHoldToggle();
         }
-        // 漕いでいる最中の SPACE：押している間は振り子がスローになって狙え、離すと発射（押した縁・離した縁は ChainSpinAction 側で見る）
-        spin_->SetLaunchHeld(spin_->GetState() == ChainSpinAction::State::kStance && keyboard->IsKeyDown(DIK_SPACE));
-        if (keyboard->IsKeyPressed(DIK_SPACE)) {
+
+        // 漕いでいる最中の発射構えホールド：押している間は振り子がスローになって狙え、離すと発射
+        bool launchHeld = keyboard->IsKeyDown(DIK_SPACE) || 
+                          (padConnected && (pad->IsButtonDown(GamepadButton::A) || pad->GetRightTrigger() > 0.3f));
+        spin_->SetLaunchHeld(spin_->GetState() == ChainSpinAction::State::kStance && launchHeld);
+
+        bool launchPressed = keyboard->IsKeyPressed(DIK_SPACE) || 
+                             (padConnected && pad->IsButtonPressed(GamepadButton::A));
+        if (launchPressed) {
             if (spin_->IsHolding()) {
-                // 持っている最中の SPACE は落として通常ジャンプ（プレイヤー側のジャンプは構え中に無効なので、ここで跳ばせる）
+                // 持っている最中の SPACE / パッドA は落として通常ジャンプ（プレイヤー側のジャンプは構え中に無効なので、ここで跳ばせる）
                 spin_->Cancel(player_, playerChain_.get());
                 if (player_->IsOnGround()) {
                     const auto& pp = player_->GetParams();
@@ -156,22 +167,33 @@ void ChainManager::HandleInput() {
         float swing = 0.0f;
         if (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) swing += 1.0f;
         if (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) swing -= 1.0f;
+
+        if (padConnected) {
+            float stickX = pad->GetLeftStick().x;
+            if (std::abs(stickX) > 0.0f) swing += stickX;
+            if (pad->IsDPadRight()) swing += 1.0f;
+            if (pad->IsDPadLeft()) swing -= 1.0f;
+        }
+        swing = std::clamp(swing, -1.0f, 1.0f);
         spin_->SetSwingInput(swing);
     }
 
-    // 拾う（K）：縛った警備員の近くなら鎖を取り戻す。それ以外は範囲内の鎖を拾う（無ければ何もしない）
-    if (keyboard->IsKeyPressed(DIK_K)) {
+    // 拾う（K / パッドY または RB）：縛った警備員の近くなら鎖を取り戻す。それ以外は範囲内の鎖を拾う（無ければ何もしない）
+    bool isPickup = keyboard->IsKeyPressed(DIK_K) || 
+                    (padConnected && (pad->IsButtonPressed(GamepadButton::Y) || pad->IsButtonPressed(GamepadButton::RB)));
+    if (isPickup) {
         if (spin_) spin_->Cancel(player_, playerChain_.get()); // 構え中の着脱は中断してから
         if (!TryUnbindGuard()) {
             TryPickup();
         }
     }
 
-
-    // 置く（J）：光っている（縛れる）警備員が近ければ縛る、それ以外は外して落とす。取る（K）と隣の右手キーで対にする
+    // 置く（J / パッドB）：光っている（縛れる）警備員が近ければ縛る、それ以外は外して落とす。取る（K）と隣の右手キーで対にする
     // 注意: Jの録画スロットはShiftと共有のため、将来ダッシュ等でShiftを使うと
     // リプレイ再生時に幻の「外す」になり得る。その場合はJを外してS(下)だけにする
-    if (keyboard->IsKeyPressed(DIK_J)) {
+    bool isDetach = keyboard->IsKeyPressed(DIK_J) || 
+                    (padConnected && pad->IsButtonPressed(GamepadButton::B));
+    if (isDetach) {
         if (spin_) spin_->Cancel(player_, playerChain_.get());
         if (!TryBindGuard()) {
             DetachUnits();

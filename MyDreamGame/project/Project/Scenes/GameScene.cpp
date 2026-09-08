@@ -2260,15 +2260,31 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
     auto kb = KeyboardInput::GetInstance();
     auto pad = GamepadInput::GetInstance();
 
-    // W / S キーでメニュー項目の切り替え (上下矢印キー・アナログスティックは使用しない)
+    // W / S / 矢印キー / パッド十字キー・スティックでメニュー項目の切り替え
     bool moveUp = false;
     bool moveDown = false;
 
-    if (kb->IsKeyPressed(DIK_W)) {
+    if (kb->IsKeyPressed(DIK_W) || kb->IsKeyPressed(DIK_UP)) {
         moveUp = true;
     }
-    if (kb->IsKeyPressed(DIK_S)) {
+    if (kb->IsKeyPressed(DIK_S) || kb->IsKeyPressed(DIK_DOWN)) {
         moveDown = true;
+    }
+
+    static float s_pausePadCooldown = 0.0f;
+    if (s_pausePadCooldown > 0.0f) {
+        s_pausePadCooldown -= dt;
+    }
+
+    if (pad && pad->IsConnected() && s_pausePadCooldown <= 0.0f) {
+        float stickY = pad->GetLeftStick().y;
+        if (pad->IsDPadUp() || stickY > 0.5f) {
+            moveUp = true;
+            s_pausePadCooldown = 0.25f;
+        } else if (pad->IsDPadDown() || stickY < -0.5f) {
+            moveDown = true;
+            s_pausePadCooldown = 0.25f;
+        }
     }
 
     if (moveUp) {
@@ -2277,12 +2293,19 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
         pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
     }
 
+    // Bボタンでポーズ解除
+    if (pad && pad->IsButtonPressed(GamepadButton::B)) {
+        isPaused_ = false;
+        pauseCooldown_ = 0.25f;
+        return;
+    }
+
     // 決定入力 (Space / Enter / パッド Aボタン)
     bool isDecision = false;
     if (kb->IsKeyPressed(DIK_SPACE) || kb->IsKeyPressed(DIK_RETURN) || kb->IsKeyPressed(DIK_NUMPADENTER)) {
         isDecision = true;
     }
-    if (pad && pad->IsButtonPressed(0)) {
+    if (pad && (pad->IsButtonPressed(GamepadButton::A) || pad->IsButtonPressed(0))) {
         isDecision = true;
     }
 
