@@ -1,4 +1,4 @@
-﻿#include "ChainConfig.h"
+#include "ChainConfig.h"
 #include <algorithm>
 #include <fstream>
 #include <filesystem>
@@ -53,6 +53,9 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["throwOutTime_"] = params.throwOutTime_;
         j["throwAngleDeg_"] = params.throwAngleDeg_;
         j["throwOmega_"] = params.throwOmega_;
+        j["spinAccel_"] = params.spinAccel_;
+        j["spinBrake_"] = params.spinBrake_;
+        j["maxSpinOmega_"] = params.maxSpinOmega_;
         j["groundThrowSpeed_"] = params.groundThrowSpeed_;
         j["groundThrowUp_"] = params.groundThrowUp_;
         j["groundThrowRecover_"] = params.groundThrowRecover_;
@@ -72,6 +75,7 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["coneMinDeg_"] = params.coneMinDeg_;
         j["coneMaxDeg_"] = params.coneMaxDeg_;
         j["aimSlow_"] = params.aimSlow_;
+        j["aimTargetOmega_"] = params.aimTargetOmega_;
         j["aimMaxTime_"] = params.aimMaxTime_;
         j["linkThickness_"] = params.linkThickness_;
         j["linkOverlap_"] = params.linkOverlap_;
@@ -137,6 +141,9 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("throwOutTime_")) params.throwOutTime_ = j["throwOutTime_"];
         if (j.contains("throwAngleDeg_")) params.throwAngleDeg_ = j["throwAngleDeg_"];
         if (j.contains("throwOmega_")) params.throwOmega_ = j["throwOmega_"];
+        if (j.contains("spinAccel_")) params.spinAccel_ = j["spinAccel_"];
+        if (j.contains("spinBrake_")) params.spinBrake_ = j["spinBrake_"];
+        if (j.contains("maxSpinOmega_")) params.maxSpinOmega_ = j["maxSpinOmega_"];
         if (j.contains("groundThrowSpeed_")) params.groundThrowSpeed_ = j["groundThrowSpeed_"];
         if (j.contains("groundThrowUp_")) params.groundThrowUp_ = j["groundThrowUp_"];
         if (j.contains("groundThrowRecover_")) params.groundThrowRecover_ = j["groundThrowRecover_"];
@@ -156,6 +163,7 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("coneMinDeg_")) params.coneMinDeg_ = j["coneMinDeg_"];
         if (j.contains("coneMaxDeg_")) params.coneMaxDeg_ = j["coneMaxDeg_"];
         if (j.contains("aimSlow_")) params.aimSlow_ = j["aimSlow_"];
+        if (j.contains("aimTargetOmega_")) params.aimTargetOmega_ = j["aimTargetOmega_"];
         if (j.contains("aimMaxTime_")) params.aimMaxTime_ = j["aimMaxTime_"];
         if (j.contains("linkThickness_")) params.linkThickness_ = j["linkThickness_"];
         if (j.contains("linkOverlap_")) params.linkOverlap_ = j["linkOverlap_"];
@@ -203,7 +211,8 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         params.justBonus_ = std::clamp(params.justBonus_, 1.0f, 2.0f);
         params.coneMinDeg_ = std::clamp(params.coneMinDeg_, 0.0f, 89.0f);
         params.coneMaxDeg_ = std::clamp(params.coneMaxDeg_, params.coneMinDeg_, 89.0f);
-        params.aimSlow_ = std::clamp(params.aimSlow_, 0.05f, 1.0f);
+        params.aimSlow_ = std::clamp(params.aimSlow_, 0.01f, 1.0f);
+        params.aimTargetOmega_ = std::clamp(params.aimTargetOmega_, 0.5f, 10.0f);
         params.aimMaxTime_ = std::clamp(params.aimMaxTime_, 0.1f, 3.0f);
         params.spinMoveFactor_ = std::clamp(params.spinMoveFactor_, 0.0f, 1.0f);
         params.spinCooldown_ = (std::max)(0.0f, params.spinCooldown_);

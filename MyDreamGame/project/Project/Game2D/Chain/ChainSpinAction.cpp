@@ -97,6 +97,7 @@ void ChainSpinAction::Initialize(const ChainParams& params) {
     lastLaunchDir_ = { 0.0f, 0.0f, 0.0f };
     lastBrokeByTerrain_ = false;
     lastLaunchJust_ = false;
+    currentSlowScale_ = 1.0f;
     arrowVisible_ = false;
     trailVisible_ = 0;
 }
@@ -110,6 +111,7 @@ void ChainSpinAction::ResetInputState() {
     throwLockTime_ = -1.0f;
     swingInput_ = 0.0f;
     spinAllowed_ = false;
+    currentSlowScale_ = 1.0f;
     // 振り子の状態も入力から決まるので一緒に戻す（前回のプレイ/再生ループの値が残ると0フレーム目からずれる）
     theta_ = 0.0f;
     omega_ = 0.0f;
@@ -159,6 +161,23 @@ void ChainSpinAction::UpdateSpinTarget(const Vector3& socketWorld) {
     spinTarget_ = { socketWorld.x + std::sin(theta_) * radius_,
                     socketWorld.y - std::cos(theta_) * radius_,
                     0.0f };
+}
+
+bool ChainSpinAction::IsSlowRegion() const {
+    float localX = std::sin(theta_);
+    if (omega_ > 0.01f) {
+        // 右回転（Dで加速）：プレイヤーから見て右側（X > 0）の間だけスロー
+        return localX > 0.0f;
+    } else if (omega_ < -0.01f) {
+        // 左回転（Aで加速）：プレイヤーから見て左側（X < 0）の間だけスロー
+        return localX < 0.0f;
+    }
+    return true;
+}
+
+bool ChainSpinAction::IsSlowActive() const {
+    // スペースキーを押して狙い（スロー）モード中はアクティブ。離した瞬間にfalseになり滑らかに解除される
+    return (state_ == State::kStance && aiming_);
 }
 
 bool ChainSpinAction::IsRodBlocked(MapChip2D* map, const Vector3& socketWorld, float theta, float radius, float endRadius) const {
@@ -336,14 +355,14 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
             break;
         }
 
-        // SPACE：押した瞬間から振り子だけスローにして狙い、離した瞬間に飛ぶ。押しっぱなしでも aimMaxTime_ で飛ぶ
+        // SPACE：押した瞬間から狙い（スロー）モード。キーを離した瞬間に発射（押し続けている間は何回転しても解除されない）
         if (held && !heldPrev) {
             aiming_ = true;
             aimTimer_ = 0.0f;
         }
         if (aiming_) {
             aimTimer_ += dt;
-            if (!held || aimTimer_ >= params_.aimMaxTime_) {
+            if (!held) {
                 Launch(dt, player, chain, socketWorld, IsInJustWindow());
                 break;
             }
@@ -352,9 +371,25 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
         // 構え中は移動不可（A/Dは振りに使う）。ジャンプも無効（SPACE は発射に使う）
         player->SetActionInputModifier(params_.spinMoveFactor_, true);
 
-        // 狙っている間は振り子の時間だけ遅くする（角度・角速度の進みだけ。勢いそのものは変えない）。漕ぎも効かない
-        const float simDt = aiming_ ? dt * params_.aimSlow_ : dt;
-        const float swing = aiming_ ? 0.0f : swingInput_;
+        // 半周スローモーション（動的バレットタイム方式）：
+        // 右回転中はプレイヤーの右側（X > 0）のみスロー、左回転中は左側（X < 0）のみスロー
+        // 回転が高速（omega大）な場合でも見かけの回転速度が aimTargetOmega_（約1.8 rad/s）程度になるよう、
+        // スロー倍率を動的に深める（ただし通常の aimSlow_ よりは速くならない）
+        const bool inSlowRegion = aiming_ && IsSlowRegion();
+        float targetSlow = 1.0f;
+        if (inSlowRegion) {
+            const float absOmega = std::fabs(omega_);
+            if (absOmega > 0.01f) {
+                targetSlow = (std::min)(params_.aimSlow_, params_.aimTargetOmega_ / absOmega);
+            } else {
+                targetSlow = params_.aimSlow_;
+            }
+        }
+        // スローへ入るときは素早く(12.0f/s)、スローから戻るときは「もっとゆっくり滑らかに」(1.2f/s) 補間
+        const float transitionSpeed = (targetSlow > currentSlowScale_) ? 1.2f : 12.0f;
+        currentSlowScale_ += (targetSlow - currentSlowScale_) * std::clamp(transitionSpeed * dt, 0.0f, 1.0f);
+
+        const float simDt = dt * currentSlowScale_;
 
         float full = FullRadius(chain);
         throwOutTime_ += simDt;
@@ -363,11 +398,53 @@ void ChainSpinAction::Update(float dt, MapChip2D* map, Player2D* player, Chain2D
         radius_ = (std::max)(radius_, kMinSpinRadius);
 
         effMass_ = EffectiveMass(player);
-        float g = std::fabs(params_.gravity_);
-        float alphaGravity = -(g / radius_) * std::sin(theta_);
-        float alphaSwing = params_.swingStrength_ * swing / effMass_;
-        omega_ += (alphaGravity + alphaSwing) * simDt;
-        omega_ *= (std::max)(0.0f, 1.0f - params_.swingDamping_ * simDt);
+
+        // D長押しで右回転に徐々に加速、A長押しで左回転に徐々に加速
+        // 右回転中にAで急ブレーキ、左回転中にDで急ブレーキ
+        // A/Dが離れたら自然減速（スローモーション区間では減衰率も時間の進みsimDtに合わせてスケーリング）
+        const float accel = params_.spinAccel_;
+        const float brake = params_.spinBrake_;
+        const float maxOmega = params_.maxSpinOmega_;
+
+        if (swingInput_ > 0.5f) {
+            // D が押されている：右回転（下から右へ駆け上がる回転: omega_ > 0）
+            if (omega_ < -0.1f) {
+                // 現在は左回転（omega < 0）なので急ブレーキ！
+                omega_ += brake * simDt;
+                if (omega_ > 0.0f) {
+                    omega_ = 0.0f;
+                }
+            } else {
+                // 右回転方向に徐々に加速
+                omega_ += accel * simDt;
+                if (omega_ > maxOmega) {
+                    omega_ = maxOmega;
+                }
+            }
+        } else if (swingInput_ < -0.5f) {
+            // A が押されている：左回転（下から左へ駆け上がる回転: omega_ < 0）
+            if (omega_ > 0.1f) {
+                // 現在は右回転（omega > 0）なので急ブレーキ！
+                omega_ -= brake * simDt;
+                if (omega_ < 0.0f) {
+                    omega_ = 0.0f;
+                }
+            } else {
+                // 左回転方向に徐々に加速
+                omega_ -= accel * simDt;
+                if (omega_ < -maxOmega) {
+                    omega_ = -maxOmega;
+                }
+            }
+        } else {
+            // A/D が離れている：自然減衰
+            // simDt を用いているため、スローモーション区間では減衰率も時間の進みと連動
+            omega_ *= (std::max)(0.0f, 1.0f - params_.swingDamping_ * simDt);
+            if (std::fabs(omega_) < 0.05f) {
+                omega_ = 0.0f;
+            }
+        }
+
         const float dTheta = omega_ * simDt;
         theta_ = WrapAngle(theta_ + dTheta);
 
@@ -416,6 +493,7 @@ void ChainSpinAction::StartHold(Player2D* player, Chain2D* chain, const Vector3&
     aimTimer_ = 0.0f;
     lastBrokeByTerrain_ = false;
     spinAccumAngle_ = 0.0f;
+    currentSlowScale_ = 1.0f;
 
     launchCap_ = player->GetParams().jumpPower_ * params_.launchMaxJumpRatio_;
     effMass_ = EffectiveMass(player);
@@ -428,10 +506,9 @@ void ChainSpinAction::StartHold(Player2D* player, Chain2D* chain, const Vector3&
 
 void ChainSpinAction::StartThrow(float dirSign, const Vector3& socketWorld) {
     state_ = State::kStance;
-    theta_ = WrapAngle(dirSign * params_.throwAngleDeg_ * kPi / 180.0f);
-    float c = std::cos(theta_);
-    float motionSign = (std::fabs(c) > 0.01f) ? dirSign * ((c > 0.0f) ? 1.0f : -1.0f) : dirSign;
-    omega_ = motionSign * params_.throwOmega_;
+    // dirSign > 0 (D) なら右回転（omega > 0）、dirSign < 0 (A) なら左回転（omega < 0）
+    omega_ = dirSign * params_.throwOmega_;
+    theta_ = 0.0f;
     throwOutTime_ = 0.0f;
     radius_ = params_.holdOffset_;
     aiming_ = false;
@@ -502,6 +579,7 @@ void ChainSpinAction::Launch(float dt, Player2D* player, Chain2D* chain, const V
     aiming_ = false;
     aimTimer_ = 0.0f;
     spinAccumAngle_ = 0.0f;
+    currentSlowScale_ = 1.0f;
     state_ = State::kCooldown;
     cooldownTimer_ = params_.spinCooldown_;
     Log("ChainSpinAction: Launch speed=" + std::to_string(speed) + " / cap " + std::to_string(launchCap_) +
@@ -516,6 +594,7 @@ void ChainSpinAction::Break(float dt, Player2D* player, Chain2D* chain, const Ve
     aiming_ = false;
     aimTimer_ = 0.0f;
     spinAccumAngle_ = 0.0f;
+    currentSlowScale_ = 1.0f;
     state_ = State::kCooldown;
     cooldownTimer_ = params_.spinCooldown_;
     Log("ChainSpinAction: stance broken (terrain/airborne/cancel) omega=" + std::to_string(omega_) + "\n");
@@ -535,6 +614,7 @@ void ChainSpinAction::Cancel(Player2D* player, Chain2D* chain) {
     aiming_ = false;
     aimTimer_ = 0.0f;
     spinAccumAngle_ = 0.0f;
+    currentSlowScale_ = 1.0f;
     arrowVisible_ = false;
     trailVisible_ = 0;
 }
@@ -584,13 +664,15 @@ void ChainSpinAction::UpdateVisuals(Player2D* player, const Vector3& socketWorld
     const Vector4 dim = { 0.75f, 0.7f, 0.45f, 0.55f };
     const Vector4 bright = { 1.0f, 0.95f, 0.6f, 1.0f };
 
-    // ---- 矢じり：スロー中だけ、プレイヤーの体から「今離したら自分が飛ぶ向き」を指す（発射と同じ計算で嘘にならない） ----
+    // ---- 矢じり：エイム中、プレイヤーの体から「今離したら自分が飛ぶ向き」を指す ----
     // 飛ぶのはプレイヤーなので、宝石ではなく体から出す。勢いが強いほど長く伸びる
     arrowVisible_ = false;
     if (arrow_ && aiming_) {
-        const Vector3 v = PredictLaunchVelocity(just);
-        const float speed = std::sqrt(v.x * v.x + v.y * v.y);
-        const Vector3 dir = (speed > 1e-6f) ? Vector3{ v.x / speed, v.y / speed, 0.0f } : ClampToCone(TangentDirection());
+        // 矢印の向き：接線方向（TangentDirection）を直接使用
+        // チェーンの剛体回転速度ベクトルと完全に一致し、チェーンの回転と1対1で360度滑らかに完全連動する
+        Vector3 dir = TangentDirection();
+
+        const float speed = std::clamp(GetCurrentThrowSpeed() * params_.pullTransfer_, 0.0f, launchCap_);
         // 長さ：勢い（上限に対する割合）で伸ばす。円錐の高さは kArrowSize × 2
         const float ratio = (launchCap_ > 0.0f) ? std::clamp(speed / launchCap_, 0.0f, 1.0f) : 0.0f;
         const float stretch = 1.0f + (kArrowMaxStretch - 1.0f) * ratio;
@@ -603,11 +685,11 @@ void ChainSpinAction::UpdateVisuals(Player2D* player, const Vector3& socketWorld
         arrow_->SetTranslation(pos);
         // 円錐の先端は +Y。向き（右 = 0 度）へ倒すには Z 回転 = 角度 − 90 度
         arrow_->SetRotation({ 0.0f, 0.0f, std::atan2(dir.y, dir.x) - kPi * 0.5f });
-        // 勢い不足は細く暗く、飛べるなら金、ジャストは白っぽく太く
+        // 勢い不足は細く暗く、飛べるなら金、ジャスト窓内は白っぽく太く強く発光
         float w = ready ? 1.0f : 0.7f;
         Vector4 color = ready ? gold : dim;
         if (just && ready) {
-            w = 1.3f;
+            w = 1.4f;
             color = bright;
         }
         arrow_->SetScale({ w, stretch, w });
@@ -651,8 +733,9 @@ void ChainSpinAction::Draw() {
 void ChainSpinAction::DrawImGui() {
 #ifdef USE_IMGUI
     const char* stateNames[] = { "Idle", "Hold", "Stance", "Cooldown" };
+    const bool isSlow = aiming_ && IsSlowRegion();
     ImGui::Text("Spin: %s%s  theta %.2f  omega %.2f  radius %.2f  mass %.2f  swing %+.0f%s",
-                stateNames[static_cast<int>(state_)], aiming_ ? " (aiming/slow)" : "", theta_, omega_, radius_, effMass_, swingInput_,
+                stateNames[static_cast<int>(state_)], isSlow ? " (slow)" : (aiming_ ? " (aim/fast)" : ""), theta_, omega_, radius_, effMass_, swingInput_,
                 lastBrokeByTerrain_ ? "  [last: broken]" : "");
     ImGui::Text("Throw now: %.1f u/s -> fly %.1f / cap %.1f %s  (last %.1f%s, dir %.2f, %.2f)",
                 GetCurrentThrowSpeed(), GetCurrentThrowSpeed() * params_.pullTransfer_, launchCap_,
