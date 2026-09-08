@@ -170,6 +170,13 @@ void WindowsApplication::Initialize() {
 
     // 音声の初期化
     AudioManager::Initialize();
+#ifdef USE_IMGUI
+    // エディター起動時は最初は停止状態（PLAYボタン未押下）のためBGM再生を無効化
+    AudioManager::SetBGMPlaybackAllowed(false);
+#else
+    // リリース版等は最初からBGM再生を許可
+    AudioManager::SetBGMPlaybackAllowed(true);
+#endif
 
     // システムタイマーの分解能を上げる
     timeBeginPeriod(1);
@@ -355,6 +362,9 @@ void WindowsApplication::Update() {
         
         // プレイヤー移動後のゲームカメラを更新（ViewProjectionへの反映のため）
         gameCamera_->Update();
+
+        // エディター表示中は PLAY または Replay 再生中のみBGM再生を許可
+        AudioManager::SetBGMPlaybackAllowed(isCurrentlyActive);
     } else {
         // ImGui 非表示時は通常通りシーンとカメラを更新し、アクティブカメラをゲームカメラに強制する
         sceneManager_->Update();
@@ -362,12 +372,16 @@ void WindowsApplication::Update() {
         activeCamera_ = gameCamera_.get();
         isDebugCameraActive_ = false;
         CameraManager::GetInstance()->ClearCullingCameraInfo();
+
+        // ImGui非表示時はゲームプレイ中とみなしてBGM再生を許可
+        AudioManager::SetBGMPlaybackAllowed(true);
     }
 #else
     // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
     gameCamera_->Update();
     CameraManager::GetInstance()->ClearCullingCameraInfo();
+    AudioManager::SetBGMPlaybackAllowed(true);
 #endif
 
     // 現在のアクティブカメラの行列をViewProjectionに反映
@@ -377,6 +391,9 @@ void WindowsApplication::Update() {
     
     // 他のオブジェクトが使うCameraManagerも同期させる
     activeCamera_->UpdateMatrix(); 
+
+    // 音声の更新処理（再生終了ボイスの破棄など）
+    AudioManager::Update();
 }
 
 void WindowsApplication::Draw() {

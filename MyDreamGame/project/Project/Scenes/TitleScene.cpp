@@ -19,6 +19,7 @@
 #endif
 
 #include "Scene/SceneFactory.h"
+#include "Resource/Audio/AudioManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"
 #include "Component/TransformComponent.h"
@@ -59,6 +60,11 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
         titleLogoAlpha_ = 0.0f;
         titleMenuAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
+
+        // セレクトモード時はTitle.mp3とSelect.mp3を同時に再生
+        AudioManager::StopAllBGM();
+        AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Title.mp3", true, 0.4f);
+        AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
     } else {
         // 通常のタイトル画面から開始（夜空を見上げるアングル）
         phase_ = Phase::kTitle;
@@ -69,6 +75,10 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
         titleLogoAlpha_ = 1.0f;
         titleMenuAlpha_ = 1.0f;
         searchlightAlpha_ = 1.0f;
+
+        // タイトル画面時はTitle.mp3のみを再生
+        AudioManager::StopAllBGM();
+        AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Title.mp3", true, 0.4f);
     }
 
     // カメラをGameCameraおよびCameraManagerに即時反映
@@ -286,6 +296,9 @@ void TitleScene::Update(SceneManager *sceneManager) {
                     transitionStartPos_ = cameraTransform_.translate;
                     transitionStartRot_ = cameraTransform_.rotate;
                     transitionTimer_ = 0.0f;
+
+                    // セレクトモード開始: Title.mp3 は流したまま、Select.mp3 を同時に重ねて再生
+                    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
                 } else if (selectedTitleMenu_ == 1) {
                     // 「クレジット」選択時（将来のクレジット画面展開用）
                 }
@@ -806,6 +819,8 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         cameraTransform_.rotate = targetSelectRot_;
         titleLogoAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
+        AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Title.mp3", true, 0.4f);
+        AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
         if (gameCamera_) {
             gameCamera_->SetTranslation(targetSelectPos_);
             gameCamera_->SetRotation(targetSelectRot_);
@@ -825,6 +840,8 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         cameraTransform_.rotate = { 0.06f, 0.0f, 0.0f };
         titleLogoAlpha_ = 1.0f;
         searchlightAlpha_ = 1.0f;
+        AudioManager::StopBGM("resources/Sound/10Dyas/BGM/Select.mp3");
+        AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Title.mp3", true, 0.4f);
         if (gameCamera_) {
             gameCamera_->SetTranslation(cameraTransform_.translate);
             gameCamera_->SetRotation(cameraTransform_.rotate);
@@ -853,7 +870,22 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         transitionStartPos_ = cameraTransform_.translate;
         transitionStartRot_ = cameraTransform_.rotate;
         transitionTimer_ = 0.0f;
+        AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
     }
+
+    ImGui::Separator();
+    ImGui::Text("【BGM コントロール】");
+    static float titleVol = 0.4f;
+    static float selectVol = 0.4f;
+    if (ImGui::SliderFloat("Title BGM 音量", &titleVol, 0.0f, 1.0f, "%.2f")) {
+        AudioManager::SetBGMVolume("resources/Sound/10Dyas/BGM/Title.mp3", titleVol);
+    }
+    if (ImGui::SliderFloat("Select BGM 音量", &selectVol, 0.0f, 1.0f, "%.2f")) {
+        AudioManager::SetBGMVolume("resources/Sound/10Dyas/BGM/Select.mp3", selectVol);
+    }
+    ImGui::Text("Title BGM: %s", AudioManager::IsBGMPlaying("resources/Sound/10Dyas/BGM/Title.mp3") ? "再生中" : "停止中");
+    ImGui::SameLine();
+    ImGui::Text(" / Select BGM: %s", AudioManager::IsBGMPlaying("resources/Sound/10Dyas/BGM/Select.mp3") ? "再生中" : "停止中");
 
     ImGui::Separator();
     DebugCamera* liveDebugCam = EditorManager::GetInstance() ? EditorManager::GetInstance()->GetDebugCamera() : nullptr;
