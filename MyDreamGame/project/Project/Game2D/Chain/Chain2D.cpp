@@ -323,6 +323,18 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
         }
         ApplyEndWeight(); // 末端の質量を戻す（挟まれていれば 0 のまま）
     }
+
+    // 落ち着いた判定：一番速い節でも遅ければ、地面で止まったとみなして時間を数える
+    float maxSpeed = 0.0f;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        Vector3 v = GetNodeVelocity(static_cast<int>(i));
+        maxSpeed = (std::max)(maxSpeed, std::sqrt(v.x * v.x + v.y * v.y));
+    }
+    if (maxSpeed < kRestSpeed) {
+        restTimer_ += dt;
+    } else {
+        restTimer_ = 0.0f;
+    }
 }
 
 void Chain2D::UpdateLinkTransforms() {
@@ -406,6 +418,7 @@ void Chain2D::ResetPoseHanging(const Vector3& anchor, MapChip2D* map) {
 
 void Chain2D::ResetDynamics() {
     VerletPhysics2D::ResetVelocities(nodes_);
+    restTimer_ = 0.0f;
 }
 
 void Chain2D::ResetToInitial() {
@@ -682,6 +695,26 @@ void Chain2D::ReleaseRigidLine(const Vector3& center, float omega, float velocit
         float ry = node.pos.y - center.y;
         Vector3 v = { -ry * w, rx * w, 0.0f };
         VerletPhysics2D::ApplyVelocity(node, v, subDt, 1.0f);
+    }
+}
+
+void Chain2D::ThrowWeight(const Vector3& velocity, float dt) {
+    rigidLine_ = nullptr;
+    RestoreMasses();
+    if (nodes_.size() < 2) {
+        return;
+    }
+    float subDt = dt / static_cast<float>((std::max)(1, params_.subSteps_));
+    const float last = static_cast<float>(nodes_.size() - 1);
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        VerletNode& node = nodes_[i];
+        node.prevPos = node.pos; // 拘束中の残留変位を消してから注入
+        if (node.invMass <= 0.0f) {
+            continue; // アンカー等の固定ノード
+        }
+        // 手元（0）から先端（1）へ向かって速度を増やす。先端の重りが一番速い
+        float t = (last > 0.0f) ? static_cast<float>(i) / last : 1.0f;
+        VerletPhysics2D::ApplyVelocity(node, velocity, subDt, t);
     }
 }
 

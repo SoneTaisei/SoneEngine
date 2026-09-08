@@ -1,5 +1,7 @@
 ﻿#include "SwitchBlock.h"
+#include "LinkColor.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Resource/Audio/AudioManager.h"
 
 SwitchBlock::SwitchBlock(MapChip2D* map, int chipX, int chipY)
     : BaseBlock(map, chipX, chipY) {}
@@ -42,11 +44,15 @@ void SwitchBlock::Update() {
     float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
     
     // タイマーを減らす
+    bool wasPressed = isPressed_;
     if (pressedTimer_ > 0.0f) {
         pressedTimer_ -= dt;
         isPressed_ = true;
     } else {
         isPressed_ = false;
+    }
+    if (!wasPressed && isPressed_) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Switch.mp3", 0.75f);
     }
 
     // 見た目の更新
@@ -57,12 +63,12 @@ void SwitchBlock::Update() {
             // 押されている時は沈み込み、色が明るくなる
             tc->SetScale({startWidth_ * 0.8f, startHeight_ * 0.1f, 1.0f});
             tc->SetPosition({startX_, startY_ - startHeight_ * 0.45f, 0.0f});
-            renderer->GetMaterial().color = {1.0f, 0.5f, 0.5f, 1.0f};
+            renderer->GetMaterial().color = LinkColor::Bright(linkId_); // 連動番号ごとの色（押している間は明るく）
         } else {
             // 元に戻る
             tc->SetScale({startWidth_ * 0.8f, startHeight_ * 0.5f, 1.0f});
             tc->SetPosition({startX_, startY_ - startHeight_ * 0.25f, 0.0f});
-            renderer->GetMaterial().color = {0.8f, 0.2f, 0.2f, 1.0f};
+            renderer->GetMaterial().color = LinkColor::Base(linkId_); // 連動番号ごとの色
         }
     }
 }

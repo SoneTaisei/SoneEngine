@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "Game2D/CollectibleTracker.h"
+#include "Effect/TutorialPosterSet.h"
 #include <Windows.h>
 #include "Scene/SceneManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
@@ -8,6 +9,7 @@
 #include "Graphics/GameCamera.h"
 #include "Graphics/CameraManager.h"
 #include "Scene/SceneFactory.h"
+#include "Resource/Audio/AudioManager.h"
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
 #include "Editor/EditorManager.h"
@@ -59,6 +61,10 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
     // このシーンの OnExit() が正射影と追従ターゲットを解除してしまう。
     // 戻る時（PopScene）は Initialize() ではなく OnEnter() しか呼ばれないため、ここで必ず張り直す。
     SetupGameCamera();
+
+    // ゲーム用BGMの再生（前シーンのBGMを停止し、Game.mp3をループ再生）
+    AudioManager::StopAllBGM();
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Game.mp3", true, 0.4f);
 }
 
 // 2Dゲーム用カメラ（正射影＋プレイヤー追従）をこのシーンのものへ張り直す
@@ -93,6 +99,7 @@ void GameScene::EnsureGameCameraMode() {
 
 void GameScene::OnExit(SceneManager* sceneManager) {
     (void)sceneManager;
+    AudioManager::StopAllLoopSE();
     isPaused_ = false;
     isIrisInActive_ = false;
     isIrisOutActive_ = false;
@@ -268,6 +275,9 @@ void GameScene::Initialize() {
     playerChainPostEffect_ = std::make_unique<PlayerChainPostEffect>();
     playerChainPostEffect_->Initialize("resources/json/shared/PostEffect/Player_Chain.json");
     spaceHoldTimer_ = 0.0f;
+
+    // 6.7. 操作説明の映像（マップごとの JSON。無ければ開始位置に一番近い木の板の上に 1 枚置く）
+    SetupTutorialPoster();
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
     if (gameCamera_) {
@@ -546,12 +556,16 @@ void GameScene::Update(SceneManager *sceneManager) {
             // 失敗：同じステージを最初からやり直す（ステージ選択でこのステージを選んだ時と同じ）
             TransitionDirector::GetInstance()->Abort();
             s_QuickRestart = capturedByMiss_;
-            Log("GameScene: captured -> restart same stage\n");
+            // 作り直す前に、今遊んでいるマップのパスへ直す（エディタでファイル名を打って読んだ時は
+            // s_TargetMapFilePath が古いままで、やり直すと別のマップになってしまうため）
+            s_TargetMapFilePath = ResolveCurrentMapPath();
+            Log("GameScene: captured -> restart same stage (" + s_TargetMapFilePath + ")\n");
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;
         }
     } else if (gameState_ == GameState::Clear && isClearSequenceFinished_) {
         stateTimer_ += dt;
+
         if (!isClearExitIrisActive_) {
             auto kb = KeyboardInput::GetInstance();
             auto pad = GamepadInput::GetInstance();
@@ -562,6 +576,14 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 画面中央（ズームした台座・怪盗）に向かってアイリスアウト（0.7秒）を開始！
                 StartIrisOutUV(Vector2(0.5f, 0.5f), 0.7f);
                 Log("GameScene: Stage Clear -> Start Iris Out transition to TitleScene (StageSelect phase)\n");
+              
+        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+            AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
+#ifdef USE_IMGUI
+            if (EditorManager::GetInstance()) {
+                EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
+                EditorManager::GetInstance()->SetUseDebugCamera(false);
+#endif
             }
         } else {
             // アイリスアウトの進行
@@ -1017,6 +1039,13 @@ void GameScene::Update(SceneManager *sceneManager) {
     // プレイヤー座標を基準にしたアイリスイン演出の更新
     if (player_) {
         UpdateIrisIn(player_->GetPosition(), dt);
+        // 操作説明の映像：遊んでいる間だけ、決めた範囲に近づくと出る
+        if (tutorialPosters_) {
+            // エディタの停止→再生ではシーン作成時だけ一時ファイルのパスになるので、本来のマップのパスに毎フレーム付け替える
+            tutorialPosters_->RebindMap(ResolveCurrentMapPath());
+            bool posterActive = isPlayingOrReplaying && (gameState_ == GameState::Playing || gameState_ == GameState::StartReady);
+            tutorialPosters_->Update(dt, player_->GetPosition(), posterActive);
+        }
     }
 
     // プレイヤーが鎖を回している時（kStance）にスペース長押し（エイム中）のポストエフェクト更新 (Player_Chain.json)
@@ -1817,6 +1846,11 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         DrawFragileFloorImGui(map_.get(), gameCamera_, s_TargetMapFilePath);
     }
 
+    // 操作説明の映像（どの映像をどこにどの大きさで置くか。マップごとに保存）
+    if (tutorialPosters_ && ImGui::CollapsingHeader("Tutorial Posters (操作説明の映像)")) {
+        tutorialPosters_->DrawImGui(gameCamera_, player_ ? player_->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f });
+    }
+
     if (ImGui::CollapsingHeader("Pause Menu (ポーズメニュー)")) {
         ImGui::Checkbox("ポーズ状態 (isPaused)", &isPaused_);
         const char* menuItems[] = { "0: リトライ (restartText)", "1: タイトル (titleText)" };
@@ -1824,6 +1858,21 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         if (ImGui::Button(isPaused_ ? "ポーズ解除 (Resume)" : "ポーズ実行 (Pause)")) {
             isPaused_ = !isPaused_;
             pausePulseTimer_ = 0.0f;
+        }
+    }
+
+    if (ImGui::CollapsingHeader("BGM Control (音楽設定)")) {
+        static float gameBgmVol = 0.4f;
+        if (ImGui::SliderFloat("Game BGM 音量", &gameBgmVol, 0.0f, 1.0f, "%.2f")) {
+            AudioManager::SetBGMVolume("resources/Sound/10Dyas/BGM/Game.mp3", gameBgmVol);
+        }
+        ImGui::Text("Game BGM: %s", AudioManager::IsBGMPlaying("resources/Sound/10Dyas/BGM/Game.mp3") ? "再生中" : "停止中");
+        if (ImGui::Button("BGM 再生")) {
+            AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Game.mp3", true, gameBgmVol);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("BGM 停止")) {
+            AudioManager::StopBGM("resources/Sound/10Dyas/BGM/Game.mp3");
         }
     }
 
@@ -2224,6 +2273,10 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 1.5. 背景板ポリゴンの描画
     if (backgroundPlane_) {
         backgroundPlane_->Draw();
+        // 操作説明の映像（背景板の手前、ブロックの奥）
+        if (tutorialPosters_) {
+            tutorialPosters_->Draw();
+        }
     }
 
     // 2. 3Dモデル（マップ・プレイヤー）の描画準備
@@ -2957,6 +3010,7 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager* sceneManager) {
 void GameScene::TriggerClearSequence(const Vector3& goalPos, float goalTopY) {
     if (isClearSequenceActive_) return;
 
+    AudioManager::Play("resources/Sound/10Dyas/SE/SpotLight.mp3", 0.75f);
     isClearSequenceActive_ = true;
     isClearSequenceFinished_ = false;
     clearSequenceTimer_ = 0.0f;
@@ -3068,8 +3122,18 @@ void GameScene::UpdateSpotBeams(const Vector3& targetPos, float targetTopY, floa
 void GameScene::UpdateClearSequence(float dt, SceneManager* sceneManager) {
     if (!isClearSequenceActive_) return;
 
+    float prevTimer = clearSequenceTimer_;
     clearSequenceTimer_ += dt;
 
+
+    if (prevTimer < 0.35f && clearSequenceTimer_ >= 0.35f) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/SpotLight.mp3", 0.75f);
+    }
+
+    // 左右交互に照らし、そのあと交差して怪盗を捕捉する
+    // 0.0s〜0.35s: 左ライト点灯
+    // 0.35s〜0.70s: 右ライト点灯
+    // 0.70s以降: 両ライトが交差して台座の怪盗を捉える
     float beam1Alpha = 0.0f;
     float beam2Alpha = 0.0f;
     ParameterManager* pm = ParameterManager::GetInstance();
@@ -3273,8 +3337,10 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
 
     if (moveUp) {
         pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     } else if (moveDown) {
         pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 2; // 0 <-> 1
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
 
     // Bボタンでポーズ解除
@@ -3294,9 +3360,11 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
     }
 
     if (isDecision) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
         if (pauseMenuIndex_ == 0) {
             // リトライ: 現在のステージを最初からリスタート
             isPaused_ = false;
+            s_TargetMapFilePath = ResolveCurrentMapPath(); // 別のマップにならないように
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;
         } else if (pauseMenuIndex_ == 1) {
@@ -3584,6 +3652,87 @@ void GameScene::DrawHudSprites(const Matrix4x4& viewProjection) {
             gemCompleteSprite_->Draw();
         }
     }
+}
+
+std::string GameScene::ResolveCurrentMapPath() const {
+    // 実際に読み込んだマップのファイルを優先（エディタでファイル名を打って読んだ時もこれが本当のファイル）
+    std::string loaded = map_ ? map_->GetCurrentFilePath() : std::string();
+    if (!loaded.empty() && loaded.find("temp_play_map") == std::string::npos) {
+        return loaded;
+    }
+    // エディタの停止→再生では一時ファイル temp_play_map を読むので、エディタで選んでいるファイル名を使う
+    if (EditorManager::GetInstance()) {
+        const char* f = EditorManager::GetInstance()->GetStageFilename();
+        if (f && *f) {
+            return std::string("resources/json/shared/MapData/") + f;
+        }
+    }
+    return s_TargetMapFilePath;
+}
+
+void GameScene::SetupTutorialPoster() {
+    tutorialPosters_.reset();
+    if (!map_ || !player_) return;
+    ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
+    auto set = std::make_unique<TutorialPosterSet>();
+    set->Initialize(device, ResolveCurrentMapPath()); // マップごとの JSON があれば読む（空でも「保存済み」として初期配置はしない）
+    if (set->HasConfigFile() || !set->Empty()) {
+        tutorialPosters_ = std::move(set);
+        return;
+    }
+
+    // ---- 保存が無い時の初期配置：木の板（鎖を回せる足場）の上に振り子の説明を 1 枚。ImGui で動かして保存できる ----
+    struct Span { int y; int x0; int x1; };
+    std::vector<Span> spans;
+    const int w = map_->GetWidth();
+    const int h = map_->GetHeight();
+    for (int y = 0; y < h; ++y) {
+        int start = -1;
+        for (int x = 0; x <= w; ++x) {
+            BaseBlock* b = (x < w) ? map_->GetBlock(x, y) : nullptr;
+            bool plank = (b && !b->IsDestroyed() && b->AllowsChainSpin());
+            if (plank && start < 0) start = x;
+            if (!plank && start >= 0) {
+                spans.push_back({ y, start, x - 1 });
+                start = -1;
+            }
+        }
+    }
+    if (spans.empty()) {
+        tutorialPosters_ = std::move(set); // 空のまま（ImGui から追加できる）
+        return;
+    }
+    const Vector3 spawn = player_->GetPosition();
+    const Span* best = nullptr;
+    float bestDist = 1e9f;
+    for (const auto& s : spans) {
+        float cx = (static_cast<float>(s.x0) + static_cast<float>(s.x1) + 1.0f) * 0.5f;
+        float cy = static_cast<float>(s.y) + 1.0f;
+        float d = std::hypot(cx - spawn.x, cy - spawn.y);
+        if (d < bestDist) { bestDist = d; best = &s; }
+    }
+    // 板の上空。板の右側が広いので、中心を右へずらして大きめに貼る。マップの上端（一番上の行）は超えない
+    const float posterW = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterWidth", 17.0f);
+    const float offsetX = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterOffsetX", 5.0f);
+    const float gapY = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterGapY", 1.0f);
+    const float posterH = posterW * 0.5f; // コマは 2:1
+    const float plankTop = static_cast<float>(best->y) + 1.0f;
+    TutorialPosterSet::Entry e;
+    e.name = "振り子で飛ぶ";
+    e.sheet = "resources/Sprite/anim/tutorial_sheet.json";
+    e.width = posterW;
+    e.x = (static_cast<float>(best->x0) + static_cast<float>(best->x1) + 1.0f) * 0.5f + offsetX;
+    e.y = (std::min)(plankTop + gapY + posterH * 0.5f, static_cast<float>(h) - 1.0f - posterH * 0.5f);
+    // 出す範囲は板の範囲（上に立っている・近くにいる）
+    e.triggerX = (static_cast<float>(best->x0) + static_cast<float>(best->x1) + 1.0f) * 0.5f;
+    e.triggerY = plankTop + 1.0f;
+    e.triggerW = static_cast<float>(best->x1 - best->x0 + 1) + 2.0f;
+    e.triggerH = 4.0f;
+    e.showDist = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterShowDist", 3.0f);
+    e.hideDist = ParameterManager::GetInstance()->GetValue("GameScene", "tutorialPosterHideDist", 5.5f);
+    set->Add(e);
+    tutorialPosters_ = std::move(set);
+    Log("GameScene: tutorial poster placed above plank x=" + std::to_string(best->x0) + "-" + std::to_string(best->x1) + " y=" + std::to_string(best->y) + "\n");
 }
 
 void GameScene::DrawPauseMenu() {

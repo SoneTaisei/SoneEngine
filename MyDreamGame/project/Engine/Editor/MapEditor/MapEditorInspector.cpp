@@ -6,6 +6,7 @@
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BlockFactory.h"
 #include "Game2D/Blocks/BaseBlock.h"
+#include "Graphics/TextureManager.h"
 #include <string>
 #include <algorithm>
 #include <vector>
@@ -24,7 +25,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
     if (!mapChip) return false;
 
     int selectedTool = context_->GetSelectedTool();
-    if (selectedTool < 100 && (selectedTool < 1 || selectedTool > 12)) {
+    if (selectedTool <= 0 || selectedTool == 6 || selectedTool == 10) {
         return false;
     }
 
@@ -126,6 +127,11 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
             if (ImGui::Selectable(modelPath.c_str(), isSelected)) {
                 targetDef->modelName = modelPath;
                 changed = true;
+                // モデル変更時に対応するテクスチャを自動検出して設定（未設定または自動反映）
+                auto assocTextures = context_->GetAssociatedTexturesForModel(modelPath);
+                if (!assocTextures.empty()) {
+                    targetDef->textureName = assocTextures[0];
+                }
             }
             if (isSelected) {
                 ImGui::SetItemDefaultFocus();
@@ -134,8 +140,15 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         ImGui::EndCombo();
     }
 
+    // --- テクスチャ選択UI ---
+    std::vector<std::string> assocTextures;
+    if (!targetDef->modelName.empty()) {
+        assocTextures = context_->GetAssociatedTexturesForModel(targetDef->modelName);
+    }
     const auto& availableTextures = context_->GetAvailableTextures();
-    if (ImGui::BeginCombo("テクスチャ (Texture)", targetDef->textureName.empty() ? "なし (None)" : targetDef->textureName.c_str())) {
+
+    std::string currentTexPreview = targetDef->textureName.empty() ? "なし (None)" : targetDef->textureName;
+    if (ImGui::BeginCombo("テクスチャ (Texture)", currentTexPreview.c_str())) {
         bool isTexNoneSelected = targetDef->textureName.empty();
         if (ImGui::Selectable("なし (None)", isTexNoneSelected)) {
             targetDef->textureName = "";
@@ -144,6 +157,26 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (isTexNoneSelected) {
             ImGui::SetItemDefaultFocus();
         }
+
+        // モデル推奨テクスチャ
+        if (!assocTextures.empty()) {
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "--- モデル推奨テクスチャ ---");
+            for (const auto& texPath : assocTextures) {
+                bool isSelected = (targetDef->textureName == texPath);
+                if (ImGui::Selectable(("[推奨] " + texPath).c_str(), isSelected)) {
+                    targetDef->textureName = texPath;
+                    changed = true;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+        }
+
+        // 全テクスチャ一覧
+        ImGui::Separator();
+        ImGui::TextDisabled("--- すべてのテクスチャ ---");
         for (const auto& texPath : availableTextures) {
             bool isSelected = (targetDef->textureName == texPath);
             if (ImGui::Selectable(texPath.c_str(), isSelected)) {
@@ -155,6 +188,42 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
             }
         }
         ImGui::EndCombo();
+    }
+
+    // サムネイル表示およびモデル初期テクスチャリセットボタン
+    if (!targetDef->textureName.empty()) {
+        std::string fullTex = (targetDef->textureName.find("resources/") == 0) ? targetDef->textureName : ("resources/" + targetDef->textureName);
+        uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuH = TextureManager::GetInstance()->GetGpuHandle(handle);
+        if (gpuH.ptr != 0) {
+            ImGui::SameLine();
+            ImGui::Image((ImTextureID)gpuH.ptr, ImVec2(22.0f, 22.0f));
+        }
+    }
+    if (!assocTextures.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("推奨テクスチャを適用")) {
+            targetDef->textureName = assocTextures[0];
+            changed = true;
+        }
+    }
+
+    // --- シェーダー設定UI ---
+    const char* shaderItems[] = { "通常 (Standard)", "宝石 (Gem / Crystal)" };
+    int currentShader = targetDef->shaderMode;
+    if (currentShader < 0 || currentShader >= IM_ARRAYSIZE(shaderItems)) {
+        currentShader = 0;
+    }
+    if (ImGui::Combo("シェーダー (Shader)", &currentShader, shaderItems, IM_ARRAYSIZE(shaderItems))) {
+        targetDef->shaderMode = currentShader;
+        changed = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "オブジェクトの描画シェーダープリセットを切り替えます。\n"
+            "・通常 (Standard): 一般的な拡散光・陰影・シャドウ・環境光\n"
+            "・宝石 (Gem / Crystal): ウズシオクリスタルと同じ薄膜干渉虹色、擬似屈折、インナーグロー、表面光沢"
+        );
     }
 
     ImGui::Separator();
@@ -241,6 +310,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
                 targetDef->scale = t.scale;
                 targetDef->modelName = t.modelName;
                 targetDef->textureName = t.textureName;
+                targetDef->shaderMode = t.shaderMode;
                 targetDef->properties = t.properties;
                 changed = true;
                 break;
@@ -248,8 +318,25 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         }
     }
 
+    if (!autoApply) {
+        ImGui::SameLine();
+        if (ImGui::Button("適用 (Apply)")) {
+            mapChip->RebuildChipObjects();
+            if (isTemplate) {
+                mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
+            } else {
+                mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+            }
+        }
+    }
+
     if (changed && autoApply) {
-        mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+        mapChip->RebuildChipObjects();
+        if (isTemplate) {
+            mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
+        } else {
+            mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+        }
     }
 
     return true;

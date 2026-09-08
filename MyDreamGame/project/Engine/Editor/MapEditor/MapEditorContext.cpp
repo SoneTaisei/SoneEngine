@@ -7,6 +7,8 @@
 #include "Editor/EditorManager.h"
 #include <filesystem>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 
 namespace {
     class MapEditCommand : public MapEditorContext::IMapCommand {
@@ -127,6 +129,82 @@ void MapEditorContext::ScanAvailableTextures() {
             }
         }
     }
+}
+
+std::vector<std::string> MapEditorContext::GetAssociatedTexturesForModel(const std::string& modelPath) const {
+    std::vector<std::string> results;
+    if (modelPath.empty()) return results;
+
+    std::string fullPath = (modelPath.find("resources/") == 0) ? modelPath : ("resources/" + modelPath);
+    std::filesystem::path mp(fullPath);
+    std::filesystem::path parentDir = mp.parent_path();
+    if (!std::filesystem::exists(parentDir) || !std::filesystem::is_directory(parentDir)) {
+        return results;
+    }
+
+    // 1. 同一ディレクトリ内の .mtl ファイルからテクスチャファイル名を探索
+    std::vector<std::string> mtlTextures;
+    for (const auto& entry : std::filesystem::directory_iterator(parentDir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".mtl") {
+            std::ifstream mtlFile(entry.path());
+            if (mtlFile.is_open()) {
+                std::string line;
+                while (std::getline(mtlFile, line)) {
+                    std::istringstream iss(line);
+                    std::string key;
+                    if (iss >> key) {
+                        if (key == "map_Kd" || key == "map_Ka" || key == "map_Bump" || key == "bump") {
+                            std::string texFile;
+                            if (iss >> texFile) {
+                                std::filesystem::path tp(texFile);
+                                std::string fname = tp.filename().string();
+                                if (!fname.empty()) {
+                                    mtlTextures.push_back(fname);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. モデルのディレクトリおよびそのサブディレクトリ（textures等）にある画像ファイルを走査
+    std::vector<std::string> dirTextures;
+    try {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(parentDir)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".png" || ext == ".jpg" || ext == ".dds" || ext == ".tga") {
+                    std::string relPath = std::filesystem::relative(entry.path(), "resources").string();
+                    std::replace(relPath.begin(), relPath.end(), '\\', '/');
+                    dirTextures.push_back(relPath);
+                }
+            }
+        }
+    } catch (...) {}
+
+    // mtlで指定されたテクスチャを優先して先頭に配置
+    for (const auto& mtlTex : mtlTextures) {
+        for (const auto& dt : dirTextures) {
+            std::filesystem::path p(dt);
+            if (p.filename().string() == mtlTex) {
+                if (std::find(results.begin(), results.end(), dt) == results.end()) {
+                    results.push_back(dt);
+                }
+            }
+        }
+    }
+
+    // 残りの同ディレクトリ内テクスチャを追加
+    for (const auto& dt : dirTextures) {
+        if (std::find(results.begin(), results.end(), dt) == results.end()) {
+            results.push_back(dt);
+        }
+    }
+
+    return results;
 }
 
 void MapEditorContext::SetStageFilename(const std::string& filename) {

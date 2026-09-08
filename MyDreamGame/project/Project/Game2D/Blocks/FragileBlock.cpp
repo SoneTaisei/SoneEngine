@@ -3,6 +3,7 @@
 #include "Game2D/Security/AlertSystem.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -266,6 +267,7 @@ void FragileBlock::OnPlayerStand(Player2D* player) {
     if (player->GetChainLength() >= breakWeight_) {
         isBreaking_ = true;
         breakTimer_ = 0.0f;
+        AudioManager::Play("resources/Sound/10Dyas/SE/FragileBlock.mp3", 0.75f);
         if (map_) {
             map_->SpawnFragileParticle({startX_, startY_ - 0.5f, 0.0f});
         }

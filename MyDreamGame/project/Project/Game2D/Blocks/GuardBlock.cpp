@@ -6,6 +6,7 @@
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
 #include "Effect/GPUParticle/GPUParticleSystem.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -244,12 +245,16 @@ void GuardBlock::Update() {
                 if (alertGauge_ >= maxAlertGauge_) {
                     // 発見確定：追跡へ（「！」）。即ミスではなく、接触で捕まる
                     alertGauge_ = maxAlertGauge_;
+                    if (state_ != State::Alert) {
+                        AudioManager::Play("resources/Sound/10Dyas/SE/Find.mp3", 0.75f);
+                    }
                     state_ = State::Alert;
                     if (!spottedReported_ && alert) {
                         alert->OnSpotted(); // 回数制なら1回、値の警戒度なら +25
                         spottedReported_ = true;
                     }
                 } else if (state_ == State::Patrol || state_ == State::Wait || state_ == State::Investigate) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/LoseSight.mp3", 0.7f);
                     state_ = State::Suspicious; // チラ見え：立ち止まって向く（「？」）
                 }
             }
@@ -257,9 +262,10 @@ void GuardBlock::Update() {
             // 見えていない間は見られ続けのゲージが速めに戻る（一瞬の遮りでは戻り切らない）
             exposure_ = (std::max)(0.0f, exposure_ - dt * 1.5f);
             if (state_ == State::Alert) {
-                // 追跡中に見失った：しばらくは最後の場所へ走り、諦めたら調べに切り替える
+                // 追跡中に見失った：しばらくは最後の場所へ走り、諦めたら調べに切り替える（「？」表示）
                 lostTimer_ += dt;
                 if (lostTimer_ >= loseSightTime_) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/LoseSight.mp3", 0.7f);
                     state_ = State::Investigate;
                     lookTimer_ = lookTime_;
                     lostTimer_ = 0.0f;
@@ -736,6 +742,7 @@ void GuardBlock::OnSpottedPlayer(Player2D* player) {
 // ---------------------------------------------------------------------------
 
 void GuardBlock::EnterStunned(float duration) {
+    AudioManager::Play("resources/Sound/10Dyas/SE/RobotStun.mp3", 0.8f);
     state_ = State::Stunned;
     stunTimer_ = (std::max)(0.1f, duration);
     alertGauge_ = 0.0f;

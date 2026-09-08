@@ -69,6 +69,10 @@ struct ChainParams {
     float spinMoveFactor_ = 0.0f;      // 構え中の移動速度倍率（0 で移動不可。A/D は振りに使う）
     float spinCooldown_ = 0.4f;        // 引かれた後のクールダウン（秒。着地でも解除）
     bool spinAnywhere_ = false;        // false: 木の板（ThinPlatformBlock）の上に立っている時だけ回せる（既定）。true: どこでも回せる（調整用）
+    // ---- 板以外の床で投げる（回さずにその場から放る。警備員に宝石を当てやすくするため）----
+    float groundThrowSpeed_ = 26.0f;   // 投げる速さ（チップ/秒）。警備員が気絶する速さ（stunSpeed 6）より十分速く。速いほど気絶も長い
+    float groundThrowUp_ = 0.18f;      // 投げる向きの上向き成分（0 で真横、大きいほど山なり）
+    float groundThrowRecover_ = 0.3f;  // 投げた後に動けるようになるまでの秒数（投げた勢いで歩き出さないように）
 
     // --- 発射のアシストと狙い（Q 持つ / A・D 投げる・漕ぐ / SPACE 押して振り子をスロー → 離して飛ぶ） ---
     float launchAngleDeg_ = 60.0f;     // ジャスト時の飛ぶ向き（水平から上向き、度）

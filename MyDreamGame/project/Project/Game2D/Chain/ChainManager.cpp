@@ -2,6 +2,7 @@
 #include "Game2D/Security/AlertSystem.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
+#include "Resource/Audio/AudioManager.h"
 #include <cmath>
 
 #include "Game2D/Player/Player2D.h"
@@ -216,6 +217,7 @@ bool ChainManager::TryPickup() {
             // 上限を超える分は消滅させる（見えないジャンプペナルティだけが増えるのを防ぐ）
             int gain = (std::min)(droppedChains_[i].unitWorth, headroom);
             player_->AddChainLength(gain);
+            AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
             if (droppedChains_[i].effect) {
                 RecycleLuminescenceEffect(std::move(droppedChains_[i].effect));
             }
@@ -233,6 +235,7 @@ bool ChainManager::TryPickup() {
             if (take > 0) {
                 chain->RemoveUnitsAtAnchor(take);
                 player_->AddChainLength(take);
+                AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
                 // 使い切った吊り鎖も消さずに残す（アンカー1ノードだけの休眠状態＝描画も物理も判定も無効）
                 // ResetToInitial() が初期ユニット数へ復元するので、リプレイ再生や2回目のプレイで世界がずれない
                 return true;
@@ -287,6 +290,7 @@ bool ChainManager::TryBindGuard() {
     }
     guard->Bind(1);
     player_->AddChainLength(-1); // Reconcile が手元側から1ユニット縮める
+    AudioManager::Play("resources/Sound/10Dyas/SE/LosingChain.mp3", 0.75f);
     Log("ChainManager: guard bound, chainLength=" + std::to_string(player_->GetChainLength()) + "\n");
     return true;
 }
@@ -309,6 +313,7 @@ bool ChainManager::TryUnbindGuard() {
     int gain = std::clamp(units, 0, (std::max)(0, headroom));
     if (gain > 0) {
         player_->AddChainLength(gain); // 増えた分は Reconcile が手元から繰り出す
+        AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
     }
     Log("ChainManager: guard unbound +" + std::to_string(gain) + " unit(s)\n");
     return true;
@@ -339,6 +344,7 @@ void ChainManager::DetachUnits() {
     }
     // 先に個数を減らしてから（同フレームの Reconcile が二重に削らないよう current == target にする）
     player_->AddChainLength(-detach);
+    AudioManager::Play("resources/Sound/10Dyas/SE/LosingChain.mp3", 0.75f);
 
     // 外したエフェクト再生
     if (breakEffect_) {
@@ -683,6 +689,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
             return;
         }
         const bool isFree = (chain->GetAnchorMode() == ChainAnchorMode::kFree); // 落ちている鎖・ちぎれた鎖
+        // 地面に落ち着いた鎖は「置いてあるだけ」にする：拾う判定とスイッチは効くが、
+        // 警備員を転ばせたりドアに反応したりはしない（止まった鎖が警備員を延々と転ばせ続けていた）
+        const bool settled = isFree && chain->IsResting();
         const auto& nodes = chain->GetNodes();
         const int last = static_cast<int>(nodes.size()) - 1;
         for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
@@ -711,7 +720,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                 }
             }
             // 動くブロック（ドアなど）は「通路の範囲」で当たりを取る（crushKills OFF のドアが通路の鎖を見て閉まるのを待つため）
+            // 落ち着いた鎖は対象外（置いてあるだけの鎖でドアが閉まらなくなるのを防ぐ）
             for (const auto& blockPtr : map->GetUpdateBlocks()) {
+                if (settled) break;
                 if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
                 if (dynamic_cast<GuardBlock*>(blockPtr.get())) continue; // 警備員は下で別に扱う
                 AABB2D box = blockPtr->GetChainTouchAABB();
@@ -733,8 +744,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                     if (CircleOverlapsAABB(node.pos, r, guard->GetAABB()) && guard->HitByTreasure(vel)) {
                         chain->ScaleNodeVelocity(i, 0.4f); // 跳ね返して連打を防ぐ
                     }
-                } else if (isFree) {
+                } else if (isFree && !settled) {
                     // 転ばせる：落ちている鎖の節が移動中の足元に重なる
+                    // 地面で止まった鎖は転ばせない（置きっぱなしの鎖で永遠に転び続けるため）
                     if (CircleOverlapsAABB(node.pos, r, guard->GetFootAABB())) {
                         guard->TripByChain(speed);
                     }
@@ -785,8 +797,8 @@ void ChainManager::UpdateTether() {
     if (!player_ || !playerChain_) {
         return;
     }
-    // 構え中はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
-    if (spin_ && spin_->IsInStance()) {
+    // 構え中と、板以外で投げた直後はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
+    if (spin_ && (spin_->IsInStance() || spin_->IsThrowLocked())) {
         return;
     }
     if (!params_.tetherEnabled_ || tornChain_ || transitionHidden_ || player_->IsDead() || player_->IsGoal()) {
@@ -1082,6 +1094,11 @@ void ChainManager::DrawImGui() {
         ImGui::SameLine();
         ImGui::TextDisabled(spin_->IsSpinAllowed() ? "[on plank]" : "[not on plank]");
     }
+    ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【板以外の床で投げる（Q で持って A/D）】");
+    spinChanged |= ImGui::DragFloat("Ground Throw Speed (投げる速さ)##Spin", &params_.groundThrowSpeed_, 0.5f, 0.0f, 40.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Up (上向き成分)##Spin", &params_.groundThrowUp_, 0.05f, 0.0f, 2.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Recover (投げた後動けない秒数)##Spin", &params_.groundThrowRecover_, 0.05f, 0.0f, 2.0f);
+    ImGui::TextDisabled("※ 警備員が気絶する速さは Stun Speed（既定 6）。それより速く投げること");
     spinChanged |= ImGui::DragFloat("Swing Strength##Spin", &params_.swingStrength_, 0.5f, 0.0f, 200.0f);
     spinChanged |= ImGui::DragFloat("Swing Damping##Spin", &params_.swingDamping_, 0.01f, 0.0f, 5.0f);
     spinChanged |= ImGui::DragFloat("Chain Mass Per Unit##Spin", &params_.chainMassPerUnit_, 0.05f, 0.0f, 10.0f);
@@ -1099,6 +1116,9 @@ void ChainManager::DrawImGui() {
         params_.throwOutTime_ = std::clamp(params_.throwOutTime_, 0.01f, 2.0f);
         params_.throwAngleDeg_ = std::clamp(params_.throwAngleDeg_, 0.0f, 180.0f);
         params_.throwOmega_ = std::clamp(params_.throwOmega_, 0.0f, 20.0f);
+        params_.groundThrowSpeed_ = std::clamp(params_.groundThrowSpeed_, 0.0f, 40.0f);
+        params_.groundThrowUp_ = std::clamp(params_.groundThrowUp_, 0.0f, 2.0f);
+        params_.groundThrowRecover_ = std::clamp(params_.groundThrowRecover_, 0.0f, 2.0f);
         params_.swingStrength_ = (std::max)(0.0f, params_.swingStrength_);
         params_.swingDamping_ = (std::max)(0.0f, params_.swingDamping_);
         params_.chainMassPerUnit_ = (std::max)(0.0f, params_.chainMassPerUnit_);

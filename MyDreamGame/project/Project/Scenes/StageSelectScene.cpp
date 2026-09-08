@@ -9,6 +9,7 @@
 #include "Input/KeyboardInput.h"
 #include "Input/GamepadInput.h"
 #include "Scene/SceneFactory.h"
+#include "Resource/Audio/AudioManager.h"
 #include "GameScene.h"
 #include "Game2D/Blocks/SavePoint.h"
 #include "Core/TimeManager.h"
@@ -25,6 +26,9 @@ StageSelectScene::~StageSelectScene() {}
 
 void StageSelectScene::OnEnter(SceneManager* sceneManager) {
     // シーン開始時に、可能なら前回の選択ステージなどを復元する
+    AudioManager::StopAllBGM();
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Title.mp3", true, 0.4f);
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
 }
 
 void StageSelectScene::OnExit(SceneManager* sceneManager) {
@@ -138,18 +142,21 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         if (currentStageIndex_ < 0) {
             currentStageIndex_ = stageCount_ - 1;
         }
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
     if (moveNext) {
         currentStageIndex_++;
         if (currentStageIndex_ >= stageCount_) {
             currentStageIndex_ = 0;
         }
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
 
     bool isDecision = keyboard->IsKeyPressed(DIK_SPACE) || keyboard->IsKeyPressed(DIK_RETURN) ||
                       (pad && (pad->IsButtonPressed(GamepadButton::A) || pad->IsButtonPressed(0)));
 
     if (isDecision) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
             GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }

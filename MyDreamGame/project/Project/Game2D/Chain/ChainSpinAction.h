@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Game2D/Chain/ChainConfig.h"
 #include "Core/Utility/Vector3.h"
 #include <memory>
@@ -73,6 +73,8 @@ public:
 
     State GetState() const { return state_; }
     /// <summary>持っている〜漕いでいる間（鎖が剛体拘束されている間）</summary>
+    /// <summary>板以外で投げた直後で、まだ動けない間か</summary>
+    bool IsThrowLocked() const { return throwLockTime_ >= 0.0f; }
     bool IsInStance() const { return state_ == State::kHold || state_ == State::kStance; }
     bool IsHolding() const { return state_ == State::kHold; }
     /// <summary>SPACE を押してスローで狙っている</summary>
@@ -101,6 +103,8 @@ private:
     void StartHold(Player2D* player, Chain2D* chain, const Vector3& socketWorld);
     // 持っている宝石を dirSign（-1:左 / +1:右）へ投げ、振り子を始める
     void StartThrow(float dirSign, const Vector3& socketWorld);
+    /// <summary>板以外の床で A/D：回さずにその場から宝石を投げる（警備員に当てる用）</summary>
+    void ThrowFromGround(float dirSign, float dt, Player2D* player, Chain2D* chain);
     // SPACE を離した：鎖ごと放ち、プレイヤーを宝石の進行方向へ飛ばす（just = ジャスト窓の中で離した）
     void Launch(float dt, Player2D* player, Chain2D* chain, const Vector3& socketWorld, bool just);
     // 棒が地形に当たった／足場を離れた／Q でやめた：鎖を勢い付きで物理に戻して構えを解除する（プレイヤーは飛ばない）
@@ -147,6 +151,8 @@ private:
     float aimTimer_ = 0.0f;
     // Q 連打で持つ→やめる→持つ が続かないように、やめた後は少しの間持てない
     float holdBlockTimer_ = 0.0f;
+    float throwLockTime_ = -1.0f;    // 板以外で投げてからの経過秒（-1 で投げていない）。この間は動けない
+    float throwLockDir_ = 0.0f;      // 投げた向き（押しっぱなしの A/D で歩き出さないよう見張る）
 
     // 振り子状態
     float theta_ = 0.0f;        // 真下を0とした角度（rad。+で右へ振れる）
@@ -157,6 +163,7 @@ private:
     float effMass_ = 1.0f;      // 現在の振りにくさ（ImGui表示用）
     float launchCap_ = 0.0f;    // 飛ぶ速さの上限（構え開始時に決定）
     float cooldownTimer_ = 0.0f;
+    float spinAccumAngle_ = 0.0f; // 1回転(360度)判定用の累積回転角（rad）
 
     // 直近の発射（ImGui確認用）
     float lastLaunchSpeed_ = 0.0f;

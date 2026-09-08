@@ -398,6 +398,9 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             }
         } else if (state.isSwingingChain_ || state.isHoldingChain_) {
             rotationY = 0.0f; // スイング中・宝石持ち中は正面（カメラ目線）
+        } else if (state.faceDirX_ < -0.01f || state.faceDirX_ > 0.01f) {
+            // 向きの指定があればそちらを優先（投げた直後など、動かないまま左右を向く）
+            rotationY = (state.faceDirX_ < 0.0f) ? 1.57079632f : -1.57079632f;
         } else {
             if (state.velocity_.x < -0.01f) {
                 rotationY = 1.57079632f;
