@@ -60,6 +60,7 @@ public:
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel);
     void ReloadAnimations();
     void Update(const PlayerState& state, const PlayerParams& params, float deltaTime);
+    void UpdateClearAnimation(const PlayerState& state, const PlayerParams& params, float clearTimer, float deltaTime);
     void Draw(const PlayerState& state, const PlayerParams& params);
 
     void SpawnJumpDust(const Vector3& basePos, float dirX);

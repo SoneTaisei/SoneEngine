@@ -134,6 +134,14 @@ private:
     Vector2 irisCenterUV_ = { 0.5f, 0.5f };
     bool isIrisOutActive_ = false;
 
+    // --- シーン開始演出 (アイリスイン: 画面中央から円が開いてステージ選択画面が現れる) ---
+    float irisInTimer_ = 0.0f;
+    float irisInDuration_ = 0.7f;
+    Vector2 irisInCenterUV_ = { 0.5f, 0.5f };
+    bool isIrisInActive_ = false;
+
+    void StartIrisIn(const Vector2& centerUV = { 0.5f, 0.5f }, float duration = 0.7f);
+    void UpdateIrisIn(float dt);
     void StartIrisOut(const Vector2& centerUV, float duration = 0.85f);
     void UpdateIrisOut(float dt, SceneManager* sceneManager);
     Vector2 WorldToScreenUV(const Vector3& worldPos) const;
