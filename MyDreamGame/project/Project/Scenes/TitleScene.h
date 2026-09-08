@@ -87,6 +87,14 @@ private:
     Vector2 creditTextPos_ = { 512.5f, 520.0f };
     Vector2 creditTextSize_ = { 255.0f, 50.0f };
 
+    // --- ステージ選択の見出し。カメラが着いた後、画面の外から引っ張られるように入ってくる ---
+    std::unique_ptr<Sprite> stageSelectTitleSprite_;
+    uint32_t stageSelectTitleTextureHandle_ = 0;
+    float stageSelectIntroTimer_ = -1.0f;      // 0 未満は「まだ始まっていない」
+    float stageSelectIntroDuration_ = 0.55f;   // 入ってくるのにかける時間（秒）
+    Vector2 stageSelectTitlePos_ = { 64.0f, 46.0f };   // 落ち着く位置（左上）
+    float stageSelectTitleHeight_ = 64.0f;             // 高さ（幅は画像の比率から出す）
+
     // --- 決定の操作案内（右下）。パッドを触れば A、キーボードを触れば SPACE ---
     std::unique_ptr<Sprite> padPromptSprite_;  // A:決定
     std::unique_ptr<Sprite> keyPromptSprite_;  // SPACE:決定
@@ -125,6 +133,7 @@ private:
     };
 
     Phase phase_ = Phase::kTitle;
+    Phase prevPhase_ = Phase::kTitle; // フェーズが変わった瞬間を拾う（見出しの演出開始用）
 
     // タイトル画面基準カメラ座標・角度
     Vector3 titleCameraPos_ = { 0.0f, 1.2f, -8.5f };

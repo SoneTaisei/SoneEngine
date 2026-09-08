@@ -236,6 +236,11 @@ void TitleScene::Initialize() {
     // 6.2 スタートテキスト スプライト (startText.png)
     // -------------------------------------------------------------
     startTextTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/startText.png");
+    // ステージ選択の見出し。位置と大きさは描く直前に決める
+    stageSelectTitleTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stage_select.png");
+    stageSelectTitleSprite_ = std::make_unique<Sprite>();
+    stageSelectTitleSprite_->Initialize(spriteCommon_, stageSelectTitleTextureHandle_);
+
     // 決定の操作案内（右下）。位置と大きさは描く直前に決める
     padPromptTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/A_select.png");
     padPromptSprite_ = std::make_unique<Sprite>();
@@ -295,6 +300,18 @@ void TitleScene::Update(SceneManager *sceneManager) {
     bool isDecisionPressed = kb->IsKeyPressed(DIK_SPACE) || 
                              kb->IsKeyPressed(DIK_RETURN) || 
                              (pad && pad->IsButtonPressed(0)); // Aボタン
+
+    // ステージ選択に入った瞬間（カメラが着いた瞬間）に見出しの演出を始める。
+    // 入口が複数あるので、フェーズが変わったことで拾う
+    if (phase_ == Phase::kStageSelect && prevPhase_ != Phase::kStageSelect) {
+        stageSelectIntroTimer_ = 0.0f;
+    } else if (phase_ != Phase::kStageSelect) {
+        stageSelectIntroTimer_ = -1.0f; // 抜けたら次に入った時にまた最初から
+    }
+    if (stageSelectIntroTimer_ >= 0.0f) {
+        stageSelectIntroTimer_ += dt;
+    }
+    prevPhase_ = phase_;
 
     // 右下の操作案内を、直前に触った方に合わせる（パッドを触れば A、キーを触れば SPACE）
     if (pad && pad->IsConnected()) {
@@ -797,6 +814,29 @@ void TitleScene::Draw2D() {
         }
         for (auto &sprite : sprites_) {
             sprite->Draw();
+        }
+
+        // ステージ選択の見出し。画面の外から一気に入ってきて、少し行き過ぎてから止まる
+        if (phase_ == Phase::kStageSelect && stageSelectIntroTimer_ >= 0.0f && stageSelectTitleSprite_) {
+            const float w = stageSelectTitleHeight_ * (500.0f / 100.0f);
+            const float t = (stageSelectIntroDuration_ > 0.001f)
+                                ? (std::min)(stageSelectIntroTimer_ / stageSelectIntroDuration_, 1.0f)
+                                : 1.0f;
+            // イーズアウトバック：終わり際に少し行き過ぎてから戻る（引っ張られて止まる感じ）
+            const float c1 = 1.70158f;
+            const float c3 = c1 + 1.0f;
+            const float u = t - 1.0f;
+            const float eased = 1.0f + c3 * u * u * u + c1 * u * u;
+
+            const float startX = -w - 40.0f; // 画面の外（左）から
+            const float x = startX + (stageSelectTitlePos_.x - startX) * eased;
+            const float alpha = (std::min)(1.0f, t * 3.0f); // 出だしだけさっと濃くなる
+
+            stageSelectTitleSprite_->SetSize({w, stageSelectTitleHeight_});
+            stageSelectTitleSprite_->SetPosition({x, stageSelectTitlePos_.y});
+            stageSelectTitleSprite_->SetColor({1.0f, 1.0f, 1.0f, alpha});
+            stageSelectTitleSprite_->Update();
+            stageSelectTitleSprite_->Draw();
         }
 
         // 決定の操作案内（右下）。カメラが動いている間は出さず、止まったらまた出す
