@@ -18,6 +18,11 @@ public:
     // 壁ではないのですり抜けられるようにする
     bool IsSolid() const override { return false; }
 
+    /// <summary>拾ってもマップから消さずに残す（死亡して復活した時に元へ戻せるように）</summary>
+    bool KeepWhenDestroyed() const override { return true; }
+    /// <summary>リスポーン・やり直しで、拾う前の状態に戻す</summary>
+    void Reset() override { isDestroyed_ = false; }
+
     void SetProperties(const nlohmann::json& properties) override;
     int GetUnits() const { return units_; }
 

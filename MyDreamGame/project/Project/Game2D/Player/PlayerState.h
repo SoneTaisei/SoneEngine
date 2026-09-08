@@ -29,6 +29,7 @@ struct PlayerState {
     float spinFlipTimer_ = 0.0f;
     float spinFlipDuration_ = 0.45f;
     float spinFlipSign_ = -1.0f;
+    float faceDirX_ = 0.0f;       // 見た目の向きの指定（-1 左 / +1 右 / 0 は速度まかせ）。投げた時など、動かないまま向きだけ変える用
     bool isWallClinging_ = false;
     bool isWallSliding_ = false;
     bool isTouchingWallLeft_ = false;

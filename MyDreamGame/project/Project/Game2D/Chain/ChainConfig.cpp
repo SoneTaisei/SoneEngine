@@ -53,6 +53,9 @@ void ChainConfig::Save(const ChainParams& params, const std::string& filepath) {
         j["throwOutTime_"] = params.throwOutTime_;
         j["throwAngleDeg_"] = params.throwAngleDeg_;
         j["throwOmega_"] = params.throwOmega_;
+        j["groundThrowSpeed_"] = params.groundThrowSpeed_;
+        j["groundThrowUp_"] = params.groundThrowUp_;
+        j["groundThrowRecover_"] = params.groundThrowRecover_;
         j["swingStrength_"] = params.swingStrength_;
         j["swingDamping_"] = params.swingDamping_;
         j["chainMassPerUnit_"] = params.chainMassPerUnit_;
@@ -134,6 +137,9 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         if (j.contains("throwOutTime_")) params.throwOutTime_ = j["throwOutTime_"];
         if (j.contains("throwAngleDeg_")) params.throwAngleDeg_ = j["throwAngleDeg_"];
         if (j.contains("throwOmega_")) params.throwOmega_ = j["throwOmega_"];
+        if (j.contains("groundThrowSpeed_")) params.groundThrowSpeed_ = j["groundThrowSpeed_"];
+        if (j.contains("groundThrowUp_")) params.groundThrowUp_ = j["groundThrowUp_"];
+        if (j.contains("groundThrowRecover_")) params.groundThrowRecover_ = j["groundThrowRecover_"];
         if (j.contains("swingStrength_")) params.swingStrength_ = j["swingStrength_"];
         if (j.contains("swingDamping_")) params.swingDamping_ = j["swingDamping_"];
         if (j.contains("chainMassPerUnit_")) params.chainMassPerUnit_ = j["chainMassPerUnit_"];
@@ -181,6 +187,9 @@ void ChainConfig::Load(ChainParams& params, const std::string& filepath) {
         params.throwOutTime_ = std::clamp(params.throwOutTime_, 0.01f, 2.0f);
         params.throwAngleDeg_ = std::clamp(params.throwAngleDeg_, 0.0f, 180.0f);
         params.throwOmega_ = std::clamp(params.throwOmega_, 0.0f, 20.0f);
+        params.groundThrowSpeed_ = std::clamp(params.groundThrowSpeed_, 0.0f, 40.0f);
+        params.groundThrowUp_ = std::clamp(params.groundThrowUp_, 0.0f, 2.0f);
+        params.groundThrowRecover_ = std::clamp(params.groundThrowRecover_, 0.0f, 2.0f);
         params.swingStrength_ = (std::max)(0.0f, params.swingStrength_);
         params.swingDamping_ = (std::max)(0.0f, params.swingDamping_);
         params.chainMassPerUnit_ = (std::max)(0.0f, params.chainMassPerUnit_);

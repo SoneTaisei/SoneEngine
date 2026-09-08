@@ -26,8 +26,22 @@
       "triggerX": 30.0,
       "triggerY": 3.0,
       "width": 13.0,
-      "x": 28.5,
+      "x": 24.5,
       "y": 10.25
+    },
+    {
+      "alwaysShow": false,
+      "hideDist": 6.0,
+      "name": "B2 小さい宝石を集める",
+      "sheet": "resources/Sprite/anim/collect_gem.json",
+      "showDist": 3.0,
+      "triggerH": 5.0,
+      "triggerW": 7.0,
+      "triggerX": 41.0,
+      "triggerY": 5.5,
+      "width": 13.0,
+      "x": 38.75,
+      "y": 10.199999809265137
     },
     {
       "alwaysShow": false,
@@ -40,7 +54,7 @@
       "triggerX": 50.0,
       "triggerY": 7.0,
       "width": 13.0,
-      "x": 52.75,
+      "x": 53.75,
       "y": 10.550000190734863
     },
     {
@@ -82,7 +96,7 @@
       "triggerX": 112.0,
       "triggerY": 3.0,
       "width": 13.0,
-      "x": 112.0,
+      "x": 111.0,
       "y": 8.0
     },
     {
@@ -115,16 +129,30 @@
     },
     {
       "alwaysShow": false,
+      "hideDist": 8.0,
+      "name": "G3 宝石を投げて気絶させる",
+      "sheet": "resources/Sprite/anim/guard_throw.json",
+      "showDist": 4.0,
+      "triggerH": 5.0,
+      "triggerW": 9.0,
+      "triggerX": 184.75,
+      "triggerY": 3.0,
+      "width": 13.0,
+      "x": 185.75,
+      "y": 10.949999809265137
+    },
+    {
+      "alwaysShow": false,
       "hideDist": 7.0,
       "name": "G2 気絶させて縛る",
       "sheet": "resources/Sprite/anim/guard_stun_bind.json",
       "showDist": 3.0,
       "triggerH": 4.0,
       "triggerW": 14.0,
-      "triggerX": 163.0,
-      "triggerY": 8.0,
+      "triggerX": 166.0,
+      "triggerY": 3.5,
       "width": 13.0,
-      "x": 163.0,
+      "x": 165.75,
       "y": 11.300000190734863
     }
   ]

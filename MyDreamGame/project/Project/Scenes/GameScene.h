@@ -105,8 +105,8 @@ private:
     // 操作説明の映像（ポスター）：マップごとの JSON に保存。無ければ木の板の上に振り子の説明を 1 枚置く
     std::unique_ptr<TutorialPosterSet> tutorialPosters_;
     void SetupTutorialPoster();
-    /// <summary>操作説明の映像の保存先を決めるマップのパス（実際に読んだファイル。エディタの一時ファイルの時はエディタで選んでいるファイル名）</summary>
-    std::string ResolvePosterMapPath() const;
+    /// <summary>今遊んでいるマップのパス（実際に読んだファイル。エディタの一時ファイルの時はエディタで選んでいるファイル名）。やり直しと映像の保存先に使う</summary>
+    std::string ResolveCurrentMapPath() const;
 
     // ---------------------------------------------------
     // 共通システム
