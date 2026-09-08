@@ -567,43 +567,37 @@ void GameScene::Update(SceneManager *sceneManager) {
         stateTimer_ += dt;
 
         if (!isClearExitIrisActive_) {
+            // まだ暗転を始めていない：決定（SPACE / Enter / パッド）が押されるのを待つ
             auto kb = KeyboardInput::GetInstance();
             auto pad = GamepadInput::GetInstance();
             bool pressedSubmit = (kb && (kb->IsKeyPressed(DIK_SPACE) || kb->IsKeyPressed(DIK_RETURN) || kb->IsKeyPressed(DIK_NUMPADENTER))) ||
                                  (pad && (pad->IsButtonPressed(0) || pad->IsButtonPressed(1) || pad->IsButtonPressed(7)));
             if (pressedSubmit) {
                 isClearExitIrisActive_ = true;
+                AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
                 // 画面中央（ズームした台座・怪盗）に向かってアイリスアウト（0.7秒）を開始！
                 StartIrisOutUV(Vector2(0.5f, 0.5f), 0.7f);
                 Log("GameScene: Stage Clear -> Start Iris Out transition to TitleScene (StageSelect phase)\n");
-
-                if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
-                    AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
+            }
+        } else {
+            // アイリスアウトの進行。閉じきったらステージ選択へ戻る
+            UpdateIrisOut(dt);
+            if (irisOutTimer_ >= irisOutDuration_) {
 #ifdef USE_IMGUI
-                    if (EditorManager::GetInstance()) {
-                        EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
-                        EditorManager::GetInstance()->SetUseDebugCamera(false);
-#endif
-                    }
-                } else {
-                    // アイリスアウトの進行
-                    UpdateIrisOut(dt);
-                    if (irisOutTimer_ >= irisOutDuration_) {
-#ifdef USE_IMGUI
-                        if (EditorManager::GetInstance()) {
-                            EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
-                            EditorManager::GetInstance()->SetUseDebugCamera(false);
-                        }
-                        EditorManager::SetPlaying(true);
-#endif
-                        sceneManager->SetData("StartAtStageSelect", true);
-                        SavePoint::Clear(s_TargetMapFilePath);
-                        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
-                        return;
-                    }
+                if (EditorManager::GetInstance()) {
+                    EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
+                    EditorManager::GetInstance()->SetUseDebugCamera(false);
                 }
+                EditorManager::SetPlaying(true);
+#endif
+                sceneManager->SetData("StartAtStageSelect", true);
+                SavePoint::Clear(s_TargetMapFilePath);
+                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+                return;
             }
         }
+    }
+
     // -------------------------------------------------------------
     // ポーズ入力の監視 (ESC, P, ゲームパッド Startボタン)
     // -------------------------------------------------------------
@@ -1091,7 +1085,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         UpdateGuardLights();
     }
 }
-}
+
 #ifdef USE_IMGUI
 namespace {
     // ===== 崩れる床の調整パネル（インスペクター内の折りたたみ） =====
@@ -3661,12 +3655,15 @@ std::string GameScene::ResolveCurrentMapPath() const {
         return loaded;
     }
     // エディタの停止→再生では一時ファイル temp_play_map を読むので、エディタで選んでいるファイル名を使う
+    // （エディタは USE_IMGUI のある構成にしか無いので、製品版ではこの経路は通らない）
+#ifdef USE_IMGUI
     if (EditorManager::GetInstance()) {
         const char* f = EditorManager::GetInstance()->GetStageFilename();
         if (f && *f) {
             return std::string("resources/json/shared/MapData/") + f;
         }
     }
+#endif
     return s_TargetMapFilePath;
 }
 
