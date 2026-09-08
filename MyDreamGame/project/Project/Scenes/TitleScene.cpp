@@ -74,11 +74,12 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
         phase_ = Phase::kTitle;
         selectedStageIndex_ = 0;
         selectedTitleMenu_ = 0;
-        cameraTransform_.translate = { 0.0f, 1.2f, -8.5f };
-        cameraTransform_.rotate = { 0.06f, 0.0f, 0.0f };
+        cameraTransform_.translate = titleCameraPos_;
+        cameraTransform_.rotate = titleCameraRot_;
         titleLogoAlpha_ = 1.0f;
         titleMenuAlpha_ = 1.0f;
         searchlightAlpha_ = 1.0f;
+        creditAlpha_ = 0.0f;
 
         // タイトル画面時はTitle.mp3のみを再生
         AudioManager::StopAllBGM();
@@ -241,13 +242,23 @@ void TitleScene::Initialize() {
     startTextSprite_->SetPosition(startTextPos_);
 
     // -------------------------------------------------------------
-    // 6.3 クレジットテキスト スプライト (credit.png)
+    // 6.3 クレジットテキスト スプライト (creditText.png)
     // -------------------------------------------------------------
-    creditTextTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/credit.png");
+    creditTextTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/creditText.png");
     creditTextSprite_ = std::make_unique<Sprite>();
     creditTextSprite_->Initialize(spriteCommon_, creditTextTextureHandle_);
     creditTextSprite_->SetSize(creditTextSize_);
     creditTextSprite_->SetPosition(creditTextPos_);
+
+    // -------------------------------------------------------------
+    // 6.4 クレジット画面表示スプライト (credit.png)
+    // -------------------------------------------------------------
+    creditTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/credit.png");
+    creditSprite_ = std::make_unique<Sprite>();
+    creditSprite_->Initialize(spriteCommon_, creditTextureHandle_);
+    creditSprite_->SetSize(creditSize_);
+    creditSprite_->SetPosition(creditPos_);
+    creditSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
 
     // -------------------------------------------------------------
     // 7. 予告状オブジェクト (callingCard.obj) の準備
@@ -310,8 +321,30 @@ void TitleScene::Update(SceneManager *sceneManager) {
                     // セレクトモード開始: Title.mp3 は流したまま、Select.mp3 を同時に重ねて再生
                     AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
                 } else if (selectedTitleMenu_ == 1) {
-                    // 「クレジット」選択時（将来のクレジット画面展開用）
+                    AudioManager::Play("resources/Sound/10Dyas/SE/TitleCameraMove.mp3", 0.7f);
+
+                    // 「クレジット」選択時: クレジットモデル表示カメラへの移動フェーズを開始
+                    phase_ = Phase::kTransitionToCredit;
+                    transitionStartPos_ = cameraTransform_.translate;
+                    transitionStartRot_ = cameraTransform_.rotate;
+                    transitionTimer_ = 0.0f;
+                    creditAnimTimer_ = 0.0f;
+                    creditAlpha_ = 0.0f;
+                    creditScale_ = 0.85f;
                 }
+            }
+        } else if (phase_ == Phase::kCredit) {
+            // クレジット画面で決定またはキャンセルボタン押下時: タイトル画面へ復帰
+            bool isCancelPressed = kb->IsKeyPressed(DIK_ESCAPE) || 
+                                   kb->IsKeyPressed(DIK_BACK) || 
+                                   (pad && pad->IsButtonPressed(GamepadButton::B));
+            if (isDecisionPressed || isCancelPressed) {
+                AudioManager::Play("resources/Sound/10Dyas/SE/TitleCameraMove.mp3", 0.7f);
+                phase_ = Phase::kTransitionFromCredit;
+                transitionStartPos_ = cameraTransform_.translate;
+                transitionStartRot_ = cameraTransform_.rotate;
+                transitionTimer_ = 0.0f;
+                // creditAlpha_ は kTransitionFromCredit の最初の0.15秒で縮小フェードアウト
             }
         } else if (phase_ == Phase::kStageSelect) {
             // ステージ選択画面で決定ボタン押下時: 選択中ステージオブジェクトへ向けて予告状突き刺し演出を開始
@@ -408,6 +441,133 @@ void TitleScene::Update(SceneManager *sceneManager) {
         titleLogoAlpha_ = 0.0f;
         titleMenuAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
+    } else if (phase_ == Phase::kTransitionToCredit) {
+        // クレジット画面へ滑らかにカメラを補間移動 (Smoothstep)
+        // ※ ユーザー要望により移動時間を短縮 (creditTransitionDuration_)
+        transitionTimer_ += dt;
+        float t = std::clamp(transitionTimer_ / creditTransitionDuration_, 0.0f, 1.0f);
+        float ease = t * t * (3.0f - 2.0f * t); // Smoothstep
+
+        camPos = {
+            transitionStartPos_.x + (targetCreditPos_.x - transitionStartPos_.x) * ease,
+            transitionStartPos_.y + (targetCreditPos_.y - transitionStartPos_.y) * ease,
+            transitionStartPos_.z + (targetCreditPos_.z - transitionStartPos_.z) * ease
+        };
+        camRot = {
+            transitionStartRot_.x + (targetCreditRot_.x - transitionStartRot_.x) * ease,
+            transitionStartRot_.y + (targetCreditRot_.y - transitionStartRot_.y) * ease,
+            transitionStartRot_.z + (targetCreditRot_.z - transitionStartRot_.z) * ease
+        };
+
+        cameraTransform_.translate = camPos;
+        cameraTransform_.rotate = camRot;
+
+        // タイトルロゴ、メニューテキスト、サーチライトを素早く自然にフェードアウト
+        float fadeT = std::clamp(transitionTimer_ / logoFadeDuration_, 0.0f, 1.0f);
+        float remain = 1.0f - fadeT;
+        float fadeAlpha = remain * remain;
+        if (fadeAlpha < 0.001f) {
+            fadeAlpha = 0.0f;
+        }
+        titleLogoAlpha_ = fadeAlpha;
+        titleMenuAlpha_ = fadeAlpha;
+        searchlightAlpha_ = fadeAlpha;
+        creditAlpha_ = 0.0f;
+
+        if (t >= 1.0f) {
+            phase_ = Phase::kCredit;
+            cameraTransform_.translate = targetCreditPos_;
+            cameraTransform_.rotate = targetCreditRot_;
+            camPos = targetCreditPos_;
+            camRot = targetCreditRot_;
+            titleLogoAlpha_ = 0.0f;
+            titleMenuAlpha_ = 0.0f;
+            searchlightAlpha_ = 0.0f;
+            creditAnimTimer_ = 0.0f; // スプライト出現演出開始
+        }
+    } else if (phase_ == Phase::kCredit) {
+        // クレジット画面: クレジットモデル正面の目標位置に固定
+        camPos = targetCreditPos_;
+        camRot = targetCreditRot_;
+        cameraTransform_.translate = targetCreditPos_;
+        cameraTransform_.rotate = targetCreditRot_;
+        titleLogoAlpha_ = 0.0f;
+        titleMenuAlpha_ = 0.0f;
+        searchlightAlpha_ = 0.0f;
+
+        // クレジットスプライト演出 (出現ポップイン & 呼吸アニメーション)
+        creditAnimTimer_ += dt;
+        const float appearDuration = 0.35f;
+        if (creditAnimTimer_ < appearDuration) {
+            // 出現演出: スケール0.85 -> 1.03 -> 1.0 のポップイン & フェードイン (EaseOutBack)
+            float progress = creditAnimTimer_ / appearDuration;
+            float c1 = 1.70158f;
+            float c3 = c1 + 1.0f;
+            float p = progress - 1.0f;
+            float easeBack = 1.0f + c3 * p * p * p + c1 * p * p;
+            creditScale_ = 0.85f + 0.15f * easeBack;
+            creditAlpha_ = std::clamp(creditAnimTimer_ / 0.22f, 0.0f, 1.0f);
+        } else {
+            // 出現完了後は等倍・完全不透明で固定
+            creditScale_ = 1.0f;
+            creditAlpha_ = 1.0f;
+        }
+    } else if (phase_ == Phase::kTransitionFromCredit) {
+        // クレジットスプライトの退場演出: スペース等でタイトル復帰時、0.15秒でキュッと縮んでフェードアウト
+        const float fadeOutDuration = 0.15f;
+        if (transitionTimer_ < fadeOutDuration) {
+            float ft = transitionTimer_ / fadeOutDuration;
+            creditAlpha_ = (1.0f - ft) * (1.0f - ft);
+            creditScale_ = 1.0f - 0.15f * ft;
+        } else {
+            creditAlpha_ = 0.0f;
+            creditScale_ = 0.85f;
+        }
+
+        // クレジット画面からタイトル画面へ滑らかにカメラを復帰 (Smoothstep)
+        // ※ ユーザー要望により移動時間を短縮 (creditTransitionDuration_)
+        transitionTimer_ += dt;
+        float t = std::clamp(transitionTimer_ / creditTransitionDuration_, 0.0f, 1.0f);
+        float ease = t * t * (3.0f - 2.0f * t); // Smoothstep
+
+        camPos = {
+            transitionStartPos_.x + (titleCameraPos_.x - transitionStartPos_.x) * ease,
+            transitionStartPos_.y + (titleCameraPos_.y - transitionStartPos_.y) * ease,
+            transitionStartPos_.z + (titleCameraPos_.z - transitionStartPos_.z) * ease
+        };
+        camRot = {
+            transitionStartRot_.x + (titleCameraRot_.x - transitionStartRot_.x) * ease,
+            transitionStartRot_.y + (titleCameraRot_.y - transitionStartRot_.y) * ease,
+            transitionStartRot_.z + (titleCameraRot_.z - transitionStartRot_.z) * ease
+        };
+
+        cameraTransform_.translate = camPos;
+        cameraTransform_.rotate = camRot;
+
+        // タイトル画面復帰直前にUIをフェードイン (後半 logoFadeDuration_ 秒でフェードイン)
+        float remainingTime = creditTransitionDuration_ - transitionTimer_;
+        if (remainingTime <= logoFadeDuration_) {
+            float fadeT = 1.0f - std::clamp(remainingTime / logoFadeDuration_, 0.0f, 1.0f);
+            float inAlpha = fadeT * fadeT;
+            titleLogoAlpha_ = inAlpha;
+            titleMenuAlpha_ = inAlpha;
+            searchlightAlpha_ = inAlpha;
+        } else {
+            titleLogoAlpha_ = 0.0f;
+            titleMenuAlpha_ = 0.0f;
+            searchlightAlpha_ = 0.0f;
+        }
+
+        if (t >= 1.0f) {
+            phase_ = Phase::kTitle;
+            cameraTransform_.translate = titleCameraPos_;
+            cameraTransform_.rotate = titleCameraRot_;
+            camPos = titleCameraPos_;
+            camRot = titleCameraRot_;
+            titleLogoAlpha_ = 1.0f;
+            titleMenuAlpha_ = 1.0f;
+            searchlightAlpha_ = 1.0f;
+        }
     }
 
     // タイトルメニューテキストのビジュアル更新（完全不透明、選択中の拡大・ゴールド強調）
@@ -445,6 +605,20 @@ void TitleScene::Update(SceneManager *sceneManager) {
             creditTextSprite_->SetPosition(creditTextPos_);
             creditTextSprite_->SetColor({ 0.85f, 0.85f, 0.85f, titleMenuAlpha_ }); // 完全不透明ホワイト
         }
+    }
+
+    // クレジット表示スプライト (credit.png) の更新 (スケール演出を反映)
+    if (creditSprite_) {
+        Vector2 scaledSize = { creditSize_.x * creditScale_, creditSize_.y * creditScale_ };
+        Vector2 centeredPos = {
+            creditPos_.x - (scaledSize.x - creditSize_.x) * 0.5f,
+            creditPos_.y - (scaledSize.y - creditSize_.y) * 0.5f
+        };
+
+        creditSprite_->SetSize(scaledSize);
+        creditSprite_->SetPosition(centeredPos);
+        creditSprite_->SetColor({ 1.0f, 1.0f, 1.0f, creditAlpha_ });
+        creditSprite_->Update();
     }
 
     // カメラシェイク (着弾時の微小振動) の反映
@@ -590,6 +764,9 @@ void TitleScene::Draw2D() {
                 creditTextSprite_->Draw();
             }
         }
+        if (creditSprite_ && creditAlpha_ > 0.001f) {
+            creditSprite_->Draw();
+        }
         for (auto &sprite : sprites_) {
             sprite->Draw();
         }
@@ -643,6 +820,17 @@ void TitleScene::UpdateEditor() {
     if (titleLogoSprite_) {
         titleLogoSprite_->SetColor({ 1.0f, 1.0f, 1.0f, titleLogoAlpha_ });
         titleLogoSprite_->Update();
+    }
+    if (creditSprite_) {
+        Vector2 scaledSize = { creditSize_.x * creditScale_, creditSize_.y * creditScale_ };
+        Vector2 centeredPos = {
+            creditPos_.x - (scaledSize.x - creditSize_.x) * 0.5f,
+            creditPos_.y - (scaledSize.y - creditSize_.y) * 0.5f
+        };
+        creditSprite_->SetSize(scaledSize);
+        creditSprite_->SetPosition(centeredPos);
+        creditSprite_->SetColor({ 1.0f, 1.0f, 1.0f, creditAlpha_ });
+        creditSprite_->Update();
     }
     for (auto &sprite : sprites_) {
         sprite->Update();
@@ -757,6 +945,9 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     const char* phaseStr = "タイトル画面 (待機中)";
     if (phase_ == Phase::kTransitionToSelect) phaseStr = "ステージ選択カメラへ移動中...";
     else if (phase_ == Phase::kStageSelect) phaseStr = "ステージ選択画面 (待機中)";
+    else if (phase_ == Phase::kTransitionToCredit) phaseStr = "クレジット画面へ移動中...";
+    else if (phase_ == Phase::kCredit) phaseStr = "クレジット画面 (待機中)";
+    else if (phase_ == Phase::kTransitionFromCredit) phaseStr = "クレジットからタイトルへ復帰中...";
     ImGui::Text("【現在の状態】: %s", phaseStr);
     ImGui::Separator();
 
@@ -893,6 +1084,64 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     ImGui::Separator();
+
+    // 3. クレジットカメラ（目標値）
+    ImGui::Text("【クレジットカメラ (目標アングル)】");
+    ImGui::DragFloat3("クレジット 位置", &targetCreditPos_.x, 0.05f);
+    float creditRotDeg[3] = {
+        targetCreditRot_.x * 180.0f / 3.14159265f,
+        targetCreditRot_.y * 180.0f / 3.14159265f,
+        targetCreditRot_.z * 180.0f / 3.14159265f
+    };
+    if (ImGui::DragFloat3("クレジット 角度 (Deg)", creditRotDeg, 0.2f, -180.0f, 180.0f, "%.1f°")) {
+        targetCreditRot_.x = creditRotDeg[0] * 3.14159265f / 180.0f;
+        targetCreditRot_.y = creditRotDeg[1] * 3.14159265f / 180.0f;
+        targetCreditRot_.z = creditRotDeg[2] * 3.14159265f / 180.0f;
+    }
+    if (ImGui::Button("クレジット位置に即座に配置")) {
+        phase_ = Phase::kCredit;
+        cameraTransform_.translate = targetCreditPos_;
+        cameraTransform_.rotate = targetCreditRot_;
+        titleLogoAlpha_ = 0.0f;
+        titleMenuAlpha_ = 0.0f;
+        searchlightAlpha_ = 0.0f;
+        if (gameCamera_) {
+            gameCamera_->SetTranslation(targetCreditPos_);
+            gameCamera_->SetRotation(targetCreditRot_);
+            gameCamera_->UpdateMatrix();
+        }
+        if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetDebugCamera()) {
+            auto dbgCam = EditorManager::GetInstance()->GetDebugCamera();
+            dbgCam->SetTranslation(targetCreditPos_);
+            dbgCam->SetRotation(targetCreditRot_);
+            dbgCam->UpdateMatrix();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("▶ クレジット演出をテスト再生")) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/TitleCameraMove.mp3", 0.7f);
+        phase_ = Phase::kTransitionToCredit;
+        transitionStartPos_ = cameraTransform_.translate;
+        transitionStartRot_ = cameraTransform_.rotate;
+        transitionTimer_ = 0.0f;
+    }
+    if (ImGui::Button("デバッグカメラをクレジット位置に移動")) {
+        if (EditorManager::GetInstance() && EditorManager::GetInstance()->GetDebugCamera()) {
+            auto dbgCam = EditorManager::GetInstance()->GetDebugCamera();
+            dbgCam->SetTranslation(targetCreditPos_);
+            dbgCam->SetRotation(targetCreditRot_);
+            dbgCam->UpdateMatrix();
+            EditorManager::GetInstance()->SetUseDebugCamera(true);
+        }
+    }
+    ImGui::Spacing();
+    ImGui::Text("【クレジット画像 (credit.png) 表示調整】");
+    ImGui::DragFloat2("クレジット画像 位置 (px)", &creditPos_.x, 1.0f, 0.0f, 1280.0f);
+    ImGui::DragFloat2("クレジット画像 サイズ (px)", &creditSize_.x, 1.0f, 10.0f, 1280.0f);
+    ImGui::SliderFloat("クレジット画像 不透明度", &creditAlpha_, 0.0f, 1.0f);
+    ImGui::DragFloat("クレジットカメラ移動時間 (秒)", &creditTransitionDuration_, 0.05f, 0.3f, 3.0f, "%.2f秒");
+
+    ImGui::Separator();
     ImGui::Text("【BGM コントロール】");
     static float titleVol = 0.4f;
     static float selectVol = 0.4f;
@@ -961,6 +1210,11 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         if (ImGui::Button("ステージ選択目標値にコピー")) {
             targetSelectPos_ = dbgPos;
             targetSelectRot_ = dbgRot;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("クレジット目標値にコピー")) {
+            targetCreditPos_ = dbgPos;
+            targetCreditRot_ = dbgRot;
         }
 
         ImGui::Spacing();
