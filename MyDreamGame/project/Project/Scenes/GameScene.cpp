@@ -585,28 +585,25 @@ void GameScene::Update(SceneManager *sceneManager) {
                         EditorManager::GetInstance()->SetUseDebugCamera(false);
 #endif
                     }
-                }
-            }
-
-        } else {
-            // アイリスアウトの進行
-            UpdateIrisOut(dt);
-            if (irisOutTimer_ >= irisOutDuration_) {
+                } else {
+                    // アイリスアウトの進行
+                    UpdateIrisOut(dt);
+                    if (irisOutTimer_ >= irisOutDuration_) {
 #ifdef USE_IMGUI
-                if (EditorManager::GetInstance()) {
-                    EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
-                    EditorManager::GetInstance()->SetUseDebugCamera(false);
-                }
-                EditorManager::SetPlaying(true);
+                        if (EditorManager::GetInstance()) {
+                            EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
+                            EditorManager::GetInstance()->SetUseDebugCamera(false);
+                        }
+                        EditorManager::SetPlaying(true);
 #endif
-                sceneManager->SetData("StartAtStageSelect", true);
-                SavePoint::Clear(s_TargetMapFilePath);
-                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
-                return;
+                        sceneManager->SetData("StartAtStageSelect", true);
+                        SavePoint::Clear(s_TargetMapFilePath);
+                        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+                        return;
+                    }
+                }
             }
         }
-    }
-
     // -------------------------------------------------------------
     // ポーズ入力の監視 (ESC, P, ゲームパッド Startボタン)
     // -------------------------------------------------------------
@@ -1094,7 +1091,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         UpdateGuardLights();
     }
 }
-
+}
 #ifdef USE_IMGUI
 namespace {
 // ===== 崩れる床の調整パネル（インスペクター内の折りたたみ） =====
