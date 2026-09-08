@@ -223,6 +223,17 @@ void GameScene::Initialize() {
         Log("GameScene::Initialize: BackgroundPlane Initialized\n");
     }
 
+    // 中間ポイントの記録は「同じ回の続き」でだけ残す。
+    // 新しく始めた回（エディタの再生し直し・ステージ選択やタイトルから入り直し）では捨てて、必ずスポーン地点から始める。
+    // マップを読む前に捨てる：後だと、セーブポイントのブロックが古い記録を見て点灯済みの見た目で作られてしまう
+    {
+        const std::string clearPath = ResolveStagePath(nullptr);
+        if (!s_ResumeFromSavePoint && !clearPath.empty()) {
+            SavePoint::Clear(clearPath);
+        }
+        s_ResumeFromSavePoint = false;
+    }
+
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
     // 収集アイテムの記録を読む（宝石ブロックが Initialize で「以前取ったか」を参照するのでマップより先）
@@ -246,14 +257,8 @@ void GameScene::Initialize() {
     player_->SetCamera(gameCamera_); // 画面揺れ連携用にカメラを渡す
     Log("GameScene::Initialize: Player Initialized\n");
 
-    // 中間ポイントの記録は「同じ回の続き」でだけ残す。
-    // 新しく始めた回（エディタの再生し直し・ステージ選択やタイトルから入り直し）では捨てて、必ずスポーン地点から始める。
-    // エディタの停止→再生では一時ファイルを読むので、鍵は必ず本当のステージ名に直してから触る
+    // 記録を引く鍵。エディタの停止→再生では一時ファイルを読むので、必ず本当のステージ名に直してから触る
     const std::string stagePath = ResolveCurrentMapPath();
-    if (!s_ResumeFromSavePoint) {
-        SavePoint::Clear(stagePath);
-    }
-    s_ResumeFromSavePoint = false;
 
     player_->FindSpawnPoint(*map_);
     if (SavePoint::HasActiveSavePoint(stagePath)) {
@@ -625,6 +630,7 @@ void GameScene::Update(SceneManager *sceneManager) {
             // 失敗：同じステージを最初からやり直す（ステージ選択でこのステージを選んだ時と同じ）
             TransitionDirector::GetInstance()->Abort();
             s_QuickRestart = capturedByMiss_;
+            s_ResumeFromSavePoint = true; // 同じ回の続き：中間ポイントの記録は捨てない
             // 作り直す前に、今遊んでいるマップのパスへ直す（エディタでファイル名を打って読んだ時は
             // s_TargetMapFilePath が古いままで、やり直すと別のマップになってしまうため）
             s_TargetMapFilePath = ResolveCurrentMapPath();
@@ -660,7 +666,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                 EditorManager::SetPlaying(true);
 #endif
                 sceneManager->SetData("StartAtStageSelect", true);
-                SavePoint::Clear(s_TargetMapFilePath);
+                SavePoint::Clear(ResolveCurrentMapPath());
                 sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
                 return;
             }
@@ -3345,7 +3351,7 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager *sceneManager) {
             }
             EditorManager::SetPlaying(true);
 #endif
-            SavePoint::Clear(s_TargetMapFilePath);
+            SavePoint::Clear(ResolveCurrentMapPath());
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
         }
@@ -3399,7 +3405,7 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager *sceneManager) {
 
 bool GameScene::HasSavePointItem() const {
     // セーブポイントを通っていれば、ポーズに「セーブポイント」の項目を出す
-    return SavePoint::HasActiveSavePoint(s_TargetMapFilePath);
+    return SavePoint::HasActiveSavePoint(ResolveCurrentMapPath());
 }
 
 float GameScene::DrawGemDigits(const char *text, float x, float y, float cellW, float cellH, const Vector4 &color, size_t startIndex) {
@@ -3451,8 +3457,8 @@ void GameScene::DrawAlertBarSprites() {
 
     const float ratio = std::clamp(alert_->GetRatio(), 0.0f, 1.0f);
     const float pulse = alert_->GetPulse();
-    const float barW = 240.0f;
-    const float barH = 14.0f + 6.0f * pulse;
+    const float barW = 340.0f;
+    const float barH = 22.0f + 8.0f * pulse;
     const float margin = 18.0f;
     const float x0 = 1280.0f - margin - barW;
     const float y0 = margin;
@@ -3496,7 +3502,7 @@ void GameScene::DrawAlertBarSprites() {
         const float blink = 0.5f + 0.5f * std::sin(hudTime_ * 10.0f);
         frameColor = {1.0f, 0.24f, 0.24f, 0.5f + 0.5f * blink};
     }
-    constexpr float kEdge = 1.5f;
+    constexpr float kEdge = 2.0f;
     rect(x0, y0, barW, kEdge, frameColor);
     rect(x0, y0 + barH - kEdge, barW, kEdge, frameColor);
     rect(x0, y0, kEdge, barH, frameColor);
@@ -3504,7 +3510,7 @@ void GameScene::DrawAlertBarSprites() {
 
     // 「警戒度」の文字はバーの左に置く
     {
-        constexpr float kLabelH = 22.0f;
+        constexpr float kLabelH = 34.0f;
         const float w = kLabelH * (160.0f / 72.0f);
         alertLabelSprite_->SetSize({w, kLabelH});
         alertLabelSprite_->SetPosition({x0 - 8.0f - w, y0 + (barH - kLabelH) * 0.5f});
@@ -3524,11 +3530,11 @@ void GameScene::DrawAlertBarSprites() {
         aspect = 264.0f / 60.0f;
     }
     if (state) {
-        constexpr float kTextH = 20.0f;
+        constexpr float kTextH = 30.0f;
         const float w = kTextH * aspect;
         const float blink = 0.6f + 0.4f * std::sin(hudTime_ * 8.0f);
         state->SetSize({w, kTextH});
-        state->SetPosition({1280.0f - margin - w, y0 + barH + 6.0f});
+        state->SetPosition({1280.0f - margin - w, y0 + barH + 8.0f});
         state->SetColor({1.0f, 1.0f, 1.0f, blink});
         state->Update();
         state->Draw();
@@ -3663,7 +3669,7 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
         const float eyeW = 36.0f, eyeH = 24.0f, gap = 40.0f, margin = 18.0f;
         float y = margin + 4.0f;
         if (alert_->GetParams().enabled_)
-            y += 58.0f; // 警戒度のバーと文字が出ている時はその下
+            y += 78.0f; // 警戒度のバーと文字が出ている時はその下
         const bool lastOne = (limit - used == 1);
         const float blink = 0.5f + 0.5f * std::sin(hudTime_ * 6.0f);
         for (int i = 0; i < limit; ++i) {
@@ -3854,8 +3860,12 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
 }
 
 std::string GameScene::ResolveCurrentMapPath() const {
+    return ResolveStagePath(map_.get());
+}
+
+std::string GameScene::ResolveStagePath(const MapChip2D *map) {
     // 実際に読み込んだマップのファイルを優先（エディタでファイル名を打って読んだ時もこれが本当のファイル）
-    std::string loaded = map_ ? map_->GetCurrentFilePath() : std::string();
+    std::string loaded = map ? map->GetCurrentFilePath() : std::string();
     if (!loaded.empty() && loaded.find("temp_play_map") == std::string::npos) {
         return loaded;
     }

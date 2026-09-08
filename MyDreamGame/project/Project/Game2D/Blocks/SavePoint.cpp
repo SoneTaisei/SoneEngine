@@ -94,16 +94,10 @@ void SavePoint::ClearAll() {
 }
 
 std::string SavePoint::GetCurrentStageKey() const {
-    // エディタの停止→再生では一時ファイル temp_play_map を読むので、それは鍵にしない。
-    // 記録する時は「temp_play_map」、探す時は本当のステージ名、と食い違って
-    // セーブポイントを通ったのに無い扱いになってしまうため
-    if (map_) {
-        const std::string& loaded = map_->GetCurrentFilePath();
-        if (!loaded.empty() && loaded.find("temp_play_map") == std::string::npos) {
-            return NormalizeStageKey(loaded);
-        }
-    }
-    return NormalizeStageKey(GameScene::s_TargetMapFilePath);
+    // 鍵の決め方は GameScene に一本化する。
+    // ここだけ別の決め方をすると、記録する時と探す時で鍵が食い違い、
+    // セーブポイントを通ったのに無い扱いになってしまう
+    return NormalizeStageKey(GameScene::ResolveStagePath(map_));
 }
 
 bool SavePoint::CheckIfCurrentActive() const {

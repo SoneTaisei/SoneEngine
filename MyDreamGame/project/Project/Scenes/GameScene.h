@@ -110,6 +110,11 @@ private:
     void SetupTutorialPoster();
     /// <summary>今遊んでいるマップのパス（実際に読んだファイル。エディタの一時ファイルの時はエディタで選んでいるファイル名）。やり直しと映像の保存先に使う</summary>
     std::string ResolveCurrentMapPath() const;
+public:
+    // マップと編集中のファイル名から、記録の鍵に使う「本当のステージのパス」を決める。
+    // セーブポイント側も同じ関数を使うことで、書く時と読む時で鍵が食い違わないようにする
+    static std::string ResolveStagePath(const class MapChip2D* map);
+private:
 
     // ---------------------------------------------------
     // 共通システム
