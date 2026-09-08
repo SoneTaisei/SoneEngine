@@ -201,6 +201,10 @@ public:
 public:
     void SetDirty() { isDirty_ = true; }
 private:
+    // パレット定義（見た目やプロパティ）を id から引く。100 未満は Basic Tools 用のテンプレート、
+    // 100 以上は Custom Tools 用のカスタムパレットを見る。無ければ nullptr
+    const CustomBlockDef* FindPaletteDef(int typeId) const;
+
     std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void CreateChipObjects();
 

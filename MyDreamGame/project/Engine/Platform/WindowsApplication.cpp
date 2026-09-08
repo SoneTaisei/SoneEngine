@@ -1,4 +1,5 @@
 #include "Platform/WindowsApplication.h"
+#include "Renderer/ConstantBufferPool.h"
 #include "Editor/Replay/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
@@ -522,6 +523,10 @@ void WindowsApplication::Finalize() {
     // 6. Windows API 関連のクリーンアップ
     // timeBeginPeriod(1) に対応する解除
     timeEndPeriod(1); // ★追加：タイマー精度を元に戻す
+
+    // 定数バッファの置き場（サブアロケータ）を解放する。
+    // 使う側（コンポーネント）は上でシーンごと破棄済みなので、デバイスを消す直前に片付ける
+    ConstantBufferPool::GetInstance()->Shutdown();
 
     // 7. 最後にすべての土台である DirectXCommon を消す
     if (dxCommon_) {
