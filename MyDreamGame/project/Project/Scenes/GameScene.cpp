@@ -486,7 +486,10 @@ void GameScene::Update(SceneManager *sceneManager) {
             // 失敗：同じステージを最初からやり直す（ステージ選択でこのステージを選んだ時と同じ）
             TransitionDirector::GetInstance()->Abort();
             s_QuickRestart = capturedByMiss_;
-            Log("GameScene: captured -> restart same stage\n");
+            // 作り直す前に、今遊んでいるマップのパスへ直す（エディタでファイル名を打って読んだ時は
+            // s_TargetMapFilePath が古いままで、やり直すと別のマップになってしまうため）
+            s_TargetMapFilePath = ResolveCurrentMapPath();
+            Log("GameScene: captured -> restart same stage (" + s_TargetMapFilePath + ")\n");
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;
         }
@@ -940,7 +943,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         // 操作説明の映像：遊んでいる間だけ、決めた範囲に近づくと出る
         if (tutorialPosters_) {
             // エディタの停止→再生ではシーン作成時だけ一時ファイルのパスになるので、本来のマップのパスに毎フレーム付け替える
-            tutorialPosters_->RebindMap(ResolvePosterMapPath());
+            tutorialPosters_->RebindMap(ResolveCurrentMapPath());
             bool posterActive = isPlayingOrReplaying && (gameState_ == GameState::Playing || gameState_ == GameState::StartReady);
             tutorialPosters_->Update(dt, player_->GetPosition(), posterActive);
         }
@@ -2885,6 +2888,7 @@ void GameScene::UpdatePauseMenu(float dt, SceneManager* sceneManager) {
         if (pauseMenuIndex_ == 0) {
             // リトライ: 現在のステージを最初からリスタート
             isPaused_ = false;
+            s_TargetMapFilePath = ResolveCurrentMapPath(); // 別のマップにならないように
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;
         } else if (pauseMenuIndex_ == 1) {
@@ -3174,7 +3178,7 @@ void GameScene::DrawHudSprites(const Matrix4x4& viewProjection) {
     }
 }
 
-std::string GameScene::ResolvePosterMapPath() const {
+std::string GameScene::ResolveCurrentMapPath() const {
     // 実際に読み込んだマップのファイルを優先（エディタでファイル名を打って読んだ時もこれが本当のファイル）
     std::string loaded = map_ ? map_->GetCurrentFilePath() : std::string();
     if (!loaded.empty() && loaded.find("temp_play_map") == std::string::npos) {
@@ -3195,7 +3199,7 @@ void GameScene::SetupTutorialPoster() {
     if (!map_ || !player_) return;
     ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
     auto set = std::make_unique<TutorialPosterSet>();
-    set->Initialize(device, ResolvePosterMapPath()); // マップごとの JSON があれば読む（空でも「保存済み」として初期配置はしない）
+    set->Initialize(device, ResolveCurrentMapPath()); // マップごとの JSON があれば読む（空でも「保存済み」として初期配置はしない）
     if (set->HasConfigFile() || !set->Empty()) {
         tutorialPosters_ = std::move(set);
         return;

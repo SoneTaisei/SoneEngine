@@ -1,4 +1,5 @@
-#include "DoorBlock.h"
+﻿#include "DoorBlock.h"
+#include "LinkColor.h"
 #include "SwitchBlock.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
@@ -24,8 +25,8 @@ void DoorBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
     auto* renderer = gameObject_->AddComponent<PrimitiveRendererComponent>();
     renderer->Initialize(device, boxPrimitive);
-    // ドアの色（鉄格子っぽい青灰色）
-    renderer->GetMaterial().color = {0.5f, 0.6f, 0.7f, 1.0f};
+    // ドアの色は連動番号ごと（同じ番号のスイッチと同じ色になる）。開き具合で明るさを変えるので Update でも入れ直す
+    renderer->GetMaterial().color = LinkColor::Dark(linkId_);
     renderer->GetMaterial().lightingType = 1;
 
     SetupCollider();
@@ -107,6 +108,17 @@ void DoorBlock::Update() {
         }
     }
     blockedThisFrame_ = false;
+
+    // 連動番号ごとの色。開くほど明るくして、動いているのが分かるようにする
+    if (auto* renderer = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        Vector4 closed = LinkColor::Dark(linkId_);
+        Vector4 opened = LinkColor::Bright(linkId_);
+        float t = openProgress_;
+        renderer->GetMaterial().color = { closed.x + (opened.x - closed.x) * t,
+                                          closed.y + (opened.y - closed.y) * t,
+                                          closed.z + (opened.z - closed.z) * t,
+                                          closed.w };
+    }
 
     ApplyTransform();
 }

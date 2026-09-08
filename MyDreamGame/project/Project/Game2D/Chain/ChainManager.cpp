@@ -689,6 +689,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
             return;
         }
         const bool isFree = (chain->GetAnchorMode() == ChainAnchorMode::kFree); // 落ちている鎖・ちぎれた鎖
+        // 地面に落ち着いた鎖は「置いてあるだけ」にする：拾う判定とスイッチは効くが、
+        // 警備員を転ばせたりドアに反応したりはしない（止まった鎖が警備員を延々と転ばせ続けていた）
+        const bool settled = isFree && chain->IsResting();
         const auto& nodes = chain->GetNodes();
         const int last = static_cast<int>(nodes.size()) - 1;
         for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
@@ -717,7 +720,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                 }
             }
             // 動くブロック（ドアなど）は「通路の範囲」で当たりを取る（crushKills OFF のドアが通路の鎖を見て閉まるのを待つため）
+            // 落ち着いた鎖は対象外（置いてあるだけの鎖でドアが閉まらなくなるのを防ぐ）
             for (const auto& blockPtr : map->GetUpdateBlocks()) {
+                if (settled) break;
                 if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
                 if (dynamic_cast<GuardBlock*>(blockPtr.get())) continue; // 警備員は下で別に扱う
                 AABB2D box = blockPtr->GetChainTouchAABB();
@@ -739,8 +744,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                     if (CircleOverlapsAABB(node.pos, r, guard->GetAABB()) && guard->HitByTreasure(vel)) {
                         chain->ScaleNodeVelocity(i, 0.4f); // 跳ね返して連打を防ぐ
                     }
-                } else if (isFree) {
+                } else if (isFree && !settled) {
                     // 転ばせる：落ちている鎖の節が移動中の足元に重なる
+                    // 地面で止まった鎖は転ばせない（置きっぱなしの鎖で永遠に転び続けるため）
                     if (CircleOverlapsAABB(node.pos, r, guard->GetFootAABB())) {
                         guard->TripByChain(speed);
                     }
@@ -791,8 +797,8 @@ void ChainManager::UpdateTether() {
     if (!player_ || !playerChain_) {
         return;
     }
-    // 構え中はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
-    if (spin_ && spin_->IsInStance()) {
+    // 構え中と、板以外で投げた直後はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
+    if (spin_ && (spin_->IsInStance() || spin_->IsThrowLocked())) {
         return;
     }
     if (!params_.tetherEnabled_ || tornChain_ || transitionHidden_ || player_->IsDead() || player_->IsGoal()) {
@@ -1088,6 +1094,11 @@ void ChainManager::DrawImGui() {
         ImGui::SameLine();
         ImGui::TextDisabled(spin_->IsSpinAllowed() ? "[on plank]" : "[not on plank]");
     }
+    ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【板以外の床で投げる（Q で持って A/D）】");
+    spinChanged |= ImGui::DragFloat("Ground Throw Speed (投げる速さ)##Spin", &params_.groundThrowSpeed_, 0.5f, 0.0f, 40.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Up (上向き成分)##Spin", &params_.groundThrowUp_, 0.05f, 0.0f, 2.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Recover (投げた後動けない秒数)##Spin", &params_.groundThrowRecover_, 0.05f, 0.0f, 2.0f);
+    ImGui::TextDisabled("※ 警備員が気絶する速さは Stun Speed（既定 6）。それより速く投げること");
     spinChanged |= ImGui::DragFloat("Swing Strength##Spin", &params_.swingStrength_, 0.5f, 0.0f, 200.0f);
     spinChanged |= ImGui::DragFloat("Swing Damping##Spin", &params_.swingDamping_, 0.01f, 0.0f, 5.0f);
     spinChanged |= ImGui::DragFloat("Chain Mass Per Unit##Spin", &params_.chainMassPerUnit_, 0.05f, 0.0f, 10.0f);
@@ -1105,6 +1116,9 @@ void ChainManager::DrawImGui() {
         params_.throwOutTime_ = std::clamp(params_.throwOutTime_, 0.01f, 2.0f);
         params_.throwAngleDeg_ = std::clamp(params_.throwAngleDeg_, 0.0f, 180.0f);
         params_.throwOmega_ = std::clamp(params_.throwOmega_, 0.0f, 20.0f);
+        params_.groundThrowSpeed_ = std::clamp(params_.groundThrowSpeed_, 0.0f, 40.0f);
+        params_.groundThrowUp_ = std::clamp(params_.groundThrowUp_, 0.0f, 2.0f);
+        params_.groundThrowRecover_ = std::clamp(params_.groundThrowRecover_, 0.0f, 2.0f);
         params_.swingStrength_ = (std::max)(0.0f, params_.swingStrength_);
         params_.swingDamping_ = (std::max)(0.0f, params_.swingDamping_);
         params_.chainMassPerUnit_ = (std::max)(0.0f, params_.chainMassPerUnit_);
