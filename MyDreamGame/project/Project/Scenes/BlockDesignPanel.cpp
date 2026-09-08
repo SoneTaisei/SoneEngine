@@ -193,7 +193,7 @@ namespace {
         {"SwitchBlock", {"linkId"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
         {"DoorBlock", {"linkId", "openDirection", "latch", "crushKills"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
         {"FragileBlock", {"breakWeight", "breakDuration"}, "breakWeight", "キー 0〜8 = 通れる上限本数"},
-        {"MovingBlock", {"moveAxis", "moveRange", "moveSpeed", "phase"}, "moveRange", "キー 1〜9 = 動く範囲"},
+        {"MovingBlock", {"moveAxis", "moveRange", "moveSpeed", "phase", "thickness"}, "moveRange", "キー 1〜9 = 動く範囲"},
         {"GuardBlock", {"startDirection", "moveRange", "sightLength", "patrolSpeed"}, "moveRange", "キー 1〜9 = 巡回範囲"},
         {"ChainItemBlock", {"units"}, "units", "キー 1〜8 = もらえる本数"},
         {"ThinPlatformBlock", {"thickness"}, nullptr, nullptr},
