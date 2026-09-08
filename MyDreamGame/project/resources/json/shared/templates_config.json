@@ -16,25 +16,27 @@
                 "y": 1.0,
                 "z": 3.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "NormalBlock"
         },
         {
             "color": {
                 "a": 1.0,
-                "b": 0.20000000298023224,
-                "g": 0.20000000298023224,
+                "b": 0.0,
+                "g": 0.8571428060531616,
                 "r": 1.0
             },
             "id": 2,
-            "modelName": "",
+            "modelName": "Object/Original/sphere/sphere.obj",
             "name": "Death",
             "properties": {},
             "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 3.0
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
             },
+            "shaderMode": 1,
             "textureName": "",
             "type": "DeathBlock"
         },
@@ -54,6 +56,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "GoalBlock"
         },
@@ -73,6 +76,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "OneWayBlock"
         },
@@ -92,6 +96,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "JumpBlock"
         },
@@ -113,6 +118,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "ChainItemBlock"
         },
@@ -137,6 +143,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "MovingBlock"
         },
@@ -159,6 +166,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "FragileBlock"
         },
@@ -180,6 +188,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "SwitchBlock"
         },
@@ -207,6 +216,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "DoorBlock"
         },
@@ -260,6 +270,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "GuardBlock"
         },
@@ -281,6 +292,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "ThinPlatformBlock"
         },
@@ -300,6 +312,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "CollectibleBlock"
         },
@@ -319,6 +332,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "SavePoint"
         }
