@@ -1823,6 +1823,8 @@ void GameScene::RenderShadowPass() {
 }
 
 void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
+    viewProjection_ = viewProjectionMatrix;
+
     // 警備員の懐中電灯スポットライトを最新化
     UpdateGuardLights();
 
@@ -1973,7 +1975,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
 void GameScene::Draw2D() {
     // 4. ポーズメニューの描画 (最前面)
-    DrawHudSprites(viewProjectionMatrix);
+    DrawHudSprites(viewProjection_);
     DrawPauseMenu();
 }
 
