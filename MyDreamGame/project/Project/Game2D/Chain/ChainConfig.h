@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <string>
 
 /// <summary>
@@ -58,9 +58,11 @@ struct ChainParams {
     float throwOutTime_ = 0.2f;        // A/D で投げてから棒が鎖の実長まで伸び切るまでの秒数
     float throwAngleDeg_ = 180.0f;     // 投げ始めの角度（真下=0。180 で真上＝頭上から振り下ろす、90 で真横）
     float throwOmega_ = 2.0f;          // 投げた瞬間の角速度（rad/s。投げた方向へ回り続ける勢い）
+    float spinAccel_ = 8.0f;           // D/A長押し時の角加速度（rad/s^2。スムーズに加速）
+    float spinBrake_ = 35.0f;          // 逆キー入力時の急ブレーキ角減速度（rad/s^2。素早く停止）
+    float maxSpinOmega_ = 18.0f;       // 最大角速度（rad/s。適度な爽快感と制御しやすさを両立）
     float swingStrength_ = 40.0f;      // A/Dで振る力。角加速度 = これ ÷ (宝石の質量 + 鎖の質量)
-                                       // 40: 押しっぱなしでは弱く(3ユニットで3.5u/s)、交互に漕ぐと約3秒で上限到達
-    float swingDamping_ = 0.25f;       // 振りの減衰（1/秒。漕がないと徐々に止まる）
+    float swingDamping_ = 0.4f;        // キー離し時の振りの自然減衰（1/秒。離すと徐々に止まる）
     float chainMassPerUnit_ = 0.5f;    // 鎖1ユニットあたりの質量（宝石の質量に加算。長いほど振りにくい）
     float weightThrowScale_ = 1.0f;    // 離した時に鎖と重りへ与える速度の倍率（角速度 × 半径 × これ）
     float pullTransfer_ = 0.9f;        // 離した時にプレイヤーが飛ぶ速さ = 重りの速さ × これ
@@ -80,7 +82,8 @@ struct ChainParams {
     float justBonus_ = 1.1f;           // ジャスト時の速さ倍率（上限は超えない）
     float coneMinDeg_ = 25.0f;         // 窓の外で離した時の向きの下限（度）
     float coneMaxDeg_ = 85.0f;         // 同 上限
-    float aimSlow_ = 0.25f;            // SPACE を押している間の振り子の速さ倍率（角度の進みだけ遅くなる。勢いは変わらない）
+    float aimSlow_ = 0.12f;            // SPACE を押している間の振り子の基本スロー倍率（上限）
+    float aimTargetOmega_ = 1.8f;      // スロー中の見かけの目標角速度（rad/s。高速回転時でもこの速度までスローにして狙いやすくする）
     float aimMaxTime_ = 0.8f;          // 押しっぱなしでもこの秒数で飛ぶ
 
     // --- 見た目 ---

@@ -1131,8 +1131,9 @@ void GameScene::Update(SceneManager *sceneManager) {
         isPlaying = isPlaying && EditorManager::IsPlaying();
 #endif
         if (isPlaying && !isPaused_ && player_ && !player_->IsDead() && !player_->IsGoal()) {
-            // 鎖を回しているとき（kStance）にスペースを押している（エイム中）
-            if (isSpinning && (isAiming || isSpaceDown)) {
+            // 鎖を回しているとき（kStance）に実際にスローモーションが効いている時のみ黒帯エフェクトを適用
+            bool isSlowActive = spinAction && spinAction->IsSlowActive();
+            if (isSpinning && isSlowActive) {
                 isTriggered = true;
             }
         }

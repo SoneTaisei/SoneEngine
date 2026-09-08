@@ -50,8 +50,8 @@ private:
     std::filesystem::file_time_type lastFileWriteTime_{};
 
     float currentAlpha_ = 0.0f;     // 0.0f (未適用) 〜 1.0f (最大適用)
-    float fadeInDuration_ = 0.08f;  // フェードイン所要時間 (秒)
-    float fadeOutDuration_ = 0.08f; // フェードアウト所要時間 (秒)
+    float fadeInDuration_ = 0.05f;  // フェードイン所要時間 (秒)
+    float fadeOutDuration_ = 0.35f; // フェードアウト所要時間 (秒。スローの滑らかな復帰に合わせてゆっくり消える)
 
     bool wasApplied_ = false;       // 直前フレームでDirectXCommonに適用されていたか
 };
