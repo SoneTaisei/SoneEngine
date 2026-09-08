@@ -323,6 +323,18 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
         }
         ApplyEndWeight(); // 末端の質量を戻す（挟まれていれば 0 のまま）
     }
+
+    // 落ち着いた判定：一番速い節でも遅ければ、地面で止まったとみなして時間を数える
+    float maxSpeed = 0.0f;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        Vector3 v = GetNodeVelocity(static_cast<int>(i));
+        maxSpeed = (std::max)(maxSpeed, std::sqrt(v.x * v.x + v.y * v.y));
+    }
+    if (maxSpeed < kRestSpeed) {
+        restTimer_ += dt;
+    } else {
+        restTimer_ = 0.0f;
+    }
 }
 
 void Chain2D::UpdateLinkTransforms() {
@@ -406,6 +418,7 @@ void Chain2D::ResetPoseHanging(const Vector3& anchor, MapChip2D* map) {
 
 void Chain2D::ResetDynamics() {
     VerletPhysics2D::ResetVelocities(nodes_);
+    restTimer_ = 0.0f;
 }
 
 void Chain2D::ResetToInitial() {

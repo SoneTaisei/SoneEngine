@@ -683,6 +683,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
             return;
         }
         const bool isFree = (chain->GetAnchorMode() == ChainAnchorMode::kFree); // 落ちている鎖・ちぎれた鎖
+        // 地面に落ち着いた鎖は「置いてあるだけ」にする：拾う判定とスイッチは効くが、
+        // 警備員を転ばせたりドアに反応したりはしない（止まった鎖が警備員を延々と転ばせ続けていた）
+        const bool settled = isFree && chain->IsResting();
         const auto& nodes = chain->GetNodes();
         const int last = static_cast<int>(nodes.size()) - 1;
         for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
@@ -711,7 +714,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                 }
             }
             // 動くブロック（ドアなど）は「通路の範囲」で当たりを取る（crushKills OFF のドアが通路の鎖を見て閉まるのを待つため）
+            // 落ち着いた鎖は対象外（置いてあるだけの鎖でドアが閉まらなくなるのを防ぐ）
             for (const auto& blockPtr : map->GetUpdateBlocks()) {
+                if (settled) break;
                 if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
                 if (dynamic_cast<GuardBlock*>(blockPtr.get())) continue; // 警備員は下で別に扱う
                 AABB2D box = blockPtr->GetChainTouchAABB();
@@ -733,8 +738,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                     if (CircleOverlapsAABB(node.pos, r, guard->GetAABB()) && guard->HitByTreasure(vel)) {
                         chain->ScaleNodeVelocity(i, 0.4f); // 跳ね返して連打を防ぐ
                     }
-                } else if (isFree) {
+                } else if (isFree && !settled) {
                     // 転ばせる：落ちている鎖の節が移動中の足元に重なる
+                    // 地面で止まった鎖は転ばせない（置きっぱなしの鎖で永遠に転び続けるため）
                     if (CircleOverlapsAABB(node.pos, r, guard->GetFootAABB())) {
                         guard->TripByChain(speed);
                     }

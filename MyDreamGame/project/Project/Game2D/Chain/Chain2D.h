@@ -213,6 +213,12 @@ public:
     /// プレイヤーが持っている鎖は無効にする（回している重りや鎖が自分の体に引っかからないように）。
     /// 落ちている鎖・吊り鎖は有効のまま
     /// </summary>
+    /// <summary>
+    /// 地面に落ち着いて動かなくなったか（落ちている鎖用）。
+    /// 止まった鎖が警備員を何度も転ばせ続けるのを防ぐのに使う。拾う判定とスイッチは止まっていても効く
+    /// </summary>
+    bool IsResting() const { return restTimer_ >= kRestTime; }
+
     void SetPlayerCollisionEnabled(bool enabled) { playerCollisionEnabled_ = enabled; }
     bool IsPlayerCollisionEnabled() const { return playerCollisionEnabled_; }
 
@@ -271,6 +277,10 @@ private:
     int playerCollisionSkip_ = 0;
     // プレイヤーとの当たり判定そのものの有効/無効（持っている鎖は false にする）
     bool playerCollisionEnabled_ = true;
+    // 落ち着いた判定：全部の節がこの速さ未満の状態が kRestTime 続いたら「止まった」とみなす
+    static constexpr float kRestSpeed = 0.6f;   // チップ/秒
+    static constexpr float kRestTime = 0.35f;   // 秒
+    float restTimer_ = 0.0f;
 
     // 直近の積分ステップ幅（暗黙速度を実速度に換算する用）
     float lastStepDt_ = 1.0f / 60.0f;
