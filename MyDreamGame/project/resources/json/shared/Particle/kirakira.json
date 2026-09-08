@@ -1,0 +1,277 @@
+{
+    "duration": 0.10000000149011612,
+    "emitters": [
+        {
+            "billboardType": 0,
+            "blendMode": 0,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 0.10000000149011612,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 1.5,
+            "lifetimeMin": 0.800000011920929,
+            "maxParticles": 20,
+            "modelPath": "resources/Object/Original/jewelry/jewelry.obj",
+            "name": "Flash",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/ParticleJewelry.PS.hlsl",
+            "renderType": 1,
+            "rotateSpeedMax": [
+                6.0,
+                6.0,
+                6.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 0,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 40.0,
+            "startColor": [
+                1.0,
+                0.0,
+                0.0,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Object/Original/kusari/kusari_2/white.png",
+            "useColorGradient": false,
+            "velocitySpread": 100.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        },
+        {
+            "billboardType": 0,
+            "blendMode": 0,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 0.10000000149011612,
+            "enabled": true,
+            "endColor": [
+                0.0,
+                1.0,
+                0.7568627595901489,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 1.5,
+            "lifetimeMin": 0.800000011920929,
+            "maxParticles": 20,
+            "modelPath": "resources/Object/Original/jewelry/jewelry.obj",
+            "name": "Flash (Copy)",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/ParticleJewelry.PS.hlsl",
+            "renderType": 1,
+            "rotateSpeedMax": [
+                6.0,
+                6.0,
+                6.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 0,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 40.0,
+            "startColor": [
+                0.0,
+                1.0,
+                0.7567565441131592,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Object/Original/kusari/kusari_2/white.png",
+            "useColorGradient": false,
+            "velocitySpread": 100.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        },
+        {
+            "billboardType": 0,
+            "blendMode": 0,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 0.10000000149011612,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                0.7647058963775635,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 1.5,
+            "lifetimeMin": 0.800000011920929,
+            "maxParticles": 20,
+            "modelPath": "resources/Object/Original/jewelry/jewelry.obj",
+            "name": "Flash (Copy) (Copy)",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/ParticleJewelry.PS.hlsl",
+            "renderType": 1,
+            "rotateSpeedMax": [
+                6.0,
+                6.0,
+                6.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 0,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 40.0,
+            "startColor": [
+                1.0,
+                0.7644787430763245,
+                0.0,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Object/Original/kusari/kusari_2/white.png",
+            "useColorGradient": false,
+            "velocitySpread": 100.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        }
+    ],
+    "isLoop": true,
+    "systemName": "kirakira"
+}

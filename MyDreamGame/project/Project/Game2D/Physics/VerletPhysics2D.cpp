@@ -101,6 +101,10 @@ int VerletPhysics2D::CollideNodeWithMap(VerletNode& node, MapChip2D* map, float 
         }
 
         AABB2D blockAABB = blockPtr->GetAABB();
+        // 全開のドアなど、厚さがほぼ 0 のものは当たりにしない（縁に見えない壁が残るのを防ぐ）
+        if (blockAABB.right - blockAABB.left < 0.01f || blockAABB.top - blockAABB.bottom < 0.01f) {
+            continue;
+        }
         if (CollideNodeWithAABB(node, blockAABB, friction)) {
             contact |= kContactMoving;
         }
@@ -120,7 +124,7 @@ bool VerletPhysics2D::IsInsideStaticSolid(const Vector3& p, MapChip2D* map) {
     return map->GetChipType(cx, cy) == MapChip2D::ChipType::kBlock;
 }
 
-bool VerletPhysics2D::IsTouchingMovingSolid(const VerletNode& node, MapChip2D* map) {
+bool VerletPhysics2D::IsTouchingMovingSolid(const VerletNode& node, MapChip2D* map, bool forCrush) {
     if (!map) {
         return false;
     }
@@ -129,7 +133,13 @@ bool VerletPhysics2D::IsTouchingMovingSolid(const VerletNode& node, MapChip2D* m
         if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->IsSolid()) {
             continue;
         }
+        if (forCrush && !blockPtr->CrushesChain()) {
+            continue; // crushKills が OFF のドアは挟んでもちぎらない
+        }
         AABB2D box = blockPtr->GetAABB();
+        if (box.right - box.left < 0.01f || box.top - box.bottom < 0.01f) {
+            continue; // 全開のドアなど厚さ 0 のものは「触れている」にしない（開いたドアの縁で鎖がちぎれていた原因）
+        }
         float closestX = std::clamp(node.pos.x, box.left, box.right);
         float closestY = std::clamp(node.pos.y, box.bottom, box.top);
         float dx = node.pos.x - closestX;

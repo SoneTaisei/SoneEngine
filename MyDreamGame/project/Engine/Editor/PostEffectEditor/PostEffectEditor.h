@@ -19,6 +19,7 @@ enum class PostEffectShaderType {
     Dissolve,
     Noise,
     Iris,
+    Letterbox,
     Composite,
     Count
 };

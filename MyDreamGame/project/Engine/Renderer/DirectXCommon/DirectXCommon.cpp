@@ -1068,6 +1068,16 @@ void DirectXCommon::CreatePostEffectPipelines() {
     compositeParamsData_->irisMaskColor[2] = 0.0f;
     compositeParamsData_->irisMaskColor[3] = 1.0f;
 
+    // Letterbox in composite
+    compositeParamsData_->enableLetterbox = 0;
+    compositeParamsData_->letterboxHeight = 0.12f;
+    compositeParamsData_->letterboxSmoothness = 0.002f;
+    compositeParamsData_->letterboxPadding = 0.0f;
+    compositeParamsData_->letterboxColor[0] = 0.0f;
+    compositeParamsData_->letterboxColor[1] = 0.0f;
+    compositeParamsData_->letterboxColor[2] = 0.0f;
+    compositeParamsData_->letterboxColor[3] = 1.0f;
+
     // Iris 用のPSOを作成
     psoDesc.PS = {psIrisBlob->GetBufferPointer(), psIrisBlob->GetBufferSize()};
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&irisPipelineState_));

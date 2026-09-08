@@ -28,7 +28,7 @@ void GPUParticleEmitter::Initialize(ID3D12Device* device, const GPUParticleEmitt
 }
 
 void GPUParticleEmitter::SetData(const GPUParticleEmitterData& data) {
-    bool needRealloc = (data.maxParticles != data_.maxParticles);
+    bool needRealloc = (data.maxParticles != allocatedCapacity_);
     data_ = data;
     if (needRealloc && device_) {
         ReallocateGpuResources(device_, data_.maxParticles);
@@ -71,6 +71,9 @@ void GPUParticleEmitter::ReallocateGpuResources(ID3D12Device* device, uint32_t m
 
     particles_.resize(maxCount);
     allocatedCapacity_ = maxCount;
+    if (numActiveParticles_ > maxCount) {
+        numActiveParticles_ = maxCount;
+    }
 }
 
 void GPUParticleEmitter::Reset() {
@@ -106,7 +109,7 @@ void GPUParticleEmitter::EmitBurst(uint32_t count) {
 }
 
 void GPUParticleEmitter::SpawnParticle() {
-    if (numActiveParticles_ >= data_.maxParticles) return;
+    if (numActiveParticles_ >= data_.maxParticles || numActiveParticles_ >= allocatedCapacity_ || numActiveParticles_ >= particles_.size()) return;
 
     GPUParticleInstance& p = particles_[numActiveParticles_];
 
@@ -394,7 +397,8 @@ void GPUParticleEmitter::TransferToGPU(const Matrix4x4& viewProjection, const Ma
         billboardMatrix = TransformFunctions::MakeRoteYMatrix(angleY + std::numbers::pi_v<float>);
     }
 
-    for (uint32_t i = 0; i < numActiveParticles_; ++i) {
+    uint32_t activeCount = (std::min)({ numActiveParticles_, allocatedCapacity_, static_cast<uint32_t>(particles_.size()) });
+    for (uint32_t i = 0; i < activeCount; ++i) {
         const GPUParticleInstance& p = particles_[i];
 
         Matrix4x4 scaleMat = TransformFunctions::MakeScaleMatrix(p.scale);
@@ -458,7 +462,7 @@ void GPUParticleEmitter::Draw(ID3D12GraphicsCommandList* commandList, const Matr
 
     TransferToGPU(viewProjection, cameraMatrix);
 
-    particleCommon->SetBlendMode(data_.blendMode);
+    particleCommon->SetPipelineState(data_.vsPath, data_.psPath, data_.blendMode);
 
     uint32_t texHandle = TextureManager::GetInstance()->Load(data_.texturePath);
     D3D12_GPU_DESCRIPTOR_HANDLE gpuTexHandle = TextureManager::GetInstance()->GetGpuHandle(texHandle);
@@ -468,10 +472,21 @@ void GPUParticleEmitter::Draw(ID3D12GraphicsCommandList* commandList, const Matr
     commandList->SetGraphicsRootDescriptorTable(2, gpuTexHandle);
 
     if (data_.renderType == GPUParticleRenderType::Mesh && modelManager) {
-        std::filesystem::path p(data_.modelPath);
-        std::string dir = p.parent_path().string();
-        if (!dir.empty() && dir.back() != '/' && dir.back() != '\\') dir += "/";
-        std::string filename = p.filename().string();
+        std::string resolvedPath = data_.modelPath;
+        if (!std::filesystem::exists(resolvedPath)) {
+            if (resolvedPath.find("Object/School/") != std::string::npos) {
+                std::string altPath = resolvedPath;
+                size_t pos = altPath.find("Object/School/");
+                altPath.replace(pos, 14, "Object/Original/");
+                if (std::filesystem::exists(altPath)) {
+                    resolvedPath = altPath;
+                }
+            }
+        }
+
+        std::filesystem::path p(resolvedPath);
+        std::string dir = p.parent_path().generic_string();
+        std::string filename = p.filename().generic_string();
 
         Model* model = modelManager->GetModel(dir, filename);
         if (model && model->GetIndexCount() > 0) {

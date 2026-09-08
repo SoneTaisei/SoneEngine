@@ -11,6 +11,8 @@
 #include "GuardBlock.h"
 #include "ThinPlatformBlock.h"
 #include "JumpBlock.h"
+#include "CollectibleBlock.h"
+#include "SavePoint.h"
 #include <algorithm>
 
 BlockFactory& BlockFactory::GetInstance() {
@@ -35,6 +37,9 @@ BlockFactory::BlockFactory() {
     Register("ChainItemBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<ChainItemBlock>(map, x, y);
     });
+    Register("CollectibleBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<CollectibleBlock>(map, x, y);
+    });
     Register("MovingBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<MovingBlock>(map, x, y);
     });
@@ -55,6 +60,9 @@ BlockFactory::BlockFactory() {
     });
     Register("JumpBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<JumpBlock>(map, x, y);
+    });
+    Register("SavePoint", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<SavePoint>(map, x, y);
     });
 }
 

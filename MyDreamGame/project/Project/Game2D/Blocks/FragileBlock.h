@@ -20,6 +20,8 @@ public:
 
     // 震えている間はまだ足場。落ちて消えたら無くなる
     bool IsSolid() const override { return !isDestroyed_; }
+    // 崩れた後もマップに残す（エディタの「復活」、巻き戻しでの復元、プレイ中の保存で床が消えないように）
+    bool KeepWhenDestroyed() const override { return true; }
     void OnPlayerStand(Player2D* player) override;
     void SetProperties(const nlohmann::json& properties) override;
     void Reset() override;

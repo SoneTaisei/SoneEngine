@@ -171,6 +171,7 @@ namespace {
         {"NormalBlock", "ブロック"}, {"DeathBlock", "死ぬ床"}, {"GoalBlock", "ゴール"}, {"OneWayBlock", "一方通行"},
         {"ChainItemBlock", "鎖アイテム"}, {"MovingBlock", "動く床"}, {"FragileBlock", "崩れる床"}, {"SwitchBlock", "スイッチ"},
         {"DoorBlock", "ドア"}, {"GuardBlock", "警備員"}, {"ThinPlatformBlock", "細い足場"}, {"JumpBlock", "ジャンプ台"},
+        {"CollectibleBlock", "収集の宝石"},
     };
 
     std::string TypeLabelFor(const std::string& type) {
@@ -1190,4 +1191,8 @@ bool BlockDesignPanel::WorldToScreen(Camera*, const Vector3&, float&, float&) { 
 void BlockDesignPanel::Draw(MapChip2D*, Camera*, const std::string&) {}
 void BlockDesignPanel::DrawLinksPanel(MapChip2D*, Camera*, const std::string&) {}
 void BlockDesignPanel::DrawOverlays(MapChip2D*, Camera*) {}
+void BlockDesignPanel::MarkUnsaved() {}
+void BlockDesignPanel::DrawSaveRow(MapChip2D*, const std::string&, const char*) {}
+bool BlockDesignPanel::CanClickSelect() { return false; }
+void BlockDesignPanel::SetRenderViewProjection(const Matrix4x4&) {}
 #endif

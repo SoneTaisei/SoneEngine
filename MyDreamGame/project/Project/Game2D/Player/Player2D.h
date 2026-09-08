@@ -68,6 +68,7 @@ public:
     const Vector3& GetPosition() const { return state_.position_; }
     void SetPosition(const Vector3& pos) { state_.position_ = pos; }
     const Vector3& GetStartPosition() const { return state_.startPosition_; }
+    void SetStartPosition(const Vector3& pos) { state_.startPosition_ = pos; }
 
     void SetCamera(GameCamera* camera) { camera_ = camera; }
     GameCamera* GetCamera() const { return camera_; }

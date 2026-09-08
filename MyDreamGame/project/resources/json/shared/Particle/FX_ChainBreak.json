@@ -48,7 +48,7 @@
             "lifetimeMax": 1.5,
             "lifetimeMin": 0.800000011920929,
             "maxParticles": 500,
-            "modelPath": "resources/Object/School/sphere/sphere.obj",
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
             "name": "Flash",
             "renderType": 0,
             "rotateSpeedMax": [

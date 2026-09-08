@@ -215,7 +215,43 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         templatePalette_.push_back(def);
     }
 
-    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate) {
+    // 収集アイテム（小さい宝石）がテンプレートに無ければ自動追加
+    bool hasCollectibleTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kCollectible)) {
+            hasCollectibleTemplate = true;
+            break;
+        }
+    }
+    if (!hasCollectibleTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kCollectible);
+        def.name = "Collectible Gem";
+        def.type = "CollectibleBlock";
+        def.color = {0.45f, 0.8f, 1.0f, 1.0f};
+        def.properties = nlohmann::json::object();
+        templatePalette_.push_back(def);
+    }
+
+    // 中間ポイント（SavePoint）がテンプレートに無ければ自動追加
+    bool hasSavePointTemplate = false;
+    for (const auto& def : templatePalette_) {
+        if (def.id == static_cast<int>(ChipType::kSavePoint)) {
+            hasSavePointTemplate = true;
+            break;
+        }
+    }
+    if (!hasSavePointTemplate) {
+        CustomBlockDef def;
+        def.id = static_cast<int>(ChipType::kSavePoint);
+        def.name = "SavePoint";
+        def.type = "SavePoint";
+        def.color = {0.25f, 0.70f, 1.0f, 1.0f};
+        def.properties = nlohmann::json::object();
+        templatePalette_.push_back(def);
+    }
+
+    if (!hasDoorTemplate || !hasGuardTemplate || !hasThinPlatformTemplate || !hasCollectibleTemplate || !hasSavePointTemplate) {
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
 
@@ -250,7 +286,7 @@ void MapChip2D::Update() {
     for (auto it = updateBlocks_.begin(); it != updateBlocks_.end();) {
         if (*it) {
             (*it)->Update();
-            if ((*it)->IsDestroyed()) {
+            if ((*it)->IsDestroyed() && !(*it)->KeepWhenDestroyed()) {
                 // リプレイ復元用に「破壊済み」であることを覚えておく
                 // （updateBlocks_ から外れると状態を記録できなくなるため）
                 uint64_t destroyedId = (*it)->GetReplayObjectId();
@@ -275,6 +311,14 @@ void MapChip2D::Update() {
         } else {
             it = updateBlocks_.erase(it);
             blocksRevision_++;
+        }
+    }
+
+    // Fragile パーティクルの更新
+    float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
+    for (auto& effect : fragileParticles_) {
+        if (effect && effect->IsPlaying()) {
+            effect->Update(dt);
         }
     }
 }
@@ -316,6 +360,12 @@ void MapChip2D::DrawParticle(ID3D12GraphicsCommandList* commandList, const Matri
     for (const auto& block : updateBlocks_) {
         if (block && !block->IsDestroyed()) {
             block->DrawParticle(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
+        }
+    }
+
+    for (const auto& effect : fragileParticles_) {
+        if (effect && effect->IsPlaying()) {
+            effect->Draw(commandList, viewProjection, cameraMatrix, particleCommon, modelManager);
         }
     }
 }
@@ -620,6 +670,7 @@ void MapChip2D::ClearMap() {
 }
 
 void MapChip2D::ResetMap() {
+    ClearFragileParticles();
     if (!currentFilePath_.empty()) {
         LoadFromFile(currentFilePath_);
     } else {
@@ -629,6 +680,7 @@ void MapChip2D::ResetMap() {
 }
 
 void MapChip2D::RebuildChipObjects() {
+    ClearFragileParticles();
     if (!isRebuildEnabled_) return;
 
     // 既に記録対象になっているブロックのIDを安全に退避（objectIdフィールドを参照するのでポインタ逆参照不要）
@@ -1217,16 +1269,25 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
 }
 
 
+std::map<std::pair<int, int>, nlohmann::json> MapChip2D::playtimeOverrides_;
+
 void MapChip2D::SetBlockOverride(int x, int y, const nlohmann::json& properties) {
     if (x < 0 || x >= mapWidth_ || y < 0 || y >= mapHeight_) return;
     nlohmann::json& slot = blockOverrides_[{x, y}];
     if (!slot.is_object()) slot = nlohmann::json::object();
     slot.update(properties);
-    isDirty_ = true;
     if (playtimeRecording_) {
+        // プレイ中：マップを作り直さず（作り直すと警備員や崩れた床まで初期化される）、置かれているブロックにだけ反映する
         nlohmann::json& rec = playtimeOverrides_[{x, y}];
         if (!rec.is_object()) rec = nlohmann::json::object();
         rec.update(properties);
+        if (BaseBlock* b = GetBlock(x, y)) {
+            nlohmann::json merged = GetPaletteProperties(x, y);
+            merged.update(slot);
+            b->SetProperties(merged);
+        }
+    } else {
+        isDirty_ = true;
     }
 }
 
@@ -1259,11 +1320,17 @@ const nlohmann::json* MapChip2D::GetBlockOverride(int x, int y) const {
 }
 
 void MapChip2D::ClearBlockOverride(int x, int y) {
-    if (blockOverrides_.erase({x, y}) > 0) {
-        isDirty_ = true;
-    }
+    bool erased = blockOverrides_.erase({x, y}) > 0;
     if (playtimeRecording_) {
         playtimeOverrides_[{x, y}] = nullptr;
+        // プレイ中はマップを作り直さず、置かれているブロックにパレットの値を戻す
+        if (erased) {
+            if (BaseBlock* b = GetBlock(x, y)) {
+                b->SetProperties(GetPaletteProperties(x, y));
+            }
+        }
+    } else if (erased) {
+        isDirty_ = true;
     }
 }
 
@@ -1333,6 +1400,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = BlockFactory::GetInstance().Create("OneWayBlock", this, x, y);
     } else if (type == ChipType::kChainItemBlock) {
         newBlock = BlockFactory::GetInstance().Create("ChainItemBlock", this, x, y);
+    } else if (type == ChipType::kSavePoint) {
+        newBlock = BlockFactory::GetInstance().Create("SavePoint", this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {
@@ -1602,3 +1671,48 @@ void MapChip2D::RestoreReplayObjects(const std::vector<ReplayObjectState>& state
         block->RestoreReplayState(state.custom);
     }
 }
+
+void MapChip2D::SpawnFragileParticle(const Vector3& worldPos) {
+    ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
+    if (!device) return;
+
+    if (!fragileParticleDataLoaded_) {
+        if (LoadParticleSystemFromJson(fragileParticleData_, "resources/json/shared/Particle/Fragile.json")) {
+            fragileParticleData_.isLoop = false;
+            for (auto& emitter : fragileParticleData_.emitters) {
+                emitter.isLoop = false;
+                if (emitter.duration > 1.0f) {
+                    emitter.duration = 1.0f;
+                }
+            }
+            fragileParticleDataLoaded_ = true;
+        }
+    }
+    if (!fragileParticleDataLoaded_) return;
+
+    // 停止中のエフェクトをプールから再利用
+    for (auto& effect : fragileParticles_) {
+        if (effect && !effect->IsPlaying()) {
+            effect->PlayAt(worldPos);
+            return;
+        }
+    }
+
+    // プール上限（16個）未満なら新規生成
+    if (fragileParticles_.size() < 16) {
+        auto effect = std::make_unique<GPUParticleSystem>();
+        effect->Initialize(device, fragileParticleData_);
+        effect->PlayAt(worldPos);
+        fragileParticles_.push_back(std::move(effect));
+    }
+}
+
+void MapChip2D::ClearFragileParticles() {
+    for (auto& effect : fragileParticles_) {
+        if (effect) {
+            effect->Restart();
+            effect->Pause();
+        }
+    }
+}
+

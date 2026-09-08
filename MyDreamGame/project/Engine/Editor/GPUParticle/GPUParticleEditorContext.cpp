@@ -14,6 +14,7 @@ void GPUParticleEditorContext::Initialize(ID3D12Device* device) {
 
     ScanAvailableAssets();
     ScanParticleFiles();
+    ScanAvailableShaders();
 }
 
 GPUParticleEmitter* GPUParticleEditorContext::GetSelectedEmitter() {
@@ -107,8 +108,8 @@ void GPUParticleEditorContext::ScanAvailableAssets() {
     namespace fs = std::filesystem;
 
     // 基本モデルのフォールバック
-    availableModels_.push_back("resources/Object/School/sphere/sphere.obj");
-    availableModels_.push_back("resources/Object/School/cube/cube.obj");
+    availableModels_.push_back("resources/Object/Original/sphere/sphere.obj");
+    availableModels_.push_back("resources/Object/Original/cube/cube.obj");
 
     // 基本テクスチャのフォールバック
     availableTextures_.push_back("white");
@@ -169,5 +170,42 @@ void GPUParticleEditorContext::ScanParticleFiles() {
         }
     } catch (...) {}
     std::sort(availableParticleFiles_.begin(), availableParticleFiles_.end());
+}
+
+void GPUParticleEditorContext::ScanAvailableShaders() {
+    availableVsShaders_.clear();
+    availablePsShaders_.clear();
+
+    // デフォルト・プリセットの登録
+    availableVsShaders_.push_back("resources/shaders/Particle.VS.hlsl");
+    availablePsShaders_.push_back("resources/shaders/Particle.PS.hlsl");
+    availablePsShaders_.push_back("resources/shaders/ParticleJewelry.PS.hlsl");
+    availablePsShaders_.push_back("resources/shaders/ParticleGlow.PS.hlsl");
+    availablePsShaders_.push_back("resources/shaders/ParticleDissolve.PS.hlsl");
+
+    namespace fs = std::filesystem;
+    try {
+        const std::string shaderDir = "resources/shaders";
+        if (fs::exists(shaderDir)) {
+            for (const auto& entry : fs::directory_iterator(shaderDir)) {
+                if (!entry.is_regular_file()) continue;
+                std::string pathStr = entry.path().generic_string();
+                std::string filename = entry.path().filename().generic_string();
+
+                if (filename.find(".VS.hlsl") != std::string::npos) {
+                    if (std::find(availableVsShaders_.begin(), availableVsShaders_.end(), pathStr) == availableVsShaders_.end()) {
+                        availableVsShaders_.push_back(pathStr);
+                    }
+                } else if (filename.find(".PS.hlsl") != std::string::npos) {
+                    if (std::find(availablePsShaders_.begin(), availablePsShaders_.end(), pathStr) == availablePsShaders_.end()) {
+                        availablePsShaders_.push_back(pathStr);
+                    }
+                }
+            }
+        }
+    } catch (...) {}
+
+    std::sort(availableVsShaders_.begin(), availableVsShaders_.end());
+    std::sort(availablePsShaders_.begin(), availablePsShaders_.end());
 }
 #endif

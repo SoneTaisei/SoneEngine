@@ -211,6 +211,12 @@
     <ClCompile Include="Project\Game2D\Blocks\ChainItemBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\CollectibleBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\CollectibleTracker.cpp">
+      <Filter>Project\Game2D</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\MovingBlock.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
@@ -257,6 +263,9 @@
       <Filter>Application\Transition</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Chain\ChainSpinAction.cpp">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Chain\PlayerChainPostEffect.cpp">
       <Filter>Project\Game2D\Chain</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Treasure\Treasure2D.cpp">
@@ -335,6 +344,9 @@
     </ClCompile>
 <ClCompile Include="Project\Game2D\Player\PlayerInput.cpp"><Filter>Project\Game2D</Filter></ClCompile><ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp"><Filter>Project\Game2D</Filter></ClCompile></ItemGroup>
     <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\SavePoint.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
   <ItemGroup>
@@ -545,6 +557,12 @@
     <ClInclude Include="Project\Game2D\Blocks\ChainItemBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\CollectibleBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\CollectibleTracker.h">
+      <Filter>Project\Game2D</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\MovingBlock.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
@@ -591,6 +609,9 @@
       <Filter>Application\Transition</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Chain\ChainSpinAction.h">
+      <Filter>Project\Game2D\Chain</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Chain\PlayerChainPostEffect.h">
       <Filter>Project\Game2D\Chain</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Treasure\Treasure2D.h">
@@ -670,6 +691,9 @@
     </ClInclude>
 <ClInclude Include="Project\Game2D\Player\PlayerInput.h"><Filter>Project\Game2D</Filter></ClInclude><ClInclude Include="Project\Game2D\Player\PlayerPhysics.h"><Filter>Project\Game2D</Filter></ClInclude></ItemGroup>
     <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\SavePoint.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
   <ItemGroup>

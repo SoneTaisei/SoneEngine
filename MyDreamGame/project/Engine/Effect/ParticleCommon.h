@@ -7,6 +7,9 @@
 #include "Core/Utility/Utilityfunctions.h"
 #include "Core/Utility/BlendMode.h"
 
+#include <map>
+#include <dxcapi.h>
+
 class ParticleManager;
 
 // 共通の頂点データ構造体
@@ -14,6 +17,19 @@ struct ParticleVertexData {
     Vector4 position;
     Vector2 texcoord;
     Vector3 normal;
+};
+
+// パイプラインキャッシュ用キー
+struct ParticlePipelineKey {
+    std::string vsPath;
+    std::string psPath;
+    BlendMode blendMode;
+
+    bool operator<(const ParticlePipelineKey& other) const {
+        if (vsPath != other.vsPath) return vsPath < other.vsPath;
+        if (psPath != other.psPath) return psPath < other.psPath;
+        return blendMode < other.blendMode;
+    }
 };
 
 class ParticleCommon {
@@ -33,8 +49,17 @@ public:
     void RemoveParticle(ParticleManager *ParticleManager);
     void ClearAll() { particles_.clear(); }
 
-    // ブレンドモード切り替え関数 (BlendMode型を受け取る)
+    // ブレンドモード切り替え関数 (BlendMode型を受け取る - 既存互換)
     void SetBlendMode(BlendMode blendMode);
+
+    // シェーダー・ブレンドモード指定でPSOを設定する
+    void SetPipelineState(const std::string& vsPath, const std::string& psPath, BlendMode blendMode);
+
+    // キャッシュを破棄して再コンパイルを促す
+    void ReloadShaders();
+
+    // パイプラインステート取得（無ければ生成）
+    ID3D12PipelineState* GetOrCreatePipelineState(const std::string& vsPath, const std::string& psPath, BlendMode blendMode);
 
     // ゲッター
     ID3D12Device *GetDevice() const { return device_; }
@@ -60,13 +85,26 @@ private:
     void CreatePipelineState();
     void CreateMesh(); // 共通の板ポリゴン生成
 
+    Microsoft::WRL::ComPtr<ID3DBlob> CompileShaderInternal(const std::string& filePath, const wchar_t* profile);
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateSinglePipelineState(
+        ID3DBlob* vsBlob, ID3DBlob* psBlob, BlendMode blendMode);
+
 private:
     ID3D12Device *device_ = nullptr;
     ID3D12GraphicsCommandList *commandList_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
 
-    // PSOを配列で管理 (kCountOfBlendMode は BlendMode.h で定義されている数)
+    // DXCコンパイラインスタンス
+    Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
+    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
+    Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
+
+    // PSOキャッシュ
+    std::map<ParticlePipelineKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>> psoCache_;
+    std::map<std::string, Microsoft::WRL::ComPtr<ID3DBlob>> shaderBlobCache_;
+
+    // デフォルトPSOを配列で管理 (kCountOfBlendMode は BlendMode.h で定義されている数)
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineStates_[kCountOfBlendMode];
 
     // 全パーティクルのリスト
