@@ -39,6 +39,9 @@ public:
     // 描画
     virtual void Draw(const Matrix4x4 &viewProjectionMatrix) = 0;
 
+    // 2Dスプライト・UIの最前面描画 (3Dモデルや配置オブジェクトの後に呼ばれる)
+    virtual void Draw2D() {}
+
     // エディター上のウィンドウ前面オーバーレイに2D描画する用 (ImGuiのWindowDrawListを使用)
     virtual void DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {}
 

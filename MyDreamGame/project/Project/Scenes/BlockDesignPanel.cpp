@@ -1182,6 +1182,10 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
 }
 
 #else
+void BlockDesignPanel::MarkUnsaved() {}
+void BlockDesignPanel::DrawSaveRow(MapChip2D*, const std::string&, const char*) {}
+bool BlockDesignPanel::CanClickSelect() { return false; }
+void BlockDesignPanel::SetRenderViewProjection(const Matrix4x4&) {}
 bool BlockDesignPanel::MouseToChip(MapChip2D*, Camera*, int&, int&) { return false; }
 bool BlockDesignPanel::WorldToScreen(Camera*, const Vector3&, float&, float&) { return false; }
 void BlockDesignPanel::Draw(MapChip2D*, Camera*, const std::string&) {}

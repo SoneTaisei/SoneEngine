@@ -35,6 +35,10 @@
 #include "Resource/Sprite/Sprite.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Input/GamepadInput.h"
+#include "Component/TransformComponent.h"
+#include "Component/MeshRendererComponent.h"
+#include "Resource/Primitive/PrimitiveCone.h"
+#include "Game2D/Blocks/GoalBlock.h"
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 bool GameScene::s_QuickRestart = false;
@@ -86,6 +90,21 @@ void GameScene::OnExit(SceneManager* sceneManager) {
     (void)sceneManager;
     isPaused_ = false;
     isIrisInActive_ = false;
+    isIrisOutActive_ = false;
+    isClearSequenceActive_ = false;
+    isDeathSequenceActive_ = false;
+    isClearEscaped_ = false;
+    isClearSmokeSpawned_ = false;
+    isClearIrisStarted_ = false;
+    clearSequenceTimer_ = 0.0f;
+    gameState_ = GameState::StartReady;
+    if (player_) {
+        player_->SetClearEscaped(false);
+        player_->ClearEffects();
+    }
+    if (chainManager_) {
+        chainManager_->SetTransitionHidden(false);
+    }
     if (gameCamera_) {
         gameCamera_->SetFollowTarget(nullptr);
         gameCamera_->SetOrthographic(false);
@@ -359,6 +378,41 @@ void GameScene::Initialize() {
         makePool(markBarFillSprites_, pauseBackdropTexHandle_, kMarkPool);
     }
 
+    // 9. 死亡演出用 帽子オブジェクトの初期化 (hat.obj)
+    {
+        Model* hatModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/hat", "hat.obj");
+        deathHatObject_ = std::make_shared<GameObject>("DeathHat");
+        deathHatObject_->AddComponent<TransformComponent>();
+        auto* meshRenderer = deathHatObject_->AddComponent<MeshRendererComponent>();
+        meshRenderer->Initialize(device.Get(), hatModel);
+        meshRenderer->GetMaterial().lightingType = 1;
+        isDeathHatActive_ = false;
+        isDeathSequenceActive_ = false;
+        deathSequenceTimer_ = 0.0f;
+    }
+
+    // 10. クリア演出用 交差スポットライト光線コーンの初期化
+    {
+        spotBeamCone_ = std::make_unique<PrimitiveCone>(1.4f, 8.5f, 24);
+        spotBeamCone_->Initialize(device.Get()); // GPUバッファ生成（必須！）
+        spotBeamObj1_ = std::make_unique<PrimitiveObject>();
+        spotBeamObj1_->Initialize(device.Get(), spotBeamCone_.get());
+        spotBeamObj1_->GetMaterial().color = { 1.0f, 0.98f, 0.88f, 0.35f };
+        spotBeamObj1_->GetMaterial().lightingType = 0; // 自発光（アンリットモード）
+        spotBeamObj1_->SetBlendMode(BlendMode::kBlendModeAdd);
+        spotBeamObj1_->SetIsDoubleSided(true);
+
+        spotBeamObj2_ = std::make_unique<PrimitiveObject>();
+        spotBeamObj2_->Initialize(device.Get(), spotBeamCone_.get());
+        spotBeamObj2_->GetMaterial().color = { 1.0f, 0.98f, 0.88f, 0.35f };
+        spotBeamObj2_->GetMaterial().lightingType = 0; // 自発光（アンリットモード）
+        spotBeamObj2_->SetBlendMode(BlendMode::kBlendModeAdd);
+        spotBeamObj2_->SetIsDoubleSided(true);
+
+        isClearSequenceActive_ = false;
+        clearSequenceTimer_ = 0.0f;
+    }
+
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -426,10 +480,9 @@ void GameScene::Update(SceneManager *sceneManager) {
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;
         }
-    } else if (gameState_ == GameState::Clear) {
+    } else if (gameState_ == GameState::Clear && isClearSequenceFinished_) {
         stateTimer_ += dt;
-        // 遷移演出が動いていない時（中断された場合など）だけ SPACE でタイトル（ステージ選択画面）へ戻れる
-        if (!TransitionDirector::GetInstance()->IsPlaying() && KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
 #ifdef USE_IMGUI
             if (EditorManager::GetInstance()) {
                 EditorManager::GetInstance()->SetCurrentSceneType(SceneType::kTitle);
@@ -507,9 +560,23 @@ void GameScene::Update(SceneManager *sceneManager) {
             if (alert_) {
                 alert_->Reset();
             }
-            if (gameState_ == GameState::Captured) {
+            if (gameState_ == GameState::Captured || gameState_ == GameState::Clear) {
                 gameState_ = GameState::StartReady;
                 stateTimer_ = 0.0f;
+            }
+            isClearSequenceActive_ = false;
+            isDeathSequenceActive_ = false;
+            isClearEscaped_ = false;
+            isClearSmokeSpawned_ = false;
+            isClearIrisStarted_ = false;
+            isIrisOutActive_ = false;
+            clearSequenceTimer_ = 0.0f;
+            if (player_) {
+                player_->SetClearEscaped(false);
+                player_->ClearEffects();
+            }
+            if (chainManager_) {
+                chainManager_->SetTransitionHidden(false);
             }
         }
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
@@ -671,7 +738,7 @@ void GameScene::Update(SceneManager *sceneManager) {
 
             if (gameCamera_ && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding &&
                 !TransitionDirector::GetInstance()->IsCameraControlled()) { // クリア演出中はカメラを演出側が動かす
-                if (player_->IsDead()) {
+                if (player_->IsDead() || isDeathSequenceActive_ || isClearSequenceActive_) {
                     gameCamera_->SetFollowTarget(nullptr);
                 } else {
                     gameCamera_->SetFollowTarget(&player_->GetPosition());
@@ -697,101 +764,119 @@ void GameScene::Update(SceneManager *sceneManager) {
                 }
                 // 捕獲は死亡より優先（同フレームならステージ失敗の方が重い）
                 if (alertActive && alert_->IsCaptured()) {
-                    gameState_ = GameState::Captured;
-                    capturedByMiss_ = false;
-                    stateTimer_ = 0.0f;
-                    alert_->SetActive(false);
-                    if (ReplayManager::GetInstance()->IsRecording()) {
-                        ReplayManager::GetInstance()->StopRecord();
-                    }
-                    Log("GameScene: captured (alert full)\n");
-                } else if (gameState_ == GameState::Playing && player_->IsDead()) {
-                    // 普通のミス（接触・落下・危険ブロック）も部屋リスポーンではなく、捕獲と同じく最初からやり直し
-                    gameState_ = GameState::Captured;
-                    capturedByMiss_ = true;
-                    stateTimer_ = 0.0f;
-                    alert_->SetActive(false);
-                    if (ReplayManager::GetInstance()->IsRecording()) {
-                        ReplayManager::GetInstance()->StopRecord();
-                    }
-                    Log("GameScene: miss -> restart same stage\n");
-                }
-            }
-            bool worldFrozen = (gameState_ == GameState::Captured);
-            bool playerFrozen = worldFrozen;
-            if (gameState_ == GameState::Captured && capturedByMiss_) {
-                // 普通のミス：すぐ止めずに少しの間そのまま動かす（鎖と宝石が落ち、警備員が動き、カメラが追う）。
-                // プレイヤー自身は死亡アニメの間だけ動かし、リスポーンで飛ぶ前にその場で止める
-                float playTime = ParameterManager::GetInstance()->GetValue("Alert", "missPlayTime_", 0.6f);
-                if (stateTimer_ < playTime) {
-                    worldFrozen = false;
-                    playerFrozen = (stateTimer_ >= player_->GetParams().deathDuration_ - 0.02f);
-                }
-            }
-
-            // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
-            if (map_ && !worldFrozen) {
-                map_->Update();
-            }
-
-            if (!playerFrozen) {
-                player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
-            }
-
-            // 復活直後の猶予：時間経過と加算を止め、警備員の見られゲージを 0 に戻す（復活位置で見られて即 +25 を防ぐ）
-            if (alert_) {
-                alert_->SetPlayerPosition(player_->GetPosition());
-                bool dead = player_->IsDead();
-                if (playerWasDead_ && !dead && map_) {
-                    alert_->StartGrace(alert_->GetParams().respawnGrace_);
-                    for (const auto& block : map_->GetUpdateBlocks()) {
-                        if (auto* guard = dynamic_cast<GuardBlock*>(block.get())) guard->ResetAlertGauge();
-                    }
-                }
-                playerWasDead_ = dead;
-            }
-
-            // プレイヤーと危険な光（スポットライト）の当たり判定
-            if (gameState_ == GameState::Playing && !player_->IsDead() && !player_->IsGoal()) {
-                bool hitDangerousLight = false;
-#ifdef USE_IMGUI
-                if (auto* editorMgr = EditorManager::GetInstance()) {
-                    if (auto* lightEditor = editorMgr->GetLightEditor()) {
-                        hitDangerousLight = lightEditor->CheckAABBHit(player_->GetAABB()) ||
-                                            lightEditor->CheckPlayerHit(player_->GetPosition(), player_->GetParams().halfWidth_);
-                    }
-                }
-#endif
-                if (hitDangerousLight) {
                     player_->Kill();
+                    TriggerDeathSequence();
+                    alert_->SetActive(false);
+                    if (ReplayManager::GetInstance()->IsRecording()) {
+                        ReplayManager::GetInstance()->StopRecord();
+                    }
+                    Log("GameScene: captured -> start death sequence\n");
+                } else if (gameState_ == GameState::Playing && player_->IsDead()) {
+                    // 普通のミス（接触・落下・危険ブロック・危険光）で帽子・鎖・宝石が残りアイリスアウト→リスポーン演出へ
+                    TriggerDeathSequence();
+                    alert_->SetActive(false);
+                    if (ReplayManager::GetInstance()->IsRecording()) {
+                        ReplayManager::GetInstance()->StopRecord();
+                    }
+                    Log("GameScene: miss -> start death sequence\n");
                 }
             }
 
-
-            // 鎖の更新（K入力 → 個数照合 → 物理。鎖がプレイヤーに反応するため、プレイヤー位置確定後に行う）
-            if (chainManager_ && !worldFrozen) {
-                chainManager_->HandleInput();
-                chainManager_->Reconcile();
-                FragileBlock::SetCurrentChainWeight(player_->GetChainLength()); // 崩れる床の赤い予告用
-                chainManager_->Update(dt, map_.get());
-            }
-
-            // 警備員の懐中電灯スポットライトを同期
-            UpdateGuardLights();
-
-            // ゴール判定 → ステージクリア遷移の開始（宝石と鎖を遷移側へ渡し、黒い円で絞る）
-            if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
-                gameState_ = GameState::Clear;
-                stateTimer_ = 0.0f;
-                // 今回取った収集アイテムを記録（クリアまで持ち帰った分だけ残る）
-                CollectibleTracker::Get().CommitStageClear();
-                SavePoint::Clear(s_TargetMapFilePath);
-                if (ReplayManager::GetInstance()->IsRecording()) {
-                    ReplayManager::GetInstance()->StopRecord(); // 記録はゴール時点で止める
+            if (isDeathSequenceActive_) {
+                UpdateDeathSequence(dt, sceneManager);
+                if (map_) {
+                    map_->Update();
                 }
-                if (chainManager_) {
-                    // プレイヤーのモデルとカメラは演出（寄る・喜ぶ・奥へ・飛び抜け）に使う
-                    TransitionDirector::GetInstance()->StartStageClear(chainManager_.get(), map_.get(), player_, gameCamera_);
+                UpdateGuardLights();
+            } else if (isClearSequenceActive_) {
+                UpdateClearSequence(dt, sceneManager);
+                if (map_) {
+                    map_->Update();
+                }
+                UpdateGuardLights();
+            } else {
+                bool worldFrozen = (gameState_ == GameState::Captured);
+                bool playerFrozen = worldFrozen;
+                if (gameState_ == GameState::Captured && capturedByMiss_) {
+                    // 普通のミス：すぐ止めずに少しの間そのまま動かす（鎖と宝石が落ち、警備員が動き、カメラが追う）。
+                    // プレイヤー自身は死亡アニメの間だけ動かし、リスポーンで飛ぶ前にその場で止める
+                    float playTime = ParameterManager::GetInstance()->GetValue("Alert", "missPlayTime_", 0.6f);
+                    if (stateTimer_ < playTime) {
+                        worldFrozen = false;
+                        playerFrozen = (stateTimer_ >= player_->GetParams().deathDuration_ - 0.02f);
+                    }
+                }
+
+                // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
+                if (map_ && !worldFrozen) {
+                    map_->Update();
+                }
+
+                if (!playerFrozen) {
+                    player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
+                }
+
+                // 復活直後の猶予：時間経過と加算を止め、警備員の見られゲージを 0 に戻す（復活位置で見られて即 +25 を防ぐ）
+                if (alert_) {
+                    alert_->SetPlayerPosition(player_->GetPosition());
+                    bool dead = player_->IsDead();
+                    if (playerWasDead_ && !dead && map_) {
+                        alert_->StartGrace(alert_->GetParams().respawnGrace_);
+                        for (const auto& block : map_->GetUpdateBlocks()) {
+                            if (auto* guard = dynamic_cast<GuardBlock*>(block.get())) guard->ResetAlertGauge();
+                        }
+                    }
+                    playerWasDead_ = dead;
+                }
+
+                // プレイヤーと危険な光（スポットライト）の当たり判定
+                if (gameState_ == GameState::Playing && !player_->IsDead() && !player_->IsGoal()) {
+                    bool hitDangerousLight = false;
+#ifdef USE_IMGUI
+                    if (auto* editorMgr = EditorManager::GetInstance()) {
+                        if (auto* lightEditor = editorMgr->GetLightEditor()) {
+                            hitDangerousLight = lightEditor->CheckAABBHit(player_->GetAABB()) ||
+                                                lightEditor->CheckPlayerHit(player_->GetPosition(), player_->GetParams().halfWidth_);
+                        }
+                    }
+#endif
+                    if (hitDangerousLight) {
+                        player_->Kill();
+                        TriggerDeathSequence();
+                        if (alert_) alert_->SetActive(false);
+                        if (ReplayManager::GetInstance()->IsRecording()) {
+                            ReplayManager::GetInstance()->StopRecord();
+                        }
+                    }
+                }
+
+                // 鎖の更新（K入力 → 個数照合 → 物理。鎖がプレイヤーに反応するため、プレイヤー位置確定後に行う）
+                if (chainManager_ && !worldFrozen) {
+                    chainManager_->HandleInput();
+                    chainManager_->Reconcile();
+                    FragileBlock::SetCurrentChainWeight(player_->GetChainLength()); // 崩れる床の赤い予告用
+                    chainManager_->Update(dt, map_.get());
+                }
+
+                // 警備員の懐中電灯スポットライトを同期
+                UpdateGuardLights();
+
+                // ゴール判定（プレイヤーと宝石の両方が台座の上に乗ったらクリア演出開始）
+                if (gameState_ == GameState::Playing && !player_->IsDead() && !isClearSequenceActive_ && map_) {
+                    Vector3 pPos = player_->GetPosition();
+                    float halfH = player_->GetParams().halfHeight_;
+                    Vector3 gemPos = chainManager_ ? chainManager_->GetTreasurePosition() : pPos;
+
+                    for (const auto& block : map_->GetUpdateBlocks()) {
+                        if (auto* goal = dynamic_cast<GoalBlock*>(block.get())) {
+                            if (goal->CheckClearCondition(pPos, halfH, gemPos)) {
+                                Log("GameScene: Goal clear condition satisfied! Triggering clear sequence\n");
+                                TriggerClearSequence(goal->GetPosition(), goal->GetTopY());
+                                break;
+                            }
+                        }
+                    }
+
                 }
             }
 
@@ -1487,8 +1572,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::End();
     }
 
-    // Clear 演出（黒い円の遷移が動いている間はその演出に任せる）
-    if (gameState_ == GameState::Clear && !TransitionDirector::GetInstance()->IsPlaying()) {
+    // Clear 演出：ゴール演出（スポットライト・煙玉・怪盗消滅・暗転）が完全に終わってから表示
+    if (gameState_ == GameState::Clear && isClearSequenceFinished_) {
         ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::Begin("ClearUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::SetWindowFontScale(6.0f);
@@ -1530,23 +1615,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::End();
     }
 
-    // Game Over (ミス) 演出
-    if (player_ && player_->IsDead() && gameState_ != GameState::Captured) {
-        ImGui::SetNextWindowPos(windowPos);
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
-        ImGui::Begin("GameOverOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 p = ImGui::GetWindowPos();
-        drawList->AddRectFilled(p, ImVec2(p.x + windowWidth, p.y + windowHeight), IM_COL32(255, 0, 0, 100)); 
 
-        ImGui::SetCursorPos(ImVec2(windowWidth/2.0f - 150.0f, windowHeight/2.0f - 50.0f));
-        ImGui::SetWindowFontScale(6.0f);
-        const char* text = "MISS!";
-        float textW = ImGui::CalcTextSize(text).x;
-        ImGui::SetCursorPosX((windowWidth - textW) * 0.5f);
-        ImGui::TextColored(ImVec4(1,1,1,1), "%s", text);
-        ImGui::End();
-    }
 
     // フェードイン/アウト画面遷移演出
     if (transitionAlpha_ > 0.0f) {
@@ -1575,6 +1644,58 @@ void GameScene::UpdateGuardLights() {
 
     SpotLightGroup* slGroup = modelCommon_->GetSpotLightGroup();
     if (!slGroup) return;
+
+    if (isClearSequenceActive_) {
+        // クリア演出中：天井の左右から交互に照らし、そのあと交差して怪盗を捕捉する細いサーチライト
+        int32_t clearLightCount = 0;
+
+        float roofY = clearTargetTopY_ + 4.2f;
+        Vector3 target = { clearTargetPos_.x, clearTargetTopY_ + 0.4f, 0.0f };
+
+        // タイムライン判定:
+        // 0.0s〜0.35s: 左ライトのみ点灯
+        // 0.35s〜0.70s: 右ライトのみ点灯
+        // 0.70s以降: 左右同時に交差照射
+        bool leftOn = (clearSequenceTimer_ < 0.35f) || (clearSequenceTimer_ >= 0.70f);
+        bool rightOn = (clearSequenceTimer_ >= 0.35f);
+
+        if (leftOn) {
+            SpotLight sl1 = {};
+            sl1.color = { 1.0f, 1.0f, 0.95f, 1.0f };
+            sl1.position = { clearTargetPos_.x - 2.2f, roofY, -0.3f };
+            Vector3 diff1 = { target.x - sl1.position.x, target.y - sl1.position.y, target.z - sl1.position.z };
+            float lightDist = std::sqrt(diff1.x * diff1.x + diff1.y * diff1.y + diff1.z * diff1.z);
+            sl1.direction = TransformFunctions::Normalize(diff1);
+            sl1.intensity = 10.0f;
+            sl1.distance = lightDist + 1.8f; // 台座と怪盗をしっかり照らす
+            sl1.decay = 0.6f;
+            sl1.cosAngle = cosf(DirectX::XMConvertToRadians(14.0f));       // しっかり怪盗を捉える角度
+            sl1.cosFalloffStart = cosf(DirectX::XMConvertToRadians(7.0f));
+            sl1.enable = 1;
+            sl1.shadowMapIndex = -1;
+            slGroup->spotLights[clearLightCount++] = sl1;
+        }
+
+        if (rightOn) {
+            SpotLight sl2 = {};
+            sl2.color = { 1.0f, 1.0f, 0.95f, 1.0f };
+            sl2.position = { clearTargetPos_.x + 2.2f, roofY, -0.3f };
+            Vector3 diff2 = { target.x - sl2.position.x, target.y - sl2.position.y, target.z - sl2.position.z };
+            float lightDist = std::sqrt(diff2.x * diff2.x + diff2.y * diff2.y + diff2.z * diff2.z);
+            sl2.direction = TransformFunctions::Normalize(diff2);
+            sl2.intensity = 10.0f;
+            sl2.distance = lightDist + 1.8f; // 台座と怪盗をしっかり照らす
+            sl2.decay = 0.6f;
+            sl2.cosAngle = cosf(DirectX::XMConvertToRadians(14.0f));       // しっかり怪盗を捉える角度
+            sl2.cosFalloffStart = cosf(DirectX::XMConvertToRadians(7.0f));
+            sl2.enable = 1;
+            sl2.shadowMapIndex = -1;
+            slGroup->spotLights[clearLightCount++] = sl2;
+        }
+
+        slGroup->spotLightCount = clearLightCount;
+        return;
+    }
 
     int32_t currentCount = 0;
     bool hasLightEditor = false;
@@ -1690,6 +1811,9 @@ void GameScene::RenderShadowPass() {
     if (chainManager_) {
         chainManager_->Draw();
     }
+    if (isDeathHatActive_ && deathHatObject_) {
+        deathHatObject_->Draw();
+    }
 
     // コンポーネント（MeshRenderer / PrimitiveRenderer）の描画
     renderer->RenderComponents();
@@ -1705,8 +1829,10 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // 0. シャドウマップパス（スポットライト視点から深度描画）
     RenderShadowPass();
 
+#ifdef USE_IMGUI
     // ブロック設計パネルの重ね描きは、この描画に使われた行列で位置を合わせる（マップチップ画面の専用カメラにも対応）
     BlockDesignPanel::SetRenderViewProjection(viewProjectionMatrix);
+#endif
 
     // 1. Skyboxの描画
     if (skybox_) {
@@ -1738,9 +1864,16 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         chainManager_->Draw();
     }
 
+    // 死亡演出中の帽子描画
+    if (isDeathHatActive_ && deathHatObject_) {
+        deathHatObject_->Draw();
+    }
+
     // ステージクリア遷移（持ち越し中の宝石と鎖 + 黒い穴あき板。同じ3Dパスなので深度で穴の外が隠れる）
     TransitionDirector::GetInstance()->Draw();
 
+    // クリア演出用 交差スポットライト光線コーンの描画
+    DrawClearSpotlightBeams();
 
     // コンポーネントの描画を実行
     Renderer::GetInstance()->RenderComponents();
@@ -1836,7 +1969,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
     }
 #endif
+}
 
+void GameScene::Draw2D() {
     // 4. ポーズメニューの描画 (最前面)
     DrawHudSprites(viewProjectionMatrix);
     DrawPauseMenu();
@@ -2192,6 +2327,390 @@ void GameScene::UpdateIrisIn(const Vector3& playerPos, float dt) {
         if (dxCommon) {
             dxCommon->SetCompositeIrisEnabled(false);
         }
+    }
+}
+
+void GameScene::StartIrisOut(const Vector3& worldPos, float duration) {
+    isIrisOutActive_ = true;
+    irisOutTimer_ = 0.0f;
+    irisOutDuration_ = (duration > 0.0f) ? duration : 0.5f;
+    irisOutTargetPos_ = worldPos;
+
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        Vector2 uv = WorldToScreenUV(irisOutTargetPos_);
+        dxCommon->SetIrisCenter(uv.x, uv.y);
+        float maxRadius = ParameterManager::GetInstance()->GetValue("GameScene", "irisInMaxRadius", 3.2f);
+        dxCommon->SetIrisRadius(maxRadius);
+        dxCommon->SetIrisSmoothness(0.03f);
+        dxCommon->SetIrisIn(false); // Iris Out (閉じる)
+        dxCommon->SetIrisMaskColor(0.0f, 0.0f, 0.0f, 1.0f);
+        dxCommon->SetCompositeIrisEnabled(true);
+    }
+}
+
+void GameScene::UpdateIrisOut(float dt) {
+    if (!isIrisOutActive_) return;
+
+    irisOutTimer_ += dt;
+    float t = std::clamp(irisOutTimer_ / irisOutDuration_, 0.0f, 1.0f);
+
+    float maxRadius = ParameterManager::GetInstance()->GetValue("GameScene", "irisInMaxRadius", 3.2f);
+    float currentRadius = (1.0f - t) * maxRadius;
+
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        Vector2 uv = WorldToScreenUV(irisOutTargetPos_);
+        dxCommon->SetIrisCenter(uv.x, uv.y);
+        dxCommon->SetIrisRadius(currentRadius);
+        dxCommon->SetIrisSmoothness(0.03f);
+        dxCommon->SetIrisIn(false);
+        dxCommon->SetCompositeIrisEnabled(true);
+    }
+
+    if (t >= 1.0f) {
+        isIrisOutActive_ = false;
+        // 完全に閉じたら画面は黒のまま保持
+    }
+}
+
+void GameScene::TriggerDeathSequence() {
+    if (isDeathSequenceActive_) return;
+    if (!player_) return;
+
+    isDeathSequenceActive_ = true;
+    deathSequenceTimer_ = 0.0f;
+    isDeathHatGrounded_ = false;
+    deathHatGroundedTimer_ = 0.0f;
+    isIrisOutStarted_ = false;
+    deathRespawnPos_ = player_->GetStartPosition();
+
+    Vector3 pPos = player_->GetPosition();
+    deathHatPos_ = { pPos.x, pPos.y + 0.65f, 0.0f };
+    deathHatVelocity_ = { 0.2f, 1.6f, 0.0f };
+    deathHatRotationZ_ = 0.0f;
+    isDeathHatActive_ = true;
+
+    if (chainManager_) {
+        chainManager_->OnPlayerDeath();
+    }
+
+    if (deathHatObject_) {
+        if (auto* tc = deathHatObject_->GetComponent<TransformComponent>()) {
+            tc->SetPosition(deathHatPos_);
+            tc->SetScale({ 2.0f, 2.0f, 2.0f });
+            tc->SetRotation({ 0.0f, 0.0f, 0.0f });
+        }
+        deathHatObject_->Update();
+    }
+}
+
+void GameScene::UpdateDeathSequence(float dt, SceneManager* sceneManager) {
+    if (!isDeathSequenceActive_) return;
+
+    deathSequenceTimer_ += dt;
+
+    // 帽子の物理挙動（放物線落下・床/ギミック接地）
+    if (isDeathHatActive_) {
+        const float hatBottomOffset = 0.15f; // 帽子の底面オフセット
+        const float hatHalfWidth = 0.22f;    // 帽子の当たり判定横幅
+
+        if (!isDeathHatGrounded_) {
+            // 重力加速
+            deathHatVelocity_.y -= 13.0f * dt;
+            if (deathHatVelocity_.y < -22.0f) deathHatVelocity_.y = -22.0f;
+
+            // X軸移動と回転
+            deathHatPos_.x += deathHatVelocity_.x * dt;
+            deathHatRotationZ_ += 2.2f * dt;
+
+            // Y軸の移動と床・ギミックの当たり判定
+            float prevBottomY = deathHatPos_.y - hatBottomOffset;
+            float newY = deathHatPos_.y + deathHatVelocity_.y * dt;
+            float newBottomY = newY - hatBottomOffset;
+
+            float highestFloorTop = -99999.0f;
+            bool foundFloor = false;
+
+            if (map_) {
+                float minX = deathHatPos_.x - hatHalfWidth;
+                float maxX = deathHatPos_.x + hatHalfWidth;
+
+                // 1. 通常マップチップ（ブロック、すり抜け床、危険ブロックなど）
+                int startCX = map_->WorldToChipX(minX);
+                int endCX   = map_->WorldToChipX(maxX);
+                int currentCY = map_->WorldToChipY(prevBottomY + 0.15f);
+
+                for (int cx = startCX; cx <= endCX; ++cx) {
+                    for (int cy = currentCY; cy >= 0 && cy >= currentCY - 4; --cy) {
+                        auto* block = map_->GetBlock(cx, cy);
+                        if (block && !block->IsDestroyed() && !block->IsMoving()) {
+                            if (block->IsSolid() || block->IsOneWay()) {
+                                float blockLeft = map_->ChipToWorldX(cx);
+                                float blockRight = blockLeft + map_->GetChipSize();
+                                float blockTop = map_->ChipToWorldY(cy) + map_->GetChipSize();
+
+                                if (maxX > blockLeft && minX < blockRight) {
+                                    if (prevBottomY >= blockTop - 0.2f && newBottomY <= blockTop) {
+                                        if (blockTop > highestFloorTop) {
+                                            highestFloorTop = blockTop;
+                                            foundFloor = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. 動く床やギミックブロック（UpdateBlocks）
+                for (const auto& blockPtr : map_->GetUpdateBlocks()) {
+                    if (!blockPtr || blockPtr->IsDestroyed()) continue;
+                    if (blockPtr->IsSolid() || blockPtr->IsOneWay()) {
+                        AABB2D aabb = blockPtr->GetAABB();
+                        if (maxX > aabb.left && minX < aabb.right) {
+                            if (prevBottomY >= aabb.top - 0.2f && newBottomY <= aabb.top) {
+                                if (aabb.top > highestFloorTop) {
+                                    highestFloorTop = aabb.top;
+                                    foundFloor = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (foundFloor) {
+                // 床またはギミックの上に着地！
+                deathHatPos_.y = highestFloorTop + hatBottomOffset;
+                deathHatVelocity_ = { 0.0f, 0.0f, 0.0f };
+                isDeathHatGrounded_ = true;
+                deathHatGroundedTimer_ = 0.0f;
+            } else {
+                deathHatPos_.y = newY;
+
+                // 奈落落下死の保険（マップ下端よりさらに落ちた場合）
+                float mapBottomY = map_ ? map_->ChipToWorldY(0) - 2.5f : -10.0f;
+                if (deathHatPos_.y < mapBottomY) {
+                    isDeathHatGrounded_ = true; // 画面外へ落ちきったので着地扱いとして暗転へ
+                    deathHatGroundedTimer_ = 0.0f;
+                }
+            }
+        } else {
+            // 接地後：帽子が床で少し斜めにコロンと安定
+            deathHatGroundedTimer_ += dt;
+            deathHatRotationZ_ = std::lerp(deathHatRotationZ_, 0.25f, 10.0f * dt);
+        }
+
+        if (deathHatObject_) {
+            if (auto* tc = deathHatObject_->GetComponent<TransformComponent>()) {
+                tc->SetPosition(deathHatPos_);
+                tc->SetRotation({ 0.0f, 0.0f, deathHatRotationZ_ });
+            }
+            deathHatObject_->Update();
+        }
+    }
+
+    // 鎖の物理（ピン留め解除された自由質点として落下）
+    if (chainManager_) {
+        chainManager_->Update(dt, map_.get());
+    }
+
+    // 「着地してから暗転」：
+    // 床やギミックに着地してから 0.25秒 経過、または落下タイムアウト（1.2秒経過）で帽子を中心としたアイリスアウト開始
+    bool shouldStartIrisOut = (isDeathHatGrounded_ && deathHatGroundedTimer_ >= 0.25f) || (deathSequenceTimer_ >= 1.2f);
+    if (shouldStartIrisOut && !isIrisOutActive_ && !isIrisOutStarted_) {
+        isIrisOutStarted_ = true;
+        StartIrisOut(deathHatPos_, 0.5f);
+    }
+
+    UpdateIrisOut(dt);
+
+    // アイリスアウト完了（暗転完了）したら、リスポーン＆アイリスイン（画面を開く）
+    if (isIrisOutStarted_ && irisOutTimer_ >= irisOutDuration_) {
+        isDeathHatActive_ = false;
+        isDeathSequenceActive_ = false;
+
+        // プレイヤーを初期位置へリスポーン
+        if (player_) {
+            player_->ResetState(deathRespawnPos_);
+            player_->ClearEffects();
+            if (gameCamera_) {
+                gameCamera_->SetFollowTarget(&player_->GetPosition());
+                gameCamera_->SetTranslation(deathRespawnPos_);
+            }
+        }
+
+        // 鎖とマップブロックをリセット
+        if (chainManager_) {
+            chainManager_->ResetAll();
+        }
+        if (map_) {
+            map_->ResetBlocks();
+        }
+        if (alert_) {
+            alert_->Reset();
+            alert_->StartGrace(alert_->GetParams().respawnGrace_);
+        }
+
+        gameState_ = GameState::Playing;
+        stateTimer_ = 0.0f;
+
+        // リスポーン地点を中心にしてアイリスイン（画面を開く）
+        StartIrisIn(deathRespawnPos_, 0.8f);
+    }
+}
+
+void GameScene::TriggerClearSequence(const Vector3& goalPos, float goalTopY) {
+    if (isClearSequenceActive_) return;
+
+    isClearSequenceActive_ = true;
+    isClearSequenceFinished_ = false;
+    clearSequenceTimer_ = 0.0f;
+    clearTargetPos_ = goalPos;
+    clearTargetTopY_ = goalTopY;
+    isClearSmokeSpawned_ = false;
+    isClearEscaped_ = false;
+    isClearIrisStarted_ = false;
+    gameState_ = GameState::Clear;
+
+    // スポットライト光線コーン（天井から台座に向けて斜め照射＆交差）
+    float roofY = clearTargetTopY_ + 4.2f;
+    Vector3 target = { clearTargetPos_.x, clearTargetTopY_ + 0.4f, -0.15f };
+
+    // コーン1（天井左上から台座へ）
+    if (spotBeamObj1_ && spotBeamCone_) {
+        Vector3 pos1 = { clearTargetPos_.x - 2.2f, roofY, -0.20f };
+        Vector3 center = { (pos1.x + target.x) * 0.5f, (pos1.y + target.y) * 0.5f, -0.18f };
+        Vector3 dir = { target.x - pos1.x, target.y - pos1.y, 0.0f };
+        float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        float rotZ = std::atan2(dir.x, -dir.y);
+
+        spotBeamObj1_->SetTranslation(center);
+        spotBeamObj1_->SetRotation({ 0.0f, 0.0f, rotZ });
+        // 美しく引き締まったサーチライトビーム（太さ0.42f）
+        spotBeamObj1_->SetScale({ 0.42f, dist / spotBeamCone_->GetHeight(), 0.42f });
+        spotBeamObj1_->GetMaterial().color = { 1.0f, 1.0f, 0.95f, 0.0f };
+        spotBeamObj1_->GetMaterial().lightingType = 0;
+        spotBeamObj1_->Update();
+    }
+
+    // コーン2（天井右上から台座へ）
+    if (spotBeamObj2_ && spotBeamCone_) {
+        Vector3 pos2 = { clearTargetPos_.x + 2.2f, roofY, -0.20f };
+        Vector3 center = { (pos2.x + target.x) * 0.5f, (pos2.y + target.y) * 0.5f, -0.18f };
+        Vector3 dir = { target.x - pos2.x, target.y - pos2.y, 0.0f };
+        float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        float rotZ = std::atan2(dir.x, -dir.y);
+
+        spotBeamObj2_->SetTranslation(center);
+        spotBeamObj2_->SetRotation({ 0.0f, 0.0f, rotZ });
+        // 美しく引き締まったサーチライトビーム（太さ0.42f）
+        spotBeamObj2_->SetScale({ 0.42f, dist / spotBeamCone_->GetHeight(), 0.42f });
+        spotBeamObj2_->GetMaterial().color = { 1.0f, 1.0f, 0.95f, 0.0f };
+        spotBeamObj2_->GetMaterial().lightingType = 0;
+        spotBeamObj2_->Update();
+    }
+
+    if (gameCamera_) {
+        gameCamera_->SetFollowTarget(nullptr);
+    }
+}
+
+void GameScene::UpdateClearSequence(float dt, SceneManager* sceneManager) {
+    if (!isClearSequenceActive_) return;
+
+    clearSequenceTimer_ += dt;
+
+    // 左右交互に照らし、そのあと交差して怪盗を捕捉する
+    // 0.0s〜0.35s: 左ライト点灯
+    // 0.35s〜0.70s: 右ライト点灯
+    // 0.70s以降: 両ライトが交差して台座の怪盗を捉える
+    float beam1Alpha = 0.0f;
+    float beam2Alpha = 0.0f;
+    const float kBeamMaxAlpha = 0.65f;
+
+    if (clearSequenceTimer_ < 0.35f) {
+        beam1Alpha = std::clamp(clearSequenceTimer_ / 0.08f, 0.0f, 1.0f) * kBeamMaxAlpha;
+        beam2Alpha = 0.0f;
+    } else if (clearSequenceTimer_ < 0.70f) {
+        beam1Alpha = 0.0f;
+        beam2Alpha = std::clamp((clearSequenceTimer_ - 0.35f) / 0.08f, 0.0f, 1.0f) * kBeamMaxAlpha;
+    } else {
+        beam1Alpha = std::clamp((clearSequenceTimer_ - 0.70f) / 0.08f, 0.0f, 1.0f) * kBeamMaxAlpha;
+        beam2Alpha = kBeamMaxAlpha;
+    }
+
+    if (spotBeamObj1_) {
+        spotBeamObj1_->GetMaterial().color.w = beam1Alpha;
+        spotBeamObj1_->GetMaterial().lightingType = 0;
+        spotBeamObj1_->Update();
+    }
+    if (spotBeamObj2_) {
+        spotBeamObj2_->GetMaterial().color.w = beam2Alpha;
+        spotBeamObj2_->GetMaterial().lightingType = 0;
+        spotBeamObj2_->Update();
+    }
+
+    // プレイヤーの待機モーション・煙エフェクトの更新
+    if (player_) {
+        player_->UpdateVisualsOnly(dt);
+    }
+
+    // 1. スモークボム（煙玉）炸裂（0.95s: 交差して怪盗が見つかった瞬間！）
+    if (!isClearSmokeSpawned_ && clearSequenceTimer_ >= 0.95f) {
+        isClearSmokeSpawned_ = true;
+        if (player_) {
+            Vector3 smokePos = player_->GetPosition();
+            smokePos.y -= player_->GetParams().halfHeight_ * 0.5f; // 足元付近
+            Log(std::format("GameScene: ClearSequence timer={:.2f}, spawning smoke bomb at ({:.2f}, {:.2f}, {:.2f})\n", clearSequenceTimer_, smokePos.x, smokePos.y, smokePos.z));
+            player_->SpawnSmokeBomb(smokePos);
+        }
+    }
+
+    // 2. 煙が広がり全身が包まれた瞬間、プレイヤーと宝石・鎖が消滅（脱出！）（1.35s）
+    if (!isClearEscaped_ && clearSequenceTimer_ >= 1.35f) {
+        isClearEscaped_ = true;
+        if (player_) {
+            player_->SetClearEscaped(true);
+        }
+        if (chainManager_) {
+            chainManager_->SetTransitionHidden(true);
+        }
+    }
+
+    // 3. もぬけの殻の台座を照らし出してから、台座を中心にアイリスアウト開始（1.90s）
+    if (!isClearIrisStarted_ && clearSequenceTimer_ >= 1.90f) {
+        isClearIrisStarted_ = true;
+        StartIrisOut(clearTargetPos_, 0.6f);
+    }
+
+    // アイリスアウト更新
+    UpdateIrisOut(dt);
+
+    // 4. 暗転完了（2.50s）でクリア演出終了。暗転画面の上にリザルトUI（STAGE CLEAR! & ランク）を表示！
+    // ユーザーは SPACEキー を押してタイトル（ステージ選択）へ戻れる
+    if (isClearIrisStarted_ && clearSequenceTimer_ >= 2.50f) {
+        isClearSequenceActive_ = false;
+        isClearSequenceFinished_ = true; // 演出完了！
+        Log("GameScene: Clear sequence finished, displaying STAGE CLEAR UI\n");
+        // アイリスアウトの暗転マスクを維持して画面を黒のまま保つ
+        DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+        if (dxCommon) {
+            dxCommon->SetIrisRadius(0.0f);
+            dxCommon->SetCompositeIrisEnabled(true);
+        }
+    }
+}
+
+void GameScene::DrawClearSpotlightBeams() {
+    if (!isClearSequenceActive_) return;
+
+    if (spotBeamObj1_) {
+        spotBeamObj1_->Draw();
+    }
+    if (spotBeamObj2_) {
+        spotBeamObj2_->Draw();
     }
 }
 

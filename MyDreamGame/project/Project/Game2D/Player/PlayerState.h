@@ -15,6 +15,7 @@ struct PlayerState {
     float respawnTimer_ = 0.0f;
     bool isGoal_ = false;
     float goalTimer_ = 0.0f;
+    bool isClearEscaped_ = false; // クリア演出で煙幕に紛れて脱出・消失したフラグ
 
     // 鎖の長さ（個数）
     int chainLength_ = 3;

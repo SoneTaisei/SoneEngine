@@ -20,6 +20,7 @@ public:
     void Initialize();
     void Update();
     void Draw(const Matrix4x4 &viewProjectionMatrix);
+    void Draw2D();
 
     // シーン遷移のみを処理する（再生状態に関係なく毎フレーム呼ぶ）
     void ProcessSceneTransition();

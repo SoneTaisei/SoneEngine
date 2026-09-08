@@ -76,6 +76,12 @@ void SceneManager::Draw(const Matrix4x4 &viewProjectionMatrix) {
     }
 }
 
+void SceneManager::Draw2D() {
+    if (currentScene_) {
+        currentScene_->Draw2D();
+    }
+}
+
 void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
     assert(nextScene); // 渡されたシーンがnullptrでないことを確認
 
