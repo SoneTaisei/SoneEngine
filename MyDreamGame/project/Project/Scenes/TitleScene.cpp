@@ -442,11 +442,16 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 } else if (selectedTitleMenu_ == 2) {
                     AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
 
-                    // 「説明書」選択時: チュートリアルステージ（tutorial.txt）へ移行
+                    // 「説明書」選択時: チュートリアルステージ（tutorial.txt）へ直接移行（カードは投げない）
                     phase_ = Phase::kTransitionToGame;
                     selectedStageIndex_ = 0; // チュートリアル
-                    Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-                    StartCallingCardThrow(targetWorldPos);
+                    cardPhase_ = CardThrowPhase::kNone;
+                    if (callingCardObject_) {
+                        if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
+                            tc->SetScale({ 0.0f, 0.0f, 0.0f });
+                        }
+                    }
+                    StartIrisOut({ 0.5f, 0.5f }, gameTransitionDuration_);
                 }
             }
         } else if (phase_ == Phase::kCredit) {
@@ -463,18 +468,24 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 // creditAlpha_ は kTransitionFromCredit の最初の0.15秒で縮小フェードアウト
             }
         } else if (phase_ == Phase::kStageSelect) {
-            // ステージ選択画面で決定ボタン押下時: 選択中ステージオブジェクトへ向けて予告状突き刺し演出を開始
-            if (isDecisionPressed && cardPhase_ == CardThrowPhase::kNone) {
+            // ステージ選択画面で決定ボタン押下時
+            if (isDecisionPressed && cardPhase_ == CardThrowPhase::kNone && !isIrisOutActive_) {
                 AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
                 phase_ = Phase::kTransitionToGame;
 
-                // 選択中のオブジェクト（チュートリアル: 画面手前/左手前のビル, select_1〜3）のワールド座標を取得
-                Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1 の位置
                 if (selectedStageIndex_ == 0) {
-                    // チュートリアル選択時: 画面左手前側のステージ1ビル付近をターゲット
-                    targetWorldPos = { -18.5f, -8.8f, 22.94f };
+                    // チュートリアル選択時: カードは投げずに直接暗転（アイリスアウト）を開始
+                    cardPhase_ = CardThrowPhase::kNone;
+                    if (callingCardObject_) {
+                        if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
+                            tc->SetScale({ 0.0f, 0.0f, 0.0f });
+                        }
+                    }
+                    StartIrisOut({ 0.5f, 0.5f }, gameTransitionDuration_);
                 } else {
+                    // ステージ1〜3選択時: 選択中ステージオブジェクトへ向けて予告状突き刺し演出を開始
                     auto context = Model3DEditorContext::GetInstance();
+                    Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1 の位置
                     std::string targetName = "select_" + std::to_string(selectedStageIndex_); // 1 -> select_1, 2 -> select_2, 3 -> select_3
                     for (const auto& obj : context->GetObjects()) {
                         if (obj && obj->GetName() == targetName) {
@@ -482,8 +493,8 @@ void TitleScene::Update(SceneManager *sceneManager) {
                             break;
                         }
                     }
+                    StartCallingCardThrow(targetWorldPos);
                 }
-                StartCallingCardThrow(targetWorldPos);
             }
         }
     }
@@ -908,7 +919,11 @@ void TitleScene::Update(SceneManager *sceneManager) {
 
     // 予告状突き刺し＆ゲームシーン移行演出を更新
     if (phase_ == Phase::kTransitionToGame) {
-        UpdateCallingCardThrow(dt, sceneManager);
+        if (cardPhase_ != CardThrowPhase::kNone) {
+            UpdateCallingCardThrow(dt, sceneManager);
+        } else {
+            UpdateIrisOut(dt, sceneManager);
+        }
     }
 
     // ステージクリアから復帰時のアイリスイン（円が開く）演出を更新
@@ -1601,8 +1616,18 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::Spacing();
     if (ImGui::Button("▶ 決定演出 (予告状突き刺し＆暗転) をテスト再生")) {
         phase_ = Phase::kTransitionToGame;
-        Vector3 targetWorldPos = getTargetWorldPos();
-        StartCallingCardThrow(targetWorldPos);
+        if (selectedStageIndex_ == 0) {
+            cardPhase_ = CardThrowPhase::kNone;
+            if (callingCardObject_) {
+                if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
+                    tc->SetScale({ 0.0f, 0.0f, 0.0f });
+                }
+            }
+            StartIrisOut({ 0.5f, 0.5f }, gameTransitionDuration_);
+        } else {
+            Vector3 targetWorldPos = getTargetWorldPos();
+            StartCallingCardThrow(targetWorldPos);
+        }
     }
 
     ImGui::End();
