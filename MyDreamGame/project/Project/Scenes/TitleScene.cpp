@@ -28,6 +28,7 @@
 #include "Component/PrimitiveRendererComponent.h"
 #include "GameObject/Object3D.h"
 #include "Scenes/GameScene.h"
+#include "StageClearData.h"
 #include <cmath>
 #include <filesystem>
 
@@ -1263,9 +1264,12 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
         else if (name == "select_3") stageIdx = 3;
 
         if (stageIdx != -1) {
+            bool isCleared = StageClearData::IsCleared(stageIdx);
+
             if (stageIdx == selectedStageIndex_) {
                 // 選択中のオブジェクト: 鮮やかなハイライト色（呼吸パルス発光付き）
-                Vector4 color = selectHighlightColor_;
+                // クリア済みならシアンブルー系、未クリアならゴールド/イエロー系
+                Vector4 color = isCleared ? clearedHighlightColor_ : selectHighlightColor_;
                 if (enableStageSelectPulse_) {
                     float pulse = (sinf(stageSelectPulseTimer_ * 5.0f) * 0.5f + 0.5f) * 0.35f; // 0.0 ~ 0.35
                     color.x = (color.x + pulse > 1.0f) ? 1.0f : (color.x + pulse);
@@ -1274,8 +1278,8 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
                 }
                 obj->SetColor(color);
             } else {
-                // 非選択のオブジェクト: 落ち着いたダークカラー
-                obj->SetColor(unselectedColor_);
+                // 非選択のオブジェクト: クリア済みなら青色、未クリアなら赤色
+                obj->SetColor(isCleared ? clearedColor_ : unselectedColor_);
             }
         }
     }
@@ -1592,9 +1596,22 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::SameLine();
     if (ImGui::Button("ステージ 3 選択")) { selectedStageIndex_ = 3; }
 
-    ImGui::ColorEdit4("選択時カラー (Highlight)", &selectHighlightColor_.x);
-    ImGui::ColorEdit4("非選択カラー (Unselected)", &unselectedColor_.x);
+    ImGui::ColorEdit4("未クリア・選択時カラー (Highlight)", &selectHighlightColor_.x);
+    ImGui::ColorEdit4("未クリア・非選択カラー (赤色)", &unselectedColor_.x);
+    ImGui::ColorEdit4("クリア済・非選択カラー (青色)", &clearedColor_.x);
+    ImGui::ColorEdit4("クリア済・選択時カラー (Highlight)", &clearedHighlightColor_.x);
     ImGui::Checkbox("パルス明滅演出 (Pulse)", &enableStageSelectPulse_);
+
+    ImGui::Spacing();
+    ImGui::Text("【デバッグ用：ステージクリア状況】");
+    for (int i = 1; i <= 3; ++i) {
+        bool cleared = StageClearData::IsCleared(i);
+        std::string label = "ステージ " + std::to_string(i) + " クリア済み";
+        if (ImGui::Checkbox(label.c_str(), &cleared)) {
+            StageClearData::SetCleared(i, cleared);
+        }
+        if (i < 3) ImGui::SameLine();
+    }
 
     ImGui::Spacing();
     ImGui::Text("【チュートリアルUI (tutorialUI.png) 調整】");

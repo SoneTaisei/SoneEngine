@@ -172,8 +172,10 @@ private:
     // --- ステージ選択インタラクション ---
     // 0: チュートリアル, 1: select_1, 2: select_2, 3: select_3
     int selectedStageIndex_ = 0;
-    Vector4 selectHighlightColor_ = { 1.0f, 0.88f, 0.2f, 1.0f }; // 選択中のハイライト色 (ゴールド/黄色)
-    Vector4 unselectedColor_ = { 1.0f, 0.0f, 0.0f, 1.0f };       // 非選択の色 (赤色: ステージの存在が分かるようにする)
+    Vector4 selectHighlightColor_ = { 1.0f, 0.88f, 0.2f, 1.0f }; // 未クリア選択中のハイライト色 (ゴールド/黄色)
+    Vector4 unselectedColor_ = { 1.0f, 0.0f, 0.0f, 1.0f };       // 未クリア非選択の色 (赤色: ステージの存在が分かるようにする)
+    Vector4 clearedColor_ = { 0.15f, 0.45f, 1.0f, 1.0f };        // クリア済み・非選択の色 (青色)
+    Vector4 clearedHighlightColor_ = { 0.35f, 0.8f, 1.0f, 1.0f }; // クリア済み・選択中のハイライト色 (シアンブルー)
     float stageSelectPulseTimer_ = 0.0f;
     bool enableStageSelectPulse_ = true;
 

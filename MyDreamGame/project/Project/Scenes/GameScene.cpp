@@ -10,6 +10,7 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Scene/SceneFactory.h"
 #include "Scene/SceneManager.h"
+#include "StageClearData.h"
 #include <Windows.h>
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
@@ -196,6 +197,8 @@ void GameScene::GoToNextStage(SceneManager *sceneManager) {
         sceneManager->SetData("StartAtStageSelect", true);
         sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
     }
+    // クリア記録を保存
+    StageClearData::SetCleared(stageIdx);
 }
 
 void GameScene::Initialize() {
@@ -730,7 +733,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                 if (sceneManager) {
                     sceneManager->SetData("SelectedStageIndex", stageIdx);
                     sceneManager->SetData("StartAtStageSelect", true);
+                    sceneManager->SetData("StageCleared_" + std::to_string(stageIdx), true);
                 }
+                // クリア記録を保存
+                StageClearData::SetCleared(stageIdx);
                 SavePoint::Clear(ResolveCurrentMapPath());
                 sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
                 return;
