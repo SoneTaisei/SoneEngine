@@ -180,9 +180,22 @@ void GameScene::GoToNextStage(SceneManager *sceneManager) {
     EditorManager::SetPlaying(true);
 #endif
 
-    // タイトルシーンに「ステージ選択画面から直接開始する」フラグを渡す
-    sceneManager->SetData("StartAtStageSelect", true);
-    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+    // 直前にプレイしていたステージのインデックスを保持
+    std::string currentMap = ResolveCurrentMapPath();
+    int stageIdx = 0;
+    if (currentMap.find("map1") != std::string::npos) stageIdx = 1;
+    else if (currentMap.find("map2") != std::string::npos) stageIdx = 2;
+    else if (currentMap.find("map3") != std::string::npos) stageIdx = 3;
+    else if (currentMap.find("tutorial") != std::string::npos) stageIdx = 0;
+    else if (sceneManager && sceneManager->HasData("SelectedStageIndex")) {
+        stageIdx = sceneManager->GetData<int>("SelectedStageIndex");
+    }
+    if (sceneManager) {
+        sceneManager->SetData("SelectedStageIndex", stageIdx);
+        // タイトルシーンに「ステージ選択画面から直接開始する」フラグを渡す
+        sceneManager->SetData("StartAtStageSelect", true);
+        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+    }
 }
 
 void GameScene::Initialize() {
@@ -704,7 +717,20 @@ void GameScene::Update(SceneManager *sceneManager) {
                 }
                 EditorManager::SetPlaying(true);
 #endif
-                sceneManager->SetData("StartAtStageSelect", true);
+                // 直前にプレイしていたステージのインデックスを保持
+                std::string currentMap = ResolveCurrentMapPath();
+                int stageIdx = 0;
+                if (currentMap.find("map1") != std::string::npos) stageIdx = 1;
+                else if (currentMap.find("map2") != std::string::npos) stageIdx = 2;
+                else if (currentMap.find("map3") != std::string::npos) stageIdx = 3;
+                else if (currentMap.find("tutorial") != std::string::npos) stageIdx = 0;
+                else if (sceneManager && sceneManager->HasData("SelectedStageIndex")) {
+                    stageIdx = sceneManager->GetData<int>("SelectedStageIndex");
+                }
+                if (sceneManager) {
+                    sceneManager->SetData("SelectedStageIndex", stageIdx);
+                    sceneManager->SetData("StartAtStageSelect", true);
+                }
                 SavePoint::Clear(ResolveCurrentMapPath());
                 sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
                 return;

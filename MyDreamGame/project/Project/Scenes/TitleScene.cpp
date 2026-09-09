@@ -60,7 +60,14 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     if (startAtStageSelect) {
         // ステージ選択画面から直接開始（ビル群を見下ろすアングル）
         phase_ = Phase::kStageSelect;
-        selectedStageIndex_ = 0; // 最初チュートリアルを選択された状態
+        if (sceneManager && sceneManager->HasData("SelectedStageIndex")) {
+            selectedStageIndex_ = sceneManager->GetData<int>("SelectedStageIndex");
+            if (selectedStageIndex_ < 0 || selectedStageIndex_ > 3) {
+                selectedStageIndex_ = 0;
+            }
+        } else {
+            selectedStageIndex_ = 0; // デフォルトはチュートリアル
+        }
         cameraTransform_.translate = targetSelectPos_;
         cameraTransform_.rotate = targetSelectRot_;
         titleLogoAlpha_ = 0.0f;
@@ -187,9 +194,9 @@ void TitleScene::Initialize() {
     searchlightObjects_.clear();
     Primitive* boxPrim = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box);
     
-    // サーチライト1 (黄色・左奥から右へスイング)
+    // サーチライト1 (白色・左奥から右へスイング)
     {
-        auto light1 = std::make_shared<GameObject>("Searchlight_Yellow");
+        auto light1 = std::make_shared<GameObject>("Searchlight_White1");
         auto lt1 = light1->AddComponent<TransformComponent>();
         lt1->SetPosition({ -4.5f, 6.0f, 4.0f });
         lt1->SetScale({ 0.9f, 22.0f, 0.9f });
@@ -197,16 +204,16 @@ void TitleScene::Initialize() {
 
         auto lr1 = light1->AddComponent<PrimitiveRendererComponent>();
         lr1->Initialize(device.Get(), boxPrim);
-        lr1->GetMaterial().color = { 1.0f, 0.92f, 0.4f, 0.22f }; // 半透明の光線イエロー
+        lr1->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 0.22f }; // 半透明の白色光線
         lr1->GetMaterial().lightingType = 0; // 自己発光
 
         gameObjects_.push_back(light1);
         searchlightObjects_.push_back(light1);
     }
 
-    // サーチライト2 (シアンブルー・右奥から左へスイング)
+    // サーチライト2 (白色・右奥から左へスイング)
     {
-        auto light2 = std::make_shared<GameObject>("Searchlight_Cyan");
+        auto light2 = std::make_shared<GameObject>("Searchlight_White2");
         auto lt2 = light2->AddComponent<TransformComponent>();
         lt2->SetPosition({ 4.0f, 6.5f, 6.0f });
         lt2->SetScale({ 0.8f, 24.0f, 0.8f });
@@ -214,7 +221,7 @@ void TitleScene::Initialize() {
 
         auto lr2 = light2->AddComponent<PrimitiveRendererComponent>();
         lr2->Initialize(device.Get(), boxPrim);
-        lr2->GetMaterial().color = { 0.3f, 0.85f, 1.0f, 0.18f }; // 半透明のサイバーシアン
+        lr2->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 0.18f }; // 半透明の白色光線
         lr2->GetMaterial().lightingType = 0; // 自己発光
 
         gameObjects_.push_back(light2);
@@ -483,6 +490,9 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 // ステージ選択画面で決定ボタン押下時
                 AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
                 phase_ = Phase::kTransitionToGame;
+                if (sceneManager) {
+                    sceneManager->SetData("SelectedStageIndex", selectedStageIndex_);
+                }
 
                 if (selectedStageIndex_ == 0) {
                     // チュートリアル選択時: カードは投げずに直接暗転（アイリスアウト）を開始
@@ -1805,6 +1815,7 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
             }
             GameScene::s_TargetMapFilePath = mapPath;
             sceneManager->SetData("SelectedStagePath", mapPath);
+            sceneManager->SetData("SelectedStageIndex", selectedStageIndex_);
 
 #ifdef USE_IMGUI
             if (EditorManager::GetInstance()) {
