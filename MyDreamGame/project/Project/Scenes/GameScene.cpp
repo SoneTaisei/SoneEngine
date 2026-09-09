@@ -209,28 +209,28 @@ void GameScene::Initialize() {
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
     Log("GameScene::Initialize: Skybox loaded\n");
 
-    // 4.5. マップ背景板ポリゴンの生成（スポットライト等のライティング視認用）
-    Primitive *planePrim = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Plane, 1.0f);
-    if (planePrim) {
-        backgroundPlane_ = std::make_unique<PrimitiveObject>();
-        backgroundPlane_->Initialize(device.Get(), planePrim);
-        backgroundPlane_->SetName("BackgroundPlane");
+    // 4.5. マップ背景3Dモデルの生成（background.obj）
+    Model *bgModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/background", "background.obj");
+    if (bgModel) {
+        backgroundWall_ = std::make_unique<Object3D>();
+        backgroundWall_->Initialize(device.Get(), bgModel);
+        backgroundWall_->SetName("BackgroundWall");
 
-        // 法線を手前（Z負方向）に向けるためX軸を-90度回転
-        backgroundPlane_->SetRotation({-std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f});
-        // マップ全体を覆うスケール（X: 横幅, Z: 高さ）
-        backgroundPlane_->SetScale({220.0f, 1.0f, 40.0f});
+        // 直立モデルのため回転なし
+        backgroundWall_->SetRotation({0.0f, 0.0f, 0.0f});
+        // 原寸（幅220、高さ40）
+        backgroundWall_->SetScale({1.0f, 1.0f, 1.0f});
         // ブロック（Z=0, 厚み1.0）の奥（Z=1.6f）に配置
-        backgroundPlane_->SetTranslation({100.5f, 15.0f, 1.6f});
+        backgroundWall_->SetTranslation({100.5f, 15.0f, 1.6f});
 
-        auto &mat = backgroundPlane_->GetMaterial();
+        auto &mat = backgroundWall_->GetMaterial();
         mat.lightingType = 1; // ライティング有効化
         mat.enableEnvironmentMap = 0;
-        mat.color = {0.28f, 0.30f, 0.35f, 1.0f}; // スポットライトが映えやすい背景色
+        mat.color = {1.0f, 1.0f, 1.0f, 1.0f}; // モデルのテクスチャ/頂点カラーをそのまま乗算するため白
         mat.shininess = 20.0f;
-        backgroundPlane_->Update();
+        backgroundWall_->Update();
         LoadBackgroundConfig();
-        Log("GameScene::Initialize: BackgroundPlane Initialized\n");
+        Log("GameScene::Initialize: BackgroundWall Initialized\n");
     }
 
     // 中間ポイントの記録は「同じ回の続き」でだけ残す。
@@ -631,8 +631,8 @@ void GameScene::Update(SceneManager *sceneManager) {
         skybox_->Update();
     }
 
-    if (backgroundPlane_) {
-        backgroundPlane_->Update();
+    if (backgroundWall_) {
+        backgroundWall_->Update();
     }
 
     float dt = TimeManager::GetInstance().GetDeltaTime();
@@ -1655,9 +1655,6 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
         player_->DisplayImGui();
     }
 
-    if (backgroundPlane_ && backgroundPlane_.get() == selectedPrimitive) {
-        backgroundPlane_->DisplayImGui("Background Plane");
-    }
 
     if (playerChainPostEffect_) {
         playerChainPostEffect_->DisplayImGui();
@@ -1852,10 +1849,10 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
         }
     }
 
-    // 灰色の奥壁（背景板ポリゴン）の調整UI（常にインスペクターから操作可能）
-    if (backgroundPlane_ && ImGui::CollapsingHeader("Background Wall (灰色の壁・背景板)")) {
-        EulerTransform transform = backgroundPlane_->GetTransform();
-        Material &mat = backgroundPlane_->GetMaterial();
+    // 背景奥壁（3Dモデル）の調整UI（常にインスペクターから操作可能）
+    if (backgroundWall_ && ImGui::CollapsingHeader("Background Wall (背景の壁モデル)")) {
+        EulerTransform transform = backgroundWall_->GetTransform();
+        Material &mat = backgroundWall_->GetMaterial();
         bool changed = false;
 
         ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【位置 (Translate)】");
@@ -1869,7 +1866,7 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
 
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【サイズ・回転】");
-        if (ImGui::DragFloat3("スケール (幅/厚み/高さ)##bgScale", &transform.scale.x, 1.0f, 1.0f, 2000.0f))
+        if (ImGui::DragFloat3("スケール (幅/厚み/高さ)##bgScale", &transform.scale.x, 0.05f, 0.01f, 100.0f))
             changed = true;
         if (ImGui::DragFloat3("回転 (ラジアン)##bgRot", &transform.rotate.x, 0.01f))
             changed = true;
@@ -1887,24 +1884,24 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
         }
 
         if (changed) {
-            backgroundPlane_->SetTranslation(transform.translate);
-            backgroundPlane_->SetRotation(transform.rotate);
-            backgroundPlane_->SetScale(transform.scale);
-            backgroundPlane_->Update();
+            backgroundWall_->SetTranslation(transform.translate);
+            backgroundWall_->SetRotation(transform.rotate);
+            backgroundWall_->SetScale(transform.scale);
+            backgroundWall_->Update();
         }
 
         ImGui::Spacing();
         if (ImGui::Button("初期値に戻す##bgReset")) {
-            transform.translate = {50.5f, 15.0f, 1.6f};
-            transform.rotate = {-std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f};
-            transform.scale = {110.0f, 1.0f, 40.0f};
-            mat.color = {0.28f, 0.30f, 0.35f, 1.0f};
+            transform.translate = {100.5f, 15.0f, 1.6f};
+            transform.rotate = {0.0f, 0.0f, 0.0f};
+            transform.scale = {1.0f, 1.0f, 1.0f};
+            mat.color = {1.0f, 1.0f, 1.0f, 1.0f};
             mat.lightingType = 1;
             mat.shininess = 20.0f;
-            backgroundPlane_->SetTranslation(transform.translate);
-            backgroundPlane_->SetRotation(transform.rotate);
-            backgroundPlane_->SetScale(transform.scale);
-            backgroundPlane_->Update();
+            backgroundWall_->SetTranslation(transform.translate);
+            backgroundWall_->SetRotation(transform.rotate);
+            backgroundWall_->SetScale(transform.scale);
+            backgroundWall_->Update();
         }
         ImGui::SameLine();
         if (ImGui::Button("設定を保存 (Save)##bgSave")) {
@@ -2300,13 +2297,13 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         skybox_->Draw();
     }
 
-    // 1.5. 背景板ポリゴンの描画
-    if (backgroundPlane_) {
-        backgroundPlane_->Draw();
-        // 操作説明の映像（背景板の手前、ブロックの奥）
-        if (tutorialPosters_) {
-            tutorialPosters_->Draw();
-        }
+    // 1.5. 背景壁モデルの描画
+    if (backgroundWall_) {
+        backgroundWall_->Draw();
+    }
+    // 操作説明の映像（背景壁の手前、ブロックの奥）
+    if (tutorialPosters_) {
+        tutorialPosters_->Draw();
     }
 
     // 2. 3Dモデル（マップ・プレイヤー）の描画準備
@@ -2641,6 +2638,11 @@ std::vector<ParticleManager *> GameScene::GetParticles() {
 std::vector<Object3D *> GameScene::GetObjects() {
     std::vector<Object3D *> result;
 
+    // 背景壁モデルをヒエラルキーに表示する
+    if (backgroundWall_) {
+        result.push_back(backgroundWall_.get());
+    }
+
     // 鎖のリンクモデルをヒエラルキーに表示する
     if (chainManager_) {
         auto links = chainManager_->GetLinkObjects();
@@ -2667,11 +2669,6 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     if (map_) {
         auto mapPrims = map_->GetPrimitiveObjects();
         result.insert(result.end(), mapPrims.begin(), mapPrims.end());
-    }
-
-    // 3. 背景板ポリゴン
-    if (backgroundPlane_) {
-        result.push_back(backgroundPlane_.get());
     }
 
     return result;
@@ -2713,8 +2710,8 @@ void GameScene::UpdateEditor() {
         }
     }
 
-    if (backgroundPlane_) {
-        backgroundPlane_->Update();
+    if (backgroundWall_) {
+        backgroundWall_->Update();
     }
 
     if (skybox_) {
@@ -3306,10 +3303,10 @@ void GameScene::DrawClearSpotlightBeams() {
 }
 
 void GameScene::SaveBackgroundConfig() {
-    if (!backgroundPlane_)
+    if (!backgroundWall_)
         return;
-    EulerTransform t = backgroundPlane_->GetTransform();
-    Material &m = backgroundPlane_->GetMaterial();
+    EulerTransform t = backgroundWall_->GetTransform();
+    Material &m = backgroundWall_->GetMaterial();
     nlohmann::json j;
     j["translate"] = {t.translate.x, t.translate.y, t.translate.z};
     j["rotate"] = {t.rotate.x, t.rotate.y, t.rotate.z};
@@ -3332,7 +3329,7 @@ void GameScene::SaveBackgroundConfig() {
 }
 
 void GameScene::LoadBackgroundConfig() {
-    if (!backgroundPlane_)
+    if (!backgroundWall_)
         return;
     try {
         std::ifstream ifs("resources/json/shared/background_wall_config.json");
@@ -3340,7 +3337,7 @@ void GameScene::LoadBackgroundConfig() {
             return;
         nlohmann::json j;
         ifs >> j;
-        EulerTransform t = backgroundPlane_->GetTransform();
+        EulerTransform t = backgroundWall_->GetTransform();
         if (j.contains("translate") && j["translate"].is_array() && j["translate"].size() >= 3) {
             t.translate = {j["translate"][0].get<float>(), j["translate"][1].get<float>(), j["translate"][2].get<float>()};
         }
@@ -3350,11 +3347,11 @@ void GameScene::LoadBackgroundConfig() {
         if (j.contains("scale") && j["scale"].is_array() && j["scale"].size() >= 3) {
             t.scale = {j["scale"][0].get<float>(), j["scale"][1].get<float>(), j["scale"][2].get<float>()};
         }
-        backgroundPlane_->SetTranslation(t.translate);
-        backgroundPlane_->SetRotation(t.rotate);
-        backgroundPlane_->SetScale(t.scale);
+        backgroundWall_->SetTranslation(t.translate);
+        backgroundWall_->SetRotation(t.rotate);
+        backgroundWall_->SetScale(t.scale);
 
-        auto &m = backgroundPlane_->GetMaterial();
+        auto &m = backgroundWall_->GetMaterial();
         if (j.contains("color") && j["color"].is_array() && j["color"].size() >= 4) {
             m.color = {j["color"][0].get<float>(), j["color"][1].get<float>(), j["color"][2].get<float>(), j["color"][3].get<float>()};
         }
@@ -3364,7 +3361,7 @@ void GameScene::LoadBackgroundConfig() {
         if (j.contains("lightingType") && j["lightingType"].is_number()) {
             m.lightingType = j["lightingType"].get<int>();
         }
-        backgroundPlane_->Update();
+        backgroundWall_->Update();
     } catch (...) {
     }
 }

@@ -20,6 +20,7 @@ class GameCamera;
 struct ImVec2;
 
 #include "GameObject/PrimitiveObject.h"
+#include "GameObject/Object3D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Primitive/PrimitiveCone.h"
 class Skybox;
@@ -105,8 +106,8 @@ private:
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
 
-    // マップ背景用板ポリゴン（スポットライト等のライティング視認用）
-    std::unique_ptr<PrimitiveObject> backgroundPlane_;
+    // マップ背景用3Dモデル（スポットライト等のライティング視認用）
+    std::unique_ptr<Object3D> backgroundWall_;
 
     // 操作説明の映像（ポスター）：マップごとの JSON に保存。無ければ木の板の上に振り子の説明を 1 枚置く
     std::unique_ptr<TutorialPosterSet> tutorialPosters_;

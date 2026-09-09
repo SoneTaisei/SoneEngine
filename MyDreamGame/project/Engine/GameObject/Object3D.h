@@ -26,6 +26,7 @@ public:
     const Vector3 &GetTranslation() const { return transform_.translate; }
     const Vector3 &GetRotation() const { return transform_.rotate; }
     const Vector3 &GetScale() const { return transform_.scale; }
+    const EulerTransform &GetTransform() const { return transform_; }
 
     // --- Transformのセッター ---
     void SetTranslation(const Vector3 &translate) { transform_.translate = translate; }
