@@ -160,11 +160,23 @@ private:
     bool enableCinematicSway_ = false; // カメラ調整中は固定できるようにする
 
     // --- ステージ選択インタラクション ---
-    int selectedStageIndex_ = 0; // 0: select_1, 1: select_2, 2: select_3
+    // 0: チュートリアル, 1: select_1, 2: select_2, 3: select_3
+    int selectedStageIndex_ = 0;
     Vector4 selectHighlightColor_ = { 1.0f, 0.88f, 0.2f, 1.0f }; // 選択中のハイライト色 (ゴールド/黄色)
     Vector4 unselectedColor_ = { 1.0f, 0.0f, 0.0f, 1.0f };       // 非選択の色 (赤色: ステージの存在が分かるようにする)
     float stageSelectPulseTimer_ = 0.0f;
     bool enableStageSelectPulse_ = true;
+
+    // --- チュートリアルUI（左下） ---
+    std::unique_ptr<Sprite> tutorialUiSprite_;
+    uint32_t tutorialUiTextureHandle_ = 0;
+    Vector2 tutorialUiPos_ = { 36.0f, 540.0f }; // 左下配置
+    Vector2 tutorialUiSize_ = { 130.0f, 130.0f }; // 400x400 の正方形アイコン用サイズ
+    float tutorialUiScale_ = 1.0f;
+    float tutorialUiAlpha_ = 0.0f;
+    float tutorialBobTimer_ = 0.0f;     // 選択時の縦揺れ用タイマー
+    float tutorialBobAmplitude_ = 8.0f; // 縦揺れの振幅 (px)
+    float tutorialBobFrequency_ = 4.0f; // 縦揺れの周波数 (rad/s)
 
     void UpdateStageSelectInteraction(float dt);
 

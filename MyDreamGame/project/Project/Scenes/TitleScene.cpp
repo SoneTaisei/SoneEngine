@@ -60,6 +60,7 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     if (startAtStageSelect) {
         // ステージ選択画面から直接開始（ビル群を見下ろすアングル）
         phase_ = Phase::kStageSelect;
+        selectedStageIndex_ = 0; // 最初チュートリアルを選択された状態
         cameraTransform_.translate = targetSelectPos_;
         cameraTransform_.rotate = targetSelectRot_;
         titleLogoAlpha_ = 0.0f;
@@ -248,6 +249,14 @@ void TitleScene::Initialize() {
     keyPromptSprite_ = std::make_unique<Sprite>();
     keyPromptSprite_->Initialize(spriteCommon_, keyPromptTextureHandle_);
 
+    // チュートリアルUI（左下）。ステージ選択時に表示
+    tutorialUiTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/tutorialUI.png");
+    tutorialUiSprite_ = std::make_unique<Sprite>();
+    tutorialUiSprite_->Initialize(spriteCommon_, tutorialUiTextureHandle_);
+    tutorialUiSprite_->SetSize(tutorialUiSize_);
+    tutorialUiSprite_->SetPosition(tutorialUiPos_);
+    tutorialUiSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
+
     startTextSprite_ = std::make_unique<Sprite>();
     startTextSprite_->Initialize(spriteCommon_, startTextTextureHandle_);
     startTextSprite_->SetSize(startTextSize_);
@@ -396,11 +405,14 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
                 phase_ = Phase::kTransitionToGame;
 
-                // 選択中のオブジェクト（select_1, select_2, select_3）のワールド座標を取得
+                // 選択中のオブジェクト（チュートリアル: 画面手前/左手前のビル, select_1〜3）のワールド座標を取得
                 Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1 の位置
-                {
+                if (selectedStageIndex_ == 0) {
+                    // チュートリアル選択時: 画面左手前側のステージ1ビル付近をターゲット
+                    targetWorldPos = { -18.5f, -8.8f, 22.94f };
+                } else {
                     auto context = Model3DEditorContext::GetInstance();
-                    std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
+                    std::string targetName = "select_" + std::to_string(selectedStageIndex_); // 1 -> select_1, 2 -> select_2, 3 -> select_3
                     for (const auto& obj : context->GetObjects()) {
                         if (obj && obj->GetName() == targetName) {
                             targetWorldPos = obj->GetTranslation();
@@ -661,6 +673,64 @@ void TitleScene::Update(SceneManager *sceneManager) {
         creditSprite_->Update();
     }
 
+    // チュートリアルUIスプライト (tutorialUI.png) の更新
+    if (tutorialUiSprite_) {
+        // ステージ選択中またはゲーム移行演出中に出現
+        bool showTutorialUi = (phase_ == Phase::kStageSelect || phase_ == Phase::kTransitionToGame);
+        if (showTutorialUi) {
+            // 見出しの出現に同調してフェードイン (0.3秒程度でスッと表示)
+            float targetAlpha = 1.0f;
+            if (stageSelectIntroTimer_ >= 0.0f) {
+                targetAlpha = (std::min)(1.0f, stageSelectIntroTimer_ * 3.0f);
+            }
+            tutorialUiAlpha_ = targetAlpha;
+        } else {
+            tutorialUiAlpha_ = 0.0f;
+        }
+
+        if (tutorialUiAlpha_ > 0.001f) {
+            Vector4 uiColor = { 1.0f, 1.0f, 1.0f, tutorialUiAlpha_ };
+            float targetScale = 1.0f;
+
+            float offsetY = 0.0f;
+            if (selectedStageIndex_ == 0) {
+                // 選択中: わずかに拡大 (1.12倍) ＋ ゴールド発光・呼吸パルス
+                targetScale = 1.12f;
+                float pulse = 0.0f;
+                if (enableStageSelectPulse_) {
+                    pulse = (sinf(stageSelectPulseTimer_ * 5.0f) * 0.5f + 0.5f) * 0.25f;
+                }
+                uiColor = {
+                    (std::min)(1.0f, 1.0f + pulse),
+                    (std::min)(1.0f, 0.95f + pulse),
+                    (std::min)(1.0f, 0.55f + pulse),
+                    tutorialUiAlpha_
+                };
+
+                // sin波で文字・スプライト全体を縦に揺らす演出
+                tutorialBobTimer_ += dt;
+                offsetY = sinf(tutorialBobTimer_ * tutorialBobFrequency_) * tutorialBobAmplitude_;
+            } else {
+                // 非選択時: 等倍・少し落ち着いた明るさ（揺れは停止・リセット）
+                targetScale = 1.0f;
+                uiColor = { 0.75f, 0.75f, 0.75f, tutorialUiAlpha_ * 0.85f };
+                tutorialBobTimer_ = 0.0f;
+            }
+
+            tutorialUiScale_ = targetScale;
+            Vector2 scaledSize = { tutorialUiSize_.x * tutorialUiScale_, tutorialUiSize_.y * tutorialUiScale_ };
+            Vector2 centeredPos = {
+                tutorialUiPos_.x - (scaledSize.x - tutorialUiSize_.x) * 0.5f,
+                tutorialUiPos_.y - (scaledSize.y - tutorialUiSize_.y) * 0.5f + offsetY
+            };
+
+            tutorialUiSprite_->SetSize(scaledSize);
+            tutorialUiSprite_->SetPosition(centeredPos);
+            tutorialUiSprite_->SetColor(uiColor);
+            tutorialUiSprite_->Update();
+        }
+    }
+
     // カメラシェイク (着弾時の微小振動) の反映
     camPos.x += cameraShakeOffset_.x;
     camPos.y += cameraShakeOffset_.y;
@@ -834,6 +904,11 @@ void TitleScene::Draw2D() {
             stageSelectTitleSprite_->Draw();
         }
 
+        // チュートリアルUI（左下）。ステージ選択中またはゲーム移行演出中に描画
+        if (tutorialUiSprite_ && tutorialUiAlpha_ > 0.001f) {
+            tutorialUiSprite_->Draw();
+        }
+
         // 決定の操作案内（右下）。カメラが動いている間は出さず、止まったらまた出す
         const bool cameraMoving = (phase_ == Phase::kTransitionToSelect ||
                                    phase_ == Phase::kTransitionToGame ||
@@ -964,19 +1039,23 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
 
         int prevStageIdx = selectedStageIndex_;
         if (prevStage) {
-            selectedStageIndex_ = (selectedStageIndex_ + 2) % 3; // 0 -> 2, 1 -> 0, 2 -> 1
+            // 4項目 (0:チュートリアル, 1:Stage1, 2:Stage2, 3:Stage3) の左移動
+            selectedStageIndex_ = (selectedStageIndex_ + 3) % 4; // 0 -> 3, 1 -> 0, 2 -> 1, 3 -> 2
         }
         if (nextStage) {
-            selectedStageIndex_ = (selectedStageIndex_ + 1) % 3; // 0 -> 1, 1 -> 2, 2 -> 0
+            // 4項目の右移動
+            selectedStageIndex_ = (selectedStageIndex_ + 1) % 4; // 0 -> 1, 1 -> 2, 2 -> 3, 3 -> 0
         }
 
-        // 数字キー (1, 2, 3) による直接選択
-        if (kb->IsKeyPressed(DIK_1) || kb->IsKeyPressed(DIK_NUMPAD1)) {
+        // 数字キー (0:チュートリアル, 1〜3:ステージ1〜3) による直接選択
+        if (kb->IsKeyPressed(DIK_0) || kb->IsKeyPressed(DIK_NUMPAD0) || kb->IsKeyPressed(DIK_T)) {
             selectedStageIndex_ = 0;
-        } else if (kb->IsKeyPressed(DIK_2) || kb->IsKeyPressed(DIK_NUMPAD2)) {
+        } else if (kb->IsKeyPressed(DIK_1) || kb->IsKeyPressed(DIK_NUMPAD1)) {
             selectedStageIndex_ = 1;
-        } else if (kb->IsKeyPressed(DIK_3) || kb->IsKeyPressed(DIK_NUMPAD3)) {
+        } else if (kb->IsKeyPressed(DIK_2) || kb->IsKeyPressed(DIK_NUMPAD2)) {
             selectedStageIndex_ = 2;
+        } else if (kb->IsKeyPressed(DIK_3) || kb->IsKeyPressed(DIK_NUMPAD3)) {
+            selectedStageIndex_ = 3;
         }
 
         if (prevStageIdx != selectedStageIndex_) {
@@ -984,16 +1063,16 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
         }
     }
 
-    // select_1, select_2, select_3 のマテリアルカラーを更新
+    // select_1, select_2, select_3 のマテリアルカラーを更新 (0:チュートリアルの場合はすべて非選択色)
     const auto& objects = context->GetObjects();
     for (const auto& obj : objects) {
         if (!obj) continue;
         const std::string& name = obj->GetName();
 
         int stageIdx = -1;
-        if (name == "select_1") stageIdx = 0;
-        else if (name == "select_2") stageIdx = 1;
-        else if (name == "select_3") stageIdx = 2;
+        if (name == "select_1") stageIdx = 1;
+        else if (name == "select_2") stageIdx = 2;
+        else if (name == "select_3") stageIdx = 3;
 
         if (stageIdx != -1) {
             if (stageIdx == selectedStageIndex_) {
@@ -1303,20 +1382,30 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     ImGui::Separator();
-    ImGui::Text("【ステージ選択オブジェクト (select_1, 2, 3) 調整】");
+    ImGui::Text("【ステージ選択オブジェクト & チュートリアルUI 調整】");
 
-    const char* stageNames[3] = { "ステージ 1 (select_1)", "ステージ 2 (select_2)", "ステージ 3 (select_3)" };
+    const char* stageNames[4] = { "チュートリアル (tutorialUI)", "ステージ 1 (select_1)", "ステージ 2 (select_2)", "ステージ 3 (select_3)" };
     ImGui::Text("現在の選択ステージ: %s", stageNames[selectedStageIndex_]);
 
-    if (ImGui::Button("ステージ 1 選択")) { selectedStageIndex_ = 0; }
+    if (ImGui::Button("チュートリアル 選択")) { selectedStageIndex_ = 0; }
     ImGui::SameLine();
-    if (ImGui::Button("ステージ 2 選択")) { selectedStageIndex_ = 1; }
+    if (ImGui::Button("ステージ 1 選択")) { selectedStageIndex_ = 1; }
     ImGui::SameLine();
-    if (ImGui::Button("ステージ 3 選択")) { selectedStageIndex_ = 2; }
+    if (ImGui::Button("ステージ 2 選択")) { selectedStageIndex_ = 2; }
+    ImGui::SameLine();
+    if (ImGui::Button("ステージ 3 選択")) { selectedStageIndex_ = 3; }
 
     ImGui::ColorEdit4("選択時カラー (Highlight)", &selectHighlightColor_.x);
     ImGui::ColorEdit4("非選択カラー (Unselected)", &unselectedColor_.x);
     ImGui::Checkbox("パルス明滅演出 (Pulse)", &enableStageSelectPulse_);
+
+    ImGui::Spacing();
+    ImGui::Text("【チュートリアルUI (tutorialUI.png) 調整】");
+    ImGui::DragFloat2("チュートリアル 位置 (px)", &tutorialUiPos_.x, 1.0f, 0.0f, 1280.0f);
+    ImGui::DragFloat2("チュートリアル サイズ (px)", &tutorialUiSize_.x, 1.0f, 10.0f, 500.0f);
+    ImGui::SliderFloat("チュートリアル 不透明度", &tutorialUiAlpha_, 0.0f, 1.0f);
+    ImGui::DragFloat("縦揺れ振幅 (px)", &tutorialBobAmplitude_, 0.5f, 0.0f, 50.0f, "%.1f px");
+    ImGui::DragFloat("縦揺れ速度 (rad/s)", &tutorialBobFrequency_, 0.2f, 0.0f, 20.0f, "%.1f");
 
     ImGui::Separator();
     ImGui::Text("【予告状（callingCard）突き刺し調整】");
@@ -1340,20 +1429,25 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
     ImGui::DragFloat("飛翔開始スケール", &cardStartScale_, 0.02f, 0.1f, 3.0f, "%.2f");
 
+    auto getTargetWorldPos = [this]() -> Vector3 {
+        Vector3 pos = { -18.5f, -8.8f, 22.94f };
+        if (selectedStageIndex_ > 0) {
+            auto context = Model3DEditorContext::GetInstance();
+            std::string targetName = "select_" + std::to_string(selectedStageIndex_);
+            for (const auto& obj : context->GetObjects()) {
+                if (obj && obj->GetName() == targetName) {
+                    pos = obj->GetTranslation();
+                    break;
+                }
+            }
+        }
+        return pos;
+    };
+
     if (cardParamsChanged && callingCardObject_) {
         if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
             if (tc->GetScale().x > 0.001f && cardPhase_ == CardThrowPhase::kNone) {
-                Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-                {
-                    auto context = Model3DEditorContext::GetInstance();
-                    std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-                    for (const auto& obj : context->GetObjects()) {
-                        if (obj && obj->GetName() == targetName) {
-                            targetWorldPos = obj->GetTranslation();
-                            break;
-                        }
-                    }
-                }
+                Vector3 targetWorldPos = getTargetWorldPos();
                 tc->SetPosition({
                     targetWorldPos.x + cardTargetOffset_.x,
                     targetWorldPos.y + cardTargetOffset_.y,
@@ -1366,17 +1460,7 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     if (ImGui::Button("刺さり位置に予告状を配置して確認")) {
-        Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-        {
-            auto context = Model3DEditorContext::GetInstance();
-            std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-            for (const auto& obj : context->GetObjects()) {
-                if (obj && obj->GetName() == targetName) {
-                    targetWorldPos = obj->GetTranslation();
-                    break;
-                }
-            }
-        }
+        Vector3 targetWorldPos = getTargetWorldPos();
         if (callingCardObject_) {
             if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
                 tc->SetPosition({
@@ -1401,17 +1485,7 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::Spacing();
     if (ImGui::Button("▶ 決定演出 (予告状突き刺し＆暗転) をテスト再生")) {
         phase_ = Phase::kTransitionToGame;
-        Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-        {
-            auto context = Model3DEditorContext::GetInstance();
-            std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-            for (const auto& obj : context->GetObjects()) {
-                if (obj && obj->GetName() == targetName) {
-                    targetWorldPos = obj->GetTranslation();
-                    break;
-                }
-            }
-        }
+        Vector3 targetWorldPos = getTargetWorldPos();
         StartCallingCardThrow(targetWorldPos);
     }
 
@@ -1522,12 +1596,14 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
         isIrisOutActive_ = false;
         if (sceneManager) {
             // 選択されたステージに応じたマップを設定
-            std::string mapPath = "resources/json/shared/MapData/map1.txt";
+            std::string mapPath = "resources/json/shared/MapData/tutorial.txt";
             if (selectedStageIndex_ == 0) {
-                mapPath = "resources/json/shared/MapData/map1.txt";
+                mapPath = "resources/json/shared/MapData/tutorial.txt";
             } else if (selectedStageIndex_ == 1) {
-                mapPath = "resources/json/shared/MapData/map2.txt";
+                mapPath = "resources/json/shared/MapData/map1.txt";
             } else if (selectedStageIndex_ == 2) {
+                mapPath = "resources/json/shared/MapData/map2.txt";
+            } else if (selectedStageIndex_ == 3) {
                 mapPath = "resources/json/shared/MapData/map3.txt";
             }
             GameScene::s_TargetMapFilePath = mapPath;
