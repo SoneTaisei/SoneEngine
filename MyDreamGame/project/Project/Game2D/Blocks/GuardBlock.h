@@ -247,6 +247,8 @@ private:
     float exposure_ = 0.0f;        // 追跡中に見られ続けている秒数（HUD の「！」の下のゲージ）
 
     // 懐中電灯ビジュアルパーツ（本体器具＋発光レンズ）
+    // 光が最初の壁に当たるまでの距離（-1 = 未計算）。壁の向こうを照らさないように長さを切るのに使う
+    float lightBlockDistance_ = -1.0f;
     // 頭の上で回るプロペラ（本体とは別のモデル）。本体に合わせて動き、倒れたら止まる
     std::unique_ptr<GameObject> propellerObj_;
     float propellerAngle_ = 0.0f;

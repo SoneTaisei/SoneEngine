@@ -54,6 +54,15 @@ void DoorBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("latch") && properties["latch"].is_boolean()) {
         latch_ = properties["latch"];
     }
+    if (properties.contains("invert") && properties["invert"].is_boolean()) {
+        const bool v = properties["invert"];
+        if (v != invert_) {
+            // 開き始めの状態が入れ替わるので、今の開き具合もその初期状態へ合わせる
+            invert_ = v;
+            openProgress_ = invert_ ? 1.0f : 0.0f;
+            latched_ = false;
+        }
+    }
     if (properties.contains("crushKills") && properties["crushKills"].is_boolean()) {
         crushKills_ = properties["crushKills"];
     }
@@ -84,11 +93,14 @@ void DoorBlock::Update() {
         }
     }
 
-    // 一度全部開いたら開いたまま
-    if (latch_ && openProgress_ >= 1.0f) {
+    // 反転（invert）が ON のドアは「押していない時が開いている」。押している間だけ閉まる
+    bool wantOpen = invert_ ? !isAnySwitchPressed : isAnySwitchPressed;
+
+    // 一度全部開いたら開いたまま（反転のドアは最初から開いているので対象外）
+    if (latch_ && !invert_ && openProgress_ >= 1.0f) {
         latched_ = true;
     }
-    bool wantOpen = isAnySwitchPressed || latched_;
+    wantOpen = wantOpen || latched_;
 
     // リプレイ再生・シーク時も録画時と同じだけ時間が進むよう、共有クロックの差分を使う
     float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
@@ -178,18 +190,11 @@ AABB2D DoorBlock::GetClosedAABB() const {
 }
 
 void DoorBlock::Reset() {
-    openProgress_ = 0.0f;
+    openProgress_ = invert_ ? 1.0f : 0.0f;  // 反転のドアは最初から開いた状態に戻す
     latched_ = false;
     closing_ = false;
     blockedThisFrame_ = false;
-    if (gameObject_) {
-        auto* tc = gameObject_->GetComponent<TransformComponent>();
-        if (tc) {
-            float sz = tc->GetScale().z;
-            tc->SetScale({startWidth_, startHeight_, sz});
-            tc->SetPosition({startX_, startY_, 0.0f});
-        }
-    }
+    ApplyTransform();
 }
 
 void DoorBlock::CaptureReplayState(std::vector<float>& outCustom) const {

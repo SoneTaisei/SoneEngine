@@ -6,6 +6,7 @@
 /// ドア。同じ連動番号（linkId）のスイッチが押されている間だけ開く
 /// - openDirection：開く向き（Up = 上に引っ込む、Down、Left、Right）
 /// - openDistance：どれだけ開くか（チップ。0 以下なら全部開く）
+/// - invert：スイッチの働きを逆にする（最初から開いていて、押している間だけ閉まる）
 /// - latch：一度全部開いたら、スイッチを離しても開いたまま（リトライで戻る）
 /// - crushKills：ON = 閉まる時に鎖を挟むとちぎれてミス。OFF = 通路に鎖があると閉まらずに待つ
 /// </summary>
@@ -60,6 +61,7 @@ private:
     float openDistance_ = 0.0f; // 0 以下 = 全部開く
     bool latch_ = false;
     bool crushKills_ = true;
+    bool invert_ = false;       // ON = 最初から開いていて、スイッチを押している間だけ閉まる
 
     bool latched_ = false;      // latch_ で開いたまま固定中
     bool closing_ = false;      // 今フレーム、実際に閉まる向きへ動いたか

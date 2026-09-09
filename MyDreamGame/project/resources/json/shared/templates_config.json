@@ -210,7 +210,8 @@
                 "linkId": 1,
                 "openDirection": "Up",
                 "openDistance": 0.0,
-                "openSpeed": 2.0
+                "openSpeed": 2.0,
+                "invert": false
             },
             "scale": {
                 "x": 1.0,
