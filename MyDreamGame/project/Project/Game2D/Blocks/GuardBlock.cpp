@@ -5,6 +5,7 @@
 #include "Game2D/Security/AlertSystem.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
+#include "Graphics/TextureManager.h"
 #include "Effect/GPUParticle/GPUParticleSystem.h"
 #include "Resource/Audio/AudioManager.h"
 #include <algorithm>
@@ -18,6 +19,10 @@
 
 namespace {
     constexpr float kPi = std::numbers::pi_v<float>;
+    constexpr float kPropellerSpeed = 14.0f;                      // プロペラの回る速さ（ラジアン/秒）
+    // モデルは顔が手前（Z のマイナス側）を向いて作られているので、90 度回して横を向かせる。
+    // 前後が逆に見えたら符号を反転する
+    constexpr float kModelYawOffset = -kPi * 0.5f;
     constexpr Vector4 kBodyColor = {0.1f, 0.2f, 0.5f, 1.0f};      // 通常
     constexpr Vector4 kStunColor = {0.45f, 0.5f, 0.7f, 1.0f};     // 気絶（薄い）
     constexpr Vector4 kBoundColor = {0.35f, 0.35f, 0.4f, 1.0f};   // 縛られ（灰）
@@ -77,6 +82,43 @@ void GuardBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float
     fllRenderer->Initialize(device, boxPrimitive);
     fllRenderer->GetMaterial().color = {1.0f, 1.0f, 0.8f, 1.0f}; // 明るいレンズ色
     fllRenderer->GetMaterial().lightingType = 0; // 自己発光風
+
+    // 本体（enemy_1）。パレット任せにすると、マップごとの「Custom Guard」のようにモデル設定が空の項目から
+    // 置かれた警備員だけ立方体のままになるので、警備員自身が必ず持つようにする
+    if (Model* bodyModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/enemy_1", "enemy_1.obj")) {
+        auto* bodyMesh = gameObject_->AddComponent<MeshRendererComponent>();
+        bodyMesh->Initialize(device, bodyModel);
+        const std::string& bodyTex = bodyModel->GetModelData().material.textureFilePath;
+        if (!bodyTex.empty()) {
+            uint32_t handle = TextureManager::GetInstance()->Load(bodyTex);
+            bodyMesh->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+        }
+        bodyMesh->GetMaterial().color = {1.0f, 1.0f, 1.0f, 1.0f};
+        bodyMesh->GetMaterial().lightingType = 1;
+        // 立方体は描画そのものを止める（色だけ透明にしても Reset で戻ってしまう）
+        renderer->SetEnabled(false);
+        renderer->GetMaterial().color.w = 0.0f;
+    }
+
+    // 頭の上のプロペラ（enemy_2）。本体と同じ原点で作られているので、同じ座標に置けば頭の上に乗る。
+    // モデルは中心が本体と同じ位置に作られているので、本体と同じ座標に置けば頭の上に乗る
+    if (Model* propellerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/enemy_2", "enemy_2.obj")) {
+        propellerObj_ = std::make_unique<GameObject>();
+        propellerObj_->Initialize();
+        propellerObj_->SetName("GuardPropeller");
+        auto* ptc = propellerObj_->AddComponent<TransformComponent>();
+        ptc->SetPosition({worldX, worldY, 0.0f});
+        ptc->SetScale({width, height, 1.0f});
+        auto* pmr = propellerObj_->AddComponent<MeshRendererComponent>();
+        pmr->Initialize(device, propellerModel);
+        const std::string& propellerTex = propellerModel->GetModelData().material.textureFilePath;
+        if (!propellerTex.empty()) {
+            uint32_t handle = TextureManager::GetInstance()->Load(propellerTex);
+            pmr->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+        }
+        pmr->GetMaterial().color = {1.0f, 1.0f, 1.0f, 1.0f};
+        pmr->GetMaterial().lightingType = 1;
+    }
 
     SetupCollider();
 
@@ -388,15 +430,45 @@ void GuardBlock::Update() {
 
     // 本体の滑らかな回転 (1.0 のとき 0度, -1.0 のとき 180度) + 倒れ
     tumble_ += (targetTumble - tumble_) * std::clamp(12.0f * dt, 0.0f, 1.0f);
-    float yaw = (1.0f - currentFacing_) * 0.5f * kPi;
+    float yaw = (1.0f - currentFacing_) * 0.5f * kPi + kModelYawOffset;
     tc->SetRotation({0.0f, yaw, -tumble_ * kPi * 0.5f});
     if (prompt_) {
         // 縛れる／取り戻せる合図：明るくする（押す前に結果が分かるように）
         bodyColor = {bodyColor.x + 0.35f, bodyColor.y + 0.35f, bodyColor.z + 0.25f, 1.0f};
     }
+    const bool wasPrompt = prompt_;
     prompt_ = false;
     if (auto* renderer = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
         renderer->GetMaterial().color = bodyColor;
+    }
+    // モデルで描いている時は、素の色のまま出して状態が変わった時だけ色を掛ける。
+    // 立方体と同じ本体色を掛けると、テクスチャが暗く沈んで何も見えなくなるため
+    const bool stateTint = (state_ == State::Stunned || state_ == State::Bound || staggerTimer_ > 0.0f);
+    Vector4 modelTint = stateTint ? bodyColor : Vector4{1.0f, 1.0f, 1.0f, 1.0f};
+    if (wasPrompt) {
+        modelTint = {(std::min)(1.0f, modelTint.x + 0.35f), (std::min)(1.0f, modelTint.y + 0.35f),
+                     (std::min)(1.0f, modelTint.z + 0.25f), 1.0f};
+    }
+    if (auto* mesh = gameObject_->GetComponent<MeshRendererComponent>()) {
+        mesh->GetMaterial().color = modelTint;
+    }
+
+    // プロペラ：本体と同じ場所へ置き、倒れも合わせる。倒れている間は回さない
+    if (propellerObj_) {
+        if (!IsIncapacitated()) {
+            propellerAngle_ += kPropellerSpeed * dt;
+            if (propellerAngle_ > kPi * 2.0f) {
+                propellerAngle_ -= kPi * 2.0f;
+            }
+        }
+        if (auto* ptc = propellerObj_->GetComponent<TransformComponent>()) {
+            ptc->SetPosition(newPos);
+            ptc->SetRotation({0.0f, propellerAngle_, -tumble_ * kPi * 0.5f});
+        }
+        if (auto* pmr = propellerObj_->GetComponent<MeshRendererComponent>()) {
+            pmr->GetMaterial().color = modelTint;
+        }
+        propellerObj_->Update();
     }
 
     // 懐中電灯パーツの更新（位置・向き・倒れ同期、発光部カラー更新）
@@ -464,6 +536,9 @@ void GuardBlock::UpdateBoundRing() {
 
 void GuardBlock::Draw() {
     BaseBlock::Draw();
+    if (propellerObj_ && !IsDestroyed()) {
+        propellerObj_->Draw();
+    }
     if (flashlightBodyObj_) {
         flashlightBodyObj_->Draw();
     }

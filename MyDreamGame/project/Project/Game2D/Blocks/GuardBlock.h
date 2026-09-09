@@ -247,6 +247,9 @@ private:
     float exposure_ = 0.0f;        // 追跡中に見られ続けている秒数（HUD の「！」の下のゲージ）
 
     // 懐中電灯ビジュアルパーツ（本体器具＋発光レンズ）
+    // 頭の上で回るプロペラ（本体とは別のモデル）。本体に合わせて動き、倒れたら止まる
+    std::unique_ptr<GameObject> propellerObj_;
+    float propellerAngle_ = 0.0f;
     std::unique_ptr<GameObject> flashlightBodyObj_;
     std::unique_ptr<GameObject> flashlightLensObj_;
 
