@@ -1,5 +1,9 @@
 #include "GoalBlock.h"
 #include "Game2D/Player/Player2D.h"
+#include "GameObject/Object3D.h"
+#include "Resource/Model/ModelManager.h"
+#include "Graphics/TextureManager.h"
+#include "Core/TimeManager.h"
 #include <cmath>
 
 void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
@@ -19,6 +23,59 @@ void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     tc->SetPosition({ worldX, worldY - height * 0.25f, 0.0f });
     prc->GetMaterial().lightingType = 1; // ライティング無効化
     SetupCollider();
+
+    // ゴール上部の3D矢印オブジェクト (plan.obj) を初期化
+    if (device) {
+        Model* arrowModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/plan", "plan.obj");
+        if (arrowModel) {
+            arrowObject_ = std::make_unique<Object3D>();
+            arrowObject_->Initialize(device, arrowModel);
+            arrowObject_->SetName("GoalArrow3D");
+
+            uint32_t arrowTex = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/goal_arrow.png");
+            arrowObject_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(arrowTex));
+
+            Material& mat = arrowObject_->GetMaterial();
+            mat.color = { 1.0f, 0.85f, 0.25f, 0.85f }; // スプライト時と同じ色合い（温かみのあるゴールド・黄色）
+            mat.lightingType = 0;                     // ライティングなし（テクスチャ本来の鮮やかさで表示）
+            mat.alphaReference = 0.05f;               // 完全透明ピクセルをDiscard
+            mat.enableEnvironmentMap = 0;
+            arrowObject_->SetIsDoubleSided(true);
+            arrowObject_->SetBlendMode(BlendMode::kBlendModeNormal);
+
+            constexpr float kArrowScale = 0.40f;
+            arrowObject_->SetScale({ kArrowScale, kArrowScale, kArrowScale });
+
+            // カメラ（+Z向き）に対して正面を向き、下を指すように回転
+            constexpr float kPi = 3.14159265f;
+            arrowObject_->SetRotation({ 0.0f, kPi * 0.5f, kPi });
+            arrowObject_->SetTranslation({ worldX_, worldY_ + 1.0f, 0.0f });
+            arrowObject_->Update();
+        }
+    }
+}
+
+void GoalBlock::Update() {
+    BaseBlock::Update();
+
+    if (arrowObject_) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        arrowAnimTime_ += dt;
+
+        // 台座の上で上下にふわふわ浮遊する演出
+        constexpr float kBaseOffsetY = 1.05f;
+        float bob = std::sin(arrowAnimTime_ * 4.0f) * 0.10f;
+        arrowObject_->SetTranslation({ worldX_, worldY_ + kBaseOffsetY + bob, 0.0f });
+        arrowObject_->Update();
+    }
+}
+
+void GoalBlock::Draw() {
+    BaseBlock::Draw();
+
+    if (arrowVisible_ && arrowObject_) {
+        arrowObject_->Draw();
+    }
 }
 
 AABB2D GoalBlock::GetAABB() const {

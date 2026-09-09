@@ -203,7 +203,7 @@ void GameScene::Initialize() {
     Log("GameScene::Initialize: ReplayManager loaded\n");
 
     // ★ Skyboxの初期化処理を追加
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/temp_cube.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
@@ -219,9 +219,9 @@ void GameScene::Initialize() {
         // 法線を手前（Z負方向）に向けるためX軸を-90度回転
         backgroundPlane_->SetRotation({-std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f});
         // マップ全体を覆うスケール（X: 横幅, Z: 高さ）
-        backgroundPlane_->SetScale({300.0f, 1.0f, 150.0f});
+        backgroundPlane_->SetScale({220.0f, 1.0f, 40.0f});
         // ブロック（Z=0, 厚み1.0）の奥（Z=1.6f）に配置
-        backgroundPlane_->SetTranslation({100.0f, 20.0f, 1.6f});
+        backgroundPlane_->SetTranslation({100.5f, 15.0f, 1.6f});
 
         auto &mat = backgroundPlane_->GetMaterial();
         mat.lightingType = 1; // ライティング有効化
@@ -1895,9 +1895,9 @@ void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
 
         ImGui::Spacing();
         if (ImGui::Button("初期値に戻す##bgReset")) {
-            transform.translate = {100.0f, 20.0f, 1.6f};
+            transform.translate = {50.5f, 15.0f, 1.6f};
             transform.rotate = {-std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f};
-            transform.scale = {300.0f, 1.0f, 150.0f};
+            transform.scale = {110.0f, 1.0f, 40.0f};
             mat.color = {0.28f, 0.30f, 0.35f, 1.0f};
             mat.lightingType = 1;
             mat.shininess = 20.0f;
@@ -3652,20 +3652,27 @@ void GameScene::DrawAlertBarSprites() {
 
 void GameScene::DrawGoalArrowSprite(const Matrix4x4 &viewProjection) {
     // ゴールがどこにあるか分かるように矢印を出す。
-    // 画面の外にある時は端に寄せてその方向を指し、見えている時は台座の上で下を指す
-    if (!goalArrowSprite_ || !map_ || !player_) return;
-    if (!IsGamePlaying()) return;
-    if (gameState_ == GameState::Captured || gameState_ == GameState::Clear) return;
-    if (isClearSequenceActive_ || isDeathSequenceActive_ || isPaused_) return;
+    // ゴールが画面内にある時は台座の上に 3Dモデル (plan.obj) が表示され、
+    // 画面の外にある時は端に寄せてその方向をスプライトで指す
+    if (!map_ || !player_) return;
 
-    const GoalBlock *goal = nullptr;
+    GoalBlock *goal = nullptr;
     for (const auto &block : map_->GetUpdateBlocks()) {
-        if (const auto *g = dynamic_cast<const GoalBlock *>(block.get())) {
+        if (auto *g = dynamic_cast<GoalBlock *>(block.get())) {
             goal = g;
             break;
         }
     }
     if (!goal) return;
+
+    // ゲームプレイ中かつ演出中でない時のみ 3D矢印を表示
+    const bool arrowActive = IsGamePlaying() &&
+                             (gameState_ != GameState::Captured && gameState_ != GameState::Clear) &&
+                             !isClearSequenceActive_ && !isDeathSequenceActive_;
+    goal->SetArrowVisible(arrowActive);
+
+    if (!arrowActive || isPaused_) return;
+    if (!goalArrowSprite_) return;
 
     const AABB2D box = goal->GetAABB();
     const Vector3 goalPos = {(box.left + box.right) * 0.5f, box.top + 0.6f, 0.0f};
@@ -3678,36 +3685,31 @@ void GameScene::DrawGoalArrowSprite(const Matrix4x4 &viewProjection) {
     constexpr float kSize = 56.0f;   // 矢印の大きさ
     const bool inView = (gx > kEdge && gx < 1280.0f - kEdge && gy > kEdge && gy < 720.0f - kEdge);
 
+    // 画面内にゴールが見えている時は台座の上の 3Dモデル矢印を見せるため、スプライトは非表示にする
+    if (inView) {
+        return;
+    }
+
     float cx = 0.0f, cy = 0.0f, rot = 0.0f, alpha = 0.9f;
     float dirX = 0.0f, dirY = 1.0f; // 矢印が指している向き（「G」を反対側へ置くのに使う）
     const float bob = std::sin(hudTime_ * 4.0f);
 
-    if (inView) {
-        // 見えている：台座の少し上で、ゆっくり上下しながら下を指す
-        cx = gx;
-        cy = gy - kSize * 0.9f + bob * 5.0f;
-        rot = 3.14159265f; // 下向き
-        alpha = 0.75f;
-        dirX = 0.0f;
-        dirY = 1.0f;
-    } else {
-        // 画面の外：中心からゴールへの向きを指しながら、画面の端に貼り付く
-        const float dx = gx - 640.0f;
-        const float dy = gy - 360.0f;
-        const float len = std::sqrt(dx * dx + dy * dy);
-        if (len < 1.0f) return;
-        const float ux = dx / len;
-        const float uy = dy / len;
-        // 端の内側に収まるところまで進める
-        const float limitX = (640.0f - kEdge) / (std::max)(0.0001f, std::abs(ux));
-        const float limitY = (360.0f - kEdge) / (std::max)(0.0001f, std::abs(uy));
-        const float t = (std::min)(limitX, limitY) + bob * 4.0f;
-        cx = 640.0f + ux * t;
-        cy = 360.0f + uy * t;
-        rot = std::atan2(ux, -uy); // 画像は上向きなので、上をこの向きへ回す
-        dirX = ux;
-        dirY = uy;
-    }
+    // 画面の外：中心からゴールへの向きを指しながら、画面の端に貼り付く
+    const float dx = gx - 640.0f;
+    const float dy = gy - 360.0f;
+    const float len = std::sqrt(dx * dx + dy * dy);
+    if (len < 1.0f) return;
+    const float ux = dx / len;
+    const float uy = dy / len;
+    // 端の内側に収まるところまで進める
+    const float limitX = (640.0f - kEdge) / (std::max)(0.0001f, std::abs(ux));
+    const float limitY = (360.0f - kEdge) / (std::max)(0.0001f, std::abs(uy));
+    const float t = (std::min)(limitX, limitY) + bob * 4.0f;
+    cx = 640.0f + ux * t;
+    cy = 360.0f + uy * t;
+    rot = std::atan2(ux, -uy); // 画像は上向きなので、上をこの向きへ回す
+    dirX = ux;
+    dirY = uy;
 
     // スプライトは左上を軸に回るので、回した後の中心が cx, cy に来るように置く
     const float c = std::cos(rot);
