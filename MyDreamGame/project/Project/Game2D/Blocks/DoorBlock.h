@@ -32,6 +32,9 @@ public:
     void RestoreReplayState(const std::vector<float>& custom) override;
 
     int GetLinkId() const { return linkId_; }
+    /// <summary>今このフレームで閉まっている最中か（開き途中・止まっている時は false）。
+    /// プレイヤーの潰され判定に使う。開いた所を通っただけで死なないようにするため</summary>
+    bool IsClosing() const { return closing_; }
     const std::string& GetOpenDirection() const { return openDirection_; }
     bool IsLatched() const { return latched_; }
     /// <summary>閉じた状態の枠（エディタの重ね描き用。開いていると本体が潰れて見えないため）</summary>
@@ -59,5 +62,6 @@ private:
     bool crushKills_ = true;
 
     bool latched_ = false;      // latch_ で開いたまま固定中
+    bool closing_ = false;      // 今フレーム、実際に閉まる向きへ動いたか
     bool blockedThisFrame_ = false; // 今フレーム通路に鎖があった（OnChainTouch で立ち、Update で消費）
 };

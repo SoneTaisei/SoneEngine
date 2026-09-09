@@ -1,8 +1,8 @@
 {
   "title": "崩れる床（鎖の本数で決まる）",
   "texture": "resources/Sprite/anim/fragile_floor.dds",
-  "cellW": 640,
-  "cellH": 312,
+  "cellW": 512,
+  "cellH": 248,
   "cols": 8,
   "frames": 73,
   "fps": 9,

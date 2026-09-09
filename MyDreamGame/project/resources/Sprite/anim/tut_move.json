@@ -1,8 +1,8 @@
 {
   "title": "移動とジャンプ（A / D / SPACE）",
   "texture": "resources/Sprite/anim/tut_move.dds",
-  "cellW": 640,
-  "cellH": 320,
+  "cellW": 512,
+  "cellH": 256,
   "cols": 8,
   "frames": 101,
   "fps": 9,

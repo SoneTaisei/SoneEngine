@@ -1,8 +1,8 @@
 {
   "title": "警備員に見つかると",
   "texture": "resources/Sprite/anim/guard_detect.dds",
-  "cellW": 640,
-  "cellH": 376,
+  "cellW": 512,
+  "cellH": 300,
   "cols": 8,
   "frames": 113,
   "fps": 9,
