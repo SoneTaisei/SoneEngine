@@ -69,8 +69,7 @@ void TutorialPoster::Initialize(ID3D12Device* device, const std::string& metaPat
     obj_->SetRotation({ -std::numbers::pi_v<float> / 2.0f, 0.0f, 0.0f });
     obj_->SetIsBillboard(false);
     obj_->SetIsDoubleSided(true);
-    uint32_t tex = TextureManager::GetInstance()->Load(meta_.texture);
-    obj_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(tex));
+    // テクスチャはここでは読まない（EnsureTexture で、近づいた時に初めて読む）
     Material& mat = obj_->GetMaterial();
     mat.lightingType = 0; // 明かりに関係なく読めるように
     mat.enableEnvironmentMap = 0;
@@ -112,6 +111,13 @@ void TutorialPoster::SetPlacement(const Vector3& center, float width, float heig
     }
 }
 
+void TutorialPoster::EnsureTexture() {
+    if (textureLoaded_ || !obj_ || meta_.texture.empty()) return;
+    uint32_t tex = TextureManager::GetInstance()->Load(meta_.texture);
+    obj_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(tex));
+    textureLoaded_ = true;
+}
+
 void TutorialPoster::ApplyFrame(int frame) {
     if (!obj_) return;
     frame = std::clamp(frame, 0, meta_.frames - 1);
@@ -133,6 +139,13 @@ void TutorialPoster::Update(float dt, const Vector3& playerPos, bool active) {
     const float dx = (std::max)({ tMinX_ - playerPos.x, 0.0f, playerPos.x - tMaxX_ });
     const float dy = (std::max)({ tMinY_ - playerPos.y, 0.0f, playerPos.y - tMaxY_ });
     const float dist = std::sqrt(dx * dx + dy * dy);
+
+    // 出す少し前に読み込む。歩いて近づく間に済ませておけば、出た瞬間に固まらない
+    constexpr float kPreloadMargin = 14.0f;
+    if (!textureLoaded_ && (preview_ || alwaysShow_ || dist <= hideDist_ + kPreloadMargin)) {
+        EnsureTexture();
+    }
+
     if (preview_) {
         shown_ = true; // 編集中：いつでも見せる
     } else if (!active) {
@@ -173,7 +186,7 @@ void TutorialPoster::Update(float dt, const Vector3& playerPos, bool active) {
 }
 
 void TutorialPoster::Draw() {
-    if (!obj_ || alpha_ <= 0.001f) return;
+    if (!obj_ || !textureLoaded_ || alpha_ <= 0.001f) return;
     if (frameObj_) frameObj_->Draw(); // 先に枠、その手前に映像
     obj_->Draw();
 }

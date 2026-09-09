@@ -284,12 +284,26 @@ namespace {
         return merged;
     }
 
+    // 1 枚のブロックが複数チップにまたがっていることがある（ドアや、同じ設定でつながって結合された床）。
+    // 上書きはそのブロックが乗っている全チップに書く。1 チップだけ違う値にすると、
+    // 次にマップを作り直した時に「同じ設定どうし」の結合が崩れてブロックが 2 つに分かれ、
+    // 番号を変えたつもりのドアが片方しか開かず、開いたはずの所に当たり判定が残る
     void SetPropOne(MapChip2D* map, BaseBlock* b, const std::string& key, const nlohmann::json& value) {
-        if (!b) return;
-        int x = b->GetChipX();
-        int y = b->GetChipY();
-        map->SetBlockOverride(x, y, {{key, value}});
-        b->SetProperties(MergedProps(map, x, y));
+        if (!b || !map) return;
+        const int ox = b->GetChipX();
+        const int oy = b->GetChipY();
+        bool wrote = false;
+        for (int y = 0; y < map->GetHeight(); ++y) {
+            for (int x = 0; x < map->GetWidth(); ++x) {
+                if (map->GetBlock(x, y) != b) continue;
+                map->SetBlockOverride(x, y, {{key, value}});
+                wrote = true;
+            }
+        }
+        if (!wrote) {
+            map->SetBlockOverride(ox, oy, {{key, value}});
+        }
+        b->SetProperties(MergedProps(map, ox, oy));
         s_unsaved = true;
     }
 

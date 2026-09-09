@@ -1,8 +1,8 @@
 {
   "title": "警戒度（右上のバー）",
   "texture": "resources/Sprite/anim/guard_alert.dds",
-  "cellW": 640,
-  "cellH": 320,
+  "cellW": 512,
+  "cellH": 256,
   "cols": 8,
   "frames": 141,
   "fps": 9,

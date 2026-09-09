@@ -1,8 +1,8 @@
 {
   "title": "小さい宝石を集める",
   "texture": "resources/Sprite/anim/collect_gem.dds",
-  "cellW": 640,
-  "cellH": 344,
+  "cellW": 512,
+  "cellH": 272,
   "cols": 8,
   "frames": 61,
   "fps": 9,

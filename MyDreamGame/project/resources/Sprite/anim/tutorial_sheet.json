@@ -1,8 +1,8 @@
 {
   "title": "振り子で飛ぶ（E → A/D → SPACE）",
   "texture": "resources/Sprite/anim/tutorial_sheet.dds",
-  "cellW": 640,
-  "cellH": 348,
+  "cellW": 512,
+  "cellH": 280,
   "cols": 8,
   "frames": 157,
   "fps": 9,

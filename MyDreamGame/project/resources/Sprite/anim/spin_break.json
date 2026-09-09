@@ -1,8 +1,8 @@
 {
   "title": "回している最中に壁や地面に当たると解除",
   "texture": "resources/Sprite/anim/spin_break.dds",
-  "cellW": 640,
-  "cellH": 320,
+  "cellW": 512,
+  "cellH": 256,
   "cols": 8,
   "frames": 117,
   "fps": 9,
