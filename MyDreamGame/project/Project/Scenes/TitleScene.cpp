@@ -86,6 +86,8 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
         titleMenuAlpha_ = 1.0f;
         searchlightAlpha_ = 1.0f;
         creditAlpha_ = 0.0f;
+        titlePadCooldown_ = 0.0f;
+        ruleBookBobTimer_ = 0.0f;
 
         // タイトル画面時はTitle.mp3のみを再生
         AudioManager::StopAllBGM();
@@ -272,6 +274,16 @@ void TitleScene::Initialize() {
     creditTextSprite_->SetPosition(creditTextPos_);
 
     // -------------------------------------------------------------
+    // 6.35 説明書スプライト (ruleBook.png) - タイトル画面左下に配置
+    // -------------------------------------------------------------
+    ruleBookTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/ruleBook.png");
+    ruleBookSprite_ = std::make_unique<Sprite>();
+    ruleBookSprite_->Initialize(spriteCommon_, ruleBookTextureHandle_);
+    ruleBookSprite_->SetSize(ruleBookSize_);
+    ruleBookSprite_->SetPosition(ruleBookPos_);
+    ruleBookSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+    // -------------------------------------------------------------
     // 6.4 クレジット画面表示スプライト (credit.png)
     // -------------------------------------------------------------
     creditTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/credit.png");
@@ -346,16 +358,59 @@ void TitleScene::Update(SceneManager *sceneManager) {
         isFirstFrame_ = false;
     } else {
         if (phase_ == Phase::kTitle) {
-            // メニュー項目の上下選択 (W/S, ↑/↓)
-            // ※ ゲームパッドのPOVハットスイッチは未入力時に0を返す環境があり、常時上入力と誤判定されて
-            //    勝手に選択が切り替わり続ける原因となっていたため（ポーズメニュー時と同様）、
-            //    キーボードの確実な押下 (IsKeyPressed) で制御し、直接インデックスを指定します。
-            int prevMenu = selectedTitleMenu_;
-            if (kb->IsKeyPressed(DIK_UP) || kb->IsKeyPressed(DIK_W)) {
-                selectedTitleMenu_ = 0; // 上: スタート
-            } else if (kb->IsKeyPressed(DIK_DOWN) || kb->IsKeyPressed(DIK_S)) {
-                selectedTitleMenu_ = 1; // 下: クレジット
+            // パッド用クールダウンタイマーの更新
+            if (titlePadCooldown_ > 0.0f) {
+                titlePadCooldown_ -= dt;
             }
+
+            // 方向入力判定 (キーボード & ゲームパッド)
+            bool upPressed = kb->IsKeyPressed(DIK_UP) || kb->IsKeyPressed(DIK_W);
+            bool downPressed = kb->IsKeyPressed(DIK_DOWN) || kb->IsKeyPressed(DIK_S);
+            bool leftPressed = kb->IsKeyPressed(DIK_LEFT) || kb->IsKeyPressed(DIK_A);
+            bool rightPressed = kb->IsKeyPressed(DIK_RIGHT) || kb->IsKeyPressed(DIK_D);
+
+            if (pad && titlePadCooldown_ <= 0.0f) {
+                Vector2 stick = pad->GetLeftStick();
+                if (pad->IsDPadUp() || stick.y > 0.5f) {
+                    upPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                } else if (pad->IsDPadDown() || stick.y < -0.5f) {
+                    downPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                } else if (pad->IsDPadLeft() || stick.x < -0.5f) {
+                    leftPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                } else if (pad->IsDPadRight() || stick.x > 0.5f) {
+                    rightPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                }
+            }
+
+            int prevMenu = selectedTitleMenu_;
+
+            // メニュー項目の選択遷移 (0: スタート, 1: クレジット, 2: 説明書)
+            if (upPressed) {
+                if (selectedTitleMenu_ == 1) {
+                    selectedTitleMenu_ = 0; // クレジット -> スタート
+                } else if (selectedTitleMenu_ == 2) {
+                    selectedTitleMenu_ = 0; // 説明書 -> スタート
+                }
+            } else if (downPressed) {
+                if (selectedTitleMenu_ == 0) {
+                    selectedTitleMenu_ = 1; // スタート -> クレジット
+                } else if (selectedTitleMenu_ == 1) {
+                    selectedTitleMenu_ = 2; // クレジット -> 説明書
+                }
+            } else if (leftPressed) {
+                if (selectedTitleMenu_ == 0 || selectedTitleMenu_ == 1) {
+                    selectedTitleMenu_ = 2; // スタート/クレジット -> 左下の説明書へ
+                }
+            } else if (rightPressed) {
+                if (selectedTitleMenu_ == 2) {
+                    selectedTitleMenu_ = 0; // 説明書 -> 中央のスタートへ
+                }
+            }
+
             if (prevMenu != selectedTitleMenu_) {
                 AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
             }
@@ -384,6 +439,14 @@ void TitleScene::Update(SceneManager *sceneManager) {
                     creditAnimTimer_ = 0.0f;
                     creditAlpha_ = 0.0f;
                     creditScale_ = 0.85f;
+                } else if (selectedTitleMenu_ == 2) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
+
+                    // 「説明書」選択時: チュートリアルステージ（tutorial.txt）へ移行
+                    phase_ = Phase::kTransitionToGame;
+                    selectedStageIndex_ = 0; // チュートリアル
+                    Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
+                    StartCallingCardThrow(targetWorldPos);
                 }
             }
         } else if (phase_ == Phase::kCredit) {
@@ -659,6 +722,47 @@ void TitleScene::Update(SceneManager *sceneManager) {
         }
     }
 
+    // 説明書スプライト (ruleBook.png) の更新
+    if (ruleBookSprite_) {
+        if (titleMenuAlpha_ > 0.001f) {
+            Vector4 bookColor = { 1.0f, 1.0f, 1.0f, titleMenuAlpha_ };
+            float targetScale = 1.0f;
+            float offsetY = 0.0f;
+
+            if (selectedTitleMenu_ == 2) {
+                // 選択中: 1.12倍に拡大 ＋ ゴールドパルス発光 ＋ 縦揺れ
+                targetScale = 1.12f;
+                float pulse = (sinf(titleMenuPulseTimer_ * 5.0f) * 0.5f + 0.5f) * 0.25f;
+                bookColor = {
+                    (std::min)(1.0f, 1.0f + pulse),
+                    (std::min)(1.0f, 0.95f + pulse),
+                    (std::min)(1.0f, 0.55f + pulse),
+                    titleMenuAlpha_
+                };
+
+                ruleBookBobTimer_ += dt;
+                offsetY = sinf(ruleBookBobTimer_ * 4.0f) * 8.0f;
+            } else {
+                // 非選択時: 等倍、落ち着いたトーン
+                targetScale = 1.0f;
+                bookColor = { 0.8f, 0.8f, 0.8f, titleMenuAlpha_ * 0.9f };
+                ruleBookBobTimer_ = 0.0f;
+            }
+
+            ruleBookScale_ = targetScale;
+            Vector2 scaledSize = { ruleBookSize_.x * ruleBookScale_, ruleBookSize_.y * ruleBookScale_ };
+            Vector2 centeredPos = {
+                ruleBookPos_.x - (scaledSize.x - ruleBookSize_.x) * 0.5f,
+                ruleBookPos_.y - (scaledSize.y - ruleBookSize_.y) * 0.5f + offsetY
+            };
+
+            ruleBookSprite_->SetSize(scaledSize);
+            ruleBookSprite_->SetPosition(centeredPos);
+            ruleBookSprite_->SetColor(bookColor);
+            ruleBookSprite_->Update();
+        }
+    }
+
     // クレジット表示スプライト (credit.png) の更新 (スケール演出を反映)
     if (creditSprite_) {
         Vector2 scaledSize = { creditSize_.x * creditScale_, creditSize_.y * creditScale_ };
@@ -872,6 +976,9 @@ void TitleScene::Draw2D() {
             }
             if (creditTextSprite_) {
                 creditTextSprite_->Draw();
+            }
+            if (ruleBookSprite_) {
+                ruleBookSprite_->Draw();
             }
         }
         if (creditSprite_ && creditAlpha_ > 0.001f) {
@@ -1108,17 +1215,22 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::Separator();
 
     // タイトルメニューテキスト調整
-    ImGui::Text("【タイトルメニュー (スタート / クレジット) 調整】");
-    ImGui::Text("現在の選択: %s", (selectedTitleMenu_ == 0) ? "スタート" : "クレジット");
+    ImGui::Text("【タイトルメニュー (スタート / クレジット / 説明書) 調整】");
+    const char* titleMenuNames[3] = { "スタート", "クレジット", "説明書 (ruleBook)" };
+    ImGui::Text("現在の選択: %s", titleMenuNames[selectedTitleMenu_]);
     if (ImGui::Button("選択: スタート")) { selectedTitleMenu_ = 0; }
     ImGui::SameLine();
     if (ImGui::Button("選択: クレジット")) { selectedTitleMenu_ = 1; }
+    ImGui::SameLine();
+    if (ImGui::Button("選択: 説明書")) { selectedTitleMenu_ = 2; }
 
     bool menuSpriteChanged = false;
     if (ImGui::DragFloat2("スタート 位置 (px)", &startTextPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
     if (ImGui::DragFloat2("スタート サイズ (px)", &startTextSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
     if (ImGui::DragFloat2("クレジット 位置 (px)", &creditTextPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
     if (ImGui::DragFloat2("クレジット サイズ (px)", &creditTextSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
+    if (ImGui::DragFloat2("説明書 位置 (px)", &ruleBookPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
+    if (ImGui::DragFloat2("説明書 サイズ (px)", &ruleBookSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
 
     if (menuSpriteChanged) {
         if (startTextSprite_) {
@@ -1128,6 +1240,10 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         if (creditTextSprite_) {
             creditTextSprite_->SetPosition(creditTextPos_);
             creditTextSprite_->SetSize(creditTextSize_);
+        }
+        if (ruleBookSprite_) {
+            ruleBookSprite_->SetPosition(ruleBookPos_);
+            ruleBookSprite_->SetSize(ruleBookSize_);
         }
     }
 

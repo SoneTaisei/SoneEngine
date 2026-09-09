@@ -87,6 +87,15 @@ private:
     Vector2 creditTextPos_ = { 512.5f, 520.0f };
     Vector2 creditTextSize_ = { 255.0f, 50.0f };
 
+    // --- タイトルメニュー用（説明書 / ruleBook.png） ---
+    std::unique_ptr<Sprite> ruleBookSprite_;
+    uint32_t ruleBookTextureHandle_ = 0;
+    Vector2 ruleBookPos_ = { 36.0f, 540.0f };
+    Vector2 ruleBookSize_ = { 130.0f, 130.0f };
+    float ruleBookScale_ = 1.0f;
+    float ruleBookBobTimer_ = 0.0f;
+    float titlePadCooldown_ = 0.0f;
+
     // --- ステージ選択の見出し。カメラが着いた後、画面の外から引っ張られるように入ってくる ---
     std::unique_ptr<Sprite> stageSelectTitleSprite_;
     uint32_t stageSelectTitleTextureHandle_ = 0;
