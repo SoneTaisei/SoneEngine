@@ -720,8 +720,9 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     bool togglePause = false;
-    // プレイ中、またはポーズ中の場合にトグル可能（クリア中・開始直後は無効）
-    if (gameState_ == GameState::Playing || isPaused_) {
+    // プレイ中・開始準備中、またはポーズ中の場合にトグル可能（クリア演出・死亡演出中は無効）
+    if ((gameState_ == GameState::Playing || gameState_ == GameState::StartReady || isPaused_) &&
+        !isDeathSequenceActive_ && !isClearSequenceActive_) {
         auto kb = KeyboardInput::GetInstance();
         auto pad = GamepadInput::GetInstance();
 

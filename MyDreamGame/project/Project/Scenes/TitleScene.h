@@ -135,6 +135,7 @@ private:
         kTitle,                 // タイトル画面
         kTransitionToSelect,    // ステージ選択へのカメラ移動演出中
         kStageSelect,           // ステージ選択画面
+        kTransitionFromSelect,  // ステージ選択からタイトルへのカメラ復帰演出中
         kTransitionToGame,      // ゲーム遷移中
         kTransitionToCredit,    // クレジット画面へのカメラ移動演出中
         kCredit,                // クレジット画面

@@ -468,8 +468,19 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 // creditAlpha_ は kTransitionFromCredit の最初の0.15秒で縮小フェードアウト
             }
         } else if (phase_ == Phase::kStageSelect) {
-            // ステージ選択画面で決定ボタン押下時
-            if (isDecisionPressed && cardPhase_ == CardThrowPhase::kNone && !isIrisOutActive_) {
+            // ステージ選択画面でキャンセルボタン（ESC, BackSpace, パッドBボタン）押下時: タイトル画面へ復帰
+            bool isCancelPressed = kb->IsKeyPressed(DIK_ESCAPE) || 
+                                   kb->IsKeyPressed(DIK_BACK) || 
+                                   (pad && pad->IsButtonPressed(GamepadButton::B));
+            if (isCancelPressed && cardPhase_ == CardThrowPhase::kNone && !isIrisOutActive_) {
+                AudioManager::Play("resources/Sound/10Dyas/SE/TitleCameraMove.mp3", 0.7f);
+                AudioManager::StopBGM("resources/Sound/10Dyas/BGM/Select.mp3");
+                phase_ = Phase::kTransitionFromSelect;
+                transitionStartPos_ = cameraTransform_.translate;
+                transitionStartRot_ = cameraTransform_.rotate;
+                transitionTimer_ = 0.0f;
+            } else if (isDecisionPressed && cardPhase_ == CardThrowPhase::kNone && !isIrisOutActive_) {
+                // ステージ選択画面で決定ボタン押下時
                 AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
                 phase_ = Phase::kTransitionToGame;
 
@@ -567,6 +578,50 @@ void TitleScene::Update(SceneManager *sceneManager) {
         titleLogoAlpha_ = 0.0f;
         titleMenuAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
+    } else if (phase_ == Phase::kTransitionFromSelect) {
+        // ステージ選択位置からタイトル画面へ滑らかにカメラを復帰 (Smoothstep)
+        transitionTimer_ += dt;
+        float t = std::clamp(transitionTimer_ / transitionDuration_, 0.0f, 1.0f);
+        float ease = t * t * (3.0f - 2.0f * t); // Smoothstep
+
+        camPos = {
+            transitionStartPos_.x + (titleCameraPos_.x - transitionStartPos_.x) * ease,
+            transitionStartPos_.y + (titleCameraPos_.y - transitionStartPos_.y) * ease,
+            transitionStartPos_.z + (titleCameraPos_.z - transitionStartPos_.z) * ease
+        };
+        camRot = {
+            transitionStartRot_.x + (titleCameraRot_.x - transitionStartRot_.x) * ease,
+            transitionStartRot_.y + (titleCameraRot_.y - transitionStartRot_.y) * ease,
+            transitionStartRot_.z + (titleCameraRot_.z - transitionStartRot_.z) * ease
+        };
+
+        cameraTransform_.translate = camPos;
+        cameraTransform_.rotate = camRot;
+
+        // タイトル画面復帰直前にUIをフェードイン (後半 logoFadeDuration_ 秒でフェードイン)
+        float remainingTime = transitionDuration_ - transitionTimer_;
+        if (remainingTime <= logoFadeDuration_) {
+            float fadeT = 1.0f - std::clamp(remainingTime / logoFadeDuration_, 0.0f, 1.0f);
+            float inAlpha = fadeT * fadeT;
+            titleLogoAlpha_ = inAlpha;
+            titleMenuAlpha_ = inAlpha;
+            searchlightAlpha_ = inAlpha;
+        } else {
+            titleLogoAlpha_ = 0.0f;
+            titleMenuAlpha_ = 0.0f;
+            searchlightAlpha_ = 0.0f;
+        }
+
+        if (t >= 1.0f) {
+            phase_ = Phase::kTitle;
+            cameraTransform_.translate = titleCameraPos_;
+            cameraTransform_.rotate = titleCameraRot_;
+            camPos = titleCameraPos_;
+            camRot = titleCameraRot_;
+            titleLogoAlpha_ = 1.0f;
+            titleMenuAlpha_ = 1.0f;
+            searchlightAlpha_ = 1.0f;
+        }
     } else if (phase_ == Phase::kTransitionToCredit) {
         // クレジット画面へ滑らかにカメラを補間移動 (Smoothstep)
         // ※ ユーザー要望により移動時間を短縮 (creditTransitionDuration_)
@@ -1033,6 +1088,7 @@ void TitleScene::Draw2D() {
 
         // 決定の操作案内（右下）。カメラが動いている間は出さず、止まったらまた出す
         const bool cameraMoving = (phase_ == Phase::kTransitionToSelect ||
+                                   phase_ == Phase::kTransitionFromSelect ||
                                    phase_ == Phase::kTransitionToGame ||
                                    phase_ == Phase::kTransitionToCredit ||
                                    phase_ == Phase::kTransitionFromCredit);

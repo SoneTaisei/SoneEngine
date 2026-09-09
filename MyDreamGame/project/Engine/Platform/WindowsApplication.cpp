@@ -246,15 +246,11 @@ void WindowsApplication::Update() {
         }
     }
 
-    // ESCキーの処理 (閉じる / 最小化) - リリース版では無効化
+    // Shift + ESC で終了（開発用ショートカット。ESC単体はゲーム内のポーズ・キャンセル用に使用）
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE)) {
         bool isShiftDown = KeyboardInput::GetInstance()->IsKeyDown(DIK_LSHIFT) || 
                            KeyboardInput::GetInstance()->IsKeyDown(DIK_RSHIFT);
         if (isShiftDown) {
-            // Shift + ESC で最小化
-            ShowWindow(window_->GetHwnd(), SW_MINIMIZE);
-        } else {
-            // ESC のみで終了
             SendMessage(window_->GetHwnd(), WM_CLOSE, 0, 0);
         }
     }
