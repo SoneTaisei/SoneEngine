@@ -201,6 +201,9 @@ private:
     Vector3 deathCameraStartPos_ = { 0.0f, 0.0f, -10.0f };
     float clearCameraStartScale_ = 1.0f;
     Vector3 clearCameraStartPos_ = { 0.0f, 0.0f, -10.0f };
+    // 演出が終わった時のカメラ。そのあとカメラ自身の追従・部屋合わせで一瞬動くので、ここへ固定し続ける
+    float clearCameraEndScale_ = 1.0f;
+    Vector3 clearCameraEndPos_ = { 0.0f, 0.0f, -10.0f };
     bool isClearExitIrisActive_ = false; // クリア画面でSPACEを押した後のタイトル遷移用アイリスアウト
 
     void TriggerClearSequence(const Vector3& goalPos, float goalTopY);
@@ -268,8 +271,10 @@ private:
     std::unique_ptr<class Sprite> alertSeenSprite_;              // 「見られている」
     std::unique_ptr<class Sprite> alertSuspectSprite_;           // 「怪しまれている」
     // 開始・クリア・ポーズの文字。これも ImGui だと製品版で消えるのでスプライトで描く
-    std::unique_ptr<class Sprite> readyTextSprite_;    // 「READY...」
-    std::unique_ptr<class Sprite> goTextSprite_;       // 「GO!」
+    std::unique_ptr<class Sprite> escapeTextSprite_;   // 開始の合図「ここから脱出しろ!!」
+    std::unique_ptr<class Sprite> clearPanelSprite_;   // クリア画面を少し暗くする全画面の幕
+    std::unique_ptr<class Sprite> readyTextSprite_;    // 「READY...」（今は未使用。合図は escapeTextSprite_）
+    std::unique_ptr<class Sprite> goTextSprite_;       // 「GO!」（同上）
     std::unique_ptr<class Sprite> stageClearSprite_;   // 「STAGE CLEAR!」
     std::unique_ptr<class Sprite> clearPromptSprite_;  // 「Press SPACE / A to Stage Select」
     std::unique_ptr<class Sprite> pauseGuideSprite_;   // ポーズ中の操作ガイド
@@ -283,6 +288,7 @@ private:
     uint32_t alertSeenTexHandle_ = 0;
     uint32_t alertSuspectTexHandle_ = 0;
     float hudTime_ = 0.0f; // 点滅・上下ゆれ用
+    float clearGemTimer_ = 0.0f; // クリア画面で宝石の枠を順に埋めるための経過秒
     // ゲーム画面の HUD をまとめてスプライトで描く（宝石・目・縁の赤・警備員の合図）。3D と粒子の後、ポーズの前
     void DrawHudSprites(const Matrix4x4& viewProjection);
     // ゲームが動いているか（エディタで編集しているだけの間は false）。ゲーム中の表示を出すかの判断に使う

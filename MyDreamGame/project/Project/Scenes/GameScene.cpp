@@ -218,8 +218,8 @@ void GameScene::Initialize() {
 
         // 直立モデルのため回転なし
         backgroundWall_->SetRotation({0.0f, 0.0f, 0.0f});
-        // 原寸（幅220、高さ40）
-        backgroundWall_->SetScale({1.0f, 1.0f, 1.0f});
+        // 原寸は幅 220・高さ 40。そのままだとモデルの端（壁と天井の継ぎ目）が画面に入るので広げて使う
+        backgroundWall_->SetScale({1.3f, 1.3f, 1.0f});
         // ブロック（Z=0, 厚み1.0）の奥（Z=1.6f）に配置
         backgroundWall_->SetTranslation({100.5f, 15.0f, 1.6f});
 
@@ -428,8 +428,9 @@ void GameScene::Initialize() {
         pauseBackdropTexHandle_ = TextureManager::GetInstance()->Load("resources/Object/Original/kusari/kusari_2/white.png");
         pauseBackdropSprite_ = std::make_unique<Sprite>();
         pauseBackdropSprite_->Initialize(spriteCommon_, pauseBackdropTexHandle_);
-        pauseBackdropSprite_->SetPosition({0.0f, 0.0f});
-        pauseBackdropSprite_->SetSize({1280.0f, 720.0f});
+        // 画面ぴったりだと、端が縁で切れて黒帯が途切れて見えることがあるので一回り大きく敷く
+        pauseBackdropSprite_->SetPosition({-160.0f, -120.0f});
+        pauseBackdropSprite_->SetSize({1600.0f, 960.0f});
         pauseBackdropSprite_->SetColor({0.0f, 0.0f, 0.0f, 0.65f});
 
         // 「ポーズ」タイトル (poseText.png: 300x100)
@@ -473,7 +474,9 @@ void GameScene::Initialize() {
         gemDigitsTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_digits.png");
         gemLabelTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_label.png");
         gemCompleteTexHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/gem_complete.png");
-        constexpr int kGemSpritePool = 8; // ステージに置ける宝石の表示上限（HUD 用）
+        // 左下の HUD 用 8 個 ＋ クリア画面の並び用 8 個。
+        // スプライトは描画用の箱を 1 つしか持たないので、同じフレームで二か所に出すには別の実体が要る
+        constexpr int kGemSpritePool = 16;
         constexpr int kGemDigitPool = 26; // 「NN / NN」+ クリア画面 + クリアの内訳用
         gemIconSprites_.clear();
         gemOutlineSprites_.clear();
@@ -544,6 +547,8 @@ void GameScene::Initialize() {
             sp = std::make_unique<Sprite>();
             sp->Initialize(spriteCommon_, TextureManager::GetInstance()->Load(path));
         };
+        makeOne(escapeTextSprite_, "resources/Sprite/Original/UI/escape_text.png");
+        makeOne(clearPanelSprite_, "resources/Object/Original/kusari/kusari_2/white.png");
         makeOne(readyTextSprite_, "resources/Sprite/Original/UI/ready_text.png");
         makeOne(goTextSprite_, "resources/Sprite/Original/UI/go_text.png");
         makeOne(stageClearSprite_, "resources/Sprite/Original/UI/stage_clear.png");
@@ -1024,6 +1029,14 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // クリア演出完了後、スペースキーでステージ選択に戻る待機中（プレイヤーや鎖のキー入力・物理更新は行わない）
                 if (map_) {
                     map_->Update();
+                }
+                // 演出中は毎フレームこちらでカメラを置いていたが、演出が終わるとカメラ自身の
+                // 追従・部屋合わせが効いて一瞬ずれる。寄せ終わった所に固定し続けて止める
+                if (gameCamera_ && isClearSequenceFinished_) {
+                    gameCamera_->SetFollowTarget(nullptr);
+                    gameCamera_->SetScale(clearCameraEndScale_);
+                    gameCamera_->SetTranslation(clearCameraEndPos_);
+                    gameCamera_->UpdateMatrix();
                 }
                 UpdateGuardLights();
             } else {
@@ -3284,6 +3297,11 @@ void GameScene::UpdateClearSequence(float dt, SceneManager *sceneManager) {
     if (clearSequenceTimer_ >= 2.50f) {
         isClearSequenceActive_ = false;
         isClearSequenceFinished_ = true; // 演出完了！
+        // 寄せ終わった位置と倍率を覚えて、このあと毎フレームここへ戻す（カメラが一瞬動くのを防ぐ）
+        if (gameCamera_) {
+            clearCameraEndScale_ = gameCamera_->GetScale();
+            clearCameraEndPos_ = gameCamera_->GetTranslation();
+        }
         Log("GameScene: Clear sequence finished, displaying STAGE CLEAR UI on illuminated stage\n");
     }
 }
@@ -3559,7 +3577,8 @@ void GameScene::DrawAlertBarSprites() {
     // 警戒度のバーと文字。ImGui ではなくスプライトで描くので、エディタでも製品版でも同じように出る
     if (!alert_ || !alert_->GetParams().enabled_) return;
     if (alertBarSprites_.size() < 6 || !alertLabelSprite_) return;
-    if (gameState_ == GameState::Captured) return;
+    // 捕獲・クリアに入ったら消す（クリア演出とステージ選択への遷移の間、右上に残っていた）
+    if (gameState_ == GameState::Captured || gameState_ == GameState::Clear) return;
 
     const float ratio = std::clamp(alert_->GetRatio(), 0.0f, 1.0f);
     const float pulse = alert_->GetPulse();
@@ -3749,17 +3768,51 @@ void GameScene::DrawStageStateSprites() {
         sp->Draw();
     };
 
-    // ---- 開始（READY... → GO!）----
-    if (gameState_ == GameState::StartReady) {
-        if (stateTimer_ < 1.0f) {
-            drawCentered(readyTextSprite_.get(), 516.0f / 124.0f, 92.0f, 300.0f, {1.0f, 0.55f, 0.12f, 1.0f});
-        } else {
-            drawCentered(goTextSprite_.get(), 248.0f / 128.0f, 104.0f, 300.0f, {0.35f, 1.0f, 0.45f, 1.0f});
+    // ---- 開始の合図：「ここから脱出しろ!!」が奥から手前へ出てきて、そのまま抜けて消える ----
+    if (gameState_ == GameState::StartReady && escapeTextSprite_) {
+        ParameterManager *pm = ParameterManager::GetInstance();
+        const float total = s_QuickRestart ? pm->GetValue("GameScene", "quickRestartReadyTime", 0.3f)
+                                           : pm->GetValue("GameScene", "startReadyTime", 2.0f);
+        // 待ち時間が変わっても最後まで見せ切れるように、経過を 0〜1 に直してから動かす
+        const float u = (total > 0.01f) ? std::clamp(stateTimer_ / total, 0.0f, 1.0f) : 1.0f;
+
+        constexpr float kInEnd = 0.30f;    // ここまでで奥から手前へ出てくる
+        constexpr float kOutStart = 0.72f; // ここから手前へ抜けて消える
+        float scale = 1.0f;
+        float alpha = 1.0f;
+        if (u < kInEnd) {
+            const float k = u / kInEnd;
+            const float ease = 1.0f - (1.0f - k) * (1.0f - k) * (1.0f - k); // 手前に来るほどゆっくり止まる
+            scale = 0.20f + (1.0f - 0.20f) * ease;
+            alpha = (std::min)(1.0f, k * 2.5f);
+        } else if (u >= kOutStart) {
+            // 大きくすると派手すぎるので、そのままの大きさで薄くして消す
+            const float k = (u - kOutStart) / (1.0f - kOutStart);
+            alpha = 1.0f - k * k;
         }
+
+        constexpr float kBaseWidth = 860.0f;
+        constexpr float kAspect = 244.0f / 1452.0f; // escape_text.png の縦横比
+        const float w = kBaseWidth * scale;
+        const float h = w * kAspect;
+        escapeTextSprite_->SetSize({w, h});
+        escapeTextSprite_->SetPosition({(1280.0f - w) * 0.5f, 300.0f - h * 0.5f});
+        escapeTextSprite_->SetColor({1.0f, 1.0f, 1.0f, alpha});
+        escapeTextSprite_->Update();
+        escapeTextSprite_->Draw();
     }
 
     // ---- クリア（演出が終わってから。アイリスアウトが始まったら隠す）----
     if (gameState_ == GameState::Clear && isClearSequenceFinished_ && !isClearExitIrisActive_) {
+        // 画面全体を少し暗くする（ポーズと同じ形）。煙や明るい背景に文字が負けて読めなくなるため。
+        // 帯だと境目が出るので、全面に薄く敷く
+        if (clearPanelSprite_) {
+            clearPanelSprite_->SetSize({1600.0f, 960.0f});
+            clearPanelSprite_->SetPosition({-160.0f, -120.0f});
+            clearPanelSprite_->SetColor({0.0f, 0.0f, 0.0f, 0.5f});
+            clearPanelSprite_->Update();
+            clearPanelSprite_->Draw();
+        }
         drawCentered(stageClearSprite_.get(), 856.0f / 128.0f, 88.0f, 190.0f, {1.0f, 0.82f, 0.15f, 1.0f});
 
         if (alert_ && rankSprites_.size() >= 4) {
@@ -3786,20 +3839,20 @@ void GameScene::DrawStageStateSprites() {
 }
 
 void GameScene::DrawClearStatLine(const AlertRank &rank, float centerY) {
-    // 「発見 N 回   通報 N 回   騒音 N 回   最大警戒度 N」を中央に並べる。
+    // 「発見 N 回   通報 N 回   最大警戒度 N」を中央に並べる。
     // 数字は宝石と同じ数字帯を使う（先頭 12 個は宝石の表示で使っているのでその後ろから借りる）
-    if (!statSpottedSprite_ || statTimesSprites_.size() < 3) return;
+    if (!statSpottedSprite_ || statTimesSprites_.size() < 2) return;
 
-    const float h = 24.0f;
-    const float cellW = 15.0f;
-    const float pad = 5.0f;   // 語と数字の間
-    const float group = 26.0f; // 項目どうしの間
+    // 煙や背景に負けて読めなかったので、ひと回り大きくして色も濃くした
+    const float h = 34.0f;
+    const float cellW = 21.0f;
+    const float pad = 7.0f;    // 語と数字の間
+    const float group = 38.0f; // 項目どうしの間
 
-    char num[4][8];
+    char num[3][8];
     snprintf(num[0], sizeof(num[0]), "%d", rank.spotted);
     snprintf(num[1], sizeof(num[1]), "%d", rank.reported);
-    snprintf(num[2], sizeof(num[2]), "%d", rank.noises);
-    snprintf(num[3], sizeof(num[3]), "%d", static_cast<int>(rank.peak + 0.5f));
+    snprintf(num[2], sizeof(num[2]), "%d", static_cast<int>(rank.peak + 0.5f));
 
     struct Part { Sprite *sp; float aspect; const char *digits; float lead; };
     const Part parts[] = {
@@ -3809,11 +3862,8 @@ void GameScene::DrawClearStatLine(const AlertRank &rank, float centerY) {
         {statReportSprite_.get(), 100.0f / 64.0f, nullptr, group},
         {nullptr, 0.0f, num[1], pad},
         {statTimesSprites_[1].get(), 1.0f, nullptr, pad},
-        {statNoiseSprite_.get(), 100.0f / 64.0f, nullptr, group},
-        {nullptr, 0.0f, num[2], pad},
-        {statTimesSprites_[2].get(), 1.0f, nullptr, pad},
         {statPeakSprite_.get(), 200.0f / 64.0f, nullptr, group},
-        {nullptr, 0.0f, num[3], pad},
+        {nullptr, 0.0f, num[2], pad},
     };
     const int count = static_cast<int>(sizeof(parts) / sizeof(parts[0]));
 
@@ -3823,7 +3873,7 @@ void GameScene::DrawClearStatLine(const AlertRank &rank, float centerY) {
         total += parts[i].digits ? cellW * static_cast<float>(strlen(parts[i].digits)) : h * parts[i].aspect;
     }
 
-    const Vector4 color = {1.0f, 1.0f, 1.0f, 0.9f};
+    const Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
     float x = (1280.0f - total) * 0.5f;
     const float y = centerY - h * 0.5f;
     size_t digitIndex = 12; // 宝石の表示（0〜11）とぶつからない番号から使う
@@ -3857,7 +3907,8 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
     DrawAlertBarSprites();
 
     // ---- 目のアイコン（右上。残り回数）と、発見直後の画面の縁の赤 ----
-    if (alert_ && alert_->GetParams().strikeEnabled_ && !eyeOpenSprites_.empty() && gameState_ != GameState::Captured) {
+    if (alert_ && alert_->GetParams().strikeEnabled_ && !eyeOpenSprites_.empty() &&
+        gameState_ != GameState::Captured && gameState_ != GameState::Clear) {
         const int limit = (std::min)(alert_->GetStrikeLimit(), static_cast<int>(eyeOpenSprites_.size()));
         const int used = alert_->GetStrikes();
         const float pulse = alert_->GetStrikePulse();
@@ -3906,7 +3957,7 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
     }
 
     // ---- 警備員の頭上の合図：疑う・調べる =「？」（黄）、追跡 =「！」（赤）。追跡中は見られ続けているゲージも ----
-    if (gameState_ != GameState::Captured && !markExclaimSprites_.empty()) {
+    if (gameState_ != GameState::Captured && gameState_ != GameState::Clear && !markExclaimSprites_.empty()) {
         size_t exclUsed = 0, questUsed = 0, barUsed = 0;
         for (const auto &block : map_->GetUpdateBlocks()) {
             auto *guard = dynamic_cast<GuardBlock *>(block.get());
@@ -3984,7 +4035,8 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
     const float x0 = margin;
     const std::pair<int, int> last = tracker.GetLastCollected();
     const float pulse = tracker.GetPulse();
-    const int n = (std::min)(s.total, static_cast<int>(gemIconSprites_.size()));
+    constexpr int kGemHudSlots = 8; // 左下の HUD が使うスプライトの数（クリア画面はこの後ろを使う）
+    const int n = (std::min)(s.total, kGemHudSlots);
     for (int i = 0; i < n; ++i) {
         const auto &e = s.entries[i];
         const bool isLast = e.collectedNow && (e.x == last.first && e.y == last.second);
@@ -4026,8 +4078,47 @@ void GameScene::DrawHudSprites(const Matrix4x4 &viewProjection) {
     snprintf(countText, sizeof(countText), "%d / %d", s.collectedNow, s.total);
     DrawGemDigits(countText, x0 + gap * static_cast<float>(n) + 4.0f, baseY - 2.0f, 22.0f, 36.0f, {0.9f, 0.96f, 1.0f, 0.95f});
 
-    // ---- クリア画面：中央に「宝石 N / M」、全部取っていれば「コンプリート!」 ----
+    // ---- クリア画面：宝石の枠を並べて、取った分を 1 個ずつ順に埋める ----
     const bool clearScreen = (gameState_ == GameState::Clear && !TransitionDirector::GetInstance()->IsPlaying());
+    clearGemTimer_ = clearScreen ? (clearGemTimer_ + dt) : 0.0f;
+    if (clearScreen && static_cast<int>(gemIconSprites_.size()) >= kGemHudSlots + n) {
+        constexpr float kSlot = 52.0f;   // 枠の大きさ
+        constexpr float kGap = 74.0f;    // 枠の間隔
+        constexpr float kStart = 0.35f;  // クリア画面が出てから埋め始めるまで
+        constexpr float kStep = 0.22f;   // 1 個ずつの間
+        constexpr float kPop = 0.28f;    // 弾んで収まるまで
+        const float rowW = kGap * static_cast<float>(n - 1) + kSlot;
+        const float cx0 = (1280.0f - rowW) * 0.5f + kSlot * 0.5f;
+        const float cy = 452.0f;
+        int order = 0; // 何個目に埋まるか（取った物だけ数える）
+        for (int i = 0; i < n; ++i) {
+            const bool got = s.entries[i].collectedNow;
+            const float cx = cx0 + kGap * static_cast<float>(i);
+            // 枠は最初から全部出しておく（取れなかった所は空のまま残る）
+            Sprite *ol = gemOutlineSprites_[kGemHudSlots + i].get();
+            ol->SetSize({kSlot, kSlot});
+            ol->SetPosition({cx - kSlot * 0.5f, cy - kSlot * 0.5f});
+            ol->SetColor({0.85f, 0.95f, 1.0f, got ? 0.95f : 0.45f});
+            ol->Update();
+            ol->Draw();
+            if (!got)
+                continue;
+            const float at = kStart + kStep * static_cast<float>(order++);
+            if (clearGemTimer_ < at)
+                continue;
+            const float k = (std::min)(1.0f, (clearGemTimer_ - at) / kPop);
+            const float size = kSlot * (1.0f + 0.9f * (1.0f - k) * (1.0f - k)); // 大きい所から縮んで収まる
+            const float flash = 1.0f - k;
+            Sprite *sp = gemIconSprites_[kGemHudSlots + i].get();
+            sp->SetSize({size, size});
+            sp->SetPosition({cx - size * 0.5f, cy - size * 0.5f});
+            sp->SetColor({0.5f + 0.5f * flash, 0.85f + 0.15f * flash, 1.0f, 1.0f});
+            sp->Update();
+            sp->Draw();
+        }
+    }
+
+    // ---- クリア画面：中央に「宝石 N / M」、全部取っていれば「コンプリート!」 ----
     if (clearScreen && gemLabelSprite_ && gemCompleteSprite_) {
         const float labelW = 120.0f, labelH = 48.0f;
         const float digitW = 30.0f, digitH = 48.0f;
