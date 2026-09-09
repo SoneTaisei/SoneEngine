@@ -10,6 +10,7 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Scene/SceneFactory.h"
 #include "Scene/SceneManager.h"
+#include "StageClearData.h"
 #include <Windows.h>
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
@@ -180,9 +181,24 @@ void GameScene::GoToNextStage(SceneManager *sceneManager) {
     EditorManager::SetPlaying(true);
 #endif
 
-    // タイトルシーンに「ステージ選択画面から直接開始する」フラグを渡す
-    sceneManager->SetData("StartAtStageSelect", true);
-    sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+    // 直前にプレイしていたステージのインデックスを保持
+    std::string currentMap = ResolveCurrentMapPath();
+    int stageIdx = 0;
+    if (currentMap.find("map1") != std::string::npos) stageIdx = 1;
+    else if (currentMap.find("map2") != std::string::npos) stageIdx = 2;
+    else if (currentMap.find("map3") != std::string::npos) stageIdx = 3;
+    else if (currentMap.find("tutorial") != std::string::npos) stageIdx = 0;
+    else if (sceneManager && sceneManager->HasData("SelectedStageIndex")) {
+        stageIdx = sceneManager->GetData<int>("SelectedStageIndex");
+    }
+    if (sceneManager) {
+        sceneManager->SetData("SelectedStageIndex", stageIdx);
+        // タイトルシーンに「ステージ選択画面から直接開始する」フラグを渡す
+        sceneManager->SetData("StartAtStageSelect", true);
+        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+    }
+    // クリア記録を保存
+    StageClearData::SetCleared(stageIdx);
 }
 
 void GameScene::Initialize() {
@@ -709,7 +725,23 @@ void GameScene::Update(SceneManager *sceneManager) {
                 }
                 EditorManager::SetPlaying(true);
 #endif
-                sceneManager->SetData("StartAtStageSelect", true);
+                // 直前にプレイしていたステージのインデックスを保持
+                std::string currentMap = ResolveCurrentMapPath();
+                int stageIdx = 0;
+                if (currentMap.find("map1") != std::string::npos) stageIdx = 1;
+                else if (currentMap.find("map2") != std::string::npos) stageIdx = 2;
+                else if (currentMap.find("map3") != std::string::npos) stageIdx = 3;
+                else if (currentMap.find("tutorial") != std::string::npos) stageIdx = 0;
+                else if (sceneManager && sceneManager->HasData("SelectedStageIndex")) {
+                    stageIdx = sceneManager->GetData<int>("SelectedStageIndex");
+                }
+                if (sceneManager) {
+                    sceneManager->SetData("SelectedStageIndex", stageIdx);
+                    sceneManager->SetData("StartAtStageSelect", true);
+                    sceneManager->SetData("StageCleared_" + std::to_string(stageIdx), true);
+                }
+                // クリア記録を保存
+                StageClearData::SetCleared(stageIdx);
                 SavePoint::Clear(ResolveCurrentMapPath());
                 sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
                 return;
@@ -2866,10 +2898,20 @@ void GameScene::TriggerDeathSequence() {
     deathRespawnPos_ = player_->GetStartPosition();
 
     Vector3 pPos = player_->GetPosition();
+    if (player_->IsFallDeath() || pPos.y < -5.0f) {
+        if (gameCamera_) {
+            Vector3 camPos = gameCamera_->GetTranslation();
+            float halfH = gameCamera_->GetOrthoHeight() * 0.5f;
+            pPos.y = camPos.y - halfH + 0.8f;
+        }
+    }
     deathHatPos_ = {pPos.x, pPos.y + 0.65f, 0.0f};
     deathHatVelocity_ = {0.2f, 1.6f, 0.0f};
     deathHatRotationZ_ = 0.0f;
     isDeathHatActive_ = true;
+
+    // プレイヤー死亡位置から魂の煙（昇華エフェクト）を発生
+    player_->SpawnSoulSmoke(pPos);
 
     // 死亡演出の間はカメラを帽子へ寄せる。
     // 追従に任せるとルームの内側に収める制限と、追従のラープでずれるので、
@@ -2899,6 +2941,11 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
         return;
 
     deathSequenceTimer_ += dt;
+
+    // 死亡演出中も魂パーティクルの上昇・フェードアウト更新を継続
+    if (player_) {
+        player_->UpdateVisualsOnly(dt);
+    }
 
     // カメラを帽子へ寄せる。寄り切ると帽子の位置そのものになるので、落ちていく帽子を画面の中心で追い続ける
     if (gameCamera_) {

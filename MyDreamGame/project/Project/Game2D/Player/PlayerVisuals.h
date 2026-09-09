@@ -45,6 +45,22 @@ struct SmokeParticle {
     bool active;
 };
 
+struct SoulParticle {
+    Vector3 position;
+    Vector3 velocity;
+    Vector4 color;
+    float startSize;
+    float endSize;
+    float timer;
+    float duration;
+    float rotation;
+    float rotSpeed;
+    float swayOffset;
+    float swaySpeed;
+    bool isAdditive = false; // true: 加算合成（光球・オーラ・スパーク）、false: 通常αブレンド（煙・霊気）
+    bool active;
+};
+
 struct DashRingParticle {
     Vector3 position;
     Vector3 rotation;
@@ -68,6 +84,7 @@ public:
     void SpawnConfetti(const Vector3& pos);
     void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
     void SpawnSmokeBomb(const Vector3& pos);
+    void SpawnSoulSmoke(const Vector3& pos);
     void ClearEffects();
 
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
@@ -91,11 +108,13 @@ private:
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
     std::unique_ptr<PrimitiveObject> smokePrimitive_;
+    std::unique_ptr<PrimitiveObject> soulPrimitive_;
 
     std::vector<DustParticle> dustParticles_;
     std::vector<ConfettiParticle> confettiParticles_;
     std::vector<DashRingParticle> dashRingParticles_;
     std::vector<SmokeParticle> smokeParticles_;
+    std::vector<SoulParticle> soulParticles_;
 
     enum class PlayerAnimType {
         None,

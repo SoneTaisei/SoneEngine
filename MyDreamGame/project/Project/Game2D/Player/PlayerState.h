@@ -10,6 +10,7 @@ struct PlayerState {
 
     // ゲーム進行・ステート
     bool isDead_ = false;
+    bool isFallDeath_ = false;
     float deathTimer_ = 0.0f;
     bool isRespawning_ = false;
     float respawnTimer_ = 0.0f;
