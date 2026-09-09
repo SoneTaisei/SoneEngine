@@ -1523,10 +1523,12 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
         if (sceneManager) {
             // 選択されたステージに応じたマップを設定
             std::string mapPath = "resources/json/shared/MapData/map1.txt";
-            if (selectedStageIndex_ == 1) {
+            if (selectedStageIndex_ == 0) {
                 mapPath = "resources/json/shared/MapData/map1.txt";
+            } else if (selectedStageIndex_ == 1) {
+                mapPath = "resources/json/shared/MapData/map2.txt";
             } else if (selectedStageIndex_ == 2) {
-                mapPath = "resources/json/shared/MapData/tutorial.txt";
+                mapPath = "resources/json/shared/MapData/map3.txt";
             }
             GameScene::s_TargetMapFilePath = mapPath;
             sceneManager->SetData("SelectedStagePath", mapPath);
