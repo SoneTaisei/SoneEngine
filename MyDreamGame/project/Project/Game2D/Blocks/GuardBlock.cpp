@@ -561,37 +561,67 @@ void GuardBlock::OnCollision(Player2D* player) {
 }
 
 namespace {
-    // 2点間の線分上にソリッドブロックが存在するか判定（壁遮蔽判定）
+    // このチップが光を遮るか。
+    // 動かない壁はチップ全体が壁。ドアなど動くものは今の見た目の範囲だけ（開いたドアは素通り）
+    bool BlocksSightAt(MapChip2D* map, int cx, int cy, float wx, float wy) {
+        BaseBlock* block = map->GetBlock(cx, cy);
+        if (!block || block->IsDestroyed()) return false;
+        if (!block->IsSolid() || block->IsOneWay()) return false;
+        if (!block->IsMoving()) return true;
+        AABB2D b = block->GetAABB();
+        return (wx >= b.left && wx <= b.right && wy >= b.bottom && wy <= b.top);
+    }
+
+    // 光の通り道にあるチップを 1 つずつ順にたどり、最初に遮られるまでの距離を返す（遮る物が無ければ maxDist）。
+    // 前は等間隔に点を拾っていたので、斜めに走る線が壁の角をかすめる時に間の隙間へ落ちてすり抜け、
+    // 壁の向こうにいるプレイヤーが見つかることがあった
+    float TraceSight(MapChip2D* map, const Vector3& from, float dirX, float dirY, float maxDist) {
+        if (!map || maxDist <= 0.0f) return maxDist;
+        float chip = map->GetChipSize();
+        if (chip <= 0.0f) chip = 1.0f;
+
+        int cx = map->WorldToChipX(from.x);
+        int cy = map->WorldToChipY(from.y);
+        const int stepX = (dirX > 0.0f) ? 1 : (dirX < 0.0f ? -1 : 0);
+        const int stepY = (dirY > 0.0f) ? 1 : (dirY < 0.0f ? -1 : 0);
+        constexpr float kFar = 1e9f;
+
+        // 次のチップ境界に着くまでの距離と、1 チップ分進むのに必要な距離
+        float tMaxX = kFar, tDeltaX = kFar;
+        if (stepX != 0) {
+            tMaxX = (map->ChipToWorldX(cx + (stepX > 0 ? 1 : 0)) - from.x) / dirX;
+            tDeltaX = chip / std::abs(dirX);
+        }
+        float tMaxY = kFar, tDeltaY = kFar;
+        if (stepY != 0) {
+            tMaxY = (map->ChipToWorldY(cy + (stepY > 0 ? 1 : 0)) - from.y) / dirY;
+            tDeltaY = chip / std::abs(dirY);
+        }
+        if (stepX == 0 && stepY == 0) return maxDist;
+
+        // 出発点のチップは見ない（懐中電灯が壁ぎわにめり込んでいる時に、いきなり遮られたことにしないため）
+        for (int i = 0; i < 4096; ++i) {
+            float t;
+            if (tMaxX < tMaxY) { t = tMaxX; cx += stepX; tMaxX += tDeltaX; }
+            else               { t = tMaxY; cy += stepY; tMaxY += tDeltaY; }
+            if (t > maxDist) break;
+            // 境界のすぐ先を見て、入ったチップの中身で判定する
+            const float peek = t + chip * 0.01f;
+            if (BlocksSightAt(map, cx, cy, from.x + dirX * peek, from.y + dirY * peek)) {
+                return t;
+            }
+        }
+        return maxDist;
+    }
+
+    // 2点の間に光を遮るブロックがあるか（壁遮蔽判定）
     bool CheckLineOfSight(MapChip2D* map, const Vector3& from, const Vector3& to) {
         if (!map) return true;
         float dx = to.x - from.x;
         float dy = to.y - from.y;
         float dist = std::sqrt(dx * dx + dy * dy);
         if (dist < 1e-4f) return true;
-
-        float chipSize = map->GetChipSize();
-        if (chipSize <= 0.0f) chipSize = 1.0f;
-        // チップサイズの半分以下の刻み幅で細かくサンプリング
-        float stepSize = chipSize * 0.35f;
-        int steps = static_cast<int>(std::ceil(dist / stepSize));
-        if (steps < 2) steps = 2;
-
-        for (int i = 1; i < steps; ++i) {
-            float t = static_cast<float>(i) / static_cast<float>(steps);
-            float sx = from.x + dx * t;
-            float sy = from.y + dy * t;
-
-            int cx = map->WorldToChipX(sx);
-            int cy = map->WorldToChipY(sy);
-
-            if (auto* block = map->GetBlock(cx, cy)) {
-                // 完全ソリッドかつ非一方向床ブロックであれば光を遮る
-                if (block->IsSolid() && !block->IsOneWay()) {
-                    return false; // 遮蔽あり
-                }
-            }
-        }
-        return true; // 遮蔽なし
+        return TraceSight(map, from, dx / dist, dy / dist, dist) >= dist - 1e-4f;
     }
 }
 
@@ -600,6 +630,18 @@ void GuardBlock::UpdateFlashlight(float dt) {
     if (!gameObject_) return;
     auto* tc = gameObject_->GetComponent<TransformComponent>();
     if (!tc) return;
+
+    // 光が壁を突き抜けて向こう側のブロックまで照らさないよう、最初の壁までで長さを切る。
+    // スポットライトは影を持たないので、切らないと壁の裏が明るくなって「光っているのに当たらない」場所ができる
+    lightBlockDistance_ = -1.0f;
+    if (map_) {
+        const Vector3 eye = GetLightPosition();
+        const Vector3 dir = GetLightDirection();
+        const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        if (len > 1e-4f) {
+            lightBlockDistance_ = TraceSight(map_, eye, dir.x / len, dir.y / len, lightDistance_);
+        }
+    }
 
     Vector3 guardPos = tc->GetPosition();
     float facing = currentFacing_;
@@ -725,7 +767,8 @@ SpotLight GuardBlock::GetSpotLightData() const {
     sl.position = GetLightPosition();
     sl.direction = GetLightDirection();
     sl.intensity = lightIntensity_;
-    sl.distance = lightDistance_;
+    // 壁で切った長さを使う（未計算の時は元の長さ）
+    sl.distance = (lightBlockDistance_ >= 0.0f) ? (std::min)(lightDistance_, lightBlockDistance_) : lightDistance_;
     sl.decay = lightDecay_;
     sl.cosAngle = std::cos(lightAngleDeg_ * (std::numbers::pi_v<float> / 180.0f));
     sl.cosFalloffStart = std::cos(lightFalloffDeg_ * (std::numbers::pi_v<float> / 180.0f));
