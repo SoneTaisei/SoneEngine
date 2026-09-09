@@ -28,6 +28,7 @@
 #include "Component/PrimitiveRendererComponent.h"
 #include "GameObject/Object3D.h"
 #include "Scenes/GameScene.h"
+#include "StageClearData.h"
 #include <cmath>
 #include <filesystem>
 
@@ -60,6 +61,14 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     if (startAtStageSelect) {
         // ステージ選択画面から直接開始（ビル群を見下ろすアングル）
         phase_ = Phase::kStageSelect;
+        if (sceneManager && sceneManager->HasData("SelectedStageIndex")) {
+            selectedStageIndex_ = sceneManager->GetData<int>("SelectedStageIndex");
+            if (selectedStageIndex_ < 0 || selectedStageIndex_ > 3) {
+                selectedStageIndex_ = 0;
+            }
+        } else {
+            selectedStageIndex_ = 0; // デフォルトはチュートリアル
+        }
         cameraTransform_.translate = targetSelectPos_;
         cameraTransform_.rotate = targetSelectRot_;
         titleLogoAlpha_ = 0.0f;
@@ -85,6 +94,8 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
         titleMenuAlpha_ = 1.0f;
         searchlightAlpha_ = 1.0f;
         creditAlpha_ = 0.0f;
+        titlePadCooldown_ = 0.0f;
+        ruleBookBobTimer_ = 0.0f;
 
         // タイトル画面時はTitle.mp3のみを再生
         AudioManager::StopAllBGM();
@@ -184,9 +195,9 @@ void TitleScene::Initialize() {
     searchlightObjects_.clear();
     Primitive* boxPrim = PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Box);
     
-    // サーチライト1 (黄色・左奥から右へスイング)
+    // サーチライト1 (白色・左奥から右へスイング)
     {
-        auto light1 = std::make_shared<GameObject>("Searchlight_Yellow");
+        auto light1 = std::make_shared<GameObject>("Searchlight_White1");
         auto lt1 = light1->AddComponent<TransformComponent>();
         lt1->SetPosition({ -4.5f, 6.0f, 4.0f });
         lt1->SetScale({ 0.9f, 22.0f, 0.9f });
@@ -194,16 +205,16 @@ void TitleScene::Initialize() {
 
         auto lr1 = light1->AddComponent<PrimitiveRendererComponent>();
         lr1->Initialize(device.Get(), boxPrim);
-        lr1->GetMaterial().color = { 1.0f, 0.92f, 0.4f, 0.22f }; // 半透明の光線イエロー
+        lr1->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 0.22f }; // 半透明の白色光線
         lr1->GetMaterial().lightingType = 0; // 自己発光
 
         gameObjects_.push_back(light1);
         searchlightObjects_.push_back(light1);
     }
 
-    // サーチライト2 (シアンブルー・右奥から左へスイング)
+    // サーチライト2 (白色・右奥から左へスイング)
     {
-        auto light2 = std::make_shared<GameObject>("Searchlight_Cyan");
+        auto light2 = std::make_shared<GameObject>("Searchlight_White2");
         auto lt2 = light2->AddComponent<TransformComponent>();
         lt2->SetPosition({ 4.0f, 6.5f, 6.0f });
         lt2->SetScale({ 0.8f, 24.0f, 0.8f });
@@ -211,7 +222,7 @@ void TitleScene::Initialize() {
 
         auto lr2 = light2->AddComponent<PrimitiveRendererComponent>();
         lr2->Initialize(device.Get(), boxPrim);
-        lr2->GetMaterial().color = { 0.3f, 0.85f, 1.0f, 0.18f }; // 半透明のサイバーシアン
+        lr2->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 0.18f }; // 半透明の白色光線
         lr2->GetMaterial().lightingType = 0; // 自己発光
 
         gameObjects_.push_back(light2);
@@ -248,6 +259,14 @@ void TitleScene::Initialize() {
     keyPromptSprite_ = std::make_unique<Sprite>();
     keyPromptSprite_->Initialize(spriteCommon_, keyPromptTextureHandle_);
 
+    // チュートリアルUI（左下）。ステージ選択時に表示
+    tutorialUiTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/tutorialUI.png");
+    tutorialUiSprite_ = std::make_unique<Sprite>();
+    tutorialUiSprite_->Initialize(spriteCommon_, tutorialUiTextureHandle_);
+    tutorialUiSprite_->SetSize(tutorialUiSize_);
+    tutorialUiSprite_->SetPosition(tutorialUiPos_);
+    tutorialUiSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
+
     startTextSprite_ = std::make_unique<Sprite>();
     startTextSprite_->Initialize(spriteCommon_, startTextTextureHandle_);
     startTextSprite_->SetSize(startTextSize_);
@@ -261,6 +280,16 @@ void TitleScene::Initialize() {
     creditTextSprite_->Initialize(spriteCommon_, creditTextTextureHandle_);
     creditTextSprite_->SetSize(creditTextSize_);
     creditTextSprite_->SetPosition(creditTextPos_);
+
+    // -------------------------------------------------------------
+    // 6.35 説明書スプライト (ruleBook.png) - タイトル画面左下に配置
+    // -------------------------------------------------------------
+    ruleBookTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/ruleBook.png");
+    ruleBookSprite_ = std::make_unique<Sprite>();
+    ruleBookSprite_->Initialize(spriteCommon_, ruleBookTextureHandle_);
+    ruleBookSprite_->SetSize(ruleBookSize_);
+    ruleBookSprite_->SetPosition(ruleBookPos_);
+    ruleBookSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 
     // -------------------------------------------------------------
     // 6.4 クレジット画面表示スプライト (credit.png)
@@ -288,6 +317,30 @@ void TitleScene::Initialize() {
     rc->GetMaterial().lightingType = 0; // 自己発光でハッキリ見せる
 
     gameObjects_.push_back(callingCardObject_);
+
+    // -------------------------------------------------------------
+    // 8. ステージガイド看板オブジェクト (plan.obj + stage1~3.png) の準備
+    // -------------------------------------------------------------
+    stageGuideTextureHandles_[0] = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stage1.png");
+    stageGuideTextureHandles_[1] = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stage2.png");
+    stageGuideTextureHandles_[2] = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stage3.png");
+
+    Model* guideModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/plan", "plan.obj");
+    if (guideModel) {
+        stageGuideObject_ = std::make_shared<GameObject>("StageGuideBanner");
+        stageGuideTransform_ = stageGuideObject_->AddComponent<TransformComponent>();
+        stageGuideTransform_->SetPosition({ 0.0f, -100.0f, 0.0f });
+        stageGuideTransform_->SetScale({ 0.0f, 0.0f, 0.0f }); // 初期は非表示
+        stageGuideTransform_->SetRotation(stageGuideRots_[0]);
+
+        stageGuideRenderer_ = stageGuideObject_->AddComponent<MeshRendererComponent>();
+        stageGuideRenderer_->Initialize(device.Get(), guideModel);
+        stageGuideRenderer_->SetIsDoubleSided(true);
+        stageGuideRenderer_->GetMaterial().lightingType = 0; // 自己発光で鮮明に見せる
+        stageGuideRenderer_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(stageGuideTextureHandles_[0]));
+
+        gameObjects_.push_back(stageGuideObject_);
+    }
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -337,16 +390,59 @@ void TitleScene::Update(SceneManager *sceneManager) {
         isFirstFrame_ = false;
     } else {
         if (phase_ == Phase::kTitle) {
-            // メニュー項目の上下選択 (W/S, ↑/↓)
-            // ※ ゲームパッドのPOVハットスイッチは未入力時に0を返す環境があり、常時上入力と誤判定されて
-            //    勝手に選択が切り替わり続ける原因となっていたため（ポーズメニュー時と同様）、
-            //    キーボードの確実な押下 (IsKeyPressed) で制御し、直接インデックスを指定します。
-            int prevMenu = selectedTitleMenu_;
-            if (kb->IsKeyPressed(DIK_UP) || kb->IsKeyPressed(DIK_W)) {
-                selectedTitleMenu_ = 0; // 上: スタート
-            } else if (kb->IsKeyPressed(DIK_DOWN) || kb->IsKeyPressed(DIK_S)) {
-                selectedTitleMenu_ = 1; // 下: クレジット
+            // パッド用クールダウンタイマーの更新
+            if (titlePadCooldown_ > 0.0f) {
+                titlePadCooldown_ -= dt;
             }
+
+            // 方向入力判定 (キーボード & ゲームパッド)
+            bool upPressed = kb->IsKeyPressed(DIK_UP) || kb->IsKeyPressed(DIK_W);
+            bool downPressed = kb->IsKeyPressed(DIK_DOWN) || kb->IsKeyPressed(DIK_S);
+            bool leftPressed = kb->IsKeyPressed(DIK_LEFT) || kb->IsKeyPressed(DIK_A);
+            bool rightPressed = kb->IsKeyPressed(DIK_RIGHT) || kb->IsKeyPressed(DIK_D);
+
+            if (pad && titlePadCooldown_ <= 0.0f) {
+                Vector2 stick = pad->GetLeftStick();
+                if (pad->IsDPadUp() || stick.y > 0.5f) {
+                    upPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                } else if (pad->IsDPadDown() || stick.y < -0.5f) {
+                    downPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                } else if (pad->IsDPadLeft() || stick.x < -0.5f) {
+                    leftPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                } else if (pad->IsDPadRight() || stick.x > 0.5f) {
+                    rightPressed = true;
+                    titlePadCooldown_ = 0.22f;
+                }
+            }
+
+            int prevMenu = selectedTitleMenu_;
+
+            // メニュー項目の選択遷移 (0: スタート, 1: クレジット, 2: 説明書)
+            if (upPressed) {
+                if (selectedTitleMenu_ == 1) {
+                    selectedTitleMenu_ = 0; // クレジット -> スタート
+                } else if (selectedTitleMenu_ == 2) {
+                    selectedTitleMenu_ = 0; // 説明書 -> スタート
+                }
+            } else if (downPressed) {
+                if (selectedTitleMenu_ == 0) {
+                    selectedTitleMenu_ = 1; // スタート -> クレジット
+                } else if (selectedTitleMenu_ == 1) {
+                    selectedTitleMenu_ = 2; // クレジット -> 説明書
+                }
+            } else if (leftPressed) {
+                if (selectedTitleMenu_ == 0 || selectedTitleMenu_ == 1) {
+                    selectedTitleMenu_ = 2; // スタート/クレジット -> 左下の説明書へ
+                }
+            } else if (rightPressed) {
+                if (selectedTitleMenu_ == 2) {
+                    selectedTitleMenu_ = 0; // 説明書 -> 中央のスタートへ
+                }
+            }
+
             if (prevMenu != selectedTitleMenu_) {
                 AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
             }
@@ -375,6 +471,19 @@ void TitleScene::Update(SceneManager *sceneManager) {
                     creditAnimTimer_ = 0.0f;
                     creditAlpha_ = 0.0f;
                     creditScale_ = 0.85f;
+                } else if (selectedTitleMenu_ == 2) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
+
+                    // 「説明書」選択時: チュートリアルステージ（tutorial.txt）へ直接移行（カードは投げない）
+                    phase_ = Phase::kTransitionToGame;
+                    selectedStageIndex_ = 0; // チュートリアル
+                    cardPhase_ = CardThrowPhase::kNone;
+                    if (callingCardObject_) {
+                        if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
+                            tc->SetScale({ 0.0f, 0.0f, 0.0f });
+                        }
+                    }
+                    StartIrisOut({ 0.5f, 0.5f }, gameTransitionDuration_);
                 }
             }
         } else if (phase_ == Phase::kCredit) {
@@ -391,24 +500,47 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 // creditAlpha_ は kTransitionFromCredit の最初の0.15秒で縮小フェードアウト
             }
         } else if (phase_ == Phase::kStageSelect) {
-            // ステージ選択画面で決定ボタン押下時: 選択中ステージオブジェクトへ向けて予告状突き刺し演出を開始
-            if (isDecisionPressed && cardPhase_ == CardThrowPhase::kNone) {
+            // ステージ選択画面でキャンセルボタン（ESC, BackSpace, パッドBボタン）押下時: タイトル画面へ復帰
+            bool isCancelPressed = kb->IsKeyPressed(DIK_ESCAPE) || 
+                                   kb->IsKeyPressed(DIK_BACK) || 
+                                   (pad && pad->IsButtonPressed(GamepadButton::B));
+            if (isCancelPressed && cardPhase_ == CardThrowPhase::kNone && !isIrisOutActive_) {
+                AudioManager::Play("resources/Sound/10Dyas/SE/TitleCameraMove.mp3", 0.7f);
+                AudioManager::StopBGM("resources/Sound/10Dyas/BGM/Select.mp3");
+                phase_ = Phase::kTransitionFromSelect;
+                transitionStartPos_ = cameraTransform_.translate;
+                transitionStartRot_ = cameraTransform_.rotate;
+                transitionTimer_ = 0.0f;
+            } else if (isDecisionPressed && cardPhase_ == CardThrowPhase::kNone && !isIrisOutActive_) {
+                // ステージ選択画面で決定ボタン押下時
                 AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
                 phase_ = Phase::kTransitionToGame;
+                if (sceneManager) {
+                    sceneManager->SetData("SelectedStageIndex", selectedStageIndex_);
+                }
 
-                // 選択中のオブジェクト（select_1, select_2, select_3）のワールド座標を取得
-                Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1 の位置
-                {
+                if (selectedStageIndex_ == 0) {
+                    // チュートリアル選択時: カードは投げずに直接暗転（アイリスアウト）を開始
+                    cardPhase_ = CardThrowPhase::kNone;
+                    if (callingCardObject_) {
+                        if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
+                            tc->SetScale({ 0.0f, 0.0f, 0.0f });
+                        }
+                    }
+                    StartIrisOut({ 0.5f, 0.5f }, gameTransitionDuration_);
+                } else {
+                    // ステージ1〜3選択時: 選択中ステージオブジェクトへ向けて予告状突き刺し演出を開始
                     auto context = Model3DEditorContext::GetInstance();
-                    std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
+                    Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1 の位置
+                    std::string targetName = "select_" + std::to_string(selectedStageIndex_); // 1 -> select_1, 2 -> select_2, 3 -> select_3
                     for (const auto& obj : context->GetObjects()) {
                         if (obj && obj->GetName() == targetName) {
                             targetWorldPos = obj->GetTranslation();
                             break;
                         }
                     }
+                    StartCallingCardThrow(targetWorldPos);
                 }
-                StartCallingCardThrow(targetWorldPos);
             }
         }
     }
@@ -481,6 +613,50 @@ void TitleScene::Update(SceneManager *sceneManager) {
         titleLogoAlpha_ = 0.0f;
         titleMenuAlpha_ = 0.0f;
         searchlightAlpha_ = 0.0f;
+    } else if (phase_ == Phase::kTransitionFromSelect) {
+        // ステージ選択位置からタイトル画面へ滑らかにカメラを復帰 (Smoothstep)
+        transitionTimer_ += dt;
+        float t = std::clamp(transitionTimer_ / transitionDuration_, 0.0f, 1.0f);
+        float ease = t * t * (3.0f - 2.0f * t); // Smoothstep
+
+        camPos = {
+            transitionStartPos_.x + (titleCameraPos_.x - transitionStartPos_.x) * ease,
+            transitionStartPos_.y + (titleCameraPos_.y - transitionStartPos_.y) * ease,
+            transitionStartPos_.z + (titleCameraPos_.z - transitionStartPos_.z) * ease
+        };
+        camRot = {
+            transitionStartRot_.x + (titleCameraRot_.x - transitionStartRot_.x) * ease,
+            transitionStartRot_.y + (titleCameraRot_.y - transitionStartRot_.y) * ease,
+            transitionStartRot_.z + (titleCameraRot_.z - transitionStartRot_.z) * ease
+        };
+
+        cameraTransform_.translate = camPos;
+        cameraTransform_.rotate = camRot;
+
+        // タイトル画面復帰直前にUIをフェードイン (後半 logoFadeDuration_ 秒でフェードイン)
+        float remainingTime = transitionDuration_ - transitionTimer_;
+        if (remainingTime <= logoFadeDuration_) {
+            float fadeT = 1.0f - std::clamp(remainingTime / logoFadeDuration_, 0.0f, 1.0f);
+            float inAlpha = fadeT * fadeT;
+            titleLogoAlpha_ = inAlpha;
+            titleMenuAlpha_ = inAlpha;
+            searchlightAlpha_ = inAlpha;
+        } else {
+            titleLogoAlpha_ = 0.0f;
+            titleMenuAlpha_ = 0.0f;
+            searchlightAlpha_ = 0.0f;
+        }
+
+        if (t >= 1.0f) {
+            phase_ = Phase::kTitle;
+            cameraTransform_.translate = titleCameraPos_;
+            cameraTransform_.rotate = titleCameraRot_;
+            camPos = titleCameraPos_;
+            camRot = titleCameraRot_;
+            titleLogoAlpha_ = 1.0f;
+            titleMenuAlpha_ = 1.0f;
+            searchlightAlpha_ = 1.0f;
+        }
     } else if (phase_ == Phase::kTransitionToCredit) {
         // クレジット画面へ滑らかにカメラを補間移動 (Smoothstep)
         // ※ ユーザー要望により移動時間を短縮 (creditTransitionDuration_)
@@ -647,6 +823,47 @@ void TitleScene::Update(SceneManager *sceneManager) {
         }
     }
 
+    // 説明書スプライト (ruleBook.png) の更新
+    if (ruleBookSprite_) {
+        if (titleMenuAlpha_ > 0.001f) {
+            Vector4 bookColor = { 1.0f, 1.0f, 1.0f, titleMenuAlpha_ };
+            float targetScale = 1.0f;
+            float offsetY = 0.0f;
+
+            if (selectedTitleMenu_ == 2) {
+                // 選択中: 1.12倍に拡大 ＋ ゴールドパルス発光 ＋ 縦揺れ
+                targetScale = 1.12f;
+                float pulse = (sinf(titleMenuPulseTimer_ * 5.0f) * 0.5f + 0.5f) * 0.25f;
+                bookColor = {
+                    (std::min)(1.0f, 1.0f + pulse),
+                    (std::min)(1.0f, 0.95f + pulse),
+                    (std::min)(1.0f, 0.55f + pulse),
+                    titleMenuAlpha_
+                };
+
+                ruleBookBobTimer_ += dt;
+                offsetY = sinf(ruleBookBobTimer_ * 4.0f) * 8.0f;
+            } else {
+                // 非選択時: 等倍、落ち着いたトーン
+                targetScale = 1.0f;
+                bookColor = { 0.8f, 0.8f, 0.8f, titleMenuAlpha_ * 0.9f };
+                ruleBookBobTimer_ = 0.0f;
+            }
+
+            ruleBookScale_ = targetScale;
+            Vector2 scaledSize = { ruleBookSize_.x * ruleBookScale_, ruleBookSize_.y * ruleBookScale_ };
+            Vector2 centeredPos = {
+                ruleBookPos_.x - (scaledSize.x - ruleBookSize_.x) * 0.5f,
+                ruleBookPos_.y - (scaledSize.y - ruleBookSize_.y) * 0.5f + offsetY
+            };
+
+            ruleBookSprite_->SetSize(scaledSize);
+            ruleBookSprite_->SetPosition(centeredPos);
+            ruleBookSprite_->SetColor(bookColor);
+            ruleBookSprite_->Update();
+        }
+    }
+
     // クレジット表示スプライト (credit.png) の更新 (スケール演出を反映)
     if (creditSprite_) {
         Vector2 scaledSize = { creditSize_.x * creditScale_, creditSize_.y * creditScale_ };
@@ -659,6 +876,64 @@ void TitleScene::Update(SceneManager *sceneManager) {
         creditSprite_->SetPosition(centeredPos);
         creditSprite_->SetColor({ 1.0f, 1.0f, 1.0f, creditAlpha_ });
         creditSprite_->Update();
+    }
+
+    // チュートリアルUIスプライト (tutorialUI.png) の更新
+    if (tutorialUiSprite_) {
+        // ステージ選択中またはゲーム移行演出中に出現
+        bool showTutorialUi = (phase_ == Phase::kStageSelect || phase_ == Phase::kTransitionToGame);
+        if (showTutorialUi) {
+            // 見出しの出現に同調してフェードイン (0.3秒程度でスッと表示)
+            float targetAlpha = 1.0f;
+            if (stageSelectIntroTimer_ >= 0.0f) {
+                targetAlpha = (std::min)(1.0f, stageSelectIntroTimer_ * 3.0f);
+            }
+            tutorialUiAlpha_ = targetAlpha;
+        } else {
+            tutorialUiAlpha_ = 0.0f;
+        }
+
+        if (tutorialUiAlpha_ > 0.001f) {
+            Vector4 uiColor = { 1.0f, 1.0f, 1.0f, tutorialUiAlpha_ };
+            float targetScale = 1.0f;
+
+            float offsetY = 0.0f;
+            if (selectedStageIndex_ == 0) {
+                // 選択中: わずかに拡大 (1.12倍) ＋ ゴールド発光・呼吸パルス
+                targetScale = 1.12f;
+                float pulse = 0.0f;
+                if (enableStageSelectPulse_) {
+                    pulse = (sinf(stageSelectPulseTimer_ * 5.0f) * 0.5f + 0.5f) * 0.25f;
+                }
+                uiColor = {
+                    (std::min)(1.0f, 1.0f + pulse),
+                    (std::min)(1.0f, 0.95f + pulse),
+                    (std::min)(1.0f, 0.55f + pulse),
+                    tutorialUiAlpha_
+                };
+
+                // sin波で文字・スプライト全体を縦に揺らす演出
+                tutorialBobTimer_ += dt;
+                offsetY = sinf(tutorialBobTimer_ * tutorialBobFrequency_) * tutorialBobAmplitude_;
+            } else {
+                // 非選択時: 等倍・少し落ち着いた明るさ（揺れは停止・リセット）
+                targetScale = 1.0f;
+                uiColor = { 0.75f, 0.75f, 0.75f, tutorialUiAlpha_ * 0.85f };
+                tutorialBobTimer_ = 0.0f;
+            }
+
+            tutorialUiScale_ = targetScale;
+            Vector2 scaledSize = { tutorialUiSize_.x * tutorialUiScale_, tutorialUiSize_.y * tutorialUiScale_ };
+            Vector2 centeredPos = {
+                tutorialUiPos_.x - (scaledSize.x - tutorialUiSize_.x) * 0.5f,
+                tutorialUiPos_.y - (scaledSize.y - tutorialUiSize_.y) * 0.5f + offsetY
+            };
+
+            tutorialUiSprite_->SetSize(scaledSize);
+            tutorialUiSprite_->SetPosition(centeredPos);
+            tutorialUiSprite_->SetColor(uiColor);
+            tutorialUiSprite_->Update();
+        }
     }
 
     // カメラシェイク (着弾時の微小振動) の反映
@@ -732,9 +1007,16 @@ void TitleScene::Update(SceneManager *sceneManager) {
     // ステージ選択用オブジェクトの選択状態・色更新
     UpdateStageSelectInteraction(dt);
 
+    // ステージ選択ガイド看板（plan.obj + stage1~3.png）の更新
+    UpdateStageGuideBanner(dt);
+
     // 予告状突き刺し＆ゲームシーン移行演出を更新
     if (phase_ == Phase::kTransitionToGame) {
-        UpdateCallingCardThrow(dt, sceneManager);
+        if (cardPhase_ != CardThrowPhase::kNone) {
+            UpdateCallingCardThrow(dt, sceneManager);
+        } else {
+            UpdateIrisOut(dt, sceneManager);
+        }
     }
 
     // ステージクリアから復帰時のアイリスイン（円が開く）演出を更新
@@ -803,6 +1085,9 @@ void TitleScene::Draw2D() {
             if (creditTextSprite_) {
                 creditTextSprite_->Draw();
             }
+            if (ruleBookSprite_) {
+                ruleBookSprite_->Draw();
+            }
         }
         if (creditSprite_ && creditAlpha_ > 0.001f) {
             creditSprite_->Draw();
@@ -834,8 +1119,14 @@ void TitleScene::Draw2D() {
             stageSelectTitleSprite_->Draw();
         }
 
+        // チュートリアルUI（左下）。ステージ選択中またはゲーム移行演出中に描画
+        if (tutorialUiSprite_ && tutorialUiAlpha_ > 0.001f) {
+            tutorialUiSprite_->Draw();
+        }
+
         // 決定の操作案内（右下）。カメラが動いている間は出さず、止まったらまた出す
         const bool cameraMoving = (phase_ == Phase::kTransitionToSelect ||
+                                   phase_ == Phase::kTransitionFromSelect ||
                                    phase_ == Phase::kTransitionToGame ||
                                    phase_ == Phase::kTransitionToCredit ||
                                    phase_ == Phase::kTransitionFromCredit);
@@ -922,7 +1213,9 @@ void TitleScene::UpdateEditor() {
     }
 
     // エディタ停止中もステージ選択用オブジェクトの色更新を反映
-    UpdateStageSelectInteraction(TimeManager::GetInstance().GetDeltaTime());
+    float dt = TimeManager::GetInstance().GetDeltaTime();
+    UpdateStageSelectInteraction(dt);
+    UpdateStageGuideBanner(dt);
 }
 
 void TitleScene::UpdateStageSelectInteraction(float dt) {
@@ -964,19 +1257,23 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
 
         int prevStageIdx = selectedStageIndex_;
         if (prevStage) {
-            selectedStageIndex_ = (selectedStageIndex_ + 2) % 3; // 0 -> 2, 1 -> 0, 2 -> 1
+            // 4項目 (0:チュートリアル, 1:Stage1, 2:Stage2, 3:Stage3) の左移動
+            selectedStageIndex_ = (selectedStageIndex_ + 3) % 4; // 0 -> 3, 1 -> 0, 2 -> 1, 3 -> 2
         }
         if (nextStage) {
-            selectedStageIndex_ = (selectedStageIndex_ + 1) % 3; // 0 -> 1, 1 -> 2, 2 -> 0
+            // 4項目の右移動
+            selectedStageIndex_ = (selectedStageIndex_ + 1) % 4; // 0 -> 1, 1 -> 2, 2 -> 3, 3 -> 0
         }
 
-        // 数字キー (1, 2, 3) による直接選択
-        if (kb->IsKeyPressed(DIK_1) || kb->IsKeyPressed(DIK_NUMPAD1)) {
+        // 数字キー (0:チュートリアル, 1〜3:ステージ1〜3) による直接選択
+        if (kb->IsKeyPressed(DIK_0) || kb->IsKeyPressed(DIK_NUMPAD0) || kb->IsKeyPressed(DIK_T)) {
             selectedStageIndex_ = 0;
-        } else if (kb->IsKeyPressed(DIK_2) || kb->IsKeyPressed(DIK_NUMPAD2)) {
+        } else if (kb->IsKeyPressed(DIK_1) || kb->IsKeyPressed(DIK_NUMPAD1)) {
             selectedStageIndex_ = 1;
-        } else if (kb->IsKeyPressed(DIK_3) || kb->IsKeyPressed(DIK_NUMPAD3)) {
+        } else if (kb->IsKeyPressed(DIK_2) || kb->IsKeyPressed(DIK_NUMPAD2)) {
             selectedStageIndex_ = 2;
+        } else if (kb->IsKeyPressed(DIK_3) || kb->IsKeyPressed(DIK_NUMPAD3)) {
+            selectedStageIndex_ = 3;
         }
 
         if (prevStageIdx != selectedStageIndex_) {
@@ -984,21 +1281,24 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
         }
     }
 
-    // select_1, select_2, select_3 のマテリアルカラーを更新
+    // select_1, select_2, select_3 のマテリアルカラーを更新 (0:チュートリアルの場合はすべて非選択色)
     const auto& objects = context->GetObjects();
     for (const auto& obj : objects) {
         if (!obj) continue;
         const std::string& name = obj->GetName();
 
         int stageIdx = -1;
-        if (name == "select_1") stageIdx = 0;
-        else if (name == "select_2") stageIdx = 1;
-        else if (name == "select_3") stageIdx = 2;
+        if (name == "select_1") stageIdx = 1;
+        else if (name == "select_2") stageIdx = 2;
+        else if (name == "select_3") stageIdx = 3;
 
         if (stageIdx != -1) {
+            bool isCleared = StageClearData::IsCleared(stageIdx);
+
             if (stageIdx == selectedStageIndex_) {
                 // 選択中のオブジェクト: 鮮やかなハイライト色（呼吸パルス発光付き）
-                Vector4 color = selectHighlightColor_;
+                // クリア済みならシアンブルー系、未クリアならゴールド/イエロー系
+                Vector4 color = isCleared ? clearedHighlightColor_ : selectHighlightColor_;
                 if (enableStageSelectPulse_) {
                     float pulse = (sinf(stageSelectPulseTimer_ * 5.0f) * 0.5f + 0.5f) * 0.35f; // 0.0 ~ 0.35
                     color.x = (color.x + pulse > 1.0f) ? 1.0f : (color.x + pulse);
@@ -1007,8 +1307,8 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
                 }
                 obj->SetColor(color);
             } else {
-                // 非選択のオブジェクト: 落ち着いたダークカラー
-                obj->SetColor(unselectedColor_);
+                // 非選択のオブジェクト: クリア済みなら青色、未クリアなら赤色
+                obj->SetColor(isCleared ? clearedColor_ : unselectedColor_);
             }
         }
     }
@@ -1016,6 +1316,113 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
 
 void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
+    // -------------------------------------------------------------
+    // ステージガイド看板 専用調整ウィンドウ（独立表示で即座に調整可能）
+    // -------------------------------------------------------------
+    if (ImGui::Begin("ステージガイド看板 角度・位置調整")) {
+        static int editStageIdx = 0;
+        static bool syncWithSelected = true;
+        if (syncWithSelected && selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) {
+            editStageIdx = selectedStageIndex_ - 1;
+        }
+
+        ImGui::Text("【編集対象ステージ】");
+        ImGui::RadioButton("ステージ 1", &editStageIdx, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("ステージ 2", &editStageIdx, 1);
+        ImGui::SameLine();
+        ImGui::RadioButton("ステージ 3", &editStageIdx, 2);
+        ImGui::Checkbox("選択中ステージに自動連動", &syncWithSelected);
+
+        if (editStageIdx < 0 || editStageIdx >= 3) editStageIdx = 0;
+
+        Vector3& curRot = stageGuideRots_[editStageIdx];
+        Vector3& curOffset = stageGuideOffsets_[editStageIdx];
+
+        ImGui::Separator();
+        ImGui::Text("【ステージ %d の角度 (Degree)】", editStageIdx + 1);
+        float guideRotDeg[3] = {
+            curRot.x * 180.0f / 3.14159265f,
+            curRot.y * 180.0f / 3.14159265f,
+            curRot.z * 180.0f / 3.14159265f
+        };
+        bool rotChanged = false;
+        if (ImGui::DragFloat3("回転 (X, Y, Z)", guideRotDeg, 0.5f, -180.0f, 180.0f, "%.1f°")) {
+            rotChanged = true;
+        }
+        if (ImGui::SliderFloat("X軸 (上下の傾き)", &guideRotDeg[0], -180.0f, 180.0f, "%.1f°")) rotChanged = true;
+        if (ImGui::SliderFloat("Y軸 (左右の向き)", &guideRotDeg[1], -180.0f, 180.0f, "%.1f°")) rotChanged = true;
+        if (ImGui::SliderFloat("Z軸 (画面の傾き)", &guideRotDeg[2], -180.0f, 180.0f, "%.1f°")) rotChanged = true;
+
+        if (rotChanged) {
+            curRot.x = guideRotDeg[0] * 3.14159265f / 180.0f;
+            curRot.y = guideRotDeg[1] * 3.14159265f / 180.0f;
+            curRot.z = guideRotDeg[2] * 3.14159265f / 180.0f;
+            if (stageGuideTransform_ && (selectedStageIndex_ - 1 == editStageIdx)) {
+                currentGuideRot_ = curRot;
+                stageGuideTransform_->SetRotation(curRot);
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::Text("【ステージ %d の頭上位置オフセット】", editStageIdx + 1);
+        ImGui::DragFloat3("位置 (X, Y, Z)", &curOffset.x, 0.1f, -100.0f, 100.0f, "%.1f");
+
+        ImGui::Separator();
+        ImGui::Text("【全ステージ共通 スケール (サイズ)】");
+        if (ImGui::DragFloat3("スケール (厚み, 高さ, 横幅)", &stageGuideScale_.x, 0.1f, -50.0f, 50.0f, "%.1f")) {
+            if (stageGuideTransform_) {
+                stageGuideTransform_->SetScale({
+                    stageGuideScale_.x * currentGuideScaleFactor_,
+                    stageGuideScale_.y * currentGuideScaleFactor_,
+                    stageGuideScale_.z * currentGuideScaleFactor_
+                });
+            }
+        }
+
+        ImGui::Separator();
+        if (ImGui::Button("現在のステージを画像指定値にリセット")) {
+            if (editStageIdx == 0) {
+                stageGuideOffsets_[0] = { 13.6f, 8.4f, 0.0f };
+                stageGuideRots_[0] = { 0.0f, 1.256637f, 3.141593f };
+            } else if (editStageIdx == 1) {
+                stageGuideOffsets_[1] = { 0.0f, 16.0f, 0.0f };
+                stageGuideRots_[1] = { 0.0f, 1.239184f, 3.141593f };
+            } else if (editStageIdx == 2) {
+                stageGuideOffsets_[2] = { -18.3f, 15.4f, -4.5f };
+                stageGuideRots_[2] = { 0.0f, 1.221731f, 3.141593f };
+            }
+            stageGuideScale_ = { 1.0f, -2.5f, 10.0f };
+            if (stageGuideTransform_ && (selectedStageIndex_ - 1 == editStageIdx)) {
+                currentGuideRot_ = stageGuideRots_[editStageIdx];
+                stageGuideTransform_->SetRotation(currentGuideRot_);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("全ステージを画像指定値にリセット")) {
+            stageGuideOffsets_[0] = { 13.6f, 8.4f, 0.0f };
+            stageGuideRots_[0] = { 0.0f, 1.256637f, 3.141593f };
+            stageGuideOffsets_[1] = { 0.0f, 16.0f, 0.0f };
+            stageGuideRots_[1] = { 0.0f, 1.239184f, 3.141593f };
+            stageGuideOffsets_[2] = { -18.3f, 15.4f, -4.5f };
+            stageGuideRots_[2] = { 0.0f, 1.221731f, 3.141593f };
+            stageGuideScale_ = { 1.0f, -2.5f, 10.0f };
+            if (stageGuideTransform_ && selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) {
+                currentGuideRot_ = stageGuideRots_[selectedStageIndex_ - 1];
+                stageGuideTransform_->SetRotation(currentGuideRot_);
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::TextDisabled("現在の設定値 (ステージ %d):", editStageIdx + 1);
+        ImGui::TextDisabled("Rot(Deg): { %.1ff, %.1ff, %.1ff }", guideRotDeg[0], guideRotDeg[1], guideRotDeg[2]);
+        ImGui::TextDisabled("Rot(Rad): { %.6ff, %.6ff, %.6ff }", curRot.x, curRot.y, curRot.z);
+        ImGui::TextDisabled("Scale: { %.1ff, %.1ff, %.1ff }", stageGuideScale_.x, stageGuideScale_.y, stageGuideScale_.z);
+        ImGui::TextDisabled("Offset: { %.1ff, %.1ff, %.1ff }", curOffset.x, curOffset.y, curOffset.z);
+
+        ImGui::End();
+    }
+
     ImGui::Begin("タイトル/ステージ選択カメラ調整");
 
     // フェーズ状態の表示
@@ -1029,17 +1436,22 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::Separator();
 
     // タイトルメニューテキスト調整
-    ImGui::Text("【タイトルメニュー (スタート / クレジット) 調整】");
-    ImGui::Text("現在の選択: %s", (selectedTitleMenu_ == 0) ? "スタート" : "クレジット");
+    ImGui::Text("【タイトルメニュー (スタート / クレジット / 説明書) 調整】");
+    const char* titleMenuNames[3] = { "スタート", "クレジット", "説明書 (ruleBook)" };
+    ImGui::Text("現在の選択: %s", titleMenuNames[selectedTitleMenu_]);
     if (ImGui::Button("選択: スタート")) { selectedTitleMenu_ = 0; }
     ImGui::SameLine();
     if (ImGui::Button("選択: クレジット")) { selectedTitleMenu_ = 1; }
+    ImGui::SameLine();
+    if (ImGui::Button("選択: 説明書")) { selectedTitleMenu_ = 2; }
 
     bool menuSpriteChanged = false;
     if (ImGui::DragFloat2("スタート 位置 (px)", &startTextPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
     if (ImGui::DragFloat2("スタート サイズ (px)", &startTextSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
     if (ImGui::DragFloat2("クレジット 位置 (px)", &creditTextPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
     if (ImGui::DragFloat2("クレジット サイズ (px)", &creditTextSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
+    if (ImGui::DragFloat2("説明書 位置 (px)", &ruleBookPos_.x, 1.0f, 0.0f, 1280.0f)) menuSpriteChanged = true;
+    if (ImGui::DragFloat2("説明書 サイズ (px)", &ruleBookSize_.x, 1.0f, 10.0f, 600.0f)) menuSpriteChanged = true;
 
     if (menuSpriteChanged) {
         if (startTextSprite_) {
@@ -1049,6 +1461,10 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         if (creditTextSprite_) {
             creditTextSprite_->SetPosition(creditTextPos_);
             creditTextSprite_->SetSize(creditTextSize_);
+        }
+        if (ruleBookSprite_) {
+            ruleBookSprite_->SetPosition(ruleBookPos_);
+            ruleBookSprite_->SetSize(ruleBookSize_);
         }
     }
 
@@ -1303,20 +1719,96 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     ImGui::Separator();
-    ImGui::Text("【ステージ選択オブジェクト (select_1, 2, 3) 調整】");
+    ImGui::Text("【ステージ選択オブジェクト & チュートリアルUI 調整】");
 
-    const char* stageNames[3] = { "ステージ 1 (select_1)", "ステージ 2 (select_2)", "ステージ 3 (select_3)" };
+    const char* stageNames[4] = { "チュートリアル (tutorialUI)", "ステージ 1 (select_1)", "ステージ 2 (select_2)", "ステージ 3 (select_3)" };
     ImGui::Text("現在の選択ステージ: %s", stageNames[selectedStageIndex_]);
 
-    if (ImGui::Button("ステージ 1 選択")) { selectedStageIndex_ = 0; }
+    if (ImGui::Button("チュートリアル 選択")) { selectedStageIndex_ = 0; }
     ImGui::SameLine();
-    if (ImGui::Button("ステージ 2 選択")) { selectedStageIndex_ = 1; }
+    if (ImGui::Button("ステージ 1 選択")) { selectedStageIndex_ = 1; }
     ImGui::SameLine();
-    if (ImGui::Button("ステージ 3 選択")) { selectedStageIndex_ = 2; }
+    if (ImGui::Button("ステージ 2 選択")) { selectedStageIndex_ = 2; }
+    ImGui::SameLine();
+    if (ImGui::Button("ステージ 3 選択")) { selectedStageIndex_ = 3; }
 
-    ImGui::ColorEdit4("選択時カラー (Highlight)", &selectHighlightColor_.x);
-    ImGui::ColorEdit4("非選択カラー (Unselected)", &unselectedColor_.x);
+    ImGui::ColorEdit4("未クリア・選択時カラー (Highlight)", &selectHighlightColor_.x);
+    ImGui::ColorEdit4("未クリア・非選択カラー (赤色)", &unselectedColor_.x);
+    ImGui::ColorEdit4("クリア済・非選択カラー (青色)", &clearedColor_.x);
+    ImGui::ColorEdit4("クリア済・選択時カラー (Highlight)", &clearedHighlightColor_.x);
     ImGui::Checkbox("パルス明滅演出 (Pulse)", &enableStageSelectPulse_);
+
+    ImGui::Spacing();
+    ImGui::Text("【デバッグ用：ステージクリア状況】");
+    for (int i = 1; i <= 3; ++i) {
+        bool cleared = StageClearData::IsCleared(i);
+        std::string label = "ステージ " + std::to_string(i) + " クリア済み";
+        if (ImGui::Checkbox(label.c_str(), &cleared)) {
+            StageClearData::SetCleared(i, cleared);
+        }
+        if (i < 3) ImGui::SameLine();
+    }
+    if (ImGui::Button("全クリア状況をリセット (Reset All)")) {
+        StageClearData::ResetAll();
+    }
+
+    ImGui::Spacing();
+    ImGui::Text("【チュートリアルUI (tutorialUI.png) 調整】");
+    ImGui::DragFloat2("チュートリアル 位置 (px)", &tutorialUiPos_.x, 1.0f, 0.0f, 1280.0f);
+    ImGui::DragFloat2("チュートリアル サイズ (px)", &tutorialUiSize_.x, 1.0f, 10.0f, 500.0f);
+    ImGui::SliderFloat("チュートリアル 不透明度", &tutorialUiAlpha_, 0.0f, 1.0f);
+    ImGui::DragFloat("縦揺れ振幅 (px)", &tutorialBobAmplitude_, 0.5f, 0.0f, 50.0f, "%.1f px");
+    ImGui::DragFloat("縦揺れ速度 (rad/s)", &tutorialBobFrequency_, 0.2f, 0.0f, 20.0f, "%.1f");
+
+    ImGui::Separator();
+    ImGui::Text("【ステージガイド看板 (plan.obj + stage{N}.png) 調整】");
+    int stageIdxForCamWin = (selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) ? (selectedStageIndex_ - 1) : 0;
+    ImGui::Text("対象: ステージ %d", stageIdxForCamWin + 1);
+    Vector3& camWinRot = stageGuideRots_[stageIdxForCamWin];
+    Vector3& camWinOffset = stageGuideOffsets_[stageIdxForCamWin];
+    ImGui::DragFloat3("看板オフセット (頭上位置)", &camWinOffset.x, 0.1f);
+    float guideRotDeg2[3] = {
+        camWinRot.x * 180.0f / 3.14159265f,
+        camWinRot.y * 180.0f / 3.14159265f,
+        camWinRot.z * 180.0f / 3.14159265f
+    };
+    bool rot2Changed = false;
+    if (ImGui::DragFloat3("看板角度 (Deg)", guideRotDeg2, 0.5f, -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (ImGui::SliderFloat("看板角度 X軸", &guideRotDeg2[0], -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (ImGui::SliderFloat("看板角度 Y軸", &guideRotDeg2[1], -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (ImGui::SliderFloat("看板角度 Z軸", &guideRotDeg2[2], -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (rot2Changed) {
+        camWinRot.x = guideRotDeg2[0] * 3.14159265f / 180.0f;
+        camWinRot.y = guideRotDeg2[1] * 3.14159265f / 180.0f;
+        camWinRot.z = guideRotDeg2[2] * 3.14159265f / 180.0f;
+        if (stageGuideTransform_ && (selectedStageIndex_ - 1 == stageIdxForCamWin)) {
+            currentGuideRot_ = camWinRot;
+            stageGuideTransform_->SetRotation(camWinRot);
+        }
+    }
+    if (ImGui::DragFloat3("看板スケール (X厚み, Y高, Z幅)", &stageGuideScale_.x, 0.1f, -30.0f, 30.0f)) {
+        if (stageGuideTransform_) {
+            stageGuideTransform_->SetScale({
+                stageGuideScale_.x * currentGuideScaleFactor_,
+                stageGuideScale_.y * currentGuideScaleFactor_,
+                stageGuideScale_.z * currentGuideScaleFactor_
+            });
+        }
+    }
+    if (ImGui::Button("看板パラメータ初期化##2")) {
+        stageGuideOffsets_[0] = { 13.6f, 8.4f, 0.0f };
+        stageGuideRots_[0] = { 0.0f, 1.256637f, 3.141593f };
+        stageGuideOffsets_[1] = { 0.0f, 16.0f, 0.0f };
+        stageGuideRots_[1] = { 0.0f, 1.239184f, 3.141593f };
+        stageGuideOffsets_[2] = { -18.3f, 15.4f, -4.5f };
+        stageGuideRots_[2] = { 0.0f, 1.221731f, 3.141593f };
+        stageGuideScale_ = { 1.0f, -2.5f, 10.0f };
+        if (stageGuideTransform_ && selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) {
+            currentGuideRot_ = stageGuideRots_[selectedStageIndex_ - 1];
+            stageGuideTransform_->SetRotation(currentGuideRot_);
+            stageGuideTransform_->SetScale(stageGuideScale_);
+        }
+    }
 
     ImGui::Separator();
     ImGui::Text("【予告状（callingCard）突き刺し調整】");
@@ -1340,20 +1832,25 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
     ImGui::DragFloat("飛翔開始スケール", &cardStartScale_, 0.02f, 0.1f, 3.0f, "%.2f");
 
+    auto getTargetWorldPos = [this]() -> Vector3 {
+        Vector3 pos = { -18.5f, -8.8f, 22.94f };
+        if (selectedStageIndex_ > 0) {
+            auto context = Model3DEditorContext::GetInstance();
+            std::string targetName = "select_" + std::to_string(selectedStageIndex_);
+            for (const auto& obj : context->GetObjects()) {
+                if (obj && obj->GetName() == targetName) {
+                    pos = obj->GetTranslation();
+                    break;
+                }
+            }
+        }
+        return pos;
+    };
+
     if (cardParamsChanged && callingCardObject_) {
         if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
             if (tc->GetScale().x > 0.001f && cardPhase_ == CardThrowPhase::kNone) {
-                Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-                {
-                    auto context = Model3DEditorContext::GetInstance();
-                    std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-                    for (const auto& obj : context->GetObjects()) {
-                        if (obj && obj->GetName() == targetName) {
-                            targetWorldPos = obj->GetTranslation();
-                            break;
-                        }
-                    }
-                }
+                Vector3 targetWorldPos = getTargetWorldPos();
                 tc->SetPosition({
                     targetWorldPos.x + cardTargetOffset_.x,
                     targetWorldPos.y + cardTargetOffset_.y,
@@ -1366,17 +1863,7 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     if (ImGui::Button("刺さり位置に予告状を配置して確認")) {
-        Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-        {
-            auto context = Model3DEditorContext::GetInstance();
-            std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-            for (const auto& obj : context->GetObjects()) {
-                if (obj && obj->GetName() == targetName) {
-                    targetWorldPos = obj->GetTranslation();
-                    break;
-                }
-            }
-        }
+        Vector3 targetWorldPos = getTargetWorldPos();
         if (callingCardObject_) {
             if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
                 tc->SetPosition({
@@ -1401,18 +1888,18 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::Spacing();
     if (ImGui::Button("▶ 決定演出 (予告状突き刺し＆暗転) をテスト再生")) {
         phase_ = Phase::kTransitionToGame;
-        Vector3 targetWorldPos = { -18.5f, -8.8f, 22.94f };
-        {
-            auto context = Model3DEditorContext::GetInstance();
-            std::string targetName = "select_" + std::to_string(selectedStageIndex_ + 1);
-            for (const auto& obj : context->GetObjects()) {
-                if (obj && obj->GetName() == targetName) {
-                    targetWorldPos = obj->GetTranslation();
-                    break;
+        if (selectedStageIndex_ == 0) {
+            cardPhase_ = CardThrowPhase::kNone;
+            if (callingCardObject_) {
+                if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
+                    tc->SetScale({ 0.0f, 0.0f, 0.0f });
                 }
             }
+            StartIrisOut({ 0.5f, 0.5f }, gameTransitionDuration_);
+        } else {
+            Vector3 targetWorldPos = getTargetWorldPos();
+            StartCallingCardThrow(targetWorldPos);
         }
-        StartCallingCardThrow(targetWorldPos);
     }
 
     ImGui::End();
@@ -1522,14 +2009,19 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
         isIrisOutActive_ = false;
         if (sceneManager) {
             // 選択されたステージに応じたマップを設定
-            std::string mapPath = "resources/json/shared/MapData/map1.txt";
-            if (selectedStageIndex_ == 1) {
+            std::string mapPath = "resources/json/shared/MapData/tutorial.txt";
+            if (selectedStageIndex_ == 0) {
+                mapPath = "resources/json/shared/MapData/tutorial.txt";
+            } else if (selectedStageIndex_ == 1) {
                 mapPath = "resources/json/shared/MapData/map1.txt";
             } else if (selectedStageIndex_ == 2) {
-                mapPath = "resources/json/shared/MapData/tutorial.txt";
+                mapPath = "resources/json/shared/MapData/map2.txt";
+            } else if (selectedStageIndex_ == 3) {
+                mapPath = "resources/json/shared/MapData/map3.txt";
             }
             GameScene::s_TargetMapFilePath = mapPath;
             sceneManager->SetData("SelectedStagePath", mapPath);
+            sceneManager->SetData("SelectedStageIndex", selectedStageIndex_);
 
 #ifdef USE_IMGUI
             if (EditorManager::GetInstance()) {
@@ -1662,5 +2154,94 @@ void TitleScene::UpdateCallingCardThrow(float dt, SceneManager* sceneManager) {
         };
     } else {
         cameraShakeOffset_ = { 0.0f, 0.0f, 0.0f };
+    }
+}
+
+void TitleScene::UpdateStageGuideBanner(float dt) {
+    if (!stageGuideObject_ || !stageGuideTransform_ || !stageGuideRenderer_) return;
+
+    // ステージ選択フェーズ中（または移行演出中）かつ、ステージ1〜3が選択されている場合に表示
+    bool shouldShow = (phase_ == Phase::kStageSelect || phase_ == Phase::kTransitionToSelect) &&
+                      (selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) &&
+                      (cardPhase_ == CardThrowPhase::kNone) &&
+                      (!isIrisOutActive_);
+
+    if (shouldShow) {
+        int stageArrayIdx = selectedStageIndex_ - 1;
+        if (stageArrayIdx < 0 || stageArrayIdx >= 3) stageArrayIdx = 0;
+
+        // 選択されているステージのビル（select_1, select_2, select_3）の位置を取得
+        auto context = Model3DEditorContext::GetInstance();
+        std::string targetName = "select_" + std::to_string(selectedStageIndex_);
+        Vector3 targetBuildingPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1
+        for (const auto& obj : context->GetObjects()) {
+            if (obj && obj->GetName() == targetName) {
+                targetBuildingPos = obj->GetTranslation();
+                break;
+            }
+        }
+
+        const Vector3& targetOffset = stageGuideOffsets_[stageArrayIdx];
+        const Vector3& targetRot = stageGuideRots_[stageArrayIdx];
+
+        Vector3 targetGuidePos = {
+            targetBuildingPos.x + targetOffset.x,
+            targetBuildingPos.y + targetOffset.y,
+            targetBuildingPos.z + targetOffset.z
+        };
+
+        // 看板の位置・回転を滑らかに補間移動（初回・遠い場合は即時設定）
+        if (currentGuideScaleFactor_ <= 0.01f) {
+            currentGuidePos_ = targetGuidePos;
+            currentGuideRot_ = targetRot;
+        } else {
+            currentGuidePos_ = {
+                currentGuidePos_.x + (targetGuidePos.x - currentGuidePos_.x) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuidePos_.y + (targetGuidePos.y - currentGuidePos_.y) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuidePos_.z + (targetGuidePos.z - currentGuidePos_.z) * std::clamp(dt * 12.0f, 0.0f, 1.0f)
+            };
+            currentGuideRot_ = {
+                currentGuideRot_.x + (targetRot.x - currentGuideRot_.x) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuideRot_.y + (targetRot.y - currentGuideRot_.y) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuideRot_.z + (targetRot.z - currentGuideRot_.z) * std::clamp(dt * 12.0f, 0.0f, 1.0f)
+            };
+        }
+
+        // テクスチャの切り替え
+        if (currentGuideStageIdx_ != selectedStageIndex_) {
+            currentGuideStageIdx_ = selectedStageIndex_;
+            uint32_t handle = stageGuideTextureHandles_[stageArrayIdx];
+            if (handle != 0) {
+                stageGuideRenderer_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+            }
+        }
+
+        // スケールを 1.0f に向かって補間（ポップイン）
+        currentGuideScaleFactor_ += (1.0f - currentGuideScaleFactor_) * std::clamp(dt * 10.0f, 0.0f, 1.0f);
+
+        // 看板の微小な浮遊アニメーション（ボビング）
+        float bob = sinf(titleTimer_ * 3.0f) * 0.4f;
+
+        stageGuideTransform_->SetPosition({ currentGuidePos_.x, currentGuidePos_.y + bob, currentGuidePos_.z });
+        stageGuideTransform_->SetRotation(currentGuideRot_);
+        stageGuideTransform_->SetScale({
+            stageGuideScale_.x * currentGuideScaleFactor_,
+            stageGuideScale_.y * currentGuideScaleFactor_,
+            stageGuideScale_.z * currentGuideScaleFactor_
+        });
+    } else {
+        // 非表示アニメーション（スケールを素早く 0 に縮小）
+        if (currentGuideScaleFactor_ > 0.0f) {
+            currentGuideScaleFactor_ += (0.0f - currentGuideScaleFactor_) * std::clamp(dt * 14.0f, 0.0f, 1.0f);
+            if (currentGuideScaleFactor_ < 0.005f) {
+                currentGuideScaleFactor_ = 0.0f;
+                currentGuideStageIdx_ = -1;
+            }
+            stageGuideTransform_->SetScale({
+                stageGuideScale_.x * currentGuideScaleFactor_,
+                stageGuideScale_.y * currentGuideScaleFactor_,
+                stageGuideScale_.z * currentGuideScaleFactor_
+            });
+        }
     }
 }

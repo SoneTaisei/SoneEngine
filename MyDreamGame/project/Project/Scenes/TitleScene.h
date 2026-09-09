@@ -10,11 +10,13 @@
 #include "Effect/windowParticle.h"
 #include "GameObject/GameObject.h"
 #include "Component/MeshRendererComponent.h"
+#include "Component/TransformComponent.h"
 #include "Graphics/Skybox.h"
 #include "Graphics/DebugCamera.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 #include <vector>
+#include <array>
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Effect/ParticleCommon.h"
@@ -87,6 +89,15 @@ private:
     Vector2 creditTextPos_ = { 512.5f, 520.0f };
     Vector2 creditTextSize_ = { 255.0f, 50.0f };
 
+    // --- タイトルメニュー用（説明書 / ruleBook.png） ---
+    std::unique_ptr<Sprite> ruleBookSprite_;
+    uint32_t ruleBookTextureHandle_ = 0;
+    Vector2 ruleBookPos_ = { 36.0f, 540.0f };
+    Vector2 ruleBookSize_ = { 130.0f, 130.0f };
+    float ruleBookScale_ = 1.0f;
+    float ruleBookBobTimer_ = 0.0f;
+    float titlePadCooldown_ = 0.0f;
+
     // --- ステージ選択の見出し。カメラが着いた後、画面の外から引っ張られるように入ってくる ---
     std::unique_ptr<Sprite> stageSelectTitleSprite_;
     uint32_t stageSelectTitleTextureHandle_ = 0;
@@ -126,6 +137,7 @@ private:
         kTitle,                 // タイトル画面
         kTransitionToSelect,    // ステージ選択へのカメラ移動演出中
         kStageSelect,           // ステージ選択画面
+        kTransitionFromSelect,  // ステージ選択からタイトルへのカメラ復帰演出中
         kTransitionToGame,      // ゲーム遷移中
         kTransitionToCredit,    // クレジット画面へのカメラ移動演出中
         kCredit,                // クレジット画面
@@ -160,11 +172,25 @@ private:
     bool enableCinematicSway_ = false; // カメラ調整中は固定できるようにする
 
     // --- ステージ選択インタラクション ---
-    int selectedStageIndex_ = 0; // 0: select_1, 1: select_2, 2: select_3
-    Vector4 selectHighlightColor_ = { 1.0f, 0.88f, 0.2f, 1.0f }; // 選択中のハイライト色 (ゴールド/黄色)
-    Vector4 unselectedColor_ = { 1.0f, 0.0f, 0.0f, 1.0f };       // 非選択の色 (赤色: ステージの存在が分かるようにする)
+    // 0: チュートリアル, 1: select_1, 2: select_2, 3: select_3
+    int selectedStageIndex_ = 0;
+    Vector4 selectHighlightColor_ = { 1.0f, 0.88f, 0.2f, 1.0f }; // 未クリア選択中のハイライト色 (ゴールド/黄色)
+    Vector4 unselectedColor_ = { 1.0f, 0.0f, 0.0f, 1.0f };       // 未クリア非選択の色 (赤色: ステージの存在が分かるようにする)
+    Vector4 clearedColor_ = { 0.15f, 0.45f, 1.0f, 1.0f };        // クリア済み・非選択の色 (青色)
+    Vector4 clearedHighlightColor_ = { 0.35f, 0.8f, 1.0f, 1.0f }; // クリア済み・選択中のハイライト色 (シアンブルー)
     float stageSelectPulseTimer_ = 0.0f;
     bool enableStageSelectPulse_ = true;
+
+    // --- チュートリアルUI（左下） ---
+    std::unique_ptr<Sprite> tutorialUiSprite_;
+    uint32_t tutorialUiTextureHandle_ = 0;
+    Vector2 tutorialUiPos_ = { 36.0f, 540.0f }; // 左下配置
+    Vector2 tutorialUiSize_ = { 130.0f, 130.0f }; // 400x400 の正方形アイコン用サイズ
+    float tutorialUiScale_ = 1.0f;
+    float tutorialUiAlpha_ = 0.0f;
+    float tutorialBobTimer_ = 0.0f;     // 選択時の縦揺れ用タイマー
+    float tutorialBobAmplitude_ = 8.0f; // 縦揺れの振幅 (px)
+    float tutorialBobFrequency_ = 4.0f; // 縦揺れの周波数 (rad/s)
 
     void UpdateStageSelectInteraction(float dt);
 
@@ -210,6 +236,28 @@ private:
 
     void StartCallingCardThrow(const Vector3& targetPos);
     void UpdateCallingCardThrow(float dt, SceneManager* sceneManager);
+
+    // --- ステージ選択時のガイド看板表示 (plan.obj + stage1.png/stage2.png/stage3.png) ---
+    std::shared_ptr<GameObject> stageGuideObject_;
+    MeshRendererComponent* stageGuideRenderer_ = nullptr;
+    TransformComponent* stageGuideTransform_ = nullptr;
+    std::array<uint32_t, 3> stageGuideTextureHandles_{};
+    std::array<Vector3, 3> stageGuideOffsets_ = {
+        Vector3{ 13.6f, 8.4f, 0.0f },     // ステージ1 (画像1指定値)
+        Vector3{ 0.0f, 16.0f, 0.0f },     // ステージ2 (角度調整・位置初期値)
+        Vector3{ -18.3f, 15.4f, -4.5f }   // ステージ3 (画像2指定値)
+    };
+    std::array<Vector3, 3> stageGuideRots_ = {
+        Vector3{ 0.0f, 1.256637f, 3.141593f }, // ステージ1 (0.0°, 72.0°, 180.0°)
+        Vector3{ 0.0f, 1.239184f, 3.141593f }, // ステージ2 (0.0°, 71.0°, 180.0°)
+        Vector3{ 0.0f, 1.221731f, 3.141593f }  // ステージ3 (0.0°, 70.0°, 180.0°)
+    };
+    Vector3 stageGuideScale_ = { 1.0f, -2.5f, 10.0f }; // 4:1 アスペクト比 (厚み1.0, 高さ-2.5で上下反転解消, 横幅10.0)
+    Vector3 currentGuidePos_{};
+    Vector3 currentGuideRot_{};
+    float currentGuideScaleFactor_ = 0.0f; // ポップイン・縮小アニメーション用 (0.0 ~ 1.0)
+    int currentGuideStageIdx_ = -1;
+    void UpdateStageGuideBanner(float dt);
 
     // --- エディター停止中用 ---
     void UpdateEditor() override;

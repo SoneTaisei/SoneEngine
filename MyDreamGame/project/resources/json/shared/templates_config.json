@@ -43,12 +43,12 @@
         {
             "color": {
                 "a": 1.0,
-                "b": 0.800000011920929,
-                "g": 0.20000000298023224,
-                "r": 0.800000011920929
+                "b": 1.0,
+                "g": 1.0,
+                "r": 1.0
             },
             "id": 3,
-            "modelName": "",
+            "modelName": "Object/Original/pedestal/pedestal.obj",
             "name": "Goal",
             "properties": {},
             "scale": {
@@ -57,7 +57,7 @@
                 "z": 1.0
             },
             "shaderMode": 0,
-            "textureName": "",
+            "textureName": "Object/Original/pedestal/white.png",
             "type": "GoalBlock"
         },
         {
@@ -201,11 +201,12 @@
                 "r": 0.5
             },
             "id": 15,
-            "modelName": "",
+            "modelName": "Object/Original/door/door.obj",
             "name": "Door",
             "properties": {
                 "closeSpeed": 2.0,
                 "crushKills": true,
+                "invert": false,
                 "latch": false,
                 "linkId": 1,
                 "openDirection": "Up",

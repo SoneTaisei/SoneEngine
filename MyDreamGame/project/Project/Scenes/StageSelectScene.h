@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Scene/IScene.h"
 #include "Resource/Model/Model.h"
 #include <d3d12.h>
@@ -6,6 +6,7 @@
 #include "GameObject/GameObject.h"
 #include "Component/MeshRendererComponent.h"
 #include "Component/AnimatorComponent.h"
+#include "Component/TransformComponent.h"
 #include "Graphics/Skybox.h"
 
 #include <string>
@@ -51,4 +52,13 @@ private:
 
     std::vector<std::string> availableMapFiles_;
     void RefreshAvailableMapFiles();
+
+    // ステージ選択ガイド表示関連
+    std::shared_ptr<GameObject> guideObject_;
+    MeshRendererComponent* guideRenderer_ = nullptr;
+    TransformComponent* guideTransform_ = nullptr;
+    std::vector<uint32_t> stageGuideTextures_;
+    uint32_t fallbackGuideTexture_ = 0;
+    void LoadStageGuideTextures();
+    void UpdateGuideBanner();
 };

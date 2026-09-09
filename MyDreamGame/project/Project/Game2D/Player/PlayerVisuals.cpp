@@ -121,6 +121,16 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     smokePrimitive_->SetIsBillboard(true);
     smokePrimitive_->SetIsDoubleSided(true);
     smokePrimitive_->SetBlendMode(BlendMode::kBlendModeNormal); // 通常αブレンド（両面描画で美しく透過）
+
+    soulPrimitive_ = std::make_unique<PrimitiveObject>();
+    soulPrimitive_->Initialize(device, boxPrimitive);
+    soulPrimitive_->SetName("SoulAdditive");
+    soulPrimitive_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(smokeTex));
+    soulPrimitive_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    soulPrimitive_->GetMaterial().lightingType = 0;
+    soulPrimitive_->SetIsBillboard(true);
+    soulPrimitive_->SetIsDoubleSided(true);
+    soulPrimitive_->SetBlendMode(BlendMode::kBlendModeAdd); // 加算ブレンド（神秘的な青白い光・オーラ・スパーク）
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
@@ -520,6 +530,25 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             }
         }
     }
+
+    // 魂パーティクル（死亡時演出）の更新
+    for (auto& soul : soulParticles_) {
+        if (soul.active) {
+            soul.timer += deltaTime;
+            if (soul.timer >= soul.duration) {
+                soul.active = false;
+            } else {
+                // 上昇気流（ゆっくり加速して天へ昇る）
+                soul.velocity.y += 0.45f * deltaTime;
+                soul.velocity.x *= 0.94f;
+                // サイン波による左右のふわふわした霊気のゆらめき
+                float sway = std::sin(soul.timer * soul.swaySpeed + soul.swayOffset);
+                soul.position.x += (soul.velocity.x + sway * 0.40f) * deltaTime;
+                soul.position.y += soul.velocity.y * deltaTime;
+                soul.rotation += soul.rotSpeed * deltaTime;
+            }
+        }
+    }
 }
 
 void PlayerVisuals::UpdateClearAnimation(const PlayerState& state, const PlayerParams& params, float clearTimer, float deltaTime) {
@@ -740,6 +769,25 @@ void PlayerVisuals::UpdateClearAnimation(const PlayerState& state, const PlayerP
             }
         }
     }
+
+    // 魂パーティクル（死亡時演出）の更新
+    for (auto& soul : soulParticles_) {
+        if (soul.active) {
+            soul.timer += deltaTime;
+            if (soul.timer >= soul.duration) {
+                soul.active = false;
+            } else {
+                // 上昇気流（ゆっくり加速）
+                soul.velocity.y += 0.35f * deltaTime;
+                soul.velocity.x *= 0.92f;
+                // サイン波による左右のふわふわしたゆらめき
+                float sway = std::sin(soul.timer * soul.swaySpeed + soul.swayOffset);
+                soul.position.x += (soul.velocity.x + sway * 0.35f) * deltaTime;
+                soul.position.y += soul.velocity.y * deltaTime;
+                soul.rotation += soul.rotSpeed * deltaTime;
+            }
+        }
+    }
 }
 
 void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
@@ -819,7 +867,7 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
         }
     }
 
-    // 煙幕（スモークボム）の描画
+    // 煙幕（スモークボム）および魂煙（死亡時演出）の描画
     if (smokePrimitive_) {
         smokePrimitive_->ResetGhostIndex();
         for (const auto& smoke : smokeParticles_) {
@@ -851,6 +899,43 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
                 m.color = { smoke.color.x, smoke.color.y, smoke.color.z, alpha };
 
                 smokePrimitive_->DrawGhost(t, m);
+            }
+        }
+
+        // 魂煙（死亡時演出）の描画
+        if (soulPrimitive_) soulPrimitive_->ResetGhostIndex();
+        for (const auto& soul : soulParticles_) {
+            if (soul.active) {
+                float progress = soul.timer / soul.duration;
+                // ふわりと滑らかに広がる（イーズアウト）
+                float easedExpand = 1.0f - (1.0f - progress) * (1.0f - progress);
+                float currentSize = soul.startSize + (soul.endSize - soul.startSize) * easedExpand;
+
+                // 最初からハッキリ現れ、後半にかけてふんわり昇りながら滑らかにフェードアウト
+                float alpha = soul.color.w;
+                if (progress < 0.06f) {
+                    // 湧き出た瞬間のごく短いスムーズイン（0.5 -> 1.0）
+                    alpha = soul.color.w * (0.6f + 0.4f * (progress / 0.06f));
+                } else {
+                    float fadeT = (progress - 0.06f) / 0.94f;
+                    alpha = soul.color.w * (1.0f - fadeT * fadeT);
+                }
+
+                EulerTransform t;
+                t.translate = soul.position;
+                t.scale = { currentSize, currentSize, 0.02f };
+                t.rotate = { 0.0f, 0.0f, soul.rotation };
+
+                Material m;
+                if (soul.isAdditive && soulPrimitive_) {
+                    m = soulPrimitive_->GetMaterial();
+                    m.color = { soul.color.x, soul.color.y, soul.color.z, alpha };
+                    soulPrimitive_->DrawGhost(t, m);
+                } else if (smokePrimitive_) {
+                    m = smokePrimitive_->GetMaterial();
+                    m.color = { soul.color.x, soul.color.y, soul.color.z, alpha };
+                    smokePrimitive_->DrawGhost(t, m);
+                }
             }
         }
     }
@@ -1076,11 +1161,123 @@ void PlayerVisuals::SpawnSmokeBomb(const Vector3& pos) {
     }
 }
 
+void PlayerVisuals::SpawnSoulSmoke(const Vector3& pos) {
+    Log(std::format("PlayerVisuals: SpawnSoulSmoke triggered at ({:.2f}, {:.2f}, {:.2f})\n", pos.x, pos.y, pos.z));
+    static std::mt19937 randEngine(std::random_device{}());
+    std::uniform_real_distribution<float> rotSpeedDist(-1.8f, 1.8f);
+    std::uniform_real_distribution<float> rotInitDist(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> swaySpeedDist(3.5f, 6.5f);
+    std::uniform_real_distribution<float> swayPhaseDist(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> zDist(-0.35f, -0.15f);
+
+    // 1. コアソウル（魂の光球・オーラ：加算ブレンドで白〜青白く光り輝きながら昇天）: 12個
+    std::uniform_real_distribution<float> coreOffsetX(-0.18f, 0.18f);
+    std::uniform_real_distribution<float> coreOffsetY(0.1f, 0.6f);
+    std::uniform_real_distribution<float> coreVelY(1.6f, 2.8f);
+    std::uniform_real_distribution<float> coreVelX(-0.4f, 0.4f);
+    std::uniform_real_distribution<float> coreStartSize(0.65f, 1.0f);
+    std::uniform_real_distribution<float> coreEndSize(1.8f, 2.8f);
+    std::uniform_real_distribution<float> coreDuration(1.2f, 1.8f);
+
+    for (int i = 0; i < 12; ++i) {
+        SoulParticle p;
+        p.position = { pos.x + coreOffsetX(randEngine), pos.y + coreOffsetY(randEngine), pos.z + zDist(randEngine) };
+        p.velocity = { coreVelX(randEngine), coreVelY(randEngine), 0.0f };
+        // 加算合成で鮮やかに発光するシアン〜スカイブルー
+        float r = 0.45f + 0.25f * ((float)rand() / RAND_MAX);
+        float g = 0.80f + 0.20f * ((float)rand() / RAND_MAX);
+        p.color = { r, g, 1.0f, 0.95f };
+        p.startSize = coreStartSize(randEngine);
+        p.endSize = coreEndSize(randEngine);
+        p.timer = 0.0f;
+        p.duration = coreDuration(randEngine);
+        p.rotation = rotInitDist(randEngine);
+        p.rotSpeed = rotSpeedDist(randEngine);
+        p.swayOffset = swayPhaseDist(randEngine);
+        p.swaySpeed = swaySpeedDist(randEngine);
+        p.isAdditive = true; // 加算ブレンド
+        p.active = true;
+
+        bool reused = false;
+        for (auto& existing : soulParticles_) {
+            if (!existing.active) { existing = p; reused = true; break; }
+        }
+        if (!reused) soulParticles_.push_back(p);
+    }
+
+    // 2. 立ち上る幽玄な煙（全身からふわりと昇華する淡い煙：通常αブレンド）: 16個
+    std::uniform_real_distribution<float> bodyOffsetX(-0.28f, 0.28f);
+    std::uniform_real_distribution<float> bodyOffsetY(-0.15f, 0.45f);
+    std::uniform_real_distribution<float> bodyVelY(1.0f, 2.0f);
+    std::uniform_real_distribution<float> bodyVelX(-0.5f, 0.5f);
+    std::uniform_real_distribution<float> bodyStartSize(0.5f, 0.8f);
+    std::uniform_real_distribution<float> bodyEndSize(1.6f, 2.4f);
+    std::uniform_real_distribution<float> bodyDuration(1.0f, 1.6f);
+
+    for (int i = 0; i < 16; ++i) {
+        SoulParticle p;
+        p.position = { pos.x + bodyOffsetX(randEngine), pos.y + bodyOffsetY(randEngine), pos.z + zDist(randEngine) };
+        p.velocity = { bodyVelX(randEngine), bodyVelY(randEngine), 0.0f };
+        // 透き通る純白〜薄水色の煙
+        p.color = { 0.88f, 0.96f, 1.0f, 0.85f };
+        p.startSize = bodyStartSize(randEngine);
+        p.endSize = bodyEndSize(randEngine);
+        p.timer = 0.0f;
+        p.duration = bodyDuration(randEngine);
+        p.rotation = rotInitDist(randEngine);
+        p.rotSpeed = rotSpeedDist(randEngine);
+        p.swayOffset = swayPhaseDist(randEngine);
+        p.swaySpeed = swaySpeedDist(randEngine);
+        p.isAdditive = false; // 通常ブレンド
+        p.active = true;
+
+        bool reused = false;
+        for (auto& existing : soulParticles_) {
+            if (!existing.active) { existing = p; reused = true; break; }
+        }
+        if (!reused) soulParticles_.push_back(p);
+    }
+
+    // 3. 漂う魂の火の粉（キラキラと浮遊しながら上へ舞い上がる小さな霊気粒子：加算ブレンド）: 16個
+    std::uniform_real_distribution<float> sparkOffsetX(-0.25f, 0.25f);
+    std::uniform_real_distribution<float> sparkOffsetY(0.0f, 0.6f);
+    std::uniform_real_distribution<float> sparkVelY(2.0f, 3.6f);
+    std::uniform_real_distribution<float> sparkVelX(-0.5f, 0.5f);
+    std::uniform_real_distribution<float> sparkStartSize(0.15f, 0.25f);
+    std::uniform_real_distribution<float> sparkEndSize(0.35f, 0.55f);
+    std::uniform_real_distribution<float> sparkDuration(0.8f, 1.3f);
+
+    for (int i = 0; i < 16; ++i) {
+        SoulParticle p;
+        p.position = { pos.x + sparkOffsetX(randEngine), pos.y + sparkOffsetY(randEngine), pos.z + zDist(randEngine) };
+        p.velocity = { sparkVelX(randEngine), sparkVelY(randEngine), 0.0f };
+        // 鮮やかなシアン・白の光粒
+        p.color = { 0.7f, 1.0f, 1.0f, 0.95f };
+        p.startSize = sparkStartSize(randEngine);
+        p.endSize = sparkEndSize(randEngine);
+        p.timer = 0.0f;
+        p.duration = sparkDuration(randEngine);
+        p.rotation = rotInitDist(randEngine);
+        p.rotSpeed = rotSpeedDist(randEngine) * 2.0f;
+        p.swayOffset = swayPhaseDist(randEngine);
+        p.swaySpeed = swaySpeedDist(randEngine) * 1.5f;
+        p.isAdditive = true; // 加算ブレンド
+        p.active = true;
+
+        bool reused = false;
+        for (auto& existing : soulParticles_) {
+            if (!existing.active) { existing = p; reused = true; break; }
+        }
+        if (!reused) soulParticles_.push_back(p);
+    }
+}
+
 void PlayerVisuals::ClearEffects() {
     dustParticles_.clear();
     confettiParticles_.clear();
     dashRingParticles_.clear();
     smokeParticles_.clear();
+    soulParticles_.clear();
     currentAnimType_ = PlayerAnimType::None;
 }
 
