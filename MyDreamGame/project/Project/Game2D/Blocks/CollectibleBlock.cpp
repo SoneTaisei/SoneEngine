@@ -12,7 +12,7 @@ namespace {
     // お宝と同じ宝石モデルを小さく・青くして使う
     constexpr const char* kModelDir = "resources/Object/Original/jewelry";
     constexpr const char* kModelFile = "jewelry.obj";
-    constexpr float kGemScale = 0.14f;
+    constexpr float kGemScale = 0.3f;
     constexpr Vector4 kGemColor = { 0.45f, 0.8f, 1.0f, 1.0f };
     constexpr Vector4 kFlashColor = { 1.0f, 1.0f, 0.9f, 1.0f };
     // 以前のクリアで取った宝石は薄く
