@@ -65,6 +65,10 @@ public:
     // 設定ファイルからの読み込み
     void LoadLightingConfig();
 
+    // 静的スポットライト（設定ファイルで指定されたもの）の復元と個数取得
+    void RestoreStaticSpotLights();
+    int32_t GetStaticSpotLightCount() const { return baseSpotLightCount_; }
+
 private:
     ID3D12Device *device_ = nullptr;
     ID3D12GraphicsCommandList *commandList_ = nullptr;
@@ -83,6 +87,9 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> spotLightResource_;
     SpotLightGroup *mappedSpotLightGroup_ = nullptr;
+
+    SpotLight baseSpotLights_[kMaxSpotLights]{};
+    int32_t baseSpotLightCount_ = 0;
 
     // 全モデルのリスト
     std::list<Model *> models_;

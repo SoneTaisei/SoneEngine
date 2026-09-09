@@ -1526,7 +1526,7 @@ void TitleScene::UpdateIrisOut(float dt, SceneManager* sceneManager) {
             if (selectedStageIndex_ == 1) {
                 mapPath = "resources/json/shared/MapData/map1.txt";
             } else if (selectedStageIndex_ == 2) {
-                mapPath = "resources/json/shared/MapData/map_data.txt";
+                mapPath = "resources/json/shared/MapData/tutorial.txt";
             }
             GameScene::s_TargetMapFilePath = mapPath;
             sceneManager->SetData("SelectedStagePath", mapPath);

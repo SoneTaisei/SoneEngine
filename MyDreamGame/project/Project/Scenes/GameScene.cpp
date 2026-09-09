@@ -2165,9 +2165,10 @@ void GameScene::UpdateGuardLights() {
         }
     }
 #endif
-    if (!hasLightEditor && slGroup->spotLightCount > 0) {
-        // USE_IMGUI非定義時やLightEditorがない場合は既存のカウントを基準とする
-        currentCount = (std::min)(slGroup->spotLightCount, static_cast<int32_t>(kMaxSpotLights));
+    if (!hasLightEditor) {
+        // USE_IMGUI非定義時やLightEditorがない場合は、ModelCommonに保持された静的ライト状態に復元し、その数を基準とする
+        modelCommon_->RestoreStaticSpotLights();
+        currentCount = modelCommon_->GetStaticSpotLightCount();
     }
 
     // 1. マップ上のアクティブな GuardBlock を収集し、代表シャドウキャスター（プレイヤーに最も近いもの）を決定
