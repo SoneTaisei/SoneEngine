@@ -2,6 +2,7 @@
 #include "PlayerVisuals.h"
 #include "Core/TimeManager.h"
 #include "Renderer/Renderer.h"
+#include "Resource/Primitive/PrimitiveManager.h"
 #include <random>
 #include <cmath>
 
@@ -109,6 +110,17 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     confettiPrimitive_->Initialize(device, boxPrimitive);
     confettiPrimitive_->SetName("Confetti");
     confettiPrimitive_->GetMaterial().lightingType = 0;
+
+    smokePrimitive_ = std::make_unique<PrimitiveObject>();
+    smokePrimitive_->Initialize(device, boxPrimitive);
+    smokePrimitive_->SetName("SmokeBomb");
+    uint32_t smokeTex = TextureManager::GetInstance()->Load("resources/Sprite/Original/smoke.png");
+    smokePrimitive_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(smokeTex));
+    smokePrimitive_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    smokePrimitive_->GetMaterial().lightingType = 0;
+    smokePrimitive_->SetIsBillboard(true);
+    smokePrimitive_->SetIsDoubleSided(true);
+    smokePrimitive_->SetBlendMode(BlendMode::kBlendModeNormal); // 通常αブレンド（両面描画で美しく透過）
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
@@ -386,6 +398,9 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             }
         } else if (state.isSwingingChain_ || state.isHoldingChain_) {
             rotationY = 0.0f; // スイング中・宝石持ち中は正面（カメラ目線）
+        } else if (state.faceDirX_ < -0.01f || state.faceDirX_ > 0.01f) {
+            // 向きの指定があればそちらを優先（投げた直後など、動かないまま左右を向く）
+            rotationY = (state.faceDirX_ < 0.0f) ? 1.57079632f : -1.57079632f;
         } else {
             if (state.velocity_.x < -0.01f) {
                 rotationY = 1.57079632f;
@@ -488,62 +503,249 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             }
         }
     }
+
+    for (auto& smoke : smokeParticles_) {
+        if (smoke.active) {
+            smoke.timer += deltaTime;
+            if (smoke.timer >= smoke.duration) {
+                smoke.active = false;
+            } else {
+                // 初速の爆発から急速にブレーキをかけて煙のドームを形成
+                smoke.velocity.x *= 0.86f;
+                smoke.velocity.y *= 0.86f;
+                smoke.velocity.y += 0.35f * deltaTime; // ふんわりとした上昇気流
+                smoke.position.x += smoke.velocity.x * deltaTime;
+                smoke.position.y += smoke.velocity.y * deltaTime;
+                smoke.rotation += smoke.rotSpeed * deltaTime;
+            }
+        }
+    }
 }
 
-void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
-    if (state.isDead_ && primitiveObj_) {
-        // メインオブジェクトを描画せず、6x6のブロックに対してゴースト描画する
-        primitiveObj_->ResetGhostIndex();
-        float dissolveProgress = state.deathTimer_ / params.deathDuration_;
-        
-        for (int y = 0; y < 6; ++y) {
-            for (int x = 0; x < 6; ++x) {
-                float bx = (float)x;
-                float by = (float)(5 - y);
-                // シェーダーと同じ乱数計算をCPUで行う
-                float dot_val = bx * 12.9898f + by * 78.233f;
-                float s = std::sin(dot_val);
-                float n = s * 43758.5453f;
-                n = n - std::floor(n);
-                
-                float cellW = (params.halfWidth_ * 2.0f) / 6.0f;
-                float cellH = (params.halfHeight_ * 2.0f) / 6.0f;
-                float offsetX = -params.halfWidth_ + cellW * 0.5f + cellW * x;
-                float offsetY = -params.halfHeight_ + cellH * 0.5f + cellH * y;
-                
-                EulerTransform ghostTransform;
-                ghostTransform.scale = { cellW, cellH, 1.0f };
-                ghostTransform.rotate = {0.0f, 0.0f, 0.0f};
-                
-                Vector3 basePos = state.position_;
-                basePos.x += offsetX;
-                basePos.y += offsetY;
-                
-                Material ghostMat = primitiveObj_->GetMaterial();
-                ghostMat.dissolveThreshold = 0.0f; // ゴースト自体はディゾルブさせない
-                
-                if (dissolveProgress > n) {
-                    // ディゾルブ時間を超えたブロックは上に飛んでいく
-                    float timeSinceDissolve = (dissolveProgress - n) * params.deathDuration_;
-                    basePos.y += timeSinceDissolve * 10.0f; 
-                    ghostTransform.rotate.z = timeSinceDissolve * 15.0f; // 回転を加える
-                    
-                    // 徐々に小さくする
-                    float shrink = 1.0f - (timeSinceDissolve / 0.1f);
-                    if (shrink < 0.0f) shrink = 0.0f;
-                    ghostTransform.scale.x *= shrink;
-                    ghostTransform.scale.y *= shrink;
-                    ghostMat.color.w *= shrink; // 透明度も下げる
-                }
-                
-                if (ghostTransform.scale.x > 0.0f) {
-                    ghostTransform.translate = basePos;
-                    // DrawGhostは内部的に引数無しのGetCommandListを使っている想定
-                    primitiveObj_->DrawGhost(ghostTransform, ghostMat);
+void PlayerVisuals::UpdateClearAnimation(const PlayerState& state, const PlayerParams& params, float clearTimer, float deltaTime) {
+    visualTime_ += deltaTime;
+
+    // プレイヤーが既に脱出・消滅している場合はモデル更新をスキップ
+    if (state.isClearEscaped_) {
+        // 煙パーティクルの更新のみ継続
+        for (auto& smoke : smokeParticles_) {
+            if (smoke.active) {
+                smoke.timer += deltaTime;
+                if (smoke.timer >= smoke.duration) {
+                    smoke.active = false;
+                } else {
+                    smoke.velocity.x *= 0.86f;
+                    smoke.velocity.y *= 0.86f;
+                    smoke.velocity.y += 0.35f * deltaTime;
+                    smoke.position.x += smoke.velocity.x * deltaTime;
+                    smoke.position.y += smoke.velocity.y * deltaTime;
+                    smoke.rotation += smoke.rotSpeed * deltaTime;
                 }
             }
         }
-    } else if (!state.isDead_ && primitiveObj_) {
+        return;
+    }
+
+    if (primitiveObj_) {
+        primitiveObj_->SetTranslation(state.position_);
+        primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
+        primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
+        primitiveObj_->GetMaterial().color = params.colorNormal_;
+    }
+
+    if (modelObj_ && animator_) {
+        // ベースポーズとして正面構えアニメーションを適用
+        animator_->SetAnimation(swingAnimation_);
+        animator_->SetTime(0.0f);
+        animator_->Stop();
+        animator_->ClearJointOverrides();
+
+        Vector3 rHandPos = { 0.18f, 0.35f, 0.05f };
+        Quaternion rRot = MakeEulerQuat(-0.20f, 0.10f, 0.15f);
+        Vector3 lHandPos = { -0.18f, 0.35f, 0.05f };
+        Quaternion lRot = MakeEulerQuat(-0.20f, -0.10f, -0.15f);
+        Quaternion bRot = MakeEulerQuat(0.0f, 0.0f, 0.0f);
+        Quaternion hRot = MakeEulerQuat(0.0f, 0.0f, 0.0f);
+
+        auto lerpVec = [](const Vector3& a, const Vector3& b, float t) -> Vector3 {
+            return { a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t };
+        };
+        auto lerpQuat = [this](const Vector3& eulerA, const Vector3& eulerB, float t) -> Quaternion {
+            Vector3 e = { eulerA.x + (eulerB.x - eulerA.x) * t, eulerA.y + (eulerB.y - eulerA.y) * t, eulerA.z + (eulerB.z - eulerA.z) * t };
+            return MakeEulerQuat(e.x, e.y, e.z);
+        };
+
+        if (clearTimer < 0.35f) {
+            // ==========================================
+            // フェーズ1 (0.00s〜0.35s): 右ライト点灯
+            // 右上の光へパッと顔を向け、右手で帽子のつばを押さえるキメポーズ
+            // ==========================================
+            float p1 = std::clamp(clearTimer / 0.25f, 0.0f, 1.0f);
+            float t1 = 1.0f - (1.0f - p1) * (1.0f - p1);
+
+            // 頭：点灯した右上の光を見上げる
+            Vector3 hEuler0 = { 0.0f, 0.0f, 0.0f };
+            Vector3 hEuler1 = { -0.22f, -0.40f, -0.08f };
+            hRot = lerpQuat(hEuler0, hEuler1, t1);
+
+            // 右手：帽子のつばへ移動し、目深に押さえる
+            Vector3 rPos0 = { 0.18f, 0.35f, 0.05f };
+            Vector3 rPos1 = { 0.09f, 0.63f, 0.14f };
+            rHandPos = lerpVec(rPos0, rPos1, t1);
+
+            Vector3 rEuler0 = { -0.20f, 0.10f, 0.15f };
+            Vector3 rEuler1 = { -1.40f, 0.30f, 0.70f };
+            rRot = lerpQuat(rEuler0, rEuler1, t1);
+
+            // 左手：自然に腰の横
+            lHandPos = { -0.16f, 0.32f, 0.05f };
+            lRot = MakeEulerQuat(-0.20f, -0.10f, -0.15f);
+
+            // 体：クールに右肩を引く
+            Vector3 bEuler0 = { 0.0f, 0.0f, 0.0f };
+            Vector3 bEuler1 = { 0.04f, -0.10f, 0.0f };
+            bRot = lerpQuat(bEuler0, bEuler1, t1);
+
+        } else if (clearTimer < 0.70f) {
+            // ==========================================
+            // フェーズ2 (0.35s〜0.70s): 左ライト点灯（両方点灯）
+            // 次に点灯した左上の光へスッと顔を向ける！
+            // ==========================================
+            float p2 = std::clamp((clearTimer - 0.35f) / 0.25f, 0.0f, 1.0f);
+            float t2 = 1.0f - (1.0f - p2) * (1.0f - p2);
+
+            // 頭：右見上げから、点灯した左上の光（左上見上げ）へスッと向く
+            Vector3 hEuler1 = { -0.22f, -0.40f, -0.08f };
+            Vector3 hEuler2 = { -0.22f, 0.40f, 0.08f };
+            hRot = lerpQuat(hEuler1, hEuler2, t2);
+
+            // 体：右肩引きから左肩引きへ少しチェンジ
+            Vector3 bEuler1 = { 0.04f, -0.10f, 0.0f };
+            Vector3 bEuler2 = { 0.04f, 0.08f, 0.0f };
+            bRot = lerpQuat(bEuler1, bEuler2, t2);
+
+            // 右手：帽子のつばを押さえたままキープ
+            rHandPos = { 0.09f, 0.63f, 0.14f };
+            rRot = MakeEulerQuat(-1.40f, 0.30f, 0.70f);
+
+            // 左手：腰の横でキープ
+            lHandPos = { -0.16f, 0.32f, 0.05f };
+            lRot = MakeEulerQuat(-0.20f, -0.10f, -0.15f);
+
+        } else if (clearTimer < 1.15f) {
+            // ==========================================
+            // フェーズ3 (0.70s〜1.15s): 正面を向いて一拍置く（溜め・不敵な静止）
+            // 両方から照らされ、スッと正面に向き直り堂々と胸を張る。
+            // 左手は懐（胸元）へサッと差し入れ、煙玉を構えて一拍静止！
+            // ==========================================
+            float p3 = std::clamp((clearTimer - 0.70f) / 0.22f, 0.0f, 1.0f);
+            float t3 = 1.0f - (1.0f - p3) * (1.0f - p3);
+
+            // 頭：左見上げから正面（少し顎を引いた不敵なキメ顔）へ
+            Vector3 hEuler2 = { -0.22f, 0.40f, 0.08f };
+            Vector3 hEuler3 = { 0.06f, 0.0f, 0.0f };
+            hRot = lerpQuat(hEuler2, hEuler3, t3);
+
+            // 体：正面に向き直り、堂々と胸を張る（お辞儀なし！）
+            Vector3 bEuler2 = { 0.04f, 0.08f, 0.0f };
+            Vector3 bEuler3 = { 0.05f, 0.0f, 0.0f };
+            bRot = lerpQuat(bEuler2, bEuler3, t3);
+
+            // 右手：帽子のつばを押さえたままキープ
+            rHandPos = { 0.09f, 0.63f, 0.14f };
+            rRot = MakeEulerQuat(-1.40f, 0.30f, 0.70f);
+
+            // 左手：懐へ差し入れ、煙玉を構える
+            Vector3 lPos2 = { -0.16f, 0.32f, 0.05f };
+            Vector3 lPos3 = { -0.02f, 0.42f, 0.18f };
+            lHandPos = lerpVec(lPos2, lPos3, t3);
+
+            Vector3 lEuler2 = { -0.20f, -0.10f, -0.15f };
+            Vector3 lEuler3 = { -0.85f, -0.30f, -0.40f };
+            lRot = lerpQuat(lEuler2, lEuler3, t3);
+
+        } else {
+            // ==========================================
+            // フェーズ4 (1.15s〜): 煙玉をサッと投擲 ＆ 白煙炸裂
+            // お辞儀はせず、立膝や前傾倒れもせず、直立したまま左手を足元へサッと振り下ろす！
+            // 1.25sに地面衝突で煙玉炸裂
+            // ==========================================
+            float p4 = std::clamp((clearTimer - 1.15f) / 0.12f, 0.0f, 1.0f);
+            float t4 = 1.0f - (1.0f - p4) * (1.0f - p4); // 素早い振り下ろし
+
+            // 頭：直立のまま視線だけ足元へ落とす
+            Vector3 hEuler3 = { 0.06f, 0.0f, 0.0f };
+            Vector3 hEuler4 = { 0.15f, 0.0f, 0.0f };
+            hRot = lerpQuat(hEuler3, hEuler4, t4);
+
+            // 体：お辞儀は一切せず直立キープ（ピシッと立ったまま）
+            bRot = MakeEulerQuat(0.02f, 0.0f, 0.0f);
+
+            // 右手：マントをサッと後ろへ払う
+            Vector3 rPos3 = { 0.09f, 0.63f, 0.14f };
+            Vector3 rPos4 = { 0.16f, 0.30f, -0.05f };
+            rHandPos = lerpVec(rPos3, rPos4, t4);
+
+            Vector3 rEuler3 = { -1.40f, 0.30f, 0.70f };
+            Vector3 rEuler4 = { 0.20f, 0.15f, 0.10f };
+            rRot = lerpQuat(rEuler3, rEuler4, t4);
+
+            // 左手：懐から足元へサッと煙玉を投げ落とす
+            Vector3 lPos3 = { -0.02f, 0.42f, 0.18f };
+            Vector3 lPos4 = { -0.08f, 0.18f, 0.12f };
+            lHandPos = lerpVec(lPos3, lPos4, t4);
+
+            Vector3 lEuler3 = { -0.85f, -0.30f, -0.40f };
+            Vector3 lEuler4 = { 0.35f, -0.15f, -0.10f };
+            lRot = lerpQuat(lEuler3, lEuler4, t4);
+        }
+
+        animator_->SetJointTranslationOverride("右手", rHandPos, 1.0f);
+        animator_->SetJointRotationOverride("右手", rRot, 1.0f);
+        animator_->SetJointTranslationOverride("左手", lHandPos, 1.0f);
+        animator_->SetJointRotationOverride("左手", lRot, 1.0f);
+        animator_->SetJointRotationOverride("体", bRot, 1.0f);
+        animator_->SetJointRotationOverride("頭", hRot, 1.0f);
+
+        animator_->Update();
+
+        Vector3 modelPos = state.position_;
+        modelPos.y -= params.halfHeight_;
+        modelObj_->SetTranslation(modelPos);
+        float baseScale = (params.modelScale_ > 0.0f) ? params.modelScale_ : 2.0f;
+        modelObj_->SetScale({ baseScale, baseScale, baseScale });
+        modelObj_->SetRotation({ 0.0f, 0.0f, 0.0f }); // 正面向き
+        modelObj_->GetMaterial().color = params.colorNormal_;
+        modelObj_->Update();
+
+        // マントの物理更新（クリア演出中は少し風力を与えてドラマチックに）
+        Vector3 capeWind = { 0.2f * std::sin(visualTime_ * 5.0f), 0.0f, -0.1f };
+        capePhysics_.Update(animator_.get(), modelObj_->GetWorldMatrix(), capeWind, deltaTime);
+        animator_->UpdateSkeletonAndSkinCluster();
+    }
+
+    // 煙パーティクルの更新
+    for (auto& smoke : smokeParticles_) {
+        if (smoke.active) {
+            smoke.timer += deltaTime;
+            if (smoke.timer >= smoke.duration) {
+                smoke.active = false;
+            } else {
+                smoke.velocity.x *= 0.86f;
+                smoke.velocity.y *= 0.86f;
+                smoke.velocity.y += 0.35f * deltaTime;
+                smoke.position.x += smoke.velocity.x * deltaTime;
+                smoke.position.y += smoke.velocity.y * deltaTime;
+                smoke.rotation += smoke.rotSpeed * deltaTime;
+            }
+        }
+    }
+}
+
+void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
+    (void)params;
+    // 死亡時、またはクリア演出で煙幕に紛れて脱出した後はプレイヤーモデルを描画しない
+    if (!state.isDead_ && !state.isClearEscaped_ && primitiveObj_) {
         if (modelObj_) {
             modelObj_->Draw();
         } else {
@@ -551,7 +753,7 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
         }
     }
     
-    // シャドウパス実行中はパーティクル（砂埃、ダッシュリング、紙吹雪）を描画しない（不要かつシャドウパス破壊防止）
+    // シャドウパス実行中はパーティクル（砂埃、ダッシュリング、紙吹雪、煙幕）を描画しない
     if (Renderer::GetInstance() && Renderer::GetInstance()->IsShadowPass()) {
         return;
     }
@@ -613,6 +815,42 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
                 m.color = confetti.color;
                 
                 confettiPrimitive_->DrawGhost(t, m);
+            }
+        }
+    }
+
+    // 煙幕（スモークボム）の描画
+    if (smokePrimitive_) {
+        smokePrimitive_->ResetGhostIndex();
+        for (const auto& smoke : smokeParticles_) {
+            if (smoke.active) {
+                float progress = smoke.timer / smoke.duration;
+                // 最初の0.25秒で一気に爆発的膨張（ドカンと広がる）
+                float expandT = std::clamp(progress / 0.25f, 0.0f, 1.0f);
+                float easedExpand = 1.0f - (1.0f - expandT) * (1.0f - expandT) * (1.0f - expandT);
+                float currentSize = smoke.startSize + (smoke.endSize - smoke.startSize) * easedExpand;
+
+                // 最初0.08秒で急激に白煙が立ち上がり、0.45秒まで怪盗を完全に隠す濃さを維持
+                // その後ふんわりと滑らかに消えていく
+                float alpha = 0.0f;
+                if (progress < 0.08f) {
+                    alpha = (progress / 0.08f) * 0.95f;
+                } else if (progress < 0.45f) {
+                    alpha = 0.95f;
+                } else {
+                    float fadeT = (progress - 0.45f) / 0.55f;
+                    alpha = 0.95f * (1.0f - fadeT * fadeT);
+                }
+
+                EulerTransform t;
+                t.translate = smoke.position;
+                t.scale = { currentSize, currentSize, 0.02f }; // 正方形クアッド板として展開
+                t.rotate = { 0.0f, 0.0f, smoke.rotation };
+
+                Material m = smokePrimitive_->GetMaterial();
+                m.color = { smoke.color.x, smoke.color.y, smoke.color.z, alpha };
+
+                smokePrimitive_->DrawGhost(t, m);
             }
         }
     }
@@ -776,10 +1014,73 @@ void PlayerVisuals::SpawnDashRing(const Vector3& basePos, const Vector3& dashDir
     }
 }
 
+void PlayerVisuals::SpawnSmokeBomb(const Vector3& pos) {
+    Log(std::format("PlayerVisuals: SpawnSmokeBomb called at ({:.2f}, {:.2f}, {:.2f})\n", pos.x, pos.y, pos.z));
+    static std::mt19937 randEngine(std::random_device{}());
+    std::uniform_real_distribution<float> angleDist(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> rotSpeedDist(-3.0f, 3.0f);
+    std::uniform_real_distribution<float> rotInitDist(0.0f, 6.2831853f);
+    std::uniform_real_distribution<float> durationDist(1.6f, 2.3f);
+    std::uniform_real_distribution<float> zDist(-0.35f, -0.15f);
+
+    // 1. コア爆発煙（中心から一気に膨らみ、プレイヤーを完全に隠す巨大な白煙の塊）: 20個
+    std::uniform_real_distribution<float> coreSpeed(1.2f, 3.5f);
+    std::uniform_real_distribution<float> coreStartSize(0.8f, 1.2f);
+    std::uniform_real_distribution<float> coreEndSize(3.8f, 5.2f);
+    for (int i = 0; i < 20; ++i) {
+        float angle = angleDist(randEngine);
+        float spd = coreSpeed(randEngine);
+        SmokeParticle p;
+        p.position = { pos.x + std::cos(angle) * 0.15f, pos.y + 0.35f + std::sin(angle) * 0.25f, zDist(randEngine) };
+        p.velocity = { std::cos(angle) * spd, std::sin(angle) * spd * 0.7f + 0.8f, 0.0f };
+        p.color = { 1.0f, 1.0f, 1.0f, 1.0f }; // 純白
+        p.startSize = coreStartSize(randEngine);
+        p.endSize = coreEndSize(randEngine);
+        p.timer = 0.0f;
+        p.duration = durationDist(randEngine);
+        p.rotation = rotInitDist(randEngine);
+        p.rotSpeed = rotSpeedDist(randEngine);
+        p.active = true;
+
+        bool reused = false;
+        for (auto& existing : smokeParticles_) {
+            if (!existing.active) { existing = p; reused = true; break; }
+        }
+        if (!reused) smokeParticles_.push_back(p);
+    }
+
+    // 2. 放射状バースト煙（全方位に勢いよく飛び散り、煙幕の輪郭をダイナミックに広げる）: 44個
+    std::uniform_real_distribution<float> burstSpeed(4.0f, 8.0f);
+    std::uniform_real_distribution<float> burstStartSize(0.6f, 1.0f);
+    std::uniform_real_distribution<float> burstEndSize(2.8f, 4.0f);
+    for (int i = 0; i < 44; ++i) {
+        float angle = angleDist(randEngine);
+        float spd = burstSpeed(randEngine);
+        SmokeParticle p;
+        p.position = { pos.x + std::cos(angle) * 0.2f, pos.y + 0.3f + std::sin(angle) * 0.2f, zDist(randEngine) };
+        p.velocity = { std::cos(angle) * spd, std::sin(angle) * spd * 0.8f + 1.0f, 0.0f };
+        p.color = { 0.98f, 0.98f, 1.0f, 1.0f }; // 純白
+        p.startSize = burstStartSize(randEngine);
+        p.endSize = burstEndSize(randEngine);
+        p.timer = 0.0f;
+        p.duration = durationDist(randEngine);
+        p.rotation = rotInitDist(randEngine);
+        p.rotSpeed = rotSpeedDist(randEngine);
+        p.active = true;
+
+        bool reused = false;
+        for (auto& existing : smokeParticles_) {
+            if (!existing.active) { existing = p; reused = true; break; }
+        }
+        if (!reused) smokeParticles_.push_back(p);
+    }
+}
+
 void PlayerVisuals::ClearEffects() {
     dustParticles_.clear();
     confettiParticles_.clear();
     dashRingParticles_.clear();
+    smokeParticles_.clear();
     currentAnimType_ = PlayerAnimType::None;
 }
 

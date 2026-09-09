@@ -1,7 +1,9 @@
 #include "Platform/WindowsApplication.h"
+#include "Renderer/ConstantBufferPool.h"
 #include "Editor/Replay/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -53,7 +55,7 @@ void WindowsApplication::Initialize() {
 
     // 窓の作成を任せる
     window_ = std::make_unique<Window>();
-    window_->Create(L"MyDreamGameEngine", kWindowWidth_, kWindowHeight_);
+    window_->Create(L"3023_怪盗チェーン", kWindowWidth_, kWindowHeight_);
 
     LoadWindowConfig();
 
@@ -166,10 +168,20 @@ void WindowsApplication::Initialize() {
 #else
     // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
     modelCommon_->LoadLightingConfig();
+    // エディター非搭載ビルドでは配置モデルの実体をここで初期化する
+    // (エディター搭載時は EditorManager -> Model3DEditor 経由で初期化される)
+    Model3DEditorContext::GetInstance()->Initialize(device);
 #endif
 
     // 音声の初期化
     AudioManager::Initialize();
+#ifdef USE_IMGUI
+    // エディター起動時は最初は停止状態（PLAYボタン未押下）のためBGM再生を無効化
+    AudioManager::SetBGMPlaybackAllowed(false);
+#else
+    // リリース版等は最初からBGM再生を許可
+    AudioManager::SetBGMPlaybackAllowed(true);
+#endif
 
     // システムタイマーの分解能を上げる
     timeBeginPeriod(1);
@@ -210,6 +222,7 @@ void WindowsApplication::Update() {
 
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
+    GamepadInput::GetInstance()->Update();
 
     // フルスクリーン切り替え
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F11)) {
@@ -354,6 +367,9 @@ void WindowsApplication::Update() {
         
         // プレイヤー移動後のゲームカメラを更新（ViewProjectionへの反映のため）
         gameCamera_->Update();
+
+        // エディター表示中は PLAY または Replay 再生中のみBGM再生を許可
+        AudioManager::SetBGMPlaybackAllowed(isCurrentlyActive);
     } else {
         // ImGui 非表示時は通常通りシーンとカメラを更新し、アクティブカメラをゲームカメラに強制する
         sceneManager_->Update();
@@ -361,12 +377,18 @@ void WindowsApplication::Update() {
         activeCamera_ = gameCamera_.get();
         isDebugCameraActive_ = false;
         CameraManager::GetInstance()->ClearCullingCameraInfo();
+
+        // ImGui非表示時はゲームプレイ中とみなしてBGM再生を許可
+        AudioManager::SetBGMPlaybackAllowed(true);
     }
 #else
     // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
+    // シーンごとに読み込んだ3Dモデル配置(レベルデータ)のワールド行列を更新する
+    Model3DEditorContext::GetInstance()->Update();
     gameCamera_->Update();
     CameraManager::GetInstance()->ClearCullingCameraInfo();
+    AudioManager::SetBGMPlaybackAllowed(true);
 #endif
 
     // 現在のアクティブカメラの行列をViewProjectionに反映
@@ -376,6 +398,9 @@ void WindowsApplication::Update() {
     
     // 他のオブジェクトが使うCameraManagerも同期させる
     activeCamera_->UpdateMatrix(); 
+
+    // 音声の更新処理（再生終了ボイスの破棄など）
+    AudioManager::Update();
 }
 
 void WindowsApplication::Draw() {
@@ -394,14 +419,24 @@ void WindowsApplication::Draw() {
     if (editorManager_) {
         editorManager_->Draw3D();
     }
+#else
+    // エディター非搭載ビルドでもシーンのレベルデータを描画する (グリッド床は描かない)
+    Model3DEditorContext::GetInstance()->Draw(false);
 #endif
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw();
+
     // ------------------------------------
 
-    // ★ ポストエフェクトを実行 (RenderTexture -> PostProcessTexture)
+    // ★ ポストエフェクトを実行 (3Dシーン・アウトライン・カラー調整など)
     dxCommon_->ExecutePostEffect();
+
+    // ★ ポストエフェクト完了後に、最前面の2Dスプライト・UIを描画！
+    // （これにより、深度アウトラインやポストプロセスが文字の上に被って透けて見える現象を完全に防止）
+    dxCommon_->PreDraw2D();
+    sceneManager_->Draw2D();
+    dxCommon_->PostDraw2D();
 
     // 2. Swapchain（最終画面）への描画準備
     dxCommon_->PreDrawSwapchain();
@@ -459,6 +494,9 @@ void WindowsApplication::Finalize() {
     }
 #endif
 
+    // 配置モデル(レベルデータ)の実体を解放する
+    Model3DEditorContext::DestroyInstance();
+
     ModelManager::GetInstance()->Finalize();
 
     // 2. ゲーム層のマネージャー・共通部の解放
@@ -485,6 +523,10 @@ void WindowsApplication::Finalize() {
     // 6. Windows API 関連のクリーンアップ
     // timeBeginPeriod(1) に対応する解除
     timeEndPeriod(1); // ★追加：タイマー精度を元に戻す
+
+    // 定数バッファの置き場（サブアロケータ）を解放する。
+    // 使う側（コンポーネント）は上でシーンごと破棄済みなので、デバイスを消す直前に片付ける
+    ConstantBufferPool::GetInstance()->Shutdown();
 
     // 7. 最後にすべての土台である DirectXCommon を消す
     if (dxCommon_) {

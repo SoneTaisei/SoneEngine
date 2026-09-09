@@ -1,5 +1,7 @@
 ﻿#include "SwitchBlock.h"
+#include "LinkColor.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Resource/Audio/AudioManager.h"
 
 SwitchBlock::SwitchBlock(MapChip2D* map, int chipX, int chipY)
     : BaseBlock(map, chipX, chipY) {}
@@ -42,28 +44,36 @@ void SwitchBlock::Update() {
     float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
     
     // タイマーを減らす
+    bool wasPressed = isPressed_;
     if (pressedTimer_ > 0.0f) {
         pressedTimer_ -= dt;
         isPressed_ = true;
     } else {
         isPressed_ = false;
     }
+    if (!wasPressed && isPressed_) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Switch.mp3", 0.75f);
+    }
 
     // 見た目の更新
     auto* tc = gameObject_->GetComponent<TransformComponent>();
     auto* renderer = gameObject_->GetComponent<PrimitiveRendererComponent>();
-    if (tc && renderer) {
+    auto* mesh = gameObject_->GetComponent<MeshRendererComponent>();
+    if (tc) {
+        // 連動番号ごとの色。押している間は明るくして、どのドアが開くのかを色で追えるようにする
+        const Vector4 color = isPressed_ ? LinkColor::Bright(linkId_) : LinkColor::Base(linkId_);
         if (isPressed_) {
-            // 押されている時は沈み込み、色が明るくなる
+            // 押されている時は沈み込む
             tc->SetScale({startWidth_ * 0.8f, startHeight_ * 0.1f, 1.0f});
             tc->SetPosition({startX_, startY_ - startHeight_ * 0.45f, 0.0f});
-            renderer->GetMaterial().color = {1.0f, 0.5f, 0.5f, 1.0f};
         } else {
             // 元に戻る
             tc->SetScale({startWidth_ * 0.8f, startHeight_ * 0.5f, 1.0f});
             tc->SetPosition({startX_, startY_ - startHeight_ * 0.25f, 0.0f});
-            renderer->GetMaterial().color = {0.8f, 0.2f, 0.2f, 1.0f};
         }
+        if (renderer) renderer->GetMaterial().color = color;
+        // モデルを設定したスイッチは立方体の描画が止められているので、モデル側にも同じ色を掛ける
+        if (mesh) mesh->GetMaterial().color = color;
     }
 }
 

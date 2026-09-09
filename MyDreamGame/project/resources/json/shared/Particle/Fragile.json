@@ -1,0 +1,183 @@
+{
+    "duration": 1.0,
+    "emitters": [
+        {
+            "billboardType": 0,
+            "blendMode": 0,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 1.0,
+            "enabled": true,
+            "endColor": [
+                0.6911196708679199,
+                0.3362203538417816,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": -1.399999976158142,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.10000000149011612
+            ],
+            "initialScaleMin": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.10000000149011612
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 0.949999988079071,
+            "lifetimeMin": 0.949999988079071,
+            "maxParticles": 30,
+            "modelPath": "resources/Object/Original/cube/cube.obj",
+            "name": "Flash",
+            "orbitAxis": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "renderType": 1,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 2,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.2000000476837158
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 20.0,
+            "startColor": [
+                0.47876447439193726,
+                0.28836777806282043,
+                0.0,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Object/Original/Player/white.png",
+            "useColorGradient": false,
+            "velocitySpread": 0.0
+        },
+        {
+            "billboardType": 0,
+            "blendMode": 0,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 3.0,
+            "enabled": true,
+            "endColor": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": -1.399999976158142,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.10000000149011612
+            ],
+            "initialScaleMin": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.10000000149011612
+            ],
+            "initialSpeedMax": 0.0,
+            "initialSpeedMin": 0.0,
+            "initialVelocityDir": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 0.949999988079071,
+            "lifetimeMin": 0.949999988079071,
+            "maxParticles": 30,
+            "modelPath": "resources/Object/Original/cube/cube.obj",
+            "name": "Flash (Copy)",
+            "orbitAxis": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "renderType": 1,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 2,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.2000000476837158
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 20.0,
+            "startColor": [
+                0.2046331763267517,
+                0.2046331763267517,
+                0.2046331763267517,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Object/Original/Player/white.png",
+            "useColorGradient": false,
+            "velocitySpread": 0.0
+        }
+    ],
+    "isLoop": true,
+    "systemName": "Fragile"
+}

@@ -10,6 +10,7 @@
 #include <cmath>
 #include <algorithm>
 #include <nlohmann/json.hpp>
+#include "Core/Utility/ParameterManager.h"
 
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
@@ -846,6 +847,196 @@ void LightEditor::DrawLightEditorUI(ModelCommon* modelCommon) {
                 }
             } else {
                 ImGui::TextDisabled("スポットライトがありません。[+ 追加] ボタンでスポットライトを追加できます。");
+            }
+
+            ImGui::EndTabItem();
+        }
+
+        // ==========================================
+        // 1.5. クリア演出スポットライト設定タブ
+        // ==========================================
+        if (ImGui::BeginTabItem("クリア演出ライト (Clear Sequence)")) {
+            ParameterManager* pm = ParameterManager::GetInstance();
+            static std::string clearSaveMsg = "";
+            static float clearSaveTimer = 0.0f;
+
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "【クリア演出：スポットライト（3D光源・照射・影）】");
+            ImGui::TextDisabled("※ゴール時に怪盗を天井から照らすスポットライトとリアルタイム影の設定です。");
+
+            float lightIntensity = pm->GetValue("ClearSequence", "lightIntensity", 12.0f);
+            if (ImGui::SliderFloat("照度 (lightIntensity)", &lightIntensity, 0.0f, 50.0f, "%.1f")) {
+                pm->SetValue("ClearSequence", "lightIntensity", lightIntensity);
+            }
+
+            float lightAngleDeg = pm->GetValue("ClearSequence", "lightAngleDeg", 16.0f);
+            if (ImGui::SliderFloat("照射角度・度 (lightAngleDeg)", &lightAngleDeg, 1.0f, 60.0f, "%.1f deg")) {
+                pm->SetValue("ClearSequence", "lightAngleDeg", lightAngleDeg);
+            }
+
+            float lightFalloffDeg = pm->GetValue("ClearSequence", "lightFalloffDeg", 8.0f);
+            if (ImGui::SliderFloat("減衰開始角・度 (lightFalloffDeg)", &lightFalloffDeg, 0.0f, lightAngleDeg, "%.1f deg")) {
+                pm->SetValue("ClearSequence", "lightFalloffDeg", lightFalloffDeg);
+            }
+
+            float lightDecay = pm->GetValue("ClearSequence", "lightDecay", 0.6f);
+            if (ImGui::SliderFloat("距離減衰率 (lightDecay)", &lightDecay, 0.0f, 5.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "lightDecay", lightDecay);
+            }
+
+            float lightDistance = pm->GetValue("ClearSequence", "lightDistance", 10.0f);
+            if (ImGui::SliderFloat("照射距離 (lightDistance)", &lightDistance, 1.0f, 30.0f, "%.1f")) {
+                pm->SetValue("ClearSequence", "lightDistance", lightDistance);
+            }
+
+            float lightColor[3] = {
+                pm->GetValue("ClearSequence", "lightColorR", 1.0f),
+                pm->GetValue("ClearSequence", "lightColorG", 1.0f),
+                pm->GetValue("ClearSequence", "lightColorB", 0.95f)
+            };
+            if (ImGui::ColorEdit3("光の色 (lightColor)", lightColor)) {
+                pm->SetValue("ClearSequence", "lightColorR", lightColor[0]);
+                pm->SetValue("ClearSequence", "lightColorG", lightColor[1]);
+                pm->SetValue("ClearSequence", "lightColorB", lightColor[2]);
+            }
+
+            float shadowIntensity = pm->GetValue("ClearSequence", "shadowIntensity", 0.85f);
+            if (ImGui::SliderFloat("怪盗の影の濃さ (shadowIntensity)", &shadowIntensity, 0.0f, 1.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "shadowIntensity", shadowIntensity);
+            }
+
+            float shadowBias = pm->GetValue("ClearSequence", "shadowBias", 0.0005f);
+            if (ImGui::DragFloat("シャドウバイアス (shadowBias)", &shadowBias, 0.0001f, 0.00001f, 0.01f, "%.5f")) {
+                pm->SetValue("ClearSequence", "shadowBias", shadowBias);
+            }
+
+            bool syncSpotToBeam = pm->GetValue("ClearSequence", "syncSpotToBeam", true);
+            if (ImGui::Checkbox("スポットライト光源位置をビーム開始地点と連動##syncSpotLightEditor", &syncSpotToBeam)) {
+                pm->SetValue("ClearSequence", "syncSpotToBeam", syncSpotToBeam);
+            }
+            if (!syncSpotToBeam) {
+                float leftSpot[3] = {
+                    pm->GetValue("ClearSequence", "leftSpotX", -4.1f),
+                    pm->GetValue("ClearSequence", "leftSpotY", 12.1f),
+                    pm->GetValue("ClearSequence", "leftSpotZ", -0.20f)
+                };
+                if (ImGui::DragFloat3("左スポットライト位置 (X,Y,Z)##leftSpotEditor", leftSpot, 0.05f, -30.0f, 30.0f, "%.2f")) {
+                    pm->SetValue("ClearSequence", "leftSpotX", leftSpot[0]);
+                    pm->SetValue("ClearSequence", "leftSpotY", leftSpot[1]);
+                    pm->SetValue("ClearSequence", "leftSpotZ", leftSpot[2]);
+                }
+                float rightSpot[3] = {
+                    pm->GetValue("ClearSequence", "rightSpotX", 4.1f),
+                    pm->GetValue("ClearSequence", "rightSpotY", 12.1f),
+                    pm->GetValue("ClearSequence", "rightSpotZ", -0.20f)
+                };
+                if (ImGui::DragFloat3("右スポットライト位置 (X,Y,Z)##rightSpotEditor", rightSpot, 0.05f, -30.0f, 30.0f, "%.2f")) {
+                    pm->SetValue("ClearSequence", "rightSpotX", rightSpot[0]);
+                    pm->SetValue("ClearSequence", "rightSpotY", rightSpot[1]);
+                    pm->SetValue("ClearSequence", "rightSpotZ", rightSpot[2]);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // 2. ライトビーム（空間に浮かび上がる可視光線コーン）
+            ImGui::TextColored(ImVec4(0.4f, 0.85f, 1.0f, 1.0f), "【クリア演出：ライトビーム（可視光線コーン）】");
+
+            bool previewBeams = pm->GetValue("ClearSequence", "previewBeams", false);
+            if (ImGui::Checkbox("ライトビームを常時プレビュー表示##previewBeamsEditor", &previewBeams)) {
+                pm->SetValue("ClearSequence", "previewBeams", previewBeams);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(※エディタ上でビームの開始地点や照射角度を確認できます)");
+
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.7f, 1.0f), "--- ライトビーム開始地点 (照射元) ---");
+            ImGui::TextDisabled("※X:左右, Y:上下(正が天井), Z:奥行き(台座/怪盗基準)");
+
+            float leftPos[3] = {
+                pm->GetValue("ClearSequence", "leftBeamStartX", -4.1f),
+                pm->GetValue("ClearSequence", "leftBeamStartY", 12.1f),
+                pm->GetValue("ClearSequence", "leftBeamStartZ", -0.20f)
+            };
+            if (ImGui::DragFloat3("左ビーム開始地点 (X, Y, Z)##leftBeamStartEditor", leftPos, 0.05f, -30.0f, 30.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "leftBeamStartX", leftPos[0]);
+                pm->SetValue("ClearSequence", "leftBeamStartY", leftPos[1]);
+                pm->SetValue("ClearSequence", "leftBeamStartZ", leftPos[2]);
+            }
+
+            float rightPos[3] = {
+                pm->GetValue("ClearSequence", "rightBeamStartX", 4.1f),
+                pm->GetValue("ClearSequence", "rightBeamStartY", 12.1f),
+                pm->GetValue("ClearSequence", "rightBeamStartZ", -0.20f)
+            };
+            if (ImGui::DragFloat3("右ビーム開始地点 (X, Y, Z)##rightBeamStartEditor", rightPos, 0.05f, -30.0f, 30.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "rightBeamStartX", rightPos[0]);
+                pm->SetValue("ClearSequence", "rightBeamStartY", rightPos[1]);
+                pm->SetValue("ClearSequence", "rightBeamStartZ", rightPos[2]);
+            }
+
+            float targetPos[3] = {
+                pm->GetValue("ClearSequence", "beamTargetX", 0.0f),
+                pm->GetValue("ClearSequence", "beamTargetY", 0.4f),
+                pm->GetValue("ClearSequence", "beamTargetZ", 0.0f)
+            };
+            if (ImGui::DragFloat3("照射目標ターゲット (X, Y, Z)##beamTargetEditor", targetPos, 0.05f, -10.0f, 10.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "beamTargetX", targetPos[0]);
+                pm->SetValue("ClearSequence", "beamTargetY", targetPos[1]);
+                pm->SetValue("ClearSequence", "beamTargetZ", targetPos[2]);
+            }
+
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.7f, 1.0f), "--- ライトビーム形状・演出 ---");
+
+            float beamWidth = pm->GetValue("ClearSequence", "beamWidth", 0.42f);
+            if (ImGui::SliderFloat("ビームの太さ (beamWidth)", &beamWidth, 0.05f, 2.5f, "%.2f")) {
+                pm->SetValue("ClearSequence", "beamWidth", beamWidth);
+            }
+
+            float beamLengthScale = pm->GetValue("ClearSequence", "beamLengthScale", 1.0f);
+            if (ImGui::SliderFloat("ビームの長さ倍率 (beamLengthScale)", &beamLengthScale, 0.1f, 3.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "beamLengthScale", beamLengthScale);
+            }
+
+            float beamExtendDuration = pm->GetValue("ClearSequence", "beamExtendDuration", 0.15f);
+            if (ImGui::SliderFloat("伸びるアニメーション時間 (beamExtendDuration)", &beamExtendDuration, 0.0f, 1.0f, "%.2f 秒")) {
+                pm->SetValue("ClearSequence", "beamExtendDuration", beamExtendDuration);
+            }
+
+            float beamMaxAlpha = pm->GetValue("ClearSequence", "beamMaxAlpha", 0.65f);
+            if (ImGui::SliderFloat("ビーム透明度 (beamMaxAlpha)", &beamMaxAlpha, 0.0f, 1.0f, "%.2f")) {
+                pm->SetValue("ClearSequence", "beamMaxAlpha", beamMaxAlpha);
+            }
+
+            float beamColor[3] = {
+                pm->GetValue("ClearSequence", "beamColorR", 1.0f),
+                pm->GetValue("ClearSequence", "beamColorG", 1.0f),
+                pm->GetValue("ClearSequence", "beamColorB", 0.95f)
+            };
+            if (ImGui::ColorEdit3("ビームの色 (beamColor)", beamColor)) {
+                pm->SetValue("ClearSequence", "beamColorR", beamColor[0]);
+                pm->SetValue("ClearSequence", "beamColorG", beamColor[1]);
+                pm->SetValue("ClearSequence", "beamColorB", beamColor[2]);
+            }
+
+            ImGui::Spacing();
+            if (ImGui::Button("設定をJSON保存 (Save Parameters)", ImVec2(220, 28))) {
+                pm->Save();
+                clearSaveMsg = "設定をJSON保存しました！";
+                clearSaveTimer = 3.0f;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("設定をJSON読込 (Load Parameters)", ImVec2(220, 28))) {
+                pm->Load("resources/json/shared/Global/parameters.json");
+                clearSaveMsg = "JSONから設定を再読込しました！";
+                clearSaveTimer = 3.0f;
+            }
+
+            if (clearSaveTimer > 0.0f) {
+                clearSaveTimer -= ImGui::GetIO().DeltaTime;
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.3f, 1.0f), "%s", clearSaveMsg.c_str());
             }
 
             ImGui::EndTabItem();

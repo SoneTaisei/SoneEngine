@@ -32,10 +32,17 @@ public:
     void RestoreReplayState(const std::vector<float>& custom) override;
 
     int GetLinkId() const { return linkId_; }
+    /// <summary>今このフレームで閉まっている最中か（開き途中・止まっている時は false）。
+    /// プレイヤーの潰され判定に使う。開いた所を通っただけで死なないようにするため</summary>
+    bool IsClosing() const { return closing_; }
     const std::string& GetOpenDirection() const { return openDirection_; }
     bool IsLatched() const { return latched_; }
     /// <summary>閉じた状態の枠（エディタの重ね描き用。開いていると本体が潰れて見えないため）</summary>
     AABB2D GetClosedAABB() const;
+    // crushKills が OFF のドアは鎖を挟んでもちぎらない（通路に鎖があると閉まらずに待つ）
+    bool CrushesChain() const override { return crushKills_; }
+    // 鎖の当たりは「閉じた時の通路の範囲」で取る（開いている間に通路の鎖を見つけて、閉まるのを待つため）
+    AABB2D GetChainTouchAABB() const override { return GetClosedAABB(); }
 
 private:
     void ApplyTransform();
@@ -55,5 +62,6 @@ private:
     bool crushKills_ = true;
 
     bool latched_ = false;      // latch_ で開いたまま固定中
+    bool closing_ = false;      // 今フレーム、実際に閉まる向きへ動いたか
     bool blockedThisFrame_ = false; // 今フレーム通路に鎖があった（OnChainTouch で立ち、Update で消費）
 };

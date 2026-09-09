@@ -5,12 +5,17 @@
 #include "Graphics/TextureManager.h"
 #include "Core/TimeManager.h"
 #include "Resource/Model/ModelManager.h"
+#include "Resource/Audio/AudioManager.h"
 #include <cmath>
 #include <algorithm>
 
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
+
+Player2D::~Player2D() {
+    AudioManager::StopLoopSE("resources/Sound/10Dyas/SE/PlayerMove.mp3");
+}
 
 void Player2D::Initialize() {
     PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
@@ -70,6 +75,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
                 state_.isOnGround_ = false;
             }
         }
+        AudioManager::StopLoopSE("resources/Sound/10Dyas/SE/PlayerMove.mp3");
         visuals_.Update(state_, params_, deltaTime);
         return;
     }
@@ -82,9 +88,22 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
         currentInput_.isJumpPressed = false;
         currentInput_.isJumpHeld = false;
     }
+    // 開始演出中は入力を全部捨てる（鎖側が毎フレーム修飾を上書きしても、こちらが最後に効く）
+    if (introLocked_) {
+        currentInput_.moveX = 0.0f;
+        currentInput_.isJumpPressed = false;
+        currentInput_.isJumpHeld = false;
+    }
 
     // 物理・移動・当たり判定の更新
     physics_.Update(state_, params_, currentInput_, deltaTime, this, &map);
+
+    // 移動音（SE）のループ再生制御（地上歩行時のみ再生、立ち止まり・滞空・ゴール時は停止）
+    if (!state_.isDead_ && !state_.isGoal_ && state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.5f) {
+        AudioManager::PlayLoopSE("resources/Sound/10Dyas/SE/PlayerMove.mp3", 0.35f);
+    } else {
+        AudioManager::StopLoopSE("resources/Sound/10Dyas/SE/PlayerMove.mp3");
+    }
 
     // 見た目・Transformの同期
     visuals_.Update(state_, params_, deltaTime);
@@ -106,6 +125,7 @@ void Player2D::Draw() {
 }
 
 void Player2D::ResetState(const Vector3& initPos) {
+    AudioManager::StopLoopSE("resources/Sound/10Dyas/SE/PlayerMove.mp3");
     state_.position_ = initPos;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.launchVelocityX_ = 0.0f;

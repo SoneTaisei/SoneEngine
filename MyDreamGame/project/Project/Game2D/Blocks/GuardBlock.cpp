@@ -5,7 +5,9 @@
 #include "Game2D/Security/AlertSystem.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Model/ModelManager.h"
+#include "Graphics/TextureManager.h"
 #include "Effect/GPUParticle/GPUParticleSystem.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -17,6 +19,10 @@
 
 namespace {
     constexpr float kPi = std::numbers::pi_v<float>;
+    constexpr float kPropellerSpeed = 14.0f;                      // プロペラの回る速さ（ラジアン/秒）
+    // モデルは顔が手前（Z のマイナス側）を向いて作られているので、90 度回して横を向かせる。
+    // 前後が逆に見えたら符号を反転する
+    constexpr float kModelYawOffset = -kPi * 0.5f;
     constexpr Vector4 kBodyColor = {0.1f, 0.2f, 0.5f, 1.0f};      // 通常
     constexpr Vector4 kStunColor = {0.45f, 0.5f, 0.7f, 1.0f};     // 気絶（薄い）
     constexpr Vector4 kBoundColor = {0.35f, 0.35f, 0.4f, 1.0f};   // 縛られ（灰）
@@ -77,6 +83,43 @@ void GuardBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float
     fllRenderer->GetMaterial().color = {1.0f, 1.0f, 0.8f, 1.0f}; // 明るいレンズ色
     fllRenderer->GetMaterial().lightingType = 0; // 自己発光風
 
+    // 本体（enemy_1）。パレット任せにすると、マップごとの「Custom Guard」のようにモデル設定が空の項目から
+    // 置かれた警備員だけ立方体のままになるので、警備員自身が必ず持つようにする
+    if (Model* bodyModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/enemy_1", "enemy_1.obj")) {
+        auto* bodyMesh = gameObject_->AddComponent<MeshRendererComponent>();
+        bodyMesh->Initialize(device, bodyModel);
+        const std::string& bodyTex = bodyModel->GetModelData().material.textureFilePath;
+        if (!bodyTex.empty()) {
+            uint32_t handle = TextureManager::GetInstance()->Load(bodyTex);
+            bodyMesh->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+        }
+        bodyMesh->GetMaterial().color = {1.0f, 1.0f, 1.0f, 1.0f};
+        bodyMesh->GetMaterial().lightingType = 1;
+        // 立方体は描画そのものを止める（色だけ透明にしても Reset で戻ってしまう）
+        renderer->SetEnabled(false);
+        renderer->GetMaterial().color.w = 0.0f;
+    }
+
+    // 頭の上のプロペラ（enemy_2）。本体と同じ原点で作られているので、同じ座標に置けば頭の上に乗る。
+    // モデルは中心が本体と同じ位置に作られているので、本体と同じ座標に置けば頭の上に乗る
+    if (Model* propellerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/enemy_2", "enemy_2.obj")) {
+        propellerObj_ = std::make_unique<GameObject>();
+        propellerObj_->Initialize();
+        propellerObj_->SetName("GuardPropeller");
+        auto* ptc = propellerObj_->AddComponent<TransformComponent>();
+        ptc->SetPosition({worldX, worldY, 0.0f});
+        ptc->SetScale({width, height, 1.0f});
+        auto* pmr = propellerObj_->AddComponent<MeshRendererComponent>();
+        pmr->Initialize(device, propellerModel);
+        const std::string& propellerTex = propellerModel->GetModelData().material.textureFilePath;
+        if (!propellerTex.empty()) {
+            uint32_t handle = TextureManager::GetInstance()->Load(propellerTex);
+            pmr->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+        }
+        pmr->GetMaterial().color = {1.0f, 1.0f, 1.0f, 1.0f};
+        pmr->GetMaterial().lightingType = 1;
+    }
+
     SetupCollider();
 
     // スタン用GPUパーティクルの初期化
@@ -100,6 +143,8 @@ void GuardBlock::SetProperties(const nlohmann::json& properties) {
     readF("alertSpeed", alertSpeed_);
     readF("sightLength", sightLength_);
     readF("sightHeight", sightHeight_);
+    readF("spotNearDistance", spotNearDistance_);
+    readF("spotFarTimeScale", spotFarTimeScale_);
     readF("maxAlertGauge", maxAlertGauge_);
     if (properties.contains("startDirection") && properties["startDirection"].is_number()) {
         startDirection_ = properties["startDirection"];
@@ -209,7 +254,7 @@ void GuardBlock::Update() {
                 if (gameObject_) {
                     if (auto* tcw = gameObject_->GetComponent<TransformComponent>()) here = tcw->GetPosition();
                 }
-                alert->OnGuardWake(here);
+                alert->OnGuardWake();
             }
         }
         isPlayerInSightThisFrame_ = false;
@@ -237,19 +282,39 @@ void GuardBlock::Update() {
             }
             if (state_ != State::Alert) {
                 bool wasFull = (alertGauge_ >= maxAlertGauge_);
-                alertGauge_ += dt;
-                if (!wasFull && alert) {
-                    alert->AddContinuous(alert->GetParams().seenPerSec_, dt); // 溜まっている間は「猶予」
+                // 明るい所に入った時だけ発見が進む。薄暗い縁は「？」になるだけ。
+                // 近いほど速く、遠いほどゆっくり溜まる（遠くなら逃げる時間がある）
+                // 全体の警戒度が高いほど、見つかるまでが速くなる
+                float alertSpeed = 1.0f;
+                if (alert && alert->GetParams().enabled_) {
+                    alertSpeed = 1.0f + alert->GetRatio() * alert->GetParams().spotSpeedBonus_;
+                }
+                if (sightLevel_ == SightLevel::Spotted) {
+                    if (sightDistance_ <= spotNearDistance_) {
+                        alertGauge_ = maxAlertGauge_; // 目の前：溜めなしで一発
+                    } else {
+                        float span = (std::max)(0.01f, lightDistance_ - spotNearDistance_);
+                        float t = std::clamp((sightDistance_ - spotNearDistance_) / span, 0.0f, 1.0f);
+                        float scale = 1.0f + (spotFarTimeScale_ - 1.0f) * t;
+                        alertGauge_ += dt * alertSpeed / (std::max)(0.01f, scale);
+                    }
+                }
+                if (!wasFull && alert && sightLevel_ == SightLevel::Spotted) {
+                    alert->AddContinuous(alert->GetParams().seenPerSec_, dt); // 明るい光の中に居る間
                 }
                 if (alertGauge_ >= maxAlertGauge_) {
                     // 発見確定：追跡へ（「！」）。即ミスではなく、接触で捕まる
                     alertGauge_ = maxAlertGauge_;
+                    if (state_ != State::Alert) {
+                        AudioManager::Play("resources/Sound/10Dyas/SE/Find.mp3", 0.75f);
+                    }
                     state_ = State::Alert;
                     if (!spottedReported_ && alert) {
                         alert->OnSpotted(); // 回数制なら1回、値の警戒度なら +25
                         spottedReported_ = true;
                     }
                 } else if (state_ == State::Patrol || state_ == State::Wait || state_ == State::Investigate) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/LoseSight.mp3", 0.7f);
                     state_ = State::Suspicious; // チラ見え：立ち止まって向く（「？」）
                 }
             }
@@ -257,9 +322,10 @@ void GuardBlock::Update() {
             // 見えていない間は見られ続けのゲージが速めに戻る（一瞬の遮りでは戻り切らない）
             exposure_ = (std::max)(0.0f, exposure_ - dt * 1.5f);
             if (state_ == State::Alert) {
-                // 追跡中に見失った：しばらくは最後の場所へ走り、諦めたら調べに切り替える
+                // 追跡中に見失った：しばらくは最後の場所へ走り、諦めたら調べに切り替える（「？」表示）
                 lostTimer_ += dt;
                 if (lostTimer_ >= loseSightTime_) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/LoseSight.mp3", 0.7f);
                     state_ = State::Investigate;
                     lookTimer_ = lookTime_;
                     lostTimer_ = 0.0f;
@@ -284,6 +350,13 @@ void GuardBlock::Update() {
                 spottedReported_ = false;
                 seenTime_ = 0.0f;
             }
+        }
+
+        // 「？」が出ている間は、見えていなくても全体の警戒度が少しずつ上がる
+        // （明るい光の中は上の視認で上げているので、そちらとは重ねない）
+        if (alert && sightLevel_ != SightLevel::Spotted &&
+            (state_ == State::Suspicious || state_ == State::Investigate)) {
+            alert->AddSuspicion(alert->GetParams().suspectPerSec_, dt);
         }
 
         if (state_ == State::Wait) {
@@ -357,15 +430,45 @@ void GuardBlock::Update() {
 
     // 本体の滑らかな回転 (1.0 のとき 0度, -1.0 のとき 180度) + 倒れ
     tumble_ += (targetTumble - tumble_) * std::clamp(12.0f * dt, 0.0f, 1.0f);
-    float yaw = (1.0f - currentFacing_) * 0.5f * kPi;
+    float yaw = (1.0f - currentFacing_) * 0.5f * kPi + kModelYawOffset;
     tc->SetRotation({0.0f, yaw, -tumble_ * kPi * 0.5f});
     if (prompt_) {
         // 縛れる／取り戻せる合図：明るくする（押す前に結果が分かるように）
         bodyColor = {bodyColor.x + 0.35f, bodyColor.y + 0.35f, bodyColor.z + 0.25f, 1.0f};
     }
+    const bool wasPrompt = prompt_;
     prompt_ = false;
     if (auto* renderer = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
         renderer->GetMaterial().color = bodyColor;
+    }
+    // モデルで描いている時は、素の色のまま出して状態が変わった時だけ色を掛ける。
+    // 立方体と同じ本体色を掛けると、テクスチャが暗く沈んで何も見えなくなるため
+    const bool stateTint = (state_ == State::Stunned || state_ == State::Bound || staggerTimer_ > 0.0f);
+    Vector4 modelTint = stateTint ? bodyColor : Vector4{1.0f, 1.0f, 1.0f, 1.0f};
+    if (wasPrompt) {
+        modelTint = {(std::min)(1.0f, modelTint.x + 0.35f), (std::min)(1.0f, modelTint.y + 0.35f),
+                     (std::min)(1.0f, modelTint.z + 0.25f), 1.0f};
+    }
+    if (auto* mesh = gameObject_->GetComponent<MeshRendererComponent>()) {
+        mesh->GetMaterial().color = modelTint;
+    }
+
+    // プロペラ：本体と同じ場所へ置き、倒れも合わせる。倒れている間は回さない
+    if (propellerObj_) {
+        if (!IsIncapacitated()) {
+            propellerAngle_ += kPropellerSpeed * dt;
+            if (propellerAngle_ > kPi * 2.0f) {
+                propellerAngle_ -= kPi * 2.0f;
+            }
+        }
+        if (auto* ptc = propellerObj_->GetComponent<TransformComponent>()) {
+            ptc->SetPosition(newPos);
+            ptc->SetRotation({0.0f, propellerAngle_, -tumble_ * kPi * 0.5f});
+        }
+        if (auto* pmr = propellerObj_->GetComponent<MeshRendererComponent>()) {
+            pmr->GetMaterial().color = modelTint;
+        }
+        propellerObj_->Update();
     }
 
     // 懐中電灯パーツの更新（位置・向き・倒れ同期、発光部カラー更新）
@@ -394,6 +497,7 @@ void GuardBlock::Update() {
 
     // 次のフレームのためのフラグリセット
     isPlayerInSightThisFrame_ = false;
+    sightLevel_ = SightLevel::None;
 }
 
 void GuardBlock::UpdateBoundRing() {
@@ -432,6 +536,9 @@ void GuardBlock::UpdateBoundRing() {
 
 void GuardBlock::Draw() {
     BaseBlock::Draw();
+    if (propellerObj_ && !IsDestroyed()) {
+        propellerObj_->Draw();
+    }
     if (flashlightBodyObj_) {
         flashlightBodyObj_->Draw();
     }
@@ -585,10 +692,22 @@ Vector4 GuardBlock::GetCurrentLightColor() const {
 }
 
 VisionCone GuardBlock::GetVisionCone() const {
+    // 判定はプレイヤーと同じ平面（Z=0）の平らな扇にする。
+    // 描画の光は奥の壁と床を照らすために斜めに傾けてあるが、その軸のまま判定すると
+    // 「光っているのに当たらない」ずれが出るため、判定だけ真横へ向ける。
+    // 距離も見えている光（lightDistance_）にそろえる
     VisionCone cone;
-    cone.eyePosition = GetLightPosition();
-    cone.forward = GetLightDirection();
-    cone.distance = sightLength_;
+    Vector3 eye = GetLightPosition();
+    cone.eyePosition = { eye.x, eye.y, 0.0f };
+    cone.forward = { (currentFacing_ >= 0.0f) ? 1.0f : -1.0f, 0.0f, 0.0f };
+    cone.distance = lightDistance_;
+    cone.halfAngleRad = lightFalloffDeg_ * (std::numbers::pi_v<float> / 180.0f); // 明るい内側
+    return cone;
+}
+
+VisionCone GuardBlock::GetFringeCone() const {
+    // 薄暗い縁まで含めた外側。ここは「？」になるだけで追跡には入らない
+    VisionCone cone = GetVisionCone();
     cone.halfAngleRad = lightAngleDeg_ * (std::numbers::pi_v<float> / 180.0f);
     return cone;
 }
@@ -658,9 +777,34 @@ AABB2D GuardBlock::GetSightAABB() const {
 }
 
 bool GuardBlock::CheckPlayerInLight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const {
-    if (!IsLightActive()) return false;
+    return CheckPlayerSight(playerPos, playerRadius, playerAABB, map, nullptr) != SightLevel::None;
+}
 
+GuardBlock::SightLevel GuardBlock::CheckPlayerSight(const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map, float* outDistance) const {
+    if (outDistance) *outDistance = 0.0f;
+    if (!IsLightActive()) return SightLevel::None;
+
+    // 明るい内側に入っていれば発見、薄暗い縁だけなら「？」
+    if (CheckPlayerInCone(GetVisionCone(), playerPos, playerRadius, playerAABB, map)) {
+        if (outDistance) *outDistance = DistanceToPlayer(playerPos, playerAABB);
+        return SightLevel::Spotted;
+    }
+    if (CheckPlayerInCone(GetFringeCone(), playerPos, playerRadius, playerAABB, map)) {
+        if (outDistance) *outDistance = DistanceToPlayer(playerPos, playerAABB);
+        return SightLevel::Fringe;
+    }
+    return SightLevel::None;
+}
+
+float GuardBlock::DistanceToPlayer(const Vector3& playerPos, const AABB2D& playerAABB) const {
     VisionCone cone = GetVisionCone();
+    float centerY = (playerAABB.top + playerAABB.bottom) * 0.5f;
+    float dx = playerPos.x - cone.eyePosition.x;
+    float dy = centerY - cone.eyePosition.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+bool GuardBlock::CheckPlayerInCone(const VisionCone& cone, const Vector3& playerPos, float playerRadius, const AABB2D& playerAABB, MapChip2D* map) const {
 
     // プレイヤーの主要判定球群（頭部・胸部・足元）
     float centerY = (playerAABB.top + playerAABB.bottom) * 0.5f;
@@ -704,9 +848,11 @@ bool GuardBlock::CheckPlayerInLight(const Vector3& playerPos, float playerRadius
     return false;
 }
 
-void GuardBlock::OnSpottedPlayer(Player2D* player) {
+void GuardBlock::OnSpottedPlayer(Player2D* player, SightLevel level, float distance) {
     if (IsIncapacitated()) return;
     isPlayerInSightThisFrame_ = true;
+    sightLevel_ = level;
+    sightDistance_ = distance;
     if (player) {
         // 最後に見た場所（追跡・調べる の目的地）。巡回範囲の中に収める
         lastSeenX_ = std::clamp(player->GetPosition().x, startX_ - moveRange_, startX_ + moveRange_);
@@ -736,6 +882,7 @@ void GuardBlock::OnSpottedPlayer(Player2D* player) {
 // ---------------------------------------------------------------------------
 
 void GuardBlock::EnterStunned(float duration) {
+    AudioManager::Play("resources/Sound/10Dyas/SE/RobotStun.mp3", 0.8f);
     state_ = State::Stunned;
     stunTimer_ = (std::max)(0.1f, duration);
     alertGauge_ = 0.0f;
@@ -775,16 +922,7 @@ bool GuardBlock::HitByTreasure(const Vector3& velocity) {
         } else {
             EnterStunned(duration);
         }
-        // 速度方向へ少しノックバック（巡回範囲でクランプ）
-        if (gameObject_ && speed > 1e-3f) {
-            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
-                Vector3 p = tc->GetPosition();
-                p.x += velocity.x / speed * 0.5f;
-                p.x = std::clamp(p.x, startX_ - moveRange_, startX_ + moveRange_);
-                tc->SetPosition(p);
-                prevPosition_ = p;
-            }
-        }
+        // 位置は動かさない（以前は速度方向へ 0.5 マス動かしていたが、倒れている間に追撃するたびにずれていき、元に戻らなかった）
         hitTimer_ = hitCooldown_;
         return true;
     }

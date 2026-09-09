@@ -676,7 +676,7 @@ void DirectXCommon::CreatePipelines() {
     graphicsPipelineStateDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     graphicsPipelineStateDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
     graphicsPipelineStateDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-    graphicsPipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+    graphicsPipelineStateDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 半透明パーティクルの裏面カリングを防止
     hr = device_->CreateGraphicsPipelineState(&graphicsPipelineStateDesc, IID_PPV_ARGS(&graphicsPipelineStateTransparent_));
     assert(SUCCEEDED(hr));
 
@@ -1068,6 +1068,16 @@ void DirectXCommon::CreatePostEffectPipelines() {
     compositeParamsData_->irisMaskColor[2] = 0.0f;
     compositeParamsData_->irisMaskColor[3] = 1.0f;
 
+    // Letterbox in composite
+    compositeParamsData_->enableLetterbox = 0;
+    compositeParamsData_->letterboxHeight = 0.12f;
+    compositeParamsData_->letterboxSmoothness = 0.002f;
+    compositeParamsData_->letterboxPadding = 0.0f;
+    compositeParamsData_->letterboxColor[0] = 0.0f;
+    compositeParamsData_->letterboxColor[1] = 0.0f;
+    compositeParamsData_->letterboxColor[2] = 0.0f;
+    compositeParamsData_->letterboxColor[3] = 1.0f;
+
     // Iris 用のPSOを作成
     psoDesc.PS = {psIrisBlob->GetBufferPointer(), psIrisBlob->GetBufferSize()};
     hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&irisPipelineState_));
@@ -1326,6 +1336,53 @@ void DirectXCommon::ExecutePostEffect() {
 
         // 最終出力先は postProcessSrvHandleGPU_
         finalPostProcessSRVHandle_ = postProcessSrvHandleGPU_;
+    }
+}
+
+void DirectXCommon::PreDraw2D() {
+    ID3D12Resource* targetResource = nullptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle{};
+
+    if (finalPostProcessSRVHandle_.ptr == renderTextureSrvHandleGPU_.ptr) {
+        targetResource = renderTextureResource_.Get();
+        rtvHandle = renderTextureRtvHandle_;
+    } else {
+        targetResource = postProcessResource_.Get();
+        rtvHandle = postProcessRtvHandle_;
+    }
+
+    if (targetResource) {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = targetResource;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        commandList_->ResourceBarrier(1, &barrier);
+
+        // 深度バッファなしでレンダーターゲットをセット (スプライトは2Dのため)
+        commandList_->OMSetRenderTargets(1, &rtvHandle, false, nullptr);
+        commandList_->RSSetViewports(1, &viewport_);
+        commandList_->RSSetScissorRects(1, &scissorRect_);
+    }
+}
+
+void DirectXCommon::PostDraw2D() {
+    ID3D12Resource* targetResource = nullptr;
+    if (finalPostProcessSRVHandle_.ptr == renderTextureSrvHandleGPU_.ptr) {
+        targetResource = renderTextureResource_.Get();
+    } else {
+        targetResource = postProcessResource_.Get();
+    }
+
+    if (targetResource) {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = targetResource;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        commandList_->ResourceBarrier(1, &barrier);
     }
 }
 

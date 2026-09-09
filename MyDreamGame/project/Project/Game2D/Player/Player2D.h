@@ -14,7 +14,7 @@ class GameCamera;
 class Player2D : public IComponent {
 public:
     Player2D() = default;
-    ~Player2D() override = default;
+    ~Player2D() override;
 
     void Initialize() override;
     void Update() override;
@@ -28,6 +28,8 @@ public:
     Vector3 GetVelocity() const { return state_.velocity_; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
     bool IsOnGround() const { return state_.isOnGround_; }
+    /// <summary>見た目の向きを指定する（-1 左 / +1 右 / 0 は速度まかせ）。動かずに向きだけ変えたい時に使う</summary>
+    void SetFaceDirection(float dirX) { state_.faceDirX_ = dirX; }
     void SetIsHoldingChain(bool holding) { state_.isHoldingChain_ = holding; }
     bool IsHoldingChain() const { return state_.isHoldingChain_; }
     void SetIsSwingingChain(bool swinging) { state_.isSwingingChain_ = swinging; }
@@ -65,9 +67,15 @@ public:
         actionJumpLocked_ = jumpLocked;
     }
 
+    // 開始演出中の操作止め。鎖アクションの入力修飾より強く、移動もジャンプも一切受け付けない。
+    // 物理は止めないので、落下と着地はそのまま進む
+    void SetIntroLocked(bool locked) { introLocked_ = locked; }
+    bool IsIntroLocked() const { return introLocked_; }
+
     const Vector3& GetPosition() const { return state_.position_; }
     void SetPosition(const Vector3& pos) { state_.position_ = pos; }
     const Vector3& GetStartPosition() const { return state_.startPosition_; }
+    void SetStartPosition(const Vector3& pos) { state_.startPosition_ = pos; }
 
     void SetCamera(GameCamera* camera) { camera_ = camera; }
     GameCamera* GetCamera() const { return camera_; }
@@ -96,9 +104,14 @@ public:
             state_.goalTimer_ = 0.0f;
             state_.velocity_ = { 0.0f, 0.0f, 0.0f };
             state_.launchVelocityX_ = 0.0f;
-            visuals_.SpawnConfetti(state_.position_);
         }
     }
+
+    void SpawnSmokeBomb(const Vector3& pos) { visuals_.SpawnSmokeBomb(pos); }
+    void SetClearEscaped(bool escaped) { state_.isClearEscaped_ = escaped; }
+    bool IsClearEscaped() const { return state_.isClearEscaped_; }
+    void UpdateVisualsOnly(float deltaTime) { visuals_.Update(state_, params_, deltaTime); }
+    void UpdateClearAnimation(float clearTimer, float deltaTime) { visuals_.UpdateClearAnimation(state_, params_, clearTimer, deltaTime); }
 
     bool IsGoalComplete() const { return state_.isGoal_ && state_.goalTimer_ >= params_.goalWaitTime_; }
 
@@ -107,7 +120,10 @@ public:
     int GetChainLength() const { return state_.chainLength_; }
 
     void ResetState(const Vector3& initPos);
-    void ClearEffects() { visuals_.ClearEffects(); }
+    void ClearEffects() { 
+        state_.isClearEscaped_ = false;
+        visuals_.ClearEffects(); 
+    }
 
     AABB2D GetAABB() const { return physics_.GetAABB(state_, params_); }
     bool IsDead() const { return state_.isDead_; }
@@ -122,6 +138,7 @@ private:
     InputState currentInput_;
     float actionMoveFactor_ = 1.0f;  // 鎖アクションによる移動倍率
     bool actionJumpLocked_ = false;  // 鎖アクション中のジャンプ無効
+    bool introLocked_ = false;       // 開始演出中（着地するまで）の操作止め
     PlayerPhysics physics_;
     GameCamera* camera_ = nullptr;
 };

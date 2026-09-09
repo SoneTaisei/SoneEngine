@@ -1,7 +1,9 @@
-﻿#include "DoorBlock.h"
+#include "DoorBlock.h"
+#include "LinkColor.h"
 #include "SwitchBlock.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Game2D/MapChip2D.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 
 DoorBlock::DoorBlock(MapChip2D* map, int chipX, int chipY)
@@ -23,8 +25,8 @@ void DoorBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
     auto* renderer = gameObject_->AddComponent<PrimitiveRendererComponent>();
     renderer->Initialize(device, boxPrimitive);
-    // ドアの色（鉄格子っぽい青灰色）
-    renderer->GetMaterial().color = {0.5f, 0.6f, 0.7f, 1.0f};
+    // ドアの色は連動番号ごと（同じ番号のスイッチと同じ色になる）。開き具合で明るさを変えるので Update でも入れ直す
+    renderer->GetMaterial().color = LinkColor::Dark(linkId_);
     renderer->GetMaterial().lightingType = 1;
 
     SetupCollider();
@@ -91,18 +93,43 @@ void DoorBlock::Update() {
     // リプレイ再生・シーク時も録画時と同じだけ時間が進むよう、共有クロックの差分を使う
     float dt = ReplayManager::GetInstance()->GetPlayDeltaTime();
 
+    closing_ = false;
     if (wantOpen) {
+        if (openProgress_ <= 0.0f) {
+            AudioManager::Play("resources/Sound/10Dyas/SE/OpenDoor.mp3", 0.75f);
+        }
         openProgress_ += dt * openSpeed_;
         if (openProgress_ > 1.0f) openProgress_ = 1.0f;
     } else {
         // 挟まれミス無しの設定なら、通路に鎖がある間は閉まらずに待つ
         bool blocked = (!crushKills_ && blockedThisFrame_);
         if (!blocked) {
+            const float before = openProgress_;
             openProgress_ -= dt * closeSpeed_;
             if (openProgress_ < 0.0f) openProgress_ = 0.0f;
+            closing_ = (openProgress_ < before);
         }
     }
     blockedThisFrame_ = false;
+
+    // 連動番号ごとの色。開くほど明るくして、動いているのが分かるようにする
+    Vector4 closed = LinkColor::Dark(linkId_);
+    Vector4 opened = LinkColor::Bright(linkId_);
+    float t = openProgress_;
+    Vector4 currentColor = { closed.x + (opened.x - closed.x) * t,
+                             closed.y + (opened.y - closed.y) * t,
+                             closed.z + (opened.z - closed.z) * t,
+                             closed.w };
+
+    if (auto* renderer = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        renderer->GetMaterial().color = currentColor;
+    }
+    // モデルを設定したドア（シャッター）は立方体の描画が止められているので、
+    // モデル側にも同じ色を掛ける。これが無いとパレットの色のままで、
+    // どの番号のドアなのか・開いているのかが色で分からなくなる
+    if (auto* mesh = gameObject_->GetComponent<MeshRendererComponent>()) {
+        mesh->GetMaterial().color = currentColor;
+    }
 
     ApplyTransform();
 }
@@ -136,7 +163,8 @@ void DoorBlock::ApplyTransform() {
         w = remain;
         cx = (startX_ + startWidth_ * 0.5f) - w * 0.5f;
     }
-    tc->SetScale({w, h, 1.0f});
+    float sz = tc->GetScale().z;
+    tc->SetScale({w, h, sz});
     tc->SetPosition({cx, cy, 0.0f});
 }
 
@@ -152,11 +180,13 @@ AABB2D DoorBlock::GetClosedAABB() const {
 void DoorBlock::Reset() {
     openProgress_ = 0.0f;
     latched_ = false;
+    closing_ = false;
     blockedThisFrame_ = false;
     if (gameObject_) {
         auto* tc = gameObject_->GetComponent<TransformComponent>();
         if (tc) {
-            tc->SetScale({startWidth_, startHeight_, 1.0f});
+            float sz = tc->GetScale().z;
+            tc->SetScale({startWidth_, startHeight_, sz});
             tc->SetPosition({startX_, startY_, 0.0f});
         }
     }

@@ -27,6 +27,7 @@ public:
     void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
+    void Draw2D() override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
 
     // ヒエラルキー用
@@ -75,29 +76,85 @@ private:
     std::unique_ptr<Sprite> titleLogoSprite_;
     uint32_t titleLogoTextureHandle_ = 0;
 
+    // --- タイトルメニュー用（スタート / クレジット） ---
+    std::unique_ptr<Sprite> startTextSprite_;
+    uint32_t startTextTextureHandle_ = 0;
+    Vector2 startTextPos_ = { 515.0f, 430.0f };
+    Vector2 startTextSize_ = { 250.0f, 50.0f };
+
+    std::unique_ptr<Sprite> creditTextSprite_;
+    uint32_t creditTextTextureHandle_ = 0;
+    Vector2 creditTextPos_ = { 512.5f, 520.0f };
+    Vector2 creditTextSize_ = { 255.0f, 50.0f };
+
+    // --- ステージ選択の見出し。カメラが着いた後、画面の外から引っ張られるように入ってくる ---
+    std::unique_ptr<Sprite> stageSelectTitleSprite_;
+    uint32_t stageSelectTitleTextureHandle_ = 0;
+    float stageSelectIntroTimer_ = -1.0f;      // 0 未満は「まだ始まっていない」
+    float stageSelectIntroDuration_ = 0.55f;   // 入ってくるのにかける時間（秒）
+    Vector2 stageSelectTitlePos_ = { 64.0f, 46.0f };   // 落ち着く位置（左上）
+    float stageSelectTitleHeight_ = 64.0f;             // 高さ（幅は画像の比率から出す）
+
+    // --- 決定の操作案内（右下）。パッドを触れば A、キーボードを触れば SPACE ---
+    std::unique_ptr<Sprite> padPromptSprite_;  // A:決定
+    std::unique_ptr<Sprite> keyPromptSprite_;  // SPACE:決定
+    uint32_t padPromptTextureHandle_ = 0;
+    uint32_t keyPromptTextureHandle_ = 0;
+    bool usePadPrompt_ = false;    // 直前に触ったのがパッドか
+    float promptHeight_ = 44.0f;   // 案内の高さ（画像の比率から幅を出す）
+    float promptMargin_ = 28.0f;   // 画面の端からの余白
+
+    // --- クレジット画面表示用 (credit.png) ---
+    std::unique_ptr<Sprite> creditSprite_;
+    uint32_t creditTextureHandle_ = 0;
+    Vector2 creditPos_ = { 340.0f, 210.0f };
+    Vector2 creditSize_ = { 600.0f, 300.0f };
+    float creditAlpha_ = 0.0f; // カメラ移動完了で出現、タイトル復帰で非表示
+    float creditAnimTimer_ = 0.0f;          // 出現・待機アニメーション用タイマー
+    float creditScale_ = 1.0f;              // ポップイン・縮小演出用スケール
+    float creditTransitionDuration_ = 1.1f; // クレジットカメラ移動時間 (秒: 少し早く設定)
+
+    int selectedTitleMenu_ = 0; // 0: スタート, 1: クレジット
+    float titleMenuPulseTimer_ = 0.0f;
+    float titleMenuAlpha_ = 1.0f;
+
     std::vector<std::shared_ptr<GameObject>> searchlightObjects_;
 
     float titleTimer_ = 0.0f;
     // --- フェーズ管理 ---
     enum class Phase {
-        kTitle,              // タイトル画面
-        kTransitionToSelect, // ステージ選択へのカメラ移動演出中
-        kStageSelect,        // ステージ選択画面
-        kTransitionToGame,   // ゲーム遷移中
+        kTitle,                 // タイトル画面
+        kTransitionToSelect,    // ステージ選択へのカメラ移動演出中
+        kStageSelect,           // ステージ選択画面
+        kTransitionToGame,      // ゲーム遷移中
+        kTransitionToCredit,    // クレジット画面へのカメラ移動演出中
+        kCredit,                // クレジット画面
+        kTransitionFromCredit,  // クレジットからタイトルへのカメラ復帰演出中
     };
 
     Phase phase_ = Phase::kTitle;
+    Phase prevPhase_ = Phase::kTitle; // フェーズが変わった瞬間を拾う（見出しの演出開始用）
+
+    // タイトル画面基準カメラ座標・角度
+    Vector3 titleCameraPos_ = { 0.0f, 1.2f, -8.5f };
+    Vector3 titleCameraRot_ = { 0.06f, 0.0f, 0.0f };
 
     // ステージ選択時の目標カメラ座標・角度（画像で指定された数値）
     Vector3 targetSelectPos_ = { -18.58f, 53.63f, -43.40f };
     Vector3 targetSelectRot_ = { 0.785398f, 0.383972f, 0.0f }; // 45.0°, 22.0°, 0.0°
 
+    // クレジット表示時の目標カメラ座標・角度（ユーザー指定値）
+    // 位置: (2.32, -0.24, -10.43)
+    // 角度(ラジアン): (0.015, -1.575, 0.000)
+    Vector3 targetCreditPos_ = { 2.32f, -0.24f, -10.43f };
+    Vector3 targetCreditRot_ = { 0.015f, -1.575f, 0.0f };
+
     // カメラ移動補間用
     Vector3 transitionStartPos_{};
     Vector3 transitionStartRot_{};
     float transitionTimer_ = 0.0f;
-    float transitionDuration_ = 1.8f; // カメラ全体の移動時間（秒）
-    float logoFadeDuration_ = 0.6f;   // ロゴとライトのフェードアウト時間（秒）
+    float transitionDuration_ = 1.4f; // カメラ全体の移動時間（秒: 1.8fから少し早く調整）
+    float logoFadeDuration_ = 0.5f;   // ロゴとライトのフェードアウト時間（秒）
     float titleLogoAlpha_ = 1.0f;
     float searchlightAlpha_ = 1.0f;
     bool enableCinematicSway_ = false; // カメラ調整中は固定できるようにする
@@ -118,6 +175,14 @@ private:
     Vector2 irisCenterUV_ = { 0.5f, 0.5f };
     bool isIrisOutActive_ = false;
 
+    // --- シーン開始演出 (アイリスイン: 画面中央から円が開いてステージ選択画面が現れる) ---
+    float irisInTimer_ = 0.0f;
+    float irisInDuration_ = 0.7f;
+    Vector2 irisInCenterUV_ = { 0.5f, 0.5f };
+    bool isIrisInActive_ = false;
+
+    void StartIrisIn(const Vector2& centerUV = { 0.5f, 0.5f }, float duration = 0.7f);
+    void UpdateIrisIn(float dt);
     void StartIrisOut(const Vector2& centerUV, float duration = 0.85f);
     void UpdateIrisOut(float dt, SceneManager* sceneManager);
     Vector2 WorldToScreenUV(const Vector3& worldPos) const;

@@ -2,11 +2,13 @@
 #include "GPUParticleInspector.h"
 #include "GPUParticleEditorContext.h"
 #include "Graphics/TextureManager.h"
+#include "Scene/SceneManager.h"
+#include "Effect/ParticleCommon.h"
 #include <algorithm>
 
 void GPUParticleInspector::Initialize() {}
 
-void GPUParticleInspector::DrawInspectorUI(SceneManager* /*sceneManager*/, GPUParticleEditorContext* context) {
+void GPUParticleInspector::DrawInspectorUI(SceneManager* sceneManager, GPUParticleEditorContext* context) {
     if (!context) return;
 
     auto emitter = context->GetSelectedEmitter();
@@ -44,7 +46,7 @@ void GPUParticleInspector::DrawInspectorUI(SceneManager* /*sceneManager*/, GPUPa
     if (ImGui::IsItemActivated()) context->PushUndoState("Rename Emitter");
 
     // 1. レンダラー設定 (最重要)
-    DrawRendererSection(context);
+    DrawRendererSection(context, sceneManager);
 
     // 2. 発生 & 寿命設定
     DrawSpawnSection(context);
@@ -62,7 +64,7 @@ void GPUParticleInspector::DrawInspectorUI(SceneManager* /*sceneManager*/, GPUPa
     DrawColorSection(context);
 }
 
-void GPUParticleInspector::DrawRendererSection(GPUParticleEditorContext* context) {
+void GPUParticleInspector::DrawRendererSection(GPUParticleEditorContext* context, SceneManager* sceneManager) {
     auto emitter = context->GetSelectedEmitter();
     if (!emitter) return;
     auto& data = emitter->GetData();
@@ -161,6 +163,84 @@ void GPUParticleInspector::DrawRendererSection(GPUParticleEditorContext* context
                 data.blendMode = static_cast<BlendMode>(blendIdx);
             }
         }
+
+        // ----------------------------------------------------
+        // シェーダー設定 (Shader Settings)
+        // ----------------------------------------------------
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "シェーダー設定 (Shader Settings)");
+
+        // 頂点シェーダー (VS)
+        const auto& vsShaders = context->GetAvailableVsShaders();
+        int currentVsIdx = -1;
+        for (size_t i = 0; i < vsShaders.size(); ++i) {
+            if (vsShaders[i] == data.vsPath) {
+                currentVsIdx = static_cast<int>(i);
+                break;
+            }
+        }
+        std::string previewVsName = currentVsIdx >= 0 ? vsShaders[currentVsIdx] : data.vsPath;
+        if (ImGui::BeginCombo("頂点シェーダー (VS)", previewVsName.c_str())) {
+            for (size_t i = 0; i < vsShaders.size(); ++i) {
+                bool isSelected = (currentVsIdx == static_cast<int>(i));
+                if (ImGui::Selectable(vsShaders[i].c_str(), isSelected)) {
+                    context->PushUndoState("Change Vertex Shader");
+                    data.vsPath = vsShaders[i];
+                }
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("パーティクルの描画に使用する頂点シェーダー (.VS.hlsl)");
+
+        // VSパス直接入力
+        char vsPathBuf[256];
+        strncpy_s(vsPathBuf, data.vsPath.c_str(), sizeof(vsPathBuf) - 1);
+        if (ImGui::InputText("VSファイルパス", vsPathBuf, sizeof(vsPathBuf))) {
+            data.vsPath = vsPathBuf;
+        }
+        if (ImGui::IsItemActivated()) context->PushUndoState("Edit VS Path");
+
+        // ピクセルシェーダー (PS)
+        const auto& psShaders = context->GetAvailablePsShaders();
+        int currentPsIdx = -1;
+        for (size_t i = 0; i < psShaders.size(); ++i) {
+            if (psShaders[i] == data.psPath) {
+                currentPsIdx = static_cast<int>(i);
+                break;
+            }
+        }
+        std::string previewPsName = currentPsIdx >= 0 ? psShaders[currentPsIdx] : data.psPath;
+        if (ImGui::BeginCombo("ピクセルシェーダー (PS)", previewPsName.c_str())) {
+            for (size_t i = 0; i < psShaders.size(); ++i) {
+                bool isSelected = (currentPsIdx == static_cast<int>(i));
+                if (ImGui::Selectable(psShaders[i].c_str(), isSelected)) {
+                    context->PushUndoState("Change Pixel Shader");
+                    data.psPath = psShaders[i];
+                }
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("パーティクルの色や質感を描画するピクセルシェーダー (.PS.hlsl)");
+
+        // PSパス直接入力
+        char psPathBuf[256];
+        strncpy_s(psPathBuf, data.psPath.c_str(), sizeof(psPathBuf) - 1);
+        if (ImGui::InputText("PSファイルパス", psPathBuf, sizeof(psPathBuf))) {
+            data.psPath = psPathBuf;
+        }
+        if (ImGui::IsItemActivated()) context->PushUndoState("Edit PS Path");
+
+        // リロードボタン
+        if (ImGui::Button("シェーダー再読込 / リロード##ReloadShaders")) {
+            context->ScanAvailableShaders();
+            if (sceneManager && sceneManager->GetParticleCommon()) {
+                sceneManager->GetParticleCommon()->ReloadShaders();
+            }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("シェーダーファイルを再スキャンし、編集内容をホットリロードします");
     }
 }
 
@@ -173,8 +253,11 @@ void GPUParticleInspector::DrawSpawnSection(GPUParticleEditorContext* context) {
         // 最大粒子数
         int maxP = static_cast<int>(data.maxParticles);
         if (ImGui::DragInt("最大粒子数", &maxP, 10, 1, 50000)) {
-            data.maxParticles = static_cast<uint32_t>((std::max)(1, maxP));
-            emitter->SetData(data);
+            uint32_t newMax = static_cast<uint32_t>((std::max)(1, maxP));
+            if (newMax != data.maxParticles) {
+                data.maxParticles = newMax;
+                emitter->SetData(data);
+            }
         }
         if (ImGui::IsItemActivated()) context->PushUndoState("Change Max Particles");
 

@@ -1,4 +1,4 @@
-﻿#include "Chain2D.h"
+#include "Chain2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Player/Player2D.h"
 #include "GameObject/Object3D.h"
@@ -66,10 +66,20 @@ void Chain2D::BuildNodes() {
 
     nodes_.clear();
     nodes_.resize(nodeCount);
+
+    // プレイヤーが持つ鎖（kSocket）は、プレイヤーと重なる位置にスポーンさせる（足場貫通や下層への落下防止）
+    const bool gatherAtAnchor = (anchorMode_ == ChainAnchorMode::kSocket);
+
     for (int i = 0; i < nodeCount; ++i) {
         VerletNode& node = nodes_[i];
-        // アンカーから真下に垂らした姿勢で初期化
-        node.pos = { anchorPos_.x, anchorPos_.y - restLength_ * static_cast<float>(i), 0.0f };
+        if (gatherAtAnchor) {
+            // プレイヤーと重なるようにスポーン（ゼロ除算防止のため微小オフセット）
+            float offset = static_cast<float>(i) * 0.001f;
+            node.pos = { anchorPos_.x, anchorPos_.y - offset, 0.0f };
+        } else {
+            // アンカーから真下に垂らした姿勢で初期化
+            node.pos = { anchorPos_.x, anchorPos_.y - restLength_ * static_cast<float>(i), 0.0f };
+        }
         node.prevPos = node.pos;
         // 先頭ノードがアンカー（固定）。ただしkFree（落ちている状態）なら全ノード自由
         node.invMass = (i == 0 && anchorMode_ != ChainAnchorMode::kFree) ? 0.0f : 1.0f;
@@ -178,8 +188,13 @@ void Chain2D::UpdatePayout(float dt) {
     float feed = params_.payoutSpeed_ * dt;
 
     if (pendingNodes_ <= 0) {
-        // キューが空でも、最後に挿入した節が伸び切るまで先頭セグメントを伸ばし続ける
-        headRest_ = (std::min)(headRest_ + feed, restLength_);
+        if (headRest_ > restLength_) {
+            // 外した直後で隙間が空いている：繰り出しと同じ速さで巻き取る（一気に縮めると吹き飛ぶ）
+            headRest_ = (std::max)(restLength_, headRest_ - feed);
+        } else {
+            // キューが空でも、最後に挿入した節が伸び切るまで先頭セグメントを伸ばし続ける
+            headRest_ = (std::min)(headRest_ + feed, restLength_);
+        }
         return;
     }
 
@@ -292,10 +307,11 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
     // 「静止した地形と動くブロックに挟まれた」ので、その場に固定する（閉まるドアに鎖が挟まる）。
     // 固定された節が鎖を止めるので、プレイヤーが離れると鎖が伸び切ってちぎれる。動くブロックが離れたら解放する
     if (map) {
-        for (size_t i = 1; i < nodes_.size(); ++i) {
+        // 手元の節（rootSkip 未満）は地形から押し出していないので、地形の中にあっても「挟まれ」にはしない
+        for (size_t i = (std::max)(rootSkip, static_cast<size_t>(1)); i < nodes_.size(); ++i) {
             VerletNode& node = nodes_[i];
             if (node.crushed) {
-                if (!VerletPhysics2D::IsTouchingMovingSolid(node, map)) {
+                if (!VerletPhysics2D::IsTouchingMovingSolid(node, map, true)) {
                     node.crushed = false; // ドアが開いた
                     node.invMass = 1.0f;
                 }
@@ -304,13 +320,25 @@ void Chain2D::StepSimulation(float dt, MapChip2D* map, Player2D* player) {
             if (node.invMass <= 0.0f) {
                 continue;
             }
-            if (VerletPhysics2D::IsTouchingMovingSolid(node, map) && VerletPhysics2D::IsInsideStaticSolid(node.pos, map)) {
+            if (VerletPhysics2D::IsTouchingMovingSolid(node, map, true) && VerletPhysics2D::IsInsideStaticSolid(node.pos, map)) {
                 node.crushed = true;
                 node.invMass = 0.0f;
                 node.prevPos = node.pos;
             }
         }
         ApplyEndWeight(); // 末端の質量を戻す（挟まれていれば 0 のまま）
+    }
+
+    // 落ち着いた判定：一番速い節でも遅ければ、地面で止まったとみなして時間を数える
+    float maxSpeed = 0.0f;
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        Vector3 v = GetNodeVelocity(static_cast<int>(i));
+        maxSpeed = (std::max)(maxSpeed, std::sqrt(v.x * v.x + v.y * v.y));
+    }
+    if (maxSpeed < kRestSpeed) {
+        restTimer_ += dt;
+    } else {
+        restTimer_ = 0.0f;
     }
 }
 
@@ -368,14 +396,20 @@ void Chain2D::Draw() {
 
 void Chain2D::ResetPoseHanging(const Vector3& anchor, MapChip2D* map) {
     anchorPos_ = { anchor.x, anchor.y, 0.0f };
+    const bool gatherAtAnchor = (anchorMode_ == ChainAnchorMode::kSocket);
     float y = anchorPos_.y;
     for (size_t i = 0; i < nodes_.size(); ++i) {
         VerletNode& node = nodes_[i];
-        node.pos = { anchorPos_.x, y, 0.0f };
-        // 先頭セグメントは繰り出し中の自然長、以降は節間隔
-        y -= (i == 0) ? headRest_ : restLength_;
-        if (i > 0 && map && node.invMass > 0.0f) {
-            VerletPhysics2D::CollideNodeWithMap(node, map, 0.0f); // 床やブロックに埋まった分だけ押し出す
+        if (gatherAtAnchor) {
+            float offset = static_cast<float>(i) * 0.001f;
+            node.pos = { anchorPos_.x, anchorPos_.y - offset, 0.0f };
+        } else {
+            node.pos = { anchorPos_.x, y, 0.0f };
+            // 先頭セグメントは繰り出し中の自然長、以降は節間隔
+            y -= (i == 0) ? headRest_ : restLength_;
+            if (i > 0 && map && node.invMass > 0.0f) {
+                VerletPhysics2D::CollideNodeWithMap(node, map, 0.0f); // 床やブロックに埋まった分だけ押し出す
+            }
         }
         node.prevPos = node.pos; // 速度ゼロ
         if (node.crushed) {
@@ -389,12 +423,15 @@ void Chain2D::ResetPoseHanging(const Vector3& anchor, MapChip2D* map) {
 
 void Chain2D::ResetDynamics() {
     VerletPhysics2D::ResetVelocities(nodes_);
+    restTimer_ = 0.0f;
 }
 
 void Chain2D::ResetToInitial() {
-    // 初期モード・初期アンカーに戻して垂下姿勢を再構築する（繰り出し状態もクリアされる）
+    // 初期モード・初期アンカーに戻して姿勢を再構築する（繰り出し状態もクリアされる）
     anchorMode_ = initialMode_;
-    anchorPos_ = initialAnchorPos_;
+    if (anchorMode_ != ChainAnchorMode::kSocket) {
+        anchorPos_ = initialAnchorPos_;
+    }
     BuildNodes();
     UpdateLinkTransforms();
 }
@@ -437,7 +474,7 @@ void Chain2D::QueueUnits(int units) {
 }
 
 bool Chain2D::IsPayingOut() const {
-    return pendingNodes_ > 0 || headRest_ < restLength_ - 1e-4f;
+    return pendingNodes_ > 0 || std::fabs(headRest_ - restLength_) > 1e-4f; // 繰り出し中と巻き取り中
 }
 
 void Chain2D::AddUnitsAtAnchor(int units) {
@@ -498,8 +535,15 @@ std::vector<VerletNode> Chain2D::RemoveUnitsAtAnchor(int units) {
         node.invMass = node.crushed ? 0.0f : 1.0f; // 自由ノード化（挟まれた節は固定のまま）
         node.radius = params_.nodeRadius_;
     }
-    // 残った新しい先頭セグメントは完全長。残りの揺れは殺さない（ResetDynamicsは呼ばない）
+    // 外した分だけ、手と残った鎖の間に隙間が空く。
+    // ここで自然長を 1 節分に戻すと距離制約が一気に縮めにかかり、残りの鎖と宝石が吹き飛ぶ。
+    // いまの隙間をそのまま自然長にしておき、UpdatePayout で少しずつ巻き取る（残りの揺れは殺さない）
     headRest_ = restLength_;
+    if (nodes_.size() >= 2) {
+        const float dx = nodes_[1].pos.x - nodes_[0].pos.x;
+        const float dy = nodes_[1].pos.y - nodes_[0].pos.y;
+        headRest_ = (std::max)(restLength_, std::sqrt(dx * dx + dy * dy));
+    }
 
     ApplyEndWeight();
     UpdateLinkTransforms();
@@ -631,8 +675,13 @@ void Chain2D::RestoreMasses() {
 
 void Chain2D::SetRigidLineTarget(const Vector3* target) {
     if (rigidLine_ && !target) {
-        // 解除：速度ゼロで物理に戻す（prevPos は PlaceNodesOnLine で pos と同じ）
+        // 解除：速度ゼロで物理に戻す
+        // （PlaceNodesOnLine は「殴る」判定のために prevPos に前フレームの位置を残しているので、ここでそろえないと
+        //   直前の振りの速さがそのまま残り、K/J や死亡で解除した瞬間に宝石が飛んでいた）
         rigidLine_ = nullptr;
+        for (auto& node : nodes_) {
+            node.prevPos = node.pos;
+        }
         RestoreMasses();
         return;
     }
@@ -658,6 +707,26 @@ void Chain2D::ReleaseRigidLine(const Vector3& center, float omega, float velocit
         float ry = node.pos.y - center.y;
         Vector3 v = { -ry * w, rx * w, 0.0f };
         VerletPhysics2D::ApplyVelocity(node, v, subDt, 1.0f);
+    }
+}
+
+void Chain2D::ThrowWeight(const Vector3& velocity, float dt) {
+    rigidLine_ = nullptr;
+    RestoreMasses();
+    if (nodes_.size() < 2) {
+        return;
+    }
+    float subDt = dt / static_cast<float>((std::max)(1, params_.subSteps_));
+    const float last = static_cast<float>(nodes_.size() - 1);
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        VerletNode& node = nodes_[i];
+        node.prevPos = node.pos; // 拘束中の残留変位を消してから注入
+        if (node.invMass <= 0.0f) {
+            continue; // アンカー等の固定ノード
+        }
+        // 手元（0）から先端（1）へ向かって速度を増やす。先端の重りが一番速い
+        float t = (last > 0.0f) ? static_cast<float>(i) / last : 1.0f;
+        VerletPhysics2D::ApplyVelocity(node, velocity, subDt, t);
     }
 }
 

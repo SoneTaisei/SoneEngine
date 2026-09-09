@@ -7,8 +7,11 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include "Scene/SceneFactory.h"
+#include "Resource/Audio/AudioManager.h"
 #include "GameScene.h"
+#include "Game2D/Blocks/SavePoint.h"
 #include "Core/TimeManager.h"
 #include "Graphics/CameraManager.h"
 #include "Renderer/Renderer.h"
@@ -23,6 +26,9 @@ StageSelectScene::~StageSelectScene() {}
 
 void StageSelectScene::OnEnter(SceneManager* sceneManager) {
     // シーン開始時に、可能なら前回の選択ステージなどを復元する
+    AudioManager::StopAllBGM();
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Title.mp3", true, 0.4f);
+    AudioManager::PlayBGM("resources/Sound/10Dyas/BGM/Select.mp3", true, 0.4f);
 }
 
 void StageSelectScene::OnExit(SceneManager* sceneManager) {
@@ -110,23 +116,51 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
     }
 
     auto keyboard = KeyboardInput::GetInstance();
-    if (keyboard->IsKeyPressed(DIK_A)) {
+    auto pad = GamepadInput::GetInstance();
+
+    static float s_stageSelectPadCooldown = 0.0f;
+    if (s_stageSelectPadCooldown > 0.0f) {
+        s_stageSelectPadCooldown -= TimeManager::GetInstance().GetDeltaTime();
+    }
+
+    bool movePrev = keyboard->IsKeyPressed(DIK_A) || keyboard->IsKeyPressed(DIK_LEFT);
+    bool moveNext = keyboard->IsKeyPressed(DIK_D) || keyboard->IsKeyPressed(DIK_RIGHT);
+
+    if (pad && pad->IsConnected() && s_stageSelectPadCooldown <= 0.0f) {
+        float stickX = pad->GetLeftStick().x;
+        if (pad->IsDPadLeft() || stickX < -0.5f) {
+            movePrev = true;
+            s_stageSelectPadCooldown = 0.25f;
+        } else if (pad->IsDPadRight() || stickX > 0.5f) {
+            moveNext = true;
+            s_stageSelectPadCooldown = 0.25f;
+        }
+    }
+
+    if (movePrev) {
         currentStageIndex_--;
         if (currentStageIndex_ < 0) {
             currentStageIndex_ = stageCount_ - 1;
         }
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
-    if (keyboard->IsKeyPressed(DIK_D)) {
+    if (moveNext) {
         currentStageIndex_++;
         if (currentStageIndex_ >= stageCount_) {
             currentStageIndex_ = 0;
         }
+        AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
     }
 
-    if (keyboard->IsKeyPressed(DIK_SPACE)) {
+    bool isDecision = keyboard->IsKeyPressed(DIK_SPACE) || keyboard->IsKeyPressed(DIK_RETURN) ||
+                      (pad && (pad->IsButtonPressed(GamepadButton::A) || pad->IsButtonPressed(0)));
+
+    if (isDecision) {
+        AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
             GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }
+        SavePoint::Clear(GameScene::s_TargetMapFilePath);
         sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
         return;
     }

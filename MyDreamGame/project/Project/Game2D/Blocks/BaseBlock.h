@@ -77,11 +77,45 @@ public:
         return false;
     }
 
+    // 破壊された後もマップに残すか（true: 消えた状態のまま updateBlocks_ に残り、Reset() で復活できる。
+    // 収集アイテムの数え上げや崩れる床の「復活」、巻き戻しでの復元に使う。false: 破壊されたら MapChip2D が取り除く）
+    virtual bool KeepWhenDestroyed() const { return false; }
+
+    // 鎖がこのブロック（動くブロック）と静止した地形に挟まれた時、鎖をちぎるか（ドアの crushKills）
+    virtual bool CrushesChain() const { return true; }
+    // 鎖の当たり（OnChainTouch）に使う範囲。動くブロックは今の見た目ではなく「通路」の範囲で取りたい時に上書きする
+    virtual AABB2D GetChainTouchAABB() const { return GetAABB(); }
+
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
 
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
+
+    // ===== 3Dモデル差し替え時の見た目 =====
+    // モデルを設定したブロックは、立方体プリミティブを消してモデルだけを表示する。
+    // 派生ブロックの Reset() が色やスケールを初期値へ戻すと立方体が復活してしまうため、
+    // 設定内容をここに覚えておき、Reset() の後（MapChip2D::ResetBlocks）で再適用する。
+    void SetModelVisualOverride(const Vector3& position, const Vector3& scale) {
+        hasModelVisual_ = true;
+        modelPosition_ = position;
+        modelScale_ = scale;
+    }
+    bool HasModelVisual() const { return hasModelVisual_; }
+
+    void ApplyModelVisualOverride() {
+        if (!hasModelVisual_ || !gameObject_) return;
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            tc->SetPosition(modelPosition_);
+            tc->SetScale(modelScale_);
+        }
+        // 立方体プリミティブは描画自体を止める（アルファ0だけだと Reset() で色が戻り、
+        // モデルとブロックが重なって見えてしまう）
+        if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+            prc->SetEnabled(false);
+            prc->GetMaterial().color.w = 0.0f;
+        }
+    }
 
     // ===== リプレイ対応 =====
     // リプレイに毎フレーム状態を記録する対象かどうか。
@@ -136,7 +170,7 @@ public:
         }
     }
 
-    AABB2D GetAABB() const {
+    virtual AABB2D GetAABB() const {
         Vector3 pos = {0.0f, 0.0f, 0.0f};
         Vector3 scale = {1.0f, 1.0f, 1.0f};
         if (gameObject_) {
@@ -159,4 +193,9 @@ protected:
     int chipY_ = 0;
     std::unique_ptr<GameObject> gameObject_;
     bool isDestroyed_ = false;
+
+    // 3Dモデル差し替え時の見た目（MapChip2D が設定する）
+    bool hasModelVisual_ = false;
+    Vector3 modelPosition_ = {0.0f, 0.0f, 0.0f};
+    Vector3 modelScale_ = {1.0f, 1.0f, 1.0f};
 };

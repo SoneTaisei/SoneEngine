@@ -52,10 +52,59 @@ void ParticleCommon::PreDraw() {
 }
 
 void ParticleCommon::SetBlendMode(BlendMode blendMode) {
-    // 範囲チェック
-    if(blendMode >= 0 && blendMode < kCountOfBlendMode) {
-        commandList_->SetPipelineState(pipelineStates_[blendMode].Get());
+    SetPipelineState("resources/shaders/Particle.VS.hlsl", "resources/shaders/Particle.PS.hlsl", blendMode);
+}
+
+void ParticleCommon::SetPipelineState(const std::string& vsPath, const std::string& psPath, BlendMode blendMode) {
+    if (!commandList_) return;
+    ID3D12PipelineState* pso = GetOrCreatePipelineState(vsPath, psPath, blendMode);
+    if (pso) {
+        commandList_->SetPipelineState(pso);
     }
+}
+
+void ParticleCommon::ReloadShaders() {
+    psoCache_.clear();
+    shaderBlobCache_.clear();
+    CreatePipelineState();
+}
+
+ID3D12PipelineState* ParticleCommon::GetOrCreatePipelineState(const std::string& vsPath, const std::string& psPath, BlendMode blendMode) {
+    // 範囲外なら通常ブレンド
+    if (blendMode < 0 || blendMode >= kCountOfBlendMode) {
+        blendMode = kBlendModeNormal;
+    }
+
+    std::string normVsPath = vsPath.empty() ? "resources/shaders/Particle.VS.hlsl" : vsPath;
+    std::string normPsPath = psPath.empty() ? "resources/shaders/Particle.PS.hlsl" : psPath;
+
+    // デフォルトシェーダーの場合、事前生成済み配列を直接返す
+    if (normVsPath == "resources/shaders/Particle.VS.hlsl" && normPsPath == "resources/shaders/Particle.PS.hlsl") {
+        return pipelineStates_[blendMode].Get();
+    }
+
+    ParticlePipelineKey key{ normVsPath, normPsPath, blendMode };
+    auto it = psoCache_.find(key);
+    if (it != psoCache_.end()) {
+        return it->second.Get();
+    }
+
+    // シェーダーのコンパイル
+    auto vsBlob = CompileShaderInternal(normVsPath, L"vs_6_0");
+    auto psBlob = CompileShaderInternal(normPsPath, L"ps_6_0");
+
+    if (!vsBlob || !psBlob) {
+        // コンパイル失敗時はデフォルトに安全にフォールバック
+        return pipelineStates_[blendMode].Get();
+    }
+
+    auto pso = CreateSinglePipelineState(vsBlob.Get(), psBlob.Get(), blendMode);
+    if (!pso) {
+        return pipelineStates_[blendMode].Get();
+    }
+
+    psoCache_[key] = pso;
+    return pso.Get();
 }
 
 // リストへの追加
@@ -143,42 +192,67 @@ void ParticleCommon::CreateRootSignature() {
     device_->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature_));
 }
 
-void ParticleCommon::CreatePipelineState() {
-    // --- シェーダーコンパイル (変更なし) ---
-    IDxcUtils *dxcUtils = nullptr;
-    IDxcCompiler3 *dxcCompiler = nullptr;
-    IDxcIncludeHandler *includeHandler = nullptr;
-    DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils));
-    DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler));
-    dxcUtils->CreateDefaultIncludeHandler(&includeHandler);
+Microsoft::WRL::ComPtr<ID3DBlob> ParticleCommon::CompileShaderInternal(const std::string& filePath, const wchar_t* profile) {
+    if (filePath.empty()) return nullptr;
 
-    // シェーダーコンパイル処理
-    auto CompileShader = [&](const std::wstring &filePath, const wchar_t *profile) {
-        // ... (省略: 元のコードと同じ内容) ...
-        IDxcBlobEncoding *sourceBlob = nullptr;
-        if(FAILED(dxcUtils->LoadFile(filePath.c_str(), nullptr, &sourceBlob))) return Microsoft::WRL::ComPtr<ID3DBlob>();
-        LPCWSTR arguments[] = { filePath.c_str(), L"-E", L"main", L"-T", profile, L"-Zi", L"-Qembed_debug", L"-Od", L"-Zpr" };
-        DxcBuffer buffer = {};
-        buffer.Ptr = sourceBlob->GetBufferPointer();
-        buffer.Size = sourceBlob->GetBufferSize();
-        buffer.Encoding = DXC_CP_UTF8;
-        IDxcResult *result = nullptr;
-        dxcCompiler->Compile(&buffer, arguments, _countof(arguments), includeHandler, IID_PPV_ARGS(&result));
-        IDxcBlobUtf8 *errorBlob = nullptr;
-        result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errorBlob), nullptr);
-        if(errorBlob && errorBlob->GetStringLength() > 0) {
-            OutputDebugStringA((char *)errorBlob->GetStringPointer());
-            assert(false);
+    auto it = shaderBlobCache_.find(filePath);
+    if (it != shaderBlobCache_.end()) {
+        return it->second;
+    }
+
+    if (!dxcUtils_ || !dxcCompiler_ || !includeHandler_) {
+        DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils_));
+        DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler_));
+        if (dxcUtils_) {
+            dxcUtils_->CreateDefaultIncludeHandler(&includeHandler_);
         }
-        Microsoft::WRL::ComPtr<ID3DBlob> shaderBlob = nullptr;
-        result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
-        result->Release();
-        sourceBlob->Release();
-        return shaderBlob;
-    };
+    }
+    if (!dxcUtils_ || !dxcCompiler_) {
+        return nullptr;
+    }
 
-    auto vsBlob = CompileShader(L"resources/shaders/Particle.VS.hlsl", L"vs_6_0");
-    auto psBlob = CompileShader(L"resources/shaders/Particle.PS.hlsl", L"ps_6_0");
+    std::wstring wFilePath = ConvertString(filePath);
+    Microsoft::WRL::ComPtr<IDxcBlobEncoding> sourceBlob;
+    if (FAILED(dxcUtils_->LoadFile(wFilePath.c_str(), nullptr, &sourceBlob))) {
+        OutputDebugStringA(std::format("ParticleCommon::CompileShaderInternal: Failed to load {}\n", filePath).c_str());
+        return nullptr;
+    }
+
+    LPCWSTR arguments[] = { wFilePath.c_str(), L"-E", L"main", L"-T", profile, L"-Zi", L"-Qembed_debug", L"-Od", L"-Zpr" };
+    DxcBuffer buffer = {};
+    buffer.Ptr = sourceBlob->GetBufferPointer();
+    buffer.Size = sourceBlob->GetBufferSize();
+    buffer.Encoding = DXC_CP_UTF8;
+
+    Microsoft::WRL::ComPtr<IDxcResult> result;
+    HRESULT hr = dxcCompiler_->Compile(&buffer, arguments, _countof(arguments), includeHandler_.Get(), IID_PPV_ARGS(&result));
+    if (FAILED(hr) || !result) {
+        return nullptr;
+    }
+
+    Microsoft::WRL::ComPtr<IDxcBlobUtf8> errorBlob;
+    result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errorBlob), nullptr);
+    if (errorBlob && errorBlob->GetStringLength() > 0) {
+        OutputDebugStringA((char*)errorBlob->GetStringPointer());
+    }
+
+    HRESULT status;
+    result->GetStatus(&status);
+    if (FAILED(status)) {
+        return nullptr;
+    }
+
+    Microsoft::WRL::ComPtr<ID3DBlob> shaderBlob;
+    result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shaderBlob), nullptr);
+    if (shaderBlob) {
+        shaderBlobCache_[filePath] = shaderBlob;
+    }
+    return shaderBlob;
+}
+
+Microsoft::WRL::ComPtr<ID3D12PipelineState> ParticleCommon::CreateSinglePipelineState(
+    ID3DBlob* vsBlob, ID3DBlob* psBlob, BlendMode blendMode) {
+    if (!device_ || !rootSignature_ || !vsBlob || !psBlob) return nullptr;
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
     psoDesc.pRootSignature = rootSignature_.Get();
@@ -192,13 +266,11 @@ void ParticleCommon::CreatePipelineState() {
     psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
     psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
 
-    // ■■■ 重要: ループの前に共通設定を済ませる ■■■
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 両面描画
 
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    // パーティクルは半透明が多いので、デプス書き込みはOFF
-    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // パーティクルはデプス書き込みOFF
 
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -207,61 +279,63 @@ void ParticleCommon::CreatePipelineState() {
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
-    // --- ループでブレンド設定を変えながらPSO生成 ---
-    // ここでGit競合が発生していたため、きれいな記述の方を採用して修正
-    for(int i = 0; i < kCountOfBlendMode; ++i) {
-        // デフォルト設定にリセット
-        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    D3D12_RENDER_TARGET_BLEND_DESC &blendDesc = psoDesc.BlendState.RenderTarget[0];
+    blendDesc.BlendEnable = true;
+    blendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+    blendDesc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
 
-        BlendMode mode = static_cast<BlendMode>(i);
-        D3D12_RENDER_TARGET_BLEND_DESC &blendDesc = psoDesc.BlendState.RenderTarget[0];
-
-        // 共通設定: ブレンド有効
-        blendDesc.BlendEnable = true;
-        blendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        blendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
-        blendDesc.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA; // PrimitiveObjectに合わせる
-
-        switch(mode) {
-        case kBlendModeNone:
-            blendDesc.BlendEnable = false;
-            break;
-        case kBlendModeNormal: // 通常α
-            blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-            blendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-            blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-            break;
-        case kBlendModeAdd: // 加算
-            blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-            blendDesc.DestBlend = D3D12_BLEND_ONE;
-            blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-            break;
-        case kBlendModeSubtract: // 減算
-            blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-            blendDesc.DestBlend = D3D12_BLEND_ONE;
-            blendDesc.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
-            break;
-        case kBlendModeMultiply: // 乗算
-            blendDesc.SrcBlend = D3D12_BLEND_ZERO;
-            blendDesc.DestBlend = D3D12_BLEND_SRC_COLOR;
-            blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-            break;
-        case kBlendModeScreen: // スクリーン
-            blendDesc.SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
-            blendDesc.DestBlend = D3D12_BLEND_ONE;
-            blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
-            break;
-        }
-
-        // PSO作成 (配列に保存)
-        HRESULT hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineStates_[i]));
-        assert(SUCCEEDED(hr));
+    switch(blendMode) {
+    case kBlendModeNone:
+        blendDesc.BlendEnable = false;
+        break;
+    case kBlendModeNormal:
+        blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        blendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+        break;
+    case kBlendModeAdd:
+        blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        blendDesc.DestBlend = D3D12_BLEND_ONE;
+        blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+        break;
+    case kBlendModeSubtract:
+        blendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        blendDesc.DestBlend = D3D12_BLEND_ONE;
+        blendDesc.BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+        break;
+    case kBlendModeMultiply:
+        blendDesc.SrcBlend = D3D12_BLEND_ZERO;
+        blendDesc.DestBlend = D3D12_BLEND_SRC_COLOR;
+        blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+        break;
+    case kBlendModeScreen:
+        blendDesc.SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
+        blendDesc.DestBlend = D3D12_BLEND_ONE;
+        blendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+        break;
+    default:
+        break;
     }
-    // ■ ループ後の単体作成コードは削除しました (不要なため)
 
-    dxcUtils->Release();
-    dxcCompiler->Release();
-    includeHandler->Release();
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+    HRESULT hr = device_->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pso));
+    if (FAILED(hr)) {
+        return nullptr;
+    }
+    return pso;
+}
+
+void ParticleCommon::CreatePipelineState() {
+    auto vsBlob = CompileShaderInternal("resources/shaders/Particle.VS.hlsl", L"vs_6_0");
+    auto psBlob = CompileShaderInternal("resources/shaders/Particle.PS.hlsl", L"ps_6_0");
+    assert(vsBlob && psBlob);
+
+    for(int i = 0; i < kCountOfBlendMode; ++i) {
+        pipelineStates_[i] = CreateSinglePipelineState(vsBlob.Get(), psBlob.Get(), static_cast<BlendMode>(i));
+        assert(pipelineStates_[i]);
+    }
 }
 
 void ParticleCommon::CreateMesh() {

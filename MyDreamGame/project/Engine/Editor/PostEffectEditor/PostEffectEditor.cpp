@@ -52,6 +52,14 @@ PostEffectItem::PostEffectItem(const std::string& n, PostEffectShaderType type)
     params.irisMaskColor[2] = 0.0f;
     params.irisMaskColor[3] = 1.0f;
 
+    params.enableLetterbox = 1;
+    params.letterboxHeight = 0.12f;
+    params.letterboxSmoothness = 0.002f;
+    params.letterboxColor[0] = 0.0f;
+    params.letterboxColor[1] = 0.0f;
+    params.letterboxColor[2] = 0.0f;
+    params.letterboxColor[3] = 1.0f;
+
     params.grayscaleStrength = 1.0f;
     params.sepiaStrength = 0.8f;
 }
@@ -104,6 +112,7 @@ void PostEffectEditor::ApplyToDirectXCommon() {
     target->enableDissolve = 0;
     target->enableNoise = 0;
     target->enableIris = 0;
+    target->enableLetterbox = 0;
 
     // 有効なポストエフェクトが1つでもあるかチェック
     bool anyEnabled = false;
@@ -194,6 +203,15 @@ void PostEffectEditor::ApplyToDirectXCommon() {
             }
             break;
 
+        case PostEffectShaderType::Letterbox:
+            if (item.params.enableLetterbox) {
+                target->enableLetterbox = 1;
+                target->letterboxHeight = item.params.letterboxHeight;
+                target->letterboxSmoothness = item.params.letterboxSmoothness;
+                for (int i = 0; i < 4; ++i) target->letterboxColor[i] = item.params.letterboxColor[i];
+            }
+            break;
+
         case PostEffectShaderType::Composite:
             if (item.params.grayscaleStrength > 0.0f) target->grayscaleStrength = (std::max)(target->grayscaleStrength, item.params.grayscaleStrength);
             if (item.params.sepiaStrength > 0.0f) target->sepiaStrength = (std::max)(target->sepiaStrength, item.params.sepiaStrength);
@@ -239,6 +257,12 @@ void PostEffectEditor::ApplyToDirectXCommon() {
                 target->irisSmoothness = item.params.irisSmoothness;
                 target->isIrisIn = item.params.isIrisIn;
                 for (int i = 0; i < 4; ++i) target->irisMaskColor[i] = item.params.irisMaskColor[i];
+            }
+            if (item.params.enableLetterbox) {
+                target->enableLetterbox = 1;
+                target->letterboxHeight = item.params.letterboxHeight;
+                target->letterboxSmoothness = item.params.letterboxSmoothness;
+                for (int i = 0; i < 4; ++i) target->letterboxColor[i] = item.params.letterboxColor[i];
             }
             break;
 
@@ -419,6 +443,12 @@ bool PostEffectEditor::SaveToFile(const std::string& filePath) {
                 {"isIrisIn", item.params.isIrisIn},
                 {"maskColor", {item.params.irisMaskColor[0], item.params.irisMaskColor[1], item.params.irisMaskColor[2], item.params.irisMaskColor[3]}}
             };
+            params["letterbox"] = {
+                {"enabled", item.params.enableLetterbox != 0},
+                {"height", item.params.letterboxHeight},
+                {"smoothness", item.params.letterboxSmoothness},
+                {"color", {item.params.letterboxColor[0], item.params.letterboxColor[1], item.params.letterboxColor[2], item.params.letterboxColor[3]}}
+            };
 
             j["params"] = params;
             effectsArray.push_back(j);
@@ -543,6 +573,16 @@ bool PostEffectEditor::LoadFromFile(const std::string& filePath) {
                             }
                         }
                     }
+                    if (s.contains("letterbox")) {
+                        item.params.enableLetterbox = s["letterbox"].value("enabled", true) ? 1 : 0;
+                        item.params.letterboxHeight = s["letterbox"].value("height", 0.12f);
+                        item.params.letterboxSmoothness = s["letterbox"].value("smoothness", 0.002f);
+                        if (s["letterbox"].contains("color") && s["letterbox"]["color"].is_array()) {
+                            for (size_t c = 0; c < 4 && c < s["letterbox"]["color"].size(); ++c) {
+                                item.params.letterboxColor[c] = s["letterbox"]["color"][c].get<float>();
+                            }
+                        }
+                    }
                 }
                 postEffects_.push_back(item);
             }
@@ -604,6 +644,7 @@ static const char* GetShaderTypeName(PostEffectShaderType type) {
     case PostEffectShaderType::Dissolve:   return "ディゾルブ";
     case PostEffectShaderType::Noise:      return "ノイズ";
     case PostEffectShaderType::Iris:       return "アイリス";
+    case PostEffectShaderType::Letterbox:  return "レターボックス";
     case PostEffectShaderType::Composite:  return "複合";
     default: return "";
     }
@@ -871,6 +912,7 @@ void PostEffectEditor::DrawUI(bool* pOpen) {
         "ディゾルブ (Dissolve)",
         "ノイズ (Noise)",
         "アイリス (Iris)",
+        "レターボックス (Letterbox)",
         "複合 (Composite)"
     };
 
@@ -1149,6 +1191,81 @@ void PostEffectEditor::DrawUI(bool* pOpen) {
                 ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
                 ImGui::ColorEdit4("##irisMaskColor", currentItem->params.irisMaskColor);
                 ImGui::PopItemWidth();
+            }
+            ImGui::Spacing();
+        }
+        ImGui::Spacing();
+    }
+
+    // --- レターボックス ---
+    if (currentItem->shaderType == PostEffectShaderType::Letterbox || isAll) {
+        if (ImGui::CollapsingHeader("レターボックス設定 (Letterbox)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Spacing();
+            bool enableLetterbox = (currentItem->params.enableLetterbox != 0);
+            if (ImGui::Checkbox("レターボックスを有効化", &enableLetterbox)) {
+                currentItem->params.enableLetterbox = enableLetterbox ? 1 : 0;
+            }
+            if (enableLetterbox) {
+                ImGui::Spacing();
+                DrawFloatControl("バーの高さ (Bar Height)", &currentItem->params.letterboxHeight, 0.0f, 0.5f, 0.002f);
+                ImGui::Spacing();
+
+                // プリセットボタン
+                ImGui::Text("シネマ比率プリセット (Presets):");
+                if (ImGui::Button("シネスコ (2.35:1)")) {
+                    currentItem->params.letterboxHeight = (1.0f - (16.0f / 9.0f) / 2.35f) * 0.5f;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("シネスコ (2.39:1)")) {
+                    currentItem->params.letterboxHeight = (1.0f - (16.0f / 9.0f) / 2.39f) * 0.5f;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("標準 (12%)")) {
+                    currentItem->params.letterboxHeight = 0.12f;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("薄め (8%)")) {
+                    currentItem->params.letterboxHeight = 0.08f;
+                }
+
+                ImGui::Spacing();
+                DrawFloatControl("エッジ滑らかさ (Smoothness)", &currentItem->params.letterboxSmoothness, 0.0f, 0.1f, 0.001f);
+                ImGui::Spacing();
+
+                ImGui::Text("バーの色 (Bar Color)");
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                ImGui::ColorEdit4("##letterboxColor", currentItem->params.letterboxColor);
+                ImGui::PopItemWidth();
+                ImGui::Spacing();
+
+                // ミニプレビュー
+                ImGui::Text("プレビュー");
+                float previewWidth = 220.0f;
+                float previewHeight = previewWidth * (9.0f / 16.0f);
+                ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+                ImVec2 canvas_size = ImVec2(previewWidth, previewHeight);
+
+                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                // 画面背景
+                draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(50, 70, 90, 255));
+                
+                // 上下の黒帯
+                float barPixelH = (std::min)(currentItem->params.letterboxHeight, 0.5f) * canvas_size.y;
+                ImU32 barCol = ImGui::ColorConvertFloat4ToU32(ImVec4(
+                    currentItem->params.letterboxColor[0],
+                    currentItem->params.letterboxColor[1],
+                    currentItem->params.letterboxColor[2],
+                    currentItem->params.letterboxColor[3]
+                ));
+                // 上部バー
+                if (barPixelH > 0.0f) {
+                    draw_list->AddRectFilled(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + barPixelH), barCol);
+                    // 下部バー
+                    draw_list->AddRectFilled(ImVec2(canvas_pos.x, canvas_pos.y + canvas_size.y - barPixelH), ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), barCol);
+                }
+                // 枠線
+                draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(120, 120, 120, 255));
+                ImGui::Dummy(canvas_size);
             }
             ImGui::Spacing();
         }

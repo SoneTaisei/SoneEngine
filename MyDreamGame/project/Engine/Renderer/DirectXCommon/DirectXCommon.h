@@ -110,6 +110,14 @@ public:
         float irisPadding1 = 0.0f;
 
         float irisMaskColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+
+        // Letterbox (32 bytes aligned)
+        int enableLetterbox = 0;
+        float letterboxHeight = 0.12f;
+        float letterboxSmoothness = 0.002f;
+        float letterboxPadding = 0.0f;
+
+        float letterboxColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     };
     
 
@@ -141,6 +149,10 @@ public:
     
     // ポストエフェクトを実行する関数 (RenderTexture -> PostProcessTexture)
     void ExecutePostEffect();
+
+    // ポストエフェクト完了後に最前面2Dスプライトを描画するための準備・完了関数
+    void PreDraw2D();
+    void PostDraw2D();
 
 	// RenderTextureの内容を現在の画面にコピーして描画する関数
     void DrawRenderTexture();
@@ -274,6 +286,30 @@ public:
         }
     }
 
+    void SetCompositeLetterboxEnabled(bool enabled) {
+        if (compositeParamsData_) {
+            compositeParamsData_->enableLetterbox = enabled ? 1 : 0;
+        }
+    }
+    void SetLetterboxHeight(float height) {
+        if (compositeParamsData_) {
+            compositeParamsData_->letterboxHeight = height;
+        }
+    }
+    void SetLetterboxSmoothness(float smoothness) {
+        if (compositeParamsData_) {
+            compositeParamsData_->letterboxSmoothness = smoothness;
+        }
+    }
+    void SetLetterboxColor(float r, float g, float b, float a = 1.0f) {
+        if (compositeParamsData_) {
+            compositeParamsData_->letterboxColor[0] = r;
+            compositeParamsData_->letterboxColor[1] = g;
+            compositeParamsData_->letterboxColor[2] = b;
+            compositeParamsData_->letterboxColor[3] = a;
+        }
+    }
+
     void SetDissolveMaskTexture(D3D12_GPU_DESCRIPTOR_HANDLE handle) { dissolveMaskSrvHandleGPU_ = handle; }
 
     struct OutlineParams {
@@ -399,7 +435,7 @@ private:
 
     PostEffect postEffect_ = PostEffect::kComposite;
     bool isPostEffectEnabled_ = true;
-    bool isDepthBasedOutlineEnabled_ = true;
+    bool isDepthBasedOutlineEnabled_ = false;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;
@@ -407,7 +443,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineStateOutline_;
     Microsoft::WRL::ComPtr<ID3D12Resource> outlineParamResource_;
     OutlineParams* outlineParamsData_ = nullptr;
-    bool isOutlineEnabled_ = true;
+    bool isOutlineEnabled_ = false;
 
     // --- DepthBasedOutline ポストエフェクト関連 ---
     struct ProjectionInverseParams {

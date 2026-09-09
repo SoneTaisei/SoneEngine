@@ -188,14 +188,18 @@ void ModelCommon::LoadLightingConfig() {
 
         if (mappedSpotLightGroup_) {
             for (uint32_t i = 0; i < kMaxSpotLights; ++i) {
-                mappedSpotLightGroup_->spotLights[i].enable = 0;
+                baseSpotLights_[i] = {};
+                baseSpotLights_[i].enable = 0;
+                baseSpotLights_[i].shadowMapIndex = -1;
             }
+            baseSpotLightCount_ = 0;
+
             if (j.contains("spotLights") && j["spotLights"].is_array()) {
                 const auto& slArray = j["spotLights"];
-                mappedSpotLightGroup_->spotLightCount = static_cast<int32_t>((std::min)(slArray.size(), static_cast<size_t>(kMaxSpotLights)));
-                for (int32_t i = 0; i < mappedSpotLightGroup_->spotLightCount; ++i) {
+                baseSpotLightCount_ = static_cast<int32_t>((std::min)(slArray.size(), static_cast<size_t>(kMaxSpotLights)));
+                for (int32_t i = 0; i < baseSpotLightCount_; ++i) {
                     const auto& slItem = slArray[i];
-                    auto& sl = mappedSpotLightGroup_->spotLights[i];
+                    auto& sl = baseSpotLights_[i];
                     if (slItem.contains("color")) sl.color = {slItem["color"][0], slItem["color"][1], slItem["color"][2], slItem["color"][3]};
                     if (slItem.contains("position")) sl.position = {slItem["position"][0], slItem["position"][1], slItem["position"][2]};
                     if (slItem.contains("direction")) {
@@ -210,8 +214,24 @@ void ModelCommon::LoadLightingConfig() {
                     sl.cosAngle = std::cos(angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                     sl.cosFalloffStart = std::cos(falloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                     sl.enable = slItem.value("enabled", true) ? 1 : 0;
+                    sl.shadowMapIndex = -1;
                 }
             }
+            RestoreStaticSpotLights();
         }
     } catch (...) {}
 }
+
+void ModelCommon::RestoreStaticSpotLights() {
+    if (!mappedSpotLightGroup_) return;
+    mappedSpotLightGroup_->spotLightCount = baseSpotLightCount_;
+    for (int32_t i = 0; i < baseSpotLightCount_; ++i) {
+        mappedSpotLightGroup_->spotLights[i] = baseSpotLights_[i];
+    }
+    for (int32_t i = baseSpotLightCount_; i < static_cast<int32_t>(kMaxSpotLights); ++i) {
+        mappedSpotLightGroup_->spotLights[i] = {};
+        mappedSpotLightGroup_->spotLights[i].enable = 0;
+        mappedSpotLightGroup_->spotLights[i].shadowMapIndex = -1;
+    }
+}
+

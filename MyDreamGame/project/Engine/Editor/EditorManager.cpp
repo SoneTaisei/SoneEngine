@@ -23,6 +23,7 @@
 #include "Component/TransformComponent.h"
 #include "Animation/AnimationPreviewScene.h"
 #include "GPUParticle/GPUParticlePreviewScene.h"
+#include "Core/Utility/ParameterManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -284,9 +285,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
         if (activeScene && activeScene->GetMapChip()) {
             MapChip2D* mapChip = activeScene->GetMapChip();
-            // 前回読み込んでいたマップをロード
-            const char* currentStageName = mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt";
-            bool loaded = mapChip->LoadFromStageName(currentStageName);
+            // シーンが自分でマップを読み込み済みなら、それを上書きしない。
+            // （タイトルから選んで入ったステージを「前回のマップ」で差し替えてしまうため）
+            // MapChip2D::Initialize は読めなかった時も currentFilePath_ にパスを入れてしまうので、
+            // 「空でない」だけでは判定にならない。実在するファイルを読んだ時だけ読み込み済みとみなす
+            const std::string& sceneMapPath = mapChip->GetCurrentFilePath();
+            bool loaded = !sceneMapPath.empty() &&
+                          sceneMapPath.find("temp_play_map") == std::string::npos &&
+                          std::filesystem::exists(sceneMapPath);
+            if (!loaded) {
+                // まだ何も読んでいないシーン：前回読み込んでいたマップをロード
+                const char* currentStageName = mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt";
+                loaded = mapChip->LoadFromStageName(currentStageName);
+            }
             if (!loaded) {
                 // 前回のマップが存在しない場合はデフォルトマップを表示
                 if (mapEditor_) mapEditor_->SetStageFilename("map_data.txt");
@@ -621,6 +632,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
             if (ImGui::MenuItem("3Dモデル配置", nullptr, &showModelPlacementEditor_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("3Dモデルパレット", nullptr, &showModelPalette_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("パラメータ調整 (ParameterManager)", nullptr, &showParameterManager_)) { SaveSceneConfig(); }
             ImGui::Separator();
             if (ImGui::BeginMenu("レイアウトプリセット")) {
                 if (layoutPresets_.empty()) {
@@ -1529,7 +1541,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 }
             } else {
                 int mapTool = mapEditor_ ? mapEditor_->GetContext()->GetSelectedTool() : 0;
-                bool isMapChipSelected = (mapTool >= 100 || (mapTool >= 1 && mapTool <= 12));
+                bool isMapChipSelected = (mapTool >= 1 && mapTool != 6 && mapTool != 10);
                 bool isPlacedModelSelected = (model3DEditor_ && model3DEditor_->GetSelectedObject() != nullptr);
                 if (selectedGameObject_ || selectedObject_ || selectedParticle_ || selectedPrimitive_ || isMapChipSelected || selectedReplayBlock_.IsValid() || isPlacedModelSelected) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.25f, 0.3f, 1.0f));
@@ -2125,6 +2137,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (postEffectEditor_) {
                 postEffectEditor_->DrawUI(&showPostEffect_);
             }
+        }
+        ImGui::End();
+    }
+
+    // --- ParameterManager ウィンドウ ---
+    if (showParameterManager_) {
+        if (ImGui::Begin("パラメータ調整 (ParameterManager)", &showParameterManager_)) {
+            ParameterManager::GetInstance()->DisplayImGui();
         }
         ImGui::End();
     }
@@ -2993,17 +3013,9 @@ void EditorManager::LoadLightingConfig(ModelCommon* modelCommon) {
 }
 
 void EditorManager::LoadPlacedModelsForScene(IScene* scene) {
-    if (!scene || !model3DEditor_ || !model3DEditor_->GetContext()) return;
-    std::string targetPath = scene->GetLevelDataJsonPath();
-    if (targetPath.empty()) return;
-
-    auto context = model3DEditor_->GetContext();
-    context->SetCurrentFilePath(targetPath);
-    if (std::filesystem::exists(targetPath)) {
-        context->LoadFromFile(targetPath);
-    } else {
-        context->ClearObjects();
-    }
+    // 実処理は Model3DEditorContext 側に集約されている (SceneManager がビルド構成を問わず呼び出す)
+    if (!scene) return;
+    Model3DEditorContext::GetInstance()->LoadLevelData(scene->GetLevelDataJsonPath());
 }
 
 void EditorManager::Undo() {

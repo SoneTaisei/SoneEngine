@@ -48,7 +48,7 @@
             "lifetimeMax": 3.0,
             "lifetimeMin": 3.0,
             "maxParticles": 200,
-            "modelPath": "resources/Object/School/sphere/sphere.obj",
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
             "name": "Flash",
             "orbitAxis": [
                 0.0,
@@ -136,7 +136,7 @@
             "lifetimeMax": 2.0,
             "lifetimeMin": 1.0,
             "maxParticles": 3,
-            "modelPath": "resources/Object/School/sphere/sphere.obj",
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
             "name": "Emitter_2",
             "orbitAxis": [
                 0.0,

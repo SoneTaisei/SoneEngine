@@ -1,0 +1,93 @@
+{
+    "name": "Player_Chain",
+    "postEffects": [
+        {
+            "enabled": true,
+            "name": "PostEffect_1",
+            "params": {
+                "blur": {
+                    "boxKernelSize": 1,
+                    "boxStrength": 1.0,
+                    "gaussianSigma": 2.0,
+                    "type": 1
+                },
+                "dissolve": {
+                    "bgColor": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "edgeColor": [
+                        1.0,
+                        0.4000000059604645,
+                        0.30000001192092896
+                    ],
+                    "edgeWidth": 0.029999999329447746,
+                    "enabled": true,
+                    "threshold": 0.0
+                },
+                "grayscale": {
+                    "strength": 1.0
+                },
+                "iris": {
+                    "center": [
+                        0.5,
+                        0.5
+                    ],
+                    "enabled": true,
+                    "isIrisIn": 0,
+                    "maskColor": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "radius": 0.800000011920929,
+                    "smoothness": 0.019999999552965164
+                },
+                "letterbox": {
+                    "color": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.9411764740943909
+                    ],
+                    "enabled": true,
+                    "height": 0.11999999731779099,
+                    "smoothness": 0.10000000149011612
+                },
+                "noise": {
+                    "blendMode": 1,
+                    "enabled": true,
+                    "scale": 128.0,
+                    "strength": 0.30000001192092896
+                },
+                "radialBlur": {
+                    "center": [
+                        0.5,
+                        0.5
+                    ],
+                    "enabled": true,
+                    "samples": 10,
+                    "width": 0.019999999552965164
+                },
+                "sepia": {
+                    "strength": 0.800000011920929
+                },
+                "vignette": {
+                    "color": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "enabled": true,
+                    "power": 0.800000011920929,
+                    "scale": 16.0
+                }
+            },
+            "shaderType": 8
+        }
+    ],
+    "selectedIndex": 0
+}

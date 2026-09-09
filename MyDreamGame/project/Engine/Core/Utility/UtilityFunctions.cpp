@@ -586,12 +586,67 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
         if (!material) continue;
         aiString textureFilePath;
         std::string resolvedPath;
+        auto resolveExistingPath = [&](const std::string &rawName) -> std::string {
+            if (rawName.empty()) return "";
+            std::string direct = directoryPath + "/" + rawName;
+            if (std::filesystem::exists(direct)) return direct;
+
+            // トリム（前後の空白除去）
+            std::string trimmed = rawName;
+            trimmed.erase(0, trimmed.find_first_not_of(" \t\r\n"));
+            if (trimmed.find_last_not_of(" \t\r\n") != std::string::npos) {
+                trimmed.erase(trimmed.find_last_not_of(" \t\r\n") + 1);
+            }
+            if (!trimmed.empty() && std::filesystem::exists(directoryPath + "/" + trimmed)) {
+                return directoryPath + "/" + trimmed;
+            }
+
+            // スペース / アンダースコア相互置換
+            std::string replaced = trimmed;
+            for (char &c : replaced) { if (c == ' ') c = '_'; }
+            if (std::filesystem::exists(directoryPath + "/" + replaced)) {
+                return directoryPath + "/" + replaced;
+            }
+            replaced = trimmed;
+            for (char &c : replaced) { if (c == '_') c = ' '; }
+            if (std::filesystem::exists(directoryPath + "/" + replaced)) {
+                return directoryPath + "/" + replaced;
+            }
+
+            // ディレクトリ内探索
+            try {
+                if (std::filesystem::exists(directoryPath)) {
+                    std::string lowerTrimmed = trimmed;
+                    std::transform(lowerTrimmed.begin(), lowerTrimmed.end(), lowerTrimmed.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                    for (const auto &entry : std::filesystem::directory_iterator(directoryPath)) {
+                        if (!entry.is_regular_file()) continue;
+                        std::string fn = entry.path().filename().string();
+                        std::string lowerFn = fn;
+                        std::transform(lowerFn.begin(), lowerFn.end(), lowerFn.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                        if (lowerFn == lowerTrimmed) {
+                            return entry.path().string();
+                        }
+                    }
+                    for (const auto &entry : std::filesystem::directory_iterator(directoryPath)) {
+                        if (!entry.is_regular_file()) continue;
+                        std::string fn = entry.path().filename().string();
+                        std::string lowerFn = fn;
+                        std::transform(lowerFn.begin(), lowerFn.end(), lowerFn.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                        if (!lowerTrimmed.empty() && (lowerFn.find(lowerTrimmed) != std::string::npos || lowerTrimmed.find(lowerFn) != std::string::npos)) {
+                            return entry.path().string();
+                        }
+                    }
+                }
+            } catch (...) {}
+            return "";
+        };
+
         if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
             material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
-            resolvedPath = directoryPath + "/" + textureFilePath.C_Str();
+            resolvedPath = resolveExistingPath(textureFilePath.C_Str());
         } else if (material->GetTextureCount(aiTextureType_BASE_COLOR) != 0) {
             material->GetTexture(aiTextureType_BASE_COLOR, 0, &textureFilePath);
-            resolvedPath = directoryPath + "/" + textureFilePath.C_Str();
+            resolvedPath = resolveExistingPath(textureFilePath.C_Str());
         }
 
         if (!resolvedPath.empty() && std::filesystem::exists(resolvedPath)) {

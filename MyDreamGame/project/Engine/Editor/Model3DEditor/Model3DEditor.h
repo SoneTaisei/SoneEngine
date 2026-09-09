@@ -40,7 +40,7 @@ public:
     bool IsHovered() const { return viewport_ ? viewport_->IsHovered() : false; }
 
     // Sub-components
-    Model3DEditorContext* GetContext() { return context_.get(); }
+    Model3DEditorContext* GetContext() { return context_; }
     Model3DEditorViewport* GetViewport() { return viewport_.get(); }
     Model3DEditorPalette* GetPalette() { return palette_.get(); }
     Model3DEditorInspector* GetInspector() { return inspector_.get(); }
@@ -59,7 +59,8 @@ public:
 private:
     bool isVisible_ = true;
 
-    std::unique_ptr<Model3DEditorContext> context_;
+    // 配置データ本体はエディター非搭載ビルドとも共有する (所有はしない)
+    Model3DEditorContext* context_ = nullptr;
     std::unique_ptr<Model3DEditorViewport> viewport_;
     std::unique_ptr<Model3DEditorPalette> palette_;
     std::unique_ptr<Model3DEditorInspector> inspector_;

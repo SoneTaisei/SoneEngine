@@ -17,20 +17,20 @@ struct AlertParams {
     float strikeMergeTime_ = 1.0f;   // この秒数以内の同時発見は1回にまとめる
 
     // ---- 値の警戒度（ハードモード用。既定 OFF）----
-    bool enabled_ = false;           // 警戒度を使うか。OFF なら値は動かず HUD も出ない（警備員だけで完結する方針）
-    float seenPerSec_ = 8.0f;        // 警備員の視界に入っている間（ゲージが溜まっている間）の毎秒加算
+    bool enabled_ = true;            // 警戒度を使うか。OFF なら値は動かず HUD も出ない
+    float seenPerSec_ = 8.0f;        // 明るい光の中にいる間の毎秒加算
+    float suspectPerSec_ = 4.0f;     // 「？」が出ている間（怪しまれているだけ）の毎秒加算
+    float spotSpeedBonus_ = 1.0f;    // 警戒度が満タンの時、警備員が見つけるまでの速さが何倍増えるか（1.0 = 2倍速）
     float spottedAdd_ = 25.0f;       // 発見確定（ゲージ満タン）
-    float wakeAdd_ = 15.0f;          // 気絶した警備員が起きる（通報）
+    float wakeAdd_ = 5.0f;           // 気絶した警備員が起きる（通報）。距離では変えず一律
     bool noiseEnabled_ = false;      // 騒音を数えるか（宝石を引きずるだけで上がり続けるので、いったん OFF）
     float noiseAdd_ = 5.0f;          // 騒音（宝石の着地・床が崩れる）
     float noiseRadius_ = 6.0f;       // 騒音が届く距離（チップ）。この中に警備員がいる時だけ加算
     float noiseSpeed_ = 8.0f;        // 宝石がこの速さ以上で当たると騒音
-    float driftPerSec_ = 1.0f;       // 時間経過（無策の上限）
-    float quietDelay_ = 8.0f;        // これだけ静かだと下がり始める（秒）
-    float quietDecayPerSec_ = 2.0f;  // 静かな時の毎秒減少
+    float driftPerSec_ = 0.0f;       // 時間経過（0 なら何もしなければ上がらない）
+    float quietDelay_ = 2.5f;        // 見つかっていない時間がこれを超えると下がり始める（秒）
+    float quietDecayPerSec_ = 6.0f;  // 見つかっていない時の毎秒減少
     float captureValue_ = 100.0f;    // ここに達したら捕獲
-    float wakeFarDistance_ = 8.0f;   // 起きた時プレイヤーがこれ以上離れていれば通報が弱い（チップ）
-    float wakeFarAdd_ = 5.0f;        // 遠くで起きた時の通報
     float respawnGrace_ = 3.0f;      // 復活直後の猶予（秒）。時間経過と加算を止める
 };
 
@@ -79,14 +79,16 @@ public:
     void Add(float amount, const char* reason);
     /// <summary>視界に入っている間の毎秒加算（ポップアップ無し。静音タイマーは戻す）</summary>
     void AddContinuous(float amountPerSec, float dt);
+    /// <summary>「？」の間の毎秒加算。上がり方は同じだが、HUD には「怪しまれている」と出す</summary>
+    void AddSuspicion(float amountPerSec, float dt);
     /// <summary>騒音。pos から noiseRadius_ 以内に（気絶していない）警備員がいる時だけ noiseAdd_ を足す。足したら true</summary>
     bool AddNoise(const Vector3& pos, MapChip2D* map, const char* reason);
     /// <summary>プレイヤーが視界に入っている、を毎フレーム受ける（静音判定用。見失ってゲージが抜けている間は数えない）</summary>
     void NotifyGuardAlert() { guardAlertThisFrame_ = true; }
     /// <summary>見返りの合図（「通報 回避」など）。値は変えず緑のポップアップだけ出す</summary>
     void Notice(const char* text);
-    /// <summary>気絶した警備員が起きた。プレイヤーが遠ければ通報が弱い</summary>
-    void OnGuardWake(const Vector3& guardPos);
+    /// <summary>気絶した警備員が起きた（通報）。距離に関わらず一律で wakeAdd_ を足す</summary>
+    void OnGuardWake();
     /// <summary>警備員が追跡に入った（発見確定）。回数制なら1回数え、上限で捕獲。値の警戒度なら +spottedAdd_</summary>
     void OnSpotted();
     /// <summary>追跡中に見られ続けた（居座り）。まとめ判定を通さずにもう1回「発見」扱い</summary>
@@ -101,8 +103,8 @@ public:
     float GetGraceTimer() const { return graceTimer_; }
     /// <summary>今フレーム見られている（HUD の合図用。少しの間 true が続く）</summary>
     bool IsBeingSeen() const { return seenTimer_ > 0.0f; }
-    /// <summary>プレイヤー位置（通報の距離判定用。GameScene が毎フレーム渡す）</summary>
-    void SetPlayerPosition(const Vector3& pos) { playerPos_ = pos; }
+    /// <summary>今フレーム「？」を出されている（HUD の合図用）</summary>
+    bool IsBeingSuspected() const { return suspectTimer_ > 0.0f; }
     /// <summary>クリア時の評価（発見・通報・騒音の回数と最大警戒度から）</summary>
     AlertRank ComputeRank() const;
     float GetPeak() const { return peak_; }
@@ -143,8 +145,8 @@ private:
     float strikePulse_ = 0.0f;
     float graceTimer_ = 0.0f;
     float seenTimer_ = 0.0f;
+    float suspectTimer_ = 0.0f;
     float peak_ = 0.0f;
-    Vector3 playerPos_ = {0.0f, 0.0f, 0.0f};
     std::vector<Event> events_;
     std::map<std::string, float> totals_;
     std::map<std::string, int> counts_;

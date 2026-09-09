@@ -1,9 +1,10 @@
-﻿#include "BlockDesignPanel.h"
+#include "BlockDesignPanel.h"
 
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>
+#include <numbers>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -117,19 +118,21 @@ namespace {
         {"openDistance", "開く距離（0 = 全部開く）"},
         {"latch", "一度開いたら開いたまま"},
         {"crushKills", "挟まれたらミス（OFF = 通路に鎖があると閉まらない）"},
-        {"moveAxis", "動く軸"},
+        {"moveAxis", "動く向き（横／縦）"},
         {"moveRange", "動く範囲（片側）"},
         {"moveSpeed", "速さ"},
-        {"phase", "開始位相（-1 = 位置で自動、0〜1）"},
+        {"phase", "動き出す向き"},
         {"breakWeight", "通れる上限本数（この本数までは乗れる）"},
         {"breakDuration", "震える秒数"},
         {"units", "もらえる鎖の本数"},
         {"thickness", "板の厚み"},
         {"patrolSpeed", "巡回の速さ"},
         {"alertSpeed", "追跡の速さ"},
-        {"sightLength", "視界判定の長さ（プレイヤーが見つかる距離）"},
+        {"sightLength", "（未使用。見つかる距離はライト照射距離を使う）"},
+        {"spotNearDistance", "一発で見つかる距離（これより近いと溜めなし）"},
+        {"spotFarTimeScale", "遠い時の見つかりにくさ（何倍の時間をかけるか）"},
         {"sightHeight", "視界の高さ"},
-        {"lightDistance", "ライト照射距離（背景や床を照らす光の届く距離）"},
+        {"lightDistance", "ライト照射距離（見つかる距離もこれ）"},
         {"lightAngleDeg", "ライト照射角度（度数）"},
         {"lightFalloffDeg", "ライト中心輝度角度（度数）"},
         {"lightIntensity", "ライトの明るさ（強度）"},
@@ -171,6 +174,7 @@ namespace {
         {"NormalBlock", "ブロック"}, {"DeathBlock", "死ぬ床"}, {"GoalBlock", "ゴール"}, {"OneWayBlock", "一方通行"},
         {"ChainItemBlock", "鎖アイテム"}, {"MovingBlock", "動く床"}, {"FragileBlock", "崩れる床"}, {"SwitchBlock", "スイッチ"},
         {"DoorBlock", "ドア"}, {"GuardBlock", "警備員"}, {"ThinPlatformBlock", "細い足場"}, {"JumpBlock", "ジャンプ台"},
+        {"CollectibleBlock", "収集の宝石"},
     };
 
     std::string TypeLabelFor(const std::string& type) {
@@ -191,8 +195,8 @@ namespace {
         {"SwitchBlock", {"linkId"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
         {"DoorBlock", {"linkId", "openDirection", "latch", "crushKills"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
         {"FragileBlock", {"breakWeight", "breakDuration"}, "breakWeight", "キー 0〜8 = 通れる上限本数"},
-        {"MovingBlock", {"moveAxis", "moveRange", "moveSpeed", "phase"}, "moveRange", "キー 1〜9 = 動く範囲"},
-        {"GuardBlock", {"startDirection", "moveRange", "sightLength", "patrolSpeed"}, "moveRange", "キー 1〜9 = 巡回範囲"},
+        {"MovingBlock", {"moveAxis", "moveRange", "moveSpeed", "phase", "thickness"}, "moveRange", "キー 1〜9 = 動く範囲"},
+        {"GuardBlock", {"startDirection", "moveRange", "lightDistance", "spotNearDistance"}, "moveRange", "キー 1〜9 = 巡回範囲"},
         {"ChainItemBlock", {"units"}, "units", "キー 1〜8 = もらえる本数"},
         {"ThinPlatformBlock", {"thickness"}, nullptr, nullptr},
     };
@@ -204,15 +208,18 @@ namespace {
         return nullptr;
     }
 
-    // 文字列プロパティのうち選択肢で出すもの
+    // 文字列プロパティのうち選択肢で出すもの（保存する値と、画面に出す言葉は分ける）
     const char* kAxisOptions[] = {"X", "Y"};
+    const char* kAxisLabels[] = {"横（左右）", "縦（上下）"};
     const char* kDirectionOptions[] = {"Up", "Down", "Left", "Right"};
+    const char* kDirectionLabels[] = {"上へ開く", "下へ開く", "左へ開く", "右へ開く"};
 
     bool ComboForKey(const std::string& key, std::string& value, float width) {
         const char** options = nullptr;
+        const char** labels = nullptr;
         int count = 0;
-        if (key == "moveAxis") { options = kAxisOptions; count = 2; }
-        if (key == "openDirection") { options = kDirectionOptions; count = 4; }
+        if (key == "moveAxis") { options = kAxisOptions; labels = kAxisLabels; count = 2; }
+        if (key == "openDirection") { options = kDirectionOptions; labels = kDirectionLabels; count = 4; }
         if (!options) return false;
         int current = 0;
         for (int i = 0; i < count; ++i) {
@@ -220,10 +227,10 @@ namespace {
         }
         bool changed = false;
         ImGui::SetNextItemWidth(width);
-        if (ImGui::BeginCombo("##combo", options[current])) {
+        if (ImGui::BeginCombo("##combo", labels[current])) {
             for (int i = 0; i < count; ++i) {
                 bool sel = (i == current);
-                if (ImGui::Selectable(options[i], sel)) {
+                if (ImGui::Selectable(labels[i], sel)) {
                     value = options[i];
                     changed = true;
                 }
@@ -277,12 +284,26 @@ namespace {
         return merged;
     }
 
+    // 1 枚のブロックが複数チップにまたがっていることがある（ドアや、同じ設定でつながって結合された床）。
+    // 上書きはそのブロックが乗っている全チップに書く。1 チップだけ違う値にすると、
+    // 次にマップを作り直した時に「同じ設定どうし」の結合が崩れてブロックが 2 つに分かれ、
+    // 番号を変えたつもりのドアが片方しか開かず、開いたはずの所に当たり判定が残る
     void SetPropOne(MapChip2D* map, BaseBlock* b, const std::string& key, const nlohmann::json& value) {
-        if (!b) return;
-        int x = b->GetChipX();
-        int y = b->GetChipY();
-        map->SetBlockOverride(x, y, {{key, value}});
-        b->SetProperties(MergedProps(map, x, y));
+        if (!b || !map) return;
+        const int ox = b->GetChipX();
+        const int oy = b->GetChipY();
+        bool wrote = false;
+        for (int y = 0; y < map->GetHeight(); ++y) {
+            for (int x = 0; x < map->GetWidth(); ++x) {
+                if (map->GetBlock(x, y) != b) continue;
+                map->SetBlockOverride(x, y, {{key, value}});
+                wrote = true;
+            }
+        }
+        if (!wrote) {
+            map->SetBlockOverride(ox, oy, {{key, value}});
+        }
+        b->SetProperties(MergedProps(map, ox, oy));
         s_unsaved = true;
     }
 
@@ -330,6 +351,44 @@ namespace {
         }
     }
 
+    // 動く床の向き：警備員の「初期の向き」と同じく、右・左・上・下を押して決める
+    // 内部では軸（moveAxis）と動き出す側（phase：0 = ＋方向、0.5 = −方向）の 2 つをまとめて書き換える
+    bool DrawMovingDirection(MapChip2D* map, BaseBlock* target, const nlohmann::json& merged) {
+        struct Dir { const char* label; const char* axis; float phase; };
+        static const Dir kDirs[] = {
+            { "右", "X", 0.0f },
+            { "左", "X", 0.5f },
+            { "上", "Y", 0.0f },
+            { "下", "Y", 0.5f },
+        };
+        std::string axis = merged.contains("moveAxis") && merged["moveAxis"].is_string()
+                         ? merged["moveAxis"].get<std::string>() : std::string("X");
+        float phase = (merged.contains("phase") && merged["phase"].is_number())
+                    ? merged["phase"].get<float>() : -1.0f;
+        int current = -1;
+        for (int i = 0; i < 4; ++i) {
+            bool sameAxis = (axis == kDirs[i].axis) || (axis == (kDirs[i].axis == std::string("X") ? "x" : "y"));
+            if (sameAxis && std::fabs(phase - kDirs[i].phase) < 0.001f) { current = i; break; }
+        }
+        bool changed = false;
+        for (int i = 0; i < 4; ++i) {
+            if (i > 0) ImGui::SameLine();
+            ImGui::PushID(i);
+            if (ImGui::RadioButton(kDirs[i].label, current == i)) {
+                SetProp(map, target, "moveAxis", std::string(kDirs[i].axis));
+                SetProp(map, target, "phase", kDirs[i].phase);
+                changed = true;
+            }
+            ImGui::PopID();
+        }
+        ImGui::SameLine();
+        ImGui::TextUnformatted("動き出す向き");
+        if (current < 0) {
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "今は自動（置いた位置で決まる）。上のどれかを押すと決まる");
+        }
+        return changed;
+    }
+
     bool IsLinkBlock(BaseBlock* b) {
         return dynamic_cast<SwitchBlock*>(b) != nullptr || dynamic_cast<DoorBlock*>(b) != nullptr;
     }
@@ -374,7 +433,7 @@ namespace {
     }
 
     // 1つのプロパティの入力欄（小パネルと「選択中」で共通）。変わったら true
-    bool PropertyWidget(const std::string& key, nlohmann::json& value, bool compact) {
+    bool PropertyWidget(const std::string& key, nlohmann::json& value, bool compact, const nlohmann::json* all = nullptr) {
         std::string label = LabelFor(key);
         float width = compact ? 90.0f : 170.0f;
         ImGui::PushID(key.c_str());
@@ -397,6 +456,42 @@ namespace {
             if (ImGui::RadioButton("左", !right)) { value = -1; changed = true; }
             ImGui::SameLine();
             ImGui::TextUnformatted(compact ? "初期の向き" : label.c_str());
+        } else if (key == "phase") {
+            // 動く床の「どちらから動き出すか」。内部は 0〜1 の位相（-1 は置いた位置から自動）だが、
+            // 数値では分からないので軸に合わせた言葉で選べるようにする
+            const bool vertical = all && all->contains("moveAxis") &&
+                                  (all->at("moveAxis") == "Y" || all->at("moveAxis") == "y");
+            struct PhaseOption { const char* horizontal; const char* vertical; float phase; };
+            static const PhaseOption kPhaseOptions[] = {
+                { "自動（置いた位置で決まる）", "自動（置いた位置で決まる）", -1.0f },
+                { "右端から左へ",               "上端から下へ",               0.25f },
+                { "左端から右へ",               "下端から上へ",               0.75f },
+                { "真ん中から右へ",             "真ん中から上へ",             0.0f  },
+                { "真ん中から左へ",             "真ん中から下へ",             0.5f  },
+            };
+            const int optionCount = static_cast<int>(sizeof(kPhaseOptions) / sizeof(kPhaseOptions[0]));
+            float v = value.get<float>();
+            int current = -1;
+            for (int i = 0; i < optionCount; ++i) {
+                if (std::fabs(v - kPhaseOptions[i].phase) < 0.001f) { current = i; break; }
+            }
+            char custom[64];
+            snprintf(custom, sizeof(custom), "その他（%.2f）", v);
+            const char* preview = (current >= 0)
+                ? (vertical ? kPhaseOptions[current].vertical : kPhaseOptions[current].horizontal)
+                : custom;
+            ImGui::SetNextItemWidth(width + 70.0f);
+            if (ImGui::BeginCombo("##phase", preview)) {
+                for (int i = 0; i < optionCount; ++i) {
+                    const char* text = vertical ? kPhaseOptions[i].vertical : kPhaseOptions[i].horizontal;
+                    bool sel = (i == current);
+                    if (ImGui::Selectable(text, sel)) { value = kPhaseOptions[i].phase; changed = true; }
+                    if (sel) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(compact ? "動き出し" : label.c_str());
         } else if (value.is_boolean()) {
             bool v = value.get<bool>();
             if (ImGui::Checkbox(label.c_str(), &v)) { value = v; changed = true; }
@@ -570,12 +665,16 @@ namespace {
             }
             nlohmann::json merged = MergedProps(map, s_popX, s_popY);
             const nlohmann::json* ov = map->GetBlockOverride(s_popX, s_popY);
+            if (type == "MovingBlock") {
+                DrawMovingDirection(map, target, merged);
+            }
             for (const char* k : q->keys) {
                 std::string key = k;
                 if (!merged.contains(key)) continue;
+                if (type == "MovingBlock" && (key == "moveAxis" || key == "phase")) continue; // 上の向きの欄で決める
                 nlohmann::json value = merged[key];
                 bool overridden = ov && ov->contains(key);
-                if (PropertyWidget(key, value, true)) {
+                if (PropertyWidget(key, value, true, &merged)) {
                     SetProp(map, target, key, value);
                     if (key == "linkId") s_highlightLinkId = value.get<int>();
                 }
@@ -657,9 +756,13 @@ namespace {
         }
         ImGui::TextDisabled("値を変えるとこの1枚だけ上書きされる（* = 上書き中）。パレット側の値はインスペクターの「プロパティ」で");
 
+        if (typeName == "MovingBlock") {
+            DrawMovingDirection(map, block, merged);
+        }
         for (auto& [key, value] : merged.items()) {
+            if (typeName == "MovingBlock" && (key == "moveAxis" || key == "phase")) continue; // 上の向きの欄で決める
             bool overridden = ov && ov->contains(key);
-            if (PropertyWidget(key, value, false)) {
+            if (PropertyWidget(key, value, false, &merged)) {
                 SetProp(map, block, key, value);
             }
             if (overridden) { ImGui::SameLine(); ImGui::TextDisabled("*"); }
@@ -1129,31 +1232,36 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
                         DrawArrow(dl, ImVec2(sxp, syp), ImVec2(sxp + d, syp), col, 2.0f);
                     }
 
-                    // 懐中電灯の照射コーンを描画
-                    Vector3 eyePos = g->GetLightPosition();
+                    // 光の判定を描く。薄い線だけ＝気付かれかけ、塗り＝見つかる、内側の橙＝一発で見つかる
+                    Vector3 lightPos = g->GetLightPosition();
+                    Vector3 eyePos = { lightPos.x, lightPos.y, 0.0f }; // 判定はプレイヤーと同じ平面で行う
                     float sxEye, syEye;
                     if (WorldToScreen(camera, eyePos, sxEye, syEye)) {
-                        float halfAngle = g->GetLightAngleDeg() * (std::numbers::pi_v<float> / 180.0f);
                         float dir = (g->GetStartDirection() < 0) ? -1.0f : 1.0f;
                         float baseAngle = (dir < 0) ? std::numbers::pi_v<float> : 0.0f;
-                        float dist = g->GetSightLength();
-
                         constexpr int kArcSegs = 8;
-                        std::vector<ImVec2> pts;
-                        pts.push_back(ImVec2(sxEye, syEye));
-                        for (int seg = 0; seg <= kArcSegs; ++seg) {
-                            float t = static_cast<float>(seg) / static_cast<float>(kArcSegs);
-                            float ang = baseAngle - halfAngle + (halfAngle * 2.0f) * t;
-                            Vector3 edgePt = { eyePos.x + std::cos(ang) * dist, eyePos.y + std::sin(ang) * dist, 0.0f };
-                            float ex, ey;
-                            if (WorldToScreen(camera, edgePt, ex, ey)) {
-                                pts.push_back(ImVec2(ex, ey));
+                        auto drawFan = [&](float halfAngle, float dist, ImU32 line, ImU32 fill) {
+                            std::vector<ImVec2> pts;
+                            pts.push_back(ImVec2(sxEye, syEye));
+                            for (int seg = 0; seg <= kArcSegs; ++seg) {
+                                float t = static_cast<float>(seg) / static_cast<float>(kArcSegs);
+                                float ang = baseAngle - halfAngle + (halfAngle * 2.0f) * t;
+                                Vector3 edgePt = { eyePos.x + std::cos(ang) * dist, eyePos.y + std::sin(ang) * dist, 0.0f };
+                                float ex, ey;
+                                if (WorldToScreen(camera, edgePt, ex, ey)) {
+                                    pts.push_back(ImVec2(ex, ey));
+                                }
                             }
-                        }
-                        if (pts.size() >= 3) {
-                            dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), IM_COL32(255, 230, 80, 160), true, 1.5f);
-                            dl->AddConvexPolyFilled(pts.data(), static_cast<int>(pts.size()), IM_COL32(255, 230, 80, 25));
-                        }
+                            if (pts.size() < 3) return;
+                            if (fill != 0) {
+                                dl->AddConvexPolyFilled(pts.data(), static_cast<int>(pts.size()), fill);
+                            }
+                            dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), line, true, 1.5f);
+                        };
+                        constexpr float kToRad = std::numbers::pi_v<float> / 180.0f;
+                        drawFan(g->GetLightAngleDeg() * kToRad, g->GetSightLength(), IM_COL32(255, 230, 80, 80), 0);
+                        drawFan(g->GetSpotAngleDeg() * kToRad, g->GetSightLength(), IM_COL32(255, 230, 80, 160), IM_COL32(255, 230, 80, 25));
+                        drawFan(g->GetSpotAngleDeg() * kToRad, g->GetNearSpotDistance(), IM_COL32(255, 130, 70, 200), IM_COL32(255, 130, 70, 45));
                     }
                 }
             }
@@ -1181,6 +1289,10 @@ void BlockDesignPanel::DrawOverlays(MapChip2D* map, Camera* camera) {
 }
 
 #else
+void BlockDesignPanel::MarkUnsaved() {}
+void BlockDesignPanel::DrawSaveRow(MapChip2D*, const std::string&, const char*) {}
+bool BlockDesignPanel::CanClickSelect() { return false; }
+void BlockDesignPanel::SetRenderViewProjection(const Matrix4x4&) {}
 bool BlockDesignPanel::MouseToChip(MapChip2D*, Camera*, int&, int&) { return false; }
 bool BlockDesignPanel::WorldToScreen(Camera*, const Vector3&, float&, float&) { return false; }
 void BlockDesignPanel::Draw(MapChip2D*, Camera*, const std::string&) {}

@@ -70,6 +70,15 @@ struct CompositeParams {
 
     // Vector 14 (16 bytes)
     float4 irisMaskColor;    // color of the masked outer region
+
+    // Vector 15 (16 bytes)
+    int enableLetterbox;         // 1 to enable letterbox, 0 to disable
+    float letterboxHeight;       // height of top/bottom bars [0.0, 0.5]
+    float letterboxSmoothness;   // edge smoothness width for soft transition
+    float letterboxPadding;      // alignment padding
+
+    // Vector 16 (16 bytes)
+    float4 letterboxColor;       // color of the letterbox bars (RGBA)
 };
 ConstantBuffer<CompositeParams> gCompositeParams : register(b0);
 
@@ -116,6 +125,27 @@ float4 ProcessIris(float4 sceneColor, float2 uv, float2 center, float radius, fl
     float3 rgb = lerp(maskColor.rgb, sceneColor.rgb, factor);
     float a = lerp(maskColor.a, sceneColor.a, factor);
     return float4(rgb, a);
+}
+
+// Letterbox function (top and bottom black/colored bars)
+float4 ProcessLetterbox(float4 sceneColor, float2 uv, float barHeight, float smoothness, float4 barColor) {
+    if (barHeight <= 0.0f) {
+        return sceneColor;
+    }
+    // Distance to closest horizontal boundary (top or bottom)
+    float distToEdge = min(uv.y, 1.0f - uv.y);
+    float safeSmooth = max(smoothness, 0.0001f);
+    float halfSmooth = safeSmooth * 0.5f;
+    float edge0 = max(0.0f, barHeight - halfSmooth);
+    float edge1 = barHeight + halfSmooth;
+
+    // 1.0 inside letterbox bar, 0.0 inside scene
+    float barFactor = 1.0f - smoothstep(edge0, edge1, distToEdge);
+
+    // Blend scene color with letterbox bar color considering alpha
+    float blendFactor = barFactor * barColor.a;
+    float3 finalRgb = lerp(sceneColor.rgb, barColor.rgb, blendFactor);
+    return float4(finalRgb, sceneColor.a);
 }
 
 PixelShaderOutput main(VertexShaderOutput input) {
@@ -279,6 +309,17 @@ PixelShaderOutput main(VertexShaderOutput input) {
         );
     }
     
+    // 9. Apply Letterbox Effect
+    if (gCompositeParams.enableLetterbox != 0) {
+        processedColor = ProcessLetterbox(
+            processedColor,
+            input.texcoord,
+            gCompositeParams.letterboxHeight,
+            gCompositeParams.letterboxSmoothness,
+            gCompositeParams.letterboxColor
+        );
+    }
+
     output.color.rgb = processedColor.rgb;
     output.color.a = originalColor.a;
     

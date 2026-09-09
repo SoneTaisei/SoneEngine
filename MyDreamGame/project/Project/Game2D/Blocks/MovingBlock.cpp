@@ -21,16 +21,35 @@ void MovingBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, floa
     gameObject_->Initialize();
     gameObject_->SetName("MovingBlock");
 
+    chipWidth_ = width;
+    chipHeight_ = height;
+    plankOffsetY_ = 0.0f;
+
     auto* transform = gameObject_->AddComponent<TransformComponent>();
     transform->SetPosition({worldX, worldY, 0.0f});
     transform->SetScale({width, height, 1.0f});
 
     auto* renderer = gameObject_->AddComponent<PrimitiveRendererComponent>();
     renderer->Initialize(device, boxPrimitive);
-    renderer->GetMaterial().color = {0.8f, 0.5f, 0.1f, 1.0f}; // オレンジっぽい色
+    renderer->GetMaterial().color = {0.42f, 0.58f, 0.78f, 1.0f}; // 金属の板の色。木の板と見分けが付くようにする（実際の色はパレットの設定で上書きされる）
     renderer->GetMaterial().lightingType = 1;
 
+    ApplyPlankShape(); // 細い足場と同じ薄い板にして、チップの上端へ貼り付ける
     SetupCollider();
+}
+
+void MovingBlock::ApplyPlankShape() {
+    if (!gameObject_) return;
+    auto* tc = gameObject_->GetComponent<TransformComponent>();
+    if (!tc) return;
+
+    float t = chipHeight_ * thickness_;
+    float newOffset = chipHeight_ * 0.5f - t * 0.5f; // チップの上端に貼り付ける高さ
+    Vector3 p = tc->GetPosition();
+    tc->SetScale({chipWidth_, t, 1.0f});
+    // 今いる場所を基準に、前の板の高さから新しい板の高さへ動かす（動いている途中でも位置がずれない）
+    tc->SetPosition({p.x, p.y - plankOffsetY_ + newOffset, 0.0f});
+    plankOffsetY_ = newOffset;
 }
 
 void MovingBlock::SetProperties(const nlohmann::json& properties) {
@@ -45,6 +64,13 @@ void MovingBlock::SetProperties(const nlohmann::json& properties) {
     }
     if (properties.contains("phase") && properties["phase"].is_number()) {
         phase_ = properties["phase"];
+    }
+    // 板の厚み。細い足場と同じ範囲に収める
+    if (properties.contains("thickness") && properties["thickness"].is_number()) {
+        thickness_ = properties["thickness"];
+        if (thickness_ < 0.05f) thickness_ = 0.05f;
+        if (thickness_ > 0.5f) thickness_ = 0.5f;
+        ApplyPlankShape();
     }
 }
 
@@ -100,7 +126,8 @@ void MovingBlock::Update() {
     }
     prevPosition_ = newPos;
 
-    tc->SetPosition(newPos);
+    // 板はチップの上端にあるので、その分だけ上へずらして置く
+    tc->SetPosition({newPos.x, newPos.y + plankOffsetY_, 0.0f});
 }
 
 void MovingBlock::CaptureReplayState(std::vector<float>& outCustom) const {

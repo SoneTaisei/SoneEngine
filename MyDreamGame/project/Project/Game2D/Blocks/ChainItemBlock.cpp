@@ -1,5 +1,6 @@
-﻿#include "ChainItemBlock.h"
+#include "ChainItemBlock.h"
 #include "../Player/Player2D.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 
 namespace {
@@ -81,6 +82,7 @@ void ChainItemBlock::OnCollision(Player2D* player) {
     if (!isDestroyed_ && player) {
         // プレイヤーの鎖を units_ 本増やす
         player->AddChainLength(units_);
+        AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
         // 拾ったのでこのギミックをマップから消す
         Destroy();
     }

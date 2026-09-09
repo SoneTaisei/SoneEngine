@@ -15,6 +15,7 @@ struct PlayerState {
     float respawnTimer_ = 0.0f;
     bool isGoal_ = false;
     float goalTimer_ = 0.0f;
+    bool isClearEscaped_ = false; // クリア演出で煙幕に紛れて脱出・消失したフラグ
 
     // 鎖の長さ（個数）
     int chainLength_ = 3;
@@ -28,6 +29,7 @@ struct PlayerState {
     float spinFlipTimer_ = 0.0f;
     float spinFlipDuration_ = 0.45f;
     float spinFlipSign_ = -1.0f;
+    float faceDirX_ = 0.0f;       // 見た目の向きの指定（-1 左 / +1 右 / 0 は速度まかせ）。投げた時など、動かないまま向きだけ変える用
     bool isWallClinging_ = false;
     bool isWallSliding_ = false;
     bool isTouchingWallLeft_ = false;

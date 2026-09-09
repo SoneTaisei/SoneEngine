@@ -14,6 +14,7 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
       <ClInclude Include="Project\Game2D\Blocks\JumpBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\SavePoint.h" />
 </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -160,6 +161,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Graphics\CameraManager.cpp" />
+    <ClCompile Include="Engine\Renderer\ConstantBufferPool.cpp" />
     <ClCompile Include="Engine\Renderer\Renderer.cpp" />
     <ClCompile Include="Engine\Renderer\SkeletonDebugRenderer.cpp" />
     <ClCompile Include="Engine\Editor\EditorManager.cpp" />
@@ -212,6 +214,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\SavePoint.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\JumpBlock.cpp" />
     <ClCompile Include="Engine\GameObject\GameObject.cpp" />
     <ClCompile Include="Engine\Component\TransformComponent.cpp" />
@@ -248,6 +251,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\NormalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\ChainItemBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\CollectibleBlock.cpp" />
+    <ClCompile Include="Project\Game2D\CollectibleTracker.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\MovingBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\FragileBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\SwitchBlock.cpp" />
@@ -263,7 +268,10 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Project\Game2D\Chain\ChainManager.cpp" />
     <ClCompile Include="Project\Game2D\Security\AlertSystem.cpp" />
     <ClCompile Include="Project\Game2D\Chain\ChainSpinAction.cpp" />
+    <ClCompile Include="Project\Game2D\Chain\PlayerChainPostEffect.cpp" />
     <ClCompile Include="Project\Effect\TransitionDirector.cpp" />
+    <ClCompile Include="Project\Effect\TutorialPoster.cpp" />
+    <ClCompile Include="Project\Effect\TutorialPosterSet.cpp" />
     <ClCompile Include="Project\Game2D\Treasure\Treasure2D.cpp" />
     <ClCompile Include="Project\Game2D\Physics\VerletPhysics2D.cpp" />
     <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp" />
@@ -426,6 +434,7 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Graphics\CameraManager.h" />
+    <ClInclude Include="Engine\Renderer\ConstantBufferPool.h" />
     <ClInclude Include="Engine\Renderer\Renderer.h" />
     <ClInclude Include="Engine\Renderer\SkeletonDebugRenderer.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
@@ -504,6 +513,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\NormalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\ChainItemBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\CollectibleBlock.h" />
+    <ClInclude Include="Project\Game2D\CollectibleTracker.h" />
     <ClInclude Include="Project\Game2D\Blocks\MovingBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\FragileBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\SwitchBlock.h" />
@@ -519,7 +530,10 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Project\Game2D\Chain\ChainManager.h" />
     <ClInclude Include="Project\Game2D\Security\AlertSystem.h" />
     <ClInclude Include="Project\Game2D\Chain\ChainSpinAction.h" />
+    <ClInclude Include="Project\Game2D\Chain\PlayerChainPostEffect.h" />
     <ClInclude Include="Project\Effect\TransitionDirector.h" />
+    <ClInclude Include="Project\Effect\TutorialPoster.h" />
+    <ClInclude Include="Project\Effect\TutorialPosterSet.h" />
     <ClInclude Include="Project\Game2D\Treasure\Treasure2D.h" />
     <ClInclude Include="Project\Game2D\Physics\VerletPhysics2D.h" />
     <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h" />

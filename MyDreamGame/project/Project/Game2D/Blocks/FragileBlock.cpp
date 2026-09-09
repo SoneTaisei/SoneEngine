@@ -1,7 +1,9 @@
-﻿#include "FragileBlock.h"
+#include "FragileBlock.h"
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/Security/AlertSystem.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Game2D/MapChip2D.h"
+#include "Resource/Audio/AudioManager.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -54,6 +56,23 @@ std::unique_ptr<GameObject> FragileBlock::MakePart(const Vector3& scale, const V
     r->GetMaterial().color = color;
     r->GetMaterial().lightingType = 1;
     return part;
+}
+
+AABB2D FragileBlock::GetAABB() const {
+    // 震えている最中でも、判定は置いた場所の箱を返す。
+    // 大きさは変わらないので、今の見た目のスケールをそのまま使う
+    Vector3 scale = { 1.0f, 1.0f, 1.0f };
+    if (gameObject_) {
+        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            scale = tc->GetScale();
+        }
+    }
+    return {
+        startX_ - scale.x * 0.5f,
+        startY_ + scale.y * 0.5f,
+        startX_ + scale.x * 0.5f,
+        startY_ - scale.y * 0.5f
+    };
 }
 
 void FragileBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
@@ -209,6 +228,9 @@ void FragileBlock::Update() {
             }
             // 落ちて消える（近くに警備員がいれば騒音）
             isDestroyed_ = true;
+            if (map_) {
+                map_->SpawnFragileParticle({startX_, startY_ - 0.5f, 0.0f});
+            }
             if (auto* alert = AlertSystem::Current()) {
                 alert->AddNoise({startX_, startY_, 0.0f}, map_, "騒音");
             }
@@ -262,6 +284,10 @@ void FragileBlock::OnPlayerStand(Player2D* player) {
     if (player->GetChainLength() >= breakWeight_) {
         isBreaking_ = true;
         breakTimer_ = 0.0f;
+        AudioManager::Play("resources/Sound/10Dyas/SE/FragileBlock.mp3", 0.75f);
+        if (map_) {
+            map_->SpawnFragileParticle({startX_, startY_ - 0.5f, 0.0f});
+        }
     }
 }
 

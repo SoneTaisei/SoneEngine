@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include "Blocks/BaseBlock.h"
 #include "Editor/Replay/ReplayManager.h"
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 
 /// <summary>
 /// 2Dスクロールゲーム用マップクラス
@@ -31,13 +32,20 @@ public:
         kSwitchBlock = 14, // スイッチ
         kDoorBlock = 15, // シャッタードア
         kGuardBlock = 16, // 警備員
-        kThinPlatform = 17 // 細い足場（板。上にだけ乗れる。鎖は素通り。この上でだけ鎖を回せる）
+        kThinPlatform = 17, // 細い足場（板。上にだけ乗れる。鎖は素通り。この上でだけ鎖を回せる）
+        kCollectible = 18, // 収集アイテム（小さい青い宝石。クリアには関係ないやり込み要素。触れると取れる）
+        kSavePoint = 19    // 中間ポイント（触れるとセーブされ、ミス時にここから再開）
     };
 
     void Initialize(const std::string& mapFilePath);
+    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
     void Update();
     void Draw();
     void DrawParticle(ID3D12GraphicsCommandList* commandList, const Matrix4x4& viewProjection, const Matrix4x4& cameraMatrix, ParticleCommon* particleCommon, ModelManager* modelManager);
+
+    // 崩れる床のエフェクト再生
+    void SpawnFragileParticle(const Vector3& worldPos);
+    void ClearFragileParticles();
 
     // 指定座標のブロックを取得する
     BaseBlock* GetBlock(int chipX, int chipY) const;
@@ -130,6 +138,11 @@ public:
     void CaptureReplayObjects(std::vector<ReplayObjectState>& out) override;
     void RestoreReplayObjects(const std::vector<ReplayObjectState>& states) override;
 
+    enum ShaderPreset : int {
+        kShaderStandard = 0, // 通常シェーダー (Standard / LightingType 1)
+        kShaderGem = 1      // 宝石シェーダー (Gem / Crystal / LightingType 2)
+    };
+
     struct CustomBlockDef {
         int id = 100;
         std::string name = "New Custom Block";
@@ -139,6 +152,7 @@ public:
         Vector3 scale = {1.0f, 1.0f, 1.0f};
         std::string modelName = "";
         std::string textureName = "";
+        int shaderMode = kShaderStandard;
     };
 
     std::vector<CustomBlockDef>& GetCustomPalette() { return customPalette_; }
@@ -187,6 +201,10 @@ public:
 public:
     void SetDirty() { isDirty_ = true; }
 private:
+    // パレット定義（見た目やプロパティ）を id から引く。100 未満は Basic Tools 用のテンプレート、
+    // 100 以上は Custom Tools 用のカスタムパレットを見る。無ければ nullptr
+    const CustomBlockDef* FindPaletteDef(int typeId) const;
+
     std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void CreateChipObjects();
 
@@ -241,7 +259,8 @@ private:
     std::map<std::string, nlohmann::json> placementOverrides_;
     bool autoNumberSwitches_ = true;
     bool playtimeRecording_ = false;
-    std::map<std::pair<int, int>, nlohmann::json> playtimeOverrides_; // 値が null = 消した
+    // static：エディタの停止でシーンごと作り直されても残す（新しいマップの ReapplyPlaytimeOverrides で戻す）
+    static std::map<std::pair<int, int>, nlohmann::json> playtimeOverrides_; // 値が null = 消した
 
     // 実行時の動的再構築用のキャッシュ
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
@@ -250,4 +269,9 @@ private:
     bool isRebuildEnabled_ = true;
     bool isDirty_ = false;
     std::string currentFilePath_ = "";
+
+    // Fragileパーティクル
+    GPUParticleSystemData fragileParticleData_;
+    bool fragileParticleDataLoaded_ = false;
+    std::vector<std::unique_ptr<GPUParticleSystem>> fragileParticles_;
 };

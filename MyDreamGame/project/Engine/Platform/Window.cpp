@@ -95,7 +95,7 @@ void Window::Create(const wchar_t *title, int32_t width, int32_t height) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
 
     wc_.lpfnWndProc = WindowProc;
-    wc_.lpszClassName = L"MyDreamGameEngine";
+    wc_.lpszClassName = L"3023_怪盗チェーン";
     wc_.hInstance = hInst;
     wc_.hCursor = LoadCursor(nullptr, IDC_ARROW);
     RegisterClass(&wc_);

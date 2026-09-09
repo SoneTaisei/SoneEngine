@@ -121,6 +121,7 @@ public:
     // リソースリスト
     const std::vector<std::string>& GetAvailableModels() const { return availableModels_; }
     const std::vector<std::string>& GetAvailableTextures() const { return availableTextures_; }
+    std::vector<std::string> GetAssociatedTexturesForModel(const std::string& modelPath) const;
 
     // Undo / Redo
     void PushCommand(std::shared_ptr<IMapCommand> cmd);

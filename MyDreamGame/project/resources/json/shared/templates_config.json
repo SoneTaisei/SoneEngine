@@ -3,12 +3,12 @@
         {
             "color": {
                 "a": 1.0,
-                "b": 0.3019607961177826,
-                "g": 0.7019608020782471,
-                "r": 0.3019607961177826
+                "b": 1.0,
+                "g": 1.0,
+                "r": 1.0
             },
             "id": 1,
-            "modelName": "",
+            "modelName": "Object/Original/Block/Block.obj",
             "name": "Block",
             "properties": {},
             "scale": {
@@ -16,25 +16,27 @@
                 "y": 1.0,
                 "z": 3.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "NormalBlock"
         },
         {
             "color": {
                 "a": 1.0,
-                "b": 0.20000000298023224,
-                "g": 0.20000000298023224,
+                "b": 0.0,
+                "g": 1.0,
                 "r": 1.0
             },
             "id": 2,
-            "modelName": "",
+            "modelName": "Object/Original/sphere/sphere.obj",
             "name": "Death",
             "properties": {},
             "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 3.0
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
             },
+            "shaderMode": 1,
             "textureName": "",
             "type": "DeathBlock"
         },
@@ -54,6 +56,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "GoalBlock"
         },
@@ -73,6 +76,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "OneWayBlock"
         },
@@ -92,6 +96,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "JumpBlock"
         },
@@ -113,15 +118,16 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "ChainItemBlock"
         },
         {
             "color": {
                 "a": 1.0,
-                "b": 0.10000000149011612,
-                "g": 0.5,
-                "r": 0.800000011920929
+                "b": 0.7799999713897705,
+                "g": 0.5799999833106995,
+                "r": 0.41999998688697815
             },
             "id": 12,
             "modelName": "",
@@ -130,13 +136,15 @@
                 "moveAxis": "X",
                 "moveRange": 3.0,
                 "moveSpeed": 2.0,
-                "phase": -1.0
+                "phase": -1.0,
+                "thickness": 0.20000000298023224
             },
             "scale": {
                 "x": 1.0,
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "MovingBlock"
         },
@@ -159,6 +167,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "FragileBlock"
         },
@@ -180,6 +189,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "SwitchBlock"
         },
@@ -207,6 +217,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "DoorBlock"
         },
@@ -223,24 +234,26 @@
             "properties": {
                 "alertSpeed": 3.0,
                 "bindFromBehind": true,
+                "enableShadow": true,
                 "exposureTime": 2.5,
                 "hitCooldown": 0.3,
+                "investigateSight": 0.5,
                 "lightAngleDeg": 34.0,
                 "lightDecay": 0.95,
                 "lightDistance": 8.0,
                 "lightFalloffDeg": 22.0,
                 "lightIntensity": 8.5,
-                "enableShadow": true,
-                "shadowBias": 0.0005,
-                "shadowIntensity": 1.0,
-                "investigateSight": 0.5,
                 "lookTime": 1.5,
                 "loseSightTime": 3.0,
                 "maxAlertGauge": 1.5,
                 "moveRange": 3.0,
                 "patrolSpeed": 1.5,
+                "shadowBias": 0.0005,
+                "shadowIntensity": 1.0,
                 "sightHeight": 1.0,
                 "sightLength": 5.0,
+                "spotFarTimeScale": 2.5,
+                "spotNearDistance": 3.0,
                 "staggerTime": 0.2,
                 "startDirection": 1,
                 "stunBase": 2.0,
@@ -260,6 +273,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "GuardBlock"
         },
@@ -281,8 +295,49 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shaderMode": 0,
             "textureName": "",
             "type": "ThinPlatformBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 1.0,
+                "g": 0.800000011920929,
+                "r": 0.44999998807907104
+            },
+            "id": 18,
+            "modelName": "",
+            "name": "Collectible Gem",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shaderMode": 0,
+            "textureName": "",
+            "type": "CollectibleBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.4552229940891266,
+                "g": 0.2979532480239868,
+                "r": 0.9768339991569519
+            },
+            "id": 19,
+            "modelName": "",
+            "name": "SavePoint",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shaderMode": 0,
+            "textureName": "",
+            "type": "SavePoint"
         }
     ]
 }

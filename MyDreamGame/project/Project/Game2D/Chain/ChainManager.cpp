@@ -2,12 +2,14 @@
 #include "Game2D/Security/AlertSystem.h"
 #include "Game2D/Blocks/BaseBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
+#include "Resource/Audio/AudioManager.h"
 #include <cmath>
 
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/GPUParticle/GPUParticleSystem.h"
@@ -131,18 +133,27 @@ void ChainManager::HandleInput() {
         return;
     }
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
+    GamepadInput* pad = GamepadInput::GetInstance();
+    bool padConnected = pad && pad->IsConnected();
 
-    // スピン：Q で宝石を持つ・やめる、A/D で投げる・漕ぐ、SPACE で飛ぶ
-    // （注意：リプレイの記録キーは Engine 側で固定されていて Q は入っていない。再生で振り子を再現するには Engine の記録キーに Q を足す必要がある）
+    // スピン：E / パッドX または LB で宝石を持つ・やめる、A/D / スティック / D-Pad で投げる・回す、SPACE / パッドA または RT で飛ぶ
     if (spin_) {
-        if (keyboard->IsKeyPressed(DIK_Q)) {
+        bool toggleSpin = keyboard->IsKeyPressed(DIK_E) || 
+                          (padConnected && (pad->IsButtonPressed(GamepadButton::X) || pad->IsButtonPressed(GamepadButton::LB)));
+        if (toggleSpin) {
             spin_->OnHoldToggle();
         }
-        // 漕いでいる最中の SPACE：押している間は振り子がスローになって狙え、離すと発射（押した縁・離した縁は ChainSpinAction 側で見る）
-        spin_->SetLaunchHeld(spin_->GetState() == ChainSpinAction::State::kStance && keyboard->IsKeyDown(DIK_SPACE));
-        if (keyboard->IsKeyPressed(DIK_SPACE)) {
+
+        // 漕いでいる最中の発射構えホールド：押している間は振り子がスローになって狙え、離すと発射
+        bool launchHeld = keyboard->IsKeyDown(DIK_SPACE) || 
+                          (padConnected && (pad->IsButtonDown(GamepadButton::A) || pad->GetRightTrigger() > 0.3f));
+        spin_->SetLaunchHeld(spin_->GetState() == ChainSpinAction::State::kStance && launchHeld);
+
+        bool launchPressed = keyboard->IsKeyPressed(DIK_SPACE) || 
+                             (padConnected && pad->IsButtonPressed(GamepadButton::A));
+        if (launchPressed) {
             if (spin_->IsHolding()) {
-                // 持っている最中の SPACE は落として通常ジャンプ（プレイヤー側のジャンプは構え中に無効なので、ここで跳ばせる）
+                // 持っている最中の SPACE / パッドA は落として通常ジャンプ（プレイヤー側のジャンプは構え中に無効なので、ここで跳ばせる）
                 spin_->Cancel(player_, playerChain_.get());
                 if (player_->IsOnGround()) {
                     const auto& pp = player_->GetParams();
@@ -156,22 +167,33 @@ void ChainManager::HandleInput() {
         float swing = 0.0f;
         if (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) swing += 1.0f;
         if (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) swing -= 1.0f;
+
+        if (padConnected) {
+            float stickX = pad->GetLeftStick().x;
+            if (std::abs(stickX) > 0.0f) swing += stickX;
+            if (pad->IsDPadRight()) swing += 1.0f;
+            if (pad->IsDPadLeft()) swing -= 1.0f;
+        }
+        swing = std::clamp(swing, -1.0f, 1.0f);
         spin_->SetSwingInput(swing);
     }
 
-    // 拾う（K）：縛った警備員の近くなら鎖を取り戻す。それ以外は範囲内の鎖を拾う（無ければ何もしない）
-    if (keyboard->IsKeyPressed(DIK_K)) {
+    // 拾う（K / パッドY または RB）：縛った警備員の近くなら鎖を取り戻す。それ以外は範囲内の鎖を拾う（無ければ何もしない）
+    bool isPickup = keyboard->IsKeyPressed(DIK_K) || 
+                    (padConnected && (pad->IsButtonPressed(GamepadButton::Y) || pad->IsButtonPressed(GamepadButton::RB)));
+    if (isPickup) {
         if (spin_) spin_->Cancel(player_, playerChain_.get()); // 構え中の着脱は中断してから
         if (!TryUnbindGuard()) {
             TryPickup();
         }
     }
 
-
-    // 置く（J）：光っている（縛れる）警備員が近ければ縛る、それ以外は外して落とす。取る（K）と隣の右手キーで対にする
+    // 置く（J / パッドB）：光っている（縛れる）警備員が近ければ縛る、それ以外は外して落とす。取る（K）と隣の右手キーで対にする
     // 注意: Jの録画スロットはShiftと共有のため、将来ダッシュ等でShiftを使うと
     // リプレイ再生時に幻の「外す」になり得る。その場合はJを外してS(下)だけにする
-    if (keyboard->IsKeyPressed(DIK_J)) {
+    bool isDetach = keyboard->IsKeyPressed(DIK_J) || 
+                    (padConnected && pad->IsButtonPressed(GamepadButton::B));
+    if (isDetach) {
         if (spin_) spin_->Cancel(player_, playerChain_.get());
         if (!TryBindGuard()) {
             DetachUnits();
@@ -194,6 +216,7 @@ bool ChainManager::TryPickup() {
             // 上限を超える分は消滅させる（見えないジャンプペナルティだけが増えるのを防ぐ）
             int gain = (std::min)(droppedChains_[i].unitWorth, headroom);
             player_->AddChainLength(gain);
+            AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
             if (droppedChains_[i].effect) {
                 RecycleLuminescenceEffect(std::move(droppedChains_[i].effect));
             }
@@ -211,6 +234,7 @@ bool ChainManager::TryPickup() {
             if (take > 0) {
                 chain->RemoveUnitsAtAnchor(take);
                 player_->AddChainLength(take);
+                AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
                 // 使い切った吊り鎖も消さずに残す（アンカー1ノードだけの休眠状態＝描画も物理も判定も無効）
                 // ResetToInitial() が初期ユニット数へ復元するので、リプレイ再生や2回目のプレイで世界がずれない
                 return true;
@@ -265,6 +289,7 @@ bool ChainManager::TryBindGuard() {
     }
     guard->Bind(1);
     player_->AddChainLength(-1); // Reconcile が手元側から1ユニット縮める
+    AudioManager::Play("resources/Sound/10Dyas/SE/LosingChain.mp3", 0.75f);
     Log("ChainManager: guard bound, chainLength=" + std::to_string(player_->GetChainLength()) + "\n");
     return true;
 }
@@ -277,11 +302,17 @@ bool ChainManager::TryUnbindGuard() {
     if (!guard) {
         return false;
     }
+    if (player_->GetChainLength() >= params_.maxUnits_) {
+        // 手元が最大本数なら戻せない（以前は解いた上で本数が増えず、鎖が 1 本消えていた）
+        Log("ChainManager: 鎖が最大本数なので縛った鎖は戻せない\n");
+        return true;
+    }
     int units = guard->Unbind();
     int headroom = params_.maxUnits_ - player_->GetChainLength();
     int gain = std::clamp(units, 0, (std::max)(0, headroom));
     if (gain > 0) {
         player_->AddChainLength(gain); // 増えた分は Reconcile が手元から繰り出す
+        AudioManager::Play("resources/Sound/10Dyas/SE/GetChain.mp3", 0.75f);
     }
     Log("ChainManager: guard unbound +" + std::to_string(gain) + " unit(s)\n");
     return true;
@@ -312,6 +343,7 @@ void ChainManager::DetachUnits() {
     }
     // 先に個数を減らしてから（同フレームの Reconcile が二重に削らないよう current == target にする）
     player_->AddChainLength(-detach);
+    AudioManager::Play("resources/Sound/10Dyas/SE/LosingChain.mp3", 0.75f);
 
     // 外したエフェクト再生
     if (breakEffect_) {
@@ -402,7 +434,9 @@ void ChainManager::Update(float dt, MapChip2D* map) {
     }
 
     if (playerChain_) {
-        playerChain_->SyncSocket(socketWorld);
+        if (playerChain_->GetAnchorMode() == ChainAnchorMode::kSocket) {
+            playerChain_->SyncSocket(socketWorld);
+        }
         playerChain_->Update(dt, map, player_);
     }
     if (tornChain_) {
@@ -542,7 +576,10 @@ void ChainManager::ResetAll() {
         player_->SetChainLength(initialChainLength_);
     }
     if (playerChain_) {
-        playerChain_->ResetToInitial(); // kSocket・初期ユニット数へ（繰り出し状態もクリア）。次のSyncSocketのワープ検出が手元へ引き寄せる
+        if (player_) {
+            playerChain_->SetAnchorPosition(player_->GetPosition());
+        }
+        playerChain_->ResetToInitial(); // kSocket・初期ユニット数へ（プレイヤー位置に重なるように再生成）
     }
     for (auto& chain : worldChains_) {
         chain->ResetToInitial(); // 使い切って休眠していた吊り鎖もここで復活する
@@ -555,6 +592,21 @@ void ChainManager::ResetAll() {
         breakEffect_->Pause();
     }
     SyncTreasureTransform();
+}
+
+void ChainManager::OnPlayerDeath() {
+    if (spin_) {
+        spin_->Cancel(player_, playerChain_.get());
+        spin_->ResetInputState();
+    }
+    if (playerChain_) {
+        // プレイヤーの手元の拘束を解除し、自由落下（その場の地面に落ちて残る）状態にする
+        playerChain_->SetAnchorMode(ChainAnchorMode::kFree);
+    }
+    if (player_) {
+        player_->SetIsHoldingChain(false);
+        player_->SetIsSwingingChain(false);
+    }
 }
 
 void ChainManager::OnRewindBegin() {
@@ -636,6 +688,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
             return;
         }
         const bool isFree = (chain->GetAnchorMode() == ChainAnchorMode::kFree); // 落ちている鎖・ちぎれた鎖
+        // 地面に落ち着いた鎖は「置いてあるだけ」にする：拾う判定とスイッチは効くが、
+        // 警備員を転ばせたりドアに反応したりはしない（止まった鎖が警備員を延々と転ばせ続けていた）
+        const bool settled = isFree && chain->IsResting();
         const auto& nodes = chain->GetNodes();
         const int last = static_cast<int>(nodes.size()) - 1;
         for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
@@ -663,6 +718,21 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                     }
                 }
             }
+            // 動くブロック（ドアなど）は「通路の範囲」で当たりを取る（crushKills OFF のドアが通路の鎖を見て閉まるのを待つため）
+            // 落ち着いた鎖は対象外（置いてあるだけの鎖でドアが閉まらなくなるのを防ぐ）
+            for (const auto& blockPtr : map->GetUpdateBlocks()) {
+                if (settled) break;
+                if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving()) continue;
+                if (dynamic_cast<GuardBlock*>(blockPtr.get())) continue; // 警備員は下で別に扱う
+                AABB2D box = blockPtr->GetChainTouchAABB();
+                if (node.pos.x + r < box.left || node.pos.x - r > box.right ||
+                    node.pos.y + r < box.bottom || node.pos.y - r > box.top) {
+                    continue;
+                }
+                if (blockPtr->OnChainTouch(node.pos, r, vel, isWeight) && isWeight) {
+                    chain->ScaleNodeVelocity(i, 0.4f);
+                }
+            }
             for (const auto& blockPtr : map->GetUpdateBlocks()) {
                 auto* guard = dynamic_cast<GuardBlock*>(blockPtr.get());
                 if (!guard || guard->IsDestroyed()) {
@@ -673,8 +743,9 @@ void ChainManager::NotifyBlockContacts(MapChip2D* map) {
                     if (CircleOverlapsAABB(node.pos, r, guard->GetAABB()) && guard->HitByTreasure(vel)) {
                         chain->ScaleNodeVelocity(i, 0.4f); // 跳ね返して連打を防ぐ
                     }
-                } else if (isFree) {
+                } else if (isFree && !settled) {
                     // 転ばせる：落ちている鎖の節が移動中の足元に重なる
+                    // 地面で止まった鎖は転ばせない（置きっぱなしの鎖で永遠に転び続けるため）
                     if (CircleOverlapsAABB(node.pos, r, guard->GetFootAABB())) {
                         guard->TripByChain(speed);
                     }
@@ -708,10 +779,24 @@ void ChainManager::UpdateSpinSpots(MapChip2D* map) {
         for (int cy = y0; cy <= y1; ++cy) {
             for (int cx = x0; cx <= x1; ++cx) {
                 BaseBlock* block = map->GetBlock(cx, cy);
-                if (!block || block->IsDestroyed() || !block->AllowsChainSpin()) {
+                if (!block || block->IsDestroyed() || block->IsMoving() || !block->AllowsChainSpin()) {
+                    continue; // 動く板は置いたチップから離れるので、下のループで今いる場所を見る
+                }
+                allowed = true;
+            }
+        }
+        // 動く板（動く床）はチップではなく、今いる場所（AABB）で足元を見る
+        if (!allowed) {
+            for (const auto& blockPtr : map->GetUpdateBlocks()) {
+                if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsMoving() || !blockPtr->AllowsChainSpin()) {
+                    continue;
+                }
+                AABB2D b = blockPtr->GetAABB();
+                if (box.right < b.left || box.left > b.right || box.top < b.bottom || (box.bottom - 0.1f) > b.top) {
                     continue;
                 }
                 allowed = true;
+                break;
             }
         }
     }
@@ -725,8 +810,8 @@ void ChainManager::UpdateTether() {
     if (!player_ || !playerChain_) {
         return;
     }
-    // 構え中はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
-    if (spin_ && spin_->IsInStance()) {
+    // 構え中と、板以外で投げた直後はスピン側が入力修飾を持つ。それ以外はここで毎フレーム決める（張っていなければ通常）
+    if (spin_ && (spin_->IsInStance() || spin_->IsThrowLocked())) {
         return;
     }
     if (!params_.tetherEnabled_ || tornChain_ || transitionHidden_ || player_->IsDead() || player_->IsGoal()) {
@@ -1022,6 +1107,11 @@ void ChainManager::DrawImGui() {
         ImGui::SameLine();
         ImGui::TextDisabled(spin_->IsSpinAllowed() ? "[on plank]" : "[not on plank]");
     }
+    ImGui::TextColored(ImVec4(0.8f, 0.85f, 1.0f, 1.0f), "【板以外の床で投げる（Q で持って A/D）】");
+    spinChanged |= ImGui::DragFloat("Ground Throw Speed (投げる速さ)##Spin", &params_.groundThrowSpeed_, 0.5f, 0.0f, 40.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Up (上向き成分)##Spin", &params_.groundThrowUp_, 0.05f, 0.0f, 2.0f);
+    spinChanged |= ImGui::DragFloat("Ground Throw Recover (投げた後動けない秒数)##Spin", &params_.groundThrowRecover_, 0.05f, 0.0f, 2.0f);
+    ImGui::TextDisabled("※ 警備員が気絶する速さは Stun Speed（既定 6）。それより速く投げること");
     spinChanged |= ImGui::DragFloat("Swing Strength##Spin", &params_.swingStrength_, 0.5f, 0.0f, 200.0f);
     spinChanged |= ImGui::DragFloat("Swing Damping##Spin", &params_.swingDamping_, 0.01f, 0.0f, 5.0f);
     spinChanged |= ImGui::DragFloat("Chain Mass Per Unit##Spin", &params_.chainMassPerUnit_, 0.05f, 0.0f, 10.0f);
@@ -1039,6 +1129,9 @@ void ChainManager::DrawImGui() {
         params_.throwOutTime_ = std::clamp(params_.throwOutTime_, 0.01f, 2.0f);
         params_.throwAngleDeg_ = std::clamp(params_.throwAngleDeg_, 0.0f, 180.0f);
         params_.throwOmega_ = std::clamp(params_.throwOmega_, 0.0f, 20.0f);
+        params_.groundThrowSpeed_ = std::clamp(params_.groundThrowSpeed_, 0.0f, 40.0f);
+        params_.groundThrowUp_ = std::clamp(params_.groundThrowUp_, 0.0f, 2.0f);
+        params_.groundThrowRecover_ = std::clamp(params_.groundThrowRecover_, 0.0f, 2.0f);
         params_.swingStrength_ = (std::max)(0.0f, params_.swingStrength_);
         params_.swingDamping_ = (std::max)(0.0f, params_.swingDamping_);
         params_.chainMassPerUnit_ = (std::max)(0.0f, params_.chainMassPerUnit_);
