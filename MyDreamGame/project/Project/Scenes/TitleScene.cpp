@@ -877,6 +877,13 @@ void TitleScene::Update(SceneManager *sceneManager) {
             if (stageSelectIntroTimer_ >= 0.0f) {
                 targetAlpha = (std::min)(1.0f, stageSelectIntroTimer_ * 3.0f);
             }
+            // 暗転（アイリスアウト）は 3D の絵に掛かるポストエフェクトなので、
+            // スプライトは自分で消さないと暗くなった画面の上に残ってしまう。
+            // 円が閉じ切るより早く消えるように、進み具合より速くフェードアウトする
+            if (isIrisOutActive_ && gameTransitionDuration_ > 0.001f) {
+                const float t = std::clamp(gameTransitionTimer_ / gameTransitionDuration_, 0.0f, 1.0f);
+                targetAlpha *= (std::max)(0.0f, 1.0f - t * 1.8f);
+            }
             tutorialUiAlpha_ = targetAlpha;
         } else {
             tutorialUiAlpha_ = 0.0f;
