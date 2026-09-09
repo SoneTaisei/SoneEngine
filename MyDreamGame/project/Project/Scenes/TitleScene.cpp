@@ -291,6 +291,19 @@ void TitleScene::Initialize() {
     ruleBookSprite_->SetPosition(ruleBookPos_);
     ruleBookSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
 
+    // 6.36 説明書の中身 (rule_list.png) - 押した時に画面の真ん中へ出す
+    ruleListTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/rule_list.png");
+    ruleListSprite_ = std::make_unique<Sprite>();
+    ruleListSprite_->Initialize(spriteCommon_, ruleListTextureHandle_);
+    ruleListSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
+    // 後ろを暗くする幕（白い画像を黒く染めて使う）
+    ruleListBackdropSprite_ = std::make_unique<Sprite>();
+    ruleListBackdropSprite_->Initialize(spriteCommon_,
+        TextureManager::GetInstance()->Load("resources/Object/Original/kusari/kusari_2/white.png"));
+    ruleListBackdropSprite_->SetSize({ 1600.0f, 960.0f });
+    ruleListBackdropSprite_->SetPosition({ -160.0f, -120.0f });
+    ruleListBackdropSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f });
+
     // -------------------------------------------------------------
     // 6.4 クレジット画面表示スプライト (credit.png)
     // -------------------------------------------------------------
@@ -418,6 +431,19 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 }
             }
 
+            // 説明書を出している間は、もう一度決定（またはキャンセル）で閉じるだけ。他の操作は受けない
+            if (showRuleList_) {
+                const bool closePressed = isDecisionPressed || kb->IsKeyPressed(DIK_ESCAPE) ||
+                                          kb->IsKeyPressed(DIK_BACK) ||
+                                          (pad && pad->IsButtonPressed(GamepadButton::B));
+                if (closePressed) {
+                    AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
+                    showRuleList_ = false;
+                }
+                upPressed = downPressed = leftPressed = rightPressed = false;
+                isDecisionPressed = false;
+            }
+
             int prevMenu = selectedTitleMenu_;
 
             // メニュー項目の選択遷移 (0: スタート, 1: クレジット, 2: 説明書)
@@ -474,16 +500,8 @@ void TitleScene::Update(SceneManager *sceneManager) {
                 } else if (selectedTitleMenu_ == 2) {
                     AudioManager::Play("resources/Sound/10Dyas/SE/Select.mp3", 0.8f);
 
-                    // 「説明書」選択時: チュートリアルステージ（tutorial.txt）へ直接移行（カードは投げない）
-                    phase_ = Phase::kTransitionToGame;
-                    selectedStageIndex_ = 0; // チュートリアル
-                    cardPhase_ = CardThrowPhase::kNone;
-                    if (callingCardObject_) {
-                        if (auto tc = callingCardObject_->GetComponent<TransformComponent>()) {
-                            tc->SetScale({ 0.0f, 0.0f, 0.0f });
-                        }
-                    }
-                    StartIrisOut({ 0.5f, 0.5f }, gameTransitionDuration_);
+                    // 「説明書」選択時: 画面の真ん中に中身を出す。もう一度決定で閉じる
+                    showRuleList_ = true;
                 }
             }
         } else if (phase_ == Phase::kCredit) {
@@ -888,6 +906,13 @@ void TitleScene::Update(SceneManager *sceneManager) {
             if (stageSelectIntroTimer_ >= 0.0f) {
                 targetAlpha = (std::min)(1.0f, stageSelectIntroTimer_ * 3.0f);
             }
+            // 暗転（アイリスアウト）は 3D の絵に掛かるポストエフェクトなので、
+            // スプライトは自分で消さないと暗くなった画面の上に残ってしまう。
+            // 円が閉じ切るより早く消えるように、進み具合より速くフェードアウトする
+            if (isIrisOutActive_ && gameTransitionDuration_ > 0.001f) {
+                const float t = std::clamp(gameTransitionTimer_ / gameTransitionDuration_, 0.0f, 1.0f);
+                targetAlpha *= (std::max)(0.0f, 1.0f - t * 1.8f);
+            }
             tutorialUiAlpha_ = targetAlpha;
         } else {
             tutorialUiAlpha_ = 0.0f;
@@ -933,6 +958,31 @@ void TitleScene::Update(SceneManager *sceneManager) {
             tutorialUiSprite_->SetPosition(centeredPos);
             tutorialUiSprite_->SetColor(uiColor);
             tutorialUiSprite_->Update();
+        }
+    }
+
+    // 説明書の中身（怪盗心構え）。出ている間はふわっと現れ、閉じるとふわっと消える
+    {
+        const float target = showRuleList_ ? 1.0f : 0.0f;
+        constexpr float kFadeSpeed = 6.0f;
+        if (ruleListAlpha_ < target) {
+            ruleListAlpha_ = (std::min)(target, ruleListAlpha_ + kFadeSpeed * dt);
+        } else if (ruleListAlpha_ > target) {
+            ruleListAlpha_ = (std::max)(target, ruleListAlpha_ - kFadeSpeed * dt);
+        }
+        if (ruleListAlpha_ > 0.001f) {
+            if (ruleListBackdropSprite_) {
+                ruleListBackdropSprite_->SetColor({ 0.0f, 0.0f, 0.0f, 0.62f * ruleListAlpha_ });
+                ruleListBackdropSprite_->Update();
+            }
+            if (ruleListSprite_) {
+                constexpr float kWidth = 1000.0f; // 画像は 1600x800
+                const float h = kWidth * (800.0f / 1600.0f);
+                ruleListSprite_->SetSize({ kWidth, h });
+                ruleListSprite_->SetPosition({ (1280.0f - kWidth) * 0.5f, (720.0f - h) * 0.5f });
+                ruleListSprite_->SetColor({ 1.0f, 1.0f, 1.0f, ruleListAlpha_ });
+                ruleListSprite_->Update();
+            }
         }
     }
 
@@ -1141,6 +1191,16 @@ void TitleScene::Draw2D() {
                 prompt->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
                 prompt->Update();
                 prompt->Draw();
+            }
+        }
+
+        // 説明書の中身は一番手前。後ろを暗くしてから真ん中に出す
+        if (ruleListAlpha_ > 0.001f) {
+            if (ruleListBackdropSprite_) {
+                ruleListBackdropSprite_->Draw();
+            }
+            if (ruleListSprite_) {
+                ruleListSprite_->Draw();
             }
         }
     }
