@@ -91,6 +91,12 @@ private:
 
     // --- タイトルメニュー用（説明書 / ruleBook.png） ---
     std::unique_ptr<Sprite> ruleBookSprite_;
+    // 説明書を押した時に画面の真ん中へ出す「怪盗心構え」。もう一度決定で閉じる
+    std::unique_ptr<Sprite> ruleListSprite_;
+    std::unique_ptr<Sprite> ruleListBackdropSprite_;
+    uint32_t ruleListTextureHandle_ = 0;
+    bool showRuleList_ = false;
+    float ruleListAlpha_ = 0.0f;
     uint32_t ruleBookTextureHandle_ = 0;
     Vector2 ruleBookPos_ = { 36.0f, 540.0f };
     Vector2 ruleBookSize_ = { 130.0f, 130.0f };
