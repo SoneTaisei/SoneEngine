@@ -2885,10 +2885,20 @@ void GameScene::TriggerDeathSequence() {
     deathRespawnPos_ = player_->GetStartPosition();
 
     Vector3 pPos = player_->GetPosition();
+    if (player_->IsFallDeath() || pPos.y < -5.0f) {
+        if (gameCamera_) {
+            Vector3 camPos = gameCamera_->GetTranslation();
+            float halfH = gameCamera_->GetOrthoHeight() * 0.5f;
+            pPos.y = camPos.y - halfH + 0.8f;
+        }
+    }
     deathHatPos_ = {pPos.x, pPos.y + 0.65f, 0.0f};
     deathHatVelocity_ = {0.2f, 1.6f, 0.0f};
     deathHatRotationZ_ = 0.0f;
     isDeathHatActive_ = true;
+
+    // プレイヤー死亡位置から魂の煙（昇華エフェクト）を発生
+    player_->SpawnSoulSmoke(pPos);
 
     // 死亡演出の間はカメラを帽子へ寄せる。
     // 追従に任せるとルームの内側に収める制限と、追従のラープでずれるので、
@@ -2918,6 +2928,11 @@ void GameScene::UpdateDeathSequence(float dt, SceneManager *sceneManager) {
         return;
 
     deathSequenceTimer_ += dt;
+
+    // 死亡演出中も魂パーティクルの上昇・フェードアウト更新を継続
+    if (player_) {
+        player_->UpdateVisualsOnly(dt);
+    }
 
     // カメラを帽子へ寄せる。寄り切ると帽子の位置そのものになるので、落ちていく帽子を画面の中心で追い続ける
     if (gameCamera_) {

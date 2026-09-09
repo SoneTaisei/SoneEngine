@@ -88,15 +88,16 @@ public:
     PlayerVisuals& GetVisuals() { return visuals_; }
 
     void Kill(bool isFallDeath = false) {
-        (void)isFallDeath;
         if (!state_.isDead_) {
             state_.isDead_ = true;
+            state_.isFallDeath_ = isFallDeath;
             state_.isRespawning_ = false;
             state_.deathTimer_ = 0.0f;
             state_.velocity_ = { 0.0f, 0.0f, 0.0f };
             state_.launchVelocityX_ = 0.0f;
         }
     }
+    bool IsFallDeath() const { return state_.isFallDeath_; }
 
     void ReachGoal() {
         if (!state_.isGoal_) {
@@ -108,6 +109,7 @@ public:
     }
 
     void SpawnSmokeBomb(const Vector3& pos) { visuals_.SpawnSmokeBomb(pos); }
+    void SpawnSoulSmoke(const Vector3& pos) { visuals_.SpawnSoulSmoke(pos); }
     void SetClearEscaped(bool escaped) { state_.isClearEscaped_ = escaped; }
     bool IsClearEscaped() const { return state_.isClearEscaped_; }
     void UpdateVisualsOnly(float deltaTime) { visuals_.Update(state_, params_, deltaTime); }

@@ -71,6 +71,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
             state_.respawnTimer_ += deltaTime;
             if (state_.respawnTimer_ >= params_.respawnDuration_) {
                 state_.isDead_ = false;
+                state_.isFallDeath_ = false;
                 state_.isRespawning_ = false;
                 state_.isOnGround_ = false;
             }

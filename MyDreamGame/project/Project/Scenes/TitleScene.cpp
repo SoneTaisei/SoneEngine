@@ -1612,6 +1612,9 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         }
         if (i < 3) ImGui::SameLine();
     }
+    if (ImGui::Button("全クリア状況をリセット (Reset All)")) {
+        StageClearData::ResetAll();
+    }
 
     ImGui::Spacing();
     ImGui::Text("【チュートリアルUI (tutorialUI.png) 調整】");
