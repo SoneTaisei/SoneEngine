@@ -1,8 +1,8 @@
 {
   "title": "宝石を投げて警備員を気絶させる",
   "texture": "resources/Sprite/anim/guard_throw.dds",
-  "cellW": 640,
-  "cellH": 316,
+  "cellW": 512,
+  "cellH": 252,
   "cols": 8,
   "frames": 68,
   "fps": 9,

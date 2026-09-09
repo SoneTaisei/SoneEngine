@@ -63,6 +63,11 @@ public:
 
 private:
     void ApplyFrame(int frame);
+    /// <summary>シートのテクスチャを 1 度だけ読み込む。近づくまで読まないことで、
+    /// ステージに入った瞬間に全部のポスター（合計で数十 MB）を読み込まないようにする</summary>
+    void EnsureTexture();
+
+    bool textureLoaded_ = false;
 
     Meta meta_;
     std::unique_ptr<PrimitiveObject> obj_;

@@ -2,6 +2,7 @@
 #include "Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BaseBlock.h"
+#include "Game2D/Blocks/DoorBlock.h"
 #include "Game2D/Blocks/GuardBlock.h"
 #include "Resource/Audio/AudioManager.h"
 #include <algorithm>
@@ -566,6 +567,13 @@ void PlayerPhysics::CheckBlockInteractions(PlayerState& state_, const PlayerPara
         for (const auto& blockPtr : mapChip->GetUpdateBlocks()) {
             if (!blockPtr || blockPtr->IsDestroyed() || !blockPtr->IsSolid()) continue;
             AABB2D bAABB = blockPtr->GetAABB();
+            // 全開のドアなど厚さがほぼ 0 のものは無いものとして扱う（他の当たり判定と同じ扱い）
+            if (bAABB.right - bAABB.left < 0.01f || bAABB.top - bAABB.bottom < 0.01f) continue;
+            // ドアは「閉まっている最中」だけ潰す。開く途中や開いたままのドアの枠は、
+            // 引っ込んだ板が体に重なっていても死なない（開いた所を通っただけで死んでいた）
+            if (auto* door = dynamic_cast<DoorBlock*>(blockPtr.get())) {
+                if (!door->IsClosing()) continue;
+            }
             if (cRight > bAABB.left && cLeft < bAABB.right && cTop > bAABB.bottom && cBottom < bAABB.top) {
                 player->Kill();
                 return;

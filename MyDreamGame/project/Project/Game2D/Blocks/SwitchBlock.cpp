@@ -58,18 +58,22 @@ void SwitchBlock::Update() {
     // 見た目の更新
     auto* tc = gameObject_->GetComponent<TransformComponent>();
     auto* renderer = gameObject_->GetComponent<PrimitiveRendererComponent>();
-    if (tc && renderer) {
+    auto* mesh = gameObject_->GetComponent<MeshRendererComponent>();
+    if (tc) {
+        // 連動番号ごとの色。押している間は明るくして、どのドアが開くのかを色で追えるようにする
+        const Vector4 color = isPressed_ ? LinkColor::Bright(linkId_) : LinkColor::Base(linkId_);
         if (isPressed_) {
-            // 押されている時は沈み込み、色が明るくなる
+            // 押されている時は沈み込む
             tc->SetScale({startWidth_ * 0.8f, startHeight_ * 0.1f, 1.0f});
             tc->SetPosition({startX_, startY_ - startHeight_ * 0.45f, 0.0f});
-            renderer->GetMaterial().color = LinkColor::Bright(linkId_); // 連動番号ごとの色（押している間は明るく）
         } else {
             // 元に戻る
             tc->SetScale({startWidth_ * 0.8f, startHeight_ * 0.5f, 1.0f});
             tc->SetPosition({startX_, startY_ - startHeight_ * 0.25f, 0.0f});
-            renderer->GetMaterial().color = LinkColor::Base(linkId_); // 連動番号ごとの色
         }
+        if (renderer) renderer->GetMaterial().color = color;
+        // モデルを設定したスイッチは立方体の描画が止められているので、モデル側にも同じ色を掛ける
+        if (mesh) mesh->GetMaterial().color = color;
     }
 }
 
