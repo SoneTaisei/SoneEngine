@@ -32,6 +32,10 @@
 #include <filesystem>
 
 TitleScene::~TitleScene() {
+    DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+    if (dxCommon) {
+        dxCommon->SetDepthBasedOutlineEnabled(false);
+    }
 }
 
 void TitleScene::OnEnter(SceneManager* sceneManager) {
@@ -119,8 +123,13 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     }
 
     DirectXCommon* dxCommon = DirectXCommon::GetInstance();
-    if (dxCommon && !isIrisInActive_) {
-        dxCommon->SetCompositeIrisEnabled(false);
+    if (dxCommon) {
+        // 深度ベース・アウトライン（ポストエフェクトのシェーダーで輪郭を描くパス）はタイトルの標準の見た目。
+        // USE_IMGUI が定義されないReleaseビルドでも確実に輪郭線が表示されるよう、シーン突入時に有効化する。
+        dxCommon->SetDepthBasedOutlineEnabled(true);
+        if (!isIrisInActive_) {
+            dxCommon->SetCompositeIrisEnabled(false);
+        }
     }
 
     if (titleLogoSprite_) {
@@ -144,6 +153,7 @@ void TitleScene::OnExit(SceneManager* sceneManager) {
     DirectXCommon* dxCommon = DirectXCommon::GetInstance();
     if (dxCommon) {
         dxCommon->SetCompositeIrisEnabled(false);
+        dxCommon->SetDepthBasedOutlineEnabled(false);
     }
 }
 
