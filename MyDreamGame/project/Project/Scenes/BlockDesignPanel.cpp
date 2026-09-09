@@ -116,6 +116,7 @@ namespace {
         {"closeSpeed", "閉まる速さ"},
         {"openDirection", "開く向き"},
         {"openDistance", "開く距離（0 = 全部開く）"},
+        {"invert", "最初から開いている（押すと閉まる）"},
         {"latch", "一度開いたら開いたまま"},
         {"crushKills", "挟まれたらミス（OFF = 通路に鎖があると閉まらない）"},
         {"moveAxis", "動く向き（横／縦）"},
@@ -193,7 +194,7 @@ namespace {
     };
     const QuickDef kQuickDefs[] = {
         {"SwitchBlock", {"linkId"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
-        {"DoorBlock", {"linkId", "openDirection", "latch", "crushKills"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
+        {"DoorBlock", {"linkId", "openDirection", "invert", "latch", "crushKills"}, "linkId", "キー 1〜9 = 連動番号 / 0 = 空き番号"},
         {"FragileBlock", {"breakWeight", "breakDuration"}, "breakWeight", "キー 0〜8 = 通れる上限本数"},
         {"MovingBlock", {"moveAxis", "moveRange", "moveSpeed", "phase", "thickness"}, "moveRange", "キー 1〜9 = 動く範囲"},
         {"GuardBlock", {"startDirection", "moveRange", "lightDistance", "spotNearDistance"}, "moveRange", "キー 1〜9 = 巡回範囲"},
@@ -276,6 +277,14 @@ namespace {
     // ---- プロパティの読み書き（この1枚の上書きとして保存し、即反映） ----
     std::string TypeNameAt(MapChip2D* map, int x, int y) {
         return map->GetBlockTypeName(static_cast<int>(map->GetChip(x, y)));
+    }
+
+    // 後から足した設定は、前に作ったパレットには入っていない。
+    // その場合でも設計パネルに初期値で出して、選べるようにする
+    const nlohmann::json* DefaultPropFor(const std::string& type, const std::string& key) {
+        static const nlohmann::json kFalse = false;
+        if (type == "DoorBlock" && key == "invert") return &kFalse;
+        return nullptr;
     }
 
     nlohmann::json MergedProps(MapChip2D* map, int x, int y) {
@@ -670,7 +679,11 @@ namespace {
             }
             for (const char* k : q->keys) {
                 std::string key = k;
-                if (!merged.contains(key)) continue;
+                if (!merged.contains(key)) {
+                    const nlohmann::json* def = DefaultPropFor(type, key);
+                    if (!def) continue;
+                    merged[key] = *def;
+                }
                 if (type == "MovingBlock" && (key == "moveAxis" || key == "phase")) continue; // 上の向きの欄で決める
                 nlohmann::json value = merged[key];
                 bool overridden = ov && ov->contains(key);
