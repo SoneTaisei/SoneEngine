@@ -10,11 +10,13 @@
 #include "Effect/windowParticle.h"
 #include "GameObject/GameObject.h"
 #include "Component/MeshRendererComponent.h"
+#include "Component/TransformComponent.h"
 #include "Graphics/Skybox.h"
 #include "Graphics/DebugCamera.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 #include <vector>
+#include <array>
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Effect/ParticleCommon.h"
@@ -232,6 +234,28 @@ private:
 
     void StartCallingCardThrow(const Vector3& targetPos);
     void UpdateCallingCardThrow(float dt, SceneManager* sceneManager);
+
+    // --- ステージ選択時のガイド看板表示 (plan.obj + stage1.png/stage2.png/stage3.png) ---
+    std::shared_ptr<GameObject> stageGuideObject_;
+    MeshRendererComponent* stageGuideRenderer_ = nullptr;
+    TransformComponent* stageGuideTransform_ = nullptr;
+    std::array<uint32_t, 3> stageGuideTextureHandles_{};
+    std::array<Vector3, 3> stageGuideOffsets_ = {
+        Vector3{ 13.6f, 8.4f, 0.0f },     // ステージ1 (画像1指定値)
+        Vector3{ 0.0f, 16.0f, 0.0f },     // ステージ2 (角度調整・位置初期値)
+        Vector3{ -18.3f, 15.4f, -4.5f }   // ステージ3 (画像2指定値)
+    };
+    std::array<Vector3, 3> stageGuideRots_ = {
+        Vector3{ 0.0f, 1.256637f, 3.141593f }, // ステージ1 (0.0°, 72.0°, 180.0°)
+        Vector3{ 0.0f, 1.239184f, 3.141593f }, // ステージ2 (0.0°, 71.0°, 180.0°)
+        Vector3{ 0.0f, 1.221731f, 3.141593f }  // ステージ3 (0.0°, 70.0°, 180.0°)
+    };
+    Vector3 stageGuideScale_ = { 1.0f, -2.5f, 10.0f }; // 4:1 アスペクト比 (厚み1.0, 高さ-2.5で上下反転解消, 横幅10.0)
+    Vector3 currentGuidePos_{};
+    Vector3 currentGuideRot_{};
+    float currentGuideScaleFactor_ = 0.0f; // ポップイン・縮小アニメーション用 (0.0 ~ 1.0)
+    int currentGuideStageIdx_ = -1;
+    void UpdateStageGuideBanner(float dt);
 
     // --- エディター停止中用 ---
     void UpdateEditor() override;

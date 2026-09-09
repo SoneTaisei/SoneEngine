@@ -19,6 +19,7 @@
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
+#include <numbers>
 #include "Component/TransformComponent.h"
 #include "GameObject/Object3D.h"
 
@@ -88,6 +89,29 @@ void StageSelectScene::Initialize() {
     LoadConfig();
     RefreshAvailableMapFiles();
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
+
+    // ステージガイド看板モデル（plan.obj）の初期化
+    LoadStageGuideTextures();
+    Model* guideModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/plan", "plan.obj");
+    if (guideModel) {
+        guideObject_ = std::make_shared<GameObject>("StageGuideBanner");
+        guideTransform_ = guideObject_->AddComponent<TransformComponent>();
+        // plan.objはYZ平面（厚みX方向、法線+X/-X）のため、Y軸まわりに-90度回転させて正面（+X法線面）をカメラ（-Z方向）に向ける
+        guideTransform_->SetRotation({0.0f, -std::numbers::pi_v<float> / 2.0f, 0.0f});
+        // プレイヤー頭上に見やすく配置
+        guideTransform_->SetPosition({0.0f, 1.8f, 0.0f});
+        // 画像アスペクト比 800:200 (4:1) に合わせてスケール調整（幅6.0、高さ1.5）
+        guideTransform_->SetScale({1.0f, 0.75f, 3.0f});
+
+        guideRenderer_ = guideObject_->AddComponent<MeshRendererComponent>();
+        guideRenderer_->Initialize(device.Get(), guideModel);
+        guideRenderer_->SetIsDoubleSided(true);
+        // UI/ガイド看板用のためライティングを受けずに鮮明に発色させる
+        guideRenderer_->GetMaterial().lightingType = 0;
+
+        gameObjects_.push_back(guideObject_);
+    }
+    UpdateGuideBanner();
 }
 
 void StageSelectScene::Update(SceneManager *sceneManager) {
@@ -143,6 +167,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
             currentStageIndex_ = stageCount_ - 1;
         }
         AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
+        UpdateGuideBanner();
     }
     if (moveNext) {
         currentStageIndex_++;
@@ -150,6 +175,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
             currentStageIndex_ = 0;
         }
         AudioManager::Play("resources/Sound/10Dyas/SE/SelectMove.mp3", 0.7f);
+        UpdateGuideBanner();
     }
 
     bool isDecision = keyboard->IsKeyPressed(DIK_SPACE) || keyboard->IsKeyPressed(DIK_RETURN) ||
@@ -198,6 +224,31 @@ std::vector<Object3D *> StageSelectScene::GetObjects() {
 
 void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
+    // ガイド看板のTransform調整ウィンドウ
+    if (guideTransform_) {
+        ImGui::Begin("ステージガイド看板 調整");
+        Vector3 pos = guideTransform_->GetPosition();
+        Vector3 rot = guideTransform_->GetRotation();
+        Vector3 scale = guideTransform_->GetScale();
+
+        bool changed = false;
+        if (ImGui::DragFloat3("位置 (Position)", &pos.x, 0.05f)) changed = true;
+        if (ImGui::DragFloat3("回転 (Rotation)", &rot.x, 0.05f)) changed = true;
+        if (ImGui::DragFloat3("拡大縮小 (Scale)", &scale.x, 0.05f)) changed = true;
+
+        if (changed) {
+            guideTransform_->SetPosition(pos);
+            guideTransform_->SetRotation(rot);
+            guideTransform_->SetScale(scale);
+        }
+        if (ImGui::Button("初期位置にリセット")) {
+            guideTransform_->SetPosition({0.0f, 1.8f, 0.0f});
+            guideTransform_->SetRotation({0.0f, -std::numbers::pi_v<float> / 2.0f, 0.0f});
+            guideTransform_->SetScale({1.0f, 0.75f, 3.0f});
+        }
+        ImGui::End();
+    }
+
     // プレイヤー向けの現在の選択ステージ表示
     ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
     const float PAD = 10.0f;
@@ -220,6 +271,8 @@ void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     if (ImGui::InputInt("ステージ数", &stageCount_)) {
         if (stageCount_ < 1) stageCount_ = 1;
         stageConfigs_.resize(stageCount_);
+        LoadStageGuideTextures();
+        UpdateGuideBanner();
     }
 
     if (ImGui::Button("マップ一覧更新")) {
@@ -310,3 +363,36 @@ void StageSelectScene::LoadConfig() {
         }
     }
 }
+
+void StageSelectScene::LoadStageGuideTextures() {
+    auto texMgr = TextureManager::GetInstance();
+    fallbackGuideTexture_ = texMgr->Load("resources/Sprite/Original/UI/stage1.png");
+
+    stageGuideTextures_.clear();
+    int count = (std::max)(stageCount_, 10);
+    for (int i = 0; i < count; ++i) {
+        std::string path = "resources/Sprite/Original/UI/stage" + std::to_string(i + 1) + ".png";
+        if (std::filesystem::exists(path)) {
+            stageGuideTextures_.push_back(texMgr->Load(path));
+        } else {
+            // stage{N}.png が見つからない場合は直前の有効画像または fallback
+            if (!stageGuideTextures_.empty() && stageGuideTextures_.back() != 0) {
+                stageGuideTextures_.push_back(stageGuideTextures_.back());
+            } else {
+                stageGuideTextures_.push_back(fallbackGuideTexture_);
+            }
+        }
+    }
+}
+
+void StageSelectScene::UpdateGuideBanner() {
+    if (!guideRenderer_) return;
+    uint32_t handle = fallbackGuideTexture_;
+    if (currentStageIndex_ >= 0 && currentStageIndex_ < static_cast<int>(stageGuideTextures_.size())) {
+        handle = stageGuideTextures_[currentStageIndex_];
+    }
+    if (handle != 0) {
+        guideRenderer_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+    }
+}
+

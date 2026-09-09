@@ -309,6 +309,30 @@ void TitleScene::Initialize() {
     rc->GetMaterial().lightingType = 0; // 自己発光でハッキリ見せる
 
     gameObjects_.push_back(callingCardObject_);
+
+    // -------------------------------------------------------------
+    // 8. ステージガイド看板オブジェクト (plan.obj + stage1~3.png) の準備
+    // -------------------------------------------------------------
+    stageGuideTextureHandles_[0] = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stage1.png");
+    stageGuideTextureHandles_[1] = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stage2.png");
+    stageGuideTextureHandles_[2] = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/stage3.png");
+
+    Model* guideModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/plan", "plan.obj");
+    if (guideModel) {
+        stageGuideObject_ = std::make_shared<GameObject>("StageGuideBanner");
+        stageGuideTransform_ = stageGuideObject_->AddComponent<TransformComponent>();
+        stageGuideTransform_->SetPosition({ 0.0f, -100.0f, 0.0f });
+        stageGuideTransform_->SetScale({ 0.0f, 0.0f, 0.0f }); // 初期は非表示
+        stageGuideTransform_->SetRotation(stageGuideRots_[0]);
+
+        stageGuideRenderer_ = stageGuideObject_->AddComponent<MeshRendererComponent>();
+        stageGuideRenderer_->Initialize(device.Get(), guideModel);
+        stageGuideRenderer_->SetIsDoubleSided(true);
+        stageGuideRenderer_->GetMaterial().lightingType = 0; // 自己発光で鮮明に見せる
+        stageGuideRenderer_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(stageGuideTextureHandles_[0]));
+
+        gameObjects_.push_back(stageGuideObject_);
+    }
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
@@ -972,6 +996,9 @@ void TitleScene::Update(SceneManager *sceneManager) {
     // ステージ選択用オブジェクトの選択状態・色更新
     UpdateStageSelectInteraction(dt);
 
+    // ステージ選択ガイド看板（plan.obj + stage1~3.png）の更新
+    UpdateStageGuideBanner(dt);
+
     // 予告状突き刺し＆ゲームシーン移行演出を更新
     if (phase_ == Phase::kTransitionToGame) {
         if (cardPhase_ != CardThrowPhase::kNone) {
@@ -1175,7 +1202,9 @@ void TitleScene::UpdateEditor() {
     }
 
     // エディタ停止中もステージ選択用オブジェクトの色更新を反映
-    UpdateStageSelectInteraction(TimeManager::GetInstance().GetDeltaTime());
+    float dt = TimeManager::GetInstance().GetDeltaTime();
+    UpdateStageSelectInteraction(dt);
+    UpdateStageGuideBanner(dt);
 }
 
 void TitleScene::UpdateStageSelectInteraction(float dt) {
@@ -1273,6 +1302,113 @@ void TitleScene::UpdateStageSelectInteraction(float dt) {
 
 void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
+    // -------------------------------------------------------------
+    // ステージガイド看板 専用調整ウィンドウ（独立表示で即座に調整可能）
+    // -------------------------------------------------------------
+    if (ImGui::Begin("ステージガイド看板 角度・位置調整")) {
+        static int editStageIdx = 0;
+        static bool syncWithSelected = true;
+        if (syncWithSelected && selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) {
+            editStageIdx = selectedStageIndex_ - 1;
+        }
+
+        ImGui::Text("【編集対象ステージ】");
+        ImGui::RadioButton("ステージ 1", &editStageIdx, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("ステージ 2", &editStageIdx, 1);
+        ImGui::SameLine();
+        ImGui::RadioButton("ステージ 3", &editStageIdx, 2);
+        ImGui::Checkbox("選択中ステージに自動連動", &syncWithSelected);
+
+        if (editStageIdx < 0 || editStageIdx >= 3) editStageIdx = 0;
+
+        Vector3& curRot = stageGuideRots_[editStageIdx];
+        Vector3& curOffset = stageGuideOffsets_[editStageIdx];
+
+        ImGui::Separator();
+        ImGui::Text("【ステージ %d の角度 (Degree)】", editStageIdx + 1);
+        float guideRotDeg[3] = {
+            curRot.x * 180.0f / 3.14159265f,
+            curRot.y * 180.0f / 3.14159265f,
+            curRot.z * 180.0f / 3.14159265f
+        };
+        bool rotChanged = false;
+        if (ImGui::DragFloat3("回転 (X, Y, Z)", guideRotDeg, 0.5f, -180.0f, 180.0f, "%.1f°")) {
+            rotChanged = true;
+        }
+        if (ImGui::SliderFloat("X軸 (上下の傾き)", &guideRotDeg[0], -180.0f, 180.0f, "%.1f°")) rotChanged = true;
+        if (ImGui::SliderFloat("Y軸 (左右の向き)", &guideRotDeg[1], -180.0f, 180.0f, "%.1f°")) rotChanged = true;
+        if (ImGui::SliderFloat("Z軸 (画面の傾き)", &guideRotDeg[2], -180.0f, 180.0f, "%.1f°")) rotChanged = true;
+
+        if (rotChanged) {
+            curRot.x = guideRotDeg[0] * 3.14159265f / 180.0f;
+            curRot.y = guideRotDeg[1] * 3.14159265f / 180.0f;
+            curRot.z = guideRotDeg[2] * 3.14159265f / 180.0f;
+            if (stageGuideTransform_ && (selectedStageIndex_ - 1 == editStageIdx)) {
+                currentGuideRot_ = curRot;
+                stageGuideTransform_->SetRotation(curRot);
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::Text("【ステージ %d の頭上位置オフセット】", editStageIdx + 1);
+        ImGui::DragFloat3("位置 (X, Y, Z)", &curOffset.x, 0.1f, -100.0f, 100.0f, "%.1f");
+
+        ImGui::Separator();
+        ImGui::Text("【全ステージ共通 スケール (サイズ)】");
+        if (ImGui::DragFloat3("スケール (厚み, 高さ, 横幅)", &stageGuideScale_.x, 0.1f, -50.0f, 50.0f, "%.1f")) {
+            if (stageGuideTransform_) {
+                stageGuideTransform_->SetScale({
+                    stageGuideScale_.x * currentGuideScaleFactor_,
+                    stageGuideScale_.y * currentGuideScaleFactor_,
+                    stageGuideScale_.z * currentGuideScaleFactor_
+                });
+            }
+        }
+
+        ImGui::Separator();
+        if (ImGui::Button("現在のステージを画像指定値にリセット")) {
+            if (editStageIdx == 0) {
+                stageGuideOffsets_[0] = { 13.6f, 8.4f, 0.0f };
+                stageGuideRots_[0] = { 0.0f, 1.256637f, 3.141593f };
+            } else if (editStageIdx == 1) {
+                stageGuideOffsets_[1] = { 0.0f, 16.0f, 0.0f };
+                stageGuideRots_[1] = { 0.0f, 1.239184f, 3.141593f };
+            } else if (editStageIdx == 2) {
+                stageGuideOffsets_[2] = { -18.3f, 15.4f, -4.5f };
+                stageGuideRots_[2] = { 0.0f, 1.221731f, 3.141593f };
+            }
+            stageGuideScale_ = { 1.0f, -2.5f, 10.0f };
+            if (stageGuideTransform_ && (selectedStageIndex_ - 1 == editStageIdx)) {
+                currentGuideRot_ = stageGuideRots_[editStageIdx];
+                stageGuideTransform_->SetRotation(currentGuideRot_);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("全ステージを画像指定値にリセット")) {
+            stageGuideOffsets_[0] = { 13.6f, 8.4f, 0.0f };
+            stageGuideRots_[0] = { 0.0f, 1.256637f, 3.141593f };
+            stageGuideOffsets_[1] = { 0.0f, 16.0f, 0.0f };
+            stageGuideRots_[1] = { 0.0f, 1.239184f, 3.141593f };
+            stageGuideOffsets_[2] = { -18.3f, 15.4f, -4.5f };
+            stageGuideRots_[2] = { 0.0f, 1.221731f, 3.141593f };
+            stageGuideScale_ = { 1.0f, -2.5f, 10.0f };
+            if (stageGuideTransform_ && selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) {
+                currentGuideRot_ = stageGuideRots_[selectedStageIndex_ - 1];
+                stageGuideTransform_->SetRotation(currentGuideRot_);
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::TextDisabled("現在の設定値 (ステージ %d):", editStageIdx + 1);
+        ImGui::TextDisabled("Rot(Deg): { %.1ff, %.1ff, %.1ff }", guideRotDeg[0], guideRotDeg[1], guideRotDeg[2]);
+        ImGui::TextDisabled("Rot(Rad): { %.6ff, %.6ff, %.6ff }", curRot.x, curRot.y, curRot.z);
+        ImGui::TextDisabled("Scale: { %.1ff, %.1ff, %.1ff }", stageGuideScale_.x, stageGuideScale_.y, stageGuideScale_.z);
+        ImGui::TextDisabled("Offset: { %.1ff, %.1ff, %.1ff }", curOffset.x, curOffset.y, curOffset.z);
+
+        ImGui::End();
+    }
+
     ImGui::Begin("タイトル/ステージ選択カメラ調整");
 
     // フェーズ状態の表示
@@ -1593,6 +1729,56 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::SliderFloat("チュートリアル 不透明度", &tutorialUiAlpha_, 0.0f, 1.0f);
     ImGui::DragFloat("縦揺れ振幅 (px)", &tutorialBobAmplitude_, 0.5f, 0.0f, 50.0f, "%.1f px");
     ImGui::DragFloat("縦揺れ速度 (rad/s)", &tutorialBobFrequency_, 0.2f, 0.0f, 20.0f, "%.1f");
+
+    ImGui::Separator();
+    ImGui::Text("【ステージガイド看板 (plan.obj + stage{N}.png) 調整】");
+    int stageIdxForCamWin = (selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) ? (selectedStageIndex_ - 1) : 0;
+    ImGui::Text("対象: ステージ %d", stageIdxForCamWin + 1);
+    Vector3& camWinRot = stageGuideRots_[stageIdxForCamWin];
+    Vector3& camWinOffset = stageGuideOffsets_[stageIdxForCamWin];
+    ImGui::DragFloat3("看板オフセット (頭上位置)", &camWinOffset.x, 0.1f);
+    float guideRotDeg2[3] = {
+        camWinRot.x * 180.0f / 3.14159265f,
+        camWinRot.y * 180.0f / 3.14159265f,
+        camWinRot.z * 180.0f / 3.14159265f
+    };
+    bool rot2Changed = false;
+    if (ImGui::DragFloat3("看板角度 (Deg)", guideRotDeg2, 0.5f, -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (ImGui::SliderFloat("看板角度 X軸", &guideRotDeg2[0], -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (ImGui::SliderFloat("看板角度 Y軸", &guideRotDeg2[1], -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (ImGui::SliderFloat("看板角度 Z軸", &guideRotDeg2[2], -180.0f, 180.0f, "%.1f°")) rot2Changed = true;
+    if (rot2Changed) {
+        camWinRot.x = guideRotDeg2[0] * 3.14159265f / 180.0f;
+        camWinRot.y = guideRotDeg2[1] * 3.14159265f / 180.0f;
+        camWinRot.z = guideRotDeg2[2] * 3.14159265f / 180.0f;
+        if (stageGuideTransform_ && (selectedStageIndex_ - 1 == stageIdxForCamWin)) {
+            currentGuideRot_ = camWinRot;
+            stageGuideTransform_->SetRotation(camWinRot);
+        }
+    }
+    if (ImGui::DragFloat3("看板スケール (X厚み, Y高, Z幅)", &stageGuideScale_.x, 0.1f, -30.0f, 30.0f)) {
+        if (stageGuideTransform_) {
+            stageGuideTransform_->SetScale({
+                stageGuideScale_.x * currentGuideScaleFactor_,
+                stageGuideScale_.y * currentGuideScaleFactor_,
+                stageGuideScale_.z * currentGuideScaleFactor_
+            });
+        }
+    }
+    if (ImGui::Button("看板パラメータ初期化##2")) {
+        stageGuideOffsets_[0] = { 13.6f, 8.4f, 0.0f };
+        stageGuideRots_[0] = { 0.0f, 1.256637f, 3.141593f };
+        stageGuideOffsets_[1] = { 0.0f, 16.0f, 0.0f };
+        stageGuideRots_[1] = { 0.0f, 1.239184f, 3.141593f };
+        stageGuideOffsets_[2] = { -18.3f, 15.4f, -4.5f };
+        stageGuideRots_[2] = { 0.0f, 1.221731f, 3.141593f };
+        stageGuideScale_ = { 1.0f, -2.5f, 10.0f };
+        if (stageGuideTransform_ && selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) {
+            currentGuideRot_ = stageGuideRots_[selectedStageIndex_ - 1];
+            stageGuideTransform_->SetRotation(currentGuideRot_);
+            stageGuideTransform_->SetScale(stageGuideScale_);
+        }
+    }
 
     ImGui::Separator();
     ImGui::Text("【予告状（callingCard）突き刺し調整】");
@@ -1937,5 +2123,94 @@ void TitleScene::UpdateCallingCardThrow(float dt, SceneManager* sceneManager) {
         };
     } else {
         cameraShakeOffset_ = { 0.0f, 0.0f, 0.0f };
+    }
+}
+
+void TitleScene::UpdateStageGuideBanner(float dt) {
+    if (!stageGuideObject_ || !stageGuideTransform_ || !stageGuideRenderer_) return;
+
+    // ステージ選択フェーズ中（または移行演出中）かつ、ステージ1〜3が選択されている場合に表示
+    bool shouldShow = (phase_ == Phase::kStageSelect || phase_ == Phase::kTransitionToSelect) &&
+                      (selectedStageIndex_ >= 1 && selectedStageIndex_ <= 3) &&
+                      (cardPhase_ == CardThrowPhase::kNone) &&
+                      (!isIrisOutActive_);
+
+    if (shouldShow) {
+        int stageArrayIdx = selectedStageIndex_ - 1;
+        if (stageArrayIdx < 0 || stageArrayIdx >= 3) stageArrayIdx = 0;
+
+        // 選択されているステージのビル（select_1, select_2, select_3）の位置を取得
+        auto context = Model3DEditorContext::GetInstance();
+        std::string targetName = "select_" + std::to_string(selectedStageIndex_);
+        Vector3 targetBuildingPos = { -18.5f, -8.8f, 22.94f }; // デフォルト: select_1
+        for (const auto& obj : context->GetObjects()) {
+            if (obj && obj->GetName() == targetName) {
+                targetBuildingPos = obj->GetTranslation();
+                break;
+            }
+        }
+
+        const Vector3& targetOffset = stageGuideOffsets_[stageArrayIdx];
+        const Vector3& targetRot = stageGuideRots_[stageArrayIdx];
+
+        Vector3 targetGuidePos = {
+            targetBuildingPos.x + targetOffset.x,
+            targetBuildingPos.y + targetOffset.y,
+            targetBuildingPos.z + targetOffset.z
+        };
+
+        // 看板の位置・回転を滑らかに補間移動（初回・遠い場合は即時設定）
+        if (currentGuideScaleFactor_ <= 0.01f) {
+            currentGuidePos_ = targetGuidePos;
+            currentGuideRot_ = targetRot;
+        } else {
+            currentGuidePos_ = {
+                currentGuidePos_.x + (targetGuidePos.x - currentGuidePos_.x) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuidePos_.y + (targetGuidePos.y - currentGuidePos_.y) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuidePos_.z + (targetGuidePos.z - currentGuidePos_.z) * std::clamp(dt * 12.0f, 0.0f, 1.0f)
+            };
+            currentGuideRot_ = {
+                currentGuideRot_.x + (targetRot.x - currentGuideRot_.x) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuideRot_.y + (targetRot.y - currentGuideRot_.y) * std::clamp(dt * 12.0f, 0.0f, 1.0f),
+                currentGuideRot_.z + (targetRot.z - currentGuideRot_.z) * std::clamp(dt * 12.0f, 0.0f, 1.0f)
+            };
+        }
+
+        // テクスチャの切り替え
+        if (currentGuideStageIdx_ != selectedStageIndex_) {
+            currentGuideStageIdx_ = selectedStageIndex_;
+            uint32_t handle = stageGuideTextureHandles_[stageArrayIdx];
+            if (handle != 0) {
+                stageGuideRenderer_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+            }
+        }
+
+        // スケールを 1.0f に向かって補間（ポップイン）
+        currentGuideScaleFactor_ += (1.0f - currentGuideScaleFactor_) * std::clamp(dt * 10.0f, 0.0f, 1.0f);
+
+        // 看板の微小な浮遊アニメーション（ボビング）
+        float bob = sinf(titleTimer_ * 3.0f) * 0.4f;
+
+        stageGuideTransform_->SetPosition({ currentGuidePos_.x, currentGuidePos_.y + bob, currentGuidePos_.z });
+        stageGuideTransform_->SetRotation(currentGuideRot_);
+        stageGuideTransform_->SetScale({
+            stageGuideScale_.x * currentGuideScaleFactor_,
+            stageGuideScale_.y * currentGuideScaleFactor_,
+            stageGuideScale_.z * currentGuideScaleFactor_
+        });
+    } else {
+        // 非表示アニメーション（スケールを素早く 0 に縮小）
+        if (currentGuideScaleFactor_ > 0.0f) {
+            currentGuideScaleFactor_ += (0.0f - currentGuideScaleFactor_) * std::clamp(dt * 14.0f, 0.0f, 1.0f);
+            if (currentGuideScaleFactor_ < 0.005f) {
+                currentGuideScaleFactor_ = 0.0f;
+                currentGuideStageIdx_ = -1;
+            }
+            stageGuideTransform_->SetScale({
+                stageGuideScale_.x * currentGuideScaleFactor_,
+                stageGuideScale_.y * currentGuideScaleFactor_,
+                stageGuideScale_.z * currentGuideScaleFactor_
+            });
+        }
     }
 }
