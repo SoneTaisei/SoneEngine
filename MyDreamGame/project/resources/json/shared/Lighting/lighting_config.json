@@ -1,0 +1,58 @@
+{
+    "activeLightType": 0,
+    "dIntensity": 1.75,
+    "dLight": {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "direction": [
+            -0.03844712674617767,
+            -0.9625364542007446,
+            0.26841291785240173
+        ]
+    },
+    "enableFlatShading": false,
+    "enableFog": false,
+    "pIntensity": 0.07000000029802322,
+    "pLight": {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "decay": 1.0,
+        "position": [
+            0.0,
+            2.0,
+            0.0
+        ],
+        "radius": 10.0
+    },
+    "sIntensity": 4.0,
+    "sLight": {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "decay": 2.0,
+        "direction": [
+            -0.7071067690849304,
+            -0.7071067690849304,
+            0.0
+        ],
+        "distance": 7.0,
+        "position": [
+            2.0,
+            1.25,
+            0.0
+        ]
+    },
+    "spotAngleDeg": 30.0,
+    "spotFalloffDeg": 20.0
+}
