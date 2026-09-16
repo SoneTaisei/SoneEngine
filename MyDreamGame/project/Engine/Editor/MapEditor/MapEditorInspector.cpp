@@ -1,0 +1,344 @@
+#ifdef USE_IMGUI
+#include "MapEditorInspector.h"
+#include "MapEditorContext.h"
+#include "Scene/SceneManager.h"
+#include "Scene/IScene.h"
+#include "Game2D/MapChip2D.h"
+#include "Game2D/Blocks/BlockFactory.h"
+#include "Game2D/Blocks/BaseBlock.h"
+#include "Graphics/TextureManager.h"
+#include <string>
+#include <algorithm>
+#include <vector>
+
+MapEditorInspector::MapEditorInspector(MapEditorContext* context)
+    : context_(context) {
+}
+
+bool MapEditorInspector::Draw(SceneManager* sceneManager) {
+    if (!context_) return false;
+
+    IScene* activeScene = sceneManager ? sceneManager->GetCurrentScene() : nullptr;
+    if (!activeScene) return false;
+
+    MapChip2D* mapChip = activeScene->GetMapChip();
+    if (!mapChip) return false;
+
+    int selectedTool = context_->GetSelectedTool();
+    if (selectedTool <= 0 || selectedTool == 6 || selectedTool == 10) {
+        return false;
+    }
+
+    MapChip2D::CustomBlockDef* targetDef = nullptr;
+    bool isTemplate = false;
+    bool changed = false;
+
+    if (selectedTool >= 100) {
+        auto& palette = mapChip->GetCustomPalette();
+        for (auto& def : palette) {
+            if (def.id == selectedTool) {
+                targetDef = &def;
+                break;
+            }
+        }
+    } else {
+        auto& templates = mapChip->GetTemplatePalette();
+        for (auto& def : templates) {
+            if (def.id == selectedTool) {
+                targetDef = &def;
+                isTemplate = true;
+                break;
+            }
+        }
+    }
+
+    if (!targetDef) return false;
+
+    if (isTemplate) {
+        ImGui::Text("Template Settings (ID: %d)", targetDef->id);
+    } else {
+        ImGui::Text("Custom Block Settings (ID: %d)", targetDef->id);
+    }
+
+    char nameBuf[256];
+    strcpy_s(nameBuf, sizeof(nameBuf), targetDef->name.c_str());
+    if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+        targetDef->name = nameBuf;
+        changed = true;
+    }
+
+    // 登録済みの全ブロック型名リストを取得
+    std::vector<std::string> availableTypes = BlockFactory::GetInstance().GetAvailableTypes();
+    for (const auto& t : mapChip->GetTemplatePalette()) {
+        if (!t.type.empty() && std::find(availableTypes.begin(), availableTypes.end(), t.type) == availableTypes.end()) {
+            availableTypes.push_back(t.type);
+        }
+    }
+
+    if (ImGui::BeginCombo("種類 (Type)", targetDef->type.c_str())) {
+        for (const auto& typeName : availableTypes) {
+            bool isSelected = (targetDef->type == typeName);
+            if (ImGui::Selectable(typeName.c_str(), isSelected)) {
+                targetDef->type = typeName;
+                changed = true;
+                bool foundTemplate = false;
+                for (const auto& t : mapChip->GetTemplatePalette()) {
+                    if (t.type == targetDef->type) {
+                        targetDef->properties = t.properties;
+                        foundTemplate = true;
+                        break;
+                    }
+                }
+                if (!foundTemplate) {
+                    targetDef->properties = nlohmann::json::object();
+                }
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    float col[4] = { targetDef->color.x, targetDef->color.y, targetDef->color.z, targetDef->color.w };
+    if (ImGui::ColorEdit4("色 (Color)", col)) {
+        targetDef->color = { col[0], col[1], col[2], col[3] };
+        changed = true;
+    }
+
+    float scale[3] = { targetDef->scale.x, targetDef->scale.y, targetDef->scale.z };
+    if (ImGui::DragFloat3("スケール (Scale)", scale, 0.01f)) {
+        targetDef->scale = { scale[0], scale[1], scale[2] };
+        changed = true;
+    }
+
+    const auto& availableModels = context_->GetAvailableModels();
+    if (ImGui::BeginCombo("モデル (Model)", targetDef->modelName.empty() ? "なし (None)" : targetDef->modelName.c_str())) {
+        bool isNoneSelected = targetDef->modelName.empty();
+        if (ImGui::Selectable("なし (None)", isNoneSelected)) {
+            targetDef->modelName = "";
+            changed = true;
+        }
+        if (isNoneSelected) {
+            ImGui::SetItemDefaultFocus();
+        }
+        for (const auto& modelPath : availableModels) {
+            bool isSelected = (targetDef->modelName == modelPath);
+            if (ImGui::Selectable(modelPath.c_str(), isSelected)) {
+                targetDef->modelName = modelPath;
+                changed = true;
+                // モデル変更時に対応するテクスチャを自動検出して設定（未設定または自動反映）
+                auto assocTextures = context_->GetAssociatedTexturesForModel(modelPath);
+                if (!assocTextures.empty()) {
+                    targetDef->textureName = assocTextures[0];
+                }
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    // --- テクスチャ選択UI ---
+    std::vector<std::string> assocTextures;
+    if (!targetDef->modelName.empty()) {
+        assocTextures = context_->GetAssociatedTexturesForModel(targetDef->modelName);
+    }
+    const auto& availableTextures = context_->GetAvailableTextures();
+
+    std::string currentTexPreview = targetDef->textureName.empty() ? "なし (None)" : targetDef->textureName;
+    if (ImGui::BeginCombo("テクスチャ (Texture)", currentTexPreview.c_str())) {
+        bool isTexNoneSelected = targetDef->textureName.empty();
+        if (ImGui::Selectable("なし (None)", isTexNoneSelected)) {
+            targetDef->textureName = "";
+            changed = true;
+        }
+        if (isTexNoneSelected) {
+            ImGui::SetItemDefaultFocus();
+        }
+
+        // モデル推奨テクスチャ
+        if (!assocTextures.empty()) {
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "--- モデル推奨テクスチャ ---");
+            for (const auto& texPath : assocTextures) {
+                bool isSelected = (targetDef->textureName == texPath);
+                if (ImGui::Selectable(("[推奨] " + texPath).c_str(), isSelected)) {
+                    targetDef->textureName = texPath;
+                    changed = true;
+                }
+                if (isSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+        }
+
+        // 全テクスチャ一覧
+        ImGui::Separator();
+        ImGui::TextDisabled("--- すべてのテクスチャ ---");
+        for (const auto& texPath : availableTextures) {
+            bool isSelected = (targetDef->textureName == texPath);
+            if (ImGui::Selectable(texPath.c_str(), isSelected)) {
+                targetDef->textureName = texPath;
+                changed = true;
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    // サムネイル表示およびモデル初期テクスチャリセットボタン
+    if (!targetDef->textureName.empty()) {
+        std::string fullTex = (targetDef->textureName.find("resources/") == 0) ? targetDef->textureName : ("resources/" + targetDef->textureName);
+        uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuH = TextureManager::GetInstance()->GetGpuHandle(handle);
+        if (gpuH.ptr != 0) {
+            ImGui::SameLine();
+            ImGui::Image((ImTextureID)gpuH.ptr, ImVec2(22.0f, 22.0f));
+        }
+    }
+    if (!assocTextures.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("推奨テクスチャを適用")) {
+            targetDef->textureName = assocTextures[0];
+            changed = true;
+        }
+    }
+
+    // --- シェーダー設定UI ---
+    const char* shaderItems[] = { "通常 (Standard)", "宝石 (Gem / Crystal)" };
+    int currentShader = targetDef->shaderMode;
+    if (currentShader < 0 || currentShader >= IM_ARRAYSIZE(shaderItems)) {
+        currentShader = 0;
+    }
+    if (ImGui::Combo("シェーダー (Shader)", &currentShader, shaderItems, IM_ARRAYSIZE(shaderItems))) {
+        targetDef->shaderMode = currentShader;
+        changed = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "オブジェクトの描画シェーダープリセットを切り替えます。\n"
+            "・通常 (Standard): 一般的な拡散光・陰影・シャドウ・環境光\n"
+            "・宝石 (Gem / Crystal): ウズシオクリスタルと同じ薄膜干渉虹色、擬似屈折、インナーグロー、表面光沢"
+        );
+    }
+
+    ImGui::Separator();
+    ImGui::Text("プロパティ:");
+    auto getJpKey = [](const std::string& k) {
+        if (k == "speed") return std::string("スピード (speed)");
+        if (k == "speedForward") return std::string("往路の速さ (speedForward)");
+        if (k == "speedBackward") return std::string("復路の速さ (speedBackward)");
+        if (k == "waitTime") return std::string("待機時間 (waitTime)");
+        if (k == "acceleration") return std::string("加速度 (acceleration)");
+        if (k == "maxSpeedForward") return std::string("往路の最高速度 (maxSpeedForward)");
+        if (k == "maxSpeedBackward") return std::string("復路の最高速度 (maxSpeedBackward)");
+        if (k == "maxSpeed") return std::string("最高速度 (maxSpeed)");
+        if (k == "direction") return std::string("方向 (direction)");
+        if (k == "range") return std::string("移動距離 (range)");
+        if (k == "jumpVelocityVertical") return std::string("縦ジャンプ力 (jumpVelocityVertical)");
+        if (k == "jumpVelocityHorizontal") return std::string("横ジャンプ力 (jumpVelocityHorizontal)");
+        if (k == "moveSpeed") return std::string("移動速度 (moveSpeed)");
+        if (k == "moveAxis") return std::string("移動軸 (moveAxis) X または Y");
+        if (k == "moveRange") return std::string("移動範囲 (moveRange)");
+        if (k == "breakWeight") return std::string("崩れる鎖の重さ (breakWeight)");
+        if (k == "breakDuration") return std::string("崩れるまでの時間 (breakDuration)");
+        if (k == "linkId") return std::string("連動ID (linkId)");
+        if (k == "openSpeed") return std::string("開く速度 (openSpeed)");
+        if (k == "closeSpeed") return std::string("閉まる速度 (closeSpeed)");
+        if (k == "patrolSpeed") return std::string("パトロール速度 (patrolSpeed)");
+        if (k == "alertSpeed") return std::string("警戒時の速度 (alertSpeed)");
+        if (k == "sightLength") return std::string("視界の長さ (sightLength)");
+        if (k == "maxAlertGauge") return std::string("警戒ゲージMAXまでの時間 (maxAlertGauge)");
+        if (k == "sightHeight") return std::string("視界の高さ (sightHeight)");
+        if (k == "startDirection") return std::string("初期の向き(1:右, -1:左) (startDirection)");
+        if (k == "waitTimeAtEdge") return std::string("端での待機時間 (waitTimeAtEdge)");
+        return k;
+    };
+
+    for (auto& [key, value] : targetDef->properties.items()) {
+        std::string jpKey = getJpKey(key);
+        if (value.is_number()) {
+            float v = value.get<float>();
+            if (ImGui::DragFloat(jpKey.c_str(), &v, 0.1f)) {
+                value = v;
+                changed = true;
+            }
+        } else if (value.is_string()) {
+            std::string v = value.get<std::string>();
+            char buf[256];
+            strcpy_s(buf, sizeof(buf), v.c_str());
+            if (ImGui::InputText(jpKey.c_str(), buf, sizeof(buf))) {
+                value = buf;
+                changed = true;
+            }
+        } else if (value.is_boolean()) {
+            bool v = value.get<bool>();
+            if (ImGui::Checkbox(jpKey.c_str(), &v)) {
+                value = v;
+                changed = true;
+            }
+        }
+    }
+    
+    // ブロッククラス固有の ImGui UI (DrawImGui) の表示
+    if (BlockFactory::GetInstance().HasType(targetDef->type)) {
+        ImGui::Separator();
+        static std::shared_ptr<BaseBlock> previewBlock = nullptr;
+        static std::string lastPreviewType = "";
+        if (!previewBlock || lastPreviewType != targetDef->type) {
+            previewBlock = BlockFactory::GetInstance().Create(targetDef->type, mapChip, 0, 0);
+            lastPreviewType = targetDef->type;
+        }
+        if (previewBlock) {
+            previewBlock->SetProperties(targetDef->properties);
+            previewBlock->DrawImGui();
+        }
+    }
+
+    static bool autoApply = true;
+    ImGui::Checkbox("自動適用 (Auto Apply)", &autoApply);
+    ImGui::SameLine();
+    if (ImGui::Button("デフォルトに戻す (Reset to Default)")) {
+        auto& templates = mapChip->GetTemplatePalette();
+        for (const auto& t : templates) {
+            if (t.type == targetDef->type) {
+                targetDef->color = t.color;
+                targetDef->scale = t.scale;
+                targetDef->modelName = t.modelName;
+                targetDef->textureName = t.textureName;
+                targetDef->shaderMode = t.shaderMode;
+                targetDef->properties = t.properties;
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    if (!autoApply) {
+        ImGui::SameLine();
+        if (ImGui::Button("適用 (Apply)")) {
+            mapChip->RebuildChipObjects();
+            if (isTemplate) {
+                mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
+            } else {
+                mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+            }
+        }
+    }
+
+    if (changed && autoApply) {
+        mapChip->RebuildChipObjects();
+        if (isTemplate) {
+            mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
+        } else {
+            mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+        }
+    }
+
+    return true;
+}
+#endif

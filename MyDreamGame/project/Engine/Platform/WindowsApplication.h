@@ -37,6 +37,9 @@ public:
     void Update();
     void Draw();
 
+    // ウィンドウリサイズ・フルスクリーン時の解像度一括同期
+    void OnResize(int width, int height);
+
     void LoadWindowConfig();
     void SaveWindowConfig();
 
@@ -44,8 +47,11 @@ public:
 #ifdef USE_IMGUI
     EditorManager *GetEditorManager() const { return editorManager_.get(); }
 #endif
+    static WindowsApplication *GetInstance() { return s_Instance; }
 
 private:
+    static WindowsApplication *s_Instance;
+
     // --- システム管理 ---
     std::unique_ptr<Window> window_;
 #ifdef USE_IMGUI

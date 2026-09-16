@@ -18,13 +18,22 @@
 #include "Core/Utility/Structs.h"
 #include "Replay/ReplayManager.h"
 #include "Animation/AnimationEditor.h"
+#include "GPUParticle/GPUParticleEditor.h"
+#include "MapEditor/MapEditor.h"
+#include "LightEditor/LightEditor.h"
+#include "Model3DEditor/Model3DEditor.h"
+#include "PostEffectEditor/PostEffectEditor.h"
+#include "Common/ModelSelectModal.h"
 
 class SceneManager;
 class ParticleManager;
 class Object3D;
 class PrimitiveObject;
+class IScene;
 
 class EditorManager {
+public:
+    void LoadPlacedModelsForScene(IScene* scene);
 public:
     enum class MapEditMode {
         Normal,
@@ -47,29 +56,55 @@ public:
     // 描画処理 (コマンドリストへImGuiの描画命令を積む)
     void Draw();
 
+    // 3Dオブジェクト描画処理 (RenderTextureへの3Dモデル配置オブジェクト描画)
+    void Draw3D();
+
     // 終了処理 (ImGuiの解放)
     void Finalize();
+
+    // シングルトンインスタンス取得
+    static EditorManager* GetInstance() { return s_Instance; }
 
     // 再生状態の取得・設定
     static bool IsPlaying() { return isPlaying_; }
     static void SetPlaying(bool isPlaying) { isPlaying_ = isPlaying; }
+    static bool IsPaused() { return isPaused_; }
+    static void SetPaused(bool isPaused) { isPaused_ = isPaused; }
+
+    // マップエディターの表示切り替え・フォーカス制御
+    void ToggleMapEditor();
+    void FocusMapEditor();
+    void FocusGameView();
+
+    // プレイ中のマップ変更を一時保存データに同期（Stop時の復元用）
+    void SyncPlayMapData(class MapChip2D* mapChip);
 
     bool IsGameViewHovered() const { return isGameViewHovered_; }
     bool IsReplayEditorHovered() const { return isReplayEditorHovered_; }
     bool IsAnimationEditorHovered() const { return animationEditor_ ? animationEditor_->IsHovered() : false; }
-    bool IsMapEditorVisible() const { return isMapEditorVisible_; }
-    bool IsMapEditorHovered() const { return isMapEditorHovered_; }
-    bool IsRoomDragging() const { return draggingRoomIndex_ != -1; }
+    bool IsLightEditorHovered() const { return lightEditor_ ? lightEditor_->IsHovered() : false; }
+    bool IsModel3DEditorHovered() const { return model3DEditor_ ? model3DEditor_->IsHovered() : false; }
+    bool IsGPUParticleEditorHovered() const { return gpuParticleEditor_ ? gpuParticleEditor_->IsHovered() : false; }
+    bool IsMapEditorVisible() const { return mapEditor_ ? mapEditor_->IsVisible() : false; }
+    bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
+    bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
+    const std::string& GetActiveMainTab() const { return activeMainTab_; }
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }
 
     bool UseDebugCamera() const { return useDebugCamera_; }
     void SetUseDebugCamera(bool use) { useDebugCamera_ = use; }
+    class DebugCamera* GetDebugCamera() const { return currentDebugCamera_; }
 
     bool IsTakeoverCountdown() const { return takeoverCountdown_ > 0.0f; }
 
     AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
+    MapEditor* GetMapEditor() const { return mapEditor_.get(); }
+    LightEditor* GetLightEditor() const { return lightEditor_.get(); }
+    Model3DEditor* GetModel3DEditor() const { return model3DEditor_.get(); }
+    PostEffectEditor* GetPostEffectEditor() const { return postEffectEditor_.get(); }
+    GPUParticleEditor* GetGPUParticleEditor() const { return gpuParticleEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
     struct WindowLayoutPreset {
@@ -83,6 +118,10 @@ public:
         bool showMapSettings = true;
         bool showReplayEditor = true;
         bool showAnimEditor = true;
+        bool showLightEditor = true;
+        bool showSpotLightPanel = true;
+        bool showModelPlacement = true;
+        bool showModelPalette = true;
     };
 
     // レイアウトプリセットの保存・読込み・管理
@@ -103,8 +142,12 @@ public:
     void SaveLightingConfig(ModelCommon* modelCommon);
     void LoadLightingConfig(ModelCommon* modelCommon);
 
-    // 現在選択中のシーンタイプを取得
+    // 現在選択中のシーンタイプを取得・設定
     SceneType GetCurrentSceneType() const { return currentSceneType_; }
+    void SetCurrentSceneType(SceneType type) { currentSceneType_ = type; }
+
+    // 現在選択中のステージマップファイル名を取得
+    const char* GetStageFilename() const { return mapEditor_ ? mapEditor_->GetStageFilename() : ""; }
 
     // 今読み込んでいるマップから物理A* (詰みチェック)のスタート・ゴール座標を自動更新
     void UpdateAStarPositionsFromMap(class MapChip2D* mapChip, class SceneManager* sceneManager = nullptr);
@@ -213,12 +256,12 @@ public:
     }
 
     // マップ用の履歴保存ヘルパー
-    void BeginMapHistoryCapture(class MapChip2D* mapChip);
-    void EndMapHistoryCapture(class MapChip2D* mapChip);
+    void BeginMapHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->BeginMapHistoryCapture(mapChip); }
+    void EndMapHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->EndMapHistoryCapture(mapChip); }
     
     // バウンダリ用の履歴保存ヘルパー
-    void BeginRoomHistoryCapture(class MapChip2D* mapChip);
-    void EndRoomHistoryCapture(class MapChip2D* mapChip);
+    void BeginRoomHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->BeginRoomHistoryCapture(mapChip); }
+    void EndRoomHistoryCapture(class MapChip2D* mapChip) { if (mapEditor_) mapEditor_->EndRoomHistoryCapture(mapChip); }
 
     static ImVec2 GetGameViewPos() { return gameViewPos_; }
     static ImVec2 GetGameViewSize() { return gameViewSize_; }
@@ -234,6 +277,7 @@ private:
     char stageFilename_[128] = "map_data.txt";
 
     static bool isPlaying_; // ゲーム再生中かどうか
+    static bool isPaused_;  // ゲーム再生中の一時停止かどうか
     bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
     float takeoverCountdown_ = 0.0f; // 操作引き継ぎ時のカウントダウン
 
@@ -247,67 +291,9 @@ private:
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
     bool isReplayEditorHovered_ = false; // リプレイエディタがホバーされているか
-    bool isMapEditorVisible_ = false; // マップエディタがアクティブタブとして表示されているか
-    bool wasMapEditorVisible_ = false; // 前フレームの表示状態
-    bool isMapEditorHovered_ = false; // マップエディタがホバーされているか
-    
-    // マップエディタ用のツール状態
-    int mapEditorSelectedTool_ = 100; // 0 = None, 100 = Custom Block 1
-    int mapEditorInputWidth_ = -1;
-    int mapEditorInputHeight_ = -1;
-    
-    // Normalモード用補間
-    int prevGridX_ = -1;
-    int prevGridY_ = -1;
-    std::vector<std::pair<int, int>> pendingBlocks_;
-
-    // 拡張マップエディタ状態
-    MapEditMode mapEditMode_ = MapEditMode::Normal;
-    int selectStartX_ = -1;
-    int selectStartY_ = -1;
-    int selectEndX_ = -1;
-    int selectEndY_ = -1;
-    std::vector<std::vector<int>> clipboardMapData_;
-
-    // 範囲移動用
-    bool isDraggingSelection_ = false;
-    int dragStartGridX_ = -1;
-    int dragStartGridY_ = -1;
-    int originalSelectStartX_ = -1;
-    int originalSelectStartY_ = -1;
-    int originalSelectEndX_ = -1;
-    int originalSelectEndY_ = -1;
-    std::vector<std::vector<int>> dragSelectionData_;
-
-    // 境界線編集用
-    bool isRoomEditMode_ = false;
-    int draggingRoomIndex_ = -1;
-    int roomDragHandle_ = 0; // 0: None, 1: Move, 2: TopLeft, 3: TopRight, 4: BottomLeft, 5: BottomRight, 6: Left, 7: Right, 8: Top, 9: Bottom
-    float roomDragOffsetX_ = 0.0f;
-    float roomDragOffsetY_ = 0.0f;
 
     std::vector<std::shared_ptr<IEditorCommand>> undoStack_;
     std::vector<std::shared_ptr<IEditorCommand>> redoStack_;
-    
-    public:
-    struct MapState {
-        int width, height;
-        std::vector<std::vector<int>> data;
-    };
-    
-    struct RoomState {
-        std::vector<struct StageRoom> rooms;
-    };
-    private:
-    MapState oldMapState_;
-    RoomState oldRoomState_;
-
-    std::set<std::string> customToolFilters_;
-    std::vector<std::string> availableModels_; // "Object/..." のような相対パスを保持
-    void ScanAvailableModels();
-    
-    std::vector<std::string> availableTextures_;
-    void ScanAvailableTextures();
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;
@@ -325,7 +311,10 @@ private:
     enum class EditorMode {
         Normal,
         Replay,
-        Animation
+        Animation,
+        Light,
+        ModelPlacement,
+        GPUParticle
     };
     EditorMode currentMode_ = EditorMode::Normal;
 
@@ -338,9 +327,29 @@ private:
     bool showMapEditor_ = true;
     bool showMapSettings_ = true;
     bool showAnimEditor_ = true;
+    bool showGPUParticleEditor_ = true;
+    bool showGPUParticleTimeline_ = true;
+    bool showLightEditor_ = true;
+    bool showSpotLightPanel_ = true;
+    bool showModelPlacementEditor_ = true;
+    bool showModelPalette_ = true;
+    bool showParameterManager_ = false;
 
-    // アニメーションエディター専用インスタンス
+    // 前回選択されていたメインタブ（次回起動時に復元）
+    std::string activeMainTab_ = "ゲームビュー";
+    int focusActiveTabCountdown_ = 0;
+    int focusSpotLightTabCountdown_ = 0;
+
+    // サブエディター専用インスタンス
     std::unique_ptr<AnimationEditor> animationEditor_;
+    std::unique_ptr<GPUParticleEditor> gpuParticleEditor_;
+    std::unique_ptr<MapEditor> mapEditor_;
+    std::unique_ptr<LightEditor> lightEditor_;
+    std::unique_ptr<Model3DEditor> model3DEditor_;
+    std::unique_ptr<PostEffectEditor> postEffectEditor_;
+    std::unique_ptr<ModelSelectModal> animModelSelectModal_;
+    bool openAnimModelSelectModal_ = false;
+    bool forceShowGlobalSettings_ = false;
 
     // タイムライン（リプレイエディター）用パラメータ
     float timelineZoom_ = 4.0f;     // 1フレームあたりのピクセル幅
@@ -374,8 +383,10 @@ private:
     char newPresetNameBuf_[128] = "";
     std::string presetStatusMessage_ = "";
     float presetStatusMessageTimer_ = 0.0f;
+    DebugCamera* currentDebugCamera_ = nullptr;
 
     static bool showObjects_;
     static bool showEffects_;
+    static EditorManager* s_Instance;
 };
 #endif

@@ -2,6 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/SrvManager.h"
 #include <cassert>
+#include <filesystem>
 
 // Utilityfunctions.cppなどに以下の関数実装があることを想定しています。
 // もしmain.cppにしかなければ、そちらから移動させてください。
@@ -40,7 +41,13 @@ uint32_t TextureManager::Load(const std::string &filePath) {
 
     // 1. テクスチャファイルを読み込む
     DirectX::ScratchImage mipImages;
-    if (filePath == "white") {
+    bool isFallbackWhite = (filePath == "white" || filePath == "resources/white1x1.png" || filePath == "white1x1.png" || filePath.empty());
+    if (!isFallbackWhite && !std::filesystem::exists(filePath)) {
+        OutputDebugStringA(("[WARNING] TextureManager::Load: Texture file not found: " + filePath + ", fallback to white 1x1.\n").c_str());
+        isFallbackWhite = true;
+    }
+
+    if (isFallbackWhite) {
         HRESULT hr = mipImages.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
         assert(SUCCEEDED(hr));
         uint8_t* pixels = mipImages.GetPixels();
@@ -49,7 +56,18 @@ uint32_t TextureManager::Load(const std::string &filePath) {
         pixels[2] = 255; // B
         pixels[3] = 255; // A
     } else {
-        mipImages = LoadTexture(filePath);
+        try {
+            mipImages = LoadTexture(filePath);
+        } catch (const std::exception& e) {
+            OutputDebugStringA(("[WARNING] TextureManager::Load failed for: " + filePath + ", fallback to white 1x1. Error: " + e.what() + "\n").c_str());
+            HRESULT hr = mipImages.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+            assert(SUCCEEDED(hr));
+            uint8_t* pixels = mipImages.GetPixels();
+            pixels[0] = 255; // R
+            pixels[1] = 255; // G
+            pixels[2] = 255; // B
+            pixels[3] = 255; // A
+        }
     }
     const DirectX::TexMetadata &metadata = mipImages.GetMetadata();
 

@@ -112,6 +112,11 @@ public:
     // 全ブロックのリセット（プレイヤー死亡・リトライ時）
     void ResetBlocks();
 
+    enum ShaderPreset : int {
+        kShaderStandard = 0, // 通常シェーダー (Standard / LightingType 1)
+        kShaderGem = 1      // 宝石シェーダー (Gem / Crystal / LightingType 2)
+    };
+
     struct CustomBlockDef {
         int id = 100;
         std::string name = "New Custom Block";
@@ -121,6 +126,7 @@ public:
         Vector3 scale = {1.0f, 1.0f, 1.0f};
         std::string modelName = "";
         std::string textureName = "";
+        int shaderMode = kShaderStandard;
     };
 
     std::vector<CustomBlockDef>& GetCustomPalette() { return customPalette_; }
@@ -135,9 +141,11 @@ public:
 
 public:
     void SetDirty() { isDirty_ = true; }
+    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
+    void BuildMap();
+
 private:
     std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
-    void BuildMap();
     void CreateChipObjects();
 
 private:

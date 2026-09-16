@@ -1,7 +1,9 @@
 #include "Platform/WindowsApplication.h"
+#include "Renderer/ConstantBufferPool.h"
 #include "Editor/Replay/ReplayManager.h"
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -40,17 +42,20 @@
 
 #pragma comment(lib, "winmm.lib")
 
+WindowsApplication *WindowsApplication::s_Instance = nullptr;
+
 WindowsApplication::WindowsApplication() = default;
 WindowsApplication::~WindowsApplication() = default;
 
 void WindowsApplication::Initialize() {
+    s_Instance = this;
 
     // COMの初期化
     CoInitializeEx(0, COINIT_MULTITHREADED);
 
     // 窓の作成を任せる
     window_ = std::make_unique<Window>();
-    window_->Create(L"MyDreamGameEngine", kWindowWidth_, kWindowHeight_);
+    window_->Create(L"3023_怪盗チェーン", kWindowWidth_, kWindowHeight_);
 
     LoadWindowConfig();
 
@@ -163,10 +168,20 @@ void WindowsApplication::Initialize() {
 #else
     // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
     modelCommon_->LoadLightingConfig();
+    // エディター非搭載ビルドでは配置モデルの実体をここで初期化する
+    // (エディター搭載時は EditorManager -> Model3DEditor 経由で初期化される)
+    Model3DEditorContext::GetInstance()->Initialize(device);
 #endif
 
     // 音声の初期化
     AudioManager::Initialize();
+#ifdef USE_IMGUI
+    // エディター起動時は最初は停止状態（PLAYボタン未押下）のためBGM再生を無効化
+    AudioManager::SetBGMPlaybackAllowed(false);
+#else
+    // リリース版等は最初からBGM再生を許可
+    AudioManager::SetBGMPlaybackAllowed(true);
+#endif
 
     // システムタイマーの分解能を上げる
     timeBeginPeriod(1);
@@ -207,6 +222,7 @@ void WindowsApplication::Update() {
 
     // 入力の更新
     KeyboardInput::GetInstance()->Update();
+    GamepadInput::GetInstance()->Update();
 
     // フルスクリーン切り替え
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F11)) {
@@ -220,15 +236,21 @@ void WindowsApplication::Update() {
         showImGui_ = !showImGui_;
     }
 
-    // ESCキーの処理 (閉じる / 最小化) - リリース版では無効化
+    // マップエディター / ゲーム画面の切り替え
+    if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_F2)) {
+        if (!showImGui_) {
+            showImGui_ = true;
+        }
+        if (editorManager_) {
+            editorManager_->ToggleMapEditor();
+        }
+    }
+
+    // Shift + ESC で終了（開発用ショートカット。ESC単体はゲーム内のポーズ・キャンセル用に使用）
     if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE)) {
         bool isShiftDown = KeyboardInput::GetInstance()->IsKeyDown(DIK_LSHIFT) || 
                            KeyboardInput::GetInstance()->IsKeyDown(DIK_RSHIFT);
         if (isShiftDown) {
-            // Shift + ESC で最小化
-            ShowWindow(window_->GetHwnd(), SW_MINIMIZE);
-        } else {
-            // ESC のみで終了
             SendMessage(window_->GetHwnd(), WM_CLOSE, 0, 0);
         }
     }
@@ -250,18 +272,52 @@ void WindowsApplication::Update() {
             dxCommon_->GetPostProcessSrvHandleGPU(),
             sceneManager_.get());
 
+        // 3. カメラの切り替えと入力受付（シーン更新前にアクティブカメラを決定）
+        if (editorManager_->GetActiveMainTab() == "マップチップ画面") {
+            // マップエディタ表示時は再生中であっても常に2D専用のMapEditorCameraを使用（回転を完全に排除）
+            activeCamera_ = mapEditorCamera_.get();
+            isDebugCameraActive_ = false;
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
+
+            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
+            mapEditorCamera_->Update(allowCameraInput);
+        } else if (editorManager_->UseDebugCamera()) {
+            activeCamera_ = debugCamera_.get();
+            isDebugCameraActive_ = true;
+            
+            if (EditorManager::IsPlaying() || ReplayManager::GetInstance()->IsPlaying()) {
+                CameraManager::GetInstance()->SetCullingCameraInfo(gameCamera_->GetViewMatrix(), gameCamera_->GetProjectionMatrix());
+            } else {
+                CameraManager::GetInstance()->ClearCullingCameraInfo();
+            }
+            
+            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
+                                    editorManager_->IsReplayEditorHovered() || 
+                                    editorManager_->IsAnimationEditorHovered() || 
+                                    editorManager_->IsLightEditorHovered() || 
+                                    editorManager_->IsModel3DEditorHovered() || 
+                                    editorManager_->IsGPUParticleEditorHovered() || 
+                                    !ImGui::GetIO().WantCaptureMouse;
+            debugCamera_->Update(allowCameraInput);
+        } else {
+            isDebugCameraActive_ = false;
+            CameraManager::GetInstance()->ClearCullingCameraInfo();
+            activeCamera_ = gameCamera_.get();
+        }
+
         // --- エディターの状態に応じて更新処理を切り替え ---
         static bool wasActive = false;
         bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
         bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
+        bool isEditorPaused = EditorManager::IsPlaying() && EditorManager::IsPaused();
 
-        if (isCurrentlyActive && !isTakeoverPausing) {
+        if (isCurrentlyActive && !isTakeoverPausing && !isEditorPaused) {
             if (!wasActive) {
                 // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する
                 if (sceneManager_->GetCurrentScene()) {
                     auto* map = sceneManager_->GetCurrentScene()->GetMapChip();
                     if (map) {
-                        map->SaveToFile("resources/json/shared/MapData/temp_play_map.txt");
+                        map->SaveToFile("resources/json/local/temp_play_map.txt");
                     }
                 }
             }
@@ -269,8 +325,8 @@ void WindowsApplication::Update() {
             // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
             sceneManager_->Update();
             wasActive = true;
-        } else if (isTakeoverPausing) {
-            // カウントダウン中はシーンを更新しないが、wasActiveは維持する
+        } else if (isTakeoverPausing || isEditorPaused) {
+            // カウントダウン中または一時停止中はシーンを更新しないが、wasActiveは維持する
             wasActive = true; 
             if (sceneManager_->GetCurrentScene()) {
                 sceneManager_->GetCurrentScene()->UpdateEditor();
@@ -281,7 +337,7 @@ void WindowsApplication::Update() {
                 
                 // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
                 std::string originalPath = GameScene::s_TargetMapFilePath;
-                GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/temp_play_map.txt";
+                GameScene::s_TargetMapFilePath = "resources/json/local/temp_play_map.txt";
                 
                 sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
                 
@@ -305,40 +361,11 @@ void WindowsApplication::Update() {
             }
         }
         
-        // ゲームカメラは常に更新しておく（ViewProjectionへの反映のため）
+        // プレイヤー移動後のゲームカメラを更新（ViewProjectionへの反映のため）
         gameCamera_->Update();
 
-        // カメラの切り替え（リプレイ再生中、またはチェックボックスの状態を優先）
-        if (ReplayManager::GetInstance()->IsPlaying()) {
-            activeCamera_ = gameCamera_.get();
-            isDebugCameraActive_ = false;
-            CameraManager::GetInstance()->ClearCullingCameraInfo();
-        } else if (editorManager_->IsMapEditorVisible()) {
-            activeCamera_ = mapEditorCamera_.get();
-            isDebugCameraActive_ = false; // デバッグカメラのUI操作を無効にするため
-            CameraManager::GetInstance()->ClearCullingCameraInfo();
-            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
-            mapEditorCamera_->Update(allowCameraInput);
-        } else if (editorManager_->UseDebugCamera()) {
-            activeCamera_ = debugCamera_.get();
-            isDebugCameraActive_ = true;
-            
-            if (EditorManager::IsPlaying()) {
-                CameraManager::GetInstance()->SetCullingCameraInfo(gameCamera_->GetViewMatrix(), gameCamera_->GetProjectionMatrix());
-            } else {
-                CameraManager::GetInstance()->ClearCullingCameraInfo();
-            }
-            
-            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
-                                    editorManager_->IsReplayEditorHovered() || 
-                                    editorManager_->IsAnimationEditorHovered() || 
-                                    !ImGui::GetIO().WantCaptureMouse;
-            debugCamera_->Update(allowCameraInput);
-        } else {
-            activeCamera_ = gameCamera_.get();
-            isDebugCameraActive_ = false;
-            CameraManager::GetInstance()->ClearCullingCameraInfo();
-        }
+        // エディター表示中は PLAY または Replay 再生中のみBGM再生を許可
+        AudioManager::SetBGMPlaybackAllowed(isCurrentlyActive);
     } else {
         // ImGui 非表示時は通常通りシーンとカメラを更新し、アクティブカメラをゲームカメラに強制する
         sceneManager_->Update();
@@ -346,12 +373,18 @@ void WindowsApplication::Update() {
         activeCamera_ = gameCamera_.get();
         isDebugCameraActive_ = false;
         CameraManager::GetInstance()->ClearCullingCameraInfo();
+
+        // ImGui非表示時はゲームプレイ中とみなしてBGM再生を許可
+        AudioManager::SetBGMPlaybackAllowed(true);
     }
 #else
     // IMGUI未使用時は通常通り更新
     sceneManager_->Update();
+    // シーンごとに読み込んだ3Dモデル配置(レベルデータ)のワールド行列を更新する
+    Model3DEditorContext::GetInstance()->Update();
     gameCamera_->Update();
     CameraManager::GetInstance()->ClearCullingCameraInfo();
+    AudioManager::SetBGMPlaybackAllowed(true);
 #endif
 
     // 現在のアクティブカメラの行列をViewProjectionに反映
@@ -361,6 +394,9 @@ void WindowsApplication::Update() {
     
     // 他のオブジェクトが使うCameraManagerも同期させる
     activeCamera_->UpdateMatrix(); 
+
+    // 音声の更新処理（再生終了ボイスの破棄など）
+    AudioManager::Update();
 }
 
 void WindowsApplication::Draw() {
@@ -375,12 +411,28 @@ void WindowsApplication::Draw() {
     modelCommon_->PreDraw();
     sceneManager_->Draw(viewProjection_->GetMatrix());
 
+#ifdef USE_IMGUI
+    if (editorManager_) {
+        editorManager_->Draw3D();
+    }
+#else
+    // エディター非搭載ビルドでもシーンのレベルデータを描画する (グリッド床は描かない)
+    Model3DEditorContext::GetInstance()->Draw(false);
+#endif
+
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw();
+
     // ------------------------------------
 
-    // ★ ポストエフェクトを実行 (RenderTexture -> PostProcessTexture)
+    // ★ ポストエフェクトを実行 (3Dシーン・アウトライン・カラー調整など)
     dxCommon_->ExecutePostEffect();
+
+    // ★ ポストエフェクト完了後に、最前面の2Dスプライト・UIを描画！
+    // （これにより、深度アウトラインやポストプロセスが文字の上に被って透けて見える現象を完全に防止）
+    dxCommon_->PreDraw2D();
+    sceneManager_->Draw2D();
+    dxCommon_->PostDraw2D();
 
     // 2. Swapchain（最終画面）への描画準備
     dxCommon_->PreDrawSwapchain();
@@ -405,6 +457,29 @@ void WindowsApplication::Draw() {
     dxCommon_->ExecuteCommands();
     dxCommon_->Present();
 }
+
+void WindowsApplication::OnResize(int width, int height) {
+    if (width <= 0 || height <= 0) return;
+
+    if (dxCommon_) {
+        dxCommon_->ResizeSwapchain(width, height);
+    }
+    if (gameCamera_) {
+        gameCamera_->SetResolution(width, height);
+    }
+    if (debugCamera_) {
+        debugCamera_->SetResolution(width, height);
+    }
+#ifdef USE_IMGUI
+    if (mapEditorCamera_) {
+        mapEditorCamera_->SetResolution(width, height);
+    }
+#endif
+    if (spriteCommon_) {
+        spriteCommon_->SetResolution(width, height);
+    }
+}
+
 void WindowsApplication::Finalize() {
 #ifdef USE_IMGUI
     if (editorManager_) {
@@ -414,6 +489,9 @@ void WindowsApplication::Finalize() {
         editorManager_.reset(); // ★ここで確実に破棄
     }
 #endif
+
+    // 配置モデル(レベルデータ)の実体を解放する
+    Model3DEditorContext::DestroyInstance();
 
     ModelManager::GetInstance()->Finalize();
 
@@ -442,6 +520,10 @@ void WindowsApplication::Finalize() {
     // timeBeginPeriod(1) に対応する解除
     timeEndPeriod(1); // ★追加：タイマー精度を元に戻す
 
+    // 定数バッファの置き場（サブアロケータ）を解放する。
+    // 使う側（コンポーネント）は上でシーンごと破棄済みなので、デバイスを消す直前に片付ける
+    ConstantBufferPool::GetInstance()->Shutdown();
+
     // 7. 最後にすべての土台である DirectXCommon を消す
     if (dxCommon_) {
         dxCommon_->Finalize();
@@ -453,14 +535,20 @@ void WindowsApplication::Finalize() {
     // 終了前に現在のウィンドウ状態を保存する
     SaveWindowConfig();
 
+    s_Instance = nullptr;
+
     // 8. COMの終了処理
     CoUninitialize();
 }
 
 void WindowsApplication::LoadWindowConfig() {
-    std::ifstream ifs("resources/json/shared/window_config.json");
+    std::ifstream ifs("resources/json/local/window_config.json");
     if (!ifs.is_open()) {
-        return;
+        // フォールバック: 以前のパスにあれば読み込む
+        ifs.open("resources/json/shared/window_config.json");
+        if (!ifs.is_open()) {
+            return;
+        }
     }
 
     std::string content;
@@ -491,8 +579,8 @@ void WindowsApplication::LoadWindowConfig() {
 }
 
 void WindowsApplication::SaveWindowConfig() {
-    std::filesystem::create_directories("resources/json/shared");
-    std::ofstream ofs("resources/json/shared/window_config.json");
+    std::filesystem::create_directories("resources/json/local");
+    std::ofstream ofs("resources/json/local/window_config.json");
     if (ofs.is_open()) {
         ofs << "{" << std::endl;
         ofs << "  \"isFullscreen\": " << (window_->IsFullscreen() ? "true" : "false") << "," << std::endl;

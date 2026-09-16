@@ -1,6 +1,7 @@
 #include "Object3D.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
+#include "Component/AnimatorComponent.h"
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
 #include "Renderer/Renderer.h"
@@ -57,6 +58,9 @@ void Object3D::Update() {
 
     // 自身のワールド行列作成
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    // ジョイント座標計算用に保持（Renderer::DrawObject3Dが描画に使う行列と同じSRT構成。
+    // skeletonSpaceMatrixにはrootNodeの階層変換が含まれるため、nodeMatrix込みの行列と合成すると二重適用になる）
+    worldMatrix_ = worldMatrix;
     // モデル側のローカル行列を除外（スキニング対応のため）
     Matrix4x4 nodeMatrix = model_->GetModelData().rootNode.localMatrix;
     Matrix4x4 finalWorldMatrix = TransformFunctions::Multiply(nodeMatrix, worldMatrix);
@@ -114,4 +118,18 @@ void Object3D::DisplayImGui(const std::string &label) {
         ImGui::TreePop();
     }
 #endif
+}
+
+std::optional<Vector3> Object3D::GetJointWorldPosition(const std::string &jointName) const {
+    if (!animator_) {
+        return std::nullopt;
+    }
+    const Skeleton &skeleton = animator_->GetSkeleton();
+    auto it = skeleton.jointMap.find(jointName);
+    if (it == skeleton.jointMap.end()) {
+        return std::nullopt;
+    }
+    // SkeletonDebugRenderer と同じ式（skeletonSpaceMatrix * ワールド行列、行ベクトル規約で平行移動は3行目）
+    Matrix4x4 jointWorld = skeleton.joints[it->second].skeletonSpaceMatrix * worldMatrix_;
+    return Vector3{ jointWorld.m[3][0], jointWorld.m[3][1], jointWorld.m[3][2] };
 }

@@ -7,26 +7,66 @@
 #endif
 
 void ParameterManager::Load(const std::string& filepath) {
-    filepath_ = filepath;
-    if (!std::filesystem::exists(filepath_)) return;
+    if (!filepath.empty()) {
+        filepath_ = filepath;
+    }
 
-    std::ifstream file(filepath_);
-    if (file.is_open()) {
-        file >> data_;
-        file.close();
+    // 読み込み候補パス（実行先ディレクトリとプロジェクトディレクトリの両方をチェック）
+    std::vector<std::string> searchPaths = {
+        filepath_,
+        "resources/json/shared/Global/parameters.json",
+        "../../project/resources/json/shared/Global/parameters.json",
+        "../project/resources/json/shared/Global/parameters.json"
+    };
+
+    for (const auto& path : searchPaths) {
+        if (std::filesystem::exists(path)) {
+            std::ifstream file(path);
+            if (file.is_open()) {
+                try {
+                    nlohmann::json loaded;
+                    file >> loaded;
+                    file.close();
+                    if (!loaded.is_null()) {
+                        // 既存のキーを保持しつつ上書き
+                        for (auto& [gKey, gVal] : loaded.items()) {
+                            for (auto& [kKey, kVal] : gVal.items()) {
+                                data_[gKey][kKey] = kVal;
+                            }
+                        }
+                    }
+                    filepath_ = path;
+                    break;
+                } catch (...) {
+                    // JSONパースエラー時は次のパスを試す
+                }
+            }
+        }
     }
 }
 
 void ParameterManager::Save() {
-    std::filesystem::path path(filepath_);
-    if (path.has_parent_path() && !std::filesystem::exists(path.parent_path())) {
-        std::filesystem::create_directories(path.parent_path());
-    }
+    // 1. 設定されているパスへ保存
+    std::vector<std::string> savePaths = {
+        filepath_,
+        "resources/json/shared/Global/parameters.json",
+        "../../project/resources/json/shared/Global/parameters.json"
+    };
 
-    std::ofstream file(filepath_);
-    if (file.is_open()) {
-        file << data_.dump(4);
-        file.close();
+    for (const auto& targetPath : savePaths) {
+        try {
+            std::filesystem::path p(targetPath);
+            if (p.has_parent_path() && !std::filesystem::exists(p.parent_path())) {
+                std::filesystem::create_directories(p.parent_path());
+            }
+            std::ofstream file(targetPath);
+            if (file.is_open()) {
+                file << data_.dump(4);
+                file.close();
+            }
+        } catch (...) {
+            // パスが存在しない場合は無視
+        }
     }
 }
 

@@ -3,6 +3,17 @@
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Effect/ParticleCommon.h"
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
+
+namespace {
+    // シーンごとの3Dモデル配置JSON(エディターで作成したレベルデータ)を読み込む。
+    // エディター(USE_IMGUI)の有無に関わらず動作させるため、EditorManager ではなく
+    // 配置データ本体である Model3DEditorContext を直接呼ぶ。
+    void LoadPlacedModelsForScene(IScene* scene) {
+        if (!scene) return;
+        Model3DEditorContext::GetInstance()->LoadLevelData(scene->GetLevelDataJsonPath());
+    }
+}
 
 SceneManager::SceneManager() {}
 
@@ -55,6 +66,8 @@ void SceneManager::ProcessSceneTransition() {
         
         // 新しいシーンの開始処理を呼ぶ
         currentScene_->OnEnter(this);
+
+        LoadPlacedModelsForScene(currentScene_.get());
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);
@@ -64,6 +77,12 @@ void SceneManager::ProcessSceneTransition() {
 void SceneManager::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if(currentScene_) {
         currentScene_->Draw(viewProjectionMatrix);
+    }
+}
+
+void SceneManager::Draw2D() {
+    if (currentScene_) {
+        currentScene_->Draw2D();
     }
 }
 
@@ -85,6 +104,8 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> nextScene) {
 
         currentScene_->Initialize();
         currentScene_->OnEnter(this);
+
+        LoadPlacedModelsForScene(currentScene_.get());
         
         // 初回フレームの描画前に1度Updateを呼び出し、定数バッファやワールド行列をGPUへ完全に同期させる
         currentScene_->Update(this);
@@ -113,6 +134,9 @@ void SceneManager::PushScene(std::unique_ptr<IScene> nextScene) {
 
     currentScene_->Initialize();
     currentScene_->OnEnter(this);
+
+    LoadPlacedModelsForScene(currentScene_.get());
+
     currentScene_->Update(this);
 }
 
@@ -132,6 +156,7 @@ void SceneManager::PopScene() {
 
     if (currentScene_) {
         currentScene_->OnEnter(this);
+        LoadPlacedModelsForScene(currentScene_.get());
         currentScene_->Update(this);
     }
 }

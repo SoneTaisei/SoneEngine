@@ -1,13 +1,9 @@
 #include "MapObject2D.h"
 #include "../../Project/Game2D/Blocks/BaseBlock.h"
-#include "../../Project/Game2D/Blocks/JumpBlock.h"
-#include "../../Project/Game2D/Blocks/LiftBlock.h"
-#include "../../Project/Game2D/Blocks/CoinBlock.h"
 #include "../../Project/Game2D/Blocks/GoalBlock.h"
 #include "../../Project/Game2D/Blocks/NormalBlock.h"
 #include "../../Project/Game2D/Blocks/DeathBlock.h"
 #include "../../Project/Game2D/Blocks/OneWayBlock.h"
-#include "../../Project/Game2D/Blocks/RailBlock.h"
 #include "../../Project/Game2D/MapChip2D.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -15,15 +11,6 @@
 
 void MapObject2D::SetupDefaultProperties() {
     properties.clear();
-    if (type == "JumpBlock") {
-        properties["jumpVelocity"] = 15.0f;
-    } else if (type == "LiftBlock") {
-        properties["speed"] = 2.0f;
-        properties["range"] = 5.0f;
-        properties["directionX"] = 0.0f;
-        properties["directionY"] = 1.0f;
-    }
-    // 他のタイプも必要に応じて追加
 }
 
 void MapObject2D::DisplayImGui() {
@@ -34,7 +21,7 @@ void MapObject2D::DisplayImGui() {
         name = nameBuf;
     }
     
-    const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "CoinBlock", "OneWayBlock", "LiftBlock", "RailBlock", "JumpBlock" };
+    const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "OneWayBlock" };
     int currentType = -1;
     for (int i = 0; i < IM_ARRAYSIZE(types); i++) {
         if (type == types[i]) {
@@ -91,11 +78,7 @@ void MapObject2D::InitializeLogic(MapChip2D* map, ID3D12Device* device, Primitiv
     if (type == "NormalBlock") blockLogic = std::make_shared<NormalBlock>(map, 0, 0);
     else if (type == "DeathBlock") blockLogic = std::make_shared<DeathBlock>(map, 0, 0);
     else if (type == "GoalBlock") blockLogic = std::make_shared<GoalBlock>(map, 0, 0);
-    else if (type == "CoinBlock") blockLogic = std::make_shared<CoinBlock>(map, 0, 0);
     else if (type == "OneWayBlock") blockLogic = std::make_shared<OneWayBlock>(map, 0, 0);
-    else if (type == "LiftBlock") blockLogic = std::make_shared<LiftBlock>(map, 0, 0);
-    else if (type == "RailBlock") blockLogic = std::make_shared<RailBlock>(map, 0, 0);
-    else if (type == "JumpBlock") blockLogic = std::make_shared<JumpBlock>(map, 0, 0);
     
     if (blockLogic) {
         // 幅・高さはスケールとして渡す

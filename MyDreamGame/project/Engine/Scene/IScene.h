@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <string>
 #include <wrl.h>
 #include <d3d12.h>
 #include"Core/Utility/UtilityFunctions.h"
@@ -38,6 +39,9 @@ public:
     // 描画
     virtual void Draw(const Matrix4x4 &viewProjectionMatrix) = 0;
 
+    // 2Dスプライト・UIの最前面描画 (3Dモデルや配置オブジェクトの後に呼ばれる)
+    virtual void Draw2D() {}
+
     // エディター上のウィンドウ前面オーバーレイに2D描画する用 (ImGuiのWindowDrawListを使用)
     virtual void DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {}
 
@@ -55,6 +59,11 @@ public:
 
     // プレイヤーの取得 (デフォルトはnullptr)
     virtual class Player2D* GetPlayer() { return nullptr; }
+
+    // 3Dモデル配置JSONファイルパス（デフォルトは placed_models.json）
+    virtual std::string GetLevelDataJsonPath() const {
+        return "resources/json/shared/LevelData/placed_models.json";
+    }
 
     // セット用関数
     void SetSpriteCommon(SpriteCommon* spriteCommon) {

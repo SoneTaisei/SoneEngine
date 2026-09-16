@@ -49,6 +49,8 @@ void MapEditorCamera::Update(bool allowInput) {
 }
 
 void MapEditorCamera::UpdateMatrix() {
+    // 2Dエディタ用のため回転は常に0（正面向き）に固定
+    transform_.rotate = { 0.0f, 0.0f, 0.0f };
     viewMatrix_ = TransformFunctions::Inverse(TransformFunctions::MakeTranslateMatrix(transform_.translate));
     
     // Orthographic projection based on zoom

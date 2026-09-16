@@ -9,6 +9,8 @@
 #include <assimp/postprocess.h>
 #include "Renderer/SrvManager.h"
 #include <algorithm>
+#include <filesystem>
+#include <set>
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #ifdef USE_IMGUI
@@ -312,8 +314,25 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
     OutputDebugStringA(("LoadTexture: " + filePath + "\n").c_str());
 
     DirectX::ScratchImage image{};
+
+    // ファイルが存在しない場合の安全なフォールバック
+    if (!std::filesystem::exists(filePath)) {
+        OutputDebugStringA(("[WARNING] LoadTexture: File not found: " + filePath + ", fallback to 1x1 white texture.\n").c_str());
+        HRESULT hrFallback = image.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+        if (SUCCEEDED(hrFallback)) {
+            uint8_t* pixels = image.GetPixels();
+            if (pixels) {
+                pixels[0] = 255;
+                pixels[1] = 255;
+                pixels[2] = 255;
+                pixels[3] = 255;
+            }
+        }
+        return image;
+    }
+
     std::wstring filePathW = ConvertString(filePath);
-    HRESULT hr;
+    HRESULT hr = E_FAIL;
 
     // 備考1：DDSファイルに対応する
     if (filePathW.ends_with(L".dds")) {
@@ -323,8 +342,20 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
         // それ以外は従来通りWIC（PNGやJPGなど）として読み込む
         hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
+
     if (FAILED(hr)) {
-        throw std::runtime_error("LoadTexture failed to load file: " + filePath);
+        OutputDebugStringA(("[WARNING] LoadTexture failed to load file: " + filePath + ", fallback to 1x1 white texture.\n").c_str());
+        HRESULT hrFallback = image.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+        if (SUCCEEDED(hrFallback)) {
+            uint8_t* pixels = image.GetPixels();
+            if (pixels) {
+                pixels[0] = 255;
+                pixels[1] = 255;
+                pixels[2] = 255;
+                pixels[3] = 255;
+            }
+        }
+        return image;
     }
 
     // 備考2：圧縮フォーマットか判定してミップマップ生成を避ける
@@ -337,7 +368,9 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
         hr = DirectX::GenerateMipMaps(
             image.GetImages(), image.GetImageCount(), image.GetMetadata(),
             DirectX::TEX_FILTER_SRGB, 4, mipImages); // 第5引数の 0(MAX) や 4 など任意に変更可能
-        assert(SUCCEEDED(hr));
+        if (FAILED(hr)) {
+            return image;
+        }
     }
 
     return mipImages;
@@ -528,57 +561,184 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     std::string filePath = directoryPath + "/" + filename;
 
     // 1. ファイルの読み込み
-    // 備考にある通り、三角形化、巻き順反転、UV反転を指定
-    const aiScene *scene = importer.ReadFile(filePath.c_str(),
-                                             // 1. すべての面を三角形に変換（DirectXが理解できる形式にする）
-                                             aiProcess_Triangulate |
-                                                 // 2. V軸を反転（glTFなどの左下原点を、DirectX標準の左上原点に合わせる）
-                                                 aiProcess_FlipUVs |
-                                                 // 3. 右手系から左手系へ変換（Z軸の反転や巻き順の調整をセットで行う）
-                                                 aiProcess_ConvertToLeftHanded |
-                                                 // 4. 法線がない場合に滑らかな法線を生成（ライティング計算に必要）
-                                                 aiProcess_GenSmoothNormals |
-                                                 // グローバルスケールを適用
-                                                 aiProcess_GlobalScale);
+    const aiScene *scene = nullptr;
+    try {
+        scene = importer.ReadFile(filePath.c_str(),
+                                  aiProcess_Triangulate |
+                                  aiProcess_FlipUVs |
+                                  aiProcess_ConvertToLeftHanded |
+                                  aiProcess_GenSmoothNormals |
+                                  aiProcess_GlobalScale);
+    } catch (...) {
+        scene = nullptr;
+    }
 
-    // メッシュがない場合はエラー
-    assert(scene && scene->HasMeshes());
+    // メッシュがないファイル（アニメーション専用ファイルや無効なファイル）の場合は空のModelDataを安全に返却
+    if (!scene || !scene->HasMeshes() || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
+        return modelData;
+    }
 
-    // 2. メッシュの解析（備考に基づき、全メッシュをループ）
+    // 2. マテリアルの解析（テクスチャ収集およびマルチマテリアルカラーの抽出）
+    std::vector<std::string> materialTexturePaths(scene->mNumMaterials);
+    std::set<std::string> uniqueTextures;
+    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
+        aiMaterial *material = scene->mMaterials[materialIndex];
+        if (!material) continue;
+        aiString textureFilePath;
+        std::string resolvedPath;
+        auto resolveExistingPath = [&](const std::string &rawName) -> std::string {
+            if (rawName.empty()) return "";
+            std::string direct = directoryPath + "/" + rawName;
+            if (std::filesystem::exists(direct)) return direct;
+
+            // トリム（前後の空白除去）
+            std::string trimmed = rawName;
+            trimmed.erase(0, trimmed.find_first_not_of(" \t\r\n"));
+            if (trimmed.find_last_not_of(" \t\r\n") != std::string::npos) {
+                trimmed.erase(trimmed.find_last_not_of(" \t\r\n") + 1);
+            }
+            if (!trimmed.empty() && std::filesystem::exists(directoryPath + "/" + trimmed)) {
+                return directoryPath + "/" + trimmed;
+            }
+
+            // スペース / アンダースコア相互置換
+            std::string replaced = trimmed;
+            for (char &c : replaced) { if (c == ' ') c = '_'; }
+            if (std::filesystem::exists(directoryPath + "/" + replaced)) {
+                return directoryPath + "/" + replaced;
+            }
+            replaced = trimmed;
+            for (char &c : replaced) { if (c == '_') c = ' '; }
+            if (std::filesystem::exists(directoryPath + "/" + replaced)) {
+                return directoryPath + "/" + replaced;
+            }
+
+            // ディレクトリ内探索
+            try {
+                if (std::filesystem::exists(directoryPath)) {
+                    std::string lowerTrimmed = trimmed;
+                    std::transform(lowerTrimmed.begin(), lowerTrimmed.end(), lowerTrimmed.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                    for (const auto &entry : std::filesystem::directory_iterator(directoryPath)) {
+                        if (!entry.is_regular_file()) continue;
+                        std::string fn = entry.path().filename().string();
+                        std::string lowerFn = fn;
+                        std::transform(lowerFn.begin(), lowerFn.end(), lowerFn.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                        if (lowerFn == lowerTrimmed) {
+                            return entry.path().string();
+                        }
+                    }
+                    for (const auto &entry : std::filesystem::directory_iterator(directoryPath)) {
+                        if (!entry.is_regular_file()) continue;
+                        std::string fn = entry.path().filename().string();
+                        std::string lowerFn = fn;
+                        std::transform(lowerFn.begin(), lowerFn.end(), lowerFn.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                        if (!lowerTrimmed.empty() && (lowerFn.find(lowerTrimmed) != std::string::npos || lowerTrimmed.find(lowerFn) != std::string::npos)) {
+                            return entry.path().string();
+                        }
+                    }
+                }
+            } catch (...) {}
+            return "";
+        };
+
+        if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
+            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
+            resolvedPath = resolveExistingPath(textureFilePath.C_Str());
+        } else if (material->GetTextureCount(aiTextureType_BASE_COLOR) != 0) {
+            material->GetTexture(aiTextureType_BASE_COLOR, 0, &textureFilePath);
+            resolvedPath = resolveExistingPath(textureFilePath.C_Str());
+        }
+
+        if (!resolvedPath.empty() && std::filesystem::exists(resolvedPath)) {
+            materialTexturePaths[materialIndex] = resolvedPath;
+            uniqueTextures.insert(resolvedPath);
+        }
+    }
+
+    bool isMultiTextureModel = (uniqueTextures.size() > 1);
+
+    std::vector<aiColor4D> materialColors(scene->mNumMaterials, aiColor4D(1.0f, 1.0f, 1.0f, 1.0f));
+    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
+        aiMaterial *material = scene->mMaterials[materialIndex];
+        if (!material) continue;
+
+        aiColor4D col(1.0f, 1.0f, 1.0f, 1.0f);
+        bool gotColor = false;
+
+        // マルチテクスチャモデルの場合は各テクスチャ画像から代表色を抽出して頂点カラーに焼き込む
+        const std::string& texFile = materialTexturePaths[materialIndex];
+        if (isMultiTextureModel && !texFile.empty()) {
+            try {
+                DirectX::ScratchImage image = LoadTexture(texFile);
+                const DirectX::Image* img = image.GetImage(0, 0, 0);
+                if (img && img->pixels) {
+                    DirectX::ScratchImage converted;
+                    const DirectX::Image* srcImg = img;
+                    if (img->format != DXGI_FORMAT_R32G32B32A32_FLOAT) {
+                        if (SUCCEEDED(DirectX::Convert(*img, DXGI_FORMAT_R32G32B32A32_FLOAT, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, converted))) {
+                            srcImg = converted.GetImage(0, 0, 0);
+                        }
+                    }
+                    if (srcImg && srcImg->pixels) {
+                        size_t midX = srcImg->width / 2;
+                        size_t midY = srcImg->height / 2;
+                        const float* pixel = reinterpret_cast<const float*>(srcImg->pixels + (midY * srcImg->rowPitch) + (midX * sizeof(float) * 4));
+                        col = aiColor4D(pixel[0], pixel[1], pixel[2], pixel[3]);
+                        gotColor = true;
+                    }
+                }
+            } catch (...) {}
+        }
+
+        if (!gotColor) {
+            if (material->Get(AI_MATKEY_BASE_COLOR, col) != AI_SUCCESS) {
+                material->Get(AI_MATKEY_COLOR_DIFFUSE, col);
+            }
+        }
+        materialColors[materialIndex] = col;
+    }
+
+    // 3. メッシュの解析（備考に基づき、全メッシュをループ）
     for (uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex) {
         aiMesh *mesh = scene->mMeshes[meshIndex];
+        if (!mesh) continue;
 
         // MultiMesh/MultiMaterial対応のため、頂点の開始位置を記録しておく
         uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
 
-        // 法線とTexcoordがないメッシュは今回は非対応（備考のassert）
-        assert(mesh->HasNormals());
-        assert(mesh->HasTextureCoords(0));
+        // メッシュに紐づくマテリアルのカラーを取得
+        aiColor4D materialColor = (mesh->mMaterialIndex < materialColors.size())
+            ? materialColors[mesh->mMaterialIndex]
+            : aiColor4D(1.0f, 1.0f, 1.0f, 1.0f);
+
+        bool hasNormals = mesh->HasNormals();
+        bool hasTexCoords = mesh->HasTextureCoords(0);
+        bool hasColors = mesh->HasVertexColors(0);
 
         // 頂点データの解析
         for (uint32_t vIndex = 0; vIndex < mesh->mNumVertices; ++vIndex) {
             aiVector3D &position = mesh->mVertices[vIndex];
-            aiVector3D &normal = mesh->mNormals[vIndex];
-            aiVector3D &texcoord = mesh->mTextureCoords[0][vIndex];
+            aiVector3D normal = hasNormals ? mesh->mNormals[vIndex] : aiVector3D(0.0f, 1.0f, 0.0f);
+            aiVector3D texcoord = hasTexCoords ? mesh->mTextureCoords[0][vIndex] : aiVector3D(0.0f, 0.0f, 0.0f);
 
             VertexData vertex;
             vertex.position = {position.x, position.y, position.z, 1.0f};
             vertex.normal = {normal.x, normal.y, normal.z};
             vertex.texcoord = {texcoord.x, texcoord.y};
 
-            // 左手系への変換（備考の通り、Xを反転）
-            vertex.position = {position.x, position.y, position.z, 1.0f};
-            vertex.normal = {normal.x, normal.y, normal.z};
-            vertex.texcoord = {texcoord.x, texcoord.y};
-            vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+            if (hasColors) {
+                aiColor4D &c = mesh->mColors[0][vIndex];
+                vertex.color = {c.r, c.g, c.b, c.a};
+            } else {
+                vertex.color = {materialColor.r, materialColor.g, materialColor.b, materialColor.a};
+            }
             modelData.vertices.push_back(vertex);
         }
 
-        // インデックス(Face)の解析（備考のIndexed描画に対応させる）
-        
         // Bone解析
         for (uint32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
             aiBone* bone = mesh->mBones[boneIndex];
+            if (!bone) continue;
             std::string jointName = bone->mName.C_Str();
             JointWeightData& weightData = modelData.skinClusterData[jointName];
 
@@ -586,7 +746,6 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             aiVector3D scale, translate;
             aiQuaternion rotate;
             bindPoseMatrixAssimp.Decompose(scale, rotate, translate); // 成分を抽出
-            // 左手系のBindPoseMatrixを作る (AssimpのaiProcess_ConvertToLeftHandedにより既に左手系に変換されているため、反転は不要)
             Matrix4x4 bindPoseMatrix = TransformFunctions::MakeAffineMatrix(
                 { scale.x, scale.y, scale.z },
                 { rotate.x, rotate.y, rotate.z, rotate.w },
@@ -603,31 +762,38 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
             }
         }
 
+        // インデックス(Face)の解析
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
             aiFace &face = mesh->mFaces[faceIndex];
-            assert(face.mNumIndices == 3); // 三角形のみサポート
-
-            for (uint32_t element = 0; element < face.mNumIndices; ++element) {
-                uint32_t vertexIndex = face.mIndices[element];
-                modelData.indices.push_back(vertexIndex + vertexOffset); // vertexOffsetを加算する
+            if (face.mNumIndices == 3) {
+                for (uint32_t element = 0; element < face.mNumIndices; ++element) {
+                    uint32_t vertexIndex = face.mIndices[element];
+                    modelData.indices.push_back(vertexIndex + vertexOffset);
+                }
+            } else if (face.mNumIndices > 3) {
+                for (uint32_t element = 1; element + 1 < face.mNumIndices; ++element) {
+                    modelData.indices.push_back(face.mIndices[0] + vertexOffset);
+                    modelData.indices.push_back(face.mIndices[element] + vertexOffset);
+                    modelData.indices.push_back(face.mIndices[element + 1] + vertexOffset);
+                }
             }
         }
     }
 
-    // 3. マテリアルの解析（Diffuse / BaseColor テクスチャを取得）
-    for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
-        aiMaterial *material = scene->mMaterials[materialIndex];
-        aiString textureFilePath;
-        if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
-            material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
-            modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
-        } else if (material->GetTextureCount(aiTextureType_BASE_COLOR) != 0) {
-            material->GetTexture(aiTextureType_BASE_COLOR, 0, &textureFilePath);
-            modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
-        }
+    // 4. モデル全体のテクスチャパスを決定
+    if (isMultiTextureModel) {
+        // マルチテクスチャモデルの場合は各テクスチャ色を頂点カラーに焼き込んだため、
+        // モデル全体のテクスチャは空（白1x1テクスチャにフォールバック）にして色分けを維持
+        modelData.material.textureFilePath = "";
+    } else if (uniqueTextures.size() == 1) {
+        modelData.material.textureFilePath = *uniqueTextures.begin();
+    } else {
+        modelData.material.textureFilePath = "";
     }
 
-	modelData.rootNode = ReadNode(scene->mRootNode);
+    if (scene->mRootNode) {
+        modelData.rootNode = ReadNode(scene->mRootNode);
+    }
 
     return modelData;
 }
@@ -979,7 +1145,9 @@ Animation LoadAnimationFile(const std::string& directoryPath, const std::string&
     Assimp::Importer importer;
     std::string filePath = directoryPath + "/" + filename;
     const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
-    assert(scene && scene->mNumAnimations != 0);
+    if (!scene || scene->mNumAnimations == 0) {
+        return animation;
+    }
 
     aiAnimation* animationAssimp = nullptr;
     for (uint32_t i = 0; i < scene->mNumAnimations; ++i) {
@@ -1122,7 +1290,7 @@ SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const
     skinCluster.mappedPalette = {mappedPalette, skeleton.joints.size()};
 
     // SRVの生成
-    SrvManager::GetInstance()->Allocate(&skinCluster.paletteSrvHandle.first, &skinCluster.paletteSrvHandle.second);
+    SrvManager::GetInstance()->Allocate(&skinCluster.paletteSrvHandle.first, &skinCluster.paletteSrvHandle.second, "CreateSkinCluster");
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -1153,9 +1321,13 @@ SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const
     // ウェイト情報のパース
     for (const auto& jointWeight : modelData.skinClusterData) {
         auto it = skeleton.jointMap.find(jointWeight.first);
-        if (it == skeleton.jointMap.end()) continue; // そのボーンは存在しない
+        if (it == skeleton.jointMap.end()) {
+            LogManager::GetInstance()->AddLog(LogLevel::Warning, "[SkinCluster] Joint NOT FOUND in skeleton: " + jointWeight.first);
+            continue; // そのボーンは存在しない
+        }
 
         int32_t jointIndex = it->second;
+        LogManager::GetInstance()->AddLog(LogLevel::Info, "[SkinCluster] Bound joint [" + jointWeight.first + "] -> index " + std::to_string(jointIndex) + ", weights count: " + std::to_string(jointWeight.second.vertexWeights.size()));
         skinCluster.inverseBindPoseMatrices[jointIndex] = jointWeight.second.inverseBindPoseMatrix;
 
         for (const auto& weightInfo : jointWeight.second.vertexWeights) {

@@ -52,6 +52,49 @@ struct DifficultyScore {
 
 
 /// <summary>
+/// リプレイに記録する動的オブジェクト（動く床・扉・スイッチ等）1個分の状態
+/// 位置・回転・スケール・色・破壊フラグは全オブジェクト共通の器として持ち、
+/// 種類ごとの固有状態（タイマー・開閉率など）は custom に float 列として詰める。
+/// これにより、今後マップチップエディタに追加されるオブジェクトも
+/// 専用のデータ構造を増やさずにそのまま記録・復元できる。
+/// </summary>
+struct ReplayObjectState {
+    uint64_t id = 0;                            // プロバイダごとに一意かつ毎回同じになるID
+    Vector3 position = {0.0f, 0.0f, 0.0f};
+    Vector3 rotation = {0.0f, 0.0f, 0.0f};
+    Vector3 scale = {1.0f, 1.0f, 1.0f};
+    Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+    bool destroyed = false;                     // trueのとき position 等は使わず破壊のみ復元する
+    std::vector<float> custom;                  // 種類ごとの固有状態
+};
+
+/// <summary>
+/// 1フレーム分の動的オブジェクト状態（記録対象になったオブジェクトのみ入る）
+/// </summary>
+struct ReplayObjectFrame {
+    std::vector<ReplayObjectState> states;
+};
+
+/// <summary>
+/// 動的オブジェクトの記録・復元を仲介するインターフェース
+/// 新しい種類のオブジェクト群（マップチップ以外の敵・ギミック等）を
+/// リプレイ対応させたいときは、これを実装して ReplayManager に登録するだけでよい。
+/// </summary>
+class IReplayObjectProvider {
+public:
+    virtual ~IReplayObjectProvider() = default;
+
+    // 記録データ内でIDが衝突しないようにするための識別名（実装ごとに固有の文字列）
+    virtual const char* GetReplayProviderName() const = 0;
+
+    // 現在の状態を out に追加する（id はプロバイダ内で一意なローカルIDでよい）
+    virtual void CaptureReplayObjects(std::vector<ReplayObjectState>& out) = 0;
+
+    // 記録された状態へ復元する（id はローカルIDに戻した状態で渡される）
+    virtual void RestoreReplayObjects(const std::vector<ReplayObjectState>& states) = 0;
+};
+
+/// <summary>
 /// 1フレーム分のリプレイデータ
 /// </summary>
 struct FrameData {
@@ -61,6 +104,7 @@ struct FrameData {
     Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f}; // プレイヤーの色
     Vector3 scale = {1.0f, 1.0f, 1.0f};       // プレイヤーのスケール
     Vector3 rotation = {0.0f, 0.0f, 0.0f};    // プレイヤーの回転
+    float time = 0.0f;                        // 録画開始からのゲーム内経過時間（動く床の再現用）
 };
 
 /// <summary>
@@ -98,6 +142,7 @@ struct ReplayData {
                                               // T0: 左右移動(L,R,N), T1: ジャンプ(J,N), T2: ダッシュ(D,N), T3: 壁張り付き(C,N), T4: 上下移動(W,S,N)
     std::vector<JitterSetting> jitters;       // 動的ブレ設定リスト
     std::vector<AppliedMacro> appliedMacros;  // 適用されたマクロの記録
+    std::vector<ReplayObjectFrame> objectFrames; // frames と同じ長さの動的オブジェクト状態（空なら未記録の旧リプレイ）
     
     int id = -1;                              // このリプレイデータの一意なID
     int parentId = -1;                        // 派生元のリプレイのID（-1ならルート）
@@ -159,6 +204,30 @@ public:
     void ApplyMacro(int startFrame, const ReplayMacro& macro); // マクロを流し込む
     void RebuildMmlFromFrames(ReplayData& data);
     void RebuildFramesFromMml(ReplayData& data);
+
+    // --- 動的オブジェクト（動く床・扉・スイッチ等）のリプレイ対応 ---
+    // プロバイダを登録すると、録画時に自動で状態が記録され、再生・シーク時に復元される。
+    void RegisterObjectProvider(IReplayObjectProvider* provider);
+    void UnregisterObjectProvider(IReplayObjectProvider* provider);
+    // 指定フレームの動的オブジェクト状態を復元する（再生・シーク時に毎フレーム呼ぶ）
+    void RestoreObjectsAtFrame(int frame);
+    // 巻き戻し中に、録画バッファの現在位置の動的オブジェクト状態へ復元する
+    void RestoreRecordedObjectsAtCurrent();
+    bool HasObjectRecords() const { return !currentReplay_.objectFrames.empty(); }
+
+    // --- ゲーム内時刻（時間で動くオブジェクトをリプレイと同期させるための共有クロック） ---
+    // 通常プレイ・録画中は実 deltaTime で進み、再生中は記録されたフレームの時刻をそのまま返す。
+    // 動く床などは自前で dt を積算せず、この値を時間として使うことで再生・シークでも完全に一致する。
+    void UpdatePlayClock(float deltaTime);
+    float GetPlayTime() const { return playTime_; }
+    // このフレームで進んだゲーム内時間。dt を積算して動くブロックは
+    // TimeManager ではなくこちらを使うと、再生・シークでも録画時と一致する。
+    float GetPlayDeltaTime() const { return playDeltaTime_; }
+    void ResetPlayClock() { playTime_ = 0.0f; playDeltaTime_ = 0.0f; }
+    // 指定フレームのゲーム内時刻を取得する
+    float GetFrameTime(int frame) const;
+    // 編集などでフレームが増減した後、時刻列とオブジェクト記録の長さを整合させる
+    static void NormalizeFrameRecords(ReplayData& data);
 
     // ファイルI/O
     bool SaveToFile(const ReplayData& data, const std::string& filename);
@@ -243,6 +312,10 @@ private:
 
     // 再生・ループ時に実行用キーバッファを生成する
     void GenerateRuntimeKeys();
+    // 登録済みプロバイダから現在の動的オブジェクト状態を1フレーム分収集する
+    void CaptureObjectsForRecording();
+    // 1フレーム分の状態を、IDの上位ビットを見て各プロバイダへ振り分けて復元する
+    void RestoreObjectStates(const ReplayObjectFrame& objectFrame);
     bool CheckCollisionAt(float x, float y, MapChip2D* mapChip) const;
 
 private:
@@ -284,6 +357,12 @@ private:
     std::vector<std::string> savedList_;              // json/saved_replays/ 下のファイル名リスト
     std::vector<ReplayMacro> macros_;                 // 登録されたマクロリスト
     
+    std::vector<IReplayObjectProvider*> objectProviders_;       // 動的オブジェクトの記録・復元プロバイダ
+    std::vector<ReplayObjectFrame> temporaryRecordedObjects_;  // 録画中の動的オブジェクト状態（frames と同じ長さ）
+    std::vector<ReplayObjectState> objectCaptureScratch_;      // 収集時の一時バッファ（毎フレームの確保を避ける）
+    float playTime_ = 0.0f;                                    // 共有のゲーム内時刻（秒）
+    float playDeltaTime_ = 0.0f;                               // 直近1フレームで進んだゲーム内時間（秒）
+
     std::unique_ptr<class LevelEvolutionAI> levelEvolutionAI_;
     std::vector<std::string> runtimeKeys_;            // 再生時に使用する動的キー配列 (1要素につき7文字の文字列)
 };

@@ -276,7 +276,43 @@
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
-<ClCompile Include="Project\Game2D\Player\PlayerInput.cpp"><Filter>Project\Game2D</Filter></ClCompile><ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp"><Filter>Project\Game2D</Filter></ClCompile></ItemGroup>
+<ClCompile Include="Project\Game2D\Player\PlayerInput.cpp"><Filter>Project\Game2D</Filter></ClCompile><ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp"><Filter>Project\Game2D</Filter></ClCompile>
+    <ClCompile Include="Engine\Collision\CollisionFunctions.cpp">
+      <Filter>Engine\Collision</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
+    <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditor.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleInspector.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticlePreviewScene.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleTimeline.cpp" />
+    <ClCompile Include="Engine\Editor\LightEditor\LightEditor.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp">
+      <Filter>Engine\Editor\MapEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditor.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorCanvas.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
+    <ClCompile Include="Engine\Editor\PostEffectEditor\PostEffectEditor.cpp" />
+    <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleEmitter.cpp" />
+    <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleSystem.cpp" />
+    <ClCompile Include="Engine\Renderer\ConstantBufferPool.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp">
+      <Filter>Project</Filter>
+    </ClCompile></ItemGroup>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -549,7 +585,45 @@
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveStar.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
-<ClInclude Include="Project\Game2D\Player\PlayerInput.h"><Filter>Project\Game2D</Filter></ClInclude><ClInclude Include="Project\Game2D\Player\PlayerPhysics.h"><Filter>Project\Game2D</Filter></ClInclude></ItemGroup>
+<ClInclude Include="Project\Game2D\Player\PlayerInput.h"><Filter>Project\Game2D</Filter></ClInclude><ClInclude Include="Project\Game2D\Player\PlayerPhysics.h"><Filter>Project\Game2D</Filter></ClInclude>
+    <ClInclude Include="Engine\Collision\CollisionFunctions.h">
+      <Filter>Engine\Collision</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\Animation\AnimationLightingConfig.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
+    <ClInclude Include="Engine\Editor\Common\ModelSelectModal.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditor.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleInspector.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticlePreviewScene.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleTimeline.h" />
+    <ClInclude Include="Engine\Editor\LightEditor\LightEditor.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h">
+      <Filter>Engine\Editor\MapEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditor.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorCanvas.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorContext.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditor.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
+    <ClInclude Include="Engine\Editor\PostEffectEditor\PostEffectEditor.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleData.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleEmitter.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleSystem.h" />
+    <ClInclude Include="Engine\Renderer\ConstantBufferPool.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h">
+      <Filter>Project</Filter>
+    </ClInclude></ItemGroup>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>

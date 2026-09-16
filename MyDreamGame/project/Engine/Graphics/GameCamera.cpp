@@ -10,10 +10,26 @@
 
 void GameCamera::Initialize(int kClientWidth, int kClientHeight) {
     Camera::Initialize(kClientWidth, kClientHeight);
+    isOrthographic_ = false;
+    followTarget_ = nullptr;
     // 初期位置の設定（例えばプレイヤーの少し後ろ）
     transform_.translate = { 0.0f, 0.0f, -10.0f };
     transform_.rotate = { 0.0f, 0.0f, 0.0f };
     UpdateMatrix();
+}
+
+void GameCamera::SetResolution(int kClientWidth, int kClientHeight) {
+    kClientWidth_ = kClientWidth;
+    kClientHeight_ = kClientHeight;
+    if (isOrthographic_) {
+        // 縦幅を基準にアスペクト比に合わせて横幅を動的拡張
+        if (kClientHeight_ > 0) {
+            orthoWidth_ = orthoHeight_ * ((float)kClientWidth_ / (float)kClientHeight_);
+        }
+        UpdateMatrixOrthographic();
+    } else {
+        Camera::SetResolution(kClientWidth, kClientHeight);
+    }
 }
 
 void GameCamera::Update() {
@@ -69,10 +85,10 @@ void GameCamera::InitializeOrthographic(int kClientWidth, int kClientHeight, flo
 
 void GameCamera::UpdateMatrixOrthographic() {
     // ターゲットへの追従（ルームベース遷移）
-    if (followTarget_) {
-        // ターゲットの現在の座標
-        float targetX = followTarget_->x;
-        float targetY = followTarget_->y;
+    if (followTarget_ && isFollowEnabled_) {
+        // ターゲットの現在の座標（オフセットを加味）
+        float targetX = followTarget_->x + followOffset_.x;
+        float targetY = followTarget_->y + followOffset_.y;
 
         // カスタム境界線リストを用いたルーム計算
         int newRoomX = currentRoomX_;
@@ -139,7 +155,14 @@ void GameCamera::UpdateMatrixOrthographic() {
                 } else {
                     cameraTargetY = std::clamp(targetY, minClampY, maxClampY);
                 }
+            } else {
+                cameraTargetX = targetX;
+                cameraTargetY = targetY;
             }
+        } else {
+            // ルーム設定がない場合はターゲット（プレイヤー）を直接追従
+            cameraTargetX = targetX;
+            cameraTargetY = targetY;
         }
 
         if (newRoomX != currentRoomX_ || newRoomY != currentRoomY_) {

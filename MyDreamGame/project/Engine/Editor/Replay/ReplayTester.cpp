@@ -221,7 +221,7 @@ bool ReplayTester::CheckCollisionAt(float x, float y, MapChip2D* mapChip) const 
     for (int cx = minX; cx <= maxX; ++cx) {
         for (int cy = minY; cy <= maxY; ++cy) {
             MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
-            if (type == MapChip2D::ChipType::kBlock || type == MapChip2D::ChipType::kLift) {
+            if (type == MapChip2D::ChipType::kBlock) {
                 return true;
             }
         }
@@ -251,8 +251,7 @@ float ReplayTester::CalculateDistanceToGround(const Vector3& playerPos, MapChip2
             MapChip2D::ChipType type = mapChip->GetChipType(cx, cy);
             if (type == MapChip2D::ChipType::kBlock || 
                 type == MapChip2D::ChipType::kDeathBlock || 
-                type == MapChip2D::ChipType::kOneWayBlock ||
-                type == MapChip2D::ChipType::kLift) {
+                type == MapChip2D::ChipType::kOneWayBlock) {
                 
                 float blockTopY = mapChip->ChipToWorldY(cy) + mapChip->GetChipSize();
                 float actualDist = footY - blockTopY;

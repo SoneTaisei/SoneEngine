@@ -11,14 +11,17 @@ MeshRendererComponent::MeshRendererComponent() {
 }
 
 MeshRendererComponent::~MeshRendererComponent() {
+    ConstantBufferPool::GetInstance()->Free(materialCB_);
+    ConstantBufferPool::GetInstance()->Free(transformCB_);
 }
 
 void MeshRendererComponent::Initialize(ID3D12Device* device, Model* model) {
     model_ = model;
     
-    // マテリアル用バッファ生成
-    materialResource_ = CreateBufferResource(device, (sizeof(Material) + 255) & ~255u);
-    materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedMaterial_));
+    // マテリアル用バッファ確保
+    materialCB_ = ConstantBufferPool::GetInstance()->Allocate(device, sizeof(Material));
+    mappedMaterial_ = reinterpret_cast<Material*>(materialCB_.cpu);
+    if (!mappedMaterial_) return;
 
     // デフォルトマテリアル設定
     material_.color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -33,9 +36,9 @@ void MeshRendererComponent::Initialize(ID3D12Device* device, Model* model) {
     material_.enableBoxMapping = 0.0f;
     *mappedMaterial_ = material_;
 
-    // Transform用バッファ生成
-    transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
-    transformResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedTransform_));
+    // Transform用バッファ確保
+    transformCB_ = ConstantBufferPool::GetInstance()->Allocate(device, sizeof(TransformMatrix));
+    mappedTransform_ = reinterpret_cast<TransformMatrix*>(transformCB_.cpu);
 }
 
 void MeshRendererComponent::Initialize() {
@@ -43,7 +46,9 @@ void MeshRendererComponent::Initialize() {
 }
 
 void MeshRendererComponent::Update() {
-    *mappedMaterial_ = material_;
+    if (mappedMaterial_) {
+        *mappedMaterial_ = material_;
+    }
 }
 
 void MeshRendererComponent::Draw() {
