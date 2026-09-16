@@ -56,22 +56,12 @@ public:
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
 
-#ifdef USE_IMGUI
-    // ImGuiによるブロックパラメータの調整やデバッグ操作用UI
-    virtual void DrawImGui() {}
-#endif
-
-    // 配置チップ座標（エディタの一覧表示等に使う）
-    int GetChipX() const { return chipX_; }
-    int GetChipY() const { return chipY_; }
-
     GameObject* GetGameObject() const { return gameObject_.get(); }
     void SetGameObject(std::unique_ptr<GameObject> obj) { gameObject_ = std::move(obj); }
     
     // 消滅フラグ（コイン取得時など）
     bool IsDestroyed() const { return isDestroyed_; }
     void Destroy() { isDestroyed_ = true; }
-    void SetDestroyed(bool destroyed) { isDestroyed_ = destroyed; }
 
     void SetupCollider() {
         if (!gameObject_) return;
