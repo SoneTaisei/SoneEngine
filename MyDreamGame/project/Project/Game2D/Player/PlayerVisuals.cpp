@@ -35,8 +35,9 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
             !LoadAnimationFromJsonFile(holdingWallMoveAnimation_, "resources/json/shared/Player/holding_wall_move.json")) {
             holdingWallMoveAnimation_ = wallClimbAnimation_;
         }
-        if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
-            airDashAnimation_ = CreateDefaultAirDashAnimation();
+        if (!LoadAnimationFromJsonFile(dashAnimation_, "resources/json/shared/Player/dash.json") &&
+            !LoadAnimationFromJsonFile(dashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
+            dashAnimation_ = CreateDefaultAirDashAnimation();
         }
 
         animator_->SetAnimation(idleAnimation_);
@@ -120,14 +121,14 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
     if (modelObj_) {
         if (animator_) {
             if (state.isDashing_) {
-                // 空中ダッシュアニメーションの再生
-                airDashAnimTime_ = AdvanceAnimationTime(airDashAnimTime_, airDashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
+                // ダッシュアニメーションの再生
+                dashAnimTime_ = AdvanceAnimationTime(dashAnimTime_, dashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
                 animator_->ClearJointOverrides();
-                animator_->SetAnimation(airDashAnimation_);
-                animator_->SetTime(airDashAnimTime_);
+                animator_->SetAnimation(dashAnimation_);
+                animator_->SetTime(dashAnimTime_);
                 animator_->Stop(); // 手動で時間を制御するため自動更新を停止
             } else {
-                airDashAnimTime_ = 0.0f;
+                dashAnimTime_ = 0.0f;
 
                 // しがみつき中ならブレンド率を上げ、それ以外は下げる
                 bool isClinging = state.isWallClinging_ || state.isWallSliding_;
