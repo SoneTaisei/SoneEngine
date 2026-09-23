@@ -909,4 +909,192 @@ void AnimationEditorContext::EnsureJointVisibleInTree(const std::string& jointNa
     }
 }
 
+void AnimationEditorContext::CopyKeyframe(bool forceAllJoints, SceneManager* sceneManager) {
+    bool copyAll = forceAllJoints || isSummarySelected_ || (animEditorSelectedKeyIndex_ < 0);
+
+    AnimatorComponent* anim = GetTargetAnimator(sceneManager);
+    const Skeleton* skel = (anim && anim->HasSkeleton()) ? &anim->GetSkeleton() : nullptr;
+
+    auto extractJointData = [&](const std::string& jName) -> AnimJointKeyData {
+        AnimJointKeyData data;
+        Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
+        Vector3 curT = { 0.0f, 0.0f, 0.0f };
+        Vector3 curS = { 1.0f, 1.0f, 1.0f };
+
+        if (skel) {
+            auto itJ = skel->jointMap.find(jName);
+            if (itJ != skel->jointMap.end()) {
+                curQ = skel->joints[itJ->second].transform.rotate;
+                curT = skel->joints[itJ->second].transform.translate;
+                curS = skel->joints[itJ->second].transform.scale;
+            }
+        }
+
+        auto itNode = editingAnimation_.nodeAnimations.find(jName);
+        if (itNode != editingAnimation_.nodeAnimations.end()) {
+            const auto& nodeAnim = itNode->second;
+            if (!nodeAnim.rotate.empty()) curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+            if (!nodeAnim.translate.empty()) curT = CalculateValue(nodeAnim.translate, animEditorTime_);
+            if (!nodeAnim.scale.empty()) curS = CalculateValue(nodeAnim.scale, animEditorTime_);
+        }
+
+        auto itTemp = animTempOverrides_.find(jName);
+        if (itTemp != animTempOverrides_.end()) {
+            if (itTemp->second.translate) curT = *itTemp->second.translate;
+            if (itTemp->second.rotate) curQ = *itTemp->second.rotate;
+            if (itTemp->second.scale) curS = *itTemp->second.scale;
+        }
+
+        data.translate = curT;
+        data.rotate = curQ;
+        data.scale = curS;
+        return data;
+    };
+
+    if (copyAll) {
+        keyframeClipboard_.hasData = true;
+        keyframeClipboard_.isAllJoints = true;
+        keyframeClipboard_.sourceJointName = "";
+        keyframeClipboard_.sourceTime = animEditorTime_;
+        keyframeClipboard_.jointDataMap.clear();
+
+        std::set<std::string> targetJoints;
+        for (const auto& jName : currentJointList_) targetJoints.insert(jName);
+        for (const auto& [jName, _] : editingAnimation_.nodeAnimations) targetJoints.insert(jName);
+        if (skel) {
+            for (const auto& [jName, _] : skel->jointMap) targetJoints.insert(jName);
+        }
+
+        for (const auto& jName : targetJoints) {
+            keyframeClipboard_.jointDataMap[jName] = extractJointData(jName);
+        }
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "キーフレーム概要 (全%zuボーン) をコピーしました (%.2f秒)", targetJoints.size(), animEditorTime_);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    } else {
+        if (animEditorSelectedJointName_.empty()) {
+            SetStatusMessage("コピー対象のボーンが選択されていません");
+            return;
+        }
+
+        keyframeClipboard_.hasData = true;
+        keyframeClipboard_.isAllJoints = false;
+        keyframeClipboard_.sourceJointName = animEditorSelectedJointName_;
+        keyframeClipboard_.sourceTime = animEditorTime_;
+        keyframeClipboard_.jointDataMap.clear();
+        keyframeClipboard_.jointDataMap[animEditorSelectedJointName_] = extractJointData(animEditorSelectedJointName_);
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "ボーン [%s] のキーフレームをコピーしました (%.2f秒)", animEditorSelectedJointName_.c_str(), animEditorTime_);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    }
+}
+
+void AnimationEditorContext::PasteKeyframe(SceneManager* sceneManager) {
+    if (!keyframeClipboard_.hasData) {
+        SetStatusMessage("クリップボードにキーフレームデータがありません");
+        return;
+    }
+
+    PushAnimUndoState("キーフレーム貼り付け");
+    float pasteTime = animEditorTime_;
+
+    auto applyDataToNodeAnim = [pasteTime](NodeAnimation& nodeAnim, const AnimJointKeyData& data) {
+        if (data.translate) {
+            bool found = false;
+            for (auto& kf : nodeAnim.translate) {
+                if (std::abs(kf.time - pasteTime) < 0.005f) {
+                    kf.value = *data.translate;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                nodeAnim.translate.push_back(KeyframeVector3{ pasteTime, *data.translate });
+            }
+            std::sort(nodeAnim.translate.begin(), nodeAnim.translate.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) {
+                return a.time < b.time;
+            });
+        }
+
+        if (data.rotate) {
+            bool found = false;
+            for (auto& kf : nodeAnim.rotate) {
+                if (std::abs(kf.time - pasteTime) < 0.005f) {
+                    kf.value = *data.rotate;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                nodeAnim.rotate.push_back(KeyframeQuaternion{ pasteTime, *data.rotate });
+            }
+            std::sort(nodeAnim.rotate.begin(), nodeAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) {
+                return a.time < b.time;
+            });
+        }
+
+        if (data.scale) {
+            bool found = false;
+            for (auto& kf : nodeAnim.scale) {
+                if (std::abs(kf.time - pasteTime) < 0.005f) {
+                    kf.value = *data.scale;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                nodeAnim.scale.push_back(KeyframeVector3{ pasteTime, *data.scale });
+            }
+            std::sort(nodeAnim.scale.begin(), nodeAnim.scale.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) {
+                return a.time < b.time;
+            });
+        }
+    };
+
+    if (keyframeClipboard_.isAllJoints) {
+        for (const auto& [jName, data] : keyframeClipboard_.jointDataMap) {
+            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[jName];
+            applyDataToNodeAnim(nodeAnim, data);
+        }
+
+        isSummarySelected_ = true;
+        animEditorSelectedKeyIndex_ = -1;
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "全ボーンにキーフレームを貼り付けました (%.2f秒)", pasteTime);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    } else {
+        std::string targetJoint = animEditorSelectedJointName_;
+        if (targetJoint.empty()) {
+            targetJoint = keyframeClipboard_.sourceJointName;
+        }
+        if (targetJoint.empty()) {
+            SetStatusMessage("貼り付け先ボーンが不明です");
+            return;
+        }
+
+        if (!keyframeClipboard_.jointDataMap.empty()) {
+            const auto& data = keyframeClipboard_.jointDataMap.begin()->second;
+            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[targetJoint];
+            applyDataToNodeAnim(nodeAnim, data);
+        }
+
+        isSummarySelected_ = false;
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "ボーン [%s] にキーフレームを貼り付けました (%.2f秒)", targetJoint.c_str(), pasteTime);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    }
+
+    // 一時オーバーライドをクリアして貼り付けたキーを即時プレビューに反映
+    animTempOverrides_.clear();
+    UpdateAnimationPosePreview(sceneManager);
+}
+
 #endif

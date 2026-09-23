@@ -130,8 +130,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         for (const auto& jName : context->GetCurrentJointList()) {
             bool isSel = (context->GetSelectedJointName() == jName);
             if (ImGui::Selectable(jName.c_str(), isSel)) {
-                context->GetSelectedJointName() = jName;
-                context->GetSelectedKeyIndex() = -1;
+                context->SetSelectedJointName(jName);
                 context->GetTempOverrides().clear();
                 context->UpdateAnimationPosePreview(sceneManager);
             }
@@ -883,6 +882,10 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
                     else context->PerformAnimUndo(sceneManager);
                 } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
                     context->PerformAnimRedo(sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+                    context->CopyKeyframe(io.KeyShift, sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+                    context->PasteKeyframe(sceneManager);
                 }
             } else {
                 if (ImGui::IsKeyPressed(ImGuiKey_I, false)) {

@@ -89,7 +89,7 @@ public:
 
     const Skeleton& GetSkeleton() const { return skeleton_; }
     const SkinCluster& GetSkinCluster() const { return skinCluster_; }
-
+    bool HasSkinCluster() const { return hasSkinCluster_; }
 
 private:
     Animation animation_;
@@ -102,6 +102,7 @@ private:
     Skeleton skeleton_;
     SkinCluster skinCluster_;
     bool hasSkeleton_ = false;
+    bool hasSkinCluster_ = false;
     std::map<std::string, JointOverride> jointOverrides_;
 
     struct JointPoseSnapshot {

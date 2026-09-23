@@ -1210,6 +1210,10 @@ void AnimationEditorViewport::DrawMainView(SceneManager* sceneManager, Camera** 
                 }
             } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
                 context->PerformAnimRedo(sceneManager);
+            } else if (ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+                context->CopyKeyframe(io.KeyShift, sceneManager);
+            } else if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+                context->PasteKeyframe(sceneManager);
             }
         } else {
             if (ImGui::IsKeyPressed(ImGuiKey_I, false)) {

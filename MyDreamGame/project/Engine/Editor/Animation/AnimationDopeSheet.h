@@ -27,9 +27,14 @@ public:
 
 private:
     bool isDraggingAnimKeyframe_ = false;
-    float dragAnimKeyOriginalTime_ = 0.0f;
+    std::string dragAnimKeyJointName_;
+    float dragAnimKeyStartTime_ = 0.0f;
+    float dragAnimKeyCurrentTime_ = 0.0f;
+
     bool isSummaryKeyDrag_ = false;
-    float dragSummaryOriginalTime_ = 0.0f;
+    float dragSummaryStartTime_ = 0.0f;
+    float dragSummaryCurrentTime_ = 0.0f;
+
     bool isAnimRulerScrubbing_ = false;
     float animTimelineZoom_ = 200.0f; // 1秒あたりのピクセル幅
     float animTimelineScrollX_ = 0.0f;

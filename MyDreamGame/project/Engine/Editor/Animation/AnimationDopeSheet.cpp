@@ -52,6 +52,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
     }
 
     if (ImGui::Begin("ドープシート (タイムライン)", &context->GetShowAnimEditor(), ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        ImGuiIO& io = ImGui::GetIO();
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) || ImGui::IsWindowAppearing()) {
             // Animation mode
             if (!context->GetIsAnimScenePushed()) {
@@ -342,19 +343,47 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("選択中ボーンのSRTキーフレームを登録 (I)");
 
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+
+        if (ImGui::Button("コピー (Ctrl+C)")) {
+            context->CopyKeyframe(io.KeyShift, sceneManager);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("選択中キーフレーム（または現在ポーズ）をコピー (Ctrl+C)\n※Shift+Ctrl+C で全ボーン一括コピー");
+
+        ImGui::SameLine();
+        bool hasClip = context->HasKeyframeClipboard();
+        if (!hasClip) ImGui::BeginDisabled();
+        if (ImGui::Button("貼り付け (Ctrl+V)")) {
+            context->PasteKeyframe(sceneManager);
+        }
+        if (!hasClip) ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("クリップボードのキーフレームを現在の時間に貼り付け (Ctrl+V)");
+
+        // ステータスメッセージ表示
+        context->UpdateStatusMessage(io.DeltaTime);
+        if (!context->GetStatusMessage().empty()) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.5f, 1.0f), "[INFO] %s", context->GetStatusMessage().c_str());
+        }
+
         ImGui::PopStyleVar(2);
 
         ImGui::Separator();
 
         // ショートカットキー判定
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
-            auto io = ImGui::GetIO();
             if (io.KeyCtrl && !io.WantTextInput) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
                     if (io.KeyShift) context->PerformAnimRedo(sceneManager);
                     else context->PerformAnimUndo(sceneManager);
                 } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
                     context->PerformAnimRedo(sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+                    context->CopyKeyframe(io.KeyShift, sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+                    context->PasteKeyframe(sceneManager);
                 }
             } else if (!io.WantTextInput) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
@@ -486,7 +515,6 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         int numVisibleTracks = static_cast<int>(visibleTracks.size());
         float totalHeight = rulerHeight + summaryHeight + numVisibleTracks * trackHeight + 50.0f;
 
-        ImGuiIO& io = ImGui::GetIO();
         ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
         float canvasWidth = (std::max)(canvasAvail.x, 300.0f);
 
@@ -600,14 +628,97 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
             drawList->AddText(ImVec2(x + 3, p0.y + 4), isSec ? IM_COL32(230, 235, 245, 255) : IM_COL32(170, 175, 185, 255), fBuf);
         }
 
-        // ルーラーおよびタイムライン全領域でのスクラブ（時間シーク）操作
+        // タイムライン領域のホバー判定
         ImVec2 mousePos = io.MousePos;
         bool isHoverTimeline = (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y >= p0.y && mousePos.y <= contentBottomY);
 
-        if (isHoverTimeline && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyCtrl) {
-            isAnimRulerScrubbing_ = true;
-            context->GetTempOverrides().clear();
+        // ----------------------------------------------------
+        // ドラッグ中・スクラブ中の更新処理（描画前に位置を更新することで高レスポンスを実現）
+        // ----------------------------------------------------
+        if (isSummaryKeyDrag_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
+                newT = std::clamp(newT, 0.0f, context->GetEditingAnimation().duration);
+                if (std::abs(newT - dragSummaryCurrentTime_) > 0.0001f) {
+                    for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
+                        for (auto& k : nAnim.rotate) {
+                            if (std::abs(k.time - dragSummaryCurrentTime_) < 0.005f) k.time = newT;
+                        }
+                        for (auto& k : nAnim.translate) {
+                            if (std::abs(k.time - dragSummaryCurrentTime_) < 0.005f) k.time = newT;
+                        }
+                        for (auto& k : nAnim.scale) {
+                            if (std::abs(k.time - dragSummaryCurrentTime_) < 0.005f) k.time = newT;
+                        }
+                    }
+                    dragSummaryCurrentTime_ = newT;
+                    context->GetAnimEditorTime() = newT;
+                    context->UpdateAnimationPosePreview(sceneManager);
+                }
+            } else {
+                for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
+                    std::sort(nAnim.rotate.begin(), nAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) { return a.time < b.time; });
+                    std::sort(nAnim.translate.begin(), nAnim.translate.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) { return a.time < b.time; });
+                    std::sort(nAnim.scale.begin(), nAnim.scale.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) { return a.time < b.time; });
+                }
+                if (std::abs(dragSummaryCurrentTime_ - dragSummaryStartTime_) > 0.0001f) {
+                    if (context->GetHasAnimDragPreSnapshot()) {
+                        context->GetUndoStack().push_back(context->GetAnimDragPreSnapshot());
+                        if (context->GetUndoStack().size() > 64) context->GetUndoStack().erase(context->GetUndoStack().begin());
+                        context->GetRedoStack().clear();
+                        context->GetHasAnimDragPreSnapshot() = false;
+                    }
+                } else {
+                    context->GetHasAnimDragPreSnapshot() = false;
+                }
+                isSummaryKeyDrag_ = false;
+            }
         }
+
+        if (isDraggingAnimKeyframe_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
+                newT = std::clamp(newT, 0.0f, context->GetEditingAnimation().duration);
+                if (std::abs(newT - dragAnimKeyCurrentTime_) > 0.0001f) {
+                    auto itNodeAnim = context->GetEditingAnimation().nodeAnimations.find(dragAnimKeyJointName_);
+                    if (itNodeAnim != context->GetEditingAnimation().nodeAnimations.end()) {
+                        auto& nodeAnim = itNodeAnim->second;
+                        for (auto& k : nodeAnim.rotate) {
+                            if (std::abs(k.time - dragAnimKeyCurrentTime_) < 0.005f) k.time = newT;
+                        }
+                        for (auto& k : nodeAnim.translate) {
+                            if (std::abs(k.time - dragAnimKeyCurrentTime_) < 0.005f) k.time = newT;
+                        }
+                        for (auto& k : nodeAnim.scale) {
+                            if (std::abs(k.time - dragAnimKeyCurrentTime_) < 0.005f) k.time = newT;
+                        }
+                    }
+                    dragAnimKeyCurrentTime_ = newT;
+                    context->GetAnimEditorTime() = newT;
+                    context->UpdateAnimationPosePreview(sceneManager);
+                }
+            } else {
+                auto itNodeAnim = context->GetEditingAnimation().nodeAnimations.find(dragAnimKeyJointName_);
+                if (itNodeAnim != context->GetEditingAnimation().nodeAnimations.end()) {
+                    auto& nodeAnim = itNodeAnim->second;
+                    std::sort(nodeAnim.rotate.begin(), nodeAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) { return a.time < b.time; });
+                    std::sort(nodeAnim.translate.begin(), nodeAnim.translate.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) { return a.time < b.time; });
+                    std::sort(nodeAnim.scale.begin(), nodeAnim.scale.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) { return a.time < b.time; });
+                }
+                if (std::abs(dragAnimKeyCurrentTime_ - dragAnimKeyStartTime_) > 0.0001f) {
+                    if (context->GetHasAnimDragPreSnapshot()) {
+                        context->GetUndoStack().push_back(context->GetAnimDragPreSnapshot());
+                        if (context->GetUndoStack().size() > 64) context->GetUndoStack().erase(context->GetUndoStack().begin());
+                        context->GetRedoStack().clear();
+                        context->GetHasAnimDragPreSnapshot() = false;
+                    }
+                } else {
+                    context->GetHasAnimDragPreSnapshot() = false;
+                }
+                isDraggingAnimKeyframe_ = false;
+            }
+        }
+
         if (isAnimRulerScrubbing_) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 float newTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
@@ -617,6 +728,8 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 isAnimRulerScrubbing_ = false;
             }
         }
+
+        bool keyClickedThisFrame = false;
 
         // ----------------------------------------------------
         // 4. サマリーキー（概要）の描画 & 操作
@@ -640,25 +753,23 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                     ImVec2(sX - 5.0f, sCenterY)
                 };
                 bool isNearCurTime = std::abs(sTime - context->GetAnimEditorTime()) < 0.01f;
-                ImU32 dCol = isNearCurTime ? IM_COL32(255, 220, 60, 255) : IM_COL32(230, 160, 40, 255);
+                bool isSummaryKeyActive = context->GetIsSummarySelected() && isNearCurTime;
+                ImU32 dCol = isSummaryKeyActive ? IM_COL32(255, 240, 70, 255) : (isNearCurTime ? IM_COL32(255, 215, 50, 255) : IM_COL32(230, 160, 40, 255));
                 drawList->AddConvexPolyFilled(dP, 4, dCol);
-                drawList->AddPolyline(dP, 4, IM_COL32(20, 20, 20, 255), ImDrawFlags_Closed, 1.0f);
+                drawList->AddPolyline(dP, 4, isSummaryKeyActive ? IM_COL32(255, 255, 255, 255) : IM_COL32(20, 20, 20, 255), ImDrawFlags_Closed, isSummaryKeyActive ? 1.5f : 1.0f);
 
-                // 左クリックでサマリーキー選択 & 時間シーク
+                // 左クリックでサマリーキー選択 & ドラッグ開始
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && std::abs(mousePos.x - sX) <= 6.0f && std::abs(mousePos.y - sCenterY) <= 6.0f) {
+                    keyClickedThisFrame = true;
+                    isSummaryKeyDrag_ = true;
+                    dragSummaryStartTime_ = sTime;
+                    dragSummaryCurrentTime_ = sTime;
                     context->GetAnimEditorTime() = sTime;
                     context->GetSelectedKeyIndex() = -1;
+                    context->SetIsSummarySelected(true);
                     context->GetTempOverrides().clear();
                     context->UpdateAnimationPosePreview(sceneManager);
-                }
-
-                // Ctrlキーを押しながらドラッグした場合のみキー移動を許可（通常ドラッグでの誤移動を完全防止）
-                if (io.KeyCtrl && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f) && std::abs(io.MouseClickedPos[0].x - sX) <= 6.0f && std::abs(io.MouseClickedPos[0].y - sCenterY) <= 6.0f) {
-                    if (!isSummaryKeyDrag_) {
-                        isSummaryKeyDrag_ = true;
-                        dragSummaryOriginalTime_ = sTime;
-                        context->BeginDragSnapshot("サマリーキー移動");
-                    }
+                    context->BeginDragSnapshot("サマリーキー移動");
                 }
 
                 // 右クリックでサマリーキー（全ボーンの該当フレームキー）を一括削除
@@ -688,64 +799,36 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 );
             }
             context->GetSelectedKeyIndex() = -1;
+            context->SetIsSummarySelected(true);
             context->UpdateAnimationPosePreview(sceneManager);
         }
 
-        if (isSummaryKeyDrag_) {
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
-                newT = std::clamp(newT, 0.0f, context->GetEditingAnimation().duration);
-                float dt = newT - dragSummaryOriginalTime_;
-                if (std::abs(dt) > 0.001f) {
-                    for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
-                        for (auto& k : nAnim.rotate) {
-                            if (std::abs(k.time - dragSummaryOriginalTime_) < 0.005f) {
-                                k.time = newT;
-                            }
-                        }
-                        for (auto& k : nAnim.translate) {
-                            if (std::abs(k.time - dragSummaryOriginalTime_) < 0.005f) {
-                                k.time = newT;
-                            }
-                        }
-                        for (auto& k : nAnim.scale) {
-                            if (std::abs(k.time - dragSummaryOriginalTime_) < 0.005f) {
-                                k.time = newT;
-                            }
-                        }
-                    }
-                    dragSummaryOriginalTime_ = newT;
-                    context->GetAnimEditorTime() = newT;
-                    context->UpdateAnimationPosePreview(sceneManager);
-                }
-            } else {
-                if (context->GetHasAnimDragPreSnapshot()) {
-                    context->GetUndoStack().push_back(context->GetAnimDragPreSnapshot());
-                    if (context->GetUndoStack().size() > 64) context->GetUndoStack().erase(context->GetUndoStack().begin());
-                    context->GetRedoStack().clear();
-                    context->GetHasAnimDragPreSnapshot() = false;
-                }
-                isSummaryKeyDrag_ = false;
-            }
-        }
+        // ----------------------------------------------------
+        // 5. 各可視トラックのキーフレーム（◆）描画 & 操作
+        // ----------------------------------------------------
+        std::string deleteTrackKeyJoint;
+        float deleteTrackKeyTime = -1.0f;
 
-        // ----------------------------------------------------
-        // 5. 各可視トラックのキーフレーム（◆）描画
-        // ----------------------------------------------------
         curTrackY = summaryY + summaryHeight;
         for (int i = 0; i < numVisibleTracks; ++i) {
             const auto& item = visibleTracks[i];
             const std::string& jointName = item.name;
             bool isSelected = (context->GetSelectedJointName() == jointName);
 
-            if (context->GetEditingAnimation().nodeAnimations.find(jointName) != context->GetEditingAnimation().nodeAnimations.end()) {
-                auto& nodeAnim = context->GetEditingAnimation().nodeAnimations[jointName];
-                for (size_t k = 0; k < nodeAnim.rotate.size(); ++k) {
-                    float kTime = nodeAnim.rotate[k].time;
+            auto itNodeAnim = context->GetEditingAnimation().nodeAnimations.find(jointName);
+            if (itNodeAnim != context->GetEditingAnimation().nodeAnimations.end()) {
+                const auto& nodeAnim = itNodeAnim->second;
+                std::set<float> trackKeyTimes;
+                for (const auto& k : nodeAnim.rotate) trackKeyTimes.insert(k.time);
+                for (const auto& k : nodeAnim.translate) trackKeyTimes.insert(k.time);
+                for (const auto& k : nodeAnim.scale) trackKeyTimes.insert(k.time);
+
+                float kCenterY = curTrackY + trackHeight * 0.5f;
+                int kIdx = 0;
+                for (float kTime : trackKeyTimes) {
                     float kX = timelineStartX + kTime * animTimelineZoom_ - animTimelineScrollX_;
                     if (kX >= timelineStartX - 10.0f && kX <= timelineEndX + 10.0f) {
-                        float kCenterY = curTrackY + trackHeight * 0.5f;
-                        bool isKfSelected = (isSelected && context->GetSelectedKeyIndex() == static_cast<int>(k));
+                        bool isKfSelected = (isSelected && !context->GetIsSummarySelected() && std::abs(kTime - context->GetAnimEditorTime()) < 0.01f);
                         
                         ImVec2 kdP[4] = {
                             ImVec2(kX, kCenterY - 4.5f),
@@ -755,68 +838,70 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                         };
                         ImU32 kCol = isKfSelected ? IM_COL32(255, 215, 50, 255) : IM_COL32(225, 225, 230, 255);
                         drawList->AddConvexPolyFilled(kdP, 4, kCol);
-                        drawList->AddPolyline(kdP, 4, IM_COL32(10, 10, 10, 255), ImDrawFlags_Closed, 1.0f);
+                        drawList->AddPolyline(kdP, 4, isKfSelected ? IM_COL32(255, 255, 255, 255) : IM_COL32(10, 10, 10, 255), ImDrawFlags_Closed, isKfSelected ? 1.5f : 1.0f);
 
-                        // 左クリックでキーフレーム選択 & 時間シーク
+                        // 左クリックでキーフレーム選択 & ドラッグ開始
                         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                             if (std::abs(mousePos.x - kX) <= 6.0f && std::abs(mousePos.y - kCenterY) <= 6.0f) {
+                                keyClickedThisFrame = true;
+                                isDraggingAnimKeyframe_ = true;
+                                dragAnimKeyJointName_ = jointName;
+                                dragAnimKeyStartTime_ = kTime;
+                                dragAnimKeyCurrentTime_ = kTime;
                                 context->GetSelectedJointName() = jointName;
-                                context->GetSelectedKeyIndex() = static_cast<int>(k);
+                                context->GetSelectedKeyIndex() = kIdx;
+                                context->SetIsSummarySelected(false);
                                 context->GetAnimEditorTime() = kTime;
                                 context->GetTempOverrides().clear();
                                 context->UpdateAnimationPosePreview(sceneManager);
+                                context->BeginDragSnapshot("キーフレーム移動");
                             }
                         }
 
-                        // Ctrlキーを押しながらドラッグした場合のみキー移動を許可（通常ドラッグでの誤移動を完全防止）
-                        if (io.KeyCtrl && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f) && isSelected) {
-                            if (std::abs(io.MouseClickedPos[0].x - kX) <= 6.0f && std::abs(io.MouseClickedPos[0].y - kCenterY) <= 6.0f) {
-                                if (!isDraggingAnimKeyframe_) {
-                                    isDraggingAnimKeyframe_ = true;
-                                    context->GetSelectedJointName() = jointName;
-                                    context->GetSelectedKeyIndex() = static_cast<int>(k);
-                                    dragAnimKeyOriginalTime_ = kTime;
-                                    context->BeginDragSnapshot("キーフレーム移動");
-                                }
+                        // 右クリックでそのボーンの該当キーフレームを削除
+                        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                            if (std::abs(mousePos.x - kX) <= 6.0f && std::abs(mousePos.y - kCenterY) <= 6.0f) {
+                                deleteTrackKeyJoint = jointName;
+                                deleteTrackKeyTime = kTime;
                             }
                         }
                     }
+                    kIdx++;
                 }
             }
 
             curTrackY += trackHeight;
         }
 
-        if (isDraggingAnimKeyframe_) {
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
-                newT = std::clamp(newT, 0.0f, context->GetEditingAnimation().duration);
-                auto& nodeAnim = context->GetEditingAnimation().nodeAnimations[context->GetSelectedJointName()];
-                if (context->GetSelectedKeyIndex() >= 0 && context->GetSelectedKeyIndex() < static_cast<int>(nodeAnim.rotate.size())) {
-                    float oldT = nodeAnim.rotate[context->GetSelectedKeyIndex()].time;
-                    nodeAnim.rotate[context->GetSelectedKeyIndex()].time = newT;
-                    for (auto& kf : nodeAnim.translate) {
-                        if (std::abs(kf.time - oldT) < 0.005f) kf.time = newT;
-                    }
-                    for (auto& kf : nodeAnim.scale) {
-                        if (std::abs(kf.time - oldT) < 0.005f) kf.time = newT;
-                    }
-                    context->GetAnimEditorTime() = newT;
-                    context->UpdateAnimationPosePreview(sceneManager);
-                }
-            } else {
-                auto& nodeAnim = context->GetEditingAnimation().nodeAnimations[context->GetSelectedJointName()];
-                std::sort(nodeAnim.rotate.begin(), nodeAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) {
-                    return a.time < b.time;
-                });
-                if (context->GetHasAnimDragPreSnapshot()) {
-                    context->GetUndoStack().push_back(context->GetAnimDragPreSnapshot());
-                    if (context->GetUndoStack().size() > 64) context->GetUndoStack().erase(context->GetUndoStack().begin());
-                    context->GetRedoStack().clear();
-                    context->GetHasAnimDragPreSnapshot() = false;
-                }
-                isDraggingAnimKeyframe_ = false;
-            }
+        if (!deleteTrackKeyJoint.empty() && deleteTrackKeyTime >= 0.0f) {
+            context->PushAnimUndoState("キーフレーム削除");
+            auto& nodeAnim = context->GetEditingAnimation().nodeAnimations[deleteTrackKeyJoint];
+            nodeAnim.rotate.erase(
+                std::remove_if(nodeAnim.rotate.begin(), nodeAnim.rotate.end(),
+                    [deleteTrackKeyTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - deleteTrackKeyTime) < 0.005f; }),
+                nodeAnim.rotate.end()
+            );
+            nodeAnim.translate.erase(
+                std::remove_if(nodeAnim.translate.begin(), nodeAnim.translate.end(),
+                    [deleteTrackKeyTime](const KeyframeVector3& kf) { return std::abs(kf.time - deleteTrackKeyTime) < 0.005f; }),
+                nodeAnim.translate.end()
+            );
+            nodeAnim.scale.erase(
+                std::remove_if(nodeAnim.scale.begin(), nodeAnim.scale.end(),
+                    [deleteTrackKeyTime](const KeyframeVector3& kf) { return std::abs(kf.time - deleteTrackKeyTime) < 0.005f; }),
+                nodeAnim.scale.end()
+            );
+            context->GetSelectedKeyIndex() = -1;
+            context->UpdateAnimationPosePreview(sceneManager);
+        }
+
+        // キーフレームがクリックされなかった場合のタイムライン余白クリック（スクラブ開始）
+        if (!keyClickedThisFrame && isHoverTimeline && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            isAnimRulerScrubbing_ = true;
+            context->GetTempOverrides().clear();
+            float newTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
+            context->GetAnimEditorTime() = std::clamp(newTime, 0.0f, context->GetEditingAnimation().duration);
+            context->UpdateAnimationPosePreview(sceneManager);
         }
 
         // ----------------------------------------------------
@@ -877,7 +962,18 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         }
 
         // サマリー行ラベル
-        drawList->AddText(ImVec2(p0.x + 8, summaryY + 4), IM_COL32(245, 185, 85, 255), "[Summary] 概要");
+        bool isSummaryActive = context->GetIsSummarySelected();
+        if (isSummaryActive) {
+            drawList->AddRectFilled(ImVec2(p0.x, summaryY), ImVec2(p0.x + trackListWidth, summaryY + summaryHeight), IM_COL32(75, 65, 45, 255));
+        }
+        drawList->AddText(ImVec2(p0.x + 8, summaryY + 4), isSummaryActive ? IM_COL32(255, 235, 120, 255) : IM_COL32(245, 185, 85, 255), "[Summary] 概要");
+
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            if (mousePos.x >= p0.x && mousePos.x <= p0.x + trackListWidth && mousePos.y >= summaryY && mousePos.y < summaryY + summaryHeight) {
+                context->SetIsSummarySelected(true);
+                context->GetSelectedKeyIndex() = -1;
+            }
+        }
 
         // 各可視トラック行（左カラム）のツリー描画
         curTrackY = summaryY + summaryHeight;
@@ -945,8 +1041,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 if (mousePos.x >= p0.x && mousePos.x <= p0.x + trackListWidth && mousePos.y >= curTrackY && mousePos.y < curTrackY + trackHeight) {
                     bool clickedToggle = item.hasChildren && (mousePos.x >= indentX && mousePos.x <= indentX + iconW + 4.0f);
                     if (!clickedToggle) {
-                        context->GetSelectedJointName() = jointName;
-                        context->GetSelectedKeyIndex() = -1;
+                        context->SetSelectedJointName(jointName);
                         context->GetTempOverrides().clear();
                         context->UpdateAnimationPosePreview(sceneManager);
                     }

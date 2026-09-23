@@ -42,6 +42,22 @@ struct TempBoneOverride {
     std::optional<Vector3> scale;
 };
 
+// キーフレームクリップボード用関節データ
+struct AnimJointKeyData {
+    std::optional<Vector3> translate;
+    std::optional<Quaternion> rotate;
+    std::optional<Vector3> scale;
+};
+
+// キーフレームクリップボード
+struct AnimKeyframeClipboard {
+    bool hasData = false;
+    bool isAllJoints = false; // true: 全ボーン(サマリー/全体ポーズ), false: 単一ボーン
+    std::string sourceJointName;
+    float sourceTime = 0.0f;
+    std::unordered_map<std::string, AnimJointKeyData> jointDataMap;
+};
+
 // アニメーションエディター Undo / Redo スナップショット
 struct AnimEditorSnapshot {
     Animation animation;
@@ -192,6 +208,25 @@ public:
     void InsertSelectedJointSRTKey(SceneManager* sceneManager);
     void InsertAllJointsSRTKey(SceneManager* sceneManager);
 
+    // キーフレーム コピー & ペースト
+    void CopyKeyframe(bool forceAllJoints = false, SceneManager* sceneManager = nullptr);
+    void PasteKeyframe(SceneManager* sceneManager);
+    bool HasKeyframeClipboard() const { return keyframeClipboard_.hasData; }
+    const AnimKeyframeClipboard& GetKeyframeClipboard() const { return keyframeClipboard_; }
+
+    // ステータスメッセージ (UI通知)
+    void SetStatusMessage(const std::string& msg, float durationSec = 2.5f) {
+        statusMessage_ = msg;
+        statusMessageTimer_ = durationSec;
+    }
+    const std::string& GetStatusMessage() const { return statusMessage_; }
+    void UpdateStatusMessage(float dt) {
+        if (statusMessageTimer_ > 0.0f) {
+            statusMessageTimer_ -= dt;
+            if (statusMessageTimer_ <= 0.0f) statusMessage_.clear();
+        }
+    }
+
     // 対称編集
     std::string FindOppositeJointName(const std::string& jointName, bool axisX = true, bool axisY = false, bool axisZ = false, const Skeleton* skeleton = nullptr);
 
@@ -225,8 +260,13 @@ public:
     void SetSelectedJointName(const std::string& name) {
         animEditorSelectedJointName_ = name;
         animEditorSelectedKeyIndex_ = -1;
+        isSummarySelected_ = false;
         EnsureJointVisibleInTree(name);
     }
+
+    bool& GetIsSummarySelected() { return isSummarySelected_; }
+    bool GetIsSummarySelected() const { return isSummarySelected_; }
+    void SetIsSummarySelected(bool s) { isSummarySelected_ = s; }
 
     int& GetSelectedProperty() { return animEditorSelectedProperty_; }
     int GetSelectedProperty() const { return animEditorSelectedProperty_; }
@@ -348,5 +388,10 @@ private:
     bool animSymmetryAxisY_ = false;
     bool animSymmetryAxisZ_ = false;
     std::map<std::string, std::string> customSymmetryMap_;
+
+    AnimKeyframeClipboard keyframeClipboard_;
+    bool isSummarySelected_ = false;
+    std::string statusMessage_;
+    float statusMessageTimer_ = 0.0f;
 };
 #endif

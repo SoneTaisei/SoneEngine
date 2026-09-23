@@ -31,6 +31,10 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
         if (!LoadAnimationFromJsonFile(holdingWallAnimation_, "resources/json/shared/Player/holding_wall.json")) {
             holdingWallAnimation_ = idleAnimation_;
         }
+        if (!LoadAnimationFromJsonFile(holdingWallMoveAnimation_, "resources/json/shared/Player/holding_wall_Move.json") &&
+            !LoadAnimationFromJsonFile(holdingWallMoveAnimation_, "resources/json/shared/Player/holding_wall_move.json")) {
+            holdingWallMoveAnimation_ = wallClimbAnimation_;
+        }
         if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
             airDashAnimation_ = CreateDefaultAirDashAnimation();
         }
@@ -135,11 +139,11 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     bool isClimbMoving = (std::abs(state.velocity_.y) > 0.1f);
                     if (isClimbMoving) {
                         // 上下移動に合わせてアニメーション時間を進行
-                        float speedFactor = std::clamp(std::abs(state.velocity_.y) / 5.0f, 0.5f, 2.0f);
-                        wallClimbAnimTime_ = AdvanceAnimationTime(wallClimbAnimTime_, wallClimbAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
+                        float speedFactor = std::clamp(std::abs(state.velocity_.y) / 4.0f, 0.6f, 2.5f);
+                        holdingWallMoveAnimTime_ = AdvanceAnimationTime(holdingWallMoveAnimTime_, holdingWallMoveAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
                         animator_->ClearJointOverrides();
-                        animator_->SetAnimation(wallClimbAnimation_);
-                        animator_->SetTime(wallClimbAnimTime_);
+                        animator_->SetAnimation(holdingWallMoveAnimation_);
+                        animator_->SetTime(holdingWallMoveAnimTime_);
                         animator_->Stop(); // 手動で時間を制御
                     } else {
                         // 静止した崖つかまり・壁つかまり時は holding_wall アニメーションを再生（最後のフレームで停止）
@@ -154,6 +158,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     if (climbBlendFactor_ < 0.0f) climbBlendFactor_ = 0.0f;
                     wallClimbAnimTime_ = 0.0f;
                     holdingWallAnimTime_ = 0.0f;
+                    holdingWallMoveAnimTime_ = 0.0f;
 
                     animator_->ClearJointOverrides();
                     animator_->Play(); // 通常アニメーションは自動再生

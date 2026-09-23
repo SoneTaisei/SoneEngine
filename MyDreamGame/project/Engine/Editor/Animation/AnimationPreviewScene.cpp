@@ -178,11 +178,11 @@ void AnimationPreviewScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         gridFloorObj_->Draw();
     }
 
-    // 選択されたオブジェクトのみを描画
-    if (selectedGameObject_) {
-        selectedGameObject_->Draw();
-    } else if (!gameObjects_.empty() && gameObjects_[0]) {
-        gameObjects_[0]->Draw();
+    // シーン内の全オブジェクトを描画
+    for (auto& obj : gameObjects_) {
+        if (obj) {
+            obj->Draw();
+        }
     }
 
     Renderer::GetInstance()->RenderComponents();
@@ -291,26 +291,32 @@ const char* AnimationPreviewScene::GetDefaultHierarchyJsonPath() {
 
 std::shared_ptr<GameObject> AnimationPreviewScene::CreateDefaultPlayerObject() {
     ID3D12Device* device = DirectXCommon::GetInstance()->GetDevice();
-    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/player", "Player.gltf");
-    if (!playerModel) return nullptr;
+    Model* playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/gaikotu", "scene.gltf");
+    if (!playerModel) {
+        playerModel = ModelManager::GetInstance()->GetModel("resources/Object/Original/player", "Player.gltf");
+        if (!playerModel) return nullptr;
+    }
 
     auto playerObj = std::make_shared<GameObject>("Player");
     auto playerTransform = playerObj->AddComponent<TransformComponent>();
     playerTransform->SetPosition({ 0.0f, 0.0f, 0.0f });
-    playerTransform->SetScale({ 2.0f, 2.0f, 2.0f });
-    playerTransform->SetRotation({ 0.0f, 3.14159265f, 0.0f });
+    playerTransform->SetScale({ 1.0f, 1.0f, 1.0f });
+    playerTransform->SetRotation({ 0.0f, 0.0f, 0.0f });
 
-    std::string texPath = "resources/Object/Original/player/white.png";
+    std::string texPath = "resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png";
+    if (!std::filesystem::exists(texPath)) {
+        texPath = "resources/Object/Original/gaikotu/mini_simple_material_primary_baseColor.png";
+    }
     uint32_t playerTexIndex = TextureManager::GetInstance()->Load(texPath);
     D3D12_GPU_DESCRIPTOR_HANDLE playerTH = TextureManager::GetInstance()->GetGpuHandle(playerTexIndex);
 
     auto playerRenderer = playerObj->AddComponent<MeshRendererComponent>();
     playerRenderer->Initialize(device, playerModel);
-    playerRenderer->SetModelInfo("resources/Object/Original/player", "Player.gltf");
+    playerRenderer->SetModelInfo("resources/Object/Original/gaikotu", "scene.gltf");
     playerRenderer->SetTexturePath(texPath);
     playerRenderer->SetTextureHandle(playerTH);
     playerModel->SetTextureHandle(playerTH);
-    playerRenderer->GetMaterial().color = { 0.85f, 0.85f, 0.88f, 1.0f };
+    playerRenderer->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
     playerRenderer->GetMaterial().lightingType = 1;
     playerRenderer->GetMaterial().shininess = 40.0f;
 
@@ -404,10 +410,18 @@ bool AnimationPreviewScene::LoadHierarchyFromJson(const std::string& filePath) {
             std::string tex = item.value("texturePath", "");
             bool isPlayer = item.value("isPlayer", false);
 
+            // 旧Player.gltf設定をボーン付きガイコツモデルに自動マイグレーション
+            if (isPlayer && (file == "Player.gltf" || dir.find("player") != std::string::npos)) {
+                dir = "resources/Object/Original/gaikotu";
+                file = "scene.gltf";
+                tex = "resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png";
+            }
+
             if (dir.empty() || file.empty()) {
                 if (isPlayer) {
-                    dir = "resources/Object/Original/player";
-                    file = "Player.gltf";
+                    dir = "resources/Object/Original/gaikotu";
+                    file = "scene.gltf";
+                    tex = "resources/Object/Original/gaikotu/textures/mini_simple_material_primary_baseColor.png";
                 } else {
                     continue;
                 }

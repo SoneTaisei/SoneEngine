@@ -67,5 +67,6 @@ public:
     D3D12_GPU_VIRTUAL_ADDRESS GetTransformGPUAddress() const { return transformCB_.gpuAddress; }
     TransformMatrix* GetMappedTransform() const { return mappedTransform_; }
     D3D12_GPU_VIRTUAL_ADDRESS GetMaterialGPUAddress() const { return materialCB_.gpuAddress; }
+    Material* GetMappedMaterial() const { return mappedMaterial_; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const { return textureHandle_; }
 };

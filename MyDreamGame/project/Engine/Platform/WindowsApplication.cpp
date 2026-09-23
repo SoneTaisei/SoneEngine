@@ -55,7 +55,7 @@ void WindowsApplication::Initialize() {
 
     // 窓の作成を任せる
     window_ = std::make_unique<Window>();
-    window_->Create(L"3023_怪盗チェーン", kWindowWidth_, kWindowHeight_);
+    window_->Create(L"MyDreamGameEngine", kWindowWidth_, kWindowHeight_);
 
     LoadWindowConfig();
 

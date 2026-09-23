@@ -945,6 +945,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (animationEditor_ && !animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
                     animationEditor_->SetAnimScenePushed(true);
+                    selectedObject_ = nullptr;
+                    selectedPrimitive_ = nullptr;
+                    auto* pushedScene = dynamic_cast<AnimationPreviewScene*>(sceneManager->GetCurrentScene());
+                    if (pushedScene && !pushedScene->GetGameObjects().empty()) {
+                        selectedGameObject_ = pushedScene->GetGameObjects()[0];
+                        pushedScene->SetSelectedGameObject(selectedGameObject_);
+                    }
                     animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
                     animationEditor_->RefreshAnimationJointList(sceneManager);
                 }
@@ -953,8 +960,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (animationEditor_) {
                 auto* animScene = dynamic_cast<AnimationPreviewScene*>(sceneManager->GetCurrentScene());
                 if (animScene) {
-                    if (!selectedGameObject_ && !animScene->GetGameObjects().empty()) {
-                        selectedGameObject_ = animScene->GetGameObjects()[0];
+                    const auto& animObjs = animScene->GetGameObjects();
+                    bool isValidSelection = false;
+                    for (const auto& o : animObjs) {
+                        if (o && o == selectedGameObject_) {
+                            isValidSelection = true;
+                            break;
+                        }
+                    }
+                    if (!isValidSelection && !animObjs.empty()) {
+                        selectedGameObject_ = animObjs[0];
                     }
                     animScene->SetSelectedGameObject(selectedGameObject_);
                 }
