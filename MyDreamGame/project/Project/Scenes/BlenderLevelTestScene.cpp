@@ -6,7 +6,13 @@
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
+#include "Core/TimeManager.h"
+#include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
+#include "Scene/SceneManager.h"
+#include "Scene/SceneFactory.h"
 #include <filesystem>
+#include <cmath>
 
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
@@ -146,6 +152,17 @@ void BlenderLevelTestScene::OnExit(SceneManager* sceneManager) {
 }
 
 void BlenderLevelTestScene::Update(SceneManager* sceneManager) {
+    auto keyboard = KeyboardInput::GetInstance();
+    auto gamepad = GamepadInput::GetInstance();
+
+    // 戻る操作（タイトルへ）
+    if (keyboard->IsKeyPressed(DIK_ESCAPE) ||
+        gamepad->IsButtonPressed(GamepadButton::Back) ||
+        gamepad->IsButtonPressed(GamepadButton::B)) {
+        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
+        return;
+    }
+
     // 1. カメラの更新と CameraManager への伝達
     if (useDebugCamera_ && debugCamera_) {
         debugCamera_->Update();
@@ -163,8 +180,23 @@ void BlenderLevelTestScene::Update(SceneManager* sceneManager) {
         );
     }
 
-    // 2. 3Dレベルオブジェクト群の更新
+    // 2. 3Dレベルオブジェクト群の更新（コントローラーでプレイヤーを操作可能）
     if (player_) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        Vector2 stick = gamepad->GetLeftStick();
+        if (std::abs(stick.x) > 0.05f || std::abs(stick.y) > 0.05f) {
+            float speed = 8.0f;
+            Vector3 pos = player_->GetTranslation();
+            pos.x += stick.x * speed * dt;
+            pos.z += stick.y * speed * dt;
+            player_->SetTranslation(pos);
+        }
+        Vector2 rStick = gamepad->GetRightStick();
+        if (std::abs(rStick.x) > 0.1f) {
+            Vector3 rot = player_->GetRotation();
+            rot.y += rStick.x * 3.0f * dt;
+            player_->SetRotation(rot);
+        }
         player_->Update();
     }
     for (auto& enemy : enemies_) {
@@ -255,6 +287,13 @@ std::vector<Object3D*> BlenderLevelTestScene::GetObjects() {
 void BlenderLevelTestScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
     ImGui::Begin("Blender 3D Level Test Controls");
+
+    if (GamepadInput::GetInstance()->IsConnected()) {
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[Controller] LStick: Move Player, RStick: Rotate, [B]/[Back]: Return to Title");
+    } else {
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[Keyboard] ESC: Return to Title");
+    }
+    ImGui::Separator();
 
     ImGui::Checkbox("Use Debug Camera", &useDebugCamera_);
 

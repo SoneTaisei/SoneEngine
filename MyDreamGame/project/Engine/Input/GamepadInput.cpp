@@ -80,6 +80,10 @@ void GamepadInput::Update() {
 			device_->GetDeviceState(sizeof(DIJOYSTATE2), &state_);
 		}
 	}
+
+	// スティックの前回値と現在値を更新（エッジ判定用）
+	preLeftStick_ = curLeftStick_;
+	curLeftStick_ = GetLeftStick();
 }
 
 bool GamepadInput::IsConnected() const {
@@ -234,6 +238,78 @@ bool GamepadInput::IsDPadRight() {
 		if (pov == 9000) return true;
 	}
 	return false;
+}
+
+bool GamepadInput::IsDPadPressedUp() {
+	if (isXInputConnected_) {
+		bool curr = CheckXInputButton(xState_, GamepadButton::DPadUp);
+		bool prev = CheckXInputButton(preXState_, GamepadButton::DPadUp);
+		if (curr && !prev) return true;
+	}
+	if (device_) {
+		bool curr = (state_.rgdwPOV[0] == 0);
+		bool prev = (preState_.rgdwPOV[0] == 0);
+		if (curr && !prev) return true;
+	}
+	return false;
+}
+
+bool GamepadInput::IsDPadPressedDown() {
+	if (isXInputConnected_) {
+		bool curr = CheckXInputButton(xState_, GamepadButton::DPadDown);
+		bool prev = CheckXInputButton(preXState_, GamepadButton::DPadDown);
+		if (curr && !prev) return true;
+	}
+	if (device_) {
+		bool curr = (state_.rgdwPOV[0] == 18000);
+		bool prev = (preState_.rgdwPOV[0] == 18000);
+		if (curr && !prev) return true;
+	}
+	return false;
+}
+
+bool GamepadInput::IsDPadPressedLeft() {
+	if (isXInputConnected_) {
+		bool curr = CheckXInputButton(xState_, GamepadButton::DPadLeft);
+		bool prev = CheckXInputButton(preXState_, GamepadButton::DPadLeft);
+		if (curr && !prev) return true;
+	}
+	if (device_) {
+		bool curr = (state_.rgdwPOV[0] == 27000);
+		bool prev = (preState_.rgdwPOV[0] == 27000);
+		if (curr && !prev) return true;
+	}
+	return false;
+}
+
+bool GamepadInput::IsDPadPressedRight() {
+	if (isXInputConnected_) {
+		bool curr = CheckXInputButton(xState_, GamepadButton::DPadRight);
+		bool prev = CheckXInputButton(preXState_, GamepadButton::DPadRight);
+		if (curr && !prev) return true;
+	}
+	if (device_) {
+		bool curr = (state_.rgdwPOV[0] == 9000);
+		bool prev = (preState_.rgdwPOV[0] == 9000);
+		if (curr && !prev) return true;
+	}
+	return false;
+}
+
+bool GamepadInput::IsLeftStickPushedLeft(float threshold) {
+	return curLeftStick_.x <= -threshold && preLeftStick_.x > -threshold;
+}
+
+bool GamepadInput::IsLeftStickPushedRight(float threshold) {
+	return curLeftStick_.x >= threshold && preLeftStick_.x < threshold;
+}
+
+bool GamepadInput::IsLeftStickPushedUp(float threshold) {
+	return curLeftStick_.y >= threshold && preLeftStick_.y < threshold;
+}
+
+bool GamepadInput::IsLeftStickPushedDown(float threshold) {
+	return curLeftStick_.y <= -threshold && preLeftStick_.y > -threshold;
 }
 
 // --- アナログスティック ---

@@ -3,6 +3,7 @@
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneManager.h"
 #include "Resource/Sprite/SpriteCommon.h"
@@ -110,7 +111,10 @@ void TitleScene::Update(SceneManager *sceneManager) {
     if (isFirstFrame_) {
         isFirstFrame_ = false;
     } else {
-        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+        bool isTriggered = KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) ||
+                           GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::A) ||
+                           GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start);
+        if (isTriggered) {
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
             return;
         }
@@ -269,7 +273,7 @@ void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     
     ImGui::SetWindowFontScale(2.0f);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 50.0f);
-    const char* startText = "Press SPACE to Start";
+    const char* startText = GamepadInput::GetInstance()->IsConnected() ? "Press SPACE or [A] to Start" : "Press SPACE to Start";
     float startTextWidth = ImGui::CalcTextSize(startText).x;
     ImGui::SetCursorPosX((windowWidth - startTextWidth) * 0.5f);
     

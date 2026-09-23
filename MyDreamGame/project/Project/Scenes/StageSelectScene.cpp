@@ -7,6 +7,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include "Scene/SceneFactory.h"
 #include "GameScene.h"
 #include "Core/TimeManager.h"
@@ -115,24 +116,45 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
     }
 
     auto keyboard = KeyboardInput::GetInstance();
-    if (keyboard->IsKeyPressed(DIK_A)) {
+    auto gamepad = GamepadInput::GetInstance();
+
+    bool moveLeft = keyboard->IsKeyPressed(DIK_A) || keyboard->IsKeyPressed(DIK_LEFT) ||
+                    gamepad->IsDPadPressedLeft() || gamepad->IsLeftStickPushedLeft() ||
+                    gamepad->IsButtonPressed(GamepadButton::LB);
+    if (moveLeft) {
         currentStageIndex_--;
         if (currentStageIndex_ < 0) {
             currentStageIndex_ = stageCount_ - 1;
         }
     }
-    if (keyboard->IsKeyPressed(DIK_D)) {
+
+    bool moveRight = keyboard->IsKeyPressed(DIK_D) || keyboard->IsKeyPressed(DIK_RIGHT) ||
+                     gamepad->IsDPadPressedRight() || gamepad->IsLeftStickPushedRight() ||
+                     gamepad->IsButtonPressed(GamepadButton::RB);
+    if (moveRight) {
         currentStageIndex_++;
         if (currentStageIndex_ >= stageCount_) {
             currentStageIndex_ = 0;
         }
     }
 
-    if (keyboard->IsKeyPressed(DIK_SPACE)) {
+    // 決定（ゲーム開始）
+    bool confirm = keyboard->IsKeyPressed(DIK_SPACE) || keyboard->IsKeyPressed(DIK_RETURN) ||
+                   gamepad->IsButtonPressed(GamepadButton::A) || gamepad->IsButtonPressed(GamepadButton::Start);
+    if (confirm) {
         if (currentStageIndex_ >= 0 && currentStageIndex_ < stageConfigs_.size()) {
             GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + std::string(stageConfigs_[currentStageIndex_].jsonPath);
         }
         sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
+        return;
+    }
+
+    // 戻る（タイトル画面へ）
+    bool cancel = keyboard->IsKeyPressed(DIK_ESCAPE) ||
+                  gamepad->IsButtonPressed(GamepadButton::B) ||
+                  gamepad->IsButtonPressed(GamepadButton::Back);
+    if (cancel) {
+        sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
         return;
     }
 }
@@ -182,7 +204,11 @@ void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     ImGui::SetNextWindowBgAlpha(0.35f); 
     if (ImGui::Begin("StageSelect Overlay", nullptr, windowFlags)) {
         ImGui::Text("選択中のステージ: %d", currentStageIndex_ + 1);
-        ImGui::Text("A/Dで変更、SPACEで開始");
+        if (GamepadInput::GetInstance()->IsConnected()) {
+            ImGui::Text("十字キー/スティック/LB・RBで変更、[A]で開始、[B]で戻る");
+        } else {
+            ImGui::Text("A/Dで変更、SPACEで開始、ESCで戻る");
+        }
     }
     ImGui::End();
 

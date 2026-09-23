@@ -63,10 +63,22 @@ public:
     bool IsDPadLeft();
     bool IsDPadRight();
 
+    // D-Pad押下瞬間判定
+    bool IsDPadPressedUp();
+    bool IsDPadPressedDown();
+    bool IsDPadPressedLeft();
+    bool IsDPadPressedRight();
+
     // --- アナログスティック入力 ---
     // -1.0f ~ 1.0f の範囲で正規化された値を取得（デッドゾーン処理済み）
     Vector2 GetLeftStick();
     Vector2 GetRightStick();
+
+    // 左スティック倒し込みトリガー（メニュー用エッジ検出）
+    bool IsLeftStickPushedLeft(float threshold = 0.5f);
+    bool IsLeftStickPushedRight(float threshold = 0.5f);
+    bool IsLeftStickPushedUp(float threshold = 0.5f);
+    bool IsLeftStickPushedDown(float threshold = 0.5f);
 
     // --- トリガー入力 ---
     // 0.0f ~ 1.0f の範囲で取得
@@ -78,6 +90,10 @@ private:
     ~GamepadInput() = default;
     GamepadInput(const GamepadInput &) = delete;
     GamepadInput &operator=(const GamepadInput &) = delete;
+
+    // スティックエッジ検出用
+    Vector2 preLeftStick_{};
+    Vector2 curLeftStick_{};
 
     // XInput関連
     XINPUT_STATE xState_{};

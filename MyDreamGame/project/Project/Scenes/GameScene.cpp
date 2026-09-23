@@ -15,6 +15,7 @@
 #include "Graphics/TextureManager.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include "Graphics/Skybox.h"
 #include "Core/Utility/ParameterManager.h"
 
@@ -153,7 +154,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     } else if (gameState_ == GameState::Clear) {
         stateTimer_ += dt;
-        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE)) {
+        bool isReturn = KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::A) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start);
+        if (isReturn) {
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
         }
@@ -174,8 +178,11 @@ void GameScene::Update(SceneManager *sceneManager) {
         bool isRewinding = false;
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
             auto keyboard = KeyboardInput::GetInstance();
-            if ((keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) &&
-                keyboard->IsKeyDown(DIK_LEFT)) {
+            auto gamepad = GamepadInput::GetInstance();
+            bool keyRewind = (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) &&
+                             keyboard->IsKeyDown(DIK_LEFT);
+            bool padRewind = gamepad->IsButtonDown(GamepadButton::LB) || (gamepad->GetLeftTrigger() > 0.3f);
+            if (keyRewind || padRewind) {
                 isRewinding = true;
             }
         }
@@ -412,10 +419,19 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::Begin("Operation Guide", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
 
         ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
+        if (GamepadInput::GetInstance()->IsConnected()) {
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "LStick / D-Pad : Move (Up/Down to Climb)");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[A] : Jump / Wall Jump");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[X] : Dash");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[RB] / [RT] : Wall Cling");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[LB] / [LT] : Rewind");
+        } else {
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
+            ImGui::TextColored(ImVec4(1,1,1,0.8f), "Ctrl + Left : Rewind");
+        }
         ImGui::End();
     }
 
@@ -450,7 +466,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
         ImGui::SetWindowFontScale(2.0f);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 30.0f);
-        const char* returnText = "Press SPACE to Return Title";
+        const char* returnText = GamepadInput::GetInstance()->IsConnected() ? "Press SPACE or [A] to Return Title" : "Press SPACE to Return Title";
         float returnWidth = ImGui::CalcTextSize(returnText).x;
         ImGui::SetCursorPosX((ImGui::GetWindowSize().x - returnWidth) * 0.5f);
         
