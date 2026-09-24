@@ -1,10 +1,11 @@
-﻿#pragma once
+#pragma once
 #include "Scene/IScene.h"
 #include "Resource/Model/Model.h"
 #include <d3d12.h>
 #include <memory>
 #include "GameObject/GameObject.h"
 #include "Component/MeshRendererComponent.h"
+#include "Component/PrimitiveRendererComponent.h"
 #include "Component/AnimatorComponent.h"
 #include "Graphics/Skybox.h"
 
@@ -48,6 +49,24 @@ private:
     uint32_t skyboxTextureHandle_ = 0;
 
     float inputDelayTimer_ = 0.5f; // シーン遷移直後の入力受付までの遅延時間（秒）
+
+    static constexpr int kMaxSelectableStages = 3;
+
+    struct StageBoxData {
+        std::shared_ptr<GameObject> gameObject;
+        Vector3 position{0.0f, 0.0f, 0.0f};
+        Vector3 rotation{0.0f, 0.0f, 0.0f};
+        float scale = 1.0f;
+    };
+    std::vector<StageBoxData> stageBoxes_;
+
+    float boxSpacing_ = 3.2f;
+    float selectedScale_ = 1.8f;
+    float unselectedScale_ = 1.2f;
+    float selectedZ_ = 0.0f;
+    float unselectedZ_ = 1.5f;
+    float rotateSpeed_ = 1.2f;
+    bool enableLighting_ = false;
 
     std::vector<std::string> availableMapFiles_;
     void RefreshAvailableMapFiles();

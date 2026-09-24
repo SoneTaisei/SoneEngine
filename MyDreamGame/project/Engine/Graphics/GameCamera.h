@@ -8,6 +8,7 @@ public:
     void SetResolution(int kClientWidth, int kClientHeight) override;
     void Update(); // 特に操作はないが、追従処理などをここに書く
     void UpdateMatrix() override;
+    void Reset(); // カメラを3D・初期位置へリセット
 
     // 画面揺れの開始
     void Shake(float strength, float duration);

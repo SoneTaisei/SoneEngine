@@ -39,8 +39,7 @@ void GameScene::OnExit(SceneManager* sceneManager) {
         sceneManager->SetData("LastScore", player_->GetScore());
     }
     if (gameCamera_) {
-        gameCamera_->SetScale(initialCameraScale_);
-        gameCamera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
+        gameCamera_->Reset();
     }
 }
 

@@ -10,11 +10,26 @@
 
 void GameCamera::Initialize(int kClientWidth, int kClientHeight) {
     Camera::Initialize(kClientWidth, kClientHeight);
+    Reset();
+}
+
+void GameCamera::Reset() {
     isOrthographic_ = false;
     followTarget_ = nullptr;
-    // 初期位置の設定（例えばプレイヤーの少し後ろ）
-    transform_.translate = { 0.0f, 0.0f, -10.0f };
+    isFollowEnabled_ = false;
+    followOffset_ = { 0.0f, 0.0f, 0.0f };
+    rooms_.clear();
+    currentRoomX_ = 0;
+    currentRoomY_ = 0;
+    isTransitioning_ = false;
+    shakeStrength_ = 0.0f;
+    shakeDuration_ = 0.0f;
+    shakeTimer_ = 0.0f;
+    shakeOffset_ = { 0.0f, 0.0f, 0.0f };
+    scale_ = 1.0f;
+    transform_.translate = { 0.0f, 0.0f, -9.0f };
     transform_.rotate = { 0.0f, 0.0f, 0.0f };
+    fov_ = 0.45f;
     UpdateMatrix();
 }
 
