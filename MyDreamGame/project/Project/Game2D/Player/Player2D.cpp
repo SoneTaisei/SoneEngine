@@ -55,8 +55,12 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
     }
 }
 
-void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning) {
+void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canControl) {
     input_.Update(currentInput_);
+    if (!canControl) {
+        currentInput_ = InputState{};
+        state_.velocity_.x = 0.0f;
+    }
     // パラメータに基づいてPrimitiveObjectのスケールを常に反映させる（JSONロード時のバグ対策）
     if (!state_.isRespawning_ && visuals_.GetPrimitiveObject()) {
         visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });

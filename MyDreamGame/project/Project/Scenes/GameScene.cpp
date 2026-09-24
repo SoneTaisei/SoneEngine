@@ -13,6 +13,7 @@
 #include "Renderer/Renderer.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
+#include "Resource/Sprite/SpriteCommon.h"
 #include "GameObject/Object3D.h"
 #include "Input/KeyboardInput.h"
 #include "Input/GamepadInput.h"
@@ -36,6 +37,10 @@ void GameScene::OnExit(SceneManager* sceneManager) {
     // スコアなどを保存してTitleやStageSelectに渡す
     if (player_) {
         sceneManager->SetData("LastScore", player_->GetScore());
+    }
+    if (gameCamera_) {
+        gameCamera_->SetScale(initialCameraScale_);
+        gameCamera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
     }
 }
 
@@ -96,11 +101,79 @@ void GameScene::Initialize() {
         float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
         float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
         gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+        if (map_) {
+            gameCamera_->SetRooms(map_->GetRooms());
+        }
         // プレイヤーの位置をカメラ追従ターゲットに設定
         gameCamera_->SetFollowTarget(&player_->GetPosition());
+        gameCamera_->SnapToTarget();
+        initialCameraScale_ = gameCamera_->GetScale();
         Log("GameScene::Initialize: Camera configured\n");
     }
 
+    // 8. 開始演出用スプライトの初期化 (READY / GO / タイムバー)
+    readyTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/ready.png");
+    goTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/go.png");
+    whiteTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/white.png");
+    if (spriteCommon_) {
+        float centerX = 1280.0f * 0.5f;
+
+        readySprite_ = std::make_unique<Sprite>();
+        readySprite_->Initialize(spriteCommon_, readyTextureHandle_);
+        float readyScale = ParameterManager::GetInstance()->GetValue("GameScene", "readySpriteScale", 2.0f);
+        float readyW = 240.0f * readyScale;
+        float readyH = 92.0f * readyScale;
+        float centerY = ParameterManager::GetInstance()->GetValue("GameScene", "readySpriteCenterY", 360.0f);
+        readySprite_->SetPosition({ centerX - readyW * 0.5f, centerY - readyH * 0.5f });
+        readySprite_->SetSize({ readyW, readyH });
+        readySprite_->SetColor({ 1.0f, 0.15f, 0.15f, 0.0f }); // 赤色
+
+        goSprite_ = std::make_unique<Sprite>();
+        goSprite_->Initialize(spriteCommon_, goTextureHandle_);
+        float goScale = ParameterManager::GetInstance()->GetValue("GameScene", "goSpriteScale", 2.0f);
+        float goW = 144.0f * goScale;
+        float goH = 92.0f * goScale;
+        float goCenterY = ParameterManager::GetInstance()->GetValue("GameScene", "goSpriteCenterY", 360.0f);
+        goSprite_->SetPosition({ centerX - goW * 0.5f, goCenterY - goH * 0.5f });
+        goSprite_->SetSize({ goW, goH });
+        goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, 0.0f }); // 黄色
+
+        // タイムバー (細長い四角形)
+        float barWidth = ParameterManager::GetInstance()->GetValue("GameScene", "readyBarWidth", 360.0f);
+        float barHeight = ParameterManager::GetInstance()->GetValue("GameScene", "readyBarHeight", 8.0f);
+        float barOffsetY = ParameterManager::GetInstance()->GetValue("GameScene", "readyBarOffsetY", 110.0f);
+        float barY = centerY + barOffsetY;
+
+        readyBarBgSprite_ = std::make_unique<Sprite>();
+        readyBarBgSprite_->Initialize(spriteCommon_, whiteTextureHandle_);
+        readyBarBgSprite_->SetPosition({ centerX - barWidth * 0.5f - 2.0f, barY - 2.0f });
+        readyBarBgSprite_->SetSize({ barWidth + 4.0f, barHeight + 4.0f });
+        readyBarBgSprite_->SetColor({ 0.1f, 0.1f, 0.1f, 0.0f });
+
+        readyBarFillSprite_ = std::make_unique<Sprite>();
+        readyBarFillSprite_->Initialize(spriteCommon_, whiteTextureHandle_);
+        readyBarFillSprite_->SetPosition({ centerX - barWidth * 0.5f, barY });
+        readyBarFillSprite_->SetSize({ barWidth, barHeight });
+        readyBarFillSprite_->SetColor({ 1.0f, 0.15f, 0.15f, 0.0f });
+
+        Log("GameScene::Initialize: Ready/Go Sprites Initialized\n");
+    }
+
+    // 9. クリア演出用スプライトの初期化
+    clearTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/clear.png");
+    if (spriteCommon_) {
+        clearSprite_ = std::make_unique<Sprite>();
+        clearSprite_->Initialize(spriteCommon_, clearTextureHandle_);
+        float clearScale = ParameterManager::GetInstance()->GetValue("GameScene", "clearSpriteScale", 2.0f);
+        float spriteW = 220.0f * clearScale;
+        float spriteH = 92.0f * clearScale;
+        float centerX = 1280.0f * 0.5f;
+        float centerY = ParameterManager::GetInstance()->GetValue("GameScene", "clearSpriteCenterY", 180.0f);
+        clearSprite_->SetPosition({ centerX - spriteW * 0.5f, centerY - spriteH * 0.5f });
+        clearSprite_->SetSize({ spriteW, spriteH });
+        clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f }); // 初期状態は非表示
+        Log("GameScene::Initialize: ClearSprite Initialized\n");
+    }
 
     Log("GameScene::Initialize: Finish\n");
 }
@@ -148,18 +221,182 @@ void GameScene::Update(SceneManager *sceneManager) {
     if (gameState_ == GameState::StartReady) {
         stateTimer_ += dt;
         float startReadyTime = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyTime", 2.0f);
+        float inputDelay = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyInputDelay", 1.0f);
+
+        float centerX = 1280.0f * 0.5f;
+
+        if (stateTimer_ < inputDelay) {
+            // READY... 演出
+            float alpha = (std::min)(stateTimer_ / 0.15f, 1.0f);
+            float centerY = ParameterManager::GetInstance()->GetValue("GameScene", "readySpriteCenterY", 360.0f);
+
+            if (readySprite_) {
+                float appearDuration = 0.3f;
+                float progress = (std::clamp)(stateTimer_ / appearDuration, 0.0f, 1.0f);
+                float c1 = 1.70158f;
+                float c3 = c1 + 1.0f;
+                float ease = 1.0f + c3 * std::pow(progress - 1.0f, 3.0f) + c1 * std::pow(progress - 1.0f, 2.0f);
+                float scaleFactor = (std::max)(ease, 0.0f);
+
+                float readyScale = ParameterManager::GetInstance()->GetValue("GameScene", "readySpriteScale", 2.0f);
+                float baseW = 240.0f * readyScale;
+                float baseH = 92.0f * readyScale;
+                float currentW = baseW * scaleFactor;
+                float currentH = baseH * scaleFactor;
+
+                readySprite_->SetPosition({ centerX - currentW * 0.5f, centerY - currentH * 0.5f });
+                readySprite_->SetSize({ currentW, currentH });
+                readySprite_->SetColor({ 1.0f, 0.15f, 0.15f, alpha }); // 赤色
+            }
+
+            // タイムバー演出 (レディー表示残り時間を細長い棒で表示)
+            float barWidth = ParameterManager::GetInstance()->GetValue("GameScene", "readyBarWidth", 360.0f);
+            float barHeight = ParameterManager::GetInstance()->GetValue("GameScene", "readyBarHeight", 8.0f);
+            float barOffsetY = ParameterManager::GetInstance()->GetValue("GameScene", "readyBarOffsetY", 110.0f);
+            float barY = centerY + barOffsetY;
+            float remainRatio = (std::clamp)((inputDelay - stateTimer_) / inputDelay, 0.0f, 1.0f);
+            float currentFillW = barWidth * remainRatio;
+
+            if (readyBarBgSprite_) {
+                readyBarBgSprite_->SetPosition({ centerX - barWidth * 0.5f - 2.0f, barY - 2.0f });
+                readyBarBgSprite_->SetSize({ barWidth + 4.0f, barHeight + 4.0f });
+                readyBarBgSprite_->SetColor({ 0.1f, 0.1f, 0.1f, 0.6f * alpha });
+            }
+            if (readyBarFillSprite_) {
+                readyBarFillSprite_->SetPosition({ centerX - barWidth * 0.5f, barY });
+                readyBarFillSprite_->SetSize({ currentFillW, barHeight });
+                readyBarFillSprite_->SetColor({ 1.0f, 0.2f, 0.2f, alpha }); // 赤色
+            }
+
+            if (goSprite_) {
+                goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, 0.0f });
+            }
+        } else {
+            // GO! 演出
+            if (readySprite_) {
+                readySprite_->SetColor({ 1.0f, 0.15f, 0.15f, 0.0f });
+            }
+            if (readyBarBgSprite_) {
+                readyBarBgSprite_->SetColor({ 0.1f, 0.1f, 0.1f, 0.0f });
+            }
+            if (readyBarFillSprite_) {
+                readyBarFillSprite_->SetColor({ 1.0f, 0.2f, 0.2f, 0.0f });
+            }
+
+            if (goSprite_) {
+                float goTimer = stateTimer_ - inputDelay;
+                float appearDuration = 0.25f;
+                float progress = (std::clamp)(goTimer / appearDuration, 0.0f, 1.0f);
+                float c1 = 1.70158f;
+                float c3 = c1 + 1.0f;
+                float ease = 1.0f + c3 * std::pow(progress - 1.0f, 3.0f) + c1 * std::pow(progress - 1.0f, 2.0f);
+                float scaleFactor = (std::max)(ease, 0.0f);
+
+                float goScale = ParameterManager::GetInstance()->GetValue("GameScene", "goSpriteScale", 2.0f);
+                float baseW = 144.0f * goScale;
+                float baseH = 92.0f * goScale;
+                float currentW = baseW * scaleFactor;
+                float currentH = baseH * scaleFactor;
+                float centerY = ParameterManager::GetInstance()->GetValue("GameScene", "goSpriteCenterY", 360.0f);
+
+                goSprite_->SetPosition({ centerX - currentW * 0.5f, centerY - currentH * 0.5f });
+                goSprite_->SetSize({ currentW, currentH });
+
+                float alpha = 1.0f;
+                float fadeStart = startReadyTime - 0.25f;
+                if (stateTimer_ > fadeStart) {
+                    alpha = (std::max)(0.0f, (startReadyTime - stateTimer_) / 0.25f);
+                }
+                goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, alpha }); // 黄色
+            }
+        }
+
         if (stateTimer_ > startReadyTime) {
             gameState_ = GameState::Playing;
             stateTimer_ = 0.0f;
+            if (readySprite_) readySprite_->SetColor({ 1.0f, 0.15f, 0.15f, 0.0f });
+            if (readyBarBgSprite_) readyBarBgSprite_->SetColor({ 0.1f, 0.1f, 0.1f, 0.0f });
+            if (readyBarFillSprite_) readyBarFillSprite_->SetColor({ 1.0f, 0.2f, 0.2f, 0.0f });
+            if (goSprite_) goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, 0.0f });
         }
     } else if (gameState_ == GameState::Clear) {
         stateTimer_ += dt;
+        if (clearSprite_) {
+            // 文字が遠くからズームして出てくる演出 (EaseOutBack)
+            float appearDuration = ParameterManager::GetInstance()->GetValue("GameScene", "clearSpriteAppearDuration", 0.6f);
+            float progress = (std::clamp)(stateTimer_ / appearDuration, 0.0f, 1.0f);
+            
+            float c1 = 1.70158f;
+            float c3 = c1 + 1.0f;
+            float ease = 1.0f + c3 * std::pow(progress - 1.0f, 3.0f) + c1 * std::pow(progress - 1.0f, 2.0f);
+            float scaleFactor = (std::max)(ease, 0.0f);
+
+            float clearScale = ParameterManager::GetInstance()->GetValue("GameScene", "clearSpriteScale", 2.0f);
+            float baseW = 220.0f * clearScale;
+            float baseH = 92.0f * clearScale;
+            float currentW = baseW * scaleFactor;
+            float currentH = baseH * scaleFactor;
+
+            float centerX = 1280.0f * 0.5f;
+            float targetCenterY = ParameterManager::GetInstance()->GetValue("GameScene", "clearSpriteCenterY", 180.0f);
+
+            clearSprite_->SetPosition({ centerX - currentW * 0.5f, targetCenterY - currentH * 0.5f });
+            clearSprite_->SetSize({ currentW, currentH });
+
+            float alpha = (std::min)(stateTimer_ / 0.2f, 1.0f);
+            clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, alpha });
+        }
+        if (gameCamera_) {
+            // クリア時はプレイヤーへカメラをズームイン（アップ）
+            float targetScale = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomScale", 2.2f);
+            float zoomSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomSpeed", 3.0f);
+            float currentScale = gameCamera_->GetScale();
+            float newScale = currentScale + (targetScale - currentScale) * (1.0f - std::exp(-zoomSpeed * dt));
+            gameCamera_->SetScale(newScale);
+
+            // プレイヤーを画面のやや下側に配置するため、カメラの注視点を上方にオフセット
+            float targetOffsetY = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraOffsetY", 1.0f);
+            Vector3 currentOffset = gameCamera_->GetFollowOffset();
+            float newOffsetY = currentOffset.y + (targetOffsetY - currentOffset.y) * (1.0f - std::exp(-zoomSpeed * dt));
+            gameCamera_->SetFollowOffset({ currentOffset.x, newOffsetY, currentOffset.z });
+        }
         bool isReturn = KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) ||
                         GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::A) ||
                         GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start);
         if (isReturn) {
+            if (gameCamera_) {
+                gameCamera_->SetScale(initialCameraScale_);
+                gameCamera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
+            }
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
+        }
+    } else {
+        if (clearSprite_) {
+            clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
+        }
+        if (gameCamera_) {
+            if (std::abs(gameCamera_->GetScale() - initialCameraScale_) > 0.001f) {
+                gameCamera_->SetScale(initialCameraScale_);
+            }
+            if (std::abs(gameCamera_->GetFollowOffset().y) > 0.001f) {
+                gameCamera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
+            }
+        }
+    }
+
+    if (gameState_ != GameState::StartReady) {
+        if (readySprite_) {
+            readySprite_->SetColor({ 1.0f, 0.15f, 0.15f, 0.0f });
+        }
+        if (readyBarBgSprite_) {
+            readyBarBgSprite_->SetColor({ 0.1f, 0.1f, 0.1f, 0.0f });
+        }
+        if (readyBarFillSprite_) {
+            readyBarFillSprite_->SetColor({ 1.0f, 0.2f, 0.2f, 0.0f });
+        }
+        if (goSprite_) {
+            goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, 0.0f });
         }
     }
 
@@ -172,6 +409,10 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
+            if (gameCamera_) {
+                gameCamera_->SetRooms(map_->GetRooms());
+                gameCamera_->SnapToTarget();
+            }
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
@@ -321,7 +562,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                 }
             }
 
-            if (gameCamera_ && map_) {
+            if (gameCamera_ && map_ && gameState_ != GameState::Clear) {
                 gameCamera_->SetRooms(map_->GetRooms());
             }
 
@@ -330,12 +571,25 @@ void GameScene::Update(SceneManager *sceneManager) {
                 map_->Update();
             }
 
-            player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning());
+            bool canControl = true;
+            if (gameState_ == GameState::StartReady) {
+                float inputDelay = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyInputDelay", 1.0f);
+                if (stateTimer_ < inputDelay) {
+                    canControl = false;
+                }
+            } else if (gameState_ == GameState::Clear) {
+                canControl = false;
+            }
+
+            player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning(), canControl);
 
             // ゴール判定
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
                 gameState_ = GameState::Clear;
                 stateTimer_ = 0.0f;
+                if (gameCamera_) {
+                    gameCamera_->SetRooms({}); // 部屋境界制限を解除してプレイヤー中心へ直接追従
+                }
             }
 
             // コイン獲得エフェクト
@@ -432,48 +686,6 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "Ctrl + Left : Rewind");
         }
-        ImGui::End();
-    }
-
-    // Start Ready 演出
-    if (gameState_ == GameState::StartReady) {
-        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::Begin("ReadyUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::SetWindowFontScale(6.0f);
-        if (stateTimer_ < 1.0f) {
-            const char* text = "READY...";
-            float textW = ImGui::CalcTextSize(text).x;
-            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textW) * 0.5f);
-            ImGui::TextColored(ImVec4(1,0.5f,0,1), "%s", text);
-        } else {
-            const char* text = "GO!";
-            float textW = ImGui::CalcTextSize(text).x;
-            ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textW) * 0.5f);
-            ImGui::TextColored(ImVec4(0,1,0,1), "%s", text);
-        }
-        ImGui::End();
-    }
-
-    // Clear 演出
-    if (gameState_ == GameState::Clear) {
-        ImGui::SetNextWindowPos(ImVec2(windowPos.x + windowWidth / 2.0f, windowPos.y + windowHeight / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::Begin("ClearUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::SetWindowFontScale(6.0f);
-        const char* clearText = "STAGE CLEAR!";
-        float textWidth = ImGui::CalcTextSize(clearText).x;
-        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - textWidth) * 0.5f);
-        ImGui::TextColored(ImVec4(1,0.8f,0,1), "%s", clearText);
-
-        ImGui::SetWindowFontScale(2.0f);
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 30.0f);
-        const char* returnText = GamepadInput::GetInstance()->IsConnected() ? "Press SPACE or [A] to Return Title" : "Press SPACE to Return Title";
-        float returnWidth = ImGui::CalcTextSize(returnText).x;
-        ImGui::SetCursorPosX((ImGui::GetWindowSize().x - returnWidth) * 0.5f);
-        
-        static float time = 0.0f;
-        time += ImGui::GetIO().DeltaTime;
-        float alpha = (sinf(time * 5.0f) + 1.0f) * 0.5f;
-        ImGui::TextColored(ImVec4(1,1,1,alpha), "%s", returnText);
         ImGui::End();
     }
 
@@ -629,6 +841,26 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #endif
 }
 
+void GameScene::Draw2D() {
+    if (gameState_ == GameState::StartReady) {
+        if (spriteCommon_) {
+            spriteCommon_->PreDraw();
+            float inputDelay = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyInputDelay", 1.0f);
+            if (stateTimer_ < inputDelay) {
+                if (readyBarBgSprite_) readyBarBgSprite_->Draw();
+                if (readyBarFillSprite_) readyBarFillSprite_->Draw();
+                if (readySprite_) readySprite_->Draw();
+            } else if (stateTimer_ >= inputDelay && goSprite_) {
+                goSprite_->Draw();
+            }
+        }
+    } else if (gameState_ == GameState::Clear) {
+        if (spriteCommon_ && clearSprite_) {
+            spriteCommon_->PreDraw();
+            clearSprite_->Draw();
+        }
+    }
+}
 
 void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI

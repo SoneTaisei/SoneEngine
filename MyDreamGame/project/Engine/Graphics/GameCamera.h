@@ -47,6 +47,9 @@ public:
         rooms_ = rooms;
     }
 
+    // カメラ位置を追従ターゲット・所属ルームに即座に合わせる
+    void SnapToTarget();
+
     float GetFollowLerp() const { return followLerp_; }
     void SetFollowLerp(float lerp) { followLerp_ = lerp; }
 

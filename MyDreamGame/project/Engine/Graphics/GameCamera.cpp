@@ -214,6 +214,75 @@ void GameCamera::UpdateMatrixOrthographic() {
     CameraManager::GetInstance()->SetCameraInfo(transform_.translate, viewMatrix_, projectionMatrix_);
 }
 
+void GameCamera::SnapToTarget() {
+    if (!followTarget_ || !isFollowEnabled_) return;
+
+    float targetX = followTarget_->x + followOffset_.x;
+    float targetY = followTarget_->y + followOffset_.y;
+
+    float cameraTargetX = targetX;
+    float cameraTargetY = targetY;
+
+    if (!rooms_.empty()) {
+        int currentRoomIndex = -1;
+        for (size_t i = 0; i < rooms_.size(); ++i) {
+            const auto& r = rooms_[i];
+            if (targetX >= r.x && targetX <= r.x + r.width &&
+                targetY >= r.y && targetY <= r.y + r.height) {
+                currentRoomIndex = static_cast<int>(i);
+                break;
+            }
+        }
+
+        if (currentRoomIndex == -1) {
+            float minDistSq = 1e10f;
+            for (size_t i = 0; i < rooms_.size(); ++i) {
+                const auto& r = rooms_[i];
+                float centerX = r.x + r.width * 0.5f;
+                float centerY = r.y + r.height * 0.5f;
+                float dx = targetX - centerX;
+                float dy = targetY - centerY;
+                float distSq = dx * dx + dy * dy;
+                if (distSq < minDistSq) {
+                    minDistSq = distSq;
+                    currentRoomIndex = static_cast<int>(i);
+                }
+            }
+        }
+
+        if (currentRoomIndex != -1) {
+            currentRoomX_ = currentRoomIndex;
+            currentRoomY_ = 0;
+
+            const auto& activeRoom = rooms_[currentRoomIndex];
+            float halfW = orthoWidth_ * 0.5f;
+            float halfH = orthoHeight_ * 0.5f;
+            float minClampX = activeRoom.x + halfW;
+            float maxClampX = activeRoom.x + activeRoom.width - halfW;
+            float minClampY = activeRoom.y + halfH;
+            float maxClampY = activeRoom.y + activeRoom.height - halfH;
+
+            if (minClampX > maxClampX) {
+                cameraTargetX = activeRoom.x + activeRoom.width * 0.5f;
+            } else {
+                cameraTargetX = std::clamp(targetX, minClampX, maxClampX);
+            }
+
+            if (minClampY > maxClampY) {
+                cameraTargetY = activeRoom.y + activeRoom.height * 0.5f;
+            } else {
+                cameraTargetY = std::clamp(targetY, minClampY, maxClampY);
+            }
+        }
+    }
+
+    transform_.translate.x = cameraTargetX;
+    transform_.translate.y = cameraTargetY;
+    isTransitioning_ = false;
+
+    UpdateMatrix();
+}
+
 void GameCamera::LoadConfig(const std::string& filepath) {
     if (!std::filesystem::exists(filepath)) {
         return;

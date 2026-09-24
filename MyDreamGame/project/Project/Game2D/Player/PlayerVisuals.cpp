@@ -72,7 +72,12 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
     visualTime_ += deltaTime;
     
     if (primitiveObj_) {
-        primitiveObj_->SetTranslation(state.position_);
+        Vector3 primPos = state.position_;
+        if (state.isGoal_) {
+            float hop = std::abs(std::sin(state.goalTimer_ * 8.0f)) * 0.35f;
+            primPos.y += hop;
+        }
+        primitiveObj_->SetTranslation(primPos);
         
         if (state.isDashing_) {
             primitiveObj_->GetMaterial().color = params.colorDashed_;
@@ -165,7 +170,9 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     animator_->Play(); // 通常アニメーションは自動再生
                     animator_->SetWrapMode(AnimationWrapMode::Loop);
 
-                    if (!state.isOnGround_) {
+                    if (state.isGoal_) {
+                        animator_->SetAnimation(jumpAnimation_);
+                    } else if (!state.isOnGround_) {
                         animator_->SetAnimation(jumpAnimation_);
                     } else if (std::abs(state.velocity_.x) > 0.1f) {
                         animator_->SetAnimation(walkAnimation_);
@@ -182,7 +189,12 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         modelPos.y -= params.halfHeight_;
         
         float rotationY = modelObj_->GetRotation().y;
-        if (state.isWallClinging_ || state.isWallSliding_) {
+        if (state.isGoal_) {
+            // ゴール・クリア時はカメラ正面（手前）を向いて歓喜のジャンプ
+            rotationY = 0.0f;
+            float hop = std::abs(std::sin(state.goalTimer_ * 8.0f)) * 0.35f;
+            modelPos.y += hop;
+        } else if (state.isWallClinging_ || state.isWallSliding_) {
             if (state.isTouchingWallRight_) {
                 rotationY = -1.57079632f;
                 modelPos.x -= 0.2f; // 右壁から少し離す（左へずらす）
@@ -237,6 +249,14 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         
         if (!state.isDead_) {
             modelObj_->Update();
+        }
+    }
+
+    if (state.isGoal_) {
+        // ゴール中、一定間隔で紙吹雪を補充
+        float prevT = state.goalTimer_ - deltaTime;
+        if (prevT > 0.0f && std::floor(prevT / 0.8f) < std::floor(state.goalTimer_ / 0.8f)) {
+            SpawnConfetti(state.position_);
         }
     }
 

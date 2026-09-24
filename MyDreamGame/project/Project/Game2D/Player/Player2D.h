@@ -35,7 +35,7 @@ public:
     void DisplayImGui() override;
 
     // TODO: Mapは別途シーンかServiceLocator等から取得するように変更するまでの暫定
-    void UpdateWithMap(MapChip2D& map, bool isTransitioning = false);
+    void UpdateWithMap(MapChip2D& map, bool isTransitioning = false, bool canControl = true);
 
     // 速度の設定と取得
     void SetVelocity(const Vector3& velocity) { state_.velocity_ = velocity; }
