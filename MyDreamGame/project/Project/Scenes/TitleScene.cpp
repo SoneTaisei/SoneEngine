@@ -1,4 +1,5 @@
 #include "TitleScene.h"
+#include <cmath>
 #include "../externals/imgui/imgui.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
@@ -23,91 +24,61 @@ TitleScene::~TitleScene() {
 }
 
 void TitleScene::OnEnter(SceneManager* sceneManager) {
-    // シーン遷移時の開始処理
+    (void)sceneManager;
 }
 
 void TitleScene::OnExit(SceneManager* sceneManager) {
-    // シーン遷移時の終了処理
+    (void)sceneManager;
 }
 
 void TitleScene::Initialize() {
-    
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     device = DirectXCommon::GetInstance()->GetDevice();
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
 
-
-
-    // 1. マネージャからモデル（素材）を取得（なければロードされる）
-    Model *planeModel = ModelManager::GetInstance()->GetModel("resources/Object/School/plane", "plane.gltf");
-
-    // 2. GameObject（実体）を生成
-    auto planeObject = std::make_shared<GameObject>("Ground Plane");
-    auto transform = planeObject->AddComponent<TransformComponent>();
-    transform->SetRotation({0.0f, 0.0f, 0.0f});
-
-    // 3. 描画コンポーネントのアタッチとテクスチャの設定
-    auto planeRenderer = planeObject->AddComponent<MeshRendererComponent>();
-    planeRenderer->Initialize(device.Get(), planeModel);
-    uint32_t planeIndex = TextureManager::GetInstance()->Load("resources/Sprite/School/uvChecker.png");
-    D3D12_GPU_DESCRIPTOR_HANDLE planeTH = TextureManager::GetInstance()->GetGpuHandle(planeIndex);
-    planeRenderer->SetTextureHandle(planeTH);
-    planeModel->SetTextureHandle(planeTH);
-
-    gameObjects_.push_back(planeObject);
-
-    // ② Spriteのインスタンスを生成
-    auto sprite = std::make_unique<Sprite>();
-
-    // ③ 初期化 (spriteCommon_はIScene等で定義されている前提)
-    sprite->Initialize(spriteCommon_, planeIndex);
-
-    // ④ 位置やサイズなどのパラメータを設定
-    // 画面中央付近に配置する例
-    sprite->SetPosition({640.0f, 360.0f}); // 画面中央付近など
-    sprite->SetSize({200.0f, 200.0f});     // しっかり見える大きさにする
-
-    // ⑤ 管理用の配列に追加して保持する
-    //sprites_.push_back(std::move(sprite));
-
-    // ★ Skyboxの初期化処理を追加
-    // 1. テクスチャをロード
+    // Skyboxの初期化処理
     skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/skybox.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/yakei/panoramic-view-beach-sunset.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/School/rostock_laage_airport_4k.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_direct.dds");
-    //skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/bat_miyazaki/IMG_2496_dxt5.dds");
-
-    // 2. インスタンスを生成
     skybox_ = std::make_unique<Skybox>();
-
-    // 3. 初期化（※dxCommon_ の取得方法はエンジンの設計に合わせてください！）
-    // もし TitleScene に dxCommon_ が無い場合は、DirectXCommon::GetInstance() などを使うか、
-    // SceneManager から引っ張ってくる必要があります。
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
 
     debugCamera_ = std::make_unique<DebugCamera>();
     debugCamera_->Initialize(1280, 720);
 
-    // ■ 拡張Ringプリミティブのデモ実装
-    PrimitiveManager::GetInstance()->Initialize(device.Get());
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
-    
-    // ■ RingEffectの作成
-    ringEffect_ = std::make_unique<RingEffect>();
-    ringEffect_->Initialize(device.Get(), gradationHandle);
+    // UIスプライトの初期化
+    titleTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/title.png");
+    startTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/start.png");
 
-    // ■ CylinderEffectの作成
-    cylinderEffect_ = std::make_unique<CylinderEffect>();
-    cylinderEffect_->Initialize(device.Get(), gradationHandle);
+    if (spriteCommon_) {
+        // title.png: 元サイズ (800 x 92) の1.2倍 (960 x 110.4)
+        titleSprite_ = std::make_unique<Sprite>();
+        titleSprite_->Initialize(spriteCommon_, titleTextureHandle_);
+        const float titleWidth = 800.0f * 1.2f;
+        const float titleHeight = 92.0f * 1.2f;
+        const float titleX = (1280.0f - titleWidth) * 0.5f;
+        const float titleBaseY = 150.0f;
+        titleSprite_->SetPosition({ titleX, titleBaseY });
+        titleSprite_->SetSize({ titleWidth, titleHeight });
+        titleSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        // start.png: 中央下部に配置 (250 x 92)
+        startSprite_ = std::make_unique<Sprite>();
+        startSprite_->Initialize(spriteCommon_, startTextureHandle_);
+        const float startWidth = 250.0f;
+        const float startHeight = 92.0f;
+        const float startX = (1280.0f - startWidth) * 0.5f;
+        const float startY = 520.0f;
+        startSprite_->SetPosition({ startX, startY });
+        startSprite_->SetSize({ startWidth, startHeight });
+        startSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+    }
+
+    animationTime_ = 0.0f;
 }
 
 void TitleScene::Update(SceneManager *sceneManager) {
-    // シーン遷移直後の同一フレームでのSPACEキー入力を拾わないようにする
+    // シーン遷移直後の同一フレームでの入力を拾わないようにする
     if (isFirstFrame_) {
         isFirstFrame_ = false;
     } else {
@@ -122,45 +93,47 @@ void TitleScene::Update(SceneManager *sceneManager) {
 
     if (debugCamera_) {
         debugCamera_->Update();
-        // ★ debugCamera_->Update() の中で CameraManager::GetInstance()->SetCameraInfo(...) 
-        //    が自動的に呼ばれるため、ここでの手動セットは不要です。
     }
 
-    // 全オブジェクトの更新（座標変換行列の計算など）
-    for (auto &object : gameObjects_) {
-        object->Update();
+    // 演出用タイマー加算
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    animationTime_ += deltaTime;
+
+    // タイトル文字: sin波で上下に浮遊移動
+    if (titleSprite_) {
+        const float titleWidth = 800.0f * 1.2f;
+        const float titleX = (1280.0f - titleWidth) * 0.5f;
+        const float titleBaseY = 150.0f;
+        const float titleOffsetY = std::sin(animationTime_ * 2.0f) * 12.0f;
+        titleSprite_->SetPosition({ titleX, titleBaseY + titleOffsetY });
+        titleSprite_->Update();
     }
 
-
-    for (auto &sprite : sprites_) {
-        sprite->Update();
+    // START文字: sin波で透明度をフェード変化（出現/透明化）
+    if (startSprite_) {
+        float alpha = (std::sin(animationTime_ * 4.0f) + 1.0f) * 0.5f;
+        startSprite_->SetColor({ 1.0f, 1.0f, 1.0f, alpha });
+        startSprite_->Update();
     }
 
     if (skybox_) {
         skybox_->Update();
     }
-
-    // エフェクトの更新
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-    if (ringEffect_) {
-        ringEffect_->Update(deltaTime);
-    }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(deltaTime);
-    }
 }
 
 void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    // ★ モデル描画の前準備
+    (void)viewProjectionMatrix;
+
+    // モデル描画の前準備
     if (modelCommon_) {
         modelCommon_->PreDraw();
     }
 
-    // ★ 3Dオブジェクトの直後にSkyboxを描画！
+    // Skyboxを描画
     if (skybox_) {
         skybox_->Draw();
-        
-        // ★ Skyboxの描画後はPSOが切り替わってしまうため、再度モデル用の設定を呼び出す
+
+        // Skybox描画後はPSOが切り替わるためモデル用設定を復帰
         auto dxCommon = DirectXCommon::GetInstance();
         DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
         DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
@@ -170,42 +143,7 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         }
     }
 
-    // 3Dモデル的描画
-#ifdef USE_IMGUI
-    if (EditorManager::IsShowObjects()) {
-#endif
-        for (auto &object : gameObjects_) {
-            object->Draw();
-        }
-#ifdef USE_IMGUI
-    }
-#endif
-
-    // コンポーネントの描画を実行
-    Renderer::GetInstance()->RenderComponents();
-
-    // -------------------------------------------------
-    // ■ エフェクト/パーティクルの描画
-    // -------------------------------------------------
-#ifdef USE_IMGUI
-    if (EditorManager::IsShowEffects()) {
-#endif
-        if (particleCommon_) {
-            particleCommon_->PreDraw();
-            particleCommon_->DrawAll(viewProjectionMatrix);
-        }
-
-        // ■ プリミティブパーティクルの描画
-        if (ringEffect_) {
-            ringEffect_->Draw();
-        }
-        if (cylinderEffect_) {
-            cylinderEffect_->Draw();
-        }
-#ifdef USE_IMGUI
-    }
-#endif
-
+    // UIスプライトの描画
     if (spriteCommon_) {
         spriteCommon_->PreDraw();
         spriteCommon_->DrawAll();
@@ -217,71 +155,27 @@ std::vector<Object3D *> TitleScene::GetObjects() {
 }
 
 std::vector<ParticleManager *> TitleScene::GetParticles() {
-    std::vector<ParticleManager *> result;
-    for (auto &p : particles_) {
-        result.push_back(p.get());
-    }
-    return result;
+    return {};
 }
 
 std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
-    std::vector<PrimitiveObject *> result;
-    if (ringEffect_) {
-        result.push_back(ringEffect_->GetRoot());
-    }
-    if (cylinderEffect_) {
-        result.push_back(cylinderEffect_->GetRoot());
-    }
-    // 子要素は返さないことでエディター上の表示を1つにまとめる
-    return result;
+    return {};
 }
 
 void TitleScene::UpdateEditor() {
-    for (auto &object : gameObjects_) {
-        object->Update();
+    if (titleSprite_) {
+        titleSprite_->Update();
     }
-    for (auto &sprite : sprites_) {
-        sprite->Update();
+    if (startSprite_) {
+        startSprite_->Update();
     }
     if (skybox_) {
         skybox_->Update();
-    }
-    if (ringEffect_) {
-        ringEffect_->Update(0.0f);
-    }
-    if (cylinderEffect_) {
-        cylinderEffect_->Update(0.0f);
     }
 }
 
 void TitleScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
-    // エディター側でプレイ状態になっていないときは、タイトルUIを描画しない
-    if (!EditorManager::IsPlaying()) {
-        return;
-    }
-
-    ImGui::SetNextWindowPos(ImVec2(1280.0f / 2.0f, 720.0f / 2.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::Begin("TitleUI", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize);
-    
-    ImGui::SetWindowFontScale(4.0f);
-    float windowWidth = ImGui::GetWindowSize().x;
-    const char* titleText = "My Dream Game";
-    float textWidth = ImGui::CalcTextSize(titleText).x;
-    ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", titleText);
-    
-    ImGui::SetWindowFontScale(2.0f);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 50.0f);
-    const char* startText = GamepadInput::GetInstance()->IsConnected() ? "Press SPACE or [A] to Start" : "Press SPACE to Start";
-    float startTextWidth = ImGui::CalcTextSize(startText).x;
-    ImGui::SetCursorPosX((windowWidth - startTextWidth) * 0.5f);
-    
-    static float time = 0.0f;
-    time += ImGui::GetIO().DeltaTime;
-    float alpha = (sinf(time * 5.0f) + 1.0f) * 0.5f;
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, alpha), "%s", startText);
-    
-    ImGui::End();
+    (void)selectedPrimitive;
 #endif
 }

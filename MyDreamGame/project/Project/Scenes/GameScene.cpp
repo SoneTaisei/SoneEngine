@@ -31,6 +31,9 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
             // TODO: マップの再読み込みなどをここで行うか、Initializeのタイミングと調整する
         }
     }
+    if (gameCamera_) {
+        gameCamera_->SetFollowEnabled(true);
+    }
 }
 
 void GameScene::OnExit(SceneManager* sceneManager) {
@@ -105,6 +108,7 @@ void GameScene::Initialize() {
         }
         // プレイヤーの位置をカメラ追従ターゲットに設定
         gameCamera_->SetFollowTarget(&player_->GetPosition());
+        gameCamera_->SetFollowEnabled(true);
         gameCamera_->SnapToTarget();
         initialCameraScale_ = gameCamera_->GetScale();
         Log("GameScene::Initialize: Camera configured\n");

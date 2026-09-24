@@ -85,6 +85,7 @@ void GameCamera::InitializeOrthographic(int kClientWidth, int kClientHeight, flo
     kClientWidth_ = kClientWidth;
     kClientHeight_ = kClientHeight;
     isOrthographic_ = true;
+    isFollowEnabled_ = true;
     orthoWidth_ = viewWidth;
     orthoHeight_ = viewHeight;
 

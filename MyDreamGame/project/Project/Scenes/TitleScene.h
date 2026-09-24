@@ -1,25 +1,18 @@
 #pragma once
 #include "Scene/IScene.h"
 #include <d3d12.h>
-#include "Resource/Model/Model.h"
 #include "Resource/Sprite/Sprite.h"
 #include "Core/Utility/Utilityfunctions.h"
 #include "Effect/ParticleManager.h"
 #include <memory>
 #include "Effect/ParticleCommon.h"
-#include "Effect/windowParticle.h"
 #include "GameObject/GameObject.h"
-#include "Component/MeshRendererComponent.h"
 #include "Graphics/Skybox.h"
 #include "Graphics/DebugCamera.h"
-#include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 #include <vector>
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
-#include "Effect/ParticleCommon.h"
-#include "Effect/RingEffect.h"
-#include "Effect/CylinderEffect.h"
 
 class TitleScene : public IScene {
 public:
@@ -37,31 +30,13 @@ public:
     std::vector<PrimitiveObject *> GetPrimitives() override;
 
 private:
-    // メンバ変数としてモデル、テクスチャ、座標を持つ
-    uint32_t textureHandle_ = 0;
-    EulerTransform transform_ = {};
-    
+    // UIスプライト
+    uint32_t titleTextureHandle_ = 0;
+    uint32_t startTextureHandle_ = 0;
+    std::unique_ptr<Sprite> titleSprite_;
+    std::unique_ptr<Sprite> startSprite_;
 
-    Model *playerModel_ = nullptr;
-
-    std::vector<std::shared_ptr<GameObject>> gameObjects_{};
-    std::vector<std::unique_ptr<Sprite>> sprites_{};
-
-    // ■ 追加: パーティクル管理用変数
-
-    // 2. パーティクルリスト (所有権管理用)
-    std::vector<std::unique_ptr<ParticleManager>> particles_{};
-
-    // 3. 個別のパーティクル操作用ポインタ (Emit呼び出し用)
-    windowParticle *windowParticle_ = nullptr;
-
-    // 4. エミッタ (発生設定)
-    Emitter windowEmitter_{};
-
-    // 5. SRVインデックス (他と被らない番号)
-    const int srvIndex_ = 110;
-
-    // ■ 追加: タイトルシーン専用カメラ
+    // ■ タイトルシーン専用カメラ
     EulerTransform cameraTransform_{}; // カメラの座標・回転
     Matrix4x4 viewProjection_{};  // 描画に使う行列
 
@@ -70,11 +45,9 @@ private:
 
     std::unique_ptr<DebugCamera> debugCamera_;
 
-    std::unique_ptr<RingEffect> ringEffect_;
-    std::unique_ptr<CylinderEffect> cylinderEffect_;
-
     // --- エディター停止中用 ---
     void UpdateEditor() override;
 
     bool isFirstFrame_ = true;
+    float animationTime_ = 0.0f;
 };
