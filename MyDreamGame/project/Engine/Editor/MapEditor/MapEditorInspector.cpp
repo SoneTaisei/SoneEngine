@@ -256,8 +256,21 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (k == "sightHeight") return std::string("視界の高さ (sightHeight)");
         if (k == "startDirection") return std::string("初期の向き(1:右, -1:左) (startDirection)");
         if (k == "waitTimeAtEdge") return std::string("端での待機時間 (waitTimeAtEdge)");
+        if (k == "floatAmplitude") return std::string("浮遊の振幅 (floatAmplitude)");
+        if (k == "floatSpeed") return std::string("浮遊の速度 (floatSpeed)");
         return k;
     };
+
+    if (targetDef->type == "GoalBlock") {
+        if (!targetDef->properties.contains("floatAmplitude")) {
+            targetDef->properties["floatAmplitude"] = 0.25f;
+            changed = true;
+        }
+        if (!targetDef->properties.contains("floatSpeed")) {
+            targetDef->properties["floatSpeed"] = 2.0f;
+            changed = true;
+        }
+    }
 
     for (auto& [key, value] : targetDef->properties.items()) {
         std::string jpKey = getJpKey(key);

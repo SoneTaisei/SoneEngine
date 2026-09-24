@@ -51,7 +51,10 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         };
         addTemplate(1, "Block", "NormalBlock", {0.3f, 0.7f, 0.3f, 1.0f}, nlohmann::json::object());
         addTemplate(2, "Death", "DeathBlock", {1.0f, 0.2f, 0.2f, 1.0f}, nlohmann::json::object());
-        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, nlohmann::json::object()); // 紫色に変更
+        nlohmann::json goalProps;
+        goalProps["floatAmplitude"] = 0.25f;
+        goalProps["floatSpeed"] = 2.0f;
+        addTemplate(3, "Goal", "GoalBlock", {0.8f, 0.2f, 0.8f, 1.0f}, goalProps); // 紫色に変更
         addTemplate(4, "Coin", "CoinBlock", {1.0f, 0.8f, 0.0f, 1.0f}, nlohmann::json::object());
         addTemplate(5, "OneWay", "OneWayBlock", {0.4f, 0.8f, 0.8f, 1.0f}, nlohmann::json::object());
         
