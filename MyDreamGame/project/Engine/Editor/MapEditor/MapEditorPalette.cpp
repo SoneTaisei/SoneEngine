@@ -31,7 +31,17 @@ namespace {
         int shaderMode = 0;
     };
 
-    std::tuple<Model*, D3D12_GPU_DESCRIPTOR_HANDLE, bool> ResolveToolResource(const std::string& texName, const std::string& mdlName) {
+    MapChipResourceCacheItem ResolveToolResourceCached(
+        std::unordered_map<std::string, MapChipResourceCacheItem>& resourceCache,
+        const std::string& texName,
+        const std::string& mdlName)
+    {
+        std::string key = texName + "|" + mdlName;
+        auto it = resourceCache.find(key);
+        if (it != resourceCache.end()) {
+            return it->second;
+        }
+
         Model* model = nullptr;
         D3D12_GPU_DESCRIPTOR_HANDLE texGpuHandle = {};
         bool hasTexture = false;
@@ -66,13 +76,16 @@ namespace {
             }
         }
 
-        return { model, texGpuHandle, hasTexture };
+        MapChipResourceCacheItem item = { model, texGpuHandle, hasTexture };
+        resourceCache[key] = item;
+        return item;
     }
 
-    bool Draw3DModelPreview(ImDrawList* drawList, ImVec2 center, float boxSize, Model* model, ImVec4 baseColor, D3D12_GPU_DESCRIPTOR_HANDLE texGpuHandle, bool hasTexture) {
-        if (!model) return false;
+    std::vector<MapChipPreviewTriangle> Build3DModelPreviewTriangles(Model* model, ImVec4 baseColor, float boxSize) {
+        std::vector<MapChipPreviewTriangle> triangles;
+        if (!model) return triangles;
         const auto& modelData = model->GetModelData();
-        if (modelData.vertices.empty()) return false;
+        if (modelData.vertices.empty()) return triangles;
 
         // 1. バウンディングボックスの計算
         Vector3 bMin = { 1e9f, 1e9f, 1e9f };
@@ -114,23 +127,24 @@ namespace {
             return { x2, y2, z2 };
         };
 
-        struct Tri {
-            ImVec2 p[3];
-            ImVec2 uv[3];
-            float avgZ;
-            ImU32 col;
-        };
-        std::vector<Tri> triangles;
         size_t numIndices = modelData.indices.size();
-        size_t numTriangles = numIndices > 0 ? numIndices / 3 : modelData.vertices.size() / 3;
+        size_t totalTriangles = numIndices > 0 ? numIndices / 3 : modelData.vertices.size() / 3;
+        if (totalTriangles == 0) return triangles;
+
+        // ImDrawIdx (unsigned short: 最大65535頂点) に安全に収まる範囲（最大21000ポリゴン）
+        // ポリゴンを飛ばさずに全三角形を順番に描画することで、隙間や穴あき（ピクセルの途切れ）を防ぐ
+        constexpr size_t kMaxSafeTriangles = 21000;
+        size_t renderTriangles = (std::min)(totalTriangles, kMaxSafeTriangles);
 
         Vector3 lightDir = { 0.4f, 0.8f, 0.5f };
         float lightLen = std::sqrt(lightDir.x * lightDir.x + lightDir.y * lightDir.y + lightDir.z * lightDir.z);
-        lightDir.x /= lightLen; lightDir.y /= lightLen; lightDir.z /= lightLen;
+        if (lightLen > 1e-4f) {
+            lightDir.x /= lightLen; lightDir.y /= lightLen; lightDir.z /= lightLen;
+        }
 
-        triangles.reserve(numTriangles);
+        triangles.reserve(renderTriangles);
 
-        for (size_t t = 0; t < numTriangles; ++t) {
+        for (size_t t = 0; t < renderTriangles; ++t) {
             size_t idx0 = t * 3;
             size_t idx1 = t * 3 + 1;
             size_t idx2 = t * 3 + 2;
@@ -149,9 +163,9 @@ namespace {
             Vector3 t1 = TransformVertex(v1.position);
             Vector3 t2 = TransformVertex(v2.position);
 
-            ImVec2 s0(center.x + t0.x, center.y - t0.y);
-            ImVec2 s1(center.x + t1.x, center.y - t1.y);
-            ImVec2 s2(center.x + t2.x, center.y - t2.y);
+            ImVec2 s0(t0.x, -t0.y);
+            ImVec2 s1(t1.x, -t1.y);
+            ImVec2 s2(t2.x, -t2.y);
 
             Vector3 edge1 = { t1.x - t0.x, t1.y - t0.y, t1.z - t0.z };
             Vector3 edge2 = { t2.x - t0.x, t2.y - t0.y, t2.z - t0.z };
@@ -173,8 +187,8 @@ namespace {
             float b = (std::min)(1.0f, baseColor.z * (0.35f + 0.65f * ndotl));
             ImU32 col = IM_COL32((int)(r * 255), (int)(g * 255), (int)(b * 255), (int)(baseColor.w * 255));
 
-            Tri tri;
-            tri.p[0] = s0; tri.p[1] = s1; tri.p[2] = s2;
+            MapChipPreviewTriangle tri;
+            tri.offset[0] = s0; tri.offset[1] = s1; tri.offset[2] = s2;
             tri.uv[0] = ImVec2(v0.texcoord.x, v0.texcoord.y);
             tri.uv[1] = ImVec2(v1.texcoord.x, v1.texcoord.y);
             tri.uv[2] = ImVec2(v2.texcoord.x, v2.texcoord.y);
@@ -183,9 +197,41 @@ namespace {
             triangles.push_back(tri);
         }
 
-        std::sort(triangles.begin(), triangles.end(), [](const Tri& a, const Tri& b) {
+        std::sort(triangles.begin(), triangles.end(), [](const MapChipPreviewTriangle& a, const MapChipPreviewTriangle& b) {
             return a.avgZ < b.avgZ;
         });
+
+        return triangles;
+    }
+
+    bool DrawCached3DModelPreview(
+        ImDrawList* drawList,
+        ImVec2 center,
+        float boxSize,
+        Model* model,
+        ImVec4 baseColor,
+        D3D12_GPU_DESCRIPTOR_HANDLE texGpuHandle,
+        bool hasTexture,
+        std::unordered_map<MapChipPreviewCacheKey, std::vector<MapChipPreviewTriangle>, MapChipPreviewCacheKeyHash>& cache)
+    {
+        if (!model) return false;
+
+        uint32_t colHex = ImGui::ColorConvertFloat4ToU32(baseColor);
+        int scaleInt = static_cast<int>(std::round(boxSize * 10.0f));
+        MapChipPreviewCacheKey key = { model, colHex, scaleInt };
+
+        auto it = cache.find(key);
+        if (it == cache.end()) {
+            if (cache.size() > 128) {
+                cache.clear();
+            }
+            auto tris = Build3DModelPreviewTriangles(model, baseColor, boxSize);
+            auto insertResult = cache.emplace(key, std::move(tris));
+            it = insertResult.first;
+        }
+
+        const auto& triangles = it->second;
+        if (triangles.empty()) return false;
 
         if (hasTexture && texGpuHandle.ptr != 0) {
             drawList->PushTextureID((ImTextureID)texGpuHandle.ptr);
@@ -195,14 +241,19 @@ namespace {
                 drawList->PrimWriteIdx(vidx);
                 drawList->PrimWriteIdx(static_cast<ImDrawIdx>(vidx + 1));
                 drawList->PrimWriteIdx(static_cast<ImDrawIdx>(vidx + 2));
-                drawList->PrimWriteVtx(tri.p[0], tri.uv[0], tri.col);
-                drawList->PrimWriteVtx(tri.p[1], tri.uv[1], tri.col);
-                drawList->PrimWriteVtx(tri.p[2], tri.uv[2], tri.col);
+                drawList->PrimWriteVtx(ImVec2(center.x + tri.offset[0].x, center.y + tri.offset[0].y), tri.uv[0], tri.col);
+                drawList->PrimWriteVtx(ImVec2(center.x + tri.offset[1].x, center.y + tri.offset[1].y), tri.uv[1], tri.col);
+                drawList->PrimWriteVtx(ImVec2(center.x + tri.offset[2].x, center.y + tri.offset[2].y), tri.uv[2], tri.col);
             }
             drawList->PopTextureID();
         } else {
             for (const auto& tri : triangles) {
-                drawList->AddTriangleFilled(tri.p[0], tri.p[1], tri.p[2], tri.col);
+                drawList->AddTriangleFilled(
+                    ImVec2(center.x + tri.offset[0].x, center.y + tri.offset[0].y),
+                    ImVec2(center.x + tri.offset[1].x, center.y + tri.offset[1].y),
+                    ImVec2(center.x + tri.offset[2].x, center.y + tri.offset[2].y),
+                    tri.col
+                );
             }
         }
         return true;
@@ -306,8 +357,8 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
 
     std::vector<ToolIcon> templateTools;
     for (const auto& def : mapChip->GetTemplatePalette()) {
-        auto [mdl, gpuH, hasTex] = ResolveToolResource(def.textureName, def.modelName);
-        templateTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex, def.shaderMode });
+        auto res = ResolveToolResourceCached(resourceCache_, def.textureName, def.modelName);
+        templateTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, res.model, res.texGpuHandle, res.hasTexture, def.shaderMode });
     }
 
     std::set<std::string> availableTypes;
@@ -321,8 +372,8 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
         if (filters.find(def.type) != filters.end()) {
             continue;
         }
-        auto [mdl, gpuH, hasTex] = ResolveToolResource(def.textureName, def.modelName);
-        customTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, mdl, gpuH, hasTex, def.shaderMode });
+        auto res = ResolveToolResourceCached(resourceCache_, def.textureName, def.modelName);
+        customTools.push_back({ def.id, def.name, def.type, ImVec4(def.color.x, def.color.y, def.color.z, def.color.w), 1.0f, def.modelName, def.textureName, res.model, res.texGpuHandle, res.hasTexture, def.shaderMode });
     }
 
     float cardWidth = 84.0f;
@@ -356,74 +407,77 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
 
                 bool isHovered = ImGui::IsItemHovered();
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
+                bool isVisible = ImGui::IsRectVisible(p, ImVec2(p.x + cardWidth, p.y + cardHeight));
 
-                ImU32 bgCol = isHovered ? IM_COL32(55, 62, 75, 255) : (isSelected && sectionType != 1 ? IM_COL32(40, 52, 70, 255) : IM_COL32(36, 39, 46, 255));
-                drawList->AddRectFilled(p, ImVec2(p.x + cardWidth, p.y + cardHeight), bgCol, 6.0f);
+                if (isVisible) {
+                    ImU32 bgCol = isHovered ? IM_COL32(55, 62, 75, 255) : (isSelected && sectionType != 1 ? IM_COL32(40, 52, 70, 255) : IM_COL32(36, 39, 46, 255));
+                    drawList->AddRectFilled(p, ImVec2(p.x + cardWidth, p.y + cardHeight), bgCol, 6.0f);
 
-                ImU32 borderCol = isSelected && sectionType != 1 ? IM_COL32(255, 205, 50, 255) : (isHovered ? IM_COL32(100, 130, 170, 255) : IM_COL32(50, 55, 65, 255));
-                float borderWidth = isSelected && sectionType != 1 ? 2.0f : 1.0f;
-                drawList->AddRect(p, ImVec2(p.x + cardWidth, p.y + cardHeight), borderCol, 6.0f, 0, borderWidth);
+                    ImU32 borderCol = isSelected && sectionType != 1 ? IM_COL32(255, 205, 50, 255) : (isHovered ? IM_COL32(100, 130, 170, 255) : IM_COL32(50, 55, 65, 255));
+                    float borderWidth = isSelected && sectionType != 1 ? 2.0f : 1.0f;
+                    drawList->AddRect(p, ImVec2(p.x + cardWidth, p.y + cardHeight), borderCol, 6.0f, 0, borderWidth);
 
-                ImVec2 previewCenter(p.x + cardWidth * 0.5f, p.y + 34.0f);
-                float previewRadius = 20.0f * tool.scale;
+                    ImVec2 previewCenter(p.x + cardWidth * 0.5f, p.y + 34.0f);
+                    float previewRadius = 20.0f * tool.scale;
 
-                bool modelRendered = false;
-                if (tool.modelPtr) {
-                    modelRendered = Draw3DModelPreview(drawList, previewCenter, 46.0f * tool.scale, tool.modelPtr, tool.color, tool.textureGpuHandle, tool.hasTexture);
-                }
-
-                if (!modelRendered) {
-                    if (tool.id == 0) {
-                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, true);
-                    } else if (tool.type == "OneWayBlock") {
-                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 0.35f, false);
-                        ImVec2 arrowTop(previewCenter.x, previewCenter.y - 12.0f);
-                        ImVec2 arrowLeft(previewCenter.x - 7.0f, previewCenter.y - 3.0f);
-                        ImVec2 arrowRight(previewCenter.x + 7.0f, previewCenter.y - 3.0f);
-                        drawList->AddTriangleFilled(arrowTop, arrowLeft, arrowRight, IM_COL32(255, 255, 255, 230));
-                    } else if (tool.type == "DeathBlock") {
-                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
-                        drawList->AddLine(ImVec2(previewCenter.x - 6, previewCenter.y - 6), ImVec2(previewCenter.x + 6, previewCenter.y + 6), IM_COL32(255, 255, 255, 230), 2.0f);
-                        drawList->AddLine(ImVec2(previewCenter.x + 6, previewCenter.y - 6), ImVec2(previewCenter.x - 6, previewCenter.y + 6), IM_COL32(255, 255, 255, 230), 2.0f);
-                    } else if (tool.type == "GoalBlock") {
-                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
-                        drawList->AddLine(ImVec2(previewCenter.x - 4, previewCenter.y + 8), ImVec2(previewCenter.x - 4, previewCenter.y - 8), IM_COL32(255, 255, 255, 240), 1.5f);
-                        drawList->AddTriangleFilled(ImVec2(previewCenter.x - 3, previewCenter.y - 8), ImVec2(previewCenter.x + 6, previewCenter.y - 4), ImVec2(previewCenter.x - 3, previewCenter.y), IM_COL32(255, 220, 50, 240));
-                    } else if (tool.id == 6 || tool.id == 10) {
-                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 0.35f, false);
-                        drawList->AddCircleFilled(ImVec2(previewCenter.x, previewCenter.y - 6.0f), 5.0f, IM_COL32(255, 255, 255, 240));
-                        drawList->AddCircle(ImVec2(previewCenter.x, previewCenter.y - 6.0f), 8.0f, IM_COL32(255, 255, 255, 160), 12, 1.5f);
-                    } else {
-                        Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
+                    bool modelRendered = false;
+                    if (tool.modelPtr) {
+                        modelRendered = DrawCached3DModelPreview(drawList, previewCenter, 46.0f * tool.scale, tool.modelPtr, tool.color, tool.textureGpuHandle, tool.hasTexture, previewCache_);
                     }
+
+                    if (!modelRendered) {
+                        if (tool.id == 0) {
+                            Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, true);
+                        } else if (tool.type == "OneWayBlock") {
+                            Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 0.35f, false);
+                            ImVec2 arrowTop(previewCenter.x, previewCenter.y - 12.0f);
+                            ImVec2 arrowLeft(previewCenter.x - 7.0f, previewCenter.y - 3.0f);
+                            ImVec2 arrowRight(previewCenter.x + 7.0f, previewCenter.y - 3.0f);
+                            drawList->AddTriangleFilled(arrowTop, arrowLeft, arrowRight, IM_COL32(255, 255, 255, 230));
+                        } else if (tool.type == "DeathBlock") {
+                            Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
+                            drawList->AddLine(ImVec2(previewCenter.x - 6, previewCenter.y - 6), ImVec2(previewCenter.x + 6, previewCenter.y + 6), IM_COL32(255, 255, 255, 230), 2.0f);
+                            drawList->AddLine(ImVec2(previewCenter.x + 6, previewCenter.y - 6), ImVec2(previewCenter.x - 6, previewCenter.y + 6), IM_COL32(255, 255, 255, 230), 2.0f);
+                        } else if (tool.type == "GoalBlock") {
+                            Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
+                            drawList->AddLine(ImVec2(previewCenter.x - 4, previewCenter.y + 8), ImVec2(previewCenter.x - 4, previewCenter.y - 8), IM_COL32(255, 255, 255, 240), 1.5f);
+                            drawList->AddTriangleFilled(ImVec2(previewCenter.x - 3, previewCenter.y - 8), ImVec2(previewCenter.x + 6, previewCenter.y - 4), ImVec2(previewCenter.x - 3, previewCenter.y), IM_COL32(255, 220, 50, 240));
+                        } else if (tool.id == 6 || tool.id == 10) {
+                            Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 0.35f, false);
+                            drawList->AddCircleFilled(ImVec2(previewCenter.x, previewCenter.y - 6.0f), 5.0f, IM_COL32(255, 255, 255, 240));
+                            drawList->AddCircle(ImVec2(previewCenter.x, previewCenter.y - 6.0f), 8.0f, IM_COL32(255, 255, 255, 160), 12, 1.5f);
+                        } else {
+                            Draw3DIsometricBox(drawList, previewCenter, previewRadius, tool.color, 1.0f, false);
+                        }
+                    }
+
+                    if (!tool.modelName.empty()) {
+                        ImVec2 badgeMin(p.x + 5.0f, p.y + 5.0f);
+                        ImVec2 badgeMax(p.x + 27.0f, p.y + 18.0f);
+                        drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(30, 100, 200, 230), 3.0f);
+                        drawList->AddRect(badgeMin, badgeMax, IM_COL32(100, 180, 255, 200), 3.0f);
+                        drawList->AddText(ImVec2(badgeMin.x + 3.0f, badgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "3D");
+                    }
+
+                    if (tool.shaderMode == MapChip2D::kShaderGem) {
+                        float bx = !tool.modelName.empty() ? (p.x + 30.0f) : (p.x + 5.0f);
+                        ImVec2 gemBadgeMin(bx, p.y + 5.0f);
+                        ImVec2 gemBadgeMax(bx + 28.0f, p.y + 18.0f);
+                        drawList->AddRectFilled(gemBadgeMin, gemBadgeMax, IM_COL32(180, 50, 180, 230), 3.0f);
+                        drawList->AddRect(gemBadgeMin, gemBadgeMax, IM_COL32(255, 150, 255, 200), 3.0f);
+                        drawList->AddText(ImVec2(gemBadgeMin.x + 3.0f, gemBadgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "GEM");
+                    }
+
+                    drawList->PushClipRect(ImVec2(p.x + 2.0f, p.y + 2.0f), ImVec2(p.x + cardWidth - 2.0f, p.y + cardHeight - 2.0f), true);
+
+                    std::string dispText = GetEllipsisText(tool.name, cardWidth - 8.0f);
+                    ImVec2 textSize = ImGui::CalcTextSize(dispText.c_str());
+                    float textX = p.x + (cardWidth - textSize.x) * 0.5f;
+                    float textY = p.y + cardHeight - textSize.y - 6.0f;
+                    drawList->AddText(ImVec2(textX, textY), isSelected && sectionType != 1 ? IM_COL32(255, 230, 120, 255) : IM_COL32(220, 220, 220, 255), dispText.c_str());
+
+                    drawList->PopClipRect();
                 }
-
-                if (!tool.modelName.empty()) {
-                    ImVec2 badgeMin(p.x + 5.0f, p.y + 5.0f);
-                    ImVec2 badgeMax(p.x + 27.0f, p.y + 18.0f);
-                    drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(30, 100, 200, 230), 3.0f);
-                    drawList->AddRect(badgeMin, badgeMax, IM_COL32(100, 180, 255, 200), 3.0f);
-                    drawList->AddText(ImVec2(badgeMin.x + 3.0f, badgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "3D");
-                }
-
-                if (tool.shaderMode == MapChip2D::kShaderGem) {
-                    float bx = !tool.modelName.empty() ? (p.x + 30.0f) : (p.x + 5.0f);
-                    ImVec2 gemBadgeMin(bx, p.y + 5.0f);
-                    ImVec2 gemBadgeMax(bx + 28.0f, p.y + 18.0f);
-                    drawList->AddRectFilled(gemBadgeMin, gemBadgeMax, IM_COL32(180, 50, 180, 230), 3.0f);
-                    drawList->AddRect(gemBadgeMin, gemBadgeMax, IM_COL32(255, 150, 255, 200), 3.0f);
-                    drawList->AddText(ImVec2(gemBadgeMin.x + 3.0f, gemBadgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "GEM");
-                }
-
-                drawList->PushClipRect(ImVec2(p.x + 2.0f, p.y + 2.0f), ImVec2(p.x + cardWidth - 2.0f, p.y + cardHeight - 2.0f), true);
-
-                std::string dispText = GetEllipsisText(tool.name, cardWidth - 8.0f);
-                ImVec2 textSize = ImGui::CalcTextSize(dispText.c_str());
-                float textX = p.x + (cardWidth - textSize.x) * 0.5f;
-                float textY = p.y + cardHeight - textSize.y - 6.0f;
-                drawList->AddText(ImVec2(textX, textY), isSelected && sectionType != 1 ? IM_COL32(255, 230, 120, 255) : IM_COL32(220, 220, 220, 255), dispText.c_str());
-
-                drawList->PopClipRect();
 
                 if (isHovered) {
                     ImGui::BeginTooltip();
@@ -569,6 +623,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
         
         if (ImGui::Button("テンプレート再読み込み (Reload)")) {
             mapChip->LoadTemplatesFromFile("resources/json/shared/templates_config.json");
+            ClearPreviewCache();
             mapChip->RebuildChipObjects();
         }
         ImGui::SameLine();
@@ -617,6 +672,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                 auto it = std::remove_if(templates.begin(), templates.end(), [&](const MapChip2D::CustomBlockDef& d) { return d.id == templateToDelete_; });
                 templates.erase(it, templates.end());
                 mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
+                ClearPreviewCache();
                 
                 if (context_->GetSelectedTool() == templateToDelete_) {
                     context_->SetSelectedTool(0);
@@ -774,6 +830,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                 auto it = std::remove_if(palette.begin(), palette.end(), [&](const MapChip2D::CustomBlockDef& d) { return d.id == toolToDelete_; });
                 palette.erase(it, palette.end());
                 mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+                ClearPreviewCache();
                 toolToDelete_ = -1;
                 ImGui::CloseCurrentPopup();
             }
