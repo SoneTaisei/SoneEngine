@@ -22,6 +22,7 @@ public:
     void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
+    void Draw2D() override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
 
     // ヒエラルキー用
@@ -36,14 +37,12 @@ private:
     std::unique_ptr<Sprite> titleSprite_;
     std::unique_ptr<Sprite> startSprite_;
 
-    // ■ タイトルシーン専用カメラ
+    // ■ タイトルシーン専用カメラ設定
     EulerTransform cameraTransform_{}; // カメラの座標・回転
     Matrix4x4 viewProjection_{};  // 描画に使う行列
 
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
-
-    std::unique_ptr<DebugCamera> debugCamera_;
 
     // --- エディター停止中用 ---
     void UpdateEditor() override;

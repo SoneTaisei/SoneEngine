@@ -19,12 +19,23 @@
 #include "Renderer/Renderer.h"
 #include "Component/TransformComponent.h"
 #include "GameObject/Object3D.h"
+#include "Graphics/GameCamera.h"
 
 TitleScene::~TitleScene() {
 }
 
 void TitleScene::OnEnter(SceneManager* sceneManager) {
     (void)sceneManager;
+    cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+    cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
+
+    if (gameCamera_) {
+        gameCamera_->Reset();
+        gameCamera_->SetTranslation(cameraTransform_.translate);
+        gameCamera_->SetRotation(cameraTransform_.rotate);
+        gameCamera_->UpdateMatrix();
+    }
+    CameraManager::GetInstance()->ClearCullingCameraInfo();
 }
 
 void TitleScene::OnExit(SceneManager* sceneManager) {
@@ -36,15 +47,22 @@ void TitleScene::Initialize() {
     device = DirectXCommon::GetInstance()->GetDevice();
 
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
+    cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
+
+    // カメラの初期化リセット
+    if (gameCamera_) {
+        gameCamera_->Reset();
+        gameCamera_->SetTranslation(cameraTransform_.translate);
+        gameCamera_->SetRotation(cameraTransform_.rotate);
+        gameCamera_->UpdateMatrix();
+    }
+    CameraManager::GetInstance()->ClearCullingCameraInfo();
 
     // Skyboxの初期化処理
     skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
-
-    debugCamera_ = std::make_unique<DebugCamera>();
-    debugCamera_->Initialize(1280, 720);
 
     // UIスプライトの初期化
     titleTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/title.png");
@@ -89,10 +107,6 @@ void TitleScene::Update(SceneManager *sceneManager) {
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
             return;
         }
-    }
-
-    if (debugCamera_) {
-        debugCamera_->Update();
     }
 
     // 演出用タイマー加算
@@ -142,11 +156,18 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             modelCommon_->PreDraw();
         }
     }
+}
 
-    // UIスプライトの描画
+void TitleScene::Draw2D() {
+    // UIスプライトの最前面描画（ポストエフェクト完了後に描画）
     if (spriteCommon_) {
         spriteCommon_->PreDraw();
-        spriteCommon_->DrawAll();
+        if (titleSprite_) {
+            titleSprite_->Draw();
+        }
+        if (startSprite_) {
+            startSprite_->Draw();
+        }
     }
 }
 
@@ -164,9 +185,22 @@ std::vector<PrimitiveObject *> TitleScene::GetPrimitives() {
 
 void TitleScene::UpdateEditor() {
     if (titleSprite_) {
+        const float titleWidth = 800.0f * 1.2f;
+        const float titleX = (1280.0f - titleWidth) * 0.5f;
+        const float titleBaseY = 150.0f;
+        titleSprite_->SetPosition({ titleX, titleBaseY });
+        titleSprite_->SetSize({ titleWidth, 92.0f * 1.2f });
+        titleSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
         titleSprite_->Update();
     }
     if (startSprite_) {
+        const float startWidth = 250.0f;
+        const float startHeight = 92.0f;
+        const float startX = (1280.0f - startWidth) * 0.5f;
+        const float startY = 520.0f;
+        startSprite_->SetPosition({ startX, startY });
+        startSprite_->SetSize({ startWidth, startHeight });
+        startSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
         startSprite_->Update();
     }
     if (skybox_) {
