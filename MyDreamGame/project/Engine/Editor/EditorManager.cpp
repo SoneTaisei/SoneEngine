@@ -67,8 +67,11 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     mapEditor_->Initialize();
     model3DEditor_ = std::make_unique<Model3DEditor>();
     model3DEditor_->Initialize(device);
-    lightEditor_ = std::make_unique<LightEditor>();
-    lightEditor_->Initialize(nullptr);
+    if (!lightEditor_) {
+        ownedLightEditor_ = std::make_unique<LightEditor>();
+        lightEditor_ = ownedLightEditor_.get();
+        lightEditor_->Initialize(nullptr);
+    }
     postEffectEditor_ = std::make_unique<PostEffectEditor>();
     postEffectEditor_->Initialize();
     animModelSelectModal_ = std::make_unique<ModelSelectModal>();
@@ -1019,17 +1022,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::End();
     }
 
-    // --- Light Editor の定数バッファ同期（常時実行） ---
-    if (lightEditor_) {
-        float dt = TimeManager::GetInstance().GetDeltaTime();
-        const Vector3* playerPos = nullptr;
-        if (IScene* curScene = sceneManager->GetCurrentScene()) {
-            if (Player2D* player = curScene->GetPlayer()) {
-                playerPos = &player->GetPosition();
-            }
-        }
-        lightEditor_->Update(dt, modelCommon, playerPos);
-    }
+    // --- Light Editor の定数バッファ同期（WindowsApplication::Update でRelease/Develop問わず一元実行） ---
+    // if (lightEditor_) {
+    //     float dt = TimeManager::GetInstance().GetDeltaTime();
+    //     const Vector3* playerPos = nullptr;
+    //     if (IScene* curScene = sceneManager->GetCurrentScene()) {
+    //         if (Player2D* player = curScene->GetPlayer()) {
+    //             playerPos = &player->GetPosition();
+    //         }
+    //     }
+    //     lightEditor_->Update(dt, modelCommon, playerPos);
+    // }
 
     // --- PostEffect Editor のパラメータ同期（常時実行） ---
     if (postEffectEditor_) {
@@ -1971,13 +1974,24 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Separator();
                 {
                     auto dxCommon = DirectXCommon::GetInstance();
-                    bool outlineEnabled = dxCommon->IsOutlineEnabled();
-                    bool oldOutline = outlineEnabled;
-                    if (ImGui::Checkbox("アウトラインを有効化", &outlineEnabled)) {
-                        dxCommon->SetOutlineEnabled(outlineEnabled);
-                        SaveSceneConfig();
-                        PushActionCommand([=](){ dxCommon->SetOutlineEnabled(oldOutline); SaveSceneConfig(); }, 
-                                          [=](){ dxCommon->SetOutlineEnabled(outlineEnabled); SaveSceneConfig(); });
+                    if (dxCommon) {
+                        bool postOutlineEnabled = dxCommon->IsDepthBasedOutlineEnabled();
+                        bool oldPostOutline = postOutlineEnabled;
+                        if (ImGui::Checkbox("ポストエフェクト・アウトライン (深度)", &postOutlineEnabled)) {
+                            dxCommon->SetDepthBasedOutlineEnabled(postOutlineEnabled);
+                            SaveSceneConfig();
+                            PushActionCommand([=](){ dxCommon->SetDepthBasedOutlineEnabled(oldPostOutline); SaveSceneConfig(); }, 
+                                              [=](){ dxCommon->SetDepthBasedOutlineEnabled(postOutlineEnabled); SaveSceneConfig(); });
+                        }
+
+                        bool outlineEnabled = dxCommon->IsOutlineEnabled();
+                        bool oldOutline = outlineEnabled;
+                        if (ImGui::Checkbox("メッシュ・アウトライン (ワイヤー/押し出し)", &outlineEnabled)) {
+                            dxCommon->SetOutlineEnabled(outlineEnabled);
+                            SaveSceneConfig();
+                            PushActionCommand([=](){ dxCommon->SetOutlineEnabled(oldOutline); SaveSceneConfig(); }, 
+                                              [=](){ dxCommon->SetOutlineEnabled(outlineEnabled); SaveSceneConfig(); });
+                        }
                     }
                 }
                 ImGui::Spacing();
@@ -2866,6 +2880,7 @@ void EditorManager::SaveSceneConfig() {
         nlohmann::json j;
         j["currentScene"] = SceneFactory::GetSceneTypeName(currentSceneType_);
         j["isOutlineEnabled"] = dxCommon ? dxCommon->IsOutlineEnabled() : false;
+        j["isDepthBasedOutlineEnabled"] = dxCommon ? dxCommon->IsDepthBasedOutlineEnabled() : true;
         j["outlineThickness"] = dxCommon ? dxCommon->GetOutlineThickness() : 0.015f;
 
         // アクティブメインタブ
@@ -2933,6 +2948,11 @@ void EditorManager::LoadSceneConfig() {
         if (dxCommon) {
             if (j.contains("isOutlineEnabled") && j["isOutlineEnabled"].is_boolean()) {
                 dxCommon->SetOutlineEnabled(j["isOutlineEnabled"].get<bool>());
+            }
+            if (j.contains("isDepthBasedOutlineEnabled") && j["isDepthBasedOutlineEnabled"].is_boolean()) {
+                dxCommon->SetDepthBasedOutlineEnabled(j["isDepthBasedOutlineEnabled"].get<bool>());
+            } else {
+                dxCommon->SetDepthBasedOutlineEnabled(true);
             }
             if (j.contains("outlineThickness") && j["outlineThickness"].is_number()) {
                 dxCommon->SetOutlineThickness(j["outlineThickness"].get<float>());

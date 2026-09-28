@@ -1306,6 +1306,11 @@ bool LightEditor::LoadFromFile(const std::string& filePath) {
         ifs.close();
 
         if (j.contains("ambientIntensity")) ambientIntensity_ = j["ambientIntensity"];
+        if (j.contains("activeLightType")) {
+            int alt = j["activeLightType"].get<int>();
+            enableDirectional_ = (alt == 0);
+            enablePoint_ = (alt == 1);
+        }
         if (j.contains("enableDirectional")) enableDirectional_ = j["enableDirectional"];
         if (j.contains("enablePoint")) enablePoint_ = j["enablePoint"];
         if (j.contains("enableFlatShading")) enableFlatShading_ = j["enableFlatShading"];

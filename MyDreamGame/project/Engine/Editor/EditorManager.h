@@ -101,7 +101,8 @@ public:
 
     AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
     MapEditor* GetMapEditor() const { return mapEditor_.get(); }
-    LightEditor* GetLightEditor() const { return lightEditor_.get(); }
+    void SetLightEditor(LightEditor* lightEditor) { lightEditor_ = lightEditor; }
+    LightEditor* GetLightEditor() const { return lightEditor_; }
     Model3DEditor* GetModel3DEditor() const { return model3DEditor_.get(); }
     PostEffectEditor* GetPostEffectEditor() const { return postEffectEditor_.get(); }
     GPUParticleEditor* GetGPUParticleEditor() const { return gpuParticleEditor_.get(); }
@@ -344,7 +345,8 @@ private:
     std::unique_ptr<AnimationEditor> animationEditor_;
     std::unique_ptr<GPUParticleEditor> gpuParticleEditor_;
     std::unique_ptr<MapEditor> mapEditor_;
-    std::unique_ptr<LightEditor> lightEditor_;
+    std::unique_ptr<LightEditor> ownedLightEditor_;
+    LightEditor* lightEditor_ = nullptr;
     std::unique_ptr<Model3DEditor> model3DEditor_;
     std::unique_ptr<PostEffectEditor> postEffectEditor_;
     std::unique_ptr<ModelSelectModal> animModelSelectModal_;

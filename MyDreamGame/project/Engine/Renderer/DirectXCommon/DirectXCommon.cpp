@@ -1105,7 +1105,7 @@ void DirectXCommon::CreatePostEffectPipelines() {
 
 
     // 逆プロジェクション行列用定数バッファの作成
-    projectionInverseParamResource_ = CreateBufferResource(device_.Get(), sizeof(ProjectionInverseParams));
+    projectionInverseParamResource_ = CreateBufferResource(device_.Get(), (sizeof(ProjectionInverseParams) + 255) & ~255);
     projectionInverseParamResource_->Map(0, nullptr, reinterpret_cast<void**>(&projectionInverseParamsData_));
     projectionInverseParamsData_->projectionInverse = TransformFunctions::MakeIdentity4x4();
 }

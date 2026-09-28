@@ -435,7 +435,7 @@ private:
 
     PostEffect postEffect_ = PostEffect::kComposite;
     bool isPostEffectEnabled_ = true;
-    bool isDepthBasedOutlineEnabled_ = false;
+    bool isDepthBasedOutlineEnabled_ = true;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;

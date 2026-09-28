@@ -4,6 +4,8 @@
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
 #include "Editor/Model3DEditor/Model3DEditorContext.h"
+#include "Editor/LightEditor/LightEditor.h"
+#include "../../Project/Game2D/Player/Player2D.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
@@ -159,8 +161,13 @@ void WindowsApplication::Initialize() {
     isDebugCameraActive_ = false;
 #endif
 
+    // ライティング管理の初期化（Release / Develop問わず共通）
+    lightEditor_ = std::make_unique<LightEditor>();
+    lightEditor_->Initialize(modelCommon_.get());
+
 #ifdef USE_IMGUI
     editorManager_ = std::make_unique<EditorManager>();
+    editorManager_->SetLightEditor(lightEditor_.get());
     // commandQueue を dxCommon から取得して渡す
     editorManager_->Initialize(hwnd, device, dxCommon_->GetCommandQueue());
     editorManager_->LoadSceneConfig();
@@ -168,6 +175,9 @@ void WindowsApplication::Initialize() {
 #else
     // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
     modelCommon_->LoadLightingConfig();
+    // ポストエフェクトアウトラインを有効化、メッシュワイヤーアウトラインは無効化
+    dxCommon_->SetDepthBasedOutlineEnabled(true);
+    dxCommon_->SetOutlineEnabled(false);
     // エディター非搭載ビルドでは配置モデルの実体をここで初期化する
     // (エディター搭載時は EditorManager -> Model3DEditor 経由で初期化される)
     Model3DEditorContext::GetInstance()->Initialize(device);
@@ -386,6 +396,20 @@ void WindowsApplication::Update() {
     CameraManager::GetInstance()->ClearCullingCameraInfo();
     AudioManager::SetBGMPlaybackAllowed(true);
 #endif
+
+    // ライティングの更新（追従・アニメーションおよびGPU定数バッファ同期）
+    // Release / Develop、および ImGui 表示 / 非表示を問わず毎フレーム常に実行！
+    if (lightEditor_) {
+        const Vector3* playerPos = nullptr;
+        if (sceneManager_->GetCurrentScene()) {
+            auto* player = sceneManager_->GetCurrentScene()->GetPlayer();
+            if (player) {
+                playerPos = &player->GetPosition();
+            }
+        }
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        lightEditor_->Update(dt, modelCommon_.get(), playerPos);
+    }
 
     // 現在のアクティブカメラの行列をViewProjectionに反映
     viewProjection_->UpdateMatrix(
