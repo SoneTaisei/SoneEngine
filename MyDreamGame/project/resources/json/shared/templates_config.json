@@ -151,16 +151,16 @@
                 "r": 1.0
             },
             "id": 9,
-            "modelName": "",
+            "modelName": "Object/Original/jumpBlock/jumpBlock.obj",
             "name": "Jump",
             "properties": {
                 "jumpVelocityHorizontal": 15.0,
                 "jumpVelocityVertical": 27.0
             },
             "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
             },
             "textureName": "",
             "type": "JumpBlock"

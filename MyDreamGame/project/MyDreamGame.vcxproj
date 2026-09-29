@@ -228,6 +228,7 @@
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp" />
     <ClCompile Include="Project\Effect\windowParticle.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
+    <ClCompile Include="Engine\Renderer\LineRenderer.cpp" />
     <ClCompile Include="Engine\Platform\Window.cpp" />
     <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
     <ClCompile Include="Engine\Graphics\Skybox.cpp" />
@@ -474,6 +475,7 @@
     <ClInclude Include="Engine\Platform\WindowsApplication.h" />
     <ClInclude Include="Project\Effect\windowParticle.h" />
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
+    <ClInclude Include="Engine\Renderer\LineRenderer.h" />
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
     <ClInclude Include="Engine\Graphics\Skybox.h" />

@@ -218,6 +218,8 @@ public:
             *shadowGlobalParamData_ = lightVP;
         }
     }
+    const D3D12_VIEWPORT& GetViewport() const { return viewport_; }
+    const D3D12_RECT& GetScissorRect() const { return scissorRect_; }
     const D3D12_VIEWPORT& GetShadowViewport() const { return shadowViewport_; }
     const D3D12_RECT& GetShadowScissorRect() const { return shadowScissorRect_; }
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }

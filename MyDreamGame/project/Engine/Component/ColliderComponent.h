@@ -11,8 +11,10 @@ enum ColliderLayer : uint32_t {
 };
 
 enum class ColliderType {
-    kBox,
-    kSphere
+    kAABB,
+    kOBB,
+    kSphere,
+    kBox = kAABB // 後方互換用エイリアス
 };
 
 class ColliderComponent : public IComponent {

@@ -24,6 +24,7 @@
 #include "Animation/AnimationPreviewScene.h"
 #include "GPUParticle/GPUParticlePreviewScene.h"
 #include "Core/Utility/ParameterManager.h"
+#include "Collision/CollisionManager.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -1976,6 +1977,34 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Separator();
                 ImGui::Checkbox("オブジェクトを表示 (モデル)", &showObjects_);
                 ImGui::Checkbox("エフェクトを表示 (パーティクル/プリミティブ)", &showEffects_);
+                {
+                    bool showColliders = CollisionManager::GetInstance()->IsDebugDrawEnabled();
+                    bool oldShowColliders = showColliders;
+                    if (ImGui::Checkbox("当たり判定のワイヤー表示 (コライダー)", &showColliders)) {
+                        CollisionManager::GetInstance()->SetDebugDrawEnabled(showColliders);
+                        SaveSceneConfig();
+                        PushActionCommand([=](){ CollisionManager::GetInstance()->SetDebugDrawEnabled(oldShowColliders); SaveSceneConfig(); },
+                                          [=](){ CollisionManager::GetInstance()->SetDebugDrawEnabled(showColliders); SaveSceneConfig(); });
+                    }
+                    if (showColliders) {
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("(?)");
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("形状タイプごとの色分け:\n・緑: AABB (軸平行ボックス/矩形)\n・オレンジ: OBB (回転ボックス)\n・水色: Sphere (球/円)");
+                        }
+
+                        ImGui::Indent();
+                        bool depthTest = CollisionManager::GetInstance()->IsDepthTestEnabled();
+                        bool oldDepthTest = depthTest;
+                        if (ImGui::Checkbox("遮蔽 (ブロックの奥で隠す)", &depthTest)) {
+                            CollisionManager::GetInstance()->SetDepthTestEnabled(depthTest);
+                            SaveSceneConfig();
+                            PushActionCommand([=](){ CollisionManager::GetInstance()->SetDepthTestEnabled(oldDepthTest); SaveSceneConfig(); },
+                                              [=](){ CollisionManager::GetInstance()->SetDepthTestEnabled(depthTest); SaveSceneConfig(); });
+                        }
+                        ImGui::Unindent();
+                    }
+                }
                 ImGui::Spacing();
 
                 ImGui::Text("アウトライン設定");
@@ -2897,6 +2926,8 @@ void EditorManager::SaveSceneConfig() {
         j["isOutlineEnabled"] = dxCommon ? dxCommon->IsOutlineEnabled() : false;
         j["isDepthBasedOutlineEnabled"] = dxCommon ? dxCommon->IsDepthBasedOutlineEnabled() : true;
         j["outlineThickness"] = dxCommon ? dxCommon->GetOutlineThickness() : 0.015f;
+        j["isColliderWireEnabled"] = CollisionManager::GetInstance()->IsDebugDrawEnabled();
+        j["isColliderDepthTestEnabled"] = CollisionManager::GetInstance()->IsDepthTestEnabled();
 
         // アクティブメインタブ
         j["activeMainTab"] = activeMainTab_;
@@ -2973,6 +3004,13 @@ void EditorManager::LoadSceneConfig() {
             if (j.contains("outlineThickness") && j["outlineThickness"].is_number()) {
                 dxCommon->SetOutlineThickness(j["outlineThickness"].get<float>());
             }
+        }
+
+        if (j.contains("isColliderWireEnabled") && j["isColliderWireEnabled"].is_boolean()) {
+            CollisionManager::GetInstance()->SetDebugDrawEnabled(j["isColliderWireEnabled"].get<bool>());
+        }
+        if (j.contains("isColliderDepthTestEnabled") && j["isColliderDepthTestEnabled"].is_boolean()) {
+            CollisionManager::GetInstance()->SetDepthTestEnabled(j["isColliderDepthTestEnabled"].get<bool>());
         }
 
         if (j.contains("activeMainTab") && j["activeMainTab"].is_string()) {

@@ -17,6 +17,8 @@
 #endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"
+#include "Renderer/LineRenderer.h"
+#include "Collision/CollisionManager.h"
 #include "../../Project/Scenes/GameScene.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
@@ -133,6 +135,9 @@ void WindowsApplication::Initialize() {
     // ViewProjectionリソースの作成
     viewProjection_ = std::make_unique<ViewProjection>();
     viewProjection_->Initialize(dxCommon_->GetDevice());
+
+    // LineRenderer初期化 (コライダーやデバッグワイヤー用)
+    LineRenderer::GetInstance()->Initialize(device, dxCommon_.get());
 
     // 1. 本番カメラ生成
     gameCamera_ = std::make_unique<GameCamera>();
@@ -443,6 +448,9 @@ void WindowsApplication::Draw() {
     // エディター非搭載ビルドでもシーンのレベルデータを描画する (グリッド床は描かない)
     Model3DEditorContext::GetInstance()->Draw(false);
 #endif
+
+    // コライダーの3Dデバッグワイヤー描画（深度テストにより手前のブロックで正しく遮蔽される）
+    CollisionManager::GetInstance()->Draw3D(commandList, viewProjection_->GetMatrix());
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw();
