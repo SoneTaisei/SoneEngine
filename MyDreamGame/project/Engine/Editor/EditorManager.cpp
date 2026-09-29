@@ -74,6 +74,8 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     }
     postEffectEditor_ = std::make_unique<PostEffectEditor>();
     postEffectEditor_->Initialize();
+    spriteAnimEditor_ = std::make_unique<SpriteAnimationEditor>();
+    spriteAnimEditor_->Initialize();
     animModelSelectModal_ = std::make_unique<ModelSelectModal>();
     animModelSelectModal_->Initialize();
     postEffectEditor_->SetOnSelectCallback([this]() {
@@ -607,6 +609,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 SaveSceneConfig();
             }
             if (ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("スプライトアニメーション", nullptr, &showSpriteAnimation_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_)) {
                 if (showMapEditor_) {
                     activeMainTab_ = "マップチップ画面";
@@ -805,6 +808,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             // 右側
             ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
             ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+            ImGui::DockBuilderDockWindow("スプライトアニメーション", dock_id_right);
 
             // 下側
             ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
@@ -1038,6 +1042,10 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     if (postEffectEditor_) {
         float dt = TimeManager::GetInstance().GetDeltaTime();
         postEffectEditor_->Update(dt);
+    }
+    if (spriteAnimEditor_) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        spriteAnimEditor_->Update(dt);
     }
 
     // --- Light Editor メインウィンドウ (dock_id_main) ---
@@ -2170,6 +2178,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::End();
     }
 
+    // --- Sprite Animation ウィンドウ ---
+    if (showSpriteAnimation_) {
+        if (spriteAnimEditor_) {
+            spriteAnimEditor_->DrawUI(&showSpriteAnimation_);
+        }
+    }
+
     // --- ParameterManager ウィンドウ ---
     if (showParameterManager_) {
         if (ImGui::Begin("パラメータ調整 (ParameterManager)", &showParameterManager_)) {
@@ -2910,6 +2925,7 @@ void EditorManager::SaveSceneConfig() {
         winObj["showHierarchy"] = showHierarchy_;
         winObj["showGameView"] = showGameView_;
         winObj["showPostEffect"] = showPostEffect_;
+        winObj["showSpriteAnimation"] = showSpriteAnimation_;
         winObj["showMapEditor"] = showMapEditor_;
         winObj["showMapSettings"] = showMapSettings_;
         winObj["showReplayEditor"] = showReplayEditor_;
@@ -3018,6 +3034,7 @@ void EditorManager::LoadSceneConfig() {
             if (winObj.contains("showHierarchy") && winObj["showHierarchy"].is_boolean()) showHierarchy_ = winObj["showHierarchy"].get<bool>();
             if (winObj.contains("showGameView") && winObj["showGameView"].is_boolean()) showGameView_ = winObj["showGameView"].get<bool>();
             if (winObj.contains("showPostEffect") && winObj["showPostEffect"].is_boolean()) showPostEffect_ = winObj["showPostEffect"].get<bool>();
+            if (winObj.contains("showSpriteAnimation") && winObj["showSpriteAnimation"].is_boolean()) showSpriteAnimation_ = winObj["showSpriteAnimation"].get<bool>();
             if (winObj.contains("showMapEditor") && winObj["showMapEditor"].is_boolean()) showMapEditor_ = winObj["showMapEditor"].get<bool>();
             if (winObj.contains("showMapSettings") && winObj["showMapSettings"].is_boolean()) showMapSettings_ = winObj["showMapSettings"].get<bool>();
             if (winObj.contains("showReplayEditor") && winObj["showReplayEditor"].is_boolean()) showReplayEditor_ = winObj["showReplayEditor"].get<bool>();
@@ -3080,6 +3097,7 @@ void EditorManager::ApplyDefaultLayout() {
     showHierarchy_ = true;
     showGameView_ = true;
     showPostEffect_ = true;
+    showSpriteAnimation_ = true;
     showMapEditor_ = true;
     showMapSettings_ = true;
     showReplayEditor_ = true;
@@ -3125,6 +3143,7 @@ void EditorManager::ApplyDefaultLayout() {
     // 右側
     ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
     ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+    ImGui::DockBuilderDockWindow("スプライトアニメーション", dock_id_right);
 
     // 下側
     ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
@@ -3207,6 +3226,7 @@ void EditorManager::SaveLayoutPreset(const std::string& name) {
     preset.showSpotLightPanel = showSpotLightPanel_;
     preset.showModelPlacement = showModelPlacementEditor_;
     preset.showModelPalette = showModelPalette_;
+    preset.showSpriteAnimation = showSpriteAnimation_;
 
     nlohmann::json j;
     j["name"] = preset.name;
@@ -3215,6 +3235,7 @@ void EditorManager::SaveLayoutPreset(const std::string& name) {
     j["showHierarchy"] = preset.showHierarchy;
     j["showGameView"] = preset.showGameView;
     j["showPostEffect"] = preset.showPostEffect;
+    j["showSpriteAnimation"] = preset.showSpriteAnimation;
     j["showMapEditor"] = preset.showMapEditor;
     j["showMapSettings"] = preset.showMapSettings;
     j["showReplayEditor"] = preset.showReplayEditor;
@@ -3253,6 +3274,7 @@ bool EditorManager::ApplyLayoutPreset(const std::string& name) {
             showHierarchy_ = preset.showHierarchy;
             showGameView_ = preset.showGameView;
             showPostEffect_ = preset.showPostEffect;
+            showSpriteAnimation_ = preset.showSpriteAnimation;
             showMapEditor_ = preset.showMapEditor;
             showMapSettings_ = preset.showMapSettings;
             showReplayEditor_ = preset.showReplayEditor;
@@ -3301,12 +3323,15 @@ bool EditorManager::ExportLayoutPresetToFile(const std::string& name, const std:
             j["showHierarchy"] = preset.showHierarchy;
             j["showGameView"] = preset.showGameView;
             j["showPostEffect"] = preset.showPostEffect;
+            j["showSpriteAnimation"] = preset.showSpriteAnimation;
             j["showMapEditor"] = preset.showMapEditor;
             j["showMapSettings"] = preset.showMapSettings;
             j["showReplayEditor"] = preset.showReplayEditor;
             j["showAnimEditor"] = preset.showAnimEditor;
             j["showLightEditor"] = preset.showLightEditor;
             j["showSpotLightPanel"] = preset.showSpotLightPanel;
+            j["showModelPlacement"] = preset.showModelPlacement;
+            j["showModelPalette"] = preset.showModelPalette;
 
             std::filesystem::path outPath(filePath);
             if (outPath.has_parent_path()) {
@@ -3344,6 +3369,7 @@ bool EditorManager::ImportLayoutPresetFromFile(const std::string& filePath) {
         preset.showHierarchy = j.value("showHierarchy", true);
         preset.showGameView = j.value("showGameView", true);
         preset.showPostEffect = j.value("showPostEffect", true);
+        preset.showSpriteAnimation = j.value("showSpriteAnimation", true);
         preset.showMapEditor = j.value("showMapEditor", true);
         preset.showMapSettings = j.value("showMapSettings", true);
         preset.showReplayEditor = j.value("showReplayEditor", true);

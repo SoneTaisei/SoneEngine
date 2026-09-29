@@ -305,6 +305,7 @@
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
     <ClCompile Include="Engine\Editor\PostEffectEditor\PostEffectEditor.cpp" />
+    <ClCompile Include="Engine\Editor\SpriteAnimationEditor\SpriteAnimationEditor.cpp" />
     <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleEmitter.cpp" />
     <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleSystem.cpp" />
     <ClCompile Include="Engine\Renderer\ConstantBufferPool.cpp">
@@ -615,6 +616,7 @@
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
     <ClInclude Include="Engine\Editor\PostEffectEditor\PostEffectEditor.h" />
+    <ClInclude Include="Engine\Editor\SpriteAnimationEditor\SpriteAnimationEditor.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleData.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleEmitter.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleSystem.h" />
