@@ -58,6 +58,12 @@ public:
 
     AABB2D GetAABB() const;
 
+    // Custom Fixed AABB (Transform変更による判定ズレを防ぎたい場合用)
+    void SetCustomAABB(const AABB2D& aabb) { customAABB_ = aabb; hasCustomAABB_ = true; }
+    void ClearCustomAABB() { hasCustomAABB_ = false; }
+    bool HasCustomAABB() const { return hasCustomAABB_; }
+    const AABB2D& GetCustomAABB() const { return customAABB_; }
+
     void SetUserData(void* data) { userData_ = data; }
     void* GetUserData() const { return userData_; }
 
@@ -84,6 +90,9 @@ private:
     bool isMoving_ = false;
     Vector3 velocity_ = {0.0f, 0.0f, 0.0f};
     void* userData_ = nullptr;
+
+    bool hasCustomAABB_ = false;
+    AABB2D customAABB_{};
 
     OnCollisionCallback onCollision_ = nullptr;
     OnCollisionCallback onPlayerStand_ = nullptr;

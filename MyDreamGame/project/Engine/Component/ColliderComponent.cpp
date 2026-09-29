@@ -31,6 +31,10 @@ void ColliderComponent::DisplayImGui() {
 }
 
 AABB2D ColliderComponent::GetAABB() const {
+    if (hasCustomAABB_) {
+        return customAABB_;
+    }
+
     Vector3 pos = {0.0f, 0.0f, 0.0f};
     Vector3 scale = boxSize_;
 
