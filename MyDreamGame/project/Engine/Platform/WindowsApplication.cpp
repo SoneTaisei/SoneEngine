@@ -8,6 +8,8 @@
 #include "../../Project/Game2D/Player/Player2D.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
+#include "Editor/Animation/AnimationPreviewScene.h"
+#include "Editor/GPUParticle/GPUParticlePreviewScene.h"
 #endif
 #include "Effect/ParticleCommon.h"
 #include "Graphics/DebugCamera.h"
@@ -450,7 +452,22 @@ void WindowsApplication::Draw() {
 #endif
 
     // コライダーの3Dデバッグワイヤー描画（深度テストにより手前のブロックで正しく遮蔽される）
-    CollisionManager::GetInstance()->Draw3D(commandList, viewProjection_->GetMatrix());
+    // アニメーションエディターとパーティクルエディターを起動しているときは当たり判定の表示を消す
+    bool suppressColliderDraw = false;
+#ifdef USE_IMGUI
+    if (editorManager_ && editorManager_->IsAnimationOrParticleEditorActive()) {
+        suppressColliderDraw = true;
+    }
+    if (sceneManager_) {
+        IScene* curScene = sceneManager_->GetCurrentScene();
+        if (dynamic_cast<AnimationPreviewScene*>(curScene) || dynamic_cast<GPUParticlePreviewScene*>(curScene)) {
+            suppressColliderDraw = true;
+        }
+    }
+#endif
+    if (!suppressColliderDraw) {
+        CollisionManager::GetInstance()->Draw3D(commandList, viewProjection_->GetMatrix());
+    }
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw();

@@ -90,6 +90,9 @@ public:
     bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
     bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
     const std::string& GetActiveMainTab() const { return activeMainTab_; }
+    bool IsAnimationEditorActive() const;
+    bool IsGPUParticleEditorActive() const;
+    bool IsAnimationOrParticleEditorActive() const;
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }

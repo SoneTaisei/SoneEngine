@@ -18,6 +18,8 @@
 #include "Input/KeyboardInput.h"
 #include "Input/GamepadInput.h"
 #include "Graphics/Skybox.h"
+#include "Graphics/CameraManager.h"
+#include "Resource/Model/ModelManager.h"
 #include "Core/Utility/ParameterManager.h"
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
@@ -80,7 +82,14 @@ void GameScene::Initialize() {
     ringEffect_->Initialize(device.Get(), gradationHandle);
     cylinderEffect_ = std::make_unique<CylinderEffect>();
     cylinderEffect_->Initialize(device.Get(), gradationHandle);
-    Log("GameScene::Initialize: Effects Initialized\n");
+
+    // GPUパーティクル (snow) の初期化
+    snowParticle_ = std::make_unique<GPUParticleSystem>();
+    snowParticle_->Initialize(device.Get());
+    if (snowParticle_->LoadFromFile("resources/json/shared/Particle/snow.json")) {
+        snowParticle_->Play();
+    }
+    Log("GameScene::Initialize: Effects and Snow Particle Initialized\n");
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
@@ -214,6 +223,15 @@ void GameScene::Update(SceneManager *sceneManager) {
 
     float dt = TimeManager::GetInstance().GetDeltaTime();
     
+    // GPUパーティクル (snow) の更新（画面右端に設置して常に降らせる）
+    if (snowParticle_) {
+        Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
+        float halfW = (gameCamera_ && gameCamera_->IsOrthographic()) ? (gameCamera_->GetOrthoWidth() * 0.5f) : 10.0f;
+        Vector3 snowPos = { camPos.x + halfW, camPos.y, 0.0f };
+        snowParticle_->SetPosition(snowPos);
+        snowParticle_->Update(dt);
+    }
+
     // フェードイン演出
     float transitionSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "transitionSpeed", 1.5f);
     if (transitionAlpha_ > 0.0f) {
@@ -764,6 +782,22 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #endif
     }
 
+    if (snowParticle_) {
+#ifdef USE_IMGUI
+        if (EditorManager::IsShowEffects() || EditorManager::IsPlaying() || ReplayManager::GetInstance()->IsPlaying()) {
+#endif
+            if (particleCommon_) {
+                particleCommon_->PreDraw();
+                auto commandList = DirectXCommon::GetInstance()->GetCommandList();
+                Matrix4x4 cameraMatrix = TransformFunctions::Inverse(CameraManager::GetInstance()->GetViewMatrix());
+                ModelManager* modelManager = ModelManager::GetInstance();
+                snowParticle_->Draw(commandList, viewProjectionMatrix, cameraMatrix, particleCommon_, modelManager);
+            }
+#ifdef USE_IMGUI
+        }
+#endif
+    }
+
 #ifdef USE_IMGUI
     // --- ゴースト残像の描画（マリオメーカー仕様） ---
     // エディタ停止中で、かつリプレイの再生/録画もしていない時に「選択中のリプレイ全体」の軌跡を表示する
@@ -1008,6 +1042,16 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 
 void GameScene::UpdateEditor() {
     float dt = TimeManager::GetInstance().GetDeltaTime();
+
+    // GPUパーティクル (snow) の更新（エディタ停止中も画面右端から常時降らせる）
+    if (snowParticle_) {
+        Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
+        float halfW = (gameCamera_ && gameCamera_->IsOrthographic()) ? (gameCamera_->GetOrthoWidth() * 0.5f) : 10.0f;
+        Vector3 snowPos = { camPos.x + halfW, camPos.y, 0.0f };
+        snowParticle_->SetPosition(snowPos);
+        snowParticle_->Update(dt);
+    }
+
     // フェードイン演出 (エディタ停止中もフェードインさせる)
     if (transitionAlpha_ > 0.0f) {
         transitionAlpha_ -= dt * 1.5f;

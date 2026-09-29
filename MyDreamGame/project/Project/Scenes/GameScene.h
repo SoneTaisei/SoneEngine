@@ -2,6 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 #include "Effect/CoinEffect.h"
 #include "Effect/CylinderEffect.h"
 #include "Effect/RingEffect.h"
@@ -61,6 +62,7 @@ private:
     std::unique_ptr<CoinEffect> coinEffect_;
     std::unique_ptr<CylinderEffect> cylinderEffect_;
     std::unique_ptr<RingEffect> ringEffect_;
+    std::unique_ptr<GPUParticleSystem> snowParticle_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();

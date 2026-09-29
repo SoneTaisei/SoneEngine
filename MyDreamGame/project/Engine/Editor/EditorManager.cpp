@@ -2910,6 +2910,24 @@ void EditorManager::Draw3D() {
     }
 }
 
+bool EditorManager::IsAnimationEditorActive() const {
+    if (currentMode_ == EditorMode::Animation) return true;
+    if (activeMainTab_ == "アニメーションエディター") return true;
+    if (animationEditor_ && animationEditor_->IsAnimScenePushed()) return true;
+    return false;
+}
+
+bool EditorManager::IsGPUParticleEditorActive() const {
+    if (currentMode_ == EditorMode::GPUParticle) return true;
+    if (activeMainTab_ == "GPUパーティクルエディター") return true;
+    if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) return true;
+    return false;
+}
+
+bool EditorManager::IsAnimationOrParticleEditorActive() const {
+    return IsAnimationEditorActive() || IsGPUParticleEditorActive();
+}
+
 void EditorManager::Finalize() {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
