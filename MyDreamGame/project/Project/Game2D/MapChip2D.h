@@ -27,6 +27,8 @@ public:
         kJumpBlock = 9, // ジャンプ台
         kRoomRespawn = 10, // 部屋用リスポーン地点
         kEnemy = 12, // 巡回する敵キャラクター
+        kBreakableBlock = 13, // ダッシュ破壊ブロック
+        kDashRecovery = 14, // ダッシュ回復ブロック
     };
 
     void Initialize(const std::string& mapFilePath);

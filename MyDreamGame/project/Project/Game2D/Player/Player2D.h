@@ -47,6 +47,12 @@ public:
     void RefillDash() { state_.canDash_ = true; state_.isDashing_ = false; state_.dashTimer_ = 0.0f; }
     void ApplyHitstop(float duration) { state_.hitstopTimer_ = duration; }
     void SetSpringControlDisable(float duration) { state_.springControlDisableTimer_ = duration; }
+
+    // ダッシュ状態の取得
+    bool IsDashing() const { return state_.isDashing_; }
+    const Vector3& GetDashVelocity() const { return state_.dashVelocity_; }
+    const PlayerState& GetState() const { return state_; }
+    PlayerState& GetState() { return state_; }
     // JSON Parameters
 
     // プレイヤーの位置を取得（カメラ追従用）

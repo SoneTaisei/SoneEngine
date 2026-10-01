@@ -14,6 +14,9 @@
 #include "Blocks/RailBlock.h"
 #include "Blocks/JumpBlock.h"
 #include "Blocks/PatrolEnemyBlock.h"
+#include "Blocks/BreakableBlock.h"
+#include "Blocks/DashRecovery.h"
+#include "Blocks/BlockFactory.h"
 #include <algorithm>
 #include <filesystem>
 #include <string>
@@ -863,6 +866,10 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
         newBlock = std::make_shared<JumpBlock>(this, x, y);
     } else if (type == ChipType::kEnemy) {
         newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
+    } else if (type == ChipType::kBreakableBlock || typeId == 13) {
+        newBlock = std::make_shared<BreakableBlock>(this, x, y);
+    } else if (type == ChipType::kDashRecovery || typeId == 14) {
+        newBlock = std::make_shared<DashRecovery>(this, x, y);
     } else if (typeId >= 100) {
         const CustomBlockDef* def = nullptr;
         for (const auto& d : customPalette_) {
@@ -878,6 +885,26 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             else if (def->type == "RailBlock") newBlock = std::make_shared<RailBlock>(this, x, y);
             else if (def->type == "JumpBlock") newBlock = std::make_shared<JumpBlock>(this, x, y);
             else if (def->type == "PatrolEnemyBlock") newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
+            else if (def->type == "BreakableBlock") newBlock = std::make_shared<BreakableBlock>(this, x, y);
+            else if (def->type == "DashRecovery") newBlock = std::make_shared<DashRecovery>(this, x, y);
+            else if (BlockFactory::GetInstance().HasType(def->type)) {
+                newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
+            }
+        }
+    } else {
+        // templatePalette_ に登録されているカスタムタイプ（BlockFactory対応）
+        const CustomBlockDef* def = nullptr;
+        for (const auto& d : templatePalette_) {
+            if (d.id == typeId) { def = &d; break; }
+        }
+        if (def) {
+            if (def->type == "BreakableBlock") {
+                newBlock = std::make_shared<BreakableBlock>(this, x, y);
+            } else if (def->type == "DashRecovery") {
+                newBlock = std::make_shared<DashRecovery>(this, x, y);
+            } else if (BlockFactory::GetInstance().HasType(def->type)) {
+                newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
+            }
         }
     }
 
@@ -889,7 +916,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             for (const auto& d : customPalette_) {
                 if (d.id == typeId) { def = &d; break; }
             }
-        } else if (typeId >= 1 && typeId <= 9) {
+        } else {
             for (const auto& d : templatePalette_) {
                 if (d.id == typeId) { def = &d; break; }
             }

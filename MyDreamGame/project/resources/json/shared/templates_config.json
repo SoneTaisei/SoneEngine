@@ -185,6 +185,44 @@
             },
             "textureName": "Object/Original/enemy/monsterBall.png",
             "type": "PatrolEnemyBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.4000000059604645,
+                "g": 0.8999999761581421,
+                "r": 0.5891892313957214
+            },
+            "id": 13,
+            "modelName": "",
+            "name": "BreakableBlock",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "BreakableBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.8999999761581421,
+                "g": 0.4000000059604645,
+                "r": 0.5891889333724976
+            },
+            "id": 14,
+            "modelName": "",
+            "name": "DashRecovery",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "DashRecovery"
         }
     ]
 }
