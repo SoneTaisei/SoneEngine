@@ -35,6 +35,11 @@ public:
     // Jsonプロパティの受け取り
     void SetProperties(const nlohmann::json& properties) override;
 
+    // 設置状況からばねの向きを判定
+    BounceDirection DetermineFacingDirection() const;
+    // 向きに応じたZ軸回転角（ラジアン）を取得
+    float GetRotationZForDirection(BounceDirection dir) const;
+
     // バウンドアニメーションのトリガー
     void TriggerBounce(BounceDirection dir);
 
@@ -55,6 +60,7 @@ private:
     // ベースTransform（初期配置基準）
     Vector3 basePosition_ = {0.0f, 0.0f, 0.0f};
     Vector3 baseScale_ = {1.0f, 1.0f, 1.0f};
+    Vector3 baseRotation_ = {0.0f, 0.0f, 0.0f};
     AABB2D baseAABB_{};
     bool baseCaptured_ = false;
 

@@ -10,6 +10,46 @@
 #endif
 #include "Editor/Replay/ReplayManager.h"
 
+JumpBlock::BounceDirection JumpBlock::DetermineFacingDirection() const {
+    if (!map_) return BounceDirection::kUp;
+
+    // 周囲のブロック状況を取得
+    bool hasRight  = map_->GetBlock(chipX_ + 1, chipY_) != nullptr;
+    bool hasLeft   = map_->GetBlock(chipX_ - 1, chipY_) != nullptr;
+    bool hasTop    = map_->GetBlock(chipX_, chipY_ + 1) != nullptr;
+    bool hasBottom = map_->GetBlock(chipX_, chipY_ - 1) != nullptr;
+
+    bool isFloating = (!hasRight && !hasLeft && !hasTop && !hasBottom);
+
+    if (hasBottom) {
+        return BounceDirection::kUp; // 下にブロックがあるなら上面で跳ねる（上向き）
+    } else if (hasLeft) {
+        return BounceDirection::kRight; // 左にブロックがあるなら右面で跳ねる（右向き）
+    } else if (hasRight) {
+        return BounceDirection::kLeft; // 右にブロックがあるなら左面で跳ねる（左向き）
+    } else if (hasTop) {
+        return BounceDirection::kDown; // 上にブロックがあるなら下面で跳ねる（下向き）
+    } else {
+        return isFloating ? BounceDirection::kCenter : BounceDirection::kUp; // 完全に浮いている場合
+    }
+}
+
+float JumpBlock::GetRotationZForDirection(BounceDirection dir) const {
+    switch (dir) {
+    case BounceDirection::kUp:
+    case BounceDirection::kCenter:
+        return 0.0f;
+    case BounceDirection::kRight:
+        return -1.570796327f; // -π/2 (時計回り90度)
+    case BounceDirection::kLeft:
+        return 1.570796327f;  // +π/2 (反時計回り90度)
+    case BounceDirection::kDown:
+        return 3.141592654f;  // π (180度)
+    default:
+        return 0.0f;
+    }
+}
+
 void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     gameObject_ = std::make_unique<GameObject>("JumpBlock");
     auto* tc = gameObject_->AddComponent<TransformComponent>();
@@ -20,6 +60,9 @@ void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     // ジャンプ台の色：オレンジ色
     prc->GetMaterial().color = { 1.0f, 0.5f, 0.0f, 1.0f };
     
+    BounceDirection initialDir = DetermineFacingDirection();
+    baseRotation_ = { 0.0f, 0.0f, GetRotationZForDirection(initialDir) };
+    tc->SetRotation(baseRotation_);
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
     prc->GetMaterial().lightingType = 1; // ライティング無効化
@@ -48,6 +91,10 @@ void JumpBlock::Update() {
 
     // バウンドしていない通常時は、現在のTransformをベースとして同期（エディタによる移動やカスタムパレットのスケール変更に対応）
     if (!isBouncing_) {
+        BounceDirection facing = DetermineFacingDirection();
+        baseRotation_ = { 0.0f, 0.0f, GetRotationZForDirection(facing) };
+        tc->SetRotation(baseRotation_);
+
         basePosition_ = tc->GetPosition();
         baseScale_ = tc->GetScale();
         baseAABB_ = {
@@ -99,6 +146,7 @@ void JumpBlock::Update() {
 
         tc->SetPosition(basePosition_);
         tc->SetScale(baseScale_);
+        tc->SetRotation(baseRotation_);
         return;
     }
 
@@ -108,57 +156,45 @@ void JumpBlock::Update() {
     float crossFactor = 1.0f - bounceAmount_ * crossScaleRatio_;
     crossFactor = (std::max)(0.2f, crossFactor);
 
+    // どの向きでもローカルYがばねの伸縮主軸、ローカルX（とZ）が副軸
     Vector3 currentScale = baseScale_;
+    currentScale.y = baseScale_.y * mainFactor;
+    currentScale.x = baseScale_.x * crossFactor;
+
     Vector3 currentPos = basePosition_;
+    float lengthDelta = (currentScale.y - baseScale_.y) * 0.5f;
 
     switch (bounceDir_) {
     case BounceDirection::kUp: {
-        // 主軸：Y、副軸：X
-        currentScale.y = baseScale_.y * mainFactor;
-        currentScale.x = baseScale_.x * crossFactor;
-        // 底面を固定（底面 Y = basePos.y - baseScale.y * 0.5f）
-        float bottomY = basePosition_.y - baseScale_.y * 0.5f;
-        currentPos.y = bottomY + currentScale.y * 0.5f;
+        // 底面（下）を固定し、上(+Y)へ伸びる
+        currentPos.y = basePosition_.y + lengthDelta;
         break;
     }
     case BounceDirection::kDown: {
-        // 主軸：Y、副軸：X
-        currentScale.y = baseScale_.y * mainFactor;
-        currentScale.x = baseScale_.x * crossFactor;
-        // 上面を固定（上面 Y = basePos.y + baseScale.y * 0.5f）
-        float topY = basePosition_.y + baseScale_.y * 0.5f;
-        currentPos.y = topY - currentScale.y * 0.5f;
+        // 上面（上）を固定し、下(-Y)へ伸びる
+        currentPos.y = basePosition_.y - lengthDelta;
         break;
     }
     case BounceDirection::kLeft: {
-        // 主軸：X、副軸：Y
-        currentScale.x = baseScale_.x * mainFactor;
-        currentScale.y = baseScale_.y * crossFactor;
-        // 右面を固定（右面 X = basePos.x + baseScale.x * 0.5f）
-        float rightX = basePosition_.x + baseScale_.x * 0.5f;
-        currentPos.x = rightX - currentScale.x * 0.5f;
+        // 右面（右）を固定し、左(-X)へ伸びる
+        currentPos.x = basePosition_.x - lengthDelta;
         break;
     }
     case BounceDirection::kRight: {
-        // 主軸：X、副軸：Y
-        currentScale.x = baseScale_.x * mainFactor;
-        currentScale.y = baseScale_.y * crossFactor;
-        // 左面を固定（左面 X = basePos.x - baseScale.x * 0.5f）
-        float leftX = basePosition_.x - baseScale_.x * 0.5f;
-        currentPos.x = leftX + currentScale.x * 0.5f;
+        // 左面（左）を固定し、右(+X)へ伸びる
+        currentPos.x = basePosition_.x + lengthDelta;
         break;
     }
     case BounceDirection::kCenter:
     default: {
-        // 浮遊：中心基準で伸縮
-        currentScale.y = baseScale_.y * mainFactor;
-        currentScale.x = baseScale_.x * crossFactor;
+        // 浮遊：中心基準で伸縮（currentPosはbasePosition_のまま）
         break;
     }
     }
 
     tc->SetPosition(currentPos);
     tc->SetScale(currentScale);
+    tc->SetRotation(baseRotation_);
 }
 
 void JumpBlock::Reset() {
@@ -170,6 +206,7 @@ void JumpBlock::Reset() {
         if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
             tc->SetPosition(basePosition_);
             tc->SetScale(baseScale_);
+            tc->SetRotation(baseRotation_);
         }
     }
 }
@@ -201,31 +238,13 @@ void JumpBlock::OnCollision(Player2D* player) {
     // プレイヤーの AABB を取得
     AABB2D playerAABB = player->GetAABB();
     
-    // 周囲のブロック状況を取得
-    bool hasRight  = map_->GetBlock(chipX_ + 1, chipY_) != nullptr;
-    bool hasLeft   = map_->GetBlock(chipX_ - 1, chipY_) != nullptr;
-    bool hasTop    = map_->GetBlock(chipX_, chipY_ + 1) != nullptr;
-    bool hasBottom = map_->GetBlock(chipX_, chipY_ - 1) != nullptr;
-
-    bool isFloating = (!hasRight && !hasLeft && !hasTop && !hasBottom);
-
-    // 接地面（ブロックがくっついている面）を優先度順に判定し、ばねの方向を一つに絞る
-    bool activeTop = false;
-    bool activeBottom = false;
-    bool activeLeft = false;
-    bool activeRight = false;
-
-    if (hasBottom) {
-        activeTop = true; // 下にブロックがあるなら上面で跳ねる
-    } else if (hasLeft) {
-        activeRight = true; // 左にブロックがあるなら右面で跳ねる
-    } else if (hasRight) {
-        activeLeft = true; // 右にブロックがあるなら左面で跳ねる
-    } else if (hasTop) {
-        activeBottom = true; // 上にブロックがあるなら下面で跳ねる
-    } else {
-        activeTop = true; // 完全に浮いている場合はデフォルトで上面で跳ねる
-    }
+    // 設置向きを共通関数で判定し、モデルの向きと動作を完全に一致させる
+    BounceDirection facingDir = DetermineFacingDirection();
+    bool activeTop    = (facingDir == BounceDirection::kUp || facingDir == BounceDirection::kCenter);
+    bool activeBottom = (facingDir == BounceDirection::kDown);
+    bool activeRight  = (facingDir == BounceDirection::kRight);
+    bool activeLeft   = (facingDir == BounceDirection::kLeft);
+    bool isFloating   = (facingDir == BounceDirection::kCenter);
 
     // 各面との距離を計算（Player2D側でめり込みが押し戻されているため、接触面は距離がほぼ0になる）
     float distTop = std::abs(playerAABB.bottom - blockAABB.top);
@@ -317,9 +336,25 @@ void JumpBlock::DrawImGui() {
         ImGui::Text("Current Amount: %.3f", bounceAmount_);
         ImGui::Text("Current Velocity: %.3f", bounceVelocity_);
         ImGui::Text("Is Bouncing: %s", isBouncing_ ? "true" : "false");
+
+        BounceDirection facing = DetermineFacingDirection();
+        const char* dirStr = "Up";
+        if (facing == BounceDirection::kRight) dirStr = "Right";
+        else if (facing == BounceDirection::kLeft) dirStr = "Left";
+        else if (facing == BounceDirection::kDown) dirStr = "Down";
+        else if (facing == BounceDirection::kCenter) dirStr = "Center (Floating)";
+        ImGui::Text("Facing Direction: %s", dirStr);
+        ImGui::Text("Rotation Z: %.3f rad", baseRotation_.z);
         
         if (ImGui::Button("Test Bounce (Up)")) {
             TriggerBounce(BounceDirection::kUp);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Test Bounce (Down)")) {
+            TriggerBounce(BounceDirection::kDown);
+        }
+        if (ImGui::Button("Test Bounce (Left)")) {
+            TriggerBounce(BounceDirection::kLeft);
         }
         ImGui::SameLine();
         if (ImGui::Button("Test Bounce (Right)")) {
