@@ -1,4 +1,5 @@
 {
+    "climbLandingDuration_": 0.05999999865889549,
     "colorDashed_": [
         1.0,
         1.0,
@@ -11,18 +12,31 @@
         1.0,
         1.0
     ],
+    "colorTired_": [
+        0.800000011920929,
+        0.20000000298023224,
+        0.20000000298023224,
+        1.0
+    ],
     "dashDuration_": 0.15000000596046448,
     "dashEndUpwardVelocity_": 10.0,
     "dashSpeed_": 15.0,
     "deathDuration_": 0.17499999701976776,
     "goalWaitTime_": 2.0,
     "gravity_": -40.0,
-    "halfHeight_": 0.73,
-    "halfWidth_": 0.3,
+    "halfHeight_": 0.7300000190734863,
+    "halfWidth_": 0.30000001192092896,
     "jumpPower_": 17.0,
     "maxFallSpeed_": -15.0,
+    "maxStamina_": 110.0,
     "moveSpeed_": 7.0,
     "respawnDuration_": 0.5,
+    "runDustInterval_": 0.10000000149011612,
+    "staminaConsumeClimb_": 45.0,
+    "staminaConsumeCling_": 10.0,
+    "staminaConsumeJump_": 27.5,
+    "wallClimbSpeed_": 5.0,
+    "wallClingReleaseDuration_": 0.5,
     "wallJumpDirLockDuration_": 0.4000000059604645,
     "wallJumpDuration_": 0.5,
     "wallJumpPower_": [

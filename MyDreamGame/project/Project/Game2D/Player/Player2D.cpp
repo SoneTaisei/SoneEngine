@@ -160,6 +160,8 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
             state_.externalVelocityX_ = 0.0f;
             state_.isWallClinging_ = false;
             state_.isWallSliding_ = false;
+            state_.climbingUpTimer_ = 0.0f;
+            state_.climbLandingTimer_ = 0.0f;
 
             // パラメータをリセット
             visuals_.GetPrimitiveObject()->GetMaterial().dissolveThreshold = 0.0f;
@@ -380,6 +382,7 @@ void Player2D::DisplayImGui() {
             ImGui::DragFloat2("壁ジャンプの力 (X,Y)", &params_.wallJumpPower_.x, 0.1f, 0.0f, 50.0f);
             ImGui::DragFloat("壁ジャンプ後の壁方向入力制限時間", &params_.wallJumpDirLockDuration_, 0.01f, 0.0f, 2.0f);
             ImGui::DragFloat("壁ずり落ち時の落下速度", &params_.wallSlideSpeed_, 0.1f, -50.0f, 0.0f);
+            ImGui::DragFloat("崖登り着地停止時間", &params_.climbLandingDuration_, 0.01f, 0.0f, 1.0f);
             ImGui::TreePop();
         }
 
@@ -487,6 +490,8 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.inWallTimer_ = 0.0f;
     state_.springControlDisableTimer_ = 0.0f;
     state_.hitstopTimer_ = 0.0f;
+    state_.climbingUpTimer_ = 0.0f;
+    state_.climbLandingTimer_ = 0.0f;
     
     if (visuals_.GetPrimitiveObject()) {
         visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);

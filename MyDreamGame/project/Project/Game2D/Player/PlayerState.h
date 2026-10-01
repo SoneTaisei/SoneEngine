@@ -44,5 +44,6 @@ struct PlayerState {
     bool isExhausted_ = false;
     float springControlDisableTimer_ = 0.0f; // ばねヒット直後の左右入力無視タイマー
     float hitstopTimer_ = 0.0f; // ヒットストップ用のタイマー
-
+    float climbingUpTimer_ = 0.0f; // 崖（壁）登りを行っていた直近猶予タイマー
+    float climbLandingTimer_ = 0.0f; // 崖登り着地後の停止タイマー
 };

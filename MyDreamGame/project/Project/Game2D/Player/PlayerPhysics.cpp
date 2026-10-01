@@ -18,7 +18,7 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     }
 
     HandleInputLogic(state_, params_, input_, visuals_, deltaTime, player);
-    ApplyGravity(state_, params_, deltaTime);
+    ApplyGravity(state_, params_, input_, deltaTime);
 
     // ダッシュタイマーの更新
     if (state_.isDashing_) {
@@ -81,6 +81,12 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     if (state_.springControlDisableTimer_ > 0.0f) {
         state_.springControlDisableTimer_ -= deltaTime;
     }
+    if (state_.climbingUpTimer_ > 0.0f) {
+        state_.climbingUpTimer_ -= deltaTime;
+    }
+    if (state_.climbLandingTimer_ > 0.0f) {
+        state_.climbLandingTimer_ -= deltaTime;
+    }
 
     if (state_.isOnGround_) {
         state_.stamina_ = params_.maxStamina_;
@@ -137,6 +143,11 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             allowLeft = false;
             allowRight = false;
         }
+
+        if (state_.climbLandingTimer_ > 0.0f) {
+            allowLeft = false;
+            allowRight = false;
+        }
         
         if (state_.wallJumpDirLockTimer_ > 0.0f) {
             if (state_.lockedDirectionX_ == -1.0f) allowLeft = false;
@@ -166,7 +177,10 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             }
         }
 
-        if (state_.wallJumpTimer_ <= 0.0f) {
+        if (state_.climbLandingTimer_ > 0.0f) {
+            state_.velocity_.x = 0.0f;
+            state_.externalVelocityX_ = 0.0f;
+        } else if (state_.wallJumpTimer_ <= 0.0f) {
             state_.velocity_.x = targetVelX + state_.externalVelocityX_;
         } else {
             // 壁キック直後の操作不能時間中の速度補間
@@ -197,7 +211,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         }
 
         // ジャンプ
-        if (input_.isJumpPressed) {
+        if (input_.isJumpPressed && state_.climbLandingTimer_ <= 0.0f) {
             if (state_.isOnGround_) {
                 state_.velocity_.y = params_.jumpPower_;
                 // 足場に乗っている（または猶予期間中）場合は慣性を加算 (セレステ風)
@@ -257,6 +271,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isTouchingWallRight_ = false;
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
+                state_.climbingUpTimer_ = 0.0f;
             } else if (state_.isTouchingWallLeft_) {
                 // 壁張り付き状態（Control入力がある場合）
                 bool isPressingCling = input_.isClingHeld && !state_.isExhausted_;
@@ -299,6 +314,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isTouchingWallLeft_ = false;
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
+                state_.climbingUpTimer_ = 0.0f;
             }
         }
 
@@ -311,7 +327,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     }
 
     // ダッシュの入力検知（Jキー）
-    if (state_.canDash_ && !state_.isDashing_ && input_.isDashPressed) {
+    if (state_.canDash_ && !state_.isDashing_ && input_.isDashPressed && state_.climbLandingTimer_ <= 0.0f) {
         // 入力方向の取得
         Vector3 inputDir = {0.0f, 0.0f, 0.0f};
         if (input_.moveX < 0.0f) inputDir.x -= 1.0f;
@@ -342,17 +358,15 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     }
 }
 
-void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params_, float deltaTime) {
+void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime) {
     if (state_.isDashing_) return; // ダッシュ中は重力を無視
 
     if (state_.isWallClinging_ && !state_.isExhausted_) {
-        KeyboardInput* keyboard = KeyboardInput::GetInstance();
-        float moveY = 0.0f;
-        if (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) moveY += 1.0f;
-        if (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) moveY -= 1.0f;
+        float moveY = input_.moveY;
         
-        if (moveY > 0.0f) {
+        if (moveY > 0.1f) {
             state_.stamina_ -= params_.staminaConsumeClimb_ * deltaTime;
+            state_.climbingUpTimer_ = 0.25f; // 上登り中を記録（着地検知用の猶予時間）
         } else {
             state_.stamina_ -= params_.staminaConsumeCling_ * deltaTime;
         }
@@ -361,10 +375,11 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
             state_.stamina_ = 0.0f;
             state_.isExhausted_ = true;
             state_.isWallClinging_ = false;
+            state_.climbingUpTimer_ = 0.0f;
         }
         
         if (state_.isWallClinging_) {
-            state_.velocity_.y = moveY * params_.wallClimbSpeed_; // Wで上、Sで下へ移動
+            state_.velocity_.y = moveY * params_.wallClimbSpeed_; // W/スティック上で上、S/スティック下で下へ移動
             return;
         }
     }
@@ -444,6 +459,14 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
                 state_.wallJumpDirLockTimer_ = 0.0f;
                 state_.lockedDirectionX_ = 0.0f;
                 
+                // 崖から登って地面についたときは少しの間停止する
+                if (state_.climbingUpTimer_ > 0.0f) {
+                    state_.climbLandingTimer_ = params_.climbLandingDuration_;
+                    state_.climbingUpTimer_ = 0.0f;
+                    state_.velocity_.x = 0.0f;
+                    state_.externalVelocityX_ = 0.0f;
+                }
+                
                 if (collider->GetUserData()) {
                     BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
                     block->OnPlayerStand();
@@ -487,6 +510,15 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                 state_.canDash_ = true;
                 state_.wallJumpDirLockTimer_ = 0.0f;
                 state_.lockedDirectionX_ = 0.0f;
+                
+                // 崖から登って地面についたときは少しの間停止する
+                if (state_.climbingUpTimer_ > 0.0f) {
+                    state_.climbLandingTimer_ = params_.climbLandingDuration_;
+                    state_.climbingUpTimer_ = 0.0f;
+                    state_.velocity_.x = 0.0f;
+                    state_.externalVelocityX_ = 0.0f;
+                }
+
                 if (collider->GetUserData()) {
                     BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
                     block->OnPlayerStand();
