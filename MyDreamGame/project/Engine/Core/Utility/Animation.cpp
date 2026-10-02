@@ -1,6 +1,5 @@
 #include "Animation.h"
 #include "TransformFunctions.h"
-#include <cassert>
 
 Vector3 CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time) {
     if (keyframes.empty()) {

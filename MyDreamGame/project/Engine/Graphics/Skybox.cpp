@@ -3,7 +3,6 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Graphics/TextureManager.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h" // GetInstance()を使うために必要！
 #include "CameraManager.h"
 
 void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {

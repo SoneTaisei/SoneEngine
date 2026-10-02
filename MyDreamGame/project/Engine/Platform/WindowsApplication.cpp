@@ -34,7 +34,6 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 
-#include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/Utilityfunctions.h"
 #include "Graphics/TextureManager.h"
 #include "Input/GamepadInput.h"

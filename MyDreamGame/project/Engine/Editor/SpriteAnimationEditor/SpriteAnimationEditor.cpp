@@ -4,7 +4,6 @@
 #include "Graphics/TextureManager.h"
 
 #ifdef USE_IMGUI
-#include "imgui.h"
 #endif
 
 SpriteAnimationEditor::SpriteAnimationEditor() {

@@ -5,7 +5,6 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "Renderer/LineRenderer.h"
 #include <algorithm>
-#include <cmath>
 
 CollisionManager* CollisionManager::GetInstance() {
     static CollisionManager instance;

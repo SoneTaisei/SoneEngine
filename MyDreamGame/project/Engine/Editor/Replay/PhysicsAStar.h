@@ -1,5 +1,4 @@
 #pragma once
-#include "Core/Utility/Structs.h"
 #include "Game2D/Player/PlayerConfig.h"
 #include <vector>
 #include <queue>

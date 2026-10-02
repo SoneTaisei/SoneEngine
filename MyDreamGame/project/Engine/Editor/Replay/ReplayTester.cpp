@@ -6,7 +6,6 @@
 #include <ctime>
 #include <cmath>
 #include <iomanip>
-#include <format>
 
 void ReplayTester::ExecuteFastMonkeyTest(
     MapChip2D* mapChip, 

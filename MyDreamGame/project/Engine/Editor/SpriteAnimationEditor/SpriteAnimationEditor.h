@@ -1,11 +1,9 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <memory>
 #include "Core/Utility/Structs.h"
 
 #ifdef USE_IMGUI
-#include "imgui.h"
 #endif
 
 class SpriteAnimationEditor {

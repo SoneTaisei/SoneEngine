@@ -2,7 +2,6 @@
 #include "ModelCommon.h" // Commonをインクルード
 #include "Core/Utility/Utilityfunctions.h"
 #include <string>
-#include <vector>
 #include <wrl.h>
 
 class Model {

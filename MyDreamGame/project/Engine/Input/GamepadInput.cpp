@@ -1,7 +1,6 @@
 #define DIRECTINPUT_VERSION 0x0800
 #include "GamepadInput.h"
 #include <cmath>
-#include <algorithm>
 
 GamepadInput *GamepadInput::GetInstance() {
 	static GamepadInput instance;

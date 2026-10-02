@@ -10,7 +10,6 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/TimeManager.h"
 #include <cmath>
-#include <algorithm>
 #include <format>
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"

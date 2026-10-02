@@ -1,6 +1,5 @@
 #include "CameraManager.h"
 #include "Core/Utility/UtilityFunctions.h"
-#include <cassert>
 
 void CameraManager::Initialize(ID3D12Device* device) {
     if (cameraResource_) return;

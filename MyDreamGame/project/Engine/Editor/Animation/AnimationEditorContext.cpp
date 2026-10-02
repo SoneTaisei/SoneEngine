@@ -1,7 +1,6 @@
 #ifdef USE_IMGUI
 #include "AnimationEditorContext.h"
 #include "Editor/EditorManager.h"
-#include "Core/Utility/TransformFunctions.h"
 #include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
@@ -15,18 +14,11 @@
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
-#include "Component/TransformComponent.h"
 #include "Component/AnimatorComponent.h"
-#include "Core/Utility/Animation.h"
 #include "Resource/Model/Model.h"
 #include "Game2D/Player/Player2D.h"
 
-#include <imgui.h>
-#include <cmath>
 #include <filesystem>
-#include <fstream>
-#include <numbers>
-#include <string>
 #include <functional>
 #include <nlohmann/json.hpp>
 

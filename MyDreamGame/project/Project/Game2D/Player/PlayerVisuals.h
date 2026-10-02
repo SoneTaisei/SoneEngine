@@ -5,7 +5,6 @@
 #include "GameObject/PrimitiveObject.h"
 #include "PlayerConfig.h"
 #include "PlayerState.h"
-#include "Core/Utility/Structs.h"
 
 #include "GameObject/Object3D.h"
 #include "Component/AnimatorComponent.h"

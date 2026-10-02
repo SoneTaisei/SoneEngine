@@ -4,7 +4,6 @@
 #include "Renderer/SrvManager.h"
 #include "Graphics/CameraManager.h"
 #include <format>
-#include <vector>
 #include <thread>
 
 using namespace Microsoft::WRL;

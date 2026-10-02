@@ -7,9 +7,7 @@
 #include "ReplayTester.h"
 #include "Core/Utility/LogManager.h"
 #include "Input/KeyboardInput.h"
-#include <fstream>
 #include <sstream>
-#include <filesystem>
 #include <ctime>
 #include <iomanip>
 #include <algorithm>
@@ -258,10 +256,8 @@ bool ReplayManager::PopRecordedFrame(FrameData& outFrame) {
     return true;
 }
 
-#include "Core/Utility/LogManager.h"
 #include <chrono>
 #include <format>
-#include <ctime>
 
 void ReplayManager::TriggerBugReport(const std::string& reason) {
     LogManager::GetInstance()->AddLog(LogLevel::Error, "[Bug Report] " + reason);

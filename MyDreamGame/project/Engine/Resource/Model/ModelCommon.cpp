@@ -8,8 +8,6 @@
 #include <cmath>   // std::cos, std::sin用
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <Windows.h>
-#include <format>
 
 void ModelCommon::Initialize(ID3D12Device *device) {
     assert(device);

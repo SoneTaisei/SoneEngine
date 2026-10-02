@@ -4,7 +4,6 @@
 #include "Graphics/TextureManager.h"
 #include <fstream>
 #include <sstream>
-#include <iostream>
 #include "Blocks/NormalBlock.h"
 #include "Blocks/DeathBlock.h"
 #include "Blocks/GoalBlock.h"
@@ -20,7 +19,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <string>
-#include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"
 #include "Component/ColliderComponent.h"

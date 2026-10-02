@@ -1,9 +1,7 @@
 #pragma once
 #ifdef USE_IMGUI
-#include <Windows.h>
 #include <d3d12.h>
 #include <memory>
-#include <string>
 #include "Graphics/Camera.h"
 #include "GPUParticleEditorContext.h"
 #include "GPUParticleEditorViewport.h"

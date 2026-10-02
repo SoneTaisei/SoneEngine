@@ -2,7 +2,6 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include <cassert>
 #include <format>
-#include <dxcapi.h>
 #include "Graphics/TextureManager.h"
 #include "Renderer/SrvManager.h"
 #include "Effect/ParticleManager.h" // Particleの定義が必要なため追加

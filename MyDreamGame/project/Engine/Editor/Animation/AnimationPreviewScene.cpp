@@ -7,7 +7,6 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Component/TransformComponent.h"
 #include "Renderer/Renderer.h"
-#include "Core/Utility/Animation.h"
 #include <filesystem>
 #include <algorithm>
 #include <fstream>

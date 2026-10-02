@@ -1,6 +1,5 @@
 #pragma once
 #include "Scene/IScene.h"
-#include <d3d12.h>
 #include "Resource/Sprite/Sprite.h"
 #include "Core/Utility/Utilityfunctions.h"
 #include "Effect/ParticleManager.h"

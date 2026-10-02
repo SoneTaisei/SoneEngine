@@ -8,7 +8,6 @@
 #include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
-#include "GameObject/Object3D.h"
 #include "Component/MeshRendererComponent.h"
 #include "Renderer/ConstantBufferPool.h"
 #include "Component/PrimitiveRendererComponent.h"

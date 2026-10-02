@@ -1,7 +1,5 @@
 #include "GameScene.h"
-#include <Windows.h>
 #include "Scene/SceneManager.h"
-#include "Resource/Primitive/PrimitiveManager.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Graphics/GameCamera.h"
 #include "Scene/SceneFactory.h"

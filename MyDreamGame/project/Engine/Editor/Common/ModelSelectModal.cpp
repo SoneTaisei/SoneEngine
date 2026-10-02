@@ -5,7 +5,6 @@
 #include "Graphics/TextureManager.h"
 #include <filesystem>
 #include <algorithm>
-#include <cstring>
 #include <cmath>
 
 namespace {

@@ -8,7 +8,6 @@
 #include "Effect/RingEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
-#include <d3d12.h>
 #include <memory>
 
 // 2Dゲーム用クラス

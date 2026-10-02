@@ -3,7 +3,6 @@
 #include "Core/Utility/LogManager.h"
 #include <fstream>
 #include <sstream>
-#include <iostream>
 #include <filesystem>
 #include <algorithm>
 #include <windows.h>

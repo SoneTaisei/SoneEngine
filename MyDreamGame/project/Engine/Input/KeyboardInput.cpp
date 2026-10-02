@@ -1,5 +1,4 @@
 #include "KeyboardInput.h"
-#include <cassert> // assertを使うためにインクルード
 
 // GetInstance関数の実体
 KeyboardInput *KeyboardInput::GetInstance() {

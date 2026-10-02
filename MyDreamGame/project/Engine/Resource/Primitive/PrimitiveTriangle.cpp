@@ -1,8 +1,4 @@
 #include "PrimitiveTriangle.h"
-#include "Core/Utility/UtilityFunctions.h"
-#include "Core/Utility/TransformFunctions.h"
-#include <cmath>
-#include <numbers>
 
 PrimitiveTriangle::PrimitiveTriangle(float size) : size_(size) {
 }

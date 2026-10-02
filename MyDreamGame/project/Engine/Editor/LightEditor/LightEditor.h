@@ -1,9 +1,6 @@
 #pragma once
-#include <Windows.h>
-#include <cstdint>
 #include <string>
 #include <vector>
-#include <memory>
 #include "Core/Utility/Structs.h"
 #include "Core/Utility/Vector3.h"
 #include "Core/Utility/Vector4.h"

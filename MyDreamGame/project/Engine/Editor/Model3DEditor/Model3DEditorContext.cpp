@@ -1,15 +1,12 @@
 #include "Model3DEditorContext.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
-#include "Core/Utility/TransformFunctions.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Primitive/PrimitiveManager.h"
-#include "GameObject/PrimitiveObject.h"
 #include <fstream>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <algorithm>
-#include <cmath>
 #include <unordered_map>
 
 namespace {

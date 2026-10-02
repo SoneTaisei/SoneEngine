@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Windows.h>
 #include <memory>
 
 // 前方宣言

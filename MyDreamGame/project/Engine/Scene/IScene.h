@@ -2,7 +2,6 @@
 #include <memory>
 #include <string>
 #include <wrl.h>
-#include <d3d12.h>
 #include"Core/Utility/UtilityFunctions.h"
 #include "GameObject/GameObject.h"
 
@@ -71,7 +70,6 @@ public:
         spriteCommon_ = spriteCommon;
     }
 
-#include <Windows.h>
 #include <format>
 
     virtual void SetModelCommon(ModelCommon* modelCommon) {

@@ -10,7 +10,6 @@
 #include "Editor/EditorManager.h"
 #endif
 
-#include <filesystem>
 
 // windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {

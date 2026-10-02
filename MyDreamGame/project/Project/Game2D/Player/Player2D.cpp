@@ -1,17 +1,12 @@
 #include "Player2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"
-#include "Core/Utility/TransformFunctions.h"
 #include "Graphics/TextureManager.h"
-#include "Core/TimeManager.h"
-#include "Input/KeyboardInput.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Resource/Model/ModelManager.h"
 #include <cmath>
 #include <algorithm>
-#include <fstream>
 #include <filesystem>
-#include <iostream>
 #ifdef USE_IMGUI
 #include "../../externals/imgui/imgui.h"
 #endif

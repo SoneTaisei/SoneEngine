@@ -1,7 +1,6 @@
 #pragma once
 #include "BaseBlock.h"
 #include <memory>
-#include <string>
 
 class GPUParticleSystem;
 

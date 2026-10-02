@@ -2,7 +2,6 @@
 #include <vector>
 #include <memory>
 #include <string>
-#include <functional>
 #include <d3d12.h>
 #include "PlacedObject3D.h"
 #include "GameObject/PrimitiveObject.h"

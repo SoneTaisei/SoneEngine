@@ -1,13 +1,10 @@
 #include "TitleScene.h"
 #include <cmath>
-#include "../externals/imgui/imgui.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Input/KeyboardInput.h"
 #include "Input/GamepadInput.h"
-#include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneManager.h"
-#include "Resource/Sprite/SpriteCommon.h"
 #include <wrl.h>
 #include "Resource/Model/ModelManager.h"
 #include "Graphics/CameraManager.h"

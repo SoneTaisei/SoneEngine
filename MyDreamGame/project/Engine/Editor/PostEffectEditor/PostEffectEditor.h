@@ -1,12 +1,10 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <memory>
 #include <functional>
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 
 #ifdef USE_IMGUI
-#include "imgui.h"
 #endif
 
 // ポストエフェクトで選択可能なシェーダータイプ

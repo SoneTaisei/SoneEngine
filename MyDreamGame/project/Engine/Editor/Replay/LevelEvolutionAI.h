@@ -1,8 +1,6 @@
 #pragma once
-#include "Core/Utility/Structs.h"
 #include <vector>
 #include <string>
-#include <random>
 
 class MapChip2D;
 class ReplayManager;

@@ -1,12 +1,10 @@
 #pragma once
 #include "Scene/IScene.h"
 #include "Resource/Model/Model.h"
-#include <d3d12.h>
 #include <memory>
 #include "GameObject/GameObject.h"
 #include "Component/MeshRendererComponent.h"
 #include "Component/PrimitiveRendererComponent.h"
-#include "Component/AnimatorComponent.h"
 #include "Graphics/Skybox.h"
 
 #include <string>

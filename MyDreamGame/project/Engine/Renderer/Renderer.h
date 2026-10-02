@@ -1,5 +1,4 @@
 #pragma once
-#include <memory>
 #include "Core/Utility/Structs.h"
 
 class DirectXCommon;

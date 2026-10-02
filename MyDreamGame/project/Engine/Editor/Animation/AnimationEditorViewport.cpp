@@ -3,7 +3,6 @@
 #include "AnimationEditorContext.h"
 #include "Editor/EditorManager.h"
 #include "Core/Utility/TransformFunctions.h"
-#include "Core/Utility/LogManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
 #include "GameObject/GameObject.h"
@@ -17,15 +16,10 @@
 #include "Component/AnimatorComponent.h"
 #include "Core/Utility/Animation.h"
 #include "Resource/Model/Model.h"
-#include "Game2D/Player/Player2D.h"
 
-#include <imgui.h>
 #include <imgui_internal.h>
 #include <cmath>
-#include <numbers>
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <nlohmann/json.hpp>
 
 AnimationEditorViewport::AnimationEditorViewport() {

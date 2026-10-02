@@ -11,7 +11,6 @@
 #include "Input/GamepadInput.h"
 #include "Scene/SceneManager.h"
 #include "Scene/SceneFactory.h"
-#include <filesystem>
 #include <cmath>
 
 #ifdef USE_IMGUI

@@ -1,7 +1,6 @@
 #include "AnimatorComponent.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Core/Utility/Quaternion.h"
-#include "Renderer/SkeletonDebugRenderer.h"
 #include "TransformComponent.h"
 #include "GameObject/GameObject.h"
 #include "Core/TimeManager.h"
@@ -11,8 +10,6 @@
 #include "Editor/Replay/ReplayManager.h"
 #include "Renderer/SrvManager.h"
 #include "Core/Utility/LogManager.h"
-#include <cmath>
-#include <iostream>
 
 void AnimatorComponent::Initialize() {
     animationTime_ = 0.0f;

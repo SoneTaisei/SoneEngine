@@ -1,7 +1,6 @@
 #pragma once
 #ifdef USE_IMGUI
 #include "Model3DEditorContext.h"
-#include <string>
 
 class SceneManager;
 

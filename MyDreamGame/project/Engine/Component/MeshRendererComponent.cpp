@@ -1,6 +1,5 @@
 #include "MeshRendererComponent.h"
 #include "GameObject/GameObject.h"
-#include "TransformComponent.h"
 #include "Renderer/Renderer.h"
 #include "Core/Utility/UtilityFunctions.h"
 #ifdef USE_IMGUI

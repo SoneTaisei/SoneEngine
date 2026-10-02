@@ -6,7 +6,6 @@
 #include <fstream>
 #include <filesystem>
 #include <cstdlib>
-#include <ctime>
 
 void GameCamera::Initialize(int kClientWidth, int kClientHeight) {
     Camera::Initialize(kClientWidth, kClientHeight);

@@ -1,5 +1,4 @@
 #pragma once
-#include "Core/Utility/Structs.h"
 struct PlayerState {
     class ColliderComponent* standingPlatformCollider_ = nullptr;
     class ColliderComponent* wallPlatformCollider_ = nullptr;

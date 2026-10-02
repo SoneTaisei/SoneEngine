@@ -3,7 +3,6 @@
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Core/Utility/BlendMode.h"
-#include <deque>
 
 class PrimitiveObject {
     friend class Renderer;

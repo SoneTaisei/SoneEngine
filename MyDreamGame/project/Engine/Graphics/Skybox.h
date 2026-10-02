@@ -1,7 +1,6 @@
 #pragma once
 #include "Core/Utility/Structs.h"
 #include <d3d12.h>
-#include <vector>
 #include <wrl.h>
 
 class Skybox {

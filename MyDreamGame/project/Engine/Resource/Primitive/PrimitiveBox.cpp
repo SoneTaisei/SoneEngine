@@ -1,8 +1,4 @@
 #include "PrimitiveBox.h"
-#include "Core/Utility/UtilityFunctions.h"
-#include "Core/Utility/TransformFunctions.h"
-#include <cmath>
-#include <numbers>
 
 PrimitiveBox::PrimitiveBox(float size) : size_(size) {
 }

@@ -1,7 +1,4 @@
 #include "PrimitiveCircle.h"
-#include "Core/Utility/UtilityFunctions.h"
-#include "Core/Utility/TransformFunctions.h"
-#include <cmath>
 #include <numbers>
 
 PrimitiveCircle::PrimitiveCircle(float size, uint32_t segments) : size_(size), segments_(segments) {

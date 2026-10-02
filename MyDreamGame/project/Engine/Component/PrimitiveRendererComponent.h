@@ -5,7 +5,6 @@
 #include "Core/Utility/BlendMode.h"
 #include "Renderer/ConstantBufferPool.h"
 #include <wrl/client.h>
-#include <string>
 
 // GameObjectにアタッチして基本図形（Primitive）を描画するためのコンポーネント
 class PrimitiveRendererComponent : public IComponent {

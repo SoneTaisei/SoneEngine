@@ -10,7 +10,6 @@
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "Replay/ReplayManager.h"
 #include "Replay/PhysicsAStar.h"
 #include "Replay/LevelEvolutionAI.h"
 #include "Core/TimeManager.h"
@@ -35,9 +34,6 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <numbers>
-#include <string>
-#include <functional>
 #include <nlohmann/json.hpp>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)

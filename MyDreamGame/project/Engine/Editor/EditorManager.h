@@ -2,9 +2,6 @@
 #ifdef USE_IMGUI
 #include <Windows.h>
 #include <d3d12.h>
-#include <cstdint>
-#include <set>
-#include <unordered_map>
 #include <memory>
 #include <functional>
 #include <vector>

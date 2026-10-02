@@ -1,6 +1,5 @@
 #include "SpriteCommon.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Sprite.h" // Spriteの定義が必要
 #include <d3dcompiler.h>
 #include "Graphics/TextureManager.h"

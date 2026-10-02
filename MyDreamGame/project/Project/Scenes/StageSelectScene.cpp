@@ -14,15 +14,12 @@
 #include "Graphics/CameraManager.h"
 #include "Renderer/Renderer.h"
 #include <fstream>
-#include <sstream>
-#include <algorithm>
 #include <filesystem>
 #include "Component/TransformComponent.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Graphics/GameCamera.h"
 #include <cmath>
-#include <numbers>
 
 StageSelectScene::~StageSelectScene() {}
 

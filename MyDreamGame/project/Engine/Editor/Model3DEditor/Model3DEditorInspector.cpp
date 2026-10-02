@@ -1,6 +1,5 @@
 #ifdef USE_IMGUI
 #include "Model3DEditorInspector.h"
-#include "Model3DEditorContext.h"
 #include "Scene/SceneManager.h"
 #include <imgui.h>
 #include <cstring>
