@@ -9,8 +9,17 @@
 
 #pragma comment(lib, "dxcompiler.lib")
 
+ParticleCommon* ParticleCommon::sInstance_ = nullptr;
+
+ParticleCommon::~ParticleCommon() {
+    if (sInstance_ == this) {
+        sInstance_ = nullptr;
+    }
+}
+
 void ParticleCommon::Initialize(ID3D12Device *device) {
     assert(device);
+    sInstance_ = this;
     device_ = device;
 
     CreateRootSignature();
