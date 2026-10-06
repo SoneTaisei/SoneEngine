@@ -316,6 +316,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 mapEditor_->GetContext()->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                 mapEditor_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
             }
+            if (activeScene) {
+                activeScene->UpdateEditor();
+            }
+            if (gameCamera && debugCamera) {
+                debugCamera->SetTranslation(gameCamera->GetTranslation());
+                debugCamera->SetRotation(gameCamera->GetRotation());
+            }
             isAStarPosInitialized_ = true;
         }
     }
@@ -345,6 +352,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (mapEditor_) {
                     mapEditor_->GetContext()->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                     mapEditor_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                }
+                if (activeScene) {
+                    activeScene->UpdateEditor();
+                }
+                if (gameCamera && debugCamera) {
+                    debugCamera->SetTranslation(gameCamera->GetTranslation());
+                    debugCamera->SetRotation(gameCamera->GetRotation());
                 }
             }
         }

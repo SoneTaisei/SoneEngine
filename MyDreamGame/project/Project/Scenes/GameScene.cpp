@@ -28,11 +28,27 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
         std::string selectedPath = sceneManager->GetData<std::string>("SelectedStagePath");
         if (!selectedPath.empty()) {
             s_TargetMapFilePath = selectedPath;
-            // TODO: マップの再読み込みなどをここで行うか、Initializeのタイミングと調整する
+            if (map_) {
+                map_->Initialize(s_TargetMapFilePath);
+            }
         }
     }
+    if (player_ && map_) {
+        player_->FindSpawnPoint(*map_);
+    }
     if (gameCamera_) {
+        float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
+        float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
+        gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+        if (map_) {
+            gameCamera_->SetRooms(map_->GetRooms());
+        }
+        if (player_) {
+            gameCamera_->SetFollowTarget(&player_->GetPosition());
+        }
         gameCamera_->SetFollowEnabled(true);
+        gameCamera_->SnapToTarget();
+        initialCameraScale_ = gameCamera_->GetScale();
     }
 }
 
@@ -41,9 +57,8 @@ void GameScene::OnExit(SceneManager* sceneManager) {
     if (player_) {
         sceneManager->SetData("LastScore", player_->GetScore());
     }
-    if (gameCamera_) {
-        gameCamera_->Reset();
-    }
+    // 注: TitleSceneやStageSelectSceneは自前でOnEnter/InitializeにてReset()やカメラ座標設定を行っているため、
+    // GameScene終了時に無差別にReset()を呼ぶと、GameScene再突入時や内部遷移時にカメラが3Dパースペクティブに破壊される原因となるため呼び出さない。
 }
 
 void GameScene::Initialize() {
@@ -1076,6 +1091,21 @@ void GameScene::UpdateEditor() {
             playerPrim->SetTranslation(player_->GetPosition());
             playerPrim->Update();
         }
+    }
+
+    // エディタ停止中もカメラをプレイヤー位置にスナップ・追従させる
+    if (gameCamera_ && player_) {
+        if (!gameCamera_->IsOrthographic()) {
+            float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
+            float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
+            gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+        }
+        if (map_) {
+            gameCamera_->SetRooms(map_->GetRooms());
+        }
+        gameCamera_->SetFollowTarget(&player_->GetPosition());
+        gameCamera_->SetFollowEnabled(true);
+        gameCamera_->SnapToTarget();
     }
 
     if (skybox_) {
