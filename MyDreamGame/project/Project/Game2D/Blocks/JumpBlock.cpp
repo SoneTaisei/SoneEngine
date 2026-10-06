@@ -283,7 +283,8 @@ void JumpBlock::OnCollision(Player2D* player) {
         player->SetVelocity(vel);
         player->SetIsOnGround(false);
 
-        // 2. ダッシュ回数の全回復
+        // 2. ダッシュ状態の中断とダッシュ回数の全回復
+        player->CancelDash();
         player->RefillDash();
 
         // 3. ヒットストップ（約1〜2フレーム：0.03秒）

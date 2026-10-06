@@ -39,8 +39,9 @@ public:
     void SetExternalVelocityX(float velX) { state_.externalVelocityX_ = velX; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
     
-    // セレステ風ジャンプブロック（ばね）用のアクション
-    void RefillDash() { state_.canDash_ = true; state_.isDashing_ = false; state_.dashTimer_ = 0.0f; }
+    // ダッシュ回復・キャンセルアクション
+    void RefillDash() { state_.canDash_ = true; }
+    void CancelDash() { state_.isDashing_ = false; state_.dashTimer_ = 0.0f; }
     void RefillStamina() { state_.stamina_ = params_.maxStamina_; state_.isExhausted_ = false; }
     bool CanDash() const { return state_.canDash_; }
     bool IsExhausted() const { return state_.isExhausted_; }

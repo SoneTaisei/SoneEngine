@@ -327,7 +327,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     }
 
     // ダッシュの入力検知（Jキー）
-    if (state_.canDash_ && !state_.isDashing_ && input_.isDashPressed && state_.climbLandingTimer_ <= 0.0f) {
+    if (state_.canDash_ && input_.isDashPressed && state_.climbLandingTimer_ <= 0.0f) {
         // 入力方向の取得
         Vector3 inputDir = {0.0f, 0.0f, 0.0f};
         if (input_.moveX < 0.0f) inputDir.x -= 1.0f;
