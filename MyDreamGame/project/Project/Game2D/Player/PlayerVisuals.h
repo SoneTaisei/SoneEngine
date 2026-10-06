@@ -56,6 +56,10 @@ public:
     Object3D* GetModelObject() { return modelObj_.get(); }
     AnimatorComponent* GetAnimator() { return animator_.get(); }
 
+#ifdef USE_IMGUI
+    void DisplayImGui();
+#endif
+
 private:
     std::unique_ptr<PrimitiveObject> primitiveObj_;
     std::unique_ptr<Object3D> modelObj_;
@@ -82,7 +86,6 @@ private:
     float holdingWallMoveAnimTime_ = 0.0f;
     float dashAnimTime_ = 0.0f;
 
-public:
     // しがみつき時の腕の調整用パラメータ（親空間での回転：X=ピッチ, Y=ヨー, Z=ロール、ラジアン単位）
     float debugLArmRot_[3] = { -0.200f, -3.140f, 0.262f }; 
     float debugRArmRot_[3] = { -0.200f, 3.140f, -0.262f };
@@ -90,10 +93,5 @@ public:
     float debugRForeArmRot_[3] = { -0.334f, 0.0f, 0.0f };
     float debugHipsRot_[3] = { 0.0f, 0.0f, 0.0f };
 
-#ifdef USE_IMGUI
-    void DisplayImGui();
-#endif
-
-private:
     float EaseInElastic(float t) const;
 };

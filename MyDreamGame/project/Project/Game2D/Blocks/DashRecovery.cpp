@@ -184,8 +184,7 @@ void DashRecovery::Collect(Player2D* player) {
     // 連続取得防止ガード：
     // 直前（0.25秒以内）に別のDashRecoveryを取得しており、かつプレイヤーがまだダッシュを使っていない（canDash_ == true かつ !isDashing_）場合、
     // 隣接する回復ブロックの誤爆や多重爆発を防ぐため、このブロックは消費せず温存する
-    const auto& pState = player->GetState();
-    if (sGlobalCollectCooldown_ > 0.0f && pState.canDash_ && !pState.isDashing_) {
+    if (sGlobalCollectCooldown_ > 0.0f && player->CanDash() && !player->IsDashing()) {
         return; // 温存
     }
 
@@ -199,9 +198,7 @@ void DashRecovery::Collect(Player2D* player) {
     player->RefillDash();
 
     // 2. 壁登りスタミナも全回復
-    auto& state = player->GetState();
-    state.stamina_ = player->GetParams().maxStamina_;
-    state.isExhausted_ = false;
+    player->RefillStamina();
 
     // 3. 取得時の爽快感・手応えを与えるヒットストップ
     if (hitstopDuration_ > 0.0f) {

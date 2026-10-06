@@ -228,6 +228,12 @@ public:
     CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
     IrisParams* GetIrisParamsData() { return irisParamsData_; }
 
+    void SetVignetteParams(const VignetteParams& params) { if (vignetteParamsData_) *vignetteParamsData_ = params; }
+    void SetSmoothingParams(const SmoothingParams& params) { if (smoothingParamsData_) *smoothingParamsData_ = params; }
+    void SetGaussianParams(const GaussianParams& params) { if (gaussianParamsData_) *gaussianParamsData_ = params; }
+    void SetCompositeParams(const CompositeParams& params) { if (compositeParamsData_) *compositeParamsData_ = params; }
+    void SetIrisParams(const IrisParams& params) { if (irisParamsData_) *irisParamsData_ = params; }
+
     void SetIrisCenter(float x, float y) {
         if (irisParamsData_) {
             irisParamsData_->center[0] = x;

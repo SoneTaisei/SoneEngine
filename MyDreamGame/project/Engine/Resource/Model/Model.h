@@ -23,7 +23,7 @@ public:
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     // ゲッター
-    ModelData GetModelData() const { return modelData_; }
+    const ModelData& GetModelData() const { return modelData_; }
     ModelCommon* GetModelCommon() const { return modelCommon_; }
     const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return vertexBufferView_; }
     const D3D12_INDEX_BUFFER_VIEW& GetIndexBufferView() const { return indexBufferView_; }

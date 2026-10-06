@@ -41,6 +41,10 @@ public:
     
     // セレステ風ジャンプブロック（ばね）用のアクション
     void RefillDash() { state_.canDash_ = true; state_.isDashing_ = false; state_.dashTimer_ = 0.0f; }
+    void RefillStamina() { state_.stamina_ = params_.maxStamina_; state_.isExhausted_ = false; }
+    bool CanDash() const { return state_.canDash_; }
+    bool IsExhausted() const { return state_.isExhausted_; }
+    float GetStamina() const { return state_.stamina_; }
     void ApplyHitstop(float duration) { state_.hitstopTimer_ = duration; }
     void SetSpringControlDisable(float duration) { state_.springControlDisableTimer_ = duration; }
 
