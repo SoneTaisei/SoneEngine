@@ -19,6 +19,7 @@
 #include "Graphics/CameraManager.h"
 #include "Resource/Model/ModelManager.h"
 #include "Core/Utility/ParameterManager.h"
+#include "GameObject/WorldGif.h"
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
@@ -30,6 +31,9 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
             s_TargetMapFilePath = selectedPath;
             if (map_) {
                 map_->Initialize(s_TargetMapFilePath);
+            }
+            if (s_TargetMapFilePath.find("temp_play_map") == std::string::npos) {
+                StageGifManager::GetInstance()->LoadForStage(s_TargetMapFilePath);
             }
         }
     }
@@ -108,6 +112,14 @@ void GameScene::Initialize() {
     map_ = std::make_unique<MapChip2D>();
     map_->Initialize( s_TargetMapFilePath);
     Log("GameScene::Initialize: Map Initialized\n");
+
+    // ステージ別ワールドGIF（板ポリ）の初期化とロード
+    StageGifManager::GetInstance()->Initialize(device.Get());
+    std::string gifStagePath = s_TargetMapFilePath;
+    if (gifStagePath.find("temp_play_map") != std::string::npos) {
+        gifStagePath = StageGifManager::GetInstance()->GetCurrentStageName();
+    }
+    StageGifManager::GetInstance()->LoadForStage(gifStagePath);
 
     // 6. プレイヤーの生成と初期化
     playerObj_ = std::make_unique<GameObject>("Player");
@@ -433,6 +445,9 @@ void GameScene::Update(SceneManager *sceneManager) {
             goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, 0.0f });
         }
     }
+
+    // ステージ配置ワールドGIFの更新
+    StageGifManager::GetInstance()->Update(TimeManager::GetInstance().GetDeltaTime());
 
     // 4. プレイヤーの更新（入力・物理・当たり判定）
     if (player_ && map_) {
@@ -776,6 +791,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         map_->Draw();
     }
 
+    // ステージ配置ワールドGIF（板ポリ）の描画
+    StageGifManager::GetInstance()->Draw();
+
     // プレイヤーの描画
     if (player_) {
         player_->Draw();
@@ -1055,6 +1073,9 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 
 void GameScene::UpdateEditor() {
     float dt = TimeManager::GetInstance().GetDeltaTime();
+
+    // ステージ配置ワールドGIFの更新 (エディタ停止中もアニメーション再生＆トランスフォーム反映)
+    StageGifManager::GetInstance()->Update(dt);
 
     // GPUパーティクル (snow) の更新（エディタ停止中も画面右端から常時降らせる）
     if (snowParticle_) {

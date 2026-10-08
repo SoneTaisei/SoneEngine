@@ -1,6 +1,7 @@
 #pragma once
 #include <d3d12.h>
 #include <wrl.h>
+#include <string>
 #include "Core/Utility/Utilityfunctions.h"
 
 // 前方宣言
@@ -8,11 +9,15 @@ class SpriteCommon;
 
 // アニメーション設定構造体
 struct SpriteAnimationConfig {
+    std::string texturePath = ""; // 画像パス
     int columns = 1;              // 横の分割数（列数）
     int rows = 1;                 // 縦の分割数（行数）
     int totalFrames = 0;          // 総コマ数（0以下の場合は columns * rows で自動計算）
     float fps = 10.0f;            // 1秒あたりのコマ数
     bool isLoop = true;           // ループ再生するか
+    Vector2 size = { 0.0f, 0.0f }; // 表示サイズ
+    Vector2 position = { 0.0f, 0.0f }; // 表示位置
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f }; // 表示色
 };
 
 class Sprite {
@@ -41,6 +46,11 @@ public:
     void ResumeAnimation();
     void StopAnimation();
     void SetAnimationFrame(int frameIndex);
+
+    // --- アニメーション設定 JSON 入出力 ---
+    bool InitializeFromConfig(SpriteCommon *spriteCommon, const std::string &jsonPath);
+    bool LoadAnimationConfig(const std::string &jsonPath);
+    bool SaveAnimationConfig(const std::string &jsonPath) const;
 
     bool IsAnimationActive() const { return isAnimationActive_; }
     bool IsAnimationPlaying() const { return isAnimPlaying_; }

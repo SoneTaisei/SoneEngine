@@ -92,6 +92,7 @@ public:
     bool SaveToFile(const std::string& filepath);
     bool LoadFromFile(const std::string& filepath);
     bool LoadFromStageName(const std::string& stageName);
+    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
 
     // 文字列ベースのマップデータ取得＆設定（リプレイ用）
     std::string GetMapDataAsString() const;
@@ -143,7 +144,6 @@ public:
 
 public:
     void SetDirty() { isDirty_ = true; }
-    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
     void BuildMap();
 
 private:

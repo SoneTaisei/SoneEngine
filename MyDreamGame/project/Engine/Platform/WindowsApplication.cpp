@@ -22,6 +22,7 @@
 #include "Renderer/LineRenderer.h"
 #include "Collision/CollisionManager.h"
 #include "../../Project/Scenes/GameScene.h"
+#include "GameObject/WorldGif.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
@@ -336,6 +337,8 @@ void WindowsApplication::Update() {
                         map->SaveToFile("resources/json/local/temp_play_map.txt");
                     }
                 }
+                // GIFの現在の配置状態も自動保存してプレイ開始
+                StageGifManager::GetInstance()->SaveForStage(StageGifManager::GetInstance()->GetCurrentStageName());
             }
 
             // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
@@ -353,6 +356,8 @@ void WindowsApplication::Update() {
                 
                 // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
                 std::string originalPath = GameScene::s_TargetMapFilePath;
+                std::string currentGifStage = StageGifManager::GetInstance()->GetCurrentStageName();
+
                 GameScene::s_TargetMapFilePath = "resources/json/local/temp_play_map.txt";
                 
                 sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
@@ -362,6 +367,9 @@ void WindowsApplication::Update() {
                 
                 // パスを元に戻す（次回の正常なロードやSaveなどのため）
                 GameScene::s_TargetMapFilePath = originalPath;
+
+                // GIFステージを一時マップではなく本来のステージとして復帰
+                StageGifManager::GetInstance()->LoadForStage(currentGifStage);
                 
                 // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
                 editorManager_->ClearSelection();

@@ -542,6 +542,7 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
     bool result = LoadFromString(buffer.str());
 
     if (result) {
+        currentFilePath_ = filepath;
         // 境界線メタデータの読み込み
         std::string boundsPath = filepath;
         size_t lastDot = boundsPath.find_last_of(".");

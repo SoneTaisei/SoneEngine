@@ -24,6 +24,7 @@
 #include "GPUParticle/GPUParticlePreviewScene.h"
 #include "Core/Utility/ParameterManager.h"
 #include "Collision/CollisionManager.h"
+#include "GameObject/WorldGif.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -299,6 +300,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // まだ何も読んでいないシーン：前回読み込んでいたマップをロード
                 const char* currentStageName = mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt";
                 loaded = mapChip->LoadFromStageName(currentStageName);
+                if (loaded) {
+                    StageGifManager::GetInstance()->LoadForStage(currentStageName);
+                }
             }
             if (!loaded) {
                 // 前回のマップが存在しない場合はデフォルトマップを表示
@@ -310,6 +314,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         mapChip->GenerateDefaultRooms();
                     }
                 }
+                StageGifManager::GetInstance()->LoadForStage(mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt");
                 SaveSceneConfig();
             }
             if (mapEditor_) {
@@ -352,6 +357,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (mapEditor_) {
                     mapEditor_->GetContext()->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                     mapEditor_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                    StageGifManager::GetInstance()->LoadForStage(mapEditor_->GetStageFilename());
                 }
                 if (activeScene) {
                     activeScene->UpdateEditor();
@@ -463,6 +469,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         mapChip->ResetBlocks();
                     }
                 }
+                // GIFの配置状態も自動保存
+                StageGifManager::GetInstance()->SaveForStage(StageGifManager::GetInstance()->GetCurrentStageName());
             }
             ImGui::PopStyleColor(3);
         } else {
@@ -2220,7 +2228,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     // --- Sprite Animation ウィンドウ ---
     if (showSpriteAnimation_) {
         if (spriteAnimEditor_) {
-            spriteAnimEditor_->DrawUI(&showSpriteAnimation_);
+            spriteAnimEditor_->DrawUI(&showSpriteAnimation_, gameViewPos_, gameViewSize_);
         }
     }
 

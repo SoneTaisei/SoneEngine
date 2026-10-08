@@ -3,6 +3,9 @@
 #include "SpriteCommon.h"
 #include "Graphics/TextureManager.h"
 #include "Core/TimeManager.h"
+#include <fstream>
+#include <filesystem>
+#include <nlohmann/json.hpp>
 
 Sprite::Sprite() {}
 
@@ -160,4 +163,147 @@ void Sprite::ResetTextureRect() {
 void Sprite::Draw() {
     Renderer::GetInstance()->DrawSprite(this);
 }
+
+bool Sprite::InitializeFromConfig(SpriteCommon *spriteCommon, const std::string &jsonPath) {
+    if (!std::filesystem::exists(jsonPath)) {
+        return false;
+    }
+    std::ifstream file(jsonPath);
+    if (!file.is_open()) {
+        return false;
+    }
+    nlohmann::json j;
+    try {
+        file >> j;
+    } catch (...) {
+        return false;
+    }
+
+    std::string texPath = j.value("texturePath", "");
+    if (texPath.empty()) {
+        return false;
+    }
+
+    uint32_t texHandle = TextureManager::GetInstance()->Load(texPath);
+    Initialize(spriteCommon, texHandle);
+
+    animConfig_.texturePath = texPath;
+    animConfig_.columns = j.value("columns", 1);
+    animConfig_.rows = j.value("rows", 1);
+    animConfig_.totalFrames = j.value("totalFrames", 0);
+    animConfig_.fps = j.value("fps", 10.0f);
+    animConfig_.isLoop = j.value("isLoop", true);
+
+    SetAnimation(animConfig_);
+
+    if (j.contains("size") && j["size"].is_array() && j["size"].size() >= 2) {
+        float sw = j["size"][0].get<float>();
+        float sh = j["size"][1].get<float>();
+        if (sw > 0.0f && sh > 0.0f) {
+            SetSize({ sw, sh });
+        }
+    } else {
+        float frameW = (animConfig_.columns > 0) ? (texBaseSize_.x / static_cast<float>(animConfig_.columns)) : texBaseSize_.x;
+        float frameH = (animConfig_.rows > 0) ? (texBaseSize_.y / static_cast<float>(animConfig_.rows)) : texBaseSize_.y;
+        SetSize({ frameW, frameH });
+    }
+
+    if (j.contains("position") && j["position"].is_array() && j["position"].size() >= 2) {
+        SetPosition({ j["position"][0].get<float>(), j["position"][1].get<float>() });
+    }
+
+    if (j.contains("color") && j["color"].is_array() && j["color"].size() >= 4) {
+        SetColor({ j["color"][0].get<float>(), j["color"][1].get<float>(), j["color"][2].get<float>(), j["color"][3].get<float>() });
+    }
+
+    PlayAnimation();
+    return true;
+}
+
+bool Sprite::LoadAnimationConfig(const std::string &jsonPath) {
+    if (!std::filesystem::exists(jsonPath)) {
+        return false;
+    }
+    std::ifstream file(jsonPath);
+    if (!file.is_open()) {
+        return false;
+    }
+    nlohmann::json j;
+    try {
+        file >> j;
+    } catch (...) {
+        return false;
+    }
+
+    std::string texPath = j.value("texturePath", "");
+    if (!texPath.empty()) {
+        textureIndex_ = TextureManager::GetInstance()->Load(texPath);
+        const D3D12_RESOURCE_DESC resDesc = TextureManager::GetInstance()->GetResourceDesc(textureIndex_);
+        texBaseSize_ = { static_cast<float>(resDesc.Width), static_cast<float>(resDesc.Height) };
+    }
+
+    animConfig_.texturePath = texPath;
+    animConfig_.columns = j.value("columns", 1);
+    animConfig_.rows = j.value("rows", 1);
+    animConfig_.totalFrames = j.value("totalFrames", 0);
+    animConfig_.fps = j.value("fps", 10.0f);
+    animConfig_.isLoop = j.value("isLoop", true);
+
+    SetAnimation(animConfig_);
+
+    if (j.contains("size") && j["size"].is_array() && j["size"].size() >= 2) {
+        float sw = j["size"][0].get<float>();
+        float sh = j["size"][1].get<float>();
+        if (sw > 0.0f && sh > 0.0f) {
+            SetSize({ sw, sh });
+        }
+    } else {
+        float frameW = (animConfig_.columns > 0) ? (texBaseSize_.x / static_cast<float>(animConfig_.columns)) : texBaseSize_.x;
+        float frameH = (animConfig_.rows > 0) ? (texBaseSize_.y / static_cast<float>(animConfig_.rows)) : texBaseSize_.y;
+        SetSize({ frameW, frameH });
+    }
+
+    if (j.contains("position") && j["position"].is_array() && j["position"].size() >= 2) {
+        SetPosition({ j["position"][0].get<float>(), j["position"][1].get<float>() });
+    }
+
+    if (j.contains("color") && j["color"].is_array() && j["color"].size() >= 4) {
+        SetColor({ j["color"][0].get<float>(), j["color"][1].get<float>(), j["color"][2].get<float>(), j["color"][3].get<float>() });
+    }
+
+    PlayAnimation();
+    return true;
+}
+
+bool Sprite::SaveAnimationConfig(const std::string &jsonPath) const {
+    nlohmann::json j;
+    j["texturePath"] = animConfig_.texturePath;
+    j["columns"] = animConfig_.columns;
+    j["rows"] = animConfig_.rows;
+    j["totalFrames"] = animTotalFrames_;
+    j["fps"] = animConfig_.fps;
+    j["isLoop"] = animConfig_.isLoop;
+    Vector2 sz = GetSize();
+    j["size"] = { sz.x, sz.y };
+    Vector2 pos = GetPosition();
+    j["position"] = { pos.x, pos.y };
+    if (materialData_) {
+        j["color"] = { materialData_->color.x, materialData_->color.y, materialData_->color.z, materialData_->color.w };
+    } else {
+        j["color"] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    }
+
+    std::filesystem::path p(jsonPath);
+    if (p.has_parent_path()) {
+        std::filesystem::create_directories(p.parent_path());
+    }
+
+    std::ofstream file(jsonPath);
+    if (!file.is_open()) {
+        return false;
+    }
+    file << j.dump(4);
+    return true;
+}
+
 

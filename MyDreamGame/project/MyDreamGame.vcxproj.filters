@@ -194,6 +194,9 @@
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\GameObject\WorldGif.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Effect\CoinEffect.cpp">
       <Filter>Application\Particle</Filter>
     </ClCompile>
@@ -504,6 +507,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\GameObject\WorldGif.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
     <ClInclude Include="Project\Effect\CoinEffect.h">

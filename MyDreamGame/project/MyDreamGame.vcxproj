@@ -239,6 +239,7 @@
     <ClCompile Include="Engine\Resource\Primitive\Primitive.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
+    <ClCompile Include="Engine\GameObject\WorldGif.cpp" />
     <ClCompile Include="Project\Effect\CoinEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player\Player2D.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
@@ -486,6 +487,7 @@
     <ClInclude Include="Engine\Resource\Primitive\Primitive.h" />
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
+    <ClInclude Include="Engine\GameObject\WorldGif.h" />
     <ClInclude Include="Project\Effect\CoinEffect.h" />
     <ClInclude Include="Project\Game2D\Player\Player2D.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerState.h" />
