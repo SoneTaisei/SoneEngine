@@ -28,6 +28,9 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
     if (sceneManager->HasData("SelectedStagePath")) {
         std::string selectedPath = sceneManager->GetData<std::string>("SelectedStagePath");
         if (!selectedPath.empty()) {
+            if (selectedPath.find('/') == std::string::npos && selectedPath.find('\\') == std::string::npos) {
+                selectedPath = "resources/json/shared/MapData/" + selectedPath;
+            }
             s_TargetMapFilePath = selectedPath;
             if (map_) {
                 map_->Initialize(s_TargetMapFilePath);

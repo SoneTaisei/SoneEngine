@@ -37,7 +37,18 @@ void StageSelectScene::OnEnter(SceneManager* sceneManager) {
 void StageSelectScene::OnExit(SceneManager* sceneManager) {
     // 次のシーンへ渡すデータをセットする（選択したステージのパスなど）
     if (!stageConfigs_.empty() && currentStageIndex_ < stageConfigs_.size()) {
-        sceneManager->SetData("SelectedStagePath", std::string(stageConfigs_[currentStageIndex_].jsonPath));
+        std::string mapPath = stageConfigs_[currentStageIndex_].jsonPath;
+        if (mapPath.empty() || mapPath == "none") {
+            if (currentStageIndex_ == 0) mapPath = "map_data.txt";
+            else if (currentStageIndex_ == 1) mapPath = "map_data1.txt";
+            else if (currentStageIndex_ == 2) mapPath = "map_data2.txt";
+        }
+        std::string fullPath = mapPath;
+        if (fullPath.find('/') == std::string::npos && fullPath.find('\\') == std::string::npos) {
+            fullPath = "resources/json/shared/MapData/" + fullPath;
+        }
+        sceneManager->SetData("SelectedStagePath", fullPath);
+        GameScene::s_TargetMapFilePath = fullPath;
     }
 }
 
@@ -182,7 +193,12 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
                 else if (currentStageIndex_ == 1) mapPath = "map_data1.txt";
                 else if (currentStageIndex_ == 2) mapPath = "map_data2.txt";
             }
-            GameScene::s_TargetMapFilePath = "resources/json/shared/MapData/" + mapPath;
+            std::string fullPath = mapPath;
+            if (fullPath.find('/') == std::string::npos && fullPath.find('\\') == std::string::npos) {
+                fullPath = "resources/json/shared/MapData/" + fullPath;
+            }
+            GameScene::s_TargetMapFilePath = fullPath;
+            sceneManager->SetData("SelectedStagePath", fullPath);
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;
         }
@@ -329,6 +345,7 @@ void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 
     if (ImGui::InputInt("ステージ数", &stageCount_)) {
         if (stageCount_ < 1) stageCount_ = 1;
+        if (stageCount_ > kMaxSelectableStages) stageCount_ = kMaxSelectableStages;
         stageConfigs_.resize(stageCount_);
     }
 
@@ -336,35 +353,47 @@ void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         RefreshAvailableMapFiles();
     }
 
+    bool configChanged = false;
     for (int i = 0; i < stageCount_; ++i) {
         ImGui::PushID(i);
         ImGui::Text("ステージ %d", i + 1);
 
-        int currentIndex = -1;
-        std::vector<const char*> items;
-        for (size_t j = 0; j < availableMapFiles_.size(); ++j) {
-            items.push_back(availableMapFiles_[j].c_str());
-            if (availableMapFiles_[j] == stageConfigs_[i].jsonPath) {
-                currentIndex = static_cast<int>(j);
+        std::string currentFile = stageConfigs_[i].jsonPath;
+        if (!currentFile.empty() && currentFile != "none") {
+            auto it = std::find(availableMapFiles_.begin(), availableMapFiles_.end(), currentFile);
+            if (it == availableMapFiles_.end()) {
+                availableMapFiles_.push_back(currentFile);
             }
         }
-        
-        if (currentIndex == -1 && strlen(stageConfigs_[i].jsonPath) > 0) {
-            availableMapFiles_.push_back(stageConfigs_[i].jsonPath);
-            items.push_back(availableMapFiles_.back().c_str());
-            currentIndex = static_cast<int>(items.size() - 1);
+
+        int currentIndex = -1;
+        std::vector<const char*> items;
+        items.reserve(availableMapFiles_.size());
+        for (size_t j = 0; j < availableMapFiles_.size(); ++j) {
+            items.push_back(availableMapFiles_[j].c_str());
+            if (availableMapFiles_[j] == currentFile) {
+                currentIndex = static_cast<int>(j);
+            }
         }
 
         if (ImGui::Combo("マップファイル", &currentIndex, items.data(), static_cast<int>(items.size()))) {
             if (currentIndex >= 0 && currentIndex < static_cast<int>(availableMapFiles_.size())) {
                 strcpy_s(stageConfigs_[i].jsonPath, availableMapFiles_[currentIndex].c_str());
+                configChanged = true;
             }
         }
         ImGui::PopID();
     }
 
-    if (ImGui::Button("設定を保存")) {
+    static float saveNotificationTimer = 0.0f;
+    if (ImGui::Button("設定を保存") || configChanged) {
         SaveConfig();
+        saveNotificationTimer = 2.0f;
+    }
+    if (saveNotificationTimer > 0.0f) {
+        saveNotificationTimer -= ImGui::GetIO().DeltaTime;
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "設定を保存しました！");
     }
     ImGui::End();
 #endif
@@ -376,14 +405,20 @@ void StageSelectScene::RefreshAvailableMapFiles() {
     if (std::filesystem::exists(path) && std::filesystem::is_directory(path)) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
             if (entry.is_regular_file()) {
+                std::string filename = entry.path().filename().string();
                 std::string ext = entry.path().extension().string();
                 if (ext == ".txt" || ext == ".json") {
-                    std::string filePath = entry.path().filename().string();
-                    availableMapFiles_.push_back(filePath);
+                    // _bounds.txt や temp_play_map などの一時ファイル・境界データは除外
+                    if (filename.find("_bounds") != std::string::npos ||
+                        filename.find("temp_play_map") != std::string::npos) {
+                        continue;
+                    }
+                    availableMapFiles_.push_back(filename);
                 }
             }
         }
     }
+    std::sort(availableMapFiles_.begin(), availableMapFiles_.end());
 }
 
 void StageSelectScene::SaveConfig() {
@@ -403,14 +438,15 @@ void StageSelectScene::LoadConfig() {
     if (!ifs.is_open()) {
         stageCount_ = kMaxSelectableStages;
         stageConfigs_.resize(kMaxSelectableStages);
-        strcpy_s(stageConfigs_[0].jsonPath, "map_data1.txt");
-        strcpy_s(stageConfigs_[1].jsonPath, "map_data2.txt");
-        strcpy_s(stageConfigs_[2].jsonPath, "map_data.txt");
+        strcpy_s(stageConfigs_[0].jsonPath, "map_data.txt");
+        strcpy_s(stageConfigs_[1].jsonPath, "map_data1.txt");
+        strcpy_s(stageConfigs_[2].jsonPath, "map_data2.txt");
         return;
     }
     
     if (ifs >> stageCount_) {
         if (stageCount_ < 1) stageCount_ = 1;
+        if (stageCount_ > kMaxSelectableStages) stageCount_ = kMaxSelectableStages;
         stageConfigs_.resize(stageCount_);
         std::string path;
         for (int i = 0; i < stageCount_; ++i) {
@@ -425,8 +461,8 @@ void StageSelectScene::LoadConfig() {
     if (stageCount_ < kMaxSelectableStages) {
         stageCount_ = kMaxSelectableStages;
         stageConfigs_.resize(kMaxSelectableStages);
-        if (strlen(stageConfigs_[0].jsonPath) == 0) strcpy_s(stageConfigs_[0].jsonPath, "map_data1.txt");
-        if (strlen(stageConfigs_[1].jsonPath) == 0) strcpy_s(stageConfigs_[1].jsonPath, "map_data2.txt");
-        if (strlen(stageConfigs_[2].jsonPath) == 0) strcpy_s(stageConfigs_[2].jsonPath, "map_data.txt");
+        if (strlen(stageConfigs_[0].jsonPath) == 0) strcpy_s(stageConfigs_[0].jsonPath, "map_data.txt");
+        if (strlen(stageConfigs_[1].jsonPath) == 0) strcpy_s(stageConfigs_[1].jsonPath, "map_data1.txt");
+        if (strlen(stageConfigs_[2].jsonPath) == 0) strcpy_s(stageConfigs_[2].jsonPath, "map_data2.txt");
     }
 }
