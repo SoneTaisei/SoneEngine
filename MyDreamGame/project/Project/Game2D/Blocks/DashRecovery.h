@@ -1,8 +1,7 @@
 #pragma once
 #include "BaseBlock.h"
 #include <memory>
-
-class GPUParticleSystem;
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 
 /// <summary>
 /// DashRecovery - ダッシュ回復ブロック/アイテム
@@ -11,6 +10,7 @@ class GPUParticleSystem;
 class DashRecovery : public BaseBlock {
 public:
     using BaseBlock::BaseBlock;
+    ~DashRecovery() override;
 
     // 初期化処理（モデル・マテリアル・コライダー・GPUパーティクルのセットアップ）
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;

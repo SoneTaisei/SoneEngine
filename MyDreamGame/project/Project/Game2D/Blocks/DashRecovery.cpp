@@ -23,6 +23,8 @@ REGISTER_BLOCK_CLASS(DashRecovery);
 float DashRecovery::sGlobalCollectCooldown_ = 0.0f;
 int DashRecovery::sTotalCollectCount_ = 0;
 
+DashRecovery::~DashRecovery() = default;
+
 void DashRecovery::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     basePosition_ = { worldX, worldY, 0.0f };
     baseScale_ = { width, height, 1.0f };

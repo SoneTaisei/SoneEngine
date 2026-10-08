@@ -258,6 +258,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (k == "waitTimeAtEdge") return std::string("端での待機時間 (waitTimeAtEdge)");
         if (k == "floatAmplitude") return std::string("浮遊の振幅 (floatAmplitude)");
         if (k == "floatSpeed") return std::string("浮遊の速度 (floatSpeed)");
+        if (k == "breakConnected") return std::string("連結破壊 (breakConnected)");
         return k;
     };
 

@@ -1,11 +1,14 @@
 #include "BreakableBlock.h"
 #include "BlockFactory.h"
 #include "Game2D/Player/Player2D.h"
+#include "Game2D/MapChip2D.h"
 #include "Graphics/GameCamera.h"
 #include "Core/TimeManager.h"
 #include <random>
 #include <cmath>
 #include <algorithm>
+#include <queue>
+#include <set>
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
@@ -220,7 +223,67 @@ void BreakableBlock::OnPlayerTouch() {
     // 横から触れた場合も同様に通常ブロックとして機能
 }
 
-void BreakableBlock::Break(Player2D* player) {
+void BreakableBlock::Break(Player2D* player, bool triggerChain) {
+    if (isBroken_) return;
+
+    // プレイヤーのダッシュ方向を取得（連鎖ブロックの破片にも伝播）
+    Vector3 dashDir = { 1.0f, 0.0f, 0.0f };
+    if (player) {
+        Vector3 vel = player->GetDashVelocity();
+        float len = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+        if (len > 0.001f) {
+            dashDir = { vel.x / len, vel.y / len, 0.0f };
+        }
+    }
+
+    // 連結しているブロックを探索
+    std::vector<BreakableBlock*> connectedBlocks;
+    if (triggerChain && breakConnected_ && map_) {
+        std::queue<std::pair<int, int>> queue;
+        std::set<std::pair<int, int>> visited;
+
+        queue.push({ chipX_, chipY_ });
+        visited.insert({ chipX_, chipY_ });
+
+        const int dx[4] = { 1, -1, 0, 0 };
+        const int dy[4] = { 0, 0, 1, -1 };
+
+        while (!queue.empty()) {
+            auto [cx, cy] = queue.front();
+            queue.pop();
+
+            for (int i = 0; i < 4; ++i) {
+                int nx = cx + dx[i];
+                int ny = cy + dy[i];
+
+                if (visited.count({ nx, ny })) continue;
+                visited.insert({ nx, ny });
+
+                BaseBlock* neighbor = map_->GetBlock(nx, ny);
+                if (neighbor) {
+                    if (auto* bBlock = dynamic_cast<BreakableBlock*>(neighbor)) {
+                        if (!bBlock->IsBroken()) {
+                            queue.push({ nx, ny });
+                            connectedBlocks.push_back(bBlock);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 自身の破壊処理を実行
+    BreakInternal(player, dashDir);
+
+    // 連結しているブロックを一括破壊
+    for (auto* block : connectedBlocks) {
+        if (!block->IsBroken()) {
+            block->BreakInternal(nullptr, dashDir);
+        }
+    }
+}
+
+void BreakableBlock::BreakInternal(Player2D* player, const Vector3& inheritedDashDir) {
     if (isBroken_) return;
     isBroken_ = true;
     respawnTimer_ = 0.0f;
@@ -236,8 +299,8 @@ void BreakableBlock::Break(Player2D* player) {
         }
     }
 
-    // プレイヤーのダッシュ方向を取得
-    Vector3 dashDir = { 1.0f, 0.0f, 0.0f };
+    // ダッシュ方向の決定（playerがいれば取得、いなければ継承された方向）
+    Vector3 dashDir = inheritedDashDir;
     if (player) {
         Vector3 vel = player->GetDashVelocity();
         float len = std::sqrt(vel.x * vel.x + vel.y * vel.y);
@@ -330,6 +393,9 @@ void BreakableBlock::Respawn() {
 }
 
 void BreakableBlock::SetProperties(const nlohmann::json& properties) {
+    if (properties.contains("breakConnected") && properties["breakConnected"].is_boolean()) {
+        breakConnected_ = properties["breakConnected"].get<bool>();
+    }
     if (properties.contains("requireDirectionalDash") && properties["requireDirectionalDash"].is_boolean()) {
         requireDirectionalDash_ = properties["requireDirectionalDash"].get<bool>();
     }
@@ -386,6 +452,10 @@ void BreakableBlock::DrawImGui() {
     }
 
     ImGui::Separator();
+    ImGui::Checkbox("連結ブロックを一括破壊 (Break Connected)", &breakConnected_);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("有効時：上下左右に隣接している壊せるブロックも連鎖して同時に破壊されます。");
+    }
     ImGui::Checkbox("接触面に応じた方向ダッシュのみで破壊", &requireDirectionalDash_);
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("有効時：上面接触時は下ダッシュ、横面接触時は横ダッシュでのみ破壊されます。\n無効時：ダッシュ中であればどの方向からでも破壊されます。");

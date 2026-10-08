@@ -34,7 +34,10 @@ public:
     void OnPlayerTouch() override;
 
     // ブロックの破壊処理
-    void Break(Player2D* player = nullptr);
+    void Break(Player2D* player = nullptr, bool triggerChain = true);
+
+    // 単体ブロックの内部破壊処理
+    void BreakInternal(Player2D* player, const Vector3& inheritedDashDir = { 1.0f, 0.0f, 0.0f });
 
     // ブロックの復活処理
     void Respawn();
@@ -47,6 +50,8 @@ public:
 
     // 状態取得
     bool IsBroken() const { return isBroken_; }
+    bool IsBreakConnected() const { return breakConnected_; }
+    void SetBreakConnected(bool enable) { breakConnected_ = enable; }
 
     // 接触面とダッシュ方向から破壊すべきかを判定するヘルパー関数
     bool ShouldBreakFromContact(Player2D* player) const;
@@ -69,6 +74,7 @@ private:
 
     bool isBroken_ = false;               // 破壊状態フラグ
     bool requireDirectionalDash_ = true;  // 接触面に応じた方向のダッシュのみで壊れるか
+    bool breakConnected_ = true;          // 連結しているブロックをまとめて破壊するか
     float respawnTimer_ = 0.0f;           // 自動復活カウントタイマー
     float respawnTime_ = 0.0f;            // 自動復活までの秒数（0以下なら復活しない）
     
