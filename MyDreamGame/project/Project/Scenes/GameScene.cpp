@@ -83,7 +83,7 @@ void GameScene::Initialize() {
     Log("GameScene::Initialize: ReplayManager loaded\n");
 
     // ★ Skyboxの初期化処理を追加
-    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
+    skyboxTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/BackGround.dds");
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize(device.Get(), skyboxTextureHandle_);
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
@@ -659,6 +659,24 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
 
+        // 右スティック（RStick）によるカメラ見渡し回転
+        auto gamepad = GamepadInput::GetInstance();
+        if (gamepad && gamepad->IsConnected()) {
+            Vector2 rStick = gamepad->GetRightStick();
+            if (std::abs(rStick.x) > 0.15f || std::abs(rStick.y) > 0.15f) {
+                float targetYaw = -rStick.x * 0.6f;   // 左右見渡し（水平回転）
+                float targetPitch = rStick.y * 0.4f;  // 上下見渡し（垂直チルト）
+                cameraLookRotation_.y += (targetYaw - cameraLookRotation_.y) * 0.1f;
+                cameraLookRotation_.x += (targetPitch - cameraLookRotation_.x) * 0.1f;
+            } else {
+                cameraLookRotation_.y += (0.0f - cameraLookRotation_.y) * 0.1f;
+                cameraLookRotation_.x += (0.0f - cameraLookRotation_.x) * 0.1f;
+            }
+            if (gameCamera_) {
+                gameCamera_->SetRotation({ cameraLookRotation_.x, cameraLookRotation_.y, 0.0f });
+            }
+        }
+
         if (!isRewinding && wasRewindingLastFrame_) {
             if (gameCamera_) {
                 gameCamera_->SetFollowTarget(&player_->GetPosition());
@@ -690,6 +708,10 @@ void GameScene::Update(SceneManager *sceneManager) {
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
 #ifdef USE_IMGUI
+
+    if (skybox_) {
+        skybox_->DrawImGui();
+    }
 
     if (player_ && player_->GetPrimitiveObject() == selectedPrimitive) {
         player_->DisplayImGui();

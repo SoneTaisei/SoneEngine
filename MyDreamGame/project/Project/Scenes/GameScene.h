@@ -82,6 +82,7 @@ private:
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
+    Vector3 cameraLookRotation_ = { 0.0f, 0.0f, 0.0f }; // 右スティック等の見渡し用カメラ回転
 
     // ---------------------------------------------------
     // 共通システム
