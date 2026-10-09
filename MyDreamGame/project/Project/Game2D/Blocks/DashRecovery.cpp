@@ -52,9 +52,8 @@ void DashRecovery::Initialize(ID3D12Device* device, Primitive* boxPrimitive, flo
     const std::string particlePath = "resources/json/shared/Particle/DashRecaveryEffect.json";
     if (gpuParticleSystem_->LoadFromFile(particlePath)) {
         // アイテム取得ワンショット再生用に調整
-        auto& pData = gpuParticleSystem_->GetData();
-        pData.isLoop = false;
-        pData.duration = 1.2f; // パーティクル生存時間(1.0s)をカバー
+        gpuParticleSystem_->SetIsLoop(false);
+        gpuParticleSystem_->SetDuration(1.2f); // パーティクル生存時間(1.0s)をカバー
     }
 }
 

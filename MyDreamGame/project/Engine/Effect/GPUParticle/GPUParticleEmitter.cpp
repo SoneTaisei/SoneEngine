@@ -35,6 +35,15 @@ void GPUParticleEmitter::SetData(const GPUParticleEmitterData& data) {
     }
 }
 
+void GPUParticleEmitter::SetMaxParticles(uint32_t maxCount) {
+    if (data_.maxParticles != maxCount) {
+        data_.maxParticles = maxCount;
+        if (device_) {
+            ReallocateGpuResources(device_, data_.maxParticles);
+        }
+    }
+}
+
 void GPUParticleEmitter::ReallocateGpuResources(ID3D12Device* device, uint32_t maxCount) {
     if (maxCount == 0) maxCount = 1;
 

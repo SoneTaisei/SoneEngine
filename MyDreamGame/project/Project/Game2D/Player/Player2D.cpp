@@ -57,18 +57,11 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
         state_.velocity_.x = 0.0f;
     }
     // パラメータに基づいてPrimitiveObjectのスケールを常に反映させる（JSONロード時のバグ対策）
-    if (!state_.isRespawning_ && visuals_.GetPrimitiveObject()) {
-        visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
-    }
-
     // リプレイ再生中でかつ一時停止中の場合、物理演算や各種タイマー進行を停止する
     if (ReplayManager::GetInstance()->IsPlaying() && ReplayManager::GetInstance()->IsPaused()) {
         state_.stuckTimer_ = 0.0f;
         state_.prevPositionForBugCheck_ = state_.position_;
-        if (visuals_.GetPrimitiveObject()) {
-            visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
-            visuals_.GetPrimitiveObject()->Update();
-        }
+        visuals_.SyncTransform(state_.position_);
         if (gameObject_) {
             if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
@@ -104,9 +97,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
 
         // ディゾルブ演出の進行
         float t = (std::min)(state_.deathTimer_ / params_.deathDuration_, 1.0f);
-        if (visuals_.GetPrimitiveObject()) {
-            visuals_.GetPrimitiveObject()->GetMaterial().dissolveThreshold = t;
-        }
+        visuals_.SetDissolveThreshold(t);
 
         if (state_.deathTimer_ >= params_.deathDuration_) {
             // リスポーン地点の決定
@@ -159,7 +150,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
             state_.climbLandingTimer_ = 0.0f;
 
             // パラメータをリセット
-            visuals_.GetPrimitiveObject()->GetMaterial().dissolveThreshold = 0.0f;
+            visuals_.SetDissolveThreshold(0.0f);
             TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
             
             // ステージ内の動的オブジェクト（敵やギミック等）を初期位置・状態にリセット
@@ -168,12 +159,11 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
             // リスポーン演出の開始
             state_.isRespawning_ = true;
             state_.respawnTimer_ = 0.0f;
-            visuals_.GetPrimitiveObject()->SetScale({ 0.0f, 0.0f, 1.0f });
+            visuals_.SetRespawnVisual(state_.position_, params_, 0.0f);
         }
 
-        // PrimitiveObjectの座標を更新
-        visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
-        visuals_.GetPrimitiveObject()->Update();
+        // 描画座標を更新
+        visuals_.SyncTransform(state_.position_);
         return;
     }
 
@@ -189,16 +179,12 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
         float scaleProgress = 1.0f + c3 * (p * p * p) + c1 * (p * p);
         if (scaleProgress < 0.0f) scaleProgress = 0.0f;
 
-        visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f * scaleProgress, params_.halfHeight_ * 2.0f * scaleProgress, 1.0f });
-
         if (t >= 1.0f) {
             state_.isRespawning_ = false;
-            visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
+            scaleProgress = 1.0f;
         }
 
-        visuals_.GetPrimitiveObject()->GetMaterial().color = params_.colorNormal_; // リスポーン中は通常色
-        visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
-        visuals_.GetPrimitiveObject()->Update();
+        visuals_.SetRespawnVisual(state_.position_, params_, scaleProgress);
         return; // ここでリターンして通常のゲームロジックをスキップ
     }
 
@@ -208,8 +194,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
         // ただし、遷移前の速度（state_.velocity_）は保持しておくことで、遷移完了後にジャンプの勢いなどをそのまま引き継ぐ。
         
         // アニメーション等の描画だけは更新する
-        visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
-        visuals_.GetPrimitiveObject()->Update();
+        visuals_.SyncTransform(state_.position_);
         return;
     }
 
@@ -252,7 +237,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
     }
 
     // 色の更新
-    visuals_.GetPrimitiveObject()->GetMaterial().color = (state_.isDashing_ || !state_.canDash_) ? params_.colorDashed_ : params_.colorNormal_;
+    visuals_.SetColor((state_.isDashing_ || !state_.canDash_) ? params_.colorDashed_ : params_.colorNormal_);
 
     // 走りエフェクトの発生
     if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f) {
@@ -301,12 +286,8 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
     state_.prevPositionForBugCheck_ = state_.position_;
     // --------------------
 
-    // 色の更新
-    visuals_.GetPrimitiveObject()->GetMaterial().color = state_.canDash_ ? params_.colorNormal_ : params_.colorDashed_;
-
-    // PrimitiveObjectの座標を更新
-    visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
-    visuals_.GetPrimitiveObject()->Update();
+    // 描画座標を更新
+    visuals_.SyncTransform(state_.position_);
     
     // アイテム（コインなど）との当たり判定は physics_.Update() 内で行われるため削除
 
@@ -411,8 +392,8 @@ void Player2D::DisplayImGui() {
             if (ImGui::DragFloat("当たり判定の半高", &params_.halfHeight_, 0.01f, 0.05f, 5.0f)) {
                 sizeChanged = true;
             }
-            if (sizeChanged && visuals_.GetPrimitiveObject()) {
-                visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
+            if (sizeChanged) {
+                visuals_.SyncSize(params_);
             }
             ImGui::TreePop();
         }
@@ -488,13 +469,7 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
     
-    if (visuals_.GetPrimitiveObject()) {
-        visuals_.GetPrimitiveObject()->SetTranslation(state_.position_);
-        visuals_.GetPrimitiveObject()->GetMaterial().color = params_.colorNormal_;
-        visuals_.GetPrimitiveObject()->SetScale({ params_.halfWidth_ * 2.0f, params_.halfHeight_ * 2.0f, 1.0f });
-        visuals_.GetPrimitiveObject()->SetRotation({ 0.0f, 0.0f, 0.0f });
-        visuals_.GetPrimitiveObject()->Update();
-    }
+    visuals_.ResetVisuals(state_.position_, params_);
     visuals_.ClearEffects();
 }
 

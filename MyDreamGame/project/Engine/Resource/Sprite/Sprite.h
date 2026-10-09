@@ -62,7 +62,9 @@ public:
     void SetPosition(const Vector2 &position) { transform_.translate = { position.x, position.y, 0.0f }; }
     void SetRotation(float rotation) { transform_.rotate.z = rotation; }
     void SetSize(const Vector2 &size) { transform_.scale = { size.x, size.y, 1.0f }; }
-    void SetColor(const Vector4 &color) { materialData_->color = color; }
+    void SetColor(const Vector4 &color) { if (materialData_) materialData_->color = color; }
+    Vector4 GetColor() const { return materialData_ ? materialData_->color : Vector4{ 1.0f, 1.0f, 1.0f, 1.0f }; }
+    const Material* GetMaterial() const { return materialData_; }
 
     // --- ゲッター ---
     Vector2 GetPosition() const { return { transform_.translate.x, transform_.translate.y }; }

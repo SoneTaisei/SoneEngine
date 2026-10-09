@@ -53,7 +53,6 @@ public:
     bool IsDashing() const { return state_.isDashing_; }
     const Vector3& GetDashVelocity() const { return state_.dashVelocity_; }
     const PlayerState& GetState() const { return state_; }
-    PlayerState& GetState() { return state_; }
     // JSON Parameters
 
     // プレイヤーの位置を取得（カメラ追従用）
@@ -86,9 +85,11 @@ public:
 
     // ヒエラルキー用
     PrimitiveObject* GetPrimitiveObject() { return visuals_.GetPrimitiveObject(); }
+    const PrimitiveObject* GetPrimitiveObject() const { return visuals_.GetPrimitiveObject(); }
     Object3D* GetModelObject() { return visuals_.GetModelObject(); }
+    const Object3D* GetModelObject() const { return visuals_.GetModelObject(); }
     AnimatorComponent* GetAnimator() { return visuals_.GetAnimator(); }
-    PlayerVisuals& GetVisuals() { return visuals_; }
+    const AnimatorComponent* GetAnimator() const { return visuals_.GetAnimator(); }
 
     // ゲーム状態取得用
     int GetScore() const { return state_.score_; }
@@ -142,11 +143,7 @@ public:
     bool IsDead() const { return state_.isDead_; }
     bool IsGoal() const { return state_.isGoal_; }
     const PlayerParams& GetParams() const { return params_; }
-
 private:
-
-private:
-
     PlayerParams params_;
 
     PlayerState state_;

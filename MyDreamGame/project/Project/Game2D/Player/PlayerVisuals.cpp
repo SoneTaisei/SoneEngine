@@ -587,6 +587,70 @@ void PlayerVisuals::ClearEffects() {
     dashRingParticles_.clear();
 }
 
+void PlayerVisuals::SetDissolveThreshold(float threshold) {
+    if (primitiveObj_) {
+        primitiveObj_->GetMaterial().dissolveThreshold = threshold;
+    }
+}
+
+void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& params) {
+    if (primitiveObj_) {
+        primitiveObj_->SetTranslation(position);
+        primitiveObj_->GetMaterial().color = params.colorNormal_;
+        primitiveObj_->GetMaterial().dissolveThreshold = 0.0f;
+        primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
+        primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
+        primitiveObj_->Update();
+    }
+    if (modelObj_) {
+        modelObj_->SetTranslation(position);
+        modelObj_->GetMaterial().color = params.colorNormal_;
+        modelObj_->GetMaterial().dissolveThreshold = 0.0f;
+        modelObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
+        modelObj_->Update();
+    }
+}
+
+void PlayerVisuals::SyncTransform(const Vector3& position) {
+    if (primitiveObj_) {
+        primitiveObj_->SetTranslation(position);
+        primitiveObj_->Update();
+    }
+    if (modelObj_) {
+        modelObj_->SetTranslation(position);
+        modelObj_->Update();
+    }
+}
+
+void PlayerVisuals::SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress) {
+    if (primitiveObj_) {
+        primitiveObj_->SetScale({ params.halfWidth_ * 2.0f * scaleProgress, params.halfHeight_ * 2.0f * scaleProgress, 1.0f });
+        primitiveObj_->GetMaterial().color = params.colorNormal_;
+        primitiveObj_->SetTranslation(position);
+        primitiveObj_->Update();
+    }
+    if (modelObj_) {
+        modelObj_->SetTranslation(position);
+        modelObj_->GetMaterial().color = params.colorNormal_;
+        modelObj_->Update();
+    }
+}
+
+void PlayerVisuals::SetColor(const Vector4& color) {
+    if (primitiveObj_) {
+        primitiveObj_->GetMaterial().color = color;
+    }
+    if (modelObj_) {
+        modelObj_->GetMaterial().color = color;
+    }
+}
+
+void PlayerVisuals::SyncSize(const PlayerParams& params) {
+    if (primitiveObj_) {
+        primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
+    }
+}
+
 #ifdef USE_IMGUI
 #include "../../externals/imgui/imgui.h"
 

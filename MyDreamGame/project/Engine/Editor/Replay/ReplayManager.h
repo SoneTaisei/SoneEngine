@@ -239,7 +239,7 @@ public:
     // マクロ管理
     void LoadMacros();
     void SaveMacros();
-    std::vector<ReplayMacro>& GetMacros() { return macros_; }
+    const std::vector<ReplayMacro>& GetMacros() const { return macros_; }
     void AddMacro(const ReplayMacro& macro);
     void RemoveMacro(int index);
 

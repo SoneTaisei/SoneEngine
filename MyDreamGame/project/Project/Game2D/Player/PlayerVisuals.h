@@ -52,9 +52,20 @@ public:
     void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
     void ClearEffects();
 
+    // 表示制御・カプセル化用メソッド
+    void SetDissolveThreshold(float threshold);
+    void ResetVisuals(const Vector3& position, const PlayerParams& params);
+    void SyncTransform(const Vector3& position);
+    void SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress);
+    void SetColor(const Vector4& color);
+    void SyncSize(const PlayerParams& params);
+
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
+    const PrimitiveObject* GetPrimitiveObject() const { return primitiveObj_.get(); }
     Object3D* GetModelObject() { return modelObj_.get(); }
+    const Object3D* GetModelObject() const { return modelObj_.get(); }
     AnimatorComponent* GetAnimator() { return animator_.get(); }
+    const AnimatorComponent* GetAnimator() const { return animator_.get(); }
 
 #ifdef USE_IMGUI
     void DisplayImGui();
