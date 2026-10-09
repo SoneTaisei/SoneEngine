@@ -4,7 +4,6 @@
 #include "Component/AnimatorComponent.h"
 #include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
-#include "Renderer/Renderer.h"
 #include "Editor/Replay/ReplayManager.h"
 #include <algorithm>
 

@@ -27,6 +27,7 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["wallSlideSpeed_"] = params.wallSlideSpeed_;
         j["wallClimbSpeed_"] = params.wallClimbSpeed_;
         j["wallClingReleaseDuration_"] = params.wallClingReleaseDuration_;
+        j["climbLandingDuration_"] = params.climbLandingDuration_;
         
         j["halfWidth_"] = params.halfWidth_;
         j["halfHeight_"] = params.halfHeight_;
@@ -85,6 +86,7 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         if (j.contains("wallSlideSpeed_")) params.wallSlideSpeed_ = j["wallSlideSpeed_"];
         if (j.contains("wallClimbSpeed_")) params.wallClimbSpeed_ = j["wallClimbSpeed_"];
         if (j.contains("wallClingReleaseDuration_")) params.wallClingReleaseDuration_ = j["wallClingReleaseDuration_"];
+        if (j.contains("climbLandingDuration_")) params.climbLandingDuration_ = j["climbLandingDuration_"];
         
         if (j.contains("halfWidth_")) params.halfWidth_ = j["halfWidth_"];
         if (j.contains("halfHeight_")) params.halfHeight_ = j["halfHeight_"];

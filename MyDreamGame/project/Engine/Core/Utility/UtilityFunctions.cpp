@@ -1,7 +1,6 @@
 #include "Core/Utility/LogManager.h"
 #pragma warning(disable: 4828)
 #include "UtilityFunctions.h"
-#include <map>
 #include <fstream>
 #include <mutex>
 #include <assimp/Importer.hpp>
@@ -1094,7 +1093,6 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
 
 
 #include "LogManager.h"
-#include <set>
 
 Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename) {
     Animation animation; // create animation

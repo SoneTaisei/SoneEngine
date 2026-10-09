@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <vector>
 #include <string>
+#include "GameObject/WorldGif.h"
 
 MapEditorSettings::MapEditorSettings(MapEditorContext* context, MapEditorPalette* palette)
     : context_(context), palette_(palette) {
@@ -86,6 +87,7 @@ void MapEditorSettings::Draw(
                                         onSaveSceneConfig();
                                     }
                                 }
+                                StageGifManager::GetInstance()->LoadForStage(stageFiles[i]);
                             }
                             if (isSelected) {
                                 ImGui::SetItemDefaultFocus();
@@ -106,6 +108,7 @@ void MapEditorSettings::Draw(
                         if (onSaveSceneConfig) {
                             onSaveSceneConfig();
                         }
+                        StageGifManager::GetInstance()->LoadForStage(context_->GetStageFilename());
                     }
                 }
 

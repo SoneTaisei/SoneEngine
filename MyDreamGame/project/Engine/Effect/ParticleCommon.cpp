@@ -2,15 +2,23 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include <cassert>
 #include <format>
-#include <dxcapi.h>
 #include "Graphics/TextureManager.h"
 #include "Renderer/SrvManager.h"
 #include "Effect/ParticleManager.h" // Particleの定義が必要なため追加
 
 #pragma comment(lib, "dxcompiler.lib")
 
+ParticleCommon* ParticleCommon::sInstance_ = nullptr;
+
+ParticleCommon::~ParticleCommon() {
+    if (sInstance_ == this) {
+        sInstance_ = nullptr;
+    }
+}
+
 void ParticleCommon::Initialize(ID3D12Device *device) {
     assert(device);
+    sInstance_ = this;
     device_ = device;
 
     CreateRootSignature();

@@ -34,6 +34,10 @@ struct ParticlePipelineKey {
 
 class ParticleCommon {
 public:
+    static ParticleCommon* GetInstance() { return sInstance_; }
+    ParticleCommon() = default;
+    ~ParticleCommon();
+
     void Initialize(ID3D12Device *device);
     void PreDraw();
 
@@ -124,4 +128,6 @@ private:
 
     // カメラ行列保存用
     Matrix4x4 cameraMatrix_ = TransformFunctions::MakeIdentity4x4();
+
+    static ParticleCommon* sInstance_;
 };

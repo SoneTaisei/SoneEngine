@@ -2,9 +2,6 @@
 #ifdef USE_IMGUI
 #include <Windows.h>
 #include <d3d12.h>
-#include <cstdint>
-#include <set>
-#include <unordered_map>
 #include <memory>
 #include <functional>
 #include <vector>
@@ -23,6 +20,7 @@
 #include "LightEditor/LightEditor.h"
 #include "Model3DEditor/Model3DEditor.h"
 #include "PostEffectEditor/PostEffectEditor.h"
+#include "SpriteAnimationEditor/SpriteAnimationEditor.h"
 #include "Common/ModelSelectModal.h"
 
 class SceneManager;
@@ -89,6 +87,9 @@ public:
     bool IsMapEditorHovered() const { return mapEditor_ ? mapEditor_->IsHovered() : false; }
     bool IsRoomDragging() const { return mapEditor_ ? mapEditor_->IsRoomDragging() : false; }
     const std::string& GetActiveMainTab() const { return activeMainTab_; }
+    bool IsAnimationEditorActive() const;
+    bool IsGPUParticleEditorActive() const;
+    bool IsAnimationOrParticleEditorActive() const;
 
     static bool IsShowObjects() { return showObjects_; }
     static bool IsShowEffects() { return showEffects_; }
@@ -101,9 +102,11 @@ public:
 
     AnimationEditor* GetAnimationEditor() const { return animationEditor_.get(); }
     MapEditor* GetMapEditor() const { return mapEditor_.get(); }
-    LightEditor* GetLightEditor() const { return lightEditor_.get(); }
+    void SetLightEditor(LightEditor* lightEditor) { lightEditor_ = lightEditor; }
+    LightEditor* GetLightEditor() const { return lightEditor_; }
     Model3DEditor* GetModel3DEditor() const { return model3DEditor_.get(); }
     PostEffectEditor* GetPostEffectEditor() const { return postEffectEditor_.get(); }
+    SpriteAnimationEditor* GetSpriteAnimationEditor() const { return spriteAnimEditor_.get(); }
     GPUParticleEditor* GetGPUParticleEditor() const { return gpuParticleEditor_.get(); }
 
     // ウィンドウレイアウトプリセット構造体
@@ -122,6 +125,7 @@ public:
         bool showSpotLightPanel = true;
         bool showModelPlacement = true;
         bool showModelPalette = true;
+        bool showSpriteAnimation = true;
     };
 
     // レイアウトプリセットの保存・読込み・管理
@@ -333,6 +337,7 @@ private:
     bool showSpotLightPanel_ = true;
     bool showModelPlacementEditor_ = true;
     bool showModelPalette_ = true;
+    bool showSpriteAnimation_ = true;
     bool showParameterManager_ = false;
 
     // 前回選択されていたメインタブ（次回起動時に復元）
@@ -344,9 +349,11 @@ private:
     std::unique_ptr<AnimationEditor> animationEditor_;
     std::unique_ptr<GPUParticleEditor> gpuParticleEditor_;
     std::unique_ptr<MapEditor> mapEditor_;
-    std::unique_ptr<LightEditor> lightEditor_;
+    std::unique_ptr<LightEditor> ownedLightEditor_;
+    LightEditor* lightEditor_ = nullptr;
     std::unique_ptr<Model3DEditor> model3DEditor_;
     std::unique_ptr<PostEffectEditor> postEffectEditor_;
+    std::unique_ptr<SpriteAnimationEditor> spriteAnimEditor_;
     std::unique_ptr<ModelSelectModal> animModelSelectModal_;
     bool openAnimModelSelectModal_ = false;
     bool forceShowGlobalSettings_ = false;

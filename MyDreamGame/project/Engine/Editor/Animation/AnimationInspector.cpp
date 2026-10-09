@@ -2,8 +2,6 @@
 #include "AnimationInspector.h"
 #include "AnimationEditorContext.h"
 #include "Editor/EditorManager.h"
-#include "Core/Utility/TransformFunctions.h"
-#include "Core/Utility/LogManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
 #include "GameObject/GameObject.h"
@@ -13,19 +11,13 @@
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
 #include "AnimationPreviewScene.h"
-#include "Component/TransformComponent.h"
 #include "Component/AnimatorComponent.h"
 #include "Core/Utility/Animation.h"
 #include "Resource/Model/Model.h"
-#include "Game2D/Player/Player2D.h"
 
-#include <imgui.h>
 #include <imgui_internal.h>
 #include <cmath>
-#include <numbers>
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <nlohmann/json.hpp>
 
 AnimationInspector::AnimationInspector() {
@@ -130,8 +122,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         for (const auto& jName : context->GetCurrentJointList()) {
             bool isSel = (context->GetSelectedJointName() == jName);
             if (ImGui::Selectable(jName.c_str(), isSel)) {
-                context->GetSelectedJointName() = jName;
-                context->GetSelectedKeyIndex() = -1;
+                context->SetSelectedJointName(jName);
                 context->GetTempOverrides().clear();
                 context->UpdateAnimationPosePreview(sceneManager);
             }
@@ -883,6 +874,10 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
                     else context->PerformAnimUndo(sceneManager);
                 } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
                     context->PerformAnimRedo(sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+                    context->CopyKeyframe(io.KeyShift, sceneManager);
+                } else if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+                    context->PasteKeyframe(sceneManager);
                 }
             } else {
                 if (ImGui::IsKeyPressed(ImGuiKey_I, false)) {

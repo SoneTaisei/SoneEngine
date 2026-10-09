@@ -1,7 +1,5 @@
 #include "PrimitiveCone.h"
-#include "Core/Utility/UtilityFunctions.h"
 #include "Core/Utility/TransformFunctions.h"
-#include <cmath>
 #include <numbers>
 
 PrimitiveCone::PrimitiveCone(float radius, float height, uint32_t segments) : radius_(radius), height_(height), segments_(segments) {

@@ -1,7 +1,6 @@
 #pragma once
 #include <d3d12.h>
 #include <wrl.h>
-#include <vector>
 #include <list>
 #include "Core/Utility/Utilityfunctions.h"
 

@@ -1,5 +1,4 @@
 #include "ViewProjection.h"
-#include <cassert>
 
 void ViewProjection::Initialize(ID3D12Device *device) {
     // 256バイトアライメントでリソース作成

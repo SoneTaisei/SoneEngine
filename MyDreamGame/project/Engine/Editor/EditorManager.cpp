@@ -10,7 +10,6 @@
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "Replay/ReplayManager.h"
 #include "Replay/PhysicsAStar.h"
 #include "Replay/LevelEvolutionAI.h"
 #include "Core/TimeManager.h"
@@ -24,6 +23,8 @@
 #include "Animation/AnimationPreviewScene.h"
 #include "GPUParticle/GPUParticlePreviewScene.h"
 #include "Core/Utility/ParameterManager.h"
+#include "Collision/CollisionManager.h"
+#include "GameObject/WorldGif.h"
 
 // ImGuiのヘッダー (パスは環境に合わせてください)
 #include <imgui.h>
@@ -34,9 +35,6 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <numbers>
-#include <string>
-#include <functional>
 #include <nlohmann/json.hpp>
 
 // 枠を借りるための関数 (WindowsApplication.cppからお引越し)
@@ -67,10 +65,15 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     mapEditor_->Initialize();
     model3DEditor_ = std::make_unique<Model3DEditor>();
     model3DEditor_->Initialize(device);
-    lightEditor_ = std::make_unique<LightEditor>();
-    lightEditor_->Initialize(nullptr);
+    if (!lightEditor_) {
+        ownedLightEditor_ = std::make_unique<LightEditor>();
+        lightEditor_ = ownedLightEditor_.get();
+        lightEditor_->Initialize(nullptr);
+    }
     postEffectEditor_ = std::make_unique<PostEffectEditor>();
     postEffectEditor_->Initialize();
+    spriteAnimEditor_ = std::make_unique<SpriteAnimationEditor>();
+    spriteAnimEditor_->Initialize();
     animModelSelectModal_ = std::make_unique<ModelSelectModal>();
     animModelSelectModal_->Initialize();
     postEffectEditor_->SetOnSelectCallback([this]() {
@@ -297,6 +300,9 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 // まだ何も読んでいないシーン：前回読み込んでいたマップをロード
                 const char* currentStageName = mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt";
                 loaded = mapChip->LoadFromStageName(currentStageName);
+                if (loaded) {
+                    StageGifManager::GetInstance()->LoadForStage(currentStageName);
+                }
             }
             if (!loaded) {
                 // 前回のマップが存在しない場合はデフォルトマップを表示
@@ -308,11 +314,19 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         mapChip->GenerateDefaultRooms();
                     }
                 }
+                StageGifManager::GetInstance()->LoadForStage(mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt");
                 SaveSceneConfig();
             }
             if (mapEditor_) {
                 mapEditor_->GetContext()->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                 mapEditor_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
+            }
+            if (activeScene) {
+                activeScene->UpdateEditor();
+            }
+            if (gameCamera && debugCamera) {
+                debugCamera->SetTranslation(gameCamera->GetTranslation());
+                debugCamera->SetRotation(gameCamera->GetRotation());
             }
             isAStarPosInitialized_ = true;
         }
@@ -343,6 +357,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (mapEditor_) {
                     mapEditor_->GetContext()->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                     mapEditor_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
+                    StageGifManager::GetInstance()->LoadForStage(mapEditor_->GetStageFilename());
+                }
+                if (activeScene) {
+                    activeScene->UpdateEditor();
+                }
+                if (gameCamera && debugCamera) {
+                    debugCamera->SetTranslation(gameCamera->GetTranslation());
+                    debugCamera->SetRotation(gameCamera->GetRotation());
                 }
             }
         }
@@ -447,6 +469,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         mapChip->ResetBlocks();
                     }
                 }
+                // GIFの配置状態も自動保存
+                StageGifManager::GetInstance()->SaveForStage(StageGifManager::GetInstance()->GetCurrentStageName());
             }
             ImGui::PopStyleColor(3);
         } else {
@@ -604,6 +628,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 SaveSceneConfig();
             }
             if (ImGui::MenuItem("ポストエフェクト", nullptr, &showPostEffect_)) { SaveSceneConfig(); }
+            if (ImGui::MenuItem("スプライトアニメーション", nullptr, &showSpriteAnimation_)) { SaveSceneConfig(); }
             if (ImGui::MenuItem("マップチップ画面", nullptr, &showMapEditor_)) {
                 if (showMapEditor_) {
                     activeMainTab_ = "マップチップ画面";
@@ -802,6 +827,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             // 右側
             ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
             ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+            ImGui::DockBuilderDockWindow("スプライトアニメーション", dock_id_right);
 
             // 下側
             ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
@@ -945,6 +971,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 if (animationEditor_ && !animationEditor_->IsAnimScenePushed()) {
                     sceneManager->PushScene(std::make_unique<AnimationPreviewScene>());
                     animationEditor_->SetAnimScenePushed(true);
+                    selectedObject_ = nullptr;
+                    selectedPrimitive_ = nullptr;
+                    auto* pushedScene = dynamic_cast<AnimationPreviewScene*>(sceneManager->GetCurrentScene());
+                    if (pushedScene && !pushedScene->GetGameObjects().empty()) {
+                        selectedGameObject_ = pushedScene->GetGameObjects()[0];
+                        pushedScene->SetSelectedGameObject(selectedGameObject_);
+                    }
                     animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_);
                     animationEditor_->RefreshAnimationJointList(sceneManager);
                 }
@@ -953,8 +986,16 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (animationEditor_) {
                 auto* animScene = dynamic_cast<AnimationPreviewScene*>(sceneManager->GetCurrentScene());
                 if (animScene) {
-                    if (!selectedGameObject_ && !animScene->GetGameObjects().empty()) {
-                        selectedGameObject_ = animScene->GetGameObjects()[0];
+                    const auto& animObjs = animScene->GetGameObjects();
+                    bool isValidSelection = false;
+                    for (const auto& o : animObjs) {
+                        if (o && o == selectedGameObject_) {
+                            isValidSelection = true;
+                            break;
+                        }
+                    }
+                    if (!isValidSelection && !animObjs.empty()) {
+                        selectedGameObject_ = animObjs[0];
                     }
                     animScene->SetSelectedGameObject(selectedGameObject_);
                 }
@@ -1004,22 +1045,26 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         ImGui::End();
     }
 
-    // --- Light Editor の定数バッファ同期（常時実行） ---
-    if (lightEditor_) {
-        float dt = TimeManager::GetInstance().GetDeltaTime();
-        const Vector3* playerPos = nullptr;
-        if (IScene* curScene = sceneManager->GetCurrentScene()) {
-            if (Player2D* player = curScene->GetPlayer()) {
-                playerPos = &player->GetPosition();
-            }
-        }
-        lightEditor_->Update(dt, modelCommon, playerPos);
-    }
+    // --- Light Editor の定数バッファ同期（WindowsApplication::Update でRelease/Develop問わず一元実行） ---
+    // if (lightEditor_) {
+    //     float dt = TimeManager::GetInstance().GetDeltaTime();
+    //     const Vector3* playerPos = nullptr;
+    //     if (IScene* curScene = sceneManager->GetCurrentScene()) {
+    //         if (Player2D* player = curScene->GetPlayer()) {
+    //             playerPos = &player->GetPosition();
+    //         }
+    //     }
+    //     lightEditor_->Update(dt, modelCommon, playerPos);
+    // }
 
     // --- PostEffect Editor のパラメータ同期（常時実行） ---
     if (postEffectEditor_) {
         float dt = TimeManager::GetInstance().GetDeltaTime();
         postEffectEditor_->Update(dt);
+    }
+    if (spriteAnimEditor_) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        spriteAnimEditor_->Update(dt);
     }
 
     // --- Light Editor メインウィンドウ (dock_id_main) ---
@@ -1950,19 +1995,58 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 ImGui::Separator();
                 ImGui::Checkbox("オブジェクトを表示 (モデル)", &showObjects_);
                 ImGui::Checkbox("エフェクトを表示 (パーティクル/プリミティブ)", &showEffects_);
+                {
+                    bool showColliders = CollisionManager::GetInstance()->IsDebugDrawEnabled();
+                    bool oldShowColliders = showColliders;
+                    if (ImGui::Checkbox("当たり判定のワイヤー表示 (コライダー)", &showColliders)) {
+                        CollisionManager::GetInstance()->SetDebugDrawEnabled(showColliders);
+                        SaveSceneConfig();
+                        PushActionCommand([=](){ CollisionManager::GetInstance()->SetDebugDrawEnabled(oldShowColliders); SaveSceneConfig(); },
+                                          [=](){ CollisionManager::GetInstance()->SetDebugDrawEnabled(showColliders); SaveSceneConfig(); });
+                    }
+                    if (showColliders) {
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("(?)");
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("形状タイプごとの色分け:\n・緑: AABB (軸平行ボックス/矩形)\n・オレンジ: OBB (回転ボックス)\n・水色: Sphere (球/円)");
+                        }
+
+                        ImGui::Indent();
+                        bool depthTest = CollisionManager::GetInstance()->IsDepthTestEnabled();
+                        bool oldDepthTest = depthTest;
+                        if (ImGui::Checkbox("遮蔽 (ブロックの奥で隠す)", &depthTest)) {
+                            CollisionManager::GetInstance()->SetDepthTestEnabled(depthTest);
+                            SaveSceneConfig();
+                            PushActionCommand([=](){ CollisionManager::GetInstance()->SetDepthTestEnabled(oldDepthTest); SaveSceneConfig(); },
+                                              [=](){ CollisionManager::GetInstance()->SetDepthTestEnabled(depthTest); SaveSceneConfig(); });
+                        }
+                        ImGui::Unindent();
+                    }
+                }
                 ImGui::Spacing();
 
                 ImGui::Text("アウトライン設定");
                 ImGui::Separator();
                 {
                     auto dxCommon = DirectXCommon::GetInstance();
-                    bool outlineEnabled = dxCommon->IsOutlineEnabled();
-                    bool oldOutline = outlineEnabled;
-                    if (ImGui::Checkbox("アウトラインを有効化", &outlineEnabled)) {
-                        dxCommon->SetOutlineEnabled(outlineEnabled);
-                        SaveSceneConfig();
-                        PushActionCommand([=](){ dxCommon->SetOutlineEnabled(oldOutline); SaveSceneConfig(); }, 
-                                          [=](){ dxCommon->SetOutlineEnabled(outlineEnabled); SaveSceneConfig(); });
+                    if (dxCommon) {
+                        bool postOutlineEnabled = dxCommon->IsDepthBasedOutlineEnabled();
+                        bool oldPostOutline = postOutlineEnabled;
+                        if (ImGui::Checkbox("ポストエフェクト・アウトライン (深度)", &postOutlineEnabled)) {
+                            dxCommon->SetDepthBasedOutlineEnabled(postOutlineEnabled);
+                            SaveSceneConfig();
+                            PushActionCommand([=](){ dxCommon->SetDepthBasedOutlineEnabled(oldPostOutline); SaveSceneConfig(); }, 
+                                              [=](){ dxCommon->SetDepthBasedOutlineEnabled(postOutlineEnabled); SaveSceneConfig(); });
+                        }
+
+                        bool outlineEnabled = dxCommon->IsOutlineEnabled();
+                        bool oldOutline = outlineEnabled;
+                        if (ImGui::Checkbox("メッシュ・アウトライン (ワイヤー/押し出し)", &outlineEnabled)) {
+                            dxCommon->SetOutlineEnabled(outlineEnabled);
+                            SaveSceneConfig();
+                            PushActionCommand([=](){ dxCommon->SetOutlineEnabled(oldOutline); SaveSceneConfig(); }, 
+                                              [=](){ dxCommon->SetOutlineEnabled(outlineEnabled); SaveSceneConfig(); });
+                        }
                     }
                 }
                 ImGui::Spacing();
@@ -2139,6 +2223,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             }
         }
         ImGui::End();
+    }
+
+    // --- Sprite Animation ウィンドウ ---
+    if (showSpriteAnimation_) {
+        if (spriteAnimEditor_) {
+            spriteAnimEditor_->DrawUI(&showSpriteAnimation_, gameViewPos_, gameViewSize_);
+        }
     }
 
     // --- ParameterManager ウィンドウ ---
@@ -2837,6 +2928,24 @@ void EditorManager::Draw3D() {
     }
 }
 
+bool EditorManager::IsAnimationEditorActive() const {
+    if (currentMode_ == EditorMode::Animation) return true;
+    if (activeMainTab_ == "アニメーションエディター") return true;
+    if (animationEditor_ && animationEditor_->IsAnimScenePushed()) return true;
+    return false;
+}
+
+bool EditorManager::IsGPUParticleEditorActive() const {
+    if (currentMode_ == EditorMode::GPUParticle) return true;
+    if (activeMainTab_ == "GPUパーティクルエディター") return true;
+    if (gpuParticleEditor_ && gpuParticleEditor_->IsParticleScenePushed()) return true;
+    return false;
+}
+
+bool EditorManager::IsAnimationOrParticleEditorActive() const {
+    return IsAnimationEditorActive() || IsGPUParticleEditorActive();
+}
+
 void EditorManager::Finalize() {
     ImGui_ImplDX12_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -2851,7 +2960,10 @@ void EditorManager::SaveSceneConfig() {
         nlohmann::json j;
         j["currentScene"] = SceneFactory::GetSceneTypeName(currentSceneType_);
         j["isOutlineEnabled"] = dxCommon ? dxCommon->IsOutlineEnabled() : false;
+        j["isDepthBasedOutlineEnabled"] = dxCommon ? dxCommon->IsDepthBasedOutlineEnabled() : true;
         j["outlineThickness"] = dxCommon ? dxCommon->GetOutlineThickness() : 0.015f;
+        j["isColliderWireEnabled"] = CollisionManager::GetInstance()->IsDebugDrawEnabled();
+        j["isColliderDepthTestEnabled"] = CollisionManager::GetInstance()->IsDepthTestEnabled();
 
         // アクティブメインタブ
         j["activeMainTab"] = activeMainTab_;
@@ -2880,6 +2992,7 @@ void EditorManager::SaveSceneConfig() {
         winObj["showHierarchy"] = showHierarchy_;
         winObj["showGameView"] = showGameView_;
         winObj["showPostEffect"] = showPostEffect_;
+        winObj["showSpriteAnimation"] = showSpriteAnimation_;
         winObj["showMapEditor"] = showMapEditor_;
         winObj["showMapSettings"] = showMapSettings_;
         winObj["showReplayEditor"] = showReplayEditor_;
@@ -2919,9 +3032,21 @@ void EditorManager::LoadSceneConfig() {
             if (j.contains("isOutlineEnabled") && j["isOutlineEnabled"].is_boolean()) {
                 dxCommon->SetOutlineEnabled(j["isOutlineEnabled"].get<bool>());
             }
+            if (j.contains("isDepthBasedOutlineEnabled") && j["isDepthBasedOutlineEnabled"].is_boolean()) {
+                dxCommon->SetDepthBasedOutlineEnabled(j["isDepthBasedOutlineEnabled"].get<bool>());
+            } else {
+                dxCommon->SetDepthBasedOutlineEnabled(true);
+            }
             if (j.contains("outlineThickness") && j["outlineThickness"].is_number()) {
                 dxCommon->SetOutlineThickness(j["outlineThickness"].get<float>());
             }
+        }
+
+        if (j.contains("isColliderWireEnabled") && j["isColliderWireEnabled"].is_boolean()) {
+            CollisionManager::GetInstance()->SetDebugDrawEnabled(j["isColliderWireEnabled"].get<bool>());
+        }
+        if (j.contains("isColliderDepthTestEnabled") && j["isColliderDepthTestEnabled"].is_boolean()) {
+            CollisionManager::GetInstance()->SetDepthTestEnabled(j["isColliderDepthTestEnabled"].get<bool>());
         }
 
         if (j.contains("activeMainTab") && j["activeMainTab"].is_string()) {
@@ -2983,6 +3108,7 @@ void EditorManager::LoadSceneConfig() {
             if (winObj.contains("showHierarchy") && winObj["showHierarchy"].is_boolean()) showHierarchy_ = winObj["showHierarchy"].get<bool>();
             if (winObj.contains("showGameView") && winObj["showGameView"].is_boolean()) showGameView_ = winObj["showGameView"].get<bool>();
             if (winObj.contains("showPostEffect") && winObj["showPostEffect"].is_boolean()) showPostEffect_ = winObj["showPostEffect"].get<bool>();
+            if (winObj.contains("showSpriteAnimation") && winObj["showSpriteAnimation"].is_boolean()) showSpriteAnimation_ = winObj["showSpriteAnimation"].get<bool>();
             if (winObj.contains("showMapEditor") && winObj["showMapEditor"].is_boolean()) showMapEditor_ = winObj["showMapEditor"].get<bool>();
             if (winObj.contains("showMapSettings") && winObj["showMapSettings"].is_boolean()) showMapSettings_ = winObj["showMapSettings"].get<bool>();
             if (winObj.contains("showReplayEditor") && winObj["showReplayEditor"].is_boolean()) showReplayEditor_ = winObj["showReplayEditor"].get<bool>();
@@ -3045,6 +3171,7 @@ void EditorManager::ApplyDefaultLayout() {
     showHierarchy_ = true;
     showGameView_ = true;
     showPostEffect_ = true;
+    showSpriteAnimation_ = true;
     showMapEditor_ = true;
     showMapSettings_ = true;
     showReplayEditor_ = true;
@@ -3090,6 +3217,7 @@ void EditorManager::ApplyDefaultLayout() {
     // 右側
     ImGui::DockBuilderDockWindow("インスペクター", dock_id_right);
     ImGui::DockBuilderDockWindow("ポストエフェクト", dock_id_right);
+    ImGui::DockBuilderDockWindow("スプライトアニメーション", dock_id_right);
 
     // 下側
     ImGui::DockBuilderDockWindow("ログ (Log Window)", dock_id_bottom);
@@ -3172,6 +3300,7 @@ void EditorManager::SaveLayoutPreset(const std::string& name) {
     preset.showSpotLightPanel = showSpotLightPanel_;
     preset.showModelPlacement = showModelPlacementEditor_;
     preset.showModelPalette = showModelPalette_;
+    preset.showSpriteAnimation = showSpriteAnimation_;
 
     nlohmann::json j;
     j["name"] = preset.name;
@@ -3180,6 +3309,7 @@ void EditorManager::SaveLayoutPreset(const std::string& name) {
     j["showHierarchy"] = preset.showHierarchy;
     j["showGameView"] = preset.showGameView;
     j["showPostEffect"] = preset.showPostEffect;
+    j["showSpriteAnimation"] = preset.showSpriteAnimation;
     j["showMapEditor"] = preset.showMapEditor;
     j["showMapSettings"] = preset.showMapSettings;
     j["showReplayEditor"] = preset.showReplayEditor;
@@ -3218,6 +3348,7 @@ bool EditorManager::ApplyLayoutPreset(const std::string& name) {
             showHierarchy_ = preset.showHierarchy;
             showGameView_ = preset.showGameView;
             showPostEffect_ = preset.showPostEffect;
+            showSpriteAnimation_ = preset.showSpriteAnimation;
             showMapEditor_ = preset.showMapEditor;
             showMapSettings_ = preset.showMapSettings;
             showReplayEditor_ = preset.showReplayEditor;
@@ -3266,12 +3397,15 @@ bool EditorManager::ExportLayoutPresetToFile(const std::string& name, const std:
             j["showHierarchy"] = preset.showHierarchy;
             j["showGameView"] = preset.showGameView;
             j["showPostEffect"] = preset.showPostEffect;
+            j["showSpriteAnimation"] = preset.showSpriteAnimation;
             j["showMapEditor"] = preset.showMapEditor;
             j["showMapSettings"] = preset.showMapSettings;
             j["showReplayEditor"] = preset.showReplayEditor;
             j["showAnimEditor"] = preset.showAnimEditor;
             j["showLightEditor"] = preset.showLightEditor;
             j["showSpotLightPanel"] = preset.showSpotLightPanel;
+            j["showModelPlacement"] = preset.showModelPlacement;
+            j["showModelPalette"] = preset.showModelPalette;
 
             std::filesystem::path outPath(filePath);
             if (outPath.has_parent_path()) {
@@ -3309,6 +3443,7 @@ bool EditorManager::ImportLayoutPresetFromFile(const std::string& filePath) {
         preset.showHierarchy = j.value("showHierarchy", true);
         preset.showGameView = j.value("showGameView", true);
         preset.showPostEffect = j.value("showPostEffect", true);
+        preset.showSpriteAnimation = j.value("showSpriteAnimation", true);
         preset.showMapEditor = j.value("showMapEditor", true);
         preset.showMapSettings = j.value("showMapSettings", true);
         preset.showReplayEditor = j.value("showReplayEditor", true);

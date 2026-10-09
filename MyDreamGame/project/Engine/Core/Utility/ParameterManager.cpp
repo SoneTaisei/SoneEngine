@@ -1,7 +1,6 @@
 #include "ParameterManager.h"
 #include <fstream>
 #include <filesystem>
-#include <iostream>
 #ifdef USE_IMGUI
 #include "imgui.h"
 #endif

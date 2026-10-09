@@ -179,6 +179,7 @@
     </ClCompile>
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
+    <ClCompile Include="Engine\Renderer\LineRenderer.cpp" />
     <ClCompile Include="Engine\Platform\Window.cpp" />
     <ClCompile Include="Engine\Editor\EditorManager.cpp" />
     <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
@@ -191,6 +192,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\GameObject\WorldGif.cpp">
       <Filter>Engine\Graphics\Object</Filter>
     </ClCompile>
     <ClCompile Include="Project\Effect\CoinEffect.cpp">
@@ -305,6 +309,7 @@
     <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
     <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
     <ClCompile Include="Engine\Editor\PostEffectEditor\PostEffectEditor.cpp" />
+    <ClCompile Include="Engine\Editor\SpriteAnimationEditor\SpriteAnimationEditor.cpp" />
     <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleEmitter.cpp" />
     <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleSystem.cpp" />
     <ClCompile Include="Engine\Renderer\ConstantBufferPool.cpp">
@@ -313,6 +318,12 @@
     <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp">
       <Filter>Project</Filter>
     </ClCompile></ItemGroup>
+    <ClCompile Include="Project\Game2D\Blocks\BreakableBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\DashRecovery.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
   <ItemGroup>
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="Project\Scenes\GameScene.h">
@@ -482,6 +493,7 @@
     </ClInclude>
     <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
+    <ClInclude Include="Engine\Renderer\LineRenderer.h" />
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
     <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h" />
@@ -495,6 +507,9 @@
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h">
+      <Filter>Engine\Graphics\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\GameObject\WorldGif.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
     <ClInclude Include="Project\Effect\CoinEffect.h">
@@ -615,6 +630,7 @@
     <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
     <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
     <ClInclude Include="Engine\Editor\PostEffectEditor\PostEffectEditor.h" />
+    <ClInclude Include="Engine\Editor\SpriteAnimationEditor\SpriteAnimationEditor.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleData.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleEmitter.h" />
     <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleSystem.h" />
@@ -624,6 +640,12 @@
     <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h">
       <Filter>Project</Filter>
     </ClInclude></ItemGroup>
+    <ClInclude Include="Project\Game2D\Blocks\BreakableBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\DashRecovery.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
   <ItemGroup>
     <Filter Include="Shader">
       <UniqueIdentifier>{af648591-ddcf-4c1b-a550-bd0bf6066876}</UniqueIdentifier>

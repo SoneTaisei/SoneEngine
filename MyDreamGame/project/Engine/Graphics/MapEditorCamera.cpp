@@ -4,7 +4,6 @@
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
-#include <algorithm>
 #include "Graphics/CameraManager.h"
 
 void MapEditorCamera::Initialize(int kClientWidth, int kClientHeight) {

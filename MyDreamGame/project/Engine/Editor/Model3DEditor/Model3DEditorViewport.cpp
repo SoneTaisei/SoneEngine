@@ -1,6 +1,5 @@
 #ifdef USE_IMGUI
 #include "Model3DEditorViewport.h"
-#include "Model3DEditorContext.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Graphics/Camera.h"
 #include "Input/KeyboardInput.h"

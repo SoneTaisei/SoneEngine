@@ -5,7 +5,6 @@
 #include "Editor/Replay/ReplayManager.h"
 #include "Scene/SceneManager.h"
 #include "Scene/IScene.h"
-#include "Scene/SceneFactory.h"
 #include "Graphics/Camera.h"
 #include "Core/Utility/TransformFunctions.h"
 #include <algorithm>

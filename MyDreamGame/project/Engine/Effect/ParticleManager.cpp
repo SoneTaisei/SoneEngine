@@ -4,7 +4,6 @@
 #include "Renderer/SrvManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/TimeManager.h"
-#include <cassert>
 #include <random>
 //#include "imgui.h"
 

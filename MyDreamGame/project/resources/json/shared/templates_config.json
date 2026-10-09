@@ -41,17 +41,20 @@
         {
             "color": {
                 "a": 1.0,
-                "b": 0.800000011920929,
-                "g": 0.20000000298023224,
-                "r": 0.800000011920929
+                "b": 0.6679536700248718,
+                "g": 0.800000011920929,
+                "r": 0.20000000298023224
             },
             "id": 3,
-            "modelName": "",
-            "name": "Goal",
-            "properties": {},
+            "modelName": "Object/Original/star/star.obj",
+            "name": "New Custom Block",
+            "properties": {
+                "floatAmplitude": 0.25,
+                "floatSpeed": 2.0
+            },
             "scale": {
-                "x": 1.0,
-                "y": 1.0,
+                "x": 0.4000000059604645,
+                "y": 0.4000000059604645,
                 "z": 1.0
             },
             "textureName": "",
@@ -65,13 +68,13 @@
                 "r": 1.0
             },
             "id": 4,
-            "modelName": "",
+            "modelName": "Object/Original/coin/coin.obj",
             "name": "Coin",
             "properties": {},
             "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
+                "x": 0.699999988079071,
+                "y": 0.699999988079071,
+                "z": 0.699999988079071
             },
             "textureName": "",
             "type": "CoinBlock"
@@ -148,16 +151,16 @@
                 "r": 1.0
             },
             "id": 9,
-            "modelName": "",
+            "modelName": "Object/Original/jumpBlock/jumpBlock.obj",
             "name": "Jump",
             "properties": {
                 "jumpVelocityHorizontal": 15.0,
                 "jumpVelocityVertical": 27.0
             },
             "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
             },
             "textureName": "",
             "type": "JumpBlock"
@@ -182,6 +185,46 @@
             },
             "textureName": "Object/Original/enemy/monsterBall.png",
             "type": "PatrolEnemyBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.4000000059604645,
+                "g": 0.8999999761581421,
+                "r": 0.5891892313957214
+            },
+            "id": 13,
+            "modelName": "",
+            "name": "BreakableBlock",
+            "properties": {
+                "breakConnected": true
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 3.0
+            },
+            "textureName": "",
+            "type": "BreakableBlock"
+        },
+        {
+            "color": {
+                "a": 1.0,
+                "b": 0.8999999761581421,
+                "g": 0.4000000059604645,
+                "r": 0.5891889333724976
+            },
+            "id": 14,
+            "modelName": "",
+            "name": "DashRecovery",
+            "properties": {},
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "textureName": "",
+            "type": "DashRecovery"
         }
     ]
 }

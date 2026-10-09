@@ -218,6 +218,8 @@ public:
             *shadowGlobalParamData_ = lightVP;
         }
     }
+    const D3D12_VIEWPORT& GetViewport() const { return viewport_; }
+    const D3D12_RECT& GetScissorRect() const { return scissorRect_; }
     const D3D12_VIEWPORT& GetShadowViewport() const { return shadowViewport_; }
     const D3D12_RECT& GetShadowScissorRect() const { return shadowScissorRect_; }
     VignetteParams* GetVignetteParamsData() { return vignetteParamsData_; }
@@ -225,6 +227,12 @@ public:
     GaussianParams* GetGaussianParamsData() { return gaussianParamsData_; }
     CompositeParams* GetCompositeParamsData() { return compositeParamsData_; }
     IrisParams* GetIrisParamsData() { return irisParamsData_; }
+
+    void SetVignetteParams(const VignetteParams& params) { if (vignetteParamsData_) *vignetteParamsData_ = params; }
+    void SetSmoothingParams(const SmoothingParams& params) { if (smoothingParamsData_) *smoothingParamsData_ = params; }
+    void SetGaussianParams(const GaussianParams& params) { if (gaussianParamsData_) *gaussianParamsData_ = params; }
+    void SetCompositeParams(const CompositeParams& params) { if (compositeParamsData_) *compositeParamsData_ = params; }
+    void SetIrisParams(const IrisParams& params) { if (irisParamsData_) *irisParamsData_ = params; }
 
     void SetIrisCenter(float x, float y) {
         if (irisParamsData_) {
@@ -435,7 +443,7 @@ private:
 
     PostEffect postEffect_ = PostEffect::kComposite;
     bool isPostEffectEnabled_ = true;
-    bool isDepthBasedOutlineEnabled_ = false;
+    bool isDepthBasedOutlineEnabled_ = true;
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> skyboxRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skyboxPipelineState_;

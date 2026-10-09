@@ -8,7 +8,6 @@
 #include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
-#include "GameObject/Object3D.h"
 #include "Component/MeshRendererComponent.h"
 #include "Renderer/ConstantBufferPool.h"
 #include "Component/PrimitiveRendererComponent.h"
@@ -185,7 +184,7 @@ void Renderer::DrawObject3D(Object3D* obj) {
         if (obj->material_.color.w <= 0.0f) return;
 
         AnimatorComponent* animator = obj->GetAnimator();
-        bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+        bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
 
         if (useSkinning) {
             commandList->SetPipelineState(dxCommon_->GetShadowMapSkinningPipelineState());
@@ -260,7 +259,7 @@ void Renderer::DrawObject3D(Object3D* obj) {
     }
 
     AnimatorComponent* animator = obj->GetAnimator();
-    bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+    bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
 
     if (useSkinning) {
         commandList->SetGraphicsRootSignature(dxCommon_->GetSkinningRootSignature());
@@ -581,11 +580,15 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
     mappedTransform->World = worldMatrix;
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
 
+    if (comp->GetMappedMaterial()) {
+        *comp->GetMappedMaterial() = comp->GetMaterial();
+    }
+
     // シャドウパス時は深度専用パイプラインで描画
     if (isShadowPass_) {
         if (comp->GetMaterial().color.w <= 0.0f) return;
         AnimatorComponent* animator = comp->GetGameObject()->GetComponent<AnimatorComponent>();
-        bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+        bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
         if (useSkinning) {
             commandList->SetPipelineState(dxCommon_->GetShadowMapSkinningPipelineState());
             commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformGPUAddress());
@@ -605,7 +608,7 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
     mappedTransform->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
 
     AnimatorComponent* animator = comp->GetGameObject()->GetComponent<AnimatorComponent>();
-    bool useSkinning = (animator != nullptr && animator->HasSkeleton());
+    bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
     
     if (useSkinning) {
         commandList->SetGraphicsRootSignature(dxCommon_->GetSkinningRootSignature());
@@ -615,7 +618,8 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialGPUAddress());
         commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
         
-        if (ModelCommon* mc = comp->GetModel()->GetModelCommon()) {
+        ModelCommon* mc = (comp->GetModel() && comp->GetModel()->GetModelCommon()) ? comp->GetModel()->GetModelCommon() : ModelManager::GetInstance()->GetModelCommon();
+        if (mc) {
             if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
             if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
             if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
@@ -660,7 +664,8 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
         commandList->SetGraphicsRootConstantBufferView(0, comp->GetMaterialGPUAddress());
         commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
-        if (ModelCommon* mc = comp->GetModel()->GetModelCommon()) {
+        ModelCommon* mc = (comp->GetModel() && comp->GetModel()->GetModelCommon()) ? comp->GetModel()->GetModelCommon() : ModelManager::GetInstance()->GetModelCommon();
+        if (mc) {
             if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
             if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
             if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);

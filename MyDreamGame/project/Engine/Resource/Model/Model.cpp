@@ -2,7 +2,6 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/TextureManager.h"
-#include <cassert>
 #include <filesystem>
 
 // 必要に応じてextern宣言など

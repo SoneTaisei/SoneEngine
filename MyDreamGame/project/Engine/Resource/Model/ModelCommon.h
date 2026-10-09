@@ -40,6 +40,19 @@ public:
     SpotLight *GetSpotLight() { return (mappedSpotLightGroup_ && mappedSpotLightGroup_->spotLightCount > 0) ? &mappedSpotLightGroup_->spotLights[0] : nullptr; }
     CameraForGPU *GetCamera() { return mappedCamera_; }
     
+    void SetDirectionalLight(const DirectionalLight& light) {
+        if (mappedDirectionalLight_) *mappedDirectionalLight_ = light;
+    }
+    void SetPointLight(const PointLight& light) {
+        if (mappedPointLight_) *mappedPointLight_ = light;
+    }
+    void SetSpotLightGroup(const SpotLightGroup& group) {
+        if (mappedSpotLightGroup_) *mappedSpotLightGroup_ = group;
+    }
+    void SetCamera(const CameraForGPU& cam) {
+        if (mappedCamera_) *mappedCamera_ = cam;
+    }
+    
     // カスタムライト（アニメーションエディター専用バッファ等）のアドレスオーバーライド
     void SetCustomLighting(D3D12_GPU_VIRTUAL_ADDRESS dirAddr, D3D12_GPU_VIRTUAL_ADDRESS pointAddr, D3D12_GPU_VIRTUAL_ADDRESS spotAddr) {
         customDirLightAddr_ = dirAddr;

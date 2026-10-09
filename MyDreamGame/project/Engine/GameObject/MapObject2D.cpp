@@ -5,44 +5,45 @@
 #include "../../Project/Game2D/Blocks/DeathBlock.h"
 #include "../../Project/Game2D/Blocks/OneWayBlock.h"
 #include "../../Project/Game2D/MapChip2D.h"
+#include "Component/TransformComponent.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
 
 void MapObject2D::SetupDefaultProperties() {
-    properties.clear();
+    properties_.clear();
 }
 
 void MapObject2D::DisplayImGui() {
 #ifdef USE_IMGUI
     char nameBuf[256];
-    strcpy_s(nameBuf, sizeof(nameBuf), name.c_str());
+    strcpy_s(nameBuf, sizeof(nameBuf), name_.c_str());
     if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
-        name = nameBuf;
+        name_ = nameBuf;
     }
     
     const char* types[] = { "NormalBlock", "DeathBlock", "GoalBlock", "OneWayBlock" };
     int currentType = -1;
     for (int i = 0; i < IM_ARRAYSIZE(types); i++) {
-        if (type == types[i]) {
+        if (type_ == types[i]) {
             currentType = i;
             break;
         }
     }
     
     if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
-        type = types[currentType];
+        type_ = types[currentType];
         SetupDefaultProperties();
     }
     
-    ImGui::DragFloat3("Position", &position.x, 0.1f);
-    ImGui::DragFloat3("Scale", &scale.x, 0.1f);
+    ImGui::DragFloat3("Position", &position_.x, 0.1f);
+    ImGui::DragFloat3("Scale", &scale_.x, 0.1f);
     
     ImGui::Separator();
     ImGui::Text("Properties");
     
     // jsonの中身をImGuiで編集可能にする
-    for (auto& [key, value] : properties.items()) {
+    for (auto& [key, value] : properties_.items()) {
         if (value.is_number_float()) {
             float v = value.get<float>();
             if (ImGui::DragFloat(key.c_str(), &v, 0.1f)) {
@@ -72,66 +73,66 @@ void MapObject2D::DisplayImGui() {
 
 void MapObject2D::InitializeLogic(MapChip2D* map, ID3D12Device* device, Primitive* boxPrimitive) {
     // 古いロジックを破棄
-    blockLogic.reset();
+    blockLogic_.reset();
     
     // 仮のグリッド座標として0,0を渡す（自由座標で上書きするため）
-    if (type == "NormalBlock") blockLogic = std::make_shared<NormalBlock>(map, 0, 0);
-    else if (type == "DeathBlock") blockLogic = std::make_shared<DeathBlock>(map, 0, 0);
-    else if (type == "GoalBlock") blockLogic = std::make_shared<GoalBlock>(map, 0, 0);
-    else if (type == "OneWayBlock") blockLogic = std::make_shared<OneWayBlock>(map, 0, 0);
+    if (type_ == "NormalBlock") blockLogic_ = std::make_shared<NormalBlock>(map, 0, 0);
+    else if (type_ == "DeathBlock") blockLogic_ = std::make_shared<DeathBlock>(map, 0, 0);
+    else if (type_ == "GoalBlock") blockLogic_ = std::make_shared<GoalBlock>(map, 0, 0);
+    else if (type_ == "OneWayBlock") blockLogic_ = std::make_shared<OneWayBlock>(map, 0, 0);
     
-    if (blockLogic) {
+    if (blockLogic_) {
         // 幅・高さはスケールとして渡す
-        blockLogic->Initialize(device, boxPrimitive, position.x, position.y, scale.x, scale.y);
-        if (blockLogic->GetPrimitive()) {
-            blockLogic->GetPrimitive()->SetName(name);
+        blockLogic_->Initialize(device, boxPrimitive, position_.x, position_.y, scale_.x, scale_.y);
+        if (auto* go = blockLogic_->GetGameObject()) {
+            go->SetName(name_);
         }
         
         // JSONプロパティを渡す処理
-        blockLogic->SetProperties(properties);
+        blockLogic_->SetProperties(properties_);
     }
 }
 
 void MapObject2D::Update() {
-    if (blockLogic) {
-        // 自由配置なので毎フレームTransformをPrimitiveに同期させる？
-        // 実際にはブロック側のUpdateで処理されるが、念のため
-        if (auto* prim = blockLogic->GetPrimitive()) {
-            prim->SetTranslation(position);
-            prim->SetScale(scale);
+    if (blockLogic_) {
+        if (auto* go = blockLogic_->GetGameObject()) {
+            if (auto* tc = go->GetComponent<TransformComponent>()) {
+                tc->SetPosition(position_);
+                tc->SetScale(scale_);
+            }
         }
-        blockLogic->Update();
+        blockLogic_->Update();
     }
 }
 
-void MapObject2D::Draw(ID3D12GraphicsCommandList* commandList) {
-    if (blockLogic) {
-        blockLogic->Draw(commandList);
+void MapObject2D::Draw() {
+    if (blockLogic_) {
+        blockLogic_->Draw();
     }
 }
 
 void MapObject2D::LoadFromJson(const nlohmann::json& j) {
-    if (j.contains("name")) name = j["name"];
-    if (j.contains("type")) type = j["type"];
+    if (j.contains("name")) name_ = j["name"];
+    if (j.contains("type")) type_ = j["type"];
     if (j.contains("position")) {
-        position.x = j["position"]["x"];
-        position.y = j["position"]["y"];
-        position.z = j["position"]["z"];
+        position_.x = j["position"]["x"];
+        position_.y = j["position"]["y"];
+        position_.z = j["position"]["z"];
     }
     if (j.contains("scale")) {
-        scale.x = j["scale"]["x"];
-        scale.y = j["scale"]["y"];
-        scale.z = j["scale"]["z"];
+        scale_.x = j["scale"]["x"];
+        scale_.y = j["scale"]["y"];
+        scale_.z = j["scale"]["z"];
     }
-    if (j.contains("properties")) properties = j["properties"];
+    if (j.contains("properties")) properties_ = j["properties"];
 }
 
 nlohmann::json MapObject2D::SaveToJson() const {
     nlohmann::json j;
-    j["name"] = name;
-    j["type"] = type;
-    j["position"] = {{"x", position.x}, {"y", position.y}, {"z", position.z}};
-    j["scale"] = {{"x", scale.x}, {"y", scale.y}, {"z", scale.z}};
-    j["properties"] = properties;
+    j["name"] = name_;
+    j["type"] = type_;
+    j["position"] = {{"x", position_.x}, {"y", position_.y}, {"z", position_.z}};
+    j["scale"] = {{"x", scale_.x}, {"y", scale_.y}, {"z", scale_.z}};
+    j["properties"] = properties_;
     return j;
 }

@@ -1,5 +1,4 @@
 #include "CollisionFunctions.h"
-#include <algorithm>
 
 namespace {
     inline float Dot(const Vector3& a, const Vector3& b) {

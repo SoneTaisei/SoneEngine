@@ -2,7 +2,6 @@
 #ifdef USE_IMGUI
 #include <d3d12.h>
 #include <functional>
-#include <imgui.h>
 
 class SceneManager;
 class Camera;

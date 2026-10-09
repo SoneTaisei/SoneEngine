@@ -1,7 +1,6 @@
 #pragma once
 #ifdef USE_IMGUI
 #include "Scene/IScene.h"
-#include <d3d12.h>
 #include <memory>
 #include <vector>
 #include "GameObject/GameObject.h"

@@ -1,10 +1,24 @@
-﻿#pragma once
+#pragma once
 #include <d3d12.h>
 #include <wrl.h>
+#include <string>
 #include "Core/Utility/Utilityfunctions.h"
 
 // 前方宣言
 class SpriteCommon;
+
+// アニメーション設定構造体
+struct SpriteAnimationConfig {
+    std::string texturePath = ""; // 画像パス
+    int columns = 1;              // 横の分割数（列数）
+    int rows = 1;                 // 縦の分割数（行数）
+    int totalFrames = 0;          // 総コマ数（0以下の場合は columns * rows で自動計算）
+    float fps = 10.0f;            // 1秒あたりのコマ数
+    bool isLoop = true;           // ループ再生するか
+    Vector2 size = { 0.0f, 0.0f }; // 表示サイズ
+    Vector2 position = { 0.0f, 0.0f }; // 表示位置
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f }; // 表示色
+};
 
 class Sprite {
     friend class Renderer;
@@ -16,17 +30,48 @@ public:
     // 初期化 (Commonへのポインタを渡すことで紐付ける)
     void Initialize(SpriteCommon *spriteCommon, uint32_t textureIndex);
 
-    // 更新 (アニメーション等あれば)
+    // 更新 (TimeManager::GetDeltaTime() で自動更新)
     void Update();
+    // デルタタイム指定での更新
+    void Update(float deltaTime);
 
     // 描画 (Commonから呼ばれる)
     void Draw();
+
+    // --- アニメーション再生（パターンA：グリッド分割） ---
+    void SetAnimationGrid(int columns, int rows, float fps = 10.0f, bool isLoop = true, int totalFrames = 0);
+    void SetAnimation(const SpriteAnimationConfig &config);
+    void PlayAnimation();
+    void PauseAnimation();
+    void ResumeAnimation();
+    void StopAnimation();
+    void SetAnimationFrame(int frameIndex);
+
+    // --- アニメーション設定 JSON 入出力 ---
+    bool InitializeFromConfig(SpriteCommon *spriteCommon, const std::string &jsonPath);
+    bool LoadAnimationConfig(const std::string &jsonPath);
+    bool SaveAnimationConfig(const std::string &jsonPath) const;
+
+    bool IsAnimationActive() const { return isAnimationActive_; }
+    bool IsAnimationPlaying() const { return isAnimPlaying_; }
+    int GetCurrentAnimationFrame() const { return animCurrentFrame_; }
+    int GetAnimationTotalFrames() const { return animTotalFrames_; }
+    const SpriteAnimationConfig &GetAnimationConfig() const { return animConfig_; }
 
     // --- セッター ---
     void SetPosition(const Vector2 &position) { transform_.translate = { position.x, position.y, 0.0f }; }
     void SetRotation(float rotation) { transform_.rotate.z = rotation; }
     void SetSize(const Vector2 &size) { transform_.scale = { size.x, size.y, 1.0f }; }
-    void SetColor(const Vector4 &color) { materialData_->color = color; }
+    void SetColor(const Vector4 &color) { if (materialData_) materialData_->color = color; }
+    Vector4 GetColor() const { return materialData_ ? materialData_->color : Vector4{ 1.0f, 1.0f, 1.0f, 1.0f }; }
+    const Material* GetMaterial() const { return materialData_; }
+
+    // --- ゲッター ---
+    Vector2 GetPosition() const { return { transform_.translate.x, transform_.translate.y }; }
+    float GetRotation() const { return transform_.rotate.z; }
+    Vector2 GetSize() const { return { transform_.scale.x, transform_.scale.y }; }
+    const Vector2 &GetTexBaseSize() const { return texBaseSize_; }
+    uint32_t GetTextureIndex() const { return textureIndex_; }
 
     // テクスチャ切り抜き設定
     void SetTextureRect(float x, float y, float w, float h);
@@ -54,4 +99,12 @@ private:
     Vector2 texPos_ = { 0.0f, 0.0f };
     Vector2 texSize_ = { 100.0f, 100.0f };
     bool isCutMode_ = false;
+
+    // アニメーション制御用
+    SpriteAnimationConfig animConfig_{};
+    bool isAnimationActive_ = false;
+    bool isAnimPlaying_ = false;
+    float animTimer_ = 0.0f;
+    int animCurrentFrame_ = 0;
+    int animTotalFrames_ = 1;
 };

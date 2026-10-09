@@ -1,11 +1,6 @@
 #pragma once
 #ifdef USE_IMGUI
-#include <Windows.h>
 #include <d3d12.h>
-#include <cstdint>
-#include <string>
-#include <vector>
-#include <memory>
 #include <imgui.h>
 #include "Core/Utility/Vector3.h"
 #include "Core/Utility/Matrix4x4.h"

@@ -3,7 +3,6 @@
 #include <string>
 #include <unordered_map>
 #include <any>
-#include <Windows.h>
 #include <format>
 #include "IScene.h"
 

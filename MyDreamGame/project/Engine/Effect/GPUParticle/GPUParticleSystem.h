@@ -64,6 +64,12 @@ public:
     const GPUParticleSystemData& GetData() const { return systemData_; }
     void SetData(const GPUParticleSystemData& data);
 
+    // ループ・再生時間制御
+    void SetIsLoop(bool isLoop) { systemData_.isLoop = isLoop; }
+    bool IsLoop() const { return systemData_.isLoop; }
+    void SetDuration(float duration) { systemData_.duration = duration; }
+    float GetDuration() const { return systemData_.duration; }
+
     // JSON I/O
     bool SaveToFile(const std::string& filePath);
     bool LoadFromFile(const std::string& filePath);

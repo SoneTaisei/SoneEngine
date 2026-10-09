@@ -41,6 +41,12 @@ public:
     }
 
     Material &GetMaterial() { return material_; }
+    const Material &GetMaterial() const { return material_; }
+    void SetMaterial(const Material& material) { material_ = material; }
+    void SetColor(const Vector4& color) { material_.color = color; }
+    const Vector4& GetColor() const { return material_.color; }
+    void SetLightingType(int32_t type) { material_.lightingType = type; }
+    void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
 
     // --- 名前関連 ---
     const std::string &GetName() const { return name_; }

@@ -1,7 +1,6 @@
 #include "AnimatorComponent.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Core/Utility/Quaternion.h"
-#include "Renderer/SkeletonDebugRenderer.h"
 #include "TransformComponent.h"
 #include "GameObject/GameObject.h"
 #include "Core/TimeManager.h"
@@ -11,8 +10,6 @@
 #include "Editor/Replay/ReplayManager.h"
 #include "Renderer/SrvManager.h"
 #include "Core/Utility/LogManager.h"
-#include <cmath>
-#include <iostream>
 
 void AnimatorComponent::Initialize() {
     animationTime_ = 0.0f;
@@ -192,7 +189,9 @@ void AnimatorComponent::UpdateSkeletonAndSkinCluster() {
     }
 
     ::Update(skeleton_); // 骨格空間のローカル・ワールド行列を計算
-    ::Update(skinCluster_, skeleton_); // スキニングパレット行列をGPU用バッファに書き込み
+    if (hasSkinCluster_) {
+        ::Update(skinCluster_, skeleton_); // スキニングパレット行列をGPU用バッファに書き込み
+    }
 }
 
 
@@ -200,7 +199,8 @@ void AnimatorComponent::UpdateSkeletonAndSkinCluster() {
 
 void AnimatorComponent::SetModelData(const ModelData& modelData) {
     skeleton_ = CreateSkeleton(modelData.rootNode);
-    hasSkeleton_ = true;
+    hasSkeleton_ = !skeleton_.joints.empty();
+    hasSkinCluster_ = !modelData.skinClusterData.empty();
 
     // スケルトンの全ジョイント名を出力
     LogManager::GetInstance()->AddLog(LogLevel::Info, "===== Skeleton Joints List =====");
@@ -218,7 +218,11 @@ void AnimatorComponent::SetModelData(const ModelData& modelData) {
         skinCluster_.paletteSrvHandle.second = {};
     }
 
-    skinCluster_ = CreateSkinCluster(DirectXCommon::GetInstance()->GetDevice(), skeleton_, modelData);
+    if (hasSkinCluster_) {
+        skinCluster_ = CreateSkinCluster(DirectXCommon::GetInstance()->GetDevice(), skeleton_, modelData);
+    } else {
+        skinCluster_ = SkinCluster{};
+    }
 
     // 初期化直後にバインドポーズのスキニングパレットをGPUバッファに書き込む
     UpdateSkeletonAndSkinCluster();

@@ -3,9 +3,7 @@
 #include <wrl.h>
 #include <string>
 #include <vector>
-#include <map>
 #include "../externals/DirectXTex/DirectXTex.h"
-#include "Core/Utility/UtilityFunctions.h"
 
 
 class TextureManager {

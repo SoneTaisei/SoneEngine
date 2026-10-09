@@ -1,11 +1,8 @@
 #pragma once
 #ifdef USE_IMGUI
-#include <Windows.h>
 #include <d3d12.h>
-#include <cstdint>
 #include <imgui.h>
 #include "Graphics/Camera.h"
-#include "Core/Utility/UtilityFunctions.h"
 
 class SceneManager;
 class GPUParticleEditorContext;

@@ -3,7 +3,6 @@
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Graphics/TextureManager.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h" // GetInstance()を使うために必要！
 #include "CameraManager.h"
 
 void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {
@@ -50,32 +49,89 @@ void Skybox::Initialize(ID3D12Device *device, uint32_t textureHandle) {
     mappedMaterial_->color = {150.0f / 255.0f, 150.0f / 255.0f, 150.0f / 255.0f, 1.0f};
 }
 
+#ifdef USE_IMGUI
+#include <imgui.h>
+#endif
+#include <algorithm>
+#include <cmath>
+
 void Skybox::Update() {
-    // マネージャから勝手に取ってくる
+    if (!mappedTransform_) {
+        return;
+    }
+
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 view = cameraMgr->GetViewMatrix();
-    
-    // Skybox is drawn at infinity, so we ignore camera translation.
-    // Clear the translation components (4th row) from the view matrix.
+    const Matrix4x4 &proj = cameraMgr->GetProjectionMatrix();
+    Vector3 camPos = cameraMgr->GetCameraPos();
+
+    // 1. 射影行列の計算（カメラのアップ・ズームに適応）
+    const float nearClip = 0.1f;
+    const float farClip = 1000.0f;
+    Matrix4x4 projection{};
+
+    // 透視投影（Perspective）判定: proj.m[2][3] == 1.0f かつ proj.m[3][3] == 0.0f
+    bool isPerspective = (proj.m[2][3] == 1.0f && proj.m[3][3] == 0.0f);
+
+    if (isPerspective) {
+        // 透視投影カメラ（DebugCameraや3Dモード）:
+        // カメラの画角・アスペクト比・アップ率（P00, P11）をそのまま適用
+        projection.m[0][0] = proj.m[0][0];
+        projection.m[1][1] = proj.m[1][1];
+        projection.m[2][2] = farClip / (farClip - nearClip);
+        projection.m[2][3] = 1.0f;
+        projection.m[3][2] = (-nearClip * farClip) / (farClip - nearClip);
+        projection.m[3][3] = 0.0f;
+    } else {
+        // 直交投影カメラ（GameCameraの2Dモード等）:
+        // 正射影行列の P11 から表示高さ orthoHeight を逆算
+        float orthoHeight = (std::abs(proj.m[1][1]) > 0.0001f) ? (2.0f / proj.m[1][1]) : 11.25f;
+        float aspect = (std::abs(proj.m[0][0]) > 0.0001f) ? (proj.m[1][1] / proj.m[0][0]) : (1280.0f / 720.0f);
+
+        // 基準縦幅 11.25f に対するカメラのズームスケール S を算出
+        float currentScale = 11.25f / (std::max)(0.001f, orthoHeight);
+
+        // カメラのアップ（ズームイン）に合わせて Skybox の実効 FOV を縮小（アップ）
+        float effectiveFov = 2.0f * std::atan(std::tan(baseFov_ * 0.5f) / (std::max)(0.01f, currentScale));
+        effectiveFov = (std::clamp)(effectiveFov, 0.05f, 2.5f);
+
+        projection = TransformFunctions::MakePerspectiveFovMatrix(effectiveFov, aspect, nearClip, farClip);
+    }
+
+    // 2. ビュー行列の平行移動成分をゼロにして原点中心にする
     view.m[3][0] = 0.0f;
     view.m[3][1] = 0.0f;
     view.m[3][2] = 0.0f;
-    
-    // Skyboxは常に遠景を描画するため、カメラの投影方式（平行投影など）に関わらず
-    // 透視投影（Perspective）行列を使用して、画面全体を覆うようにする。
-    Matrix4x4 projection = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
+    view.m[3][3] = 1.0f;
 
-    // Keep the world matrix at the origin since we cleared translation in the view matrix.
+    // 3. 見渡し・視差回転の合成
+    Vector3 totalRot = rotationOffset_;
+    if (!isPerspective && enableParallax_) {
+        // 2Dモード時、カメラの移動（camPos.x, camPos.y）に連動して天球を回転させて見渡せるようにする
+        totalRot.y += -camPos.x * parallaxScale_.x;
+        totalRot.x += camPos.y * parallaxScale_.y;
+    }
+
+    Matrix4x4 rotX = TransformFunctions::MakeRoteXMatrix(totalRot.x);
+    Matrix4x4 rotY = TransformFunctions::MakeRoteYMatrix(totalRot.y);
+    Matrix4x4 rotZ = TransformFunctions::MakeRoteZMatrix(totalRot.z);
+    Matrix4x4 extraRot = TransformFunctions::Multiply(TransformFunctions::Multiply(rotX, rotY), rotZ);
+
+    // ビュー行列に見渡し回転を合成
+    Matrix4x4 finalView = TransformFunctions::Multiply(extraRot, view);
+
+    // 4. WVP行列の合成: WVP = World(Identity) * View * Projection
     Matrix4x4 worldMatrix = TransformFunctions::MakeIdentity4x4();
-
-    // LaTeX表記での行列合成: $$WVP = World \times View \times Projection$$
-    mappedTransform_->WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(view, projection));
+    mappedTransform_->WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(finalView, projection));
     mappedTransform_->World = worldMatrix;
 }
 
 #include <Windows.h>
 
 void Skybox::Draw() {
+    // 描画直前の最新のカメラ情報（回転・アップ）を反映
+    Update();
+
     auto commandList = DirectXCommon::GetInstance()->GetCommandList();
     // 1. DirectXCommonから専用のルール（PSO・RootSignature）を取得してセット
     DirectXCommon *dxCommon = DirectXCommon::GetInstance();
@@ -107,3 +163,20 @@ void Skybox::Draw() {
     // ★ Skybox描画後に標準の RootSignature に戻す
     commandList->SetGraphicsRootSignature(dxCommon->GetRootSignature());
 }
+
+#ifdef USE_IMGUI
+void Skybox::DrawImGui() {
+    if (ImGui::TreeNode("Skybox (天球設定)")) {
+        ImGui::DragFloat3("回転オフセット (rad)", &rotationOffset_.x, 0.01f);
+        ImGui::Checkbox("2D移動連動視差を有効化", &enableParallax_);
+        if (enableParallax_) {
+            ImGui::DragFloat2("視差スケール (X, Y)", &parallaxScale_.x, 0.001f, 0.0f, 0.1f, "%.4f");
+        }
+        ImGui::DragFloat("基準FOV (rad)", &baseFov_, 0.01f, 0.1f, 2.0f);
+        if (mappedMaterial_) {
+            ImGui::ColorEdit4("Skybox カラー", &mappedMaterial_->color.x);
+        }
+        ImGui::TreePop();
+    }
+}
+#endif

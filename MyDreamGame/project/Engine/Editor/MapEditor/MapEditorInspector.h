@@ -1,6 +1,5 @@
 #pragma once
 #ifdef USE_IMGUI
-#include <imgui.h>
 
 class SceneManager;
 class MapEditorContext;

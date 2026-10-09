@@ -42,6 +42,10 @@ public:
     const GPUParticleEmitterData& GetData() const { return data_; }
     void SetData(const GPUParticleEmitterData& data);
 
+    void SetIsLoop(bool isLoop) { data_.isLoop = isLoop; }
+    bool IsLoop() const { return data_.isLoop; }
+    void SetMaxParticles(uint32_t maxCount);
+
     uint32_t GetActiveParticleCount() const { return numActiveParticles_; }
     float GetCurrentTime() const { return systemTime_; }
     void SetCurrentTime(float t);

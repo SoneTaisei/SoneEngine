@@ -1,0 +1,35 @@
+[
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "columns": 2,
+        "fps": 1.7999999523162842,
+        "isBillboard": false,
+        "isDoubleSided": true,
+        "isLoop": true,
+        "name": "test_gif_1",
+        "rotation": [
+            -1.570796251296997,
+            0.0,
+            0.0
+        ],
+        "rows": 1,
+        "scale": [
+            1.0,
+            1.0,
+            1.0
+        ],
+        "showInAllStages": false,
+        "texturePath": "resources/Sprite/Original/gif/test_gif.png",
+        "totalFrames": 2,
+        "translation": [
+            15.255464553833008,
+            10.238868713378906,
+            0.0
+        ]
+    }
+]

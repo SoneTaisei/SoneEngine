@@ -4,8 +4,12 @@
 
 // ★ ヘッダーから追い出したインクルードを、CPP側の一番上で読み込みます
 #include "Editor/Model3DEditor/Model3DEditorContext.h"
+#include "Editor/LightEditor/LightEditor.h"
+#include "../../Project/Game2D/Player/Player2D.h"
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
+#include "Editor/Animation/AnimationPreviewScene.h"
+#include "Editor/GPUParticle/GPUParticlePreviewScene.h"
 #endif
 #include "Effect/ParticleCommon.h"
 #include "Graphics/DebugCamera.h"
@@ -15,7 +19,10 @@
 #endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"
+#include "Renderer/LineRenderer.h"
+#include "Collision/CollisionManager.h"
 #include "../../Project/Scenes/GameScene.h"
+#include "GameObject/WorldGif.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Resource/Sprite/SpriteCommon.h"
 #include "Scene/SceneManager.h"
@@ -28,7 +35,6 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 
-#include "Core/Utility/TransformFunctions.h"
 #include "Core/Utility/Utilityfunctions.h"
 #include "Graphics/TextureManager.h"
 #include "Input/GamepadInput.h"
@@ -55,7 +61,7 @@ void WindowsApplication::Initialize() {
 
     // 窓の作成を任せる
     window_ = std::make_unique<Window>();
-    window_->Create(L"3023_怪盗チェーン", kWindowWidth_, kWindowHeight_);
+    window_->Create(L"MyDreamGameEngine", kWindowWidth_, kWindowHeight_);
 
     LoadWindowConfig();
 
@@ -102,7 +108,7 @@ void WindowsApplication::Initialize() {
     PrimitiveManager::GetInstance()->Initialize(device);
 
     // デフォルトの環境マップ（スカイボックス用テクスチャ）をロードして設定
-    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/qwantani_dusk_2_puresky_2k/qwantani_dusk_2_puresky_2k.dds");
+    uint32_t defaultSkyboxHandle = TextureManager::GetInstance()->Load("resources/Sprite/Original/skybox/BackGround.dds");
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(defaultSkyboxHandle));
 
     // 1x1ピクセルのデフォルト白テクスチャをロードして PrimitiveObject に設定
@@ -132,6 +138,9 @@ void WindowsApplication::Initialize() {
     viewProjection_ = std::make_unique<ViewProjection>();
     viewProjection_->Initialize(dxCommon_->GetDevice());
 
+    // LineRenderer初期化 (コライダーやデバッグワイヤー用)
+    LineRenderer::GetInstance()->Initialize(device, dxCommon_.get());
+
     // 1. 本番カメラ生成
     gameCamera_ = std::make_unique<GameCamera>();
     gameCamera_->Initialize(kWindowWidth_, kWindowHeight_);
@@ -159,8 +168,13 @@ void WindowsApplication::Initialize() {
     isDebugCameraActive_ = false;
 #endif
 
+    // ライティング管理の初期化（Release / Develop問わず共通）
+    lightEditor_ = std::make_unique<LightEditor>();
+    lightEditor_->Initialize(modelCommon_.get());
+
 #ifdef USE_IMGUI
     editorManager_ = std::make_unique<EditorManager>();
+    editorManager_->SetLightEditor(lightEditor_.get());
     // commandQueue を dxCommon から取得して渡す
     editorManager_->Initialize(hwnd, device, dxCommon_->GetCommandQueue());
     editorManager_->LoadSceneConfig();
@@ -168,6 +182,9 @@ void WindowsApplication::Initialize() {
 #else
     // ImGuiを使わないReleaseモード等でも、JSON設定を反映する
     modelCommon_->LoadLightingConfig();
+    // ポストエフェクトアウトラインを有効化、メッシュワイヤーアウトラインは無効化
+    dxCommon_->SetDepthBasedOutlineEnabled(true);
+    dxCommon_->SetOutlineEnabled(false);
     // エディター非搭載ビルドでは配置モデルの実体をここで初期化する
     // (エディター搭載時は EditorManager -> Model3DEditor 経由で初期化される)
     Model3DEditorContext::GetInstance()->Initialize(device);
@@ -320,6 +337,8 @@ void WindowsApplication::Update() {
                         map->SaveToFile("resources/json/local/temp_play_map.txt");
                     }
                 }
+                // GIFの現在の配置状態も自動保存してプレイ開始
+                StageGifManager::GetInstance()->SaveForStage(StageGifManager::GetInstance()->GetCurrentStageName());
             }
 
             // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
@@ -337,6 +356,8 @@ void WindowsApplication::Update() {
                 
                 // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
                 std::string originalPath = GameScene::s_TargetMapFilePath;
+                std::string currentGifStage = StageGifManager::GetInstance()->GetCurrentStageName();
+
                 GameScene::s_TargetMapFilePath = "resources/json/local/temp_play_map.txt";
                 
                 sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
@@ -346,6 +367,9 @@ void WindowsApplication::Update() {
                 
                 // パスを元に戻す（次回の正常なロードやSaveなどのため）
                 GameScene::s_TargetMapFilePath = originalPath;
+
+                // GIFステージを一時マップではなく本来のステージとして復帰
+                StageGifManager::GetInstance()->LoadForStage(currentGifStage);
                 
                 // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
                 editorManager_->ClearSelection();
@@ -387,6 +411,20 @@ void WindowsApplication::Update() {
     AudioManager::SetBGMPlaybackAllowed(true);
 #endif
 
+    // ライティングの更新（追従・アニメーションおよびGPU定数バッファ同期）
+    // Release / Develop、および ImGui 表示 / 非表示を問わず毎フレーム常に実行！
+    if (lightEditor_) {
+        const Vector3* playerPos = nullptr;
+        if (sceneManager_->GetCurrentScene()) {
+            auto* player = sceneManager_->GetCurrentScene()->GetPlayer();
+            if (player) {
+                playerPos = &player->GetPosition();
+            }
+        }
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        lightEditor_->Update(dt, modelCommon_.get(), playerPos);
+    }
+
     // 現在のアクティブカメラの行列をViewProjectionに反映
     viewProjection_->UpdateMatrix(
         activeCamera_->GetViewMatrix(),
@@ -419,6 +457,24 @@ void WindowsApplication::Draw() {
     // エディター非搭載ビルドでもシーンのレベルデータを描画する (グリッド床は描かない)
     Model3DEditorContext::GetInstance()->Draw(false);
 #endif
+
+    // コライダーの3Dデバッグワイヤー描画（深度テストにより手前のブロックで正しく遮蔽される）
+    // アニメーションエディターとパーティクルエディターを起動しているときは当たり判定の表示を消す
+    bool suppressColliderDraw = false;
+#ifdef USE_IMGUI
+    if (editorManager_ && editorManager_->IsAnimationOrParticleEditorActive()) {
+        suppressColliderDraw = true;
+    }
+    if (sceneManager_) {
+        IScene* curScene = sceneManager_->GetCurrentScene();
+        if (dynamic_cast<AnimationPreviewScene*>(curScene) || dynamic_cast<GPUParticlePreviewScene*>(curScene)) {
+            suppressColliderDraw = true;
+        }
+    }
+#endif
+    if (!suppressColliderDraw) {
+        CollisionManager::GetInstance()->Draw3D(commandList, viewProjection_->GetMatrix());
+    }
 
     particleCommon_->SetViewProjection(viewProjection_->GetMatrix());
     particleCommon_->PreDraw();

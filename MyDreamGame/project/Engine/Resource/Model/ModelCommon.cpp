@@ -8,8 +8,6 @@
 #include <cmath>   // std::cos, std::sin用
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <Windows.h>
-#include <format>
 
 void ModelCommon::Initialize(ID3D12Device *device) {
     assert(device);
@@ -143,12 +141,17 @@ void ModelCommon::LoadLightingConfig() {
         nlohmann::json j;
         ifs >> j;
         
-        bool enableDirectional = false;
+        bool enableDirectional = true;
         bool enablePoint = false;
         bool enableFlatShading = false;
         float dIntensity = 1.0f;
         float pIntensity = 1.0f;
 
+        if (j.contains("activeLightType")) {
+            int alt = j["activeLightType"].get<int>();
+            enableDirectional = (alt == 0);
+            enablePoint = (alt == 1);
+        }
         if (j.contains("enableDirectional")) enableDirectional = j["enableDirectional"];
         if (j.contains("enablePoint")) enablePoint = j["enablePoint"];
         if (j.contains("enableFlatShading")) enableFlatShading = j["enableFlatShading"];
@@ -214,8 +217,52 @@ void ModelCommon::LoadLightingConfig() {
                     sl.cosAngle = std::cos(angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                     sl.cosFalloffStart = std::cos(falloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
                     sl.enable = slItem.value("enabled", true) ? 1 : 0;
-                    sl.shadowMapIndex = -1;
+                    bool enableShadow = slItem.value("enableShadow", true);
+                    sl.shadowMapIndex = (sl.enable && enableShadow) ? 0 : -1;
+                    sl.shadowBias = slItem.value("shadowBias", 0.0005f);
+                    sl.shadowIntensity = slItem.value("shadowIntensity", 1.0f);
+
+                    // ViewProjection matrix
+                    Vector3 eye = sl.position;
+                    Vector3 target = { eye.x + sl.direction.x, eye.y + sl.direction.y, eye.z + sl.direction.z };
+                    Vector3 up = { 0.0f, 1.0f, 0.0f };
+                    if (std::abs(sl.direction.y) > 0.99f) up = { 0.0f, 0.0f, 1.0f };
+                    DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f), DirectX::XMVectorSet(target.x, target.y, target.z, 1.0f), DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f));
+                    float fovAngle = std::clamp((angleDeg * 2.0f) * static_cast<float>(std::numbers::pi) / 180.0f, 0.01f, static_cast<float>(std::numbers::pi) * 0.99f);
+                    float farZ = (sl.distance > 0.5f) ? sl.distance : 50.0f;
+                    DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fovAngle, 1.0f, 0.1f, farZ);
+                    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&sl.viewProjection), DirectX::XMMatrixMultiply(viewMat, projMat));
                 }
+            } else if (j.contains("sLight")) {
+                baseSpotLightCount_ = 1;
+                auto& sl = baseSpotLights_[0];
+                if (j["sLight"].contains("color")) sl.color = {j["sLight"]["color"][0], j["sLight"]["color"][1], j["sLight"]["color"][2], j["sLight"]["color"][3]};
+                if (j["sLight"].contains("position")) sl.position = {j["sLight"]["position"][0], j["sLight"]["position"][1], j["sLight"]["position"][2]};
+                if (j["sLight"].contains("direction")) {
+                    Vector3 dir = {j["sLight"]["direction"][0], j["sLight"]["direction"][1], j["sLight"]["direction"][2]};
+                    sl.direction = TransformFunctions::Normalize(dir);
+                }
+                if (j["sLight"].contains("distance")) sl.distance = j["sLight"]["distance"];
+                if (j["sLight"].contains("decay")) sl.decay = j["sLight"]["decay"];
+                if (j.contains("sIntensity")) sl.intensity = j["sIntensity"];
+                float angleDeg = j.value("spotAngleDeg", 30.0f);
+                float falloffDeg = j.value("spotFalloffDeg", 20.0f);
+                sl.cosAngle = std::cos(angleDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+                sl.cosFalloffStart = std::cos(falloffDeg * static_cast<float>(std::numbers::pi) / 180.0f);
+                sl.enable = 1;
+                sl.shadowMapIndex = 0;
+                sl.shadowBias = 0.0005f;
+                sl.shadowIntensity = 1.0f;
+
+                Vector3 eye = sl.position;
+                Vector3 target = { eye.x + sl.direction.x, eye.y + sl.direction.y, eye.z + sl.direction.z };
+                Vector3 up = { 0.0f, 1.0f, 0.0f };
+                if (std::abs(sl.direction.y) > 0.99f) up = { 0.0f, 0.0f, 1.0f };
+                DirectX::XMMATRIX viewMat = DirectX::XMMatrixLookAtLH(DirectX::XMVectorSet(eye.x, eye.y, eye.z, 1.0f), DirectX::XMVectorSet(target.x, target.y, target.z, 1.0f), DirectX::XMVectorSet(up.x, up.y, up.z, 0.0f));
+                float fovAngle = std::clamp((angleDeg * 2.0f) * static_cast<float>(std::numbers::pi) / 180.0f, 0.01f, static_cast<float>(std::numbers::pi) * 0.99f);
+                float farZ = (sl.distance > 0.5f) ? sl.distance : 50.0f;
+                DirectX::XMMATRIX projMat = DirectX::XMMatrixPerspectiveFovLH(fovAngle, 1.0f, 0.1f, farZ);
+                DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&sl.viewProjection), DirectX::XMMatrixMultiply(viewMat, projMat));
             }
             RestoreStaticSpotLights();
         }

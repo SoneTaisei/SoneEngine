@@ -27,6 +27,8 @@ public:
         kJumpBlock = 9, // ジャンプ台
         kRoomRespawn = 10, // 部屋用リスポーン地点
         kEnemy = 12, // 巡回する敵キャラクター
+        kBreakableBlock = 13, // ダッシュ破壊ブロック
+        kDashRecovery = 14, // ダッシュ回復ブロック
     };
 
     void Initialize(const std::string& mapFilePath);
@@ -90,6 +92,7 @@ public:
     bool SaveToFile(const std::string& filepath);
     bool LoadFromFile(const std::string& filepath);
     bool LoadFromStageName(const std::string& stageName);
+    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
 
     // 文字列ベースのマップデータ取得＆設定（リプレイ用）
     std::string GetMapDataAsString() const;
@@ -141,7 +144,6 @@ public:
 
 public:
     void SetDirty() { isDirty_ = true; }
-    const std::string& GetCurrentFilePath() const { return currentFilePath_; }
     void BuildMap();
 
 private:

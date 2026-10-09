@@ -4,8 +4,6 @@
 #include <vector>
 #include <set>
 #include <memory>
-#include <functional>
-#include <imgui.h>
 #include "Game2D/MapChip2D.h"
 
 class SceneManager;

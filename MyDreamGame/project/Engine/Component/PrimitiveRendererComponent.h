@@ -1,11 +1,10 @@
-﻿#pragma once
+#pragma once
 #include "IComponent.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Core/Utility/Structs.h"
 #include "Core/Utility/BlendMode.h"
 #include "Renderer/ConstantBufferPool.h"
 #include <wrl/client.h>
-#include <string>
 
 // GameObjectにアタッチして基本図形（Primitive）を描画するためのコンポーネント
 class PrimitiveRendererComponent : public IComponent {
@@ -21,9 +20,14 @@ public:
     void Draw() override;
     void DisplayImGui() override;
 
-    // Setters / Getters
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     Material& GetMaterial() { return material_; }
+    const Material& GetMaterial() const { return material_; }
+    void SetMaterial(const Material& material) { material_ = material; }
+    void SetColor(const Vector4& color) { material_.color = color; }
+    const Vector4& GetColor() const { return material_.color; }
+    void SetLightingType(int32_t type) { material_.lightingType = type; }
+    void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
     BlendMode GetBlendMode() const { return blendMode_; }
     
