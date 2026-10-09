@@ -4,9 +4,9 @@
 #include "Effect/ParticleManager.h" // これが必要
 #include "Effect/GPUParticle/GPUParticleSystem.h"
 #include "Effect/BaseEffect.h"
-#include "Effect/CoinEffect.h"
-#include "Effect/CylinderEffect.h"
-#include "Effect/RingEffect.h"
+#include "Effect/BaseEffect/CoinEffect.h"
+#include "Effect/BaseEffect/CylinderEffect.h"
+#include "Effect/BaseEffect/RingEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <memory>

@@ -12,10 +12,10 @@
 #include "Editor/GPUParticle/GPUParticlePreviewScene.h"
 #endif
 #include "Effect/ParticleCommon.h"
-#include "Graphics/DebugCamera.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/DebugCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 #ifdef USE_IMGUI
-#include "Graphics/MapEditorCamera.h"
+#include "Graphics/Camera/MapEditorCamera.h"
 #endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"

@@ -16,7 +16,7 @@
 #include "Renderer/Renderer.h"
 #include "Component/TransformComponent.h"
 #include "GameObject/Object3D.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 
 TitleScene::~TitleScene() {
 }

@@ -7,7 +7,7 @@
 #include "Effect/ParticleCommon.h"
 #include "GameObject/GameObject.h"
 #include "Graphics/Skybox.h"
-#include "Graphics/DebugCamera.h"
+#include "Graphics/Camera/DebugCamera.h"
 #include "GameObject/PrimitiveObject.h"
 #include <vector>
 #include "Resource/Model/ModelCommon.h"

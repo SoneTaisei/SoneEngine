@@ -104,5 +104,5 @@ protected:
     OnCollisionCallback onPlayerStand_ = nullptr;
 };
 
-#include "BoxColliderComponent.h"
-#include "SphereColliderComponent.h"
+#include "ColliderComponent/BoxColliderComponent.h"
+#include "ColliderComponent/SphereColliderComponent.h"

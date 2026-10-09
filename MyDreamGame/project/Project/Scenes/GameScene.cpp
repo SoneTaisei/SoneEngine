@@ -1,7 +1,7 @@
 #include "GameScene.h"
 #include "Scene/SceneManager.h"
 #include "Resource/Model/ModelCommon.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 #include "Scene/SceneFactory.h"
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"

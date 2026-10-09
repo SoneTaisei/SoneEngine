@@ -8,8 +8,8 @@
 #include <string>
 
 // UIから操作したいクラスのヘッダーをインクルード
-#include "Graphics/DebugCamera.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/DebugCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneFactory.h"
 #include "Core/Utility/Structs.h"

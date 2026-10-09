@@ -18,7 +18,7 @@
 #include "Component/TransformComponent.h"
 #include "GameObject/Object3D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 #include <cmath>
 
 StageSelectScene::~StageSelectScene() {}
