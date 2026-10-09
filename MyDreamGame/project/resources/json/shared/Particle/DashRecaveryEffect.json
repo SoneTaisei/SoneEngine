@@ -1,0 +1,197 @@
+{
+    "duration": 0.10000000149011612,
+    "emitters": [
+        {
+            "billboardType": 1,
+            "blendMode": 2,
+            "bursts": [
+                {
+                    "count": 100,
+                    "time": 0.20000000298023224
+                }
+            ],
+            "colorKeys": [],
+            "drag": 1.0,
+            "duration": 0.10000000149011612,
+            "enabled": true,
+            "endColor": [
+                0.0,
+                1.0,
+                0.0235292911529541,
+                0.0
+            ],
+            "endScaleFactor": 1.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 3.0,
+            "initialSpeedMin": 3.0,
+            "initialVelocityDir": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "isLoop": false,
+            "lifetimeMax": 0.5,
+            "lifetimeMin": 0.5,
+            "maxParticles": 100,
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
+            "name": "Flash",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/Particle.PS.hlsl",
+            "renderType": 0,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 0,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 100.0,
+            "startColor": [
+                0.2602376341819763,
+                0.9768339991569519,
+                0.420710951089859,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Sprite/Original/circle.png",
+            "useColorGradient": false,
+            "velocitySpread": 90.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        },
+        {
+            "billboardType": 1,
+            "blendMode": 2,
+            "bursts": [
+                {
+                    "count": 10,
+                    "time": 0.20000000298023224
+                }
+            ],
+            "colorKeys": [],
+            "drag": 4.039999961853027,
+            "duration": 0.10000000149011612,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                1.0,
+                1.0,
+                0.0
+            ],
+            "endScaleFactor": 1.0,
+            "gravity": 0.0,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "initialScaleMin": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialSpeedMax": 10.100000381469727,
+            "initialSpeedMin": 10.100000381469727,
+            "initialVelocityDir": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "isLoop": false,
+            "lifetimeMax": 0.5,
+            "lifetimeMin": 0.5,
+            "maxParticles": 5,
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
+            "name": "Flash (Copy)",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/Particle.PS.hlsl",
+            "renderType": 0,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 0,
+            "shapeBoxSize": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 40.0,
+            "startColor": [
+                1.0,
+                1.0,
+                1.0,
+                0.40784314274787903
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Sprite/Original/circle.png",
+            "useColorGradient": false,
+            "velocitySpread": 90.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        }
+    ],
+    "isLoop": true,
+    "systemName": "DashRecaveryEffect"
+}

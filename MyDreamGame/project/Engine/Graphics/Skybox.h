@@ -1,7 +1,6 @@
 #pragma once
 #include "Core/Utility/Structs.h"
 #include <d3d12.h>
-#include <vector>
 #include <wrl.h>
 
 class Skybox {
@@ -18,8 +17,31 @@ public:
     // 色（明るさなど）を設定する
     void SetColor(const Vector4& color) { if(mappedMaterial_) mappedMaterial_->color = color; }
 
+    // カメラのアップ・回転・視差関連の設定
+    void SetRotationOffset(const Vector3& rot) { rotationOffset_ = rot; }
+    const Vector3& GetRotationOffset() const { return rotationOffset_; }
+
+    void SetParallaxScale(const Vector2& scale) { parallaxScale_ = scale; }
+    const Vector2& GetParallaxScale() const { return parallaxScale_; }
+
+    void SetBaseFov(float fov) { baseFov_ = fov; }
+    float GetBaseFov() const { return baseFov_; }
+
+    void SetEnableParallax(bool enable) { enableParallax_ = enable; }
+    bool IsParallaxEnabled() const { return enableParallax_; }
+
+#ifdef USE_IMGUI
+    void DrawImGui();
+#endif
+
 private:
     uint32_t textureHandle_ = 0;
+
+    // 見渡し・視差・画角設定
+    Vector3 rotationOffset_ = { 0.0f, 0.0f, 0.0f }; // 追加の回転（見渡し用）
+    Vector2 parallaxScale_ = { 0.015f, 0.015f };    // 2D移動時の視差回転スケール
+    float baseFov_ = 0.45f;                         // 基準視野角
+    bool enableParallax_ = true;                    // 2D時の移動連動視差を有効にするか
 
     // バッファリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;

@@ -1,7 +1,5 @@
 #include "PrimitiveTorus.h"
-#include "Core/Utility/UtilityFunctions.h"
 #include "Core/Utility/TransformFunctions.h"
-#include <cmath>
 #include <numbers>
 
 PrimitiveTorus::PrimitiveTorus(float ringRadius, float tubeRadius, uint32_t segments) : ringRadius_(ringRadius), tubeRadius_(tubeRadius), segments_(segments) {

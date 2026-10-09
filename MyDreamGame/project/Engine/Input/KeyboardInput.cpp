@@ -1,5 +1,4 @@
 #include "KeyboardInput.h"
-#include <cassert> // assertを使うためにインクルード
 
 // GetInstance関数の実体
 KeyboardInput *KeyboardInput::GetInstance() {
@@ -53,7 +52,16 @@ void KeyboardInput::Update() {
     // キーボードデバイスから現在の状態を取得
     keyboard_->Acquire();
     keyboard_->GetDeviceState(sizeof(keys_), keys_);
+
+    // CapsLockおよびIME誤爆防止のため、キー状態を無効化
+    keys_[DIK_CAPITAL] = 0;
+    keys_[DIK_KANJI] = 0;
+    keys_[DIK_CONVERT] = 0;
+    keys_[DIK_NOCONVERT] = 0;
+    keys_[DIK_KANA] = 0;
 }
+
+
 
 // キーが押されているか
 bool KeyboardInput::IsKeyDown(BYTE keyCode) {

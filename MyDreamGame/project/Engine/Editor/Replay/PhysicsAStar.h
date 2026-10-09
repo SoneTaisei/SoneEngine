@@ -1,5 +1,4 @@
 #pragma once
-#include "Core/Utility/Structs.h"
 #include "Game2D/Player/PlayerConfig.h"
 #include <vector>
 #include <queue>
@@ -18,23 +17,7 @@ enum class MacroActionType {
     JumpNeutral,
     JumpShortRight,
     JumpShortLeft,
-    LongJumpRight,
-    LongJumpLeft,
-    JumpDashRight,
-    JumpDashUpRight,
-    JumpDashLeft,
-    JumpDashUpLeft,
-    LowJumpDashRight,
-    LowJumpDashLeft,
     FallWait,
-    DashRight,
-    DashLeft,
-    DashUpRight,
-    DashUpLeft,
-    DashUp,
-    WallJumpRight,
-    WallJumpLeft,
-    WallClimbUp,
     Count
 };
 
@@ -49,8 +32,6 @@ struct PhysicsState {
     bool isGrounded = false;
     bool isTouchingWallLeft = false;
     bool isTouchingWallRight = false;
-    bool canDash = true;
-    float stamina = 110.0f;
 
     int frameCount = 0;       // g(n): スタートからの消費フレーム数
     float heuristic = 0.0f;   // h(n): ゴールまでの推定残数フレーム

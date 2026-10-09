@@ -3,7 +3,6 @@
 #include "ReplayManager.h"
 #include "Core/Utility/LogManager.h"
 #include <algorithm>
-#include <ctime>
 #include <cmath>
 #include <format>
 
@@ -167,8 +166,6 @@ void LevelEvolutionAI::ApplyChromosomeToMap(const StageChromosome& chromosome, M
             mapChip->SetChip(gene.chipX, gene.chipY, MapChip2D::ChipType::kNone);
         } else if (gene.type == 1) {
             mapChip->SetChip(gene.chipX, gene.chipY, MapChip2D::ChipType::kDeathBlock);
-        } else if (gene.type == 2) {
-            mapChip->SetChip(gene.chipX, gene.chipY, MapChip2D::ChipType::kLift);
         }
     }
 }

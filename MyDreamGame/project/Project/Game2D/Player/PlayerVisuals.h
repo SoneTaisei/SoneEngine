@@ -5,7 +5,6 @@
 #include "GameObject/PrimitiveObject.h"
 #include "PlayerConfig.h"
 #include "PlayerState.h"
-#include "Core/Utility/Structs.h"
 
 #include "GameObject/Object3D.h"
 #include "Component/AnimatorComponent.h"
@@ -53,9 +52,24 @@ public:
     void SpawnDashRing(const Vector3& basePos, const Vector3& dashDir);
     void ClearEffects();
 
+    // 表示制御・カプセル化用メソッド
+    void SetDissolveThreshold(float threshold);
+    void ResetVisuals(const Vector3& position, const PlayerParams& params);
+    void SyncTransform(const Vector3& position);
+    void SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress);
+    void SetColor(const Vector4& color);
+    void SyncSize(const PlayerParams& params);
+
     PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
+    const PrimitiveObject* GetPrimitiveObject() const { return primitiveObj_.get(); }
     Object3D* GetModelObject() { return modelObj_.get(); }
+    const Object3D* GetModelObject() const { return modelObj_.get(); }
     AnimatorComponent* GetAnimator() { return animator_.get(); }
+    const AnimatorComponent* GetAnimator() const { return animator_.get(); }
+
+#ifdef USE_IMGUI
+    void DisplayImGui();
+#endif
 
 private:
     std::unique_ptr<PrimitiveObject> primitiveObj_;
@@ -66,7 +80,8 @@ private:
     Animation jumpAnimation_;
     Animation wallClimbAnimation_;
     Animation holdingWallAnimation_;
-    Animation airDashAnimation_;
+    Animation holdingWallMoveAnimation_;
+    Animation dashAnimation_;
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
@@ -79,9 +94,9 @@ private:
     float climbBlendFactor_ = 0.0f;
     float wallClimbAnimTime_ = 0.0f;
     float holdingWallAnimTime_ = 0.0f;
-    float airDashAnimTime_ = 0.0f;
+    float holdingWallMoveAnimTime_ = 0.0f;
+    float dashAnimTime_ = 0.0f;
 
-public:
     // しがみつき時の腕の調整用パラメータ（親空間での回転：X=ピッチ, Y=ヨー, Z=ロール、ラジアン単位）
     float debugLArmRot_[3] = { -0.200f, -3.140f, 0.262f }; 
     float debugRArmRot_[3] = { -0.200f, 3.140f, -0.262f };
@@ -89,10 +104,5 @@ public:
     float debugRForeArmRot_[3] = { -0.334f, 0.0f, 0.0f };
     float debugHipsRot_[3] = { 0.0f, 0.0f, 0.0f };
 
-#ifdef USE_IMGUI
-    void DisplayImGui();
-#endif
-
-private:
     float EaseInElastic(float t) const;
 };

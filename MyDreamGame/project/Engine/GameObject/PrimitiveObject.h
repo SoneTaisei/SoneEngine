@@ -3,7 +3,6 @@
 #include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Core/Utility/BlendMode.h"
-#include <deque>
 
 class PrimitiveObject {
     friend class Renderer;
@@ -29,6 +28,12 @@ public:
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     static void SetDefaultTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { sDefaultTextureHandle_ = handle; }
     Material& GetMaterial() { return material_; }
+    const Material& GetMaterial() const { return material_; }
+    void SetMaterial(const Material& material) { material_ = material; }
+    void SetColor(const Vector4& color) { material_.color = color; }
+    const Vector4& GetColor() const { return material_.color; }
+    void SetLightingType(int32_t type) { material_.lightingType = type; }
+    void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
 
     // --- 親子関係 ---
     void SetParent(PrimitiveObject* parent) { parent_ = parent; }

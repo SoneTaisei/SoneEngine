@@ -2,17 +2,18 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 #include "Effect/CoinEffect.h"
 #include "Effect/CylinderEffect.h"
 #include "Effect/RingEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
-#include <d3d12.h>
 #include <memory>
 
 // 2Dゲーム用クラス
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
+#include "Resource/Sprite/Sprite.h"
 
 class GameCamera;
 
@@ -36,6 +37,7 @@ public:
     void OnExit(SceneManager *sceneManager) override;
     void Update(SceneManager *sceneManager) override;
     void Draw(const Matrix4x4 &viewProjectionMatrix) override;
+    void Draw2D() override;
     void DisplayImGui(PrimitiveObject* selectedPrimitive = nullptr) override;
     void DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) override;
     void UpdateEditor() override;
@@ -59,6 +61,7 @@ private:
     std::unique_ptr<CoinEffect> coinEffect_;
     std::unique_ptr<CylinderEffect> cylinderEffect_;
     std::unique_ptr<RingEffect> ringEffect_;
+    std::unique_ptr<GPUParticleSystem> snowParticle_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();
@@ -79,6 +82,7 @@ private:
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
+    Vector3 cameraLookRotation_ = { 0.0f, 0.0f, 0.0f }; // 右スティック等の見渡し用カメラ回転
 
     // ---------------------------------------------------
     // 共通システム
@@ -90,4 +94,22 @@ private:
     GameState gameState_ = GameState::StartReady;
     float stateTimer_ = 0.0f;
     float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
+
+    // 開始UIスプライト (READY / GO)
+    std::unique_ptr<Sprite> readySprite_;
+    uint32_t readyTextureHandle_ = 0;
+    std::unique_ptr<Sprite> goSprite_;
+    uint32_t goTextureHandle_ = 0;
+
+    // レディー用タイマーバー (背景と前面ゲージ)
+    uint32_t whiteTextureHandle_ = 0;
+    std::unique_ptr<Sprite> readyBarBgSprite_;
+    std::unique_ptr<Sprite> readyBarFillSprite_;
+
+    // クリアUIスプライト
+    std::unique_ptr<Sprite> clearSprite_;
+    uint32_t clearTextureHandle_ = 0;
+
+    // カメラスケール制御（クリア時のズームアップ用）
+    float initialCameraScale_ = 1.0f;
 };

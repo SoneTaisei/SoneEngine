@@ -10,7 +10,6 @@
 #include "Editor/EditorManager.h"
 #endif
 
-#include <filesystem>
 
 // windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -31,7 +30,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         app->Initialize();
 
         // 起動シーンの決定
-        SceneType startScene = SceneType::kGame;
+        SceneType startScene = SceneType::kTitle;
 #ifdef USE_IMGUI
         // エディターの場合はJSON設定から前回のシーンを復元
         EditorManager* editor = app->GetEditorManager();

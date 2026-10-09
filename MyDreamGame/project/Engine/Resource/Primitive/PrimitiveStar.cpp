@@ -1,7 +1,4 @@
 #include "PrimitiveStar.h"
-#include "Core/Utility/UtilityFunctions.h"
-#include "Core/Utility/TransformFunctions.h"
-#include <cmath>
 #include <numbers>
 
 PrimitiveStar::PrimitiveStar(float size) : size_(size) {

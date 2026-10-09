@@ -13,7 +13,9 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-  </ItemGroup>
+      <ClInclude Include="Project\Game2D\Blocks\BreakableBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\DashRecovery.h" />
+</ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -94,9 +96,7 @@
       <AdditionalDependencies>assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
-set "OUT_DIR=$(TargetDir)"
-xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -122,9 +122,7 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
-set "OUT_DIR=$(TargetDir)"
-xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
@@ -153,8 +151,7 @@ xcopy "$(ProjectDir)resources" "%OUT_DIR%\resources" /E /I /Y /D</Command>
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll"
-xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -212,6 +209,8 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\DashRecovery.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\BreakableBlock.cpp" />
     <ClCompile Include="Engine\GameObject\GameObject.cpp" />
     <ClCompile Include="Engine\Component\TransformComponent.cpp" />
     <ClCompile Include="Engine\Component\AnimatorComponent.cpp" />
@@ -230,16 +229,17 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
     <ClCompile Include="Project\Scenes\StageSelectScene.cpp" />
-    <ClCompile Include="Project\Scenes\AnimationPreviewScene.cpp" />
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp" />
     <ClCompile Include="Project\Effect\windowParticle.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
+    <ClCompile Include="Engine\Renderer\LineRenderer.cpp" />
     <ClCompile Include="Engine\Platform\Window.cpp" />
     <ClCompile Include="Engine\Graphics\ViewProjection.cpp" />
     <ClCompile Include="Engine\Graphics\Skybox.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\Primitive.cpp" />
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveManager.cpp" />
     <ClCompile Include="Engine\GameObject\PrimitiveObject.cpp" />
+    <ClCompile Include="Engine\GameObject\WorldGif.cpp" />
     <ClCompile Include="Project\Effect\CoinEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player\Player2D.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
@@ -277,6 +277,35 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClCompile Include="Engine\Resource\Primitive\PrimitiveStar.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerInput.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp" />
+    <ClCompile Include="Engine\Collision\CollisionFunctions.cpp" />
+    <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
+    <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditor.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleInspector.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticlePreviewScene.cpp" />
+    <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleTimeline.cpp" />
+    <ClCompile Include="Engine\Editor\LightEditor\LightEditor.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\BlockClassGenerator.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditor.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorCanvas.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\MapEditor\MapEditorSettings.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditor.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorContext.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.cpp" />
+    <ClCompile Include="Engine\Editor\Model3DEditor\PlacedObject3D.cpp" />
+    <ClCompile Include="Engine\Editor\PostEffectEditor\PostEffectEditor.cpp" />
+    <ClCompile Include="Engine\Editor\SpriteAnimationEditor\SpriteAnimationEditor.cpp" />
+    <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleEmitter.cpp" />
+    <ClCompile Include="Engine\Effect\GPUParticle\GPUParticleSystem.cpp" />
+    <ClCompile Include="Engine\Renderer\ConstantBufferPool.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
@@ -451,13 +480,14 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Platform\WindowsApplication.h" />
     <ClInclude Include="Project\Effect\windowParticle.h" />
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
+    <ClInclude Include="Engine\Renderer\LineRenderer.h" />
     <ClInclude Include="Engine\Platform\Window.h" />
     <ClInclude Include="Engine\Graphics\ViewProjection.h" />
     <ClInclude Include="Engine\Graphics\Skybox.h" />
-    <ClInclude Include="Project\Scenes\AnimationPreviewScene.h" />
     <ClInclude Include="Engine\Resource\Primitive\Primitive.h" />
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
+    <ClInclude Include="Engine\GameObject\WorldGif.h" />
     <ClInclude Include="Project\Effect\CoinEffect.h" />
     <ClInclude Include="Project\Game2D\Player\Player2D.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerState.h" />
@@ -486,6 +516,37 @@ xcopy "$(ProjectDir)resources" "$(TargetDir)resources\" /E /I /Y /D</Command>
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerPhysics.h" />
+    <ClInclude Include="Engine\Collision\CollisionFunctions.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationLightingConfig.h" />
+    <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
+    <ClInclude Include="Engine\Editor\Common\ModelSelectModal.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditor.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleInspector.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticlePreviewScene.h" />
+    <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleTimeline.h" />
+    <ClInclude Include="Engine\Editor\LightEditor\LightEditor.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\BlockClassGenerator.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditor.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorCanvas.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorContext.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\MapEditor\MapEditorSettings.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditor.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorContext.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorInspector.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorPalette.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\Model3DEditorViewport.h" />
+    <ClInclude Include="Engine\Editor\Model3DEditor\PlacedObject3D.h" />
+    <ClInclude Include="Engine\Editor\PostEffectEditor\PostEffectEditor.h" />
+    <ClInclude Include="Engine\Editor\SpriteAnimationEditor\SpriteAnimationEditor.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleData.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleEmitter.h" />
+    <ClInclude Include="Engine\Effect\GPUParticle\GPUParticleSystem.h" />
+    <ClInclude Include="Engine\Renderer\ConstantBufferPool.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj">

@@ -2,7 +2,6 @@
 #include "ModelCommon.h" // Commonをインクルード
 #include "Core/Utility/Utilityfunctions.h"
 #include <string>
-#include <vector>
 #include <wrl.h>
 
 class Model {
@@ -24,8 +23,11 @@ public:
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     // ゲッター
-    ModelData GetModelData() const { return modelData_; }
+    const ModelData& GetModelData() const { return modelData_; }
     ModelCommon* GetModelCommon() const { return modelCommon_; }
+    const D3D12_VERTEX_BUFFER_VIEW& GetVertexBufferView() const { return vertexBufferView_; }
+    const D3D12_INDEX_BUFFER_VIEW& GetIndexBufferView() const { return indexBufferView_; }
+    UINT GetIndexCount() const { return static_cast<UINT>(modelData_.indices.size()); }
 
 
 private:

@@ -5,8 +5,10 @@
 class GameCamera : public Camera {
 public:
     void Initialize(int kClientWidth, int kClientHeight) override;
+    void SetResolution(int kClientWidth, int kClientHeight) override;
     void Update(); // 特に操作はないが、追従処理などをここに書く
     void UpdateMatrix() override;
+    void Reset(); // カメラを3D・初期位置へリセット
 
     // 画面揺れの開始
     void Shake(float strength, float duration);
@@ -17,8 +19,17 @@ public:
     // 追従ターゲットの設定（2Dスクロール用）
     void SetFollowTarget(const Vector3* target) { followTarget_ = target; }
 
+    // 追従が有効かどうか
+    bool IsFollowEnabled() const { return isFollowEnabled_; }
+    void SetFollowEnabled(bool enable) { isFollowEnabled_ = enable; }
+
+    // 追従時のオフセット
+    const Vector3& GetFollowOffset() const { return followOffset_; }
+    void SetFollowOffset(const Vector3& offset) { followOffset_ = offset; }
+
     // 2Dモードかどうか
     bool IsOrthographic() const { return isOrthographic_; }
+    void SetOrthographic(bool isOrtho) { isOrthographic_ = isOrtho; }
 
     // 正射影のビューサイズを設定
     void SetOrthoViewSize(float width, float height) { orthoWidth_ = width; orthoHeight_ = height; }
@@ -37,6 +48,9 @@ public:
         rooms_ = rooms;
     }
 
+    // カメラ位置を追従ターゲット・所属ルームに即座に合わせる
+    void SnapToTarget();
+
     float GetFollowLerp() const { return followLerp_; }
     void SetFollowLerp(float lerp) { followLerp_ = lerp; }
 
@@ -46,8 +60,9 @@ public:
     float GetScale() const { return scale_; }
     void SetScale(float scale) {
         scale_ = (scale > 0.01f) ? scale : 0.01f;
-        orthoWidth_ = 20.0f / scale_;
         orthoHeight_ = 11.25f / scale_;
+        float aspect = (kClientHeight_ > 0) ? ((float)kClientWidth_ / (float)kClientHeight_) : (16.0f / 9.0f);
+        orthoWidth_ = orthoHeight_ * aspect;
     }
 
     void LoadConfig(const std::string& filepath = "resources/json/shared/camera_config.json");
@@ -58,6 +73,8 @@ private:
     void UpdateMatrixOrthographic();
 
     const Vector3* followTarget_ = nullptr; // 追従ターゲット
+    bool isFollowEnabled_ = true;           // ターゲット追従が有効かどうか
+    Vector3 followOffset_ = { 0.0f, 0.0f, 0.0f }; // ターゲット追従時のオフセット
     bool isOrthographic_ = false;
 
     float orthoWidth_ = 20.0f;  // 正射影の横幅（ワールド座標単位）

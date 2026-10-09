@@ -1,8 +1,4 @@
 #include "PrimitiveRing.h"
-#include "Core/Utility/UtilityFunctions.h"
-#include "Core/Utility/TransformFunctions.h"
-#include <cmath>
-#include <numbers>
 
 PrimitiveRing::PrimitiveRing(float innerRadius, float outerRadius, uint32_t segments, float startAngle, float endAngle, const Vector4& innerColor, const Vector4& outerColor, bool isRadialUV) : innerRadius_(innerRadius), outerRadius_(outerRadius), segments_(segments), startAngle_(startAngle), endAngle_(endAngle), innerColor_(innerColor), outerColor_(outerColor), isRadialUV_(isRadialUV) {
 }

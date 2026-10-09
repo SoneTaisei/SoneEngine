@@ -1,5 +1,4 @@
 #pragma once
-#include "Core/Utility/Structs.h"
 
 /// <summary>
 /// プレイヤーの操作入力状態を表す構造体

@@ -1,7 +1,6 @@
 #ifdef USE_IMGUI
 #include "AnimationEditorContext.h"
 #include "Editor/EditorManager.h"
-#include "Core/Utility/TransformFunctions.h"
 #include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/PrimitiveObject.h"
@@ -11,22 +10,15 @@
 #include "Renderer/SrvManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "Scenes/AnimationPreviewScene.h"
+#include "AnimationPreviewScene.h"
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
-#include "Component/TransformComponent.h"
 #include "Component/AnimatorComponent.h"
-#include "Core/Utility/Animation.h"
 #include "Resource/Model/Model.h"
 #include "Game2D/Player/Player2D.h"
 
-#include <imgui.h>
-#include <cmath>
 #include <filesystem>
-#include <fstream>
-#include <numbers>
-#include <string>
 #include <functional>
 #include <nlohmann/json.hpp>
 
@@ -35,6 +27,24 @@ AnimationEditorContext::AnimationEditorContext() {
 }
 
 void AnimationEditorContext::Initialize() {
+}
+
+std::string AnimationEditorContext::GetCurrentModelName() const {
+    if (selectedGameObject_) {
+        std::string name = selectedGameObject_->GetName();
+        if (name == "player") return "Player";
+        return name;
+    }
+    if (selectedObject_) {
+        std::string name = selectedObject_->GetName();
+        if (name == "player") return "Player";
+        return name;
+    }
+    return "Player";
+}
+
+std::string AnimationEditorContext::GetModelAnimationDirectory() const {
+    return "resources/json/shared/" + GetCurrentModelName();
 }
 
 AnimatorComponent* AnimationEditorContext::GetTargetAnimator(SceneManager* sceneManager) {
@@ -115,12 +125,11 @@ void AnimationEditorContext::RefreshAnimationJointList(SceneManager* sceneManage
             calcDepth(rootIdx, 0);
         }
 
-        // 開閉フラグの初期化（未設定のノードについて設定: ルートのみ展開し、子は閉じる）
+        // 開閉フラグの初期化（未設定のノードについて設定: デフォルトで全展開）
         for (int32_t i = 0; i < numJoints; ++i) {
             const std::string& name = animJointTreeNodes_[i].name;
             if (animJointExpanded_.find(name) == animJointExpanded_.end()) {
-                bool isRoot = (animJointTreeNodes_[i].parentIndex < 0);
-                animJointExpanded_[name] = isRoot;
+                animJointExpanded_[name] = true;
             }
         }
     }
@@ -155,7 +164,7 @@ void AnimationEditorContext::RefreshAnimationJointList(SceneManager* sceneManage
             }
             animJointTreeNodes_.push_back(node);
             if (animJointExpanded_.find(name) == animJointExpanded_.end()) {
-                animJointExpanded_[name] = (i == 0);
+                animJointExpanded_[name] = true;
             }
         }
     }
@@ -171,22 +180,40 @@ void AnimationEditorContext::RefreshAnimationJointList(SceneManager* sceneManage
     if (!found && !currentJointList_.empty()) {
         animEditorSelectedJointName_ = currentJointList_[0];
     }
+
+    // ターゲットモデルが変更された場合、アニメーションファイル一覧を再スキャン
+    std::string currentModel = GetCurrentModelName();
+    if (currentModel != lastTargetModelName_) {
+        lastTargetModelName_ = currentModel;
+        ScanAnimationFiles();
+        if (!availableAnimationFiles_.empty()) {
+            currentAnimFilePath_ = availableAnimationFiles_[0];
+            LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_);
+        } else {
+            editingAnimation_ = Animation{};
+            editingAnimation_.duration = 1.0f;
+        }
+        animTempOverrides_.clear();
+        animEditorTime_ = 0.0f;
+    }
 }
 
 void AnimationEditorContext::ScanAnimationFiles() {
     availableAnimationFiles_.clear();
-    const std::string animDir = "resources/json/shared/Player";
+    const std::string animDir = GetModelAnimationDirectory();
     std::filesystem::create_directories(animDir);
 
-    // 既知の標準プリセットファイルが存在しなければ作成
-    std::string wallClimbPath = animDir + "/wall_climb_animation.json";
-    std::string airDashPath = animDir + "/air_dash_animation.json";
+    // Playerモデルの場合、既知の標準プリセットファイルが存在しなければ作成
+    if (GetCurrentModelName() == "Player") {
+        std::string wallClimbPath = animDir + "/wall_climb_animation.json";
+        std::string airDashPath = animDir + "/air_dash_animation.json";
 
-    if (!std::filesystem::exists(wallClimbPath)) {
-        SaveAnimationToJsonFile(CreateDefaultWallClimbAnimation(), wallClimbPath);
-    }
-    if (!std::filesystem::exists(airDashPath)) {
-        SaveAnimationToJsonFile(CreateDefaultAirDashAnimation(), airDashPath);
+        if (!std::filesystem::exists(wallClimbPath)) {
+            SaveAnimationToJsonFile(CreateDefaultWallClimbAnimation(), wallClimbPath);
+        }
+        if (!std::filesystem::exists(airDashPath)) {
+            SaveAnimationToJsonFile(CreateDefaultAirDashAnimation(), airDashPath);
+        }
     }
 
     // ディレクトリ内のすべての.jsonファイルを列挙
@@ -209,8 +236,7 @@ void AnimationEditorContext::ScanAnimationFiles() {
         if (!availableAnimationFiles_.empty()) {
             currentAnimFilePath_ = availableAnimationFiles_[0];
         } else {
-            currentAnimFilePath_ = wallClimbPath;
-            availableAnimationFiles_.push_back(wallClimbPath);
+            currentAnimFilePath_ = animDir + "/default_animation.json";
         }
     }
 }
@@ -218,6 +244,9 @@ void AnimationEditorContext::ScanAnimationFiles() {
 void AnimationEditorContext::UpdateAnimationPosePreview(SceneManager* sceneManager) {
     if (!sceneManager || !sceneManager->GetCurrentScene()) return;
     
+    // ゲームプレイ中（PLAY実行中）はゲーム側のアニメーション処理（PlayerVisuals）を優先し、エディターのプレビュー上書きを行わない
+    if (EditorManager::IsPlaying()) return;
+
     if (!animEditorInitialized_) {
         ScanAnimationFiles();
         if (!LoadAnimationFromJsonFile(editingAnimation_, currentAnimFilePath_)) {
@@ -246,8 +275,8 @@ void AnimationEditorContext::UpdateAnimationPosePreview(SceneManager* sceneManag
         }
     }
     
-    // アニメーションをモデルに適用（アニメーションモード時または編集中）
-    if (showAnimEditor_ || EditorManager::IsPlaying()) {
+    // アニメーションをモデルに適用（アニメーションエディター表示時）
+    if (showAnimEditor_) {
         animator->ClearJointOverrides();
         for (const auto& [nodeName, nodeAnim] : editingAnimation_.nodeAnimations) {
             if (!nodeAnim.rotate.empty()) {
@@ -372,12 +401,30 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
     auto startsWith = [](const std::string& str, const std::string& prefix) -> bool {
         return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
     };
+    auto hasSymmetryTagX = [](const std::string& name) -> bool {
+        return (name.find("Left") != std::string::npos || name.find("Right") != std::string::npos ||
+                name.find("left") != std::string::npos || name.find("right") != std::string::npos ||
+                name.find("LEFT") != std::string::npos || name.find("RIGHT") != std::string::npos ||
+                name.find("_L") != std::string::npos || name.find("_R") != std::string::npos ||
+                name.find("_l") != std::string::npos || name.find("_r") != std::string::npos ||
+                name.find(".L") != std::string::npos || name.find(".R") != std::string::npos ||
+                name.find(".l") != std::string::npos || name.find(".r") != std::string::npos ||
+                name.find("L_") != std::string::npos || name.find("R_") != std::string::npos ||
+                name.find("左") != std::string::npos || name.find("右") != std::string::npos);
+    };
 
     // 1. 親子関係の階層構造（Skeleton）を用いた探索
     if (skeleton && !skeleton->joints.empty()) {
         auto itJ = skeleton->jointMap.find(jointName);
         if (itJ != skeleton->jointMap.end()) {
             int32_t curIdx = itJ->second;
+            const auto& curJoint = skeleton->joints[curIdx];
+            Vector3 curPos = { curJoint.skeletonSpaceMatrix.m[3][0], curJoint.skeletonSpaceMatrix.m[3][1], curJoint.skeletonSpaceMatrix.m[3][2] };
+
+            // X軸対称で、中心線上（|X| < 0.015f）かつ名前に左右タグがない正中線ボーン（頭、体など）は対称相手なし
+            if (axisX && !axisY && !axisZ && std::abs(curPos.x) < 0.015f && !hasSymmetryTagX(jointName)) {
+                return "";
+            }
 
             // ルートまでの祖先パス（親インデックスのリスト）を構築: [curIdx, parent, grandParent, ..., root]
             std::vector<int32_t> path;
@@ -412,6 +459,14 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
                         const auto& jointB = skeleton->joints[cIdx];
                         Vector3 posB = { jointB.skeletonSpaceMatrix.m[3][0], jointB.skeletonSpaceMatrix.m[3][1], jointB.skeletonSpaceMatrix.m[3][2] };
 
+                        // X軸対称で、両方が中心線上にある、または名前に左右タグがないのに同符号の場合は除外
+                        if (axisX) {
+                            bool aIsCenter = std::abs(posA.x) < 0.015f && !hasSymmetryTagX(jointA.name);
+                            bool bIsCenter = std::abs(posB.x) < 0.015f && !hasSymmetryTagX(jointB.name);
+                            if (aIsCenter || bIsCenter) continue;
+                            if (!hasSymmetryTagX(jointA.name) && !hasSymmetryTagX(jointB.name) && (posA.x * posB.x > 0.0f)) continue;
+                        }
+
                         float score = 0.0f;
                         // 座標の対称性スコア
                         float diff = 0.0f;
@@ -435,7 +490,9 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
                                 (jointA.name.find(".L") != std::string::npos && jointB.name.find(".R") != std::string::npos) ||
                                 (jointA.name.find(".R") != std::string::npos && jointB.name.find(".L") != std::string::npos) ||
                                 (jointA.name.find("left") != std::string::npos && jointB.name.find("right") != std::string::npos) ||
-                                (jointA.name.find("right") != std::string::npos && jointB.name.find("left") != std::string::npos)) {
+                                (jointA.name.find("right") != std::string::npos && jointB.name.find("left") != std::string::npos) ||
+                                (jointA.name.find("左") != std::string::npos && jointB.name.find("右") != std::string::npos) ||
+                                (jointA.name.find("右") != std::string::npos && jointB.name.find("左") != std::string::npos)) {
                                 score += 100.0f;
                             }
                         }
@@ -508,6 +565,7 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
     if (!currentJointList_.empty()) {
         if (axisX) { // X軸対称 (左右: Left <-> Right)
             std::vector<std::pair<std::string, std::string>> patterns = {
+                { "左", "右" },
                 { "Left", "Right" }, { "left", "right" }, { "LEFT", "RIGHT" },
                 { "_L", "_R" }, { "_l", "_r" },
                 { ".L", ".R" }, { ".l", ".r" },
@@ -599,6 +657,7 @@ std::string AnimationEditorContext::FindOppositeJointName(const std::string& joi
 void AnimationEditorContext::InsertSelectedJointSRTKey(SceneManager* sceneManager) {
     if (animEditorSelectedJointName_.empty()) return;
 
+    LogManager::GetInstance()->AddLog(LogLevel::Info, "[AnimEditor] InsertSelectedJointSRTKey called for: [" + animEditorSelectedJointName_ + "] at time: " + std::to_string(animEditorTime_));
     PushAnimUndoState("選択ボーンSRTキー挿入");
 
     AnimatorComponent* anim = GetTargetAnimator(sceneManager);
@@ -754,9 +813,9 @@ void AnimationEditorContext::InsertAllJointsSRTKey(SceneManager* sceneManager) {
         if (skel) {
             auto itJ = skel->jointMap.find(jName);
             if (itJ != skel->jointMap.end()) {
-                curQ = skel->joints[itJ->second].defaultTransform.rotate;
-                curT = skel->joints[itJ->second].defaultTransform.translate;
-                curS = skel->joints[itJ->second].defaultTransform.scale;
+                curQ = skel->joints[itJ->second].transform.rotate;
+                curT = skel->joints[itJ->second].transform.translate;
+                curS = skel->joints[itJ->second].transform.scale;
             }
         }
 
@@ -827,6 +886,207 @@ void AnimationEditorContext::InsertAllJointsSRTKey(SceneManager* sceneManager) {
     UpdateAnimationPosePreview(sceneManager);
 }
 
+void AnimationEditorContext::EnsureJointVisibleInTree(const std::string& jointName) {
+    if (jointName.empty() || animJointTreeNodes_.empty()) return;
 
+    for (size_t i = 0; i < animJointTreeNodes_.size(); ++i) {
+        if (animJointTreeNodes_[i].name == jointName) {
+            int32_t pIdx = animJointTreeNodes_[i].parentIndex;
+            while (pIdx >= 0 && pIdx < static_cast<int32_t>(animJointTreeNodes_.size())) {
+                animJointExpanded_[animJointTreeNodes_[pIdx].name] = true;
+                pIdx = animJointTreeNodes_[pIdx].parentIndex;
+            }
+            break;
+        }
+    }
+}
+
+void AnimationEditorContext::CopyKeyframe(bool forceAllJoints, SceneManager* sceneManager) {
+    bool copyAll = forceAllJoints || isSummarySelected_ || (animEditorSelectedKeyIndex_ < 0);
+
+    AnimatorComponent* anim = GetTargetAnimator(sceneManager);
+    const Skeleton* skel = (anim && anim->HasSkeleton()) ? &anim->GetSkeleton() : nullptr;
+
+    auto extractJointData = [&](const std::string& jName) -> AnimJointKeyData {
+        AnimJointKeyData data;
+        Quaternion curQ = { 0.0f, 0.0f, 0.0f, 1.0f };
+        Vector3 curT = { 0.0f, 0.0f, 0.0f };
+        Vector3 curS = { 1.0f, 1.0f, 1.0f };
+
+        if (skel) {
+            auto itJ = skel->jointMap.find(jName);
+            if (itJ != skel->jointMap.end()) {
+                curQ = skel->joints[itJ->second].transform.rotate;
+                curT = skel->joints[itJ->second].transform.translate;
+                curS = skel->joints[itJ->second].transform.scale;
+            }
+        }
+
+        auto itNode = editingAnimation_.nodeAnimations.find(jName);
+        if (itNode != editingAnimation_.nodeAnimations.end()) {
+            const auto& nodeAnim = itNode->second;
+            if (!nodeAnim.rotate.empty()) curQ = CalculateValue(nodeAnim.rotate, animEditorTime_);
+            if (!nodeAnim.translate.empty()) curT = CalculateValue(nodeAnim.translate, animEditorTime_);
+            if (!nodeAnim.scale.empty()) curS = CalculateValue(nodeAnim.scale, animEditorTime_);
+        }
+
+        auto itTemp = animTempOverrides_.find(jName);
+        if (itTemp != animTempOverrides_.end()) {
+            if (itTemp->second.translate) curT = *itTemp->second.translate;
+            if (itTemp->second.rotate) curQ = *itTemp->second.rotate;
+            if (itTemp->second.scale) curS = *itTemp->second.scale;
+        }
+
+        data.translate = curT;
+        data.rotate = curQ;
+        data.scale = curS;
+        return data;
+    };
+
+    if (copyAll) {
+        keyframeClipboard_.hasData = true;
+        keyframeClipboard_.isAllJoints = true;
+        keyframeClipboard_.sourceJointName = "";
+        keyframeClipboard_.sourceTime = animEditorTime_;
+        keyframeClipboard_.jointDataMap.clear();
+
+        std::set<std::string> targetJoints;
+        for (const auto& jName : currentJointList_) targetJoints.insert(jName);
+        for (const auto& [jName, _] : editingAnimation_.nodeAnimations) targetJoints.insert(jName);
+        if (skel) {
+            for (const auto& [jName, _] : skel->jointMap) targetJoints.insert(jName);
+        }
+
+        for (const auto& jName : targetJoints) {
+            keyframeClipboard_.jointDataMap[jName] = extractJointData(jName);
+        }
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "キーフレーム概要 (全%zuボーン) をコピーしました (%.2f秒)", targetJoints.size(), animEditorTime_);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    } else {
+        if (animEditorSelectedJointName_.empty()) {
+            SetStatusMessage("コピー対象のボーンが選択されていません");
+            return;
+        }
+
+        keyframeClipboard_.hasData = true;
+        keyframeClipboard_.isAllJoints = false;
+        keyframeClipboard_.sourceJointName = animEditorSelectedJointName_;
+        keyframeClipboard_.sourceTime = animEditorTime_;
+        keyframeClipboard_.jointDataMap.clear();
+        keyframeClipboard_.jointDataMap[animEditorSelectedJointName_] = extractJointData(animEditorSelectedJointName_);
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "ボーン [%s] のキーフレームをコピーしました (%.2f秒)", animEditorSelectedJointName_.c_str(), animEditorTime_);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    }
+}
+
+void AnimationEditorContext::PasteKeyframe(SceneManager* sceneManager) {
+    if (!keyframeClipboard_.hasData) {
+        SetStatusMessage("クリップボードにキーフレームデータがありません");
+        return;
+    }
+
+    PushAnimUndoState("キーフレーム貼り付け");
+    float pasteTime = animEditorTime_;
+
+    auto applyDataToNodeAnim = [pasteTime](NodeAnimation& nodeAnim, const AnimJointKeyData& data) {
+        if (data.translate) {
+            bool found = false;
+            for (auto& kf : nodeAnim.translate) {
+                if (std::abs(kf.time - pasteTime) < 0.005f) {
+                    kf.value = *data.translate;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                nodeAnim.translate.push_back(KeyframeVector3{ pasteTime, *data.translate });
+            }
+            std::sort(nodeAnim.translate.begin(), nodeAnim.translate.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) {
+                return a.time < b.time;
+            });
+        }
+
+        if (data.rotate) {
+            bool found = false;
+            for (auto& kf : nodeAnim.rotate) {
+                if (std::abs(kf.time - pasteTime) < 0.005f) {
+                    kf.value = *data.rotate;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                nodeAnim.rotate.push_back(KeyframeQuaternion{ pasteTime, *data.rotate });
+            }
+            std::sort(nodeAnim.rotate.begin(), nodeAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) {
+                return a.time < b.time;
+            });
+        }
+
+        if (data.scale) {
+            bool found = false;
+            for (auto& kf : nodeAnim.scale) {
+                if (std::abs(kf.time - pasteTime) < 0.005f) {
+                    kf.value = *data.scale;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                nodeAnim.scale.push_back(KeyframeVector3{ pasteTime, *data.scale });
+            }
+            std::sort(nodeAnim.scale.begin(), nodeAnim.scale.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) {
+                return a.time < b.time;
+            });
+        }
+    };
+
+    if (keyframeClipboard_.isAllJoints) {
+        for (const auto& [jName, data] : keyframeClipboard_.jointDataMap) {
+            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[jName];
+            applyDataToNodeAnim(nodeAnim, data);
+        }
+
+        isSummarySelected_ = true;
+        animEditorSelectedKeyIndex_ = -1;
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "全ボーンにキーフレームを貼り付けました (%.2f秒)", pasteTime);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    } else {
+        std::string targetJoint = animEditorSelectedJointName_;
+        if (targetJoint.empty()) {
+            targetJoint = keyframeClipboard_.sourceJointName;
+        }
+        if (targetJoint.empty()) {
+            SetStatusMessage("貼り付け先ボーンが不明です");
+            return;
+        }
+
+        if (!keyframeClipboard_.jointDataMap.empty()) {
+            const auto& data = keyframeClipboard_.jointDataMap.begin()->second;
+            NodeAnimation& nodeAnim = editingAnimation_.nodeAnimations[targetJoint];
+            applyDataToNodeAnim(nodeAnim, data);
+        }
+
+        isSummarySelected_ = false;
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "ボーン [%s] にキーフレームを貼り付けました (%.2f秒)", targetJoint.c_str(), pasteTime);
+        SetStatusMessage(buf);
+        LogManager::GetInstance()->AddLog(LogLevel::Info, std::string("[AnimEditor] ") + buf);
+    }
+
+    // 一時オーバーライドをクリアして貼り付けたキーを即時プレビューに反映
+    animTempOverrides_.clear();
+    UpdateAnimationPosePreview(sceneManager);
+}
 
 #endif

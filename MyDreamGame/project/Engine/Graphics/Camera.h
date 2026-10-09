@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Core/Utility/Structs.h" // Vector3, Matrix4x4 等の定義
 
 class Camera {
@@ -9,6 +9,9 @@ public:
 
     // 初期化（画面サイズを受け取る）
     virtual void Initialize(int kClientWidth, int kClientHeight);
+
+    // 画面サイズ・解像度変更時の更新
+    virtual void SetResolution(int kClientWidth, int kClientHeight);
 
     // 行列を更新する（位置や角度が変わったら呼ぶ）
     virtual void UpdateMatrix();
@@ -23,6 +26,11 @@ public:
     void SetRotation(const Vector3 &rotation) { transform_.rotate = rotation; }
     void SetTranslation(const Vector3 &translation) { transform_.translate = translation; }
     void SetFov(float fov) { fov_ = fov; }
+    float GetFov() const { return fov_; }
+    float GetNearClip() const { return nearClip_; }
+    float GetFarClip() const { return farClip_; }
+    void SetNearClip(float nearClip) { nearClip_ = nearClip; }
+    void SetFarClip(float farClip) { farClip_ = farClip; }
 
 protected: // 継承先（DebugCamera）でも使えるように private ではなく protected にする
     // Transform構造体を使うと管理が楽です（無ければVector3 rotation, translationでもOK）
@@ -35,4 +43,6 @@ protected: // 継承先（DebugCamera）でも使えるように private では�
     int kClientWidth_ = 1280;
     int kClientHeight_ = 720;
     float fov_ = 0.45f;
+    float nearClip_ = 0.1f;
+    float farClip_ = 1000.0f; // 遠くのオブジェクトが消失しないよう1000に拡大
 };

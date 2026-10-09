@@ -9,10 +9,6 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Input/KeyboardInput.h"
 #include "Core/TimeManager.h"
-#include <memory>
-#include <vector>
-#include <random>
-#include <string>
 #include <nlohmann/json.hpp>
 #include "Component/IComponent.h"
 
@@ -35,7 +31,7 @@ public:
     void DisplayImGui() override;
 
     // TODO: Mapは別途シーンかServiceLocator等から取得するように変更するまでの暫定
-    void UpdateWithMap(MapChip2D& map, bool isTransitioning = false);
+    void UpdateWithMap(MapChip2D& map, bool isTransitioning = false, bool canControl = true);
 
     // 速度の設定と取得
     void SetVelocity(const Vector3& velocity) { state_.velocity_ = velocity; }
@@ -43,10 +39,20 @@ public:
     void SetExternalVelocityX(float velX) { state_.externalVelocityX_ = velX; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
     
-    // セレステ風ジャンプブロック（ばね）用のアクション
-    void RefillDash() { state_.canDash_ = true; state_.isDashing_ = false; state_.dashTimer_ = 0.0f; }
+    // ダッシュ回復・キャンセルアクション
+    void RefillDash() { state_.canDash_ = true; }
+    void CancelDash() { state_.isDashing_ = false; state_.dashTimer_ = 0.0f; }
+    void RefillStamina() { state_.stamina_ = params_.maxStamina_; state_.isExhausted_ = false; }
+    bool CanDash() const { return state_.canDash_; }
+    bool IsExhausted() const { return state_.isExhausted_; }
+    float GetStamina() const { return state_.stamina_; }
     void ApplyHitstop(float duration) { state_.hitstopTimer_ = duration; }
     void SetSpringControlDisable(float duration) { state_.springControlDisableTimer_ = duration; }
+
+    // ダッシュ状態の取得
+    bool IsDashing() const { return state_.isDashing_; }
+    const Vector3& GetDashVelocity() const { return state_.dashVelocity_; }
+    const PlayerState& GetState() const { return state_; }
     // JSON Parameters
 
     // プレイヤーの位置を取得（カメラ追従用）
@@ -79,9 +85,11 @@ public:
 
     // ヒエラルキー用
     PrimitiveObject* GetPrimitiveObject() { return visuals_.GetPrimitiveObject(); }
+    const PrimitiveObject* GetPrimitiveObject() const { return visuals_.GetPrimitiveObject(); }
     Object3D* GetModelObject() { return visuals_.GetModelObject(); }
+    const Object3D* GetModelObject() const { return visuals_.GetModelObject(); }
     AnimatorComponent* GetAnimator() { return visuals_.GetAnimator(); }
-    PlayerVisuals& GetVisuals() { return visuals_; }
+    const AnimatorComponent* GetAnimator() const { return visuals_.GetAnimator(); }
 
     // ゲーム状態取得用
     int GetScore() const { return state_.score_; }
@@ -135,11 +143,7 @@ public:
     bool IsDead() const { return state_.isDead_; }
     bool IsGoal() const { return state_.isGoal_; }
     const PlayerParams& GetParams() const { return params_; }
-
 private:
-
-private:
-
     PlayerParams params_;
 
     PlayerState state_;

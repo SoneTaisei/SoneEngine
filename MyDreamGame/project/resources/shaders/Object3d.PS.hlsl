@@ -2,41 +2,78 @@
 
 Texture2D<float4> gTexture : register(t0);
 TextureCube<float4> gEnvironmentMap : register(t1);
+Texture2D<float> gShadowMap : register(t2);
 SamplerState gSampler : register(s0);
+SamplerComparisonState gShadowSampler : register(s1);
 
 ConstantBuffer<Material> gMaterial : register(b0);
 ConstantBuffer<DirectionalLight> gDirectionalLight : register(b1);
 ConstantBuffer<PointLight> gPointLight : register(b2);
 ConstantBuffer<Camera> gCamera : register(b3);
-ConstantBuffer<SpotLight> gSpotLight : register(b4);
+ConstantBuffer<SpotLightGroup> gSpotLightGroup : register(b4);
 
 struct PixelShaderOutput {
     float4 color : SV_TARGET0;
 };
 
 float4 main(VertexShaderOutput input) : SV_TARGET {
-    // 3D Procedural Floor Grid (enableBoxMapping == 2.0)
+    // 3D Infinite Procedural Floor Grid (enableBoxMapping == 2.0)
     if (gMaterial.enableBoxMapping > 1.5f) {
         float2 coord = input.worldPosition.xz;
         float2 deriv = max(fwidth(coord), 0.0001f);
-        float2 grid = abs(frac(coord - 0.5f) - 0.5f) / deriv;
-        float lineVal = min(grid.x, grid.y);
-        float lineWeight = 1.0f - min(lineVal, 1.0f);
+        
+        // Distance from camera to current surface point on XZ plane
+        float camDist = length(input.worldPosition.xz - gCamera.worldPosition.xz);
+        
+        // Smooth distance fade factors for multi-scale LOD
+        float fineFade = 1.0f - smoothstep(15.0f, 50.0f, camDist);
+        float majorFade = 1.0f - smoothstep(50.0f, 250.0f, camDist);
+        float megaFade = 1.0f - smoothstep(150.0f, 1000.0f, camDist);
+        float axisFade = 1.0f - smoothstep(100.0f, 1500.0f, camDist);
+        
+        // 1-meter fine grid lines (fades out in medium distance)
+        float2 fineGrid = abs(frac(coord - 0.5f) - 0.5f) / deriv;
+        float fineLineVal = min(fineGrid.x, fineGrid.y);
+        float fineLineWeight = (1.0f - min(fineLineVal, 1.0f)) * fineFade;
+        
+        // 10-meter major grid lines (fades out in far distance)
+        float2 majorGrid = abs(frac(coord * 0.1f - 0.5f) - 0.5f) / (deriv * 0.1f);
+        float majorLineVal = min(majorGrid.x, majorGrid.y);
+        float majorLineWeight = (1.0f - min(majorLineVal, 1.0f)) * majorFade;
+        
+        // 50-meter mega grid lines (visible up to the horizon)
+        float2 megaGrid = abs(frac(coord * 0.02f - 0.5f) - 0.5f) / (deriv * 0.02f);
+        float megaLineVal = min(megaGrid.x, megaGrid.y);
+        float megaLineWeight = (1.0f - min(megaLineVal, 1.0f)) * megaFade;
         
         // Base floor color
         float4 baseColor = gMaterial.color;
         
-        // Subtle grid line color
-        float4 gridColor = float4(0.28f, 0.28f, 0.32f, 1.0f);
+        // Line colors with hierarchical brightness
+        float4 fineGridColor = float4(0.32f, 0.32f, 0.35f, 0.65f);
+        float4 majorGridColor = float4(0.48f, 0.48f, 0.53f, 0.80f);
+        float4 megaGridColor = float4(0.60f, 0.60f, 0.68f, 0.85f);
         
         // Axis lines: X-axis (z ~ 0: Red) and Z-axis (x ~ 0: Blue)
         float2 axisDist = abs(coord) / deriv;
-        float xAxisWeight = 1.0f - min(axisDist.y, 1.0f);
-        float zAxisWeight = 1.0f - min(axisDist.x, 1.0f);
+        float xAxisWeight = (1.0f - min(axisDist.y, 1.0f)) * axisFade;
+        float zAxisWeight = (1.0f - min(axisDist.x, 1.0f)) * axisFade;
         
-        float4 finalColor = lerp(baseColor, gridColor, lineWeight * 0.70f);
-        finalColor = lerp(finalColor, float4(0.85f, 0.25f, 0.30f, 1.0f), xAxisWeight * 0.85f);
-        finalColor = lerp(finalColor, float4(0.25f, 0.55f, 0.90f, 1.0f), zAxisWeight * 0.85f);
+        // Layered blending
+        float4 finalColor = lerp(baseColor, fineGridColor, fineLineWeight * 0.70f);
+        finalColor = lerp(finalColor, majorGridColor, majorLineWeight * 0.80f);
+        finalColor = lerp(finalColor, megaGridColor, megaLineWeight * 0.85f);
+        finalColor = lerp(finalColor, float4(0.92f, 0.25f, 0.30f, 1.0f), xAxisWeight * 0.95f);
+        finalColor = lerp(finalColor, float4(0.25f, 0.55f, 0.95f, 1.0f), zAxisWeight * 0.95f);
+        
+        // Calculate dynamic alpha transparency
+        float lineAlpha = max(max(fineLineWeight * 0.70f, majorLineWeight * 0.80f),
+                              max(megaLineWeight * 0.85f, max(xAxisWeight * 0.95f, zAxisWeight * 0.95f)));
+        finalColor.a = max(baseColor.a, lineAlpha);
+        
+        if (finalColor.a <= 0.001f) {
+            discard;
+        }
         
         return finalColor;
     }
@@ -130,35 +167,92 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         float pointSpecularMask = saturate(pointNdotL * 2.0f);
         float3 specularPoint = gPointLight.color.rgb * gPointLight.intensity * (pointSpecularPow * pointSpecularMask) * float3(1.0f, 1.0f, 1.0f) * factor;
         
-        // 3. Spot Light (Soft Half-Lambert diffuse and guarded specular)
-        float3 spotLightDirOnSurface = normalize(input.worldPosition - gSpotLight.position);
-        float spotDistance = length(gSpotLight.position - input.worldPosition);
-        float spotAttenuation = pow(saturate(1.0f - (spotDistance / max(0.0001f, gSpotLight.distance))), gSpotLight.decay);
+        // 3. Multi Spot Lights (Soft Half-Lambert diffuse and guarded specular)
+        float3 diffuseSpotTotal = float3(0.0f, 0.0f, 0.0f);
+        float3 specularSpotTotal = float3(0.0f, 0.0f, 0.0f);
         
-        float cosTheta = dot(spotLightDirOnSurface, normalize(gSpotLight.direction));
-        float falloffRange = gSpotLight.cosFalloffStart - gSpotLight.cosAngle;
-        float falloffFactor = saturate((cosTheta - gSpotLight.cosAngle) / max(0.001f, falloffRange));
-        
-        float spotNdotL = dot(normal, -spotLightDirOnSurface);
-        float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
-        float spotCos = spotHalfLambert * spotHalfLambert;
-        float3 diffuseSpot = gMaterial.color.rgb * textureColor.rgb * gSpotLight.color.rgb * spotCos * gSpotLight.intensity * spotAttenuation * falloffFactor;
-        
-        float3 spotHalfVector = normalize(-spotLightDirOnSurface + toEye);
-        float spotNdotH = dot(normal, spotHalfVector);
-        float spotSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(spotNdotH), gMaterial.shininess) : 0.0f;
-        float spotSpecularMask = saturate(spotNdotL * 2.0f);
-        float3 specularSpot = gSpotLight.color.rgb * gSpotLight.intensity * (spotSpecularPow * spotSpecularMask) * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor;
+        int activeSpotCount = min(gSpotLightGroup.spotLightCount, (int)kMaxSpotLights);
+        for (int i = 0; i < activeSpotCount; ++i) {
+            if (gSpotLightGroup.spotLights[i].enable == 0) {
+                continue;
+            }
+            SpotLight sl = gSpotLightGroup.spotLights[i];
+            
+            float3 spotLightDirOnSurface = normalize(input.worldPosition - sl.position);
+            float spotDistance = length(sl.position - input.worldPosition);
+            
+            // Distance attenuation
+            float spotAttenuation = pow(saturate(1.0f - (spotDistance / max(0.0001f, sl.distance))), sl.decay);
+            
+            // Angular falloff: full intensity inside core angle (cosFalloffStart), smoothly falls off to 0 outside (cosAngle)
+            float cosTheta = dot(spotLightDirOnSurface, normalize(sl.direction));
+            float falloffRange = sl.cosFalloffStart - sl.cosAngle;
+            float rawFalloff = saturate((cosTheta - sl.cosAngle) / max(0.0001f, falloffRange));
+            // Smoothstep curve for clear distinction between safe falloff zone and dangerous core zone
+            float falloffFactor = smoothstep(0.0f, 1.0f, rawFalloff);
+            
+            float spotNdotL = dot(normal, -spotLightDirOnSurface);
+            float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
+            float spotCos = spotHalfLambert * spotHalfLambert;
+
+            // Shadow mapping evaluation
+            float shadowFactor = 1.0f;
+            if (sl.shadowMapIndex >= 0) {
+                float4 lightSpacePos = mul(float4(input.worldPosition, 1.0f), sl.viewProjection);
+                if (lightSpacePos.w > 0.0f) {
+                    float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+                    float2 shadowUV;
+                    shadowUV.x = projCoords.x * 0.5f + 0.5f;
+                    shadowUV.y = -projCoords.y * 0.5f + 0.5f;
+                    float currentDepth = projCoords.z;
+
+                    if (shadowUV.x >= 0.0f && shadowUV.x <= 1.0f &&
+                        shadowUV.y >= 0.0f && shadowUV.y <= 1.0f &&
+                        currentDepth >= 0.0f && currentDepth <= 1.0f) {
+                        
+                        // Adaptive slope-scale depth bias to prevent shadow acne
+                        float nDotL = saturate(dot(normal, -spotLightDirOnSurface));
+                        float slopeFactor = 1.0f - nDotL;
+                        float bias = max(sl.shadowBias * (1.0f + slopeFactor * 2.0f), 0.0002f);
+                        
+                        // 3x3 Percentage-Closer Filtering (PCF)
+                        float shadow = 0.0f;
+                        float2 texelSize = float2(1.0f / 2048.0f, 1.0f / 2048.0f);
+                        [unroll]
+                        for (int x = -1; x <= 1; ++x) {
+                            [unroll]
+                            for (int y = -1; y <= 1; ++y) {
+                                shadow += gShadowMap.SampleCmpLevelZero(
+                                    gShadowSampler,
+                                    shadowUV + float2(x, y) * texelSize,
+                                    currentDepth - bias
+                                );
+                            }
+                        }
+                        shadow /= 9.0f;
+                        shadowFactor = lerp(1.0f - sl.shadowIntensity, 1.0f, shadow);
+                    }
+                }
+            }
+
+            diffuseSpotTotal += gMaterial.color.rgb * textureColor.rgb * sl.color.rgb * spotCos * sl.intensity * spotAttenuation * falloffFactor * shadowFactor;
+            
+            float3 spotHalfVector = normalize(-spotLightDirOnSurface + toEye);
+            float spotNdotH = dot(normal, spotHalfVector);
+            float spotSpecularPow = (gMaterial.shininess > 0.0f) ? pow(saturate(spotNdotH), gMaterial.shininess) : 0.0f;
+            float spotSpecularMask = saturate(spotNdotL * 2.0f);
+            specularSpotTotal += sl.color.rgb * sl.intensity * (spotSpecularPow * spotSpecularMask) * float3(1.0f, 1.0f, 1.0f) * spotAttenuation * falloffFactor * shadowFactor;
+        }
         
         float3 cameraToPosition = normalize(input.worldPosition - gCamera.worldPosition);
         float3 reflectedVector = reflect(cameraToPosition, normalize(input.normal));
         float4 environmentColor = gEnvironmentMap.Sample(gSampler, reflectedVector);
 
         // 4. Final color composition
-        float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpot) * input.color.rgb;
-        float3 specularTotal = (specularDirectional + specularPoint + specularSpot) * input.color.rgb;
-        // Ambient light for uniform visibility and smooth shading without pitch black shadows
-        float3 ambient = gMaterial.color.rgb * textureColor.rgb * 0.35f;
+        float3 diffuseTotal = (diffuseDirectional + diffusePoint + diffuseSpotTotal) * input.color.rgb;
+        float3 specularTotal = (specularDirectional + specularPoint + specularSpotTotal) * input.color.rgb;
+        // Ambient light modulated by ambientIntensity (allows creating full pitch black darkness)
+        float3 ambient = gMaterial.color.rgb * textureColor.rgb * input.color.rgb * (0.35f * gSpotLightGroup.ambientIntensity);
 
         // Add environment map lighting if enabled
         if (gMaterial.enableEnvironmentMap != 0) {
@@ -176,6 +270,196 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
 
         outputColor.rgb = diffuseTotal + ambient + specularTotal;
         outputColor.a = alpha;
+
+    } else if (gMaterial.lightingType == 2) {
+        // Crystal / Gemstone Shading Mode (e.g. Uzushio Crystal)
+        // Computes thin-film iridescence, fake internal refraction, inner scattering glow, sharp facet specular, and rim highlights.
+
+        // 1. Calculate facet-enhanced normal using screen-space derivatives
+        float3 dpdx = ddx(input.worldPosition);
+        float3 dpdy = ddy(input.worldPosition);
+        float3 flatNormal = normalize(cross(dpdx, dpdy));
+        float3 smoothNormal = normalize(input.normal);
+        if (dot(flatNormal, smoothNormal) < 0.0f) {
+            flatNormal = -flatNormal;
+        }
+        // Strongly favor flatNormal to give faceted, crisp crystal cuts
+        float3 normal = normalize(lerp(smoothNormal, flatNormal, 0.85f));
+        float3 toEye = normalize(gCamera.worldPosition - input.worldPosition);
+
+        // 2. View and Fresnel calculations
+        float NdotV = saturate(dot(normal, toEye));
+        float fresnel = 1.0f - NdotV;
+        float fresnelPow = pow(fresnel, 2.5f);
+
+        // Base tint from material color and texture
+        float3 baseColor = gMaterial.color.rgb * textureColor.rgb;
+        float baseLum = max(baseColor.r, max(baseColor.g, baseColor.b));
+
+        // 3. Multi-band Iridescence (Thin-film interference / Prism dispersion)
+        // Dynamically shifts colors based on viewing angle and surface facet normal
+        float dispersionShift = frac(fresnel * 1.35f + dot(normal, float3(0.35f, 0.65f, 0.25f)) * 0.45f);
+
+        // Pure spectral rainbow dispersion (cyan -> violet -> amber/pink)
+        float3 spectralColor = 0.5f + 0.5f * cos(6.28318f * (dispersionShift + float3(0.0f, 0.33f, 0.67f)));
+
+        // Hue-shifted color revolving around baseColor (+/- 54 degrees)
+        float angle = (dispersionShift - 0.5f) * 1.9f;
+        const float3 kNorm = float3(0.57735f, 0.57735f, 0.57735f);
+        float cosA = cos(angle);
+        float sinA = sin(angle);
+        float3 hueShiftedColor = baseColor * cosA + cross(kNorm, baseColor) * sinA + kNorm * dot(kNorm, baseColor) * (1.0f - cosA);
+        hueShiftedColor = max(hueShiftedColor, 0.0f);
+
+        // Blend hue-shifted base color with spectral dispersion.
+        // Modulation by baseLum ensures dark/black gems smoothly fade out internal prism illumination.
+        float colorSat = saturate((max(baseColor.r, max(baseColor.g, baseColor.b)) - min(baseColor.r, min(baseColor.g, baseColor.b))) * 2.5f);
+        float3 spectralMod = spectralColor * baseLum;
+        float3 iridColor = lerp(spectralMod, hueShiftedColor, colorSat * 0.75f + 0.25f);
+
+        // 4. Incident Lighting and Ambient Illumination evaluation
+        // Calculate the light energy arriving at the crystal so it darkens proportionally with scene lighting.
+        float3 totalDirectDiffuse = float3(0.0f, 0.0f, 0.0f);
+        float3 crystalSpecularTotal = float3(0.0f, 0.0f, 0.0f);
+        float baseShininess = max(gMaterial.shininess, 48.0f);
+
+        // (a) Directional Light
+        float3 directionalLightDir = normalize(-gDirectionalLight.direction);
+        float directionalNdotL = dot(normal, directionalLightDir);
+        float directionalHalfLambert = directionalNdotL * 0.5f + 0.5f;
+        float dirLightingIntensity = directionalHalfLambert * directionalHalfLambert * gDirectionalLight.intensity;
+        totalDirectDiffuse += gDirectionalLight.color.rgb * dirLightingIntensity;
+
+        float3 directionalHalfVector = normalize(directionalLightDir + toEye);
+        float directionalNdotH = dot(normal, directionalHalfVector);
+        float dirSurfaceSpec = pow(saturate(directionalNdotH), baseShininess);
+        float dirFacetSpec = pow(saturate(directionalNdotH), baseShininess * 0.4f);
+        crystalSpecularTotal += gDirectionalLight.color.rgb * gDirectionalLight.intensity * (
+            dirSurfaceSpec * float3(1.0f, 1.0f, 1.0f) * 1.8f + // Crisp white surface reflection
+            dirFacetSpec * iridColor * 1.1f                     // Colored inner facet sparkle
+        );
+
+        // (b) Point Light
+        float pDist = length(gPointLight.position - input.worldPosition);
+        float pFactor = pow(saturate(-pDist / max(0.0001f, gPointLight.radius) + 1.0f), gPointLight.decay);
+        float3 pointLightDir = normalize(input.worldPosition - gPointLight.position);
+        float pointNdotL = dot(normal, -pointLightDir);
+        float pointHalfLambert = pointNdotL * 0.5f + 0.5f;
+        float pLightingIntensity = pointHalfLambert * pointHalfLambert * gPointLight.intensity * pFactor;
+        totalDirectDiffuse += gPointLight.color.rgb * pLightingIntensity;
+
+        float3 pointHalfVector = normalize(-pointLightDir + toEye);
+        float pointNdotH = dot(normal, pointHalfVector);
+        float pointSurfaceSpec = pow(saturate(pointNdotH), baseShininess);
+        crystalSpecularTotal += gPointLight.color.rgb * gPointLight.intensity * pointSurfaceSpec * pFactor * float3(1.0f, 1.0f, 1.0f) * 1.5f;
+
+        // (c) Spot Lights (with attenuation, falloff, and shadow mapping)
+        int activeSpotCount = min(gSpotLightGroup.spotLightCount, (int)kMaxSpotLights);
+        for (int i = 0; i < activeSpotCount; ++i) {
+            if (gSpotLightGroup.spotLights[i].enable == 0) continue;
+            SpotLight sl = gSpotLightGroup.spotLights[i];
+            float3 spotLightDirOnSurface = normalize(input.worldPosition - sl.position);
+            float spotDistance = length(sl.position - input.worldPosition);
+            float spotAttenuation = pow(saturate(1.0f - (spotDistance / max(0.0001f, sl.distance))), sl.decay);
+
+            float cosTheta = dot(spotLightDirOnSurface, normalize(sl.direction));
+            float falloffRange = sl.cosFalloffStart - sl.cosAngle;
+            float rawFalloff = saturate((cosTheta - sl.cosAngle) / max(0.0001f, falloffRange));
+            float falloffFactor = smoothstep(0.0f, 1.0f, rawFalloff);
+
+            float spotNdotL = dot(normal, -spotLightDirOnSurface);
+            float spotHalfLambert = spotNdotL * 0.5f + 0.5f;
+
+            // Shadow mapping evaluation
+            float shadowFactor = 1.0f;
+            if (sl.shadowMapIndex >= 0) {
+                float4 lightSpacePos = mul(float4(input.worldPosition, 1.0f), sl.viewProjection);
+                if (lightSpacePos.w > 0.0f) {
+                    float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+                    float2 shadowUV;
+                    shadowUV.x = projCoords.x * 0.5f + 0.5f;
+                    shadowUV.y = -projCoords.y * 0.5f + 0.5f;
+                    float currentDepth = projCoords.z;
+
+                    if (shadowUV.x >= 0.0f && shadowUV.x <= 1.0f &&
+                        shadowUV.y >= 0.0f && shadowUV.y <= 1.0f &&
+                        currentDepth >= 0.0f && currentDepth <= 1.0f) {
+                        float nDotL = saturate(dot(normal, -spotLightDirOnSurface));
+                        float bias = max(sl.shadowBias * (1.0f + (1.0f - nDotL) * 2.0f), 0.0002f);
+                        float shadow = 0.0f;
+                        float2 texelSize = float2(1.0f / 2048.0f, 1.0f / 2048.0f);
+                        [unroll]
+                        for (int x = -1; x <= 1; ++x) {
+                            [unroll]
+                            for (int y = -1; y <= 1; ++y) {
+                                shadow += gShadowMap.SampleCmpLevelZero(
+                                    gShadowSampler,
+                                    shadowUV + float2(x, y) * texelSize,
+                                    currentDepth - bias
+                                );
+                            }
+                        }
+                        shadow /= 9.0f;
+                        shadowFactor = lerp(1.0f - sl.shadowIntensity, 1.0f, shadow);
+                    }
+                }
+            }
+
+            float spotLightingIntensity = spotHalfLambert * spotHalfLambert * sl.intensity * spotAttenuation * falloffFactor * shadowFactor;
+            totalDirectDiffuse += sl.color.rgb * spotLightingIntensity;
+
+            float3 spotHalfVector = normalize(-spotLightDirOnSurface + toEye);
+            float spotNdotH = dot(normal, spotHalfVector);
+            float spotSurfaceSpec = pow(saturate(spotNdotH), baseShininess);
+            crystalSpecularTotal += sl.color.rgb * sl.intensity * spotSurfaceSpec * spotAttenuation * falloffFactor * shadowFactor * float3(1.0f, 1.0f, 1.0f) * 1.5f;
+        }
+
+        // (d) Ambient light modulation
+        float ambientEnergy = gSpotLightGroup.ambientIntensity;
+
+        // (e) Normalized lighting scale [0.0 = completely pitch dark, 1.0 = standard lit environment]
+        // Standard lit scenes have ambient ~ 1.0 and direct light ~ 0.5 - 1.0.
+        // By normalizing against 0.75f, standard lit rooms yield lightingScale == 1.0 (preserving 100% of the crystal's exact vibrant look).
+        // When scene lights are turned off or ambient drops to 0 in dark rooms, lightingScale smoothly fades to 0.0 (completely dark).
+        float totalDirectLightEnergy = dirLightingIntensity + pLightingIntensity + totalDirectDiffuse.r * 0.5f;
+        float totalSceneIllum = totalDirectLightEnergy + ambientEnergy * 0.65f;
+        float lightingScale = saturate(totalSceneIllum / 0.75f);
+
+        // 5. Inner glow (scaled by lightingScale so it darkens in dark environments, but retains 100% of original vibrant look when lit)
+        float innerGlowFactor = pow(NdotV, 1.2f) * 0.75f + 0.35f;
+        float3 baseInnerGlow = lerp(baseColor, iridColor, 0.55f) * innerGlowFactor;
+        float3 litInnerGlow = baseInnerGlow * lightingScale;
+
+        // 6. Fake Refraction modulated by lighting scale
+        float3 refractDir = refract(-toEye, normal, 1.0f / 1.33f);
+        if (length(refractDir) < 0.01f) {
+            refractDir = reflect(-toEye, normal); // Total internal reflection fallback
+        }
+        float4 envRefractColor = gEnvironmentMap.Sample(gSampler, refractDir);
+        float envCoeff = (gMaterial.enableEnvironmentMap != 0) ? max(gMaterial.environmentCoefficient, 0.5f) : 0.5f;
+        float3 refractedLight = envRefractColor.rgb * iridColor * envCoeff * 1.1f * lightingScale;
+
+        // 7. Environment Mirror Reflection modulated by lighting scale
+        float3 reflectDir = reflect(-toEye, normal);
+        float4 envReflectColor = gEnvironmentMap.Sample(gSampler, reflectDir);
+        // For black/dark crystals, suppress constant baseline reflection so the core remains pitch black, keeping sharp grazing-angle reflections
+        float envF0 = 0.04f * saturate(baseLum * 2.0f);
+        float3 envSpecular = envReflectColor.rgb * envCoeff * (fresnelPow * (1.0f - envF0) + envF0) * lightingScale;
+
+        // 8. Outer Rim Highlight modulated by lighting scale
+        float rimFactor = pow(fresnel, 3.5f);
+        // Base rim color follows crystal body tint without artificial white offset
+        float3 rimColor = lerp(baseColor * 1.5f, iridColor * 1.3f, dispersionShift);
+        // For dark crystals (black/onyx), subtle sharp specular rim to define the silhouette
+        float darkSilhouetteRim = (1.0f - saturate(baseLum * 2.5f)) * 0.18f;
+        float3 rimLight = (rimColor + darkSilhouetteRim) * rimFactor * 1.4f * lightingScale;
+
+        // 9. Final Color Composition
+        // In standard lit conditions (lightingScale == 1.0), this matches the original crystal visual 1:1.
+        // In dark conditions (lightingScale -> 0.0), all terms smoothly scale down to pitch black.
+        float3 crystalColor = litInnerGlow * 0.85f + refractedLight * 0.8f + crystalSpecularTotal + envSpecular + rimLight;
+        outputColor.rgb = crystalColor * input.color.rgb;
+        outputColor.a = gMaterial.color.a * textureColor.a * input.color.a;
 
     } else {
         outputColor = gMaterial.color * textureColor * input.color;

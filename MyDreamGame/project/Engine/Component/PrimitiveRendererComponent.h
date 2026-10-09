@@ -1,10 +1,10 @@
-﻿#pragma once
+#pragma once
 #include "IComponent.h"
 #include "Resource/Primitive/Primitive.h"
 #include "Core/Utility/Structs.h"
 #include "Core/Utility/BlendMode.h"
+#include "Renderer/ConstantBufferPool.h"
 #include <wrl/client.h>
-#include <string>
 
 // GameObjectにアタッチして基本図形（Primitive）を描画するためのコンポーネント
 class PrimitiveRendererComponent : public IComponent {
@@ -20,9 +20,14 @@ public:
     void Draw() override;
     void DisplayImGui() override;
 
-    // Setters / Getters
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
     Material& GetMaterial() { return material_; }
+    const Material& GetMaterial() const { return material_; }
+    void SetMaterial(const Material& material) { material_ = material; }
+    void SetColor(const Vector4& color) { material_.color = color; }
+    const Vector4& GetColor() const { return material_.color; }
+    void SetLightingType(int32_t type) { material_.lightingType = type; }
+    void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
     BlendMode GetBlendMode() const { return blendMode_; }
     
@@ -33,16 +38,22 @@ public:
 
 private:
     void UpdateGhost(const EulerTransform& currentTransform);
+    // 残像用バッファ（1コンポーネントで数MB）を必要になった時にだけ確保する
+    void EnsureGhostResources();
+
+    ID3D12Device* device_ = nullptr;
 
     Primitive* primitive_ = nullptr;
     Material material_;
     BlendMode blendMode_ = BlendMode::kBlendModeNormal;
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle_{};
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
+    // 定数バッファは ConstantBufferPool から切り出して使う
+    // （ブロック 1 個ごとにバッファを作ると、マップを開くたびの生成回数が跳ね上がるため）
+    ConstantBufferPool::Allocation materialCB_;
     Material* mappedMaterial_ = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> transformResource_;
+    ConstantBufferPool::Allocation transformCB_;
     TransformMatrix* mappedTransform_ = nullptr;
 
     // トレイル（残像）用データ
@@ -63,9 +74,9 @@ public:
     void SetIsDoubleSided(bool d) { isDoubleSided_ = d; }
     bool IsDoubleSided() const { return isDoubleSided_; }
 
-    ID3D12Resource* GetTransformResource() const { return transformResource_.Get(); }
+    D3D12_GPU_VIRTUAL_ADDRESS GetTransformGPUAddress() const { return transformCB_.gpuAddress; }
     TransformMatrix* GetMappedTransform() const { return mappedTransform_; }
-    ID3D12Resource* GetMaterialResource() const { return materialResource_.Get(); }
+    D3D12_GPU_VIRTUAL_ADDRESS GetMaterialGPUAddress() const { return materialCB_.gpuAddress; }
     D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const { return textureHandle_; }
     Primitive* GetPrimitive() const { return primitive_; }
 

@@ -8,7 +8,6 @@
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
-#include <cmath>
 
 void PatrolEnemyBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
     gameObject_ = std::make_unique<GameObject>("PatrolEnemy");

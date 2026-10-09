@@ -1,7 +1,6 @@
 #pragma once
 #include "BaseBlock.h"
 #include "Core/TimeManager.h"
-#include <algorithm>
 
 class LiftBlock : public BaseBlock {
 public:

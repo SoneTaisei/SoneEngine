@@ -18,6 +18,7 @@ struct PlayerParams {
     float wallSlideSpeed_ = -2.0f;
     float wallClimbSpeed_ = 5.0f;
     float wallClingReleaseDuration_ = 0.5f;
+    float climbLandingDuration_ = 0.2f;
     float halfWidth_ = 0.4f;
     float halfHeight_ = 0.8f;
     float deathDuration_ = 0.175f;

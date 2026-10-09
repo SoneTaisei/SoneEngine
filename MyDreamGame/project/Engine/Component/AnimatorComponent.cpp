@@ -1,7 +1,6 @@
 #include "AnimatorComponent.h"
 #include "Core/Utility/UtilityFunctions.h"
 #include "Core/Utility/Quaternion.h"
-#include "Renderer/SkeletonDebugRenderer.h"
 #include "TransformComponent.h"
 #include "GameObject/GameObject.h"
 #include "Core/TimeManager.h"
@@ -9,12 +8,46 @@
 #include "Editor/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
-#include <cmath>
-#include <iostream>
+#include "Renderer/SrvManager.h"
+#include "Core/Utility/LogManager.h"
 
 void AnimatorComponent::Initialize() {
     animationTime_ = 0.0f;
     isFinished_ = false;
+}
+
+AnimatorComponent::~AnimatorComponent() {
+    if (skinCluster_.paletteSrvHandle.first.ptr != 0) {
+        SrvManager::GetInstance()->Free(skinCluster_.paletteSrvHandle.first, skinCluster_.paletteSrvHandle.second);
+        skinCluster_.paletteSrvHandle.first = {};
+        skinCluster_.paletteSrvHandle.second = {};
+    }
+}
+
+void AnimatorComponent::CrossFade(const Animation& targetAnim, float duration) {
+    if (!hasSkeleton_ || skeleton_.joints.empty() || duration <= 0.0f) {
+        SetAnimation(targetAnim);
+        SetTime(0.0f);
+        isTransitioning_ = false;
+        return;
+    }
+
+    // 現在のスケルトンの各ジョイント姿勢をスナップショットとして保存
+    transitionFromPose_.resize(skeleton_.joints.size());
+    for (size_t i = 0; i < skeleton_.joints.size(); ++i) {
+        transitionFromPose_[i].translate = skeleton_.joints[i].transform.translate;
+        transitionFromPose_[i].rotate = skeleton_.joints[i].transform.rotate;
+        transitionFromPose_[i].scale = skeleton_.joints[i].transform.scale;
+    }
+
+    animation_ = targetAnim;
+    animationTime_ = 0.0f;
+    isFinished_ = false;
+    isPlaying_ = true;
+
+    transitionDuration_ = duration;
+    transitionTimer_ = 0.0f;
+    isTransitioning_ = true;
 }
 
 void AnimatorComponent::Update() {
@@ -39,6 +72,13 @@ void AnimatorComponent::Update() {
         if (finished && wrapMode_ != AnimationWrapMode::Loop) {
             isFinished_ = true;
             isPlaying_ = false;
+        }
+    }
+
+    if (isTransitioning_) {
+        transitionTimer_ += animDeltaTime;
+        if (transitionTimer_ >= transitionDuration_) {
+            isTransitioning_ = false;
         }
     }
 
@@ -77,6 +117,30 @@ void AnimatorComponent::UpdateSkeletonAndSkinCluster() {
     // Skeletonベースのアニメーションが設定されている場合は適用
     if (animation_.duration > 0.0f) {
         ApplyAnimation(skeleton_, animation_, animationTime_);
+    }
+
+    // クロスフェード遷移中なら、直前のスナップショットポーズと現在の新アニメーションポーズをブレンド
+    if (isTransitioning_ && transitionDuration_ > 0.0f && !transitionFromPose_.empty()) {
+        float rawT = std::clamp(transitionTimer_ / transitionDuration_, 0.0f, 1.0f);
+        // smoothstep で滑らかな加減速補間
+        float t = rawT * rawT * (3.0f - 2.0f * rawT);
+        for (size_t i = 0; i < skeleton_.joints.size() && i < transitionFromPose_.size(); ++i) {
+            skeleton_.joints[i].transform.translate = TransformFunctions::Lerp(
+                transitionFromPose_[i].translate,
+                skeleton_.joints[i].transform.translate,
+                t
+            );
+            skeleton_.joints[i].transform.rotate = Slerp(
+                transitionFromPose_[i].rotate,
+                skeleton_.joints[i].transform.rotate,
+                t
+            );
+            skeleton_.joints[i].transform.scale = TransformFunctions::Lerp(
+                transitionFromPose_[i].scale,
+                skeleton_.joints[i].transform.scale,
+                t
+            );
+        }
     }
 
     // ジョイントのSRTオーバーライドを適用
@@ -125,7 +189,9 @@ void AnimatorComponent::UpdateSkeletonAndSkinCluster() {
     }
 
     ::Update(skeleton_); // 骨格空間のローカル・ワールド行列を計算
-    ::Update(skinCluster_, skeleton_); // スキニングパレット行列をGPU用バッファに書き込み
+    if (hasSkinCluster_) {
+        ::Update(skinCluster_, skeleton_); // スキニングパレット行列をGPU用バッファに書き込み
+    }
 }
 
 
@@ -133,20 +199,30 @@ void AnimatorComponent::UpdateSkeletonAndSkinCluster() {
 
 void AnimatorComponent::SetModelData(const ModelData& modelData) {
     skeleton_ = CreateSkeleton(modelData.rootNode);
-    hasSkeleton_ = true;
+    hasSkeleton_ = !skeleton_.joints.empty();
+    hasSkinCluster_ = !modelData.skinClusterData.empty();
 
-    // スケルトンの全ジョイント名を出力（Visual Studioの出力ウィンドウで確認できるようにする）
-    OutputDebugStringA("===== Skeleton Joints List =====\n");
+    // スケルトンの全ジョイント名を出力
+    LogManager::GetInstance()->AddLog(LogLevel::Info, "===== Skeleton Joints List =====");
     for (const auto& joint : skeleton_.joints) {
-        std::string logLine = "Joint Index: " + std::to_string(joint.index) + ", Name: " + joint.name + "\n";
-        OutputDebugStringA(logLine.c_str());
+        std::string logLine = "Joint Index: " + std::to_string(joint.index) + ", Name: " + joint.name;
+        LogManager::GetInstance()->AddLog(LogLevel::Info, logLine);
     }
-    OutputDebugStringA("================================\n");
 
     debugRenderer_ = std::make_unique<SkeletonDebugRenderer>();
     debugRenderer_->Initialize();
     
-    skinCluster_ = CreateSkinCluster(DirectXCommon::GetInstance()->GetDevice(), skeleton_, modelData);
+    if (skinCluster_.paletteSrvHandle.first.ptr != 0) {
+        SrvManager::GetInstance()->Free(skinCluster_.paletteSrvHandle.first, skinCluster_.paletteSrvHandle.second);
+        skinCluster_.paletteSrvHandle.first = {};
+        skinCluster_.paletteSrvHandle.second = {};
+    }
+
+    if (hasSkinCluster_) {
+        skinCluster_ = CreateSkinCluster(DirectXCommon::GetInstance()->GetDevice(), skeleton_, modelData);
+    } else {
+        skinCluster_ = SkinCluster{};
+    }
 
     // 初期化直後にバインドポーズのスキニングパレットをGPUバッファに書き込む
     UpdateSkeletonAndSkinCluster();

@@ -1,0 +1,97 @@
+{
+    "duration": 0.10000000149011612,
+    "emitters": [
+        {
+            "billboardType": 0,
+            "blendMode": 2,
+            "bursts": [],
+            "colorKeys": [],
+            "drag": 0.0,
+            "duration": 0.10000000149011612,
+            "enabled": true,
+            "endColor": [
+                1.0,
+                1.0,
+                1.0,
+                0.0
+            ],
+            "endScaleFactor": 0.0,
+            "gravity": -0.4000000059604645,
+            "initialRotateMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialRotateMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "initialScaleMax": [
+                0.4000000059604645,
+                0.4000000059604645,
+                0.4000000059604645
+            ],
+            "initialScaleMin": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.10000000149011612
+            ],
+            "initialSpeedMax": 12.699999809265137,
+            "initialSpeedMin": 7.199999809265137,
+            "initialVelocityDir": [
+                -1.0,
+                0.0,
+                0.0
+            ],
+            "isLoop": true,
+            "lifetimeMax": 10.0,
+            "lifetimeMin": 9.699999809265137,
+            "maxParticles": 500,
+            "modelPath": "resources/Object/Original/sphere/sphere.obj",
+            "name": "Flash",
+            "orbitAxis": [
+                0.0,
+                1.0,
+                0.0
+            ],
+            "orbitalSpeed": 0.0,
+            "psPath": "resources/shaders/Particle.PS.hlsl",
+            "renderType": 0,
+            "rotateSpeedMax": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "rotateSpeedMin": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "shape": 2,
+            "shapeBoxSize": [
+                1.0,
+                30.0,
+                5.0
+            ],
+            "shapeConeAngle": 30.0,
+            "shapeConeRadius": 0.5,
+            "shapeRadius": 1.0,
+            "spawnRate": 40.0,
+            "startColor": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "startDelay": 0.0,
+            "stretchFactor": 0.10000000149011612,
+            "texturePath": "resources/Sprite/Original/circle.png",
+            "useColorGradient": false,
+            "velocitySpread": 0.0,
+            "vsPath": "resources/shaders/Particle.VS.hlsl"
+        }
+    ],
+    "isLoop": true,
+    "systemName": "snow"
+}

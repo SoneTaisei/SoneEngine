@@ -4,11 +4,31 @@
 #include <dinput.h>
 #include <wrl.h>
 #include <joystickapi.h> // DIJOYSTATE2 のために追加
-#include"Core/Utility/Structs.h"
+#include <Xinput.h>
+#include "Core/Utility/Structs.h"
 
 // ライブラリのリンク
 #pragma comment(lib, "dinput8.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "xinput.lib")
+
+enum class GamepadButton {
+    A = 0,
+    B = 1,
+    X = 2,
+    Y = 3,
+    LB = 4,
+    RB = 5,
+    Back = 6,
+    Start = 7,
+    LStick = 8,
+    RStick = 9,
+    DPadUp = 10,
+    DPadDown = 11,
+    DPadLeft = 12,
+    DPadRight = 13,
+    Count
+};
 
 class GamepadInput {
 public:
@@ -21,12 +41,20 @@ public:
     // 更新
     void Update();
 
+    // 接続状態の確認
+    bool IsConnected() const;
+
     // --- ボタン入力 ---
     // ボタンが押され続けているか
-    bool IsButtonDown(int buttonIndex);
+    bool IsButtonDown(GamepadButton button);
     // ボタンが押された瞬間か
-    bool IsButtonPressed(int buttonIndex);
+    bool IsButtonPressed(GamepadButton button);
     // ボタンが離された瞬間か
+    bool IsButtonReleased(GamepadButton button);
+
+    // 互換用インデックス指定
+    bool IsButtonDown(int buttonIndex);
+    bool IsButtonPressed(int buttonIndex);
     bool IsButtonReleased(int buttonIndex);
 
     // --- D-Pad入力 ---
@@ -35,10 +63,27 @@ public:
     bool IsDPadLeft();
     bool IsDPadRight();
 
+    // D-Pad押下瞬間判定
+    bool IsDPadPressedUp();
+    bool IsDPadPressedDown();
+    bool IsDPadPressedLeft();
+    bool IsDPadPressedRight();
+
     // --- アナログスティック入力 ---
-    // -1.0f ~ 1.0f の範囲で正規化された値を取得
+    // -1.0f ~ 1.0f の範囲で正規化された値を取得（デッドゾーン処理済み）
     Vector2 GetLeftStick();
     Vector2 GetRightStick();
+
+    // 左スティック倒し込みトリガー（メニュー用エッジ検出）
+    bool IsLeftStickPushedLeft(float threshold = 0.5f);
+    bool IsLeftStickPushedRight(float threshold = 0.5f);
+    bool IsLeftStickPushedUp(float threshold = 0.5f);
+    bool IsLeftStickPushedDown(float threshold = 0.5f);
+
+    // --- トリガー入力 ---
+    // 0.0f ~ 1.0f の範囲で取得
+    float GetLeftTrigger();
+    float GetRightTrigger();
 
 private:
     GamepadInput() = default;
@@ -46,17 +91,26 @@ private:
     GamepadInput(const GamepadInput &) = delete;
     GamepadInput &operator=(const GamepadInput &) = delete;
 
+    // スティックエッジ検出用
+    Vector2 preLeftStick_{};
+    Vector2 curLeftStick_{};
+
+    // XInput関連
+    XINPUT_STATE xState_{};
+    XINPUT_STATE preXState_{};
+    bool isXInputConnected_ = false;
+
+    // DirectInput関連
     Microsoft::WRL::ComPtr<IDirectInput8> directInput_ = nullptr;
     Microsoft::WRL::ComPtr<IDirectInputDevice8> device_ = nullptr;
-
-    // コントローラーの状態を保持する構造体
     DIJOYSTATE2 state_{};
     DIJOYSTATE2 preState_{};
-
-    // 見つかったコントローラーのGUID
     GUID gamepadGuid_{};
     bool isDeviceFound_ = false;
 
     // デバイスを検索するためのコールバック関数 (static)
     static BOOL CALLBACK EnumJoysticksCallback(const DIDEVICEINSTANCE *pdidInstance, VOID *pContext);
+
+    WORD GetXInputMask(GamepadButton button) const;
+    bool CheckXInputButton(const XINPUT_STATE& state, GamepadButton button) const;
 };

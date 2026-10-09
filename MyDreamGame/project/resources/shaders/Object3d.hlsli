@@ -49,6 +49,8 @@ struct PointLight {
     float decay; 
 };
 
+static const uint kMaxSpotLights = 8;
+
 struct SpotLight {
     float4 color; 
     float3 position;
@@ -58,7 +60,19 @@ struct SpotLight {
     float decay;
     float cosAngle;
     float cosFalloffStart;
+    int enable;
+    float4x4 viewProjection;
+    int shadowMapIndex;
+    float shadowBias;
+    float shadowIntensity;
     float padding;
+};
+
+struct SpotLightGroup {
+    SpotLight spotLights[kMaxSpotLights];
+    int spotLightCount;
+    float ambientIntensity;
+    float2 padding;
 };
 
 struct ViewProjection {
@@ -69,5 +83,5 @@ struct ViewProjection {
 
 struct Camera {
     float3 worldPosition;
-    float padding; // 16バイトアラインメントに合わせる
+    float padding; // Match 16-byte alignment
 };

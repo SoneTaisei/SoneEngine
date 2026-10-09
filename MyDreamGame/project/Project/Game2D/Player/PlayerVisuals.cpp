@@ -31,8 +31,13 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
         if (!LoadAnimationFromJsonFile(holdingWallAnimation_, "resources/json/shared/Player/holding_wall.json")) {
             holdingWallAnimation_ = idleAnimation_;
         }
-        if (!LoadAnimationFromJsonFile(airDashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
-            airDashAnimation_ = CreateDefaultAirDashAnimation();
+        if (!LoadAnimationFromJsonFile(holdingWallMoveAnimation_, "resources/json/shared/Player/holding_wall_Move.json") &&
+            !LoadAnimationFromJsonFile(holdingWallMoveAnimation_, "resources/json/shared/Player/holding_wall_move.json")) {
+            holdingWallMoveAnimation_ = wallClimbAnimation_;
+        }
+        if (!LoadAnimationFromJsonFile(dashAnimation_, "resources/json/shared/Player/dash.json") &&
+            !LoadAnimationFromJsonFile(dashAnimation_, "resources/json/shared/Player/air_dash_animation.json")) {
+            dashAnimation_ = CreateDefaultAirDashAnimation();
         }
 
         animator_->SetAnimation(idleAnimation_);
@@ -67,7 +72,12 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
     visualTime_ += deltaTime;
     
     if (primitiveObj_) {
-        primitiveObj_->SetTranslation(state.position_);
+        Vector3 primPos = state.position_;
+        if (state.isGoal_) {
+            float hop = std::abs(std::sin(state.goalTimer_ * 8.0f)) * 0.35f;
+            primPos.y += hop;
+        }
+        primitiveObj_->SetTranslation(primPos);
         
         if (state.isDashing_) {
             primitiveObj_->GetMaterial().color = params.colorDashed_;
@@ -116,14 +126,14 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
     if (modelObj_) {
         if (animator_) {
             if (state.isDashing_) {
-                // 空中ダッシュアニメーションの再生
-                airDashAnimTime_ = AdvanceAnimationTime(airDashAnimTime_, airDashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
+                // ダッシュアニメーションの再生
+                dashAnimTime_ = AdvanceAnimationTime(dashAnimTime_, dashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
                 animator_->ClearJointOverrides();
-                animator_->SetAnimation(airDashAnimation_);
-                animator_->SetTime(airDashAnimTime_);
+                animator_->SetAnimation(dashAnimation_);
+                animator_->SetTime(dashAnimTime_);
                 animator_->Stop(); // 手動で時間を制御するため自動更新を停止
             } else {
-                airDashAnimTime_ = 0.0f;
+                dashAnimTime_ = 0.0f;
 
                 // しがみつき中ならブレンド率を上げ、それ以外は下げる
                 bool isClinging = state.isWallClinging_ || state.isWallSliding_;
@@ -135,11 +145,11 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     bool isClimbMoving = (std::abs(state.velocity_.y) > 0.1f);
                     if (isClimbMoving) {
                         // 上下移動に合わせてアニメーション時間を進行
-                        float speedFactor = std::clamp(std::abs(state.velocity_.y) / 5.0f, 0.5f, 2.0f);
-                        wallClimbAnimTime_ = AdvanceAnimationTime(wallClimbAnimTime_, wallClimbAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
+                        float speedFactor = std::clamp(std::abs(state.velocity_.y) / 4.0f, 0.6f, 2.5f);
+                        holdingWallMoveAnimTime_ = AdvanceAnimationTime(holdingWallMoveAnimTime_, holdingWallMoveAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
                         animator_->ClearJointOverrides();
-                        animator_->SetAnimation(wallClimbAnimation_);
-                        animator_->SetTime(wallClimbAnimTime_);
+                        animator_->SetAnimation(holdingWallMoveAnimation_);
+                        animator_->SetTime(holdingWallMoveAnimTime_);
                         animator_->Stop(); // 手動で時間を制御
                     } else {
                         // 静止した崖つかまり・壁つかまり時は holding_wall アニメーションを再生（最後のフレームで停止）
@@ -154,12 +164,15 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     if (climbBlendFactor_ < 0.0f) climbBlendFactor_ = 0.0f;
                     wallClimbAnimTime_ = 0.0f;
                     holdingWallAnimTime_ = 0.0f;
+                    holdingWallMoveAnimTime_ = 0.0f;
 
                     animator_->ClearJointOverrides();
                     animator_->Play(); // 通常アニメーションは自動再生
                     animator_->SetWrapMode(AnimationWrapMode::Loop);
 
-                    if (!state.isOnGround_) {
+                    if (state.isGoal_) {
+                        animator_->SetAnimation(jumpAnimation_);
+                    } else if (!state.isOnGround_) {
                         animator_->SetAnimation(jumpAnimation_);
                     } else if (std::abs(state.velocity_.x) > 0.1f) {
                         animator_->SetAnimation(walkAnimation_);
@@ -176,7 +189,12 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         modelPos.y -= params.halfHeight_;
         
         float rotationY = modelObj_->GetRotation().y;
-        if (state.isWallClinging_ || state.isWallSliding_) {
+        if (state.isGoal_) {
+            // ゴール・クリア時はカメラ正面（手前）を向いて歓喜のジャンプ
+            rotationY = 0.0f;
+            float hop = std::abs(std::sin(state.goalTimer_ * 8.0f)) * 0.35f;
+            modelPos.y += hop;
+        } else if (state.isWallClinging_ || state.isWallSliding_) {
             if (state.isTouchingWallRight_) {
                 rotationY = -1.57079632f;
                 modelPos.x -= 0.2f; // 右壁から少し離す（左へずらす）
@@ -231,6 +249,14 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         
         if (!state.isDead_) {
             modelObj_->Update();
+        }
+    }
+
+    if (state.isGoal_) {
+        // ゴール中、一定間隔で紙吹雪を補充
+        float prevT = state.goalTimer_ - deltaTime;
+        if (prevT > 0.0f && std::floor(prevT / 0.8f) < std::floor(state.goalTimer_ / 0.8f)) {
+            SpawnConfetti(state.position_);
         }
     }
 
@@ -559,6 +585,70 @@ void PlayerVisuals::ClearEffects() {
     dustParticles_.clear();
     confettiParticles_.clear();
     dashRingParticles_.clear();
+}
+
+void PlayerVisuals::SetDissolveThreshold(float threshold) {
+    if (primitiveObj_) {
+        primitiveObj_->GetMaterial().dissolveThreshold = threshold;
+    }
+}
+
+void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& params) {
+    if (primitiveObj_) {
+        primitiveObj_->SetTranslation(position);
+        primitiveObj_->GetMaterial().color = params.colorNormal_;
+        primitiveObj_->GetMaterial().dissolveThreshold = 0.0f;
+        primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
+        primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
+        primitiveObj_->Update();
+    }
+    if (modelObj_) {
+        modelObj_->SetTranslation(position);
+        modelObj_->GetMaterial().color = params.colorNormal_;
+        modelObj_->GetMaterial().dissolveThreshold = 0.0f;
+        modelObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
+        modelObj_->Update();
+    }
+}
+
+void PlayerVisuals::SyncTransform(const Vector3& position) {
+    if (primitiveObj_) {
+        primitiveObj_->SetTranslation(position);
+        primitiveObj_->Update();
+    }
+    if (modelObj_) {
+        modelObj_->SetTranslation(position);
+        modelObj_->Update();
+    }
+}
+
+void PlayerVisuals::SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress) {
+    if (primitiveObj_) {
+        primitiveObj_->SetScale({ params.halfWidth_ * 2.0f * scaleProgress, params.halfHeight_ * 2.0f * scaleProgress, 1.0f });
+        primitiveObj_->GetMaterial().color = params.colorNormal_;
+        primitiveObj_->SetTranslation(position);
+        primitiveObj_->Update();
+    }
+    if (modelObj_) {
+        modelObj_->SetTranslation(position);
+        modelObj_->GetMaterial().color = params.colorNormal_;
+        modelObj_->Update();
+    }
+}
+
+void PlayerVisuals::SetColor(const Vector4& color) {
+    if (primitiveObj_) {
+        primitiveObj_->GetMaterial().color = color;
+    }
+    if (modelObj_) {
+        modelObj_->GetMaterial().color = color;
+    }
+}
+
+void PlayerVisuals::SyncSize(const PlayerParams& params) {
+    if (primitiveObj_) {
+        primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
+    }
 }
 
 #ifdef USE_IMGUI
