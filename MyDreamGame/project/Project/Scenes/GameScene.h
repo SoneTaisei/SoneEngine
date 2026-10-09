@@ -3,12 +3,14 @@
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
 #include "Effect/GPUParticle/GPUParticleSystem.h"
+#include "Effect/BaseEffect.h"
 #include "Effect/CoinEffect.h"
 #include "Effect/CylinderEffect.h"
 #include "Effect/RingEffect.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <memory>
+#include <vector>
 
 // 2Dゲーム用クラス
 #include "Game2D/Player/Player2D.h"
@@ -57,10 +59,9 @@ private:
     // ---------------------------------------------------
     // 3D・パーティクル関連 (develop)
     // ---------------------------------------------------
-    // パーティクル管理クラス
-    std::unique_ptr<CoinEffect> coinEffect_;
-    std::unique_ptr<CylinderEffect> cylinderEffect_;
-    std::unique_ptr<RingEffect> ringEffect_;
+    // エフェクト管理（BaseEffectによるポリモーフィズム）
+    std::vector<std::unique_ptr<BaseEffect>> effects_;
+    CoinEffect* coinEffect_ = nullptr; // コイン獲得時の発生(Emit)用ポインタ
     std::unique_ptr<GPUParticleSystem> snowParticle_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）

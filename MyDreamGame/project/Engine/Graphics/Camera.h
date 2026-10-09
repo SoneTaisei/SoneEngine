@@ -13,6 +13,10 @@ public:
     // 画面サイズ・解像度変更時の更新
     virtual void SetResolution(int kClientWidth, int kClientHeight);
 
+    // 毎フレームの更新処理（ポリモーフィズム用仮想関数）
+    virtual void Update() {}
+    virtual void Update(bool allowInput) { (void)allowInput; Update(); }
+
     // 行列を更新する（位置や角度が変わったら呼ぶ）
     virtual void UpdateMatrix();
 

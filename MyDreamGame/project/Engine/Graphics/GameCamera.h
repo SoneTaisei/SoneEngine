@@ -6,7 +6,8 @@ class GameCamera : public Camera {
 public:
     void Initialize(int kClientWidth, int kClientHeight) override;
     void SetResolution(int kClientWidth, int kClientHeight) override;
-    void Update(); // 特に操作はないが、追従処理などをここに書く
+    void Update() override; // 特に操作はないが、追従処理などをここに書く
+    void Update(bool allowInput) override { (void)allowInput; Update(); }
     void UpdateMatrix() override;
     void Reset(); // カメラを3D・初期位置へリセット
 

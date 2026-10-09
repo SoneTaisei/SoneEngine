@@ -1,16 +1,19 @@
 #pragma once
+#include "BaseEffect.h"
 #include "GameObject/PrimitiveObject.h"
 #include <memory>
 #include <vector>
 
-class CoinEffect {
+class CoinEffect : public BaseEffect {
 public:
     CoinEffect() = default;
-    ~CoinEffect() = default;
+    ~CoinEffect() override = default;
 
     void Initialize(ID3D12Device* device);
-    void Update(float deltaTime);
-    void Draw();
+    void Update(float deltaTime) override;
+    void Draw() override;
+    void Reset() override { Clear(); }
+    std::vector<PrimitiveObject*> GetPrimitives() override { return GetParticles(); }
 
     void Emit(const Vector3& position);
     void Clear();

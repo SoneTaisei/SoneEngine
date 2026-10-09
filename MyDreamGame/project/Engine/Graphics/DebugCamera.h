@@ -8,7 +8,8 @@ public:
     void Initialize(int kClientWidth, int kClientHeight) override;
 
     // 更新処理（入力処理を行う）
-    void Update(bool allowInput = true);
+    void Update() override { Update(true); }
+    void Update(bool allowInput) override;
 
 private:
     // リセット用に初期値を覚えておく変数

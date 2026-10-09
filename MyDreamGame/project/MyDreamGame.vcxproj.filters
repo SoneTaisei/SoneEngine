@@ -138,6 +138,12 @@
     <ClCompile Include="Engine\Component\ColliderComponent.cpp">
       <Filter>Engine\Component</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Component\BoxColliderComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Component\SphereColliderComponent.cpp">
+      <Filter>Engine\Component</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Collision\CollisionManager.cpp">
       <Filter>Engine\Collision</Filter>
     </ClCompile>
@@ -201,6 +207,9 @@
       <Filter>Application\Particle</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Player\Player2D.cpp">
+      <Filter>Application\Game2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Player\States\PlayerStates.cpp">
       <Filter>Application\Game2D</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp">
@@ -449,6 +458,12 @@
     <ClInclude Include="Engine\Component\ColliderComponent.h">
       <Filter>Engine\Component</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Component\BoxColliderComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Component\SphereColliderComponent.h">
+      <Filter>Engine\Component</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Collision\CollisionManager.h">
       <Filter>Engine\Collision</Filter>
     </ClInclude>
@@ -512,10 +527,25 @@
     <ClInclude Include="Engine\GameObject\WorldGif.h">
       <Filter>Engine\Graphics\Object</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\State\IState.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\State\StateMachine.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Effect\BaseEffect.h">
+      <Filter>Application\Particle</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Effect\CoinEffect.h">
       <Filter>Application\Particle</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Player\Player2D.h">
+      <Filter>Application\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\States\IPlayerState.h">
+      <Filter>Application\Game2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Player\States\PlayerStates.h">
       <Filter>Application\Game2D</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Player\PlayerState.h">

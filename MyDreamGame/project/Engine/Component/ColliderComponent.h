@@ -17,32 +17,38 @@ enum class ColliderType {
     kBox = kAABB // 後方互換用エイリアス
 };
 
+/// <summary>
+/// コライダーコンポーネント基底クラス（ポリモーフィズム用）
+/// </summary>
 class ColliderComponent : public IComponent {
 public:
     ColliderComponent();
-    ~ColliderComponent() override;
+    ~ColliderComponent() override; // 仮想デストラクタ
 
     void Initialize() override;
     void Update() override;
     void DisplayImGui() override;
 
-    // Type Setters
+    // 形状種別の取得（仮想関数）
+    virtual ColliderType GetColliderType() const { return type_; }
     void SetColliderType(ColliderType type) { type_ = type; }
-    ColliderType GetColliderType() const { return type_; }
 
-    // Box Collider
-    void SetBoxSize(const Vector3& size) { boxSize_ = size; }
-    void SetBoxOffset(const Vector3& offset) { boxOffset_ = offset; }
-    Vector3 GetBoxSize() const { return boxSize_; }
-    Vector3 GetBoxOffset() const { return boxOffset_; }
+    // 当たり判定AABBの取得（ポリモーフィズム用仮想関数）
+    virtual AABB2D GetAABB() const;
 
-    // Sphere Collider
-    void SetSphereRadius(float radius) { sphereRadius_ = radius; }
-    void SetSphereOffset(const Vector3& offset) { sphereOffset_ = offset; }
-    float GetSphereRadius() const { return sphereRadius_; }
-    Vector3 GetSphereOffset() const { return sphereOffset_; }
+    // --- Box Collider 仮想アクセサ（派生クラスでオーバーライド） ---
+    virtual void SetBoxSize(const Vector3& size) { boxSize_ = size; }
+    virtual void SetBoxOffset(const Vector3& offset) { boxOffset_ = offset; }
+    virtual Vector3 GetBoxSize() const { return boxSize_; }
+    virtual Vector3 GetBoxOffset() const { return boxOffset_; }
 
-    // Physics Properties
+    // --- Sphere Collider 仮想アクセサ（派生クラスでオーバーライド） ---
+    virtual void SetSphereRadius(float radius) { sphereRadius_ = radius; }
+    virtual void SetSphereOffset(const Vector3& offset) { sphereOffset_ = offset; }
+    virtual float GetSphereRadius() const { return sphereRadius_; }
+    virtual Vector3 GetSphereOffset() const { return sphereOffset_; }
+
+    // --- 共通の物理プロパティ ---
     void SetLayerMask(uint32_t layer) { layerMask_ = layer; }
     uint32_t GetLayerMask() const { return layerMask_; }
 
@@ -58,9 +64,7 @@ public:
     void SetVelocity(const Vector3& vel) { velocity_ = vel; }
     Vector3 GetVelocity() const { return velocity_; }
 
-    AABB2D GetAABB() const;
-
-    // Custom Fixed AABB (Transform変更による判定ズレを防ぎたい場合用)
+    // Custom Fixed AABB
     void SetCustomAABB(const AABB2D& aabb) { customAABB_ = aabb; hasCustomAABB_ = true; }
     void ClearCustomAABB() { hasCustomAABB_ = false; }
     bool HasCustomAABB() const { return hasCustomAABB_; }
@@ -77,7 +81,7 @@ public:
     void OnCollision(ColliderComponent* other) { if (onCollision_) onCollision_(other); }
     void OnPlayerStand(ColliderComponent* other) { if (onPlayerStand_) onPlayerStand_(other); }
 
-private:
+protected:
     ColliderType type_ = ColliderType::kBox;
 
     Vector3 boxSize_{ 1.0f, 1.0f, 1.0f };
@@ -99,3 +103,6 @@ private:
     OnCollisionCallback onCollision_ = nullptr;
     OnCollisionCallback onPlayerStand_ = nullptr;
 };
+
+#include "BoxColliderComponent.h"
+#include "SphereColliderComponent.h"

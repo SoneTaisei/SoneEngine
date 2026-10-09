@@ -1,4 +1,5 @@
 #include "Player2D.h"
+#include "States/PlayerStates.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"
 #include "Graphics/TextureManager.h"
@@ -35,6 +36,10 @@ void Player2D::Initialize() {
 
     Log("Player2D::Initialize: Init Visuals\n");
     visuals_.Initialize(device.Get(), boxPrimitive, ringPrimitive, texHandle, playerModel);
+
+    // 初期ステートの設定（ポリモーフィズム）
+    ChangeState(std::make_unique<PlayerNormalState>());
+
     Log("Player2D::Initialize: Finish\n");
 }
 
@@ -75,221 +80,21 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
     // パーティクルや見た目のベース更新 (早めに呼んでおく)
     visuals_.Update(state_, params_, deltaTime);
 
-    if (state_.isGoal_) {
-        // ゴール演出時のプレイヤーは静止させる
-        state_.goalTimer_ += deltaTime;
-        state_.velocity_.x = 0.0f;
-        state_.velocity_.y = 0.0f;
-        
-        // 紙吹雪パーティクルの更新は visuals_.Update 内で行う
-        return;
-    }
-
-    // 死亡演出中の更新処理
-    if (state_.isDead_) {
-        // スローモーション中は実時間が異なるため、deathTimer_にはdeltaTimeを足していく
-        state_.deathTimer_ += deltaTime;
-
-        // ノックバック物理挙動（演出中ずっと続ける）
-        state_.velocity_.y += params_.gravity_ * deltaTime;
-        state_.position_.x += state_.velocity_.x * deltaTime;
-        state_.position_.y += state_.velocity_.y * deltaTime;
-
-        // ディゾルブ演出の進行
-        float t = (std::min)(state_.deathTimer_ / params_.deathDuration_, 1.0f);
-        visuals_.SetDissolveThreshold(t);
-
-        if (state_.deathTimer_ >= params_.deathDuration_) {
-            // リスポーン地点の決定
-            Vector3 respawnPos = state_.startPosition_;
-            const auto& rooms = map.GetRooms();
-            if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < rooms.size()) {
-                const auto& room = rooms[state_.currentRoomIndex_];
-                
-                // ルーム内の kRoomRespawn を探す
-                bool foundRespawn = false;
-                for (int y = 0; y < map.GetHeight(); ++y) {
-                    for (int x = 0; x < map.GetWidth(); ++x) {
-                        if (map.GetChipType(x, y) == MapChip2D::ChipType::kRoomRespawn) {
-                            float wx = map.ChipToWorldX(x) + map.GetChipSize() * 0.5f;
-                            float wy = map.ChipToWorldY(y) + map.GetChipSize() * 0.5f;
-                            
-                            // このチップが現在のルーム内にあるか？
-                            if (wx >= room.x && wx <= room.x + room.width &&
-                                wy >= room.y && wy <= room.y + room.height) {
-                                respawnPos = { wx, wy, 0.0f };
-                                foundRespawn = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (foundRespawn) break;
-                }
-            }
-
-            // 指定地点に復活
-            state_.position_ = respawnPos;
-            state_.velocity_ = { 0.0f, 0.0f, 0.0f };
-            state_.isDead_ = false;
-            state_.deathTimer_ = 0.0f;
-            state_.isDashing_ = false;
-            state_.canDash_ = true;
-            state_.wallJumpDirLockTimer_ = 0.0f;
-            state_.lockedDirectionX_ = 0.0f;
-            
-            // 慣性をリセット
-            state_.isOnMovingPlatform_ = false;
-            state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
-            state_.recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
-            state_.wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
-            state_.platformInertiaTimer_ = 0.0f;
-            state_.externalVelocityX_ = 0.0f;
-            state_.isWallClinging_ = false;
-            state_.isWallSliding_ = false;
-            state_.climbingUpTimer_ = 0.0f;
-            state_.climbLandingTimer_ = 0.0f;
-
-            // パラメータをリセット
-            visuals_.SetDissolveThreshold(0.0f);
-            TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
-            
-            // ステージ内の動的オブジェクト（敵やギミック等）を初期位置・状態にリセット
-            map.ResetBlocks();
-
-            // リスポーン演出の開始
-            state_.isRespawning_ = true;
-            state_.respawnTimer_ = 0.0f;
-            visuals_.SetRespawnVisual(state_.position_, params_, 0.0f);
-        }
-
-        // 描画座標を更新
-        visuals_.SyncTransform(state_.position_);
-        return;
-    }
-
-    // リスポーン時のスケール拡大演出（この間は操作・物理無効）
-    if (state_.isRespawning_) {
-        state_.respawnTimer_ += deltaTime;
-        float t = (std::min)(state_.respawnTimer_ / params_.respawnDuration_, 1.0f);
-        
-        // EaseOutBackによる弾むようなポップアップ
-        float c1 = 1.70158f;
-        float c3 = c1 + 1.0f;
-        float p = t - 1.0f;
-        float scaleProgress = 1.0f + c3 * (p * p * p) + c1 * (p * p);
-        if (scaleProgress < 0.0f) scaleProgress = 0.0f;
-
-        if (t >= 1.0f) {
-            state_.isRespawning_ = false;
-            scaleProgress = 1.0f;
-        }
-
-        visuals_.SetRespawnVisual(state_.position_, params_, scaleProgress);
-        return; // ここでリターンして通常のゲームロジックをスキップ
-    }
-
     // カメラスライド（ルーム遷移）中の硬直処理
     if (isTransitioning) {
-        // 遷移中は操作も物理挙動（重力など）も行わず、時間を止める。
-        // ただし、遷移前の速度（state_.velocity_）は保持しておくことで、遷移完了後にジャンプの勢いなどをそのまま引き継ぐ。
-        
-        // アニメーション等の描画だけは更新する
         visuals_.SyncTransform(state_.position_);
         return;
     }
 
-    // 壁ジャンプタイマーの更新
-    if (state_.wallJumpTimer_ > 0.0f) {
-        state_.wallJumpTimer_ -= deltaTime;
+    // ステートマシンによるポリモーフィックな更新処理
+    if (currentState_) {
+        currentState_->Update(this, map, deltaTime);
     }
 
-    // 入力処理
-    physics_.Update(state_, params_, currentInput_, visuals_, deltaTime, this);
-
-    // 現在のルームを特定する
-    const auto& rooms = map.GetRooms();
-    bool isInAnyRoom = false;
-    for (int i = 0; i < (int)rooms.size(); ++i) {
-        if (state_.position_.x >= rooms[i].x && state_.position_.x <= rooms[i].x + rooms[i].width &&
-            state_.position_.y >= rooms[i].y && state_.position_.y <= rooms[i].y + rooms[i].height) {
-            state_.currentRoomIndex_ = i;
-            isInAnyRoom = true;
-            break;
-        }
-    }
-
-    // 完全にルームから逸脱している場合は死亡する
-    // ただし、トランジション中は isTransitioning = true でUpdateWithMapの先頭で早期リターンされるため、ここには来ない。
-    // また、roomsが設定されていない（空）の場合は無視する。
-    if (!rooms.empty() && !isInAnyRoom && !state_.isDead_) {
-        Kill(true);
-    }
-
-    float deathY = -10.0f;
-    if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < (int)rooms.size()) {
-        // ルームの下端から少し余裕をもたせた高さをデスマッチラインとする
-        deathY = rooms[state_.currentRoomIndex_].y - 2.0f;
-    }
-
-    // 画面外落下時のリスポーン演出移行
-    if (state_.position_.y < deathY) {
-        Kill(true);
-    }
-
-    // 色の更新
-    visuals_.SetColor((state_.isDashing_ || !state_.canDash_) ? params_.colorDashed_ : params_.colorNormal_);
-
-    // 走りエフェクトの発生
-    if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f) {
-        state_.runDustTimer_ += deltaTime;
-        if (state_.runDustTimer_ >= params_.runDustInterval_) {
-            state_.runDustTimer_ = 0.0f;
-            float dirX = (state_.velocity_.x > 0.0f) ? 1.0f : -1.0f;
-            // プレイヤーの後ろの足元から砂埃を出す
-            visuals_.SpawnRunDust({state_.position_.x - dirX * params_.halfWidth_, state_.position_.y - params_.halfHeight_, 0.0f}, dirX);
-        }
-    } else {
-        state_.runDustTimer_ = 0.0f;
-    }
-
-    // 砂埃パーティクルの更新
-
-    // --- バグ検知処理（リプレイ再生中は無効化） ---
-    if (!ReplayManager::GetInstance()->IsPlaying()) {
-        // 1. 亜空間への落下、または座標の破綻
-        if (state_.position_.y < (deathY - 50.0f) || std::isnan(state_.position_.x) || std::isnan(state_.position_.y)) {
-            ReplayManager::GetInstance()->TriggerBugReport("プレイヤーの座標が破綻、またはマップ外に落下しました。");
-            // 安全処理
-            state_.position_ = state_.startPosition_;
-            state_.velocity_ = { 0.0f, 0.0f, 0.0f };
-            state_.isDead_ = true;
-        }
-        
-        // 2. スタック検知（入力があるのに動いていない）
-        if ((std::abs(state_.velocity_.x) > 0.1f || std::abs(state_.velocity_.y) > 0.1f) && 
-            std::abs(state_.position_.x - state_.prevPositionForBugCheck_.x) < 0.001f && 
-            std::abs(state_.position_.y - state_.prevPositionForBugCheck_.y) < 0.001f) {
-            
-            state_.stuckTimer_ += deltaTime;
-            if (state_.stuckTimer_ > 2.0f) { // 2秒間スタック
-                ReplayManager::GetInstance()->TriggerBugReport("2秒間移動が反映されないスタック状態を検知しました。");
-                state_.stuckTimer_ = 0.0f;
-                state_.isDead_ = true; // スタック脱出のために死亡扱いにする
-            }
-        } else {
-            state_.stuckTimer_ = 0.0f;
-        }
-    } else {
-        state_.stuckTimer_ = 0.0f;
-    }
-    
     state_.prevPositionForBugCheck_ = state_.position_;
-    // --------------------
 
     // 描画座標を更新
     visuals_.SyncTransform(state_.position_);
-    
-    // アイテム（コインなど）との当たり判定は physics_.Update() 内で行われるため削除
 
     if (gameObject_) {
         if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
@@ -325,6 +130,18 @@ void Player2D::DisplayImGui() {
 
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);
         ImGui::DragFloat3("速度", &state_.velocity_.x, 0.1f);
+
+        if (currentState_) {
+            if (dynamic_cast<PlayerNormalState*>(currentState_.get())) {
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "現在の状態: 通常 (PlayerNormalState)");
+            } else if (dynamic_cast<PlayerDeadState*>(currentState_.get())) {
+                ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f), "現在の状態: 死亡演出 (PlayerDeadState)");
+            } else if (dynamic_cast<PlayerRespawnState*>(currentState_.get())) {
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "現在の状態: リスポーン演出 (PlayerRespawnState)");
+            } else if (dynamic_cast<PlayerGoalState*>(currentState_.get())) {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "現在の状態: ゴール演出 (PlayerGoalState)");
+            }
+        }
         
         ImGui::Text("接地状態: %s", state_.isOnGround_ ? "True" : "False");
         ImGui::Text("壁スライド: %s", state_.isWallSliding_ ? "True" : "False");
@@ -471,16 +288,37 @@ void Player2D::ResetState(const Vector3& initPos) {
     
     visuals_.ResetVisuals(state_.position_, params_);
     visuals_.ClearEffects();
+
+    // 状態を通常ステートへリセット（ポリモーフィズム）
+    ChangeState(std::make_unique<PlayerNormalState>());
 }
 
+void Player2D::Kill(bool isFallDeath) {
+    if (!state_.isDead_) {
+        ChangeState(std::make_unique<PlayerDeadState>(isFallDeath));
+    }
+}
 
+void Player2D::ReachGoal() {
+    if (!state_.isGoal_) {
+        ChangeState(std::make_unique<PlayerGoalState>());
+    }
+}
 
-
-
+void Player2D::ChangeState(std::unique_ptr<IPlayerState> nextState) {
+    if (currentState_) {
+        currentState_->Exit(this);
+    }
+    currentState_ = std::move(nextState);
+    if (currentState_) {
+        currentState_->Enter(this);
+    }
+}
 
 AABB2D Player2D::GetAABB() const {
     return physics_.GetAABB(state_, params_);
 }
+
 void Player2D::Update() {
     // IComponentとしてのUpdateは現在使用せず、UpdateWithMapを使用する
 }

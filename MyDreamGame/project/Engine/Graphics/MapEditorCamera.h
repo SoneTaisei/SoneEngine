@@ -4,7 +4,8 @@
 class MapEditorCamera : public Camera {
 public:
     void Initialize(int kClientWidth, int kClientHeight) override;
-    void Update(bool allowInput = true);
+    void Update() override { Update(true); }
+    void Update(bool allowInput) override;
     void UpdateMatrix() override;
     
     // 現在のカメラのズーム倍率を取得（スクリーン座標からワールド座標への変換用）

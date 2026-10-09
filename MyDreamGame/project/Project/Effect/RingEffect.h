@@ -1,18 +1,26 @@
 #pragma once
+#include "BaseEffect.h"
 #include "GameObject/PrimitiveObject.h"
 #include <d3d12.h>
 #include <wrl.h>
 #include <memory>
 #include <vector>
 
-class RingEffect {
+class RingEffect : public BaseEffect {
 public:
     RingEffect();
-    ~RingEffect() = default;
+    ~RingEffect() override = default;
 
     void Initialize(ID3D12Device* device, uint32_t textureHandle);
-    void Update(float deltaTime);
-    void Draw();
+    void Update(float deltaTime) override;
+    void Draw() override;
+
+    std::vector<PrimitiveObject*> GetPrimitives() override {
+        if (ringEffectRoot_) {
+            return { ringEffectRoot_.get() };
+        }
+        return {};
+    }
 
     PrimitiveObject* GetRoot() const { return ringEffectRoot_.get(); }
     std::vector<PrimitiveObject*> GetParticles();

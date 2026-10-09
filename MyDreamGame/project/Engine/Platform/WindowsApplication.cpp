@@ -290,14 +290,14 @@ void WindowsApplication::Update() {
             sceneManager_.get());
 
         // 3. カメラの切り替えと入力受付（シーン更新前にアクティブカメラを決定）
+        bool allowCameraInput = false;
         if (editorManager_->GetActiveMainTab() == "マップチップ画面") {
             // マップエディタ表示時は再生中であっても常に2D専用のMapEditorCameraを使用（回転を完全に排除）
             activeCamera_ = mapEditorCamera_.get();
             isDebugCameraActive_ = false;
             CameraManager::GetInstance()->ClearCullingCameraInfo();
 
-            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
-            mapEditorCamera_->Update(allowCameraInput);
+            allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
         } else if (editorManager_->UseDebugCamera()) {
             activeCamera_ = debugCamera_.get();
             isDebugCameraActive_ = true;
@@ -308,18 +308,22 @@ void WindowsApplication::Update() {
                 CameraManager::GetInstance()->ClearCullingCameraInfo();
             }
             
-            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
-                                    editorManager_->IsReplayEditorHovered() || 
-                                    editorManager_->IsAnimationEditorHovered() || 
-                                    editorManager_->IsLightEditorHovered() || 
-                                    editorManager_->IsModel3DEditorHovered() || 
-                                    editorManager_->IsGPUParticleEditorHovered() || 
-                                    !ImGui::GetIO().WantCaptureMouse;
-            debugCamera_->Update(allowCameraInput);
+            allowCameraInput = editorManager_->IsGameViewHovered() || 
+                               editorManager_->IsReplayEditorHovered() || 
+                               editorManager_->IsAnimationEditorHovered() || 
+                               editorManager_->IsLightEditorHovered() || 
+                               editorManager_->IsModel3DEditorHovered() || 
+                               editorManager_->IsGPUParticleEditorHovered() || 
+                               !ImGui::GetIO().WantCaptureMouse;
         } else {
             isDebugCameraActive_ = false;
             CameraManager::GetInstance()->ClearCullingCameraInfo();
             activeCamera_ = gameCamera_.get();
+        }
+
+        // 基底ポインタ activeCamera_ によるポリモーフィックな更新呼び出し
+        if (activeCamera_) {
+            activeCamera_->Update(allowCameraInput);
         }
 
         // --- エディターの状態に応じて更新処理を切り替え ---

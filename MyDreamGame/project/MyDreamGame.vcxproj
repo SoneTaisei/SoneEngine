@@ -215,6 +215,8 @@
     <ClCompile Include="Engine\Component\TransformComponent.cpp" />
     <ClCompile Include="Engine\Component\AnimatorComponent.cpp" />
     <ClCompile Include="Engine\Component\ColliderComponent.cpp" />
+    <ClCompile Include="Engine\Component\BoxColliderComponent.cpp" />
+    <ClCompile Include="Engine\Component\SphereColliderComponent.cpp" />
     <ClCompile Include="Engine\Collision\CollisionManager.cpp" />
     <ClCompile Include="Engine\Component\MeshRendererComponent.cpp" />
     <ClCompile Include="Engine\Component\PrimitiveRendererComponent.cpp" />
@@ -242,6 +244,7 @@
     <ClCompile Include="Engine\GameObject\WorldGif.cpp" />
     <ClCompile Include="Project\Effect\CoinEffect.cpp" />
     <ClCompile Include="Project\Game2D\Player\Player2D.cpp" />
+    <ClCompile Include="Project\Game2D\Player\States\PlayerStates.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
@@ -461,6 +464,8 @@
     <ClInclude Include="Engine\Component\TransformComponent.h" />
     <ClInclude Include="Engine\Component\AnimatorComponent.h" />
     <ClInclude Include="Engine\Component\ColliderComponent.h" />
+    <ClInclude Include="Engine\Component\BoxColliderComponent.h" />
+    <ClInclude Include="Engine\Component\SphereColliderComponent.h" />
     <ClInclude Include="Engine\Collision\CollisionManager.h" />
     <ClInclude Include="Engine\Component\MeshRendererComponent.h" />
     <ClInclude Include="Engine\Component\PrimitiveRendererComponent.h" />
@@ -488,8 +493,13 @@
     <ClInclude Include="Engine\Resource\Primitive\PrimitiveManager.h" />
     <ClInclude Include="Engine\GameObject\PrimitiveObject.h" />
     <ClInclude Include="Engine\GameObject\WorldGif.h" />
+    <ClInclude Include="Engine\State\IState.h" />
+    <ClInclude Include="Engine\State\StateMachine.h" />
+    <ClInclude Include="Project\Effect\BaseEffect.h" />
     <ClInclude Include="Project\Effect\CoinEffect.h" />
     <ClInclude Include="Project\Game2D\Player\Player2D.h" />
+    <ClInclude Include="Project\Game2D\Player\States\IPlayerState.h" />
+    <ClInclude Include="Project\Game2D\Player\States\PlayerStates.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerState.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerConfig.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />

@@ -92,16 +92,23 @@ void GameScene::Initialize() {
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
     Log("GameScene::Initialize: Skybox loaded\n");
 
-    // CoinEffectの作成（コイン取得用）
-    coinEffect_ = std::make_unique<CoinEffect>();
-    coinEffect_->Initialize(DirectXCommon::GetInstance()->GetDevice());
+    // エフェクト群の作成（BaseEffectによるポリモーフィズム）
+    effects_.clear();
+
+    auto coinEffect = std::make_unique<CoinEffect>();
+    coinEffect->Initialize(DirectXCommon::GetInstance()->GetDevice());
+    coinEffect_ = coinEffect.get();
+    effects_.push_back(std::move(coinEffect));
     Log("GameScene::Initialize: CoinEffect Initialized\n");
 
     uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
-    ringEffect_ = std::make_unique<RingEffect>();
-    ringEffect_->Initialize(device.Get(), gradationHandle);
-    cylinderEffect_ = std::make_unique<CylinderEffect>();
-    cylinderEffect_->Initialize(device.Get(), gradationHandle);
+    auto ringEffect = std::make_unique<RingEffect>();
+    ringEffect->Initialize(device.Get(), gradationHandle);
+    effects_.push_back(std::move(ringEffect));
+
+    auto cylinderEffect = std::make_unique<CylinderEffect>();
+    cylinderEffect->Initialize(device.Get(), gradationHandle);
+    effects_.push_back(std::move(cylinderEffect));
 
     // GPUパーティクル (snow) の初期化
     snowParticle_ = std::make_unique<GPUParticleSystem>();
@@ -234,14 +241,10 @@ void GameScene::Update(SceneManager *sceneManager) {
     bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
 
     if (isGameActive) {
-        if (coinEffect_) {
-            coinEffect_->Update(1.0f / 60.0f);
-        }
-        if (ringEffect_) {
-            ringEffect_->Update(1.0f / 60.0f);
-        }
-        if (cylinderEffect_) {
-            cylinderEffect_->Update(1.0f / 60.0f);
+        for (auto& effect : effects_) {
+            if (effect) {
+                effect->Update(1.0f / 60.0f);
+            }
         }
     }
 
@@ -548,7 +551,9 @@ void GameScene::Update(SceneManager *sceneManager) {
                     // 2. プレイヤー状態(速度含む)とスコアをリセット
                     player_->ResetState(replayData.playerInitPos);
                     player_->ClearEffects();
-                    if (coinEffect_) coinEffect_->Clear();
+                    for (auto& effect : effects_) {
+                        if (effect) effect->Reset();
+                    }
                     
                     // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
                     for (int i = 0; i <= curFrame; ++i) {
@@ -828,15 +833,17 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // コンポーネントの描画を実行
     Renderer::GetInstance()->RenderComponents();
 
-    if (coinEffect_) {
 #ifdef USE_IMGUI
-        if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
-            coinEffect_->Draw();
+    if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
+        for (auto& effect : effects_) {
+            if (effect) effect->Draw();
         }
-#else
-        coinEffect_->Draw();
-#endif
     }
+#else
+    for (auto& effect : effects_) {
+        if (effect) effect->Draw();
+    }
+#endif
 
     if (snowParticle_) {
 #ifdef USE_IMGUI
@@ -1069,12 +1076,12 @@ std::vector<Object3D *> GameScene::GetObjects() {
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
 
-    // 1. 背景エフェクト
-    if (cylinderEffect_) {
-        result.push_back(cylinderEffect_->GetRoot());
-    }
-    if (ringEffect_) {
-        result.push_back(ringEffect_->GetRoot());
+    // 1. エフェクト群（BaseEffectのポリモーフィズム）
+    for (const auto& effect : effects_) {
+        if (effect) {
+            auto effectPrims = effect->GetPrimitives();
+            result.insert(result.end(), effectPrims.begin(), effectPrims.end());
+        }
     }
 
     // 2. プレイヤー
@@ -1086,11 +1093,6 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     if (map_) {
         auto mapPrims = map_->GetPrimitiveObjects();
         result.insert(result.end(), mapPrims.begin(), mapPrims.end());
-    }
-
-    if (coinEffect_) {
-        auto coinPrims = coinEffect_->GetParticles();
-        result.insert(result.end(), coinPrims.begin(), coinPrims.end());
     }
 
     return result;
