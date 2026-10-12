@@ -49,6 +49,26 @@ public:
     const std::string &GetName() const { return name_; }
     void SetName(const std::string &name) { name_ = name; }
 
+    // --- 描画・Renderer用公開Getter ---
+    Material *GetMappedMaterial() { return mappedMaterial_; }
+    TransformMatrix *GetMappedTransform() { return mappedTransform_; }
+    ID3D12Resource *GetTransformResource() const { return transformResource_.Get(); }
+    ID3D12Resource *GetMaterialResource() const { return materialResource_.Get(); }
+    void SetWorldMatrix(const Matrix4x4 &worldMatrix) { worldMatrix_ = worldMatrix; }
+    Primitive *GetPrimitive() const { return primitive_; }
+    PrimitiveObject *GetParent() const { return parent_; }
+    bool IsBillboard() const { return isBillboard_; }
+    bool IsDoubleSided() const { return isDoubleSided_; }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const { return textureHandle_; }
+    static D3D12_GPU_DESCRIPTOR_HANDLE GetDefaultTextureHandle() { return sDefaultTextureHandle_; }
+    static int GetMaxGhosts() { return kMaxGhosts; }
+    int GetCurrentGhostIndex() const { return currentGhostIndex_; }
+    void IncrementGhostIndex() { currentGhostIndex_++; }
+    uint8_t *GetMappedGhostTransform() { return mappedGhostTransform_; }
+    uint8_t *GetMappedGhostMaterial() { return mappedGhostMaterial_; }
+    ID3D12Resource *GetGhostTransformResource() const { return ghostTransformResource_.Get(); }
+    ID3D12Resource *GetGhostMaterialResource() const { return ghostMaterialResource_.Get(); }
+
 private:
     std::string name_ = "PrimitiveObject";
     Primitive* primitive_ = nullptr;

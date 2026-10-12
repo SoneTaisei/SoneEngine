@@ -114,90 +114,97 @@ void Renderer::DrawModel(Model* model) {
     }
 }
 
-void Renderer::DrawSprite(Sprite* sprite) {
-    if (!sprite || !dxCommon_ || !sprite->spriteCommon_) return;
+void Renderer::DrawSprite(Sprite *sprite) {
+    if (!sprite || !dxCommon_ || !sprite->GetSpriteCommon())
+        return;
 
     Matrix4x4 uvTransform = TransformFunctions::MakeIdentity4x4();
-    if(sprite->isCutMode_) {
+    if (sprite->IsCutMode()) {
         uvTransform = TransformFunctions::MakeAffineMatrix(
-            { sprite->texSize_.x / sprite->texBaseSize_.x, sprite->texSize_.y / sprite->texBaseSize_.y, 1.0f },
-            { 0.0f, 0.0f, 0.0f },
-            { sprite->texPos_.x / sprite->texBaseSize_.x, sprite->texPos_.y / sprite->texBaseSize_.y, 0.0f }
-        );
+            {sprite->GetTexSize().x / sprite->GetTexBaseSize().x, sprite->GetTexSize().y / sprite->GetTexBaseSize().y, 1.0f},
+            {0.0f, 0.0f, 0.0f},
+            {sprite->GetTexPos().x / sprite->GetTexBaseSize().x, sprite->GetTexPos().y / sprite->GetTexBaseSize().y, 0.0f});
     }
-    sprite->materialData_->uvTransform = uvTransform;
+    sprite->GetMaterialData()->uvTransform = uvTransform;
 
+    const EulerTransform &transform = sprite->GetTransform();
     Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(
-        sprite->transform_.scale, sprite->transform_.rotate, sprite->transform_.translate
-    );
-    Matrix4x4 viewMatrix = sprite->spriteCommon_->GetViewMatrix();
-    Matrix4x4 projectionMatrix = sprite->spriteCommon_->GetProjectionMatrix();
+        transform.scale, transform.rotate, transform.translate);
+    Matrix4x4 viewMatrix = sprite->GetSpriteCommon()->GetViewMatrix();
+    Matrix4x4 projectionMatrix = sprite->GetSpriteCommon()->GetProjectionMatrix();
 
     TransformMatrix transformMatrixData;
     transformMatrixData.WVP = TransformFunctions::Multiply(worldMatrix, TransformFunctions::Multiply(viewMatrix, projectionMatrix));
     transformMatrixData.World = worldMatrix;
 
-    if (sprite->mappedTransform_) {
-        *sprite->mappedTransform_ = transformMatrixData;
+    if (sprite->GetMappedTransform()) {
+        *sprite->GetMappedTransform() = transformMatrixData;
     }
 
     auto commandList = dxCommon_->GetCommandList();
-    commandList->SetGraphicsRootConstantBufferView(0, sprite->materialResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(1, sprite->transformResource_->GetGPUVirtualAddress());
-    D3D12_GPU_DESCRIPTOR_HANDLE textureHandle = TextureManager::GetInstance()->GetGpuHandle(sprite->textureIndex_);
+    commandList->SetGraphicsRootConstantBufferView(0, sprite->GetMaterialResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(1, sprite->GetTransformResource()->GetGPUVirtualAddress());
+    D3D12_GPU_DESCRIPTOR_HANDLE textureHandle = TextureManager::GetInstance()->GetGpuHandle(sprite->GetTextureIndex());
     commandList->SetGraphicsRootDescriptorTable(2, textureHandle);
 
-    commandList->DrawIndexedInstanced(sprite->spriteCommon_->GetIndexCount(), 1, 0, 0, 0);
+    commandList->DrawIndexedInstanced(sprite->GetSpriteCommon()->GetIndexCount(), 1, 0, 0, 0);
 }
 
 void Renderer::DrawParticle(ParticleManager* particleManager, const Matrix4x4& viewProjection) {
-    if (!particleManager || !dxCommon_ || !particleManager->particleCommon_) return;
+    if (!particleManager || !dxCommon_ || !particleManager->GetParticleCommon()) return;
 
     particleManager->TransferToGPU(viewProjection);
-    particleManager->particleCommon_->SetBlendMode(kBlendModeAdd);
+    particleManager->GetParticleCommon()->SetBlendMode(kBlendModeAdd);
 
     auto commandList = dxCommon_->GetCommandList();
-    commandList->IASetVertexBuffers(0, 1, &particleManager->particleCommon_->GetVertexBufferView());
-    commandList->SetGraphicsRootConstantBufferView(0, particleManager->materialResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootDescriptorTable(1, particleManager->instancingSrvHandleGPU_);
-    commandList->SetGraphicsRootDescriptorTable(2, TextureManager::GetInstance()->GetGpuHandle(particleManager->textureIndex_));
+    commandList->IASetVertexBuffers(0, 1, &particleManager->GetParticleCommon()->GetVertexBufferView());
+    commandList->SetGraphicsRootConstantBufferView(0, particleManager->GetMaterialResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootDescriptorTable(1, particleManager->GetInstancingSrvHandleGPU());
+    commandList->SetGraphicsRootDescriptorTable(2, TextureManager::GetInstance()->GetGpuHandle(particleManager->GetTextureIndex()));
 
-    if(particleManager->numActiveParticles_ > 0) {
-        commandList->DrawInstanced(particleManager->particleCommon_->GetVertexCount(), particleManager->numActiveParticles_, 0, 0);
+    if (particleManager->GetNumActiveParticles() > 0) {
+        commandList->DrawInstanced(particleManager->GetParticleCommon()->GetVertexCount(), particleManager->GetNumActiveParticles(), 0, 0);
     }
 }
 
-void Renderer::DrawObject3D(Object3D* obj) {
-    if (!obj || !obj->model_ || !dxCommon_) return;
+void Renderer::DrawObject3D(Object3D *obj) {
+    if (!obj || !obj->GetModel() || !dxCommon_)
+        return;
 
     auto commandList = dxCommon_->GetCommandList();
-    *obj->mappedMaterial_ = obj->material_;
+    if (obj->GetMappedMaterial()) {
+        *obj->GetMappedMaterial() = obj->GetMaterial();
+    }
 
-    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(obj->transform_.scale, obj->transform_.rotate, obj->transform_.translate);
+    const EulerTransform &transform = obj->GetTransform();
+    Matrix4x4 worldMatrix = TransformFunctions::MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
     Matrix4x4 finalWorldMatrix = worldMatrix;
 
-    obj->mappedTransform_->World = finalWorldMatrix;
-    obj->mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+    if (obj->GetMappedTransform()) {
+        obj->GetMappedTransform()->World = finalWorldMatrix;
+        obj->GetMappedTransform()->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+    }
 
     // シャドウパス時は深度専用パイプラインで高速描画
     if (isShadowPass_) {
-        if (obj->material_.color.w <= 0.0f) return;
+        if (obj->GetMaterial().color.w <= 0.0f)
+            return;
 
-        AnimatorComponent* animator = obj->GetAnimator();
+        AnimatorComponent *animator = obj->GetAnimator();
         bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
 
         if (useSkinning) {
             commandList->SetPipelineState(dxCommon_->GetShadowMapSkinningPipelineState());
-            commandList->SetGraphicsRootConstantBufferView(0, obj->transformResource_->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(0, obj->GetTransformResource()->GetGPUVirtualAddress());
             commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
-            const SkinCluster& skinCluster = animator->GetSkinCluster();
+            const SkinCluster &skinCluster = animator->GetSkinCluster();
             commandList->SetGraphicsRootDescriptorTable(2, skinCluster.paletteSrvHandle.second);
-            obj->model_->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
+            obj->GetModel()->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
         } else {
             commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
-            commandList->SetGraphicsRootConstantBufferView(0, obj->transformResource_->GetGPUVirtualAddress());
+            commandList->SetGraphicsRootConstantBufferView(0, obj->GetTransformResource()->GetGPUVirtualAddress());
             commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
-            obj->model_->Draw(nullptr, obj->GetTextureHandle());
+            obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
         }
         return;
     }
@@ -205,60 +212,61 @@ void Renderer::DrawObject3D(Object3D* obj) {
     CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
-    obj->mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(obj->mappedTransform_->World, viewMatrix), projectionMatrix);
+    if (obj->GetMappedTransform()) {
+        obj->GetMappedTransform()->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(obj->GetMappedTransform()->World, viewMatrix), projectionMatrix);
+    }
 
-    // Removed static RootSignature set to allow skinning signature to be bound dynamically below.
-
-    if (obj->showTrail_ && obj->model_) {
-        if (!obj->trailHistory_.empty() && obj->trailLength_ > 0 && obj->trailStep_ > 0) {
-            if (obj->trailBlendMode_ == BlendMode::kBlendModeAdd) {
-                commandList->SetPipelineState(obj->isDoubleSided_ ? dxCommon_->GetGraphicsPipelineStateNoCullAdditive() : dxCommon_->GetGraphicsPipelineStateAdditive());
+    if (obj->IsShowTrail() && obj->GetModel()) {
+        if (!obj->GetTrailHistory().empty() && obj->GetTrailLength() > 0 && obj->GetTrailStep() > 0) {
+            if (obj->GetTrailBlendMode() == BlendMode::kBlendModeAdd) {
+                commandList->SetPipelineState(obj->IsDoubleSided() ? dxCommon_->GetGraphicsPipelineStateNoCullAdditive() : dxCommon_->GetGraphicsPipelineStateAdditive());
             } else {
-                commandList->SetPipelineState(obj->isDoubleSided_ ? dxCommon_->GetGraphicsPipelineStateNoCull() : dxCommon_->GetGraphicsPipelineState());
+                commandList->SetPipelineState(obj->IsDoubleSided() ? dxCommon_->GetGraphicsPipelineStateNoCull() : dxCommon_->GetGraphicsPipelineState());
             }
 
             int trailCount = 0;
             uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
             uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
 
-            size_t maxTrails = (std::min)(obj->trailHistory_.size(), (size_t)obj->trailLength_);
-            for (size_t i = 0; i < maxTrails; i += obj->trailStep_) {
-                if (trailCount >= Object3D::kMaxTrails) break;
-                
-                Vector3 pastPos = obj->trailHistory_[i].translate;
-                Vector3 pastRot = obj->trailHistory_[i].rotate;
-                Vector3 pastScale = obj->trailHistory_[i].scale;
-                
+            size_t maxTrails = (std::min)(obj->GetTrailHistory().size(), (size_t)obj->GetTrailLength());
+            for (size_t i = 0; i < maxTrails; i += obj->GetTrailStep()) {
+                if (trailCount >= Object3D::GetMaxTrails())
+                    break;
+
+                Vector3 pastPos = obj->GetTrailHistory()[i].translate;
+                Vector3 pastRot = obj->GetTrailHistory()[i].rotate;
+                Vector3 pastScale = obj->GetTrailHistory()[i].scale;
+
                 Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
                 Matrix4x4 tFinalWorldMatrix = tWorldMatrix;
 
-                TransformMatrix* tMat = reinterpret_cast<TransformMatrix*>(obj->mappedTrailTransform_ + transformSize * trailCount);
+                TransformMatrix *tMat = reinterpret_cast<TransformMatrix *>(obj->GetMappedTrailTransform() + transformSize * trailCount);
                 tMat->World = tFinalWorldMatrix;
                 tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(tFinalWorldMatrix));
                 tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(tFinalWorldMatrix, viewMatrix), projectionMatrix);
 
-                Material* mMat = reinterpret_cast<Material*>(obj->mappedTrailMaterial_ + materialSize * trailCount);
-                *mMat = obj->material_;
+                Material *mMat = reinterpret_cast<Material *>(obj->GetMappedTrailMaterial() + materialSize * trailCount);
+                *mMat = obj->GetMaterial();
                 float alphaFactor = 1.0f;
-                if (obj->trailFadeOut_) {
+                if (obj->IsTrailFadeOut()) {
                     alphaFactor = 1.0f - (static_cast<float>(i) / static_cast<float>(maxTrails));
                 }
-                mMat->color.w = obj->material_.color.w * obj->trailStartAlpha_ * alphaFactor;
+                mMat->color.w = obj->GetMaterial().color.w * obj->GetTrailStartAlpha() * alphaFactor;
 
-                commandList->SetGraphicsRootConstantBufferView(1, obj->trailTransformResource_->GetGPUVirtualAddress() + transformSize * trailCount);
-                commandList->SetGraphicsRootConstantBufferView(0, obj->trailMaterialResource_->GetGPUVirtualAddress() + materialSize * trailCount);
+                commandList->SetGraphicsRootConstantBufferView(1, obj->GetTrailTransformResource()->GetGPUVirtualAddress() + transformSize * trailCount);
+                commandList->SetGraphicsRootConstantBufferView(0, obj->GetTrailMaterialResource()->GetGPUVirtualAddress() + materialSize * trailCount);
                 commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-                if (Object3D::sEnvironmentMapHandle.ptr != 0) {
-                    commandList->SetGraphicsRootDescriptorTable(7, Object3D::sEnvironmentMapHandle);
+                if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+                    commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
                 }
-                obj->model_->Draw(nullptr, obj->GetTextureHandle());
+                obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
 
                 trailCount++;
             }
         }
     }
 
-    AnimatorComponent* animator = obj->GetAnimator();
+    AnimatorComponent *animator = obj->GetAnimator();
     bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
 
     if (useSkinning) {
@@ -266,17 +274,17 @@ void Renderer::DrawObject3D(Object3D* obj) {
         commandList->SetPipelineState(dxCommon_->GetSkinningPipelineState());
     } else {
         commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
-        if (obj->blendMode_ == BlendMode::kBlendModeAdd) {
-            if (obj->isDoubleSided_) {
+        if (obj->GetBlendMode() == BlendMode::kBlendModeAdd) {
+            if (obj->IsDoubleSided()) {
                 commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
             } else {
                 commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
             }
         } else {
-            if (obj->material_.color.w < 1.0f) {
+            if (obj->GetMaterial().color.w < 1.0f) {
                 commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent());
             } else {
-                if (obj->isDoubleSided_) {
+                if (obj->IsDoubleSided()) {
                     commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
                 } else {
                     commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
@@ -285,19 +293,22 @@ void Renderer::DrawObject3D(Object3D* obj) {
         }
     }
 
-    commandList->SetGraphicsRootConstantBufferView(1, obj->transformResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(0, obj->materialResource_->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(1, obj->GetTransformResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, obj->GetMaterialResource()->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
-    ModelCommon* mc = obj->model_ ? obj->model_->GetModelCommon() : ModelManager::GetInstance()->GetModelCommon();
+    ModelCommon *mc = obj->GetModel() ? obj->GetModel()->GetModelCommon() : ModelManager::GetInstance()->GetModelCommon();
     if (mc) {
-        if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
-        if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
-        if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
+        if (auto addr = mc->GetDirectionalLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(4, addr);
+        if (auto addr = mc->GetPointLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(5, addr);
+        if (auto addr = mc->GetSpotLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(6, addr);
     }
 
-    if (Object3D::sEnvironmentMapHandle.ptr != 0) {
-        commandList->SetGraphicsRootDescriptorTable(7, Object3D::sEnvironmentMapHandle);
+    if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
     }
 
     // 9: ShadowMap SRV
@@ -307,32 +318,35 @@ void Renderer::DrawObject3D(Object3D* obj) {
     }
 
     if (useSkinning) {
-        const SkinCluster& skinCluster = animator->GetSkinCluster();
+        const SkinCluster &skinCluster = animator->GetSkinCluster();
         commandList->SetGraphicsRootDescriptorTable(10, skinCluster.paletteSrvHandle.second);
-        obj->model_->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
+        obj->GetModel()->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
     } else {
-        obj->model_->Draw(nullptr, obj->GetTextureHandle());
+        obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
 
-        if (dxCommon_->IsOutlineEnabled() && obj->material_.color.w >= 1.0f && obj->blendMode_ != BlendMode::kBlendModeAdd) {
+        if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
             commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
-            obj->model_->Draw(nullptr, obj->GetTextureHandle());
+            obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
         }
     }
 }
 
-void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
-    if (!obj || !dxCommon_) return;
+void Renderer::DrawPrimitiveObject(PrimitiveObject *obj) {
+    if (!obj || !dxCommon_)
+        return;
 
     auto commandList = dxCommon_->GetCommandList();
-    *obj->mappedMaterial_ = obj->material_;
+    if (obj->GetMappedMaterial()) {
+        *obj->GetMappedMaterial() = obj->GetMaterial();
+    }
 
-    CameraManager* cameraMgr = CameraManager::GetInstance();
+    CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
     Matrix4x4 billboardMatrix = TransformFunctions::MakeIdentity4x4();
-    if (obj->isBillboard_) {
+    if (obj->IsBillboard()) {
         Matrix4x4 cameraMatrix = TransformFunctions::Inverse(viewMatrix);
         billboardMatrix = cameraMatrix;
         billboardMatrix.m[3][0] = 0.0f;
@@ -340,79 +354,89 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
         billboardMatrix.m[3][2] = 0.0f;
     }
 
-    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(obj->transform_.scale);
-    Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(obj->transform_.rotate.x);
-    Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(obj->transform_.rotate.y);
-    Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(obj->transform_.rotate.z);
+    const EulerTransform &transform = obj->GetTransform();
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(transform.scale);
+    Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(transform.rotate.x);
+    Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(transform.rotate.y);
+    Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(transform.rotate.z);
     Matrix4x4 rotateMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(rotateXMatrix, rotateYMatrix), rotateZMatrix);
-    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(obj->transform_.translate);
+    Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(transform.translate);
 
     Matrix4x4 localMatrix;
-    if (obj->isBillboard_) {
+    if (obj->IsBillboard()) {
         localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
     } else {
         localMatrix = rotateMatrix;
     }
-    
-    obj->worldMatrix_ = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
-    if (obj->parent_) {
-        obj->worldMatrix_ = TransformFunctions::Multiply(obj->worldMatrix_, obj->parent_->GetWorldMatrix());
+
+    Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
+    if (obj->GetParent()) {
+        worldMatrix = TransformFunctions::Multiply(worldMatrix, obj->GetParent()->GetWorldMatrix());
     }
-    
-    obj->mappedTransform_->World = obj->worldMatrix_;
-    obj->mappedTransform_->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(obj->worldMatrix_));
+    obj->SetWorldMatrix(worldMatrix);
+
+    if (obj->GetMappedTransform()) {
+        obj->GetMappedTransform()->World = worldMatrix;
+        obj->GetMappedTransform()->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+    }
 
     // シャドウパス時は深度専用パイプラインで描画
     if (isShadowPass_) {
-        if (obj->material_.color.w <= 0.0f) return;
+        if (obj->GetMaterial().color.w <= 0.0f)
+            return;
         commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
-        commandList->SetGraphicsRootConstantBufferView(0, obj->transformResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(0, obj->GetTransformResource()->GetGPUVirtualAddress());
         commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
-        if (obj->primitive_) {
-            obj->primitive_->Draw();
+        if (obj->GetPrimitive()) {
+            obj->GetPrimitive()->Draw();
         }
         return;
     }
 
-    obj->mappedTransform_->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(obj->worldMatrix_, viewMatrix), projectionMatrix);
+    if (obj->GetMappedTransform()) {
+        obj->GetMappedTransform()->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
+    }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = obj->textureHandle_;
+    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = obj->GetTextureHandle();
     if (activeTexture.ptr == 0) {
-        activeTexture = PrimitiveObject::sDefaultTextureHandle_;
+        activeTexture = PrimitiveObject::GetDefaultTextureHandle();
     }
 
     commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
 
-    if (obj->blendMode_ == BlendMode::kBlendModeAdd) {
-        if (obj->isDoubleSided_) {
+    if (obj->GetBlendMode() == BlendMode::kBlendModeAdd) {
+        if (obj->IsDoubleSided()) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
         } else {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
         }
-    } else if (obj->blendMode_ == BlendMode::kBlendModeNormal || obj->material_.color.w < 1.0f) {
-        if (obj->isDoubleSided_) {
+    } else if (obj->GetBlendMode() == BlendMode::kBlendModeNormal || obj->GetMaterial().color.w < 1.0f) {
+        if (obj->IsDoubleSided()) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent()); // αブレンド
         } else {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent()); // αブレンド
         }
     } else {
-        if (obj->isDoubleSided_) {
+        if (obj->IsDoubleSided()) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
         } else {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
         }
     }
 
-    commandList->SetGraphicsRootConstantBufferView(1, obj->transformResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(0, obj->materialResource_->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(1, obj->GetTransformResource()->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(0, obj->GetMaterialResource()->GetGPUVirtualAddress());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
 
-    if (ModelCommon* mc = ModelManager::GetInstance()->GetModelCommon()) {
-        if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
-        if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
-        if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
+    if (ModelCommon *mc = ModelManager::GetInstance()->GetModelCommon()) {
+        if (auto addr = mc->GetDirectionalLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(4, addr);
+        if (auto addr = mc->GetPointLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(5, addr);
+        if (auto addr = mc->GetSpotLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(6, addr);
     }
-    
+
     if (activeTexture.ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
     }
@@ -427,33 +451,35 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject* obj) {
         commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
     }
 
-    if (obj->primitive_) {
-        obj->primitive_->Draw();
+    if (obj->GetPrimitive()) {
+        obj->GetPrimitive()->Draw();
     }
 
-    if (dxCommon_->IsOutlineEnabled() && obj->material_.color.w >= 1.0f && obj->blendMode_ != BlendMode::kBlendModeAdd) {
+    if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
         commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
         commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
-        
-        if (obj->primitive_) {
-            obj->primitive_->Draw();
+
+        if (obj->GetPrimitive()) {
+            obj->GetPrimitive()->Draw();
         }
     }
 }
 
-void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& transform, const Material& material) {
-    if (!obj || !dxCommon_ || !obj->primitive_) return;
-    // シャドウパス実行中はゴースト・パーティクル描画を行わない（シャドウパス破壊防止）
-    if (isShadowPass_) return;
-    if (obj->currentGhostIndex_ >= PrimitiveObject::kMaxGhosts) return;
+void Renderer::DrawPrimitiveGhost(PrimitiveObject *obj, const EulerTransform &transform, const Material &material) {
+    if (!obj || !dxCommon_ || !obj->GetPrimitive())
+        return;
+    if (isShadowPass_)
+        return;
+    if (obj->GetCurrentGhostIndex() >= PrimitiveObject::GetMaxGhosts())
+        return;
 
     auto commandList = dxCommon_->GetCommandList();
-    CameraManager* cameraMgr = CameraManager::GetInstance();
+    CameraManager *cameraMgr = CameraManager::GetInstance();
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
     Matrix4x4 billboardMatrix = TransformFunctions::MakeIdentity4x4();
-    if (obj->isBillboard_) {
+    if (obj->IsBillboard()) {
         Matrix4x4 cameraMatrix = TransformFunctions::Inverse(viewMatrix);
         billboardMatrix = cameraMatrix;
         billboardMatrix.m[3][0] = 0.0f;
@@ -469,46 +495,51 @@ void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& tr
     Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(transform.translate);
 
     Matrix4x4 localMatrix;
-    if (obj->isBillboard_) {
+    if (obj->IsBillboard()) {
         localMatrix = TransformFunctions::Multiply(rotateMatrix, billboardMatrix);
     } else {
         localMatrix = rotateMatrix;
     }
-    
+
     Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
-    if (obj->parent_) {
-        worldMatrix = TransformFunctions::Multiply(worldMatrix, obj->parent_->GetWorldMatrix());
+    if (obj->GetParent()) {
+        worldMatrix = TransformFunctions::Multiply(worldMatrix, obj->GetParent()->GetWorldMatrix());
     }
 
     uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
     uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
 
-    TransformMatrix* tMat = reinterpret_cast<TransformMatrix*>(obj->mappedGhostTransform_ + transformSize * obj->currentGhostIndex_);
+    TransformMatrix *tMat = reinterpret_cast<TransformMatrix *>(obj->GetMappedGhostTransform() + transformSize * obj->GetCurrentGhostIndex());
     tMat->World = worldMatrix;
     tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
     tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
 
-    Material* mMat = reinterpret_cast<Material*>(obj->mappedGhostMaterial_ + materialSize * obj->currentGhostIndex_);
+    Material *mMat = reinterpret_cast<Material *>(obj->GetMappedGhostMaterial() + materialSize * obj->GetCurrentGhostIndex());
     *mMat = material;
 
     commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
 
-    if (obj->blendMode_ == BlendMode::kBlendModeAdd) {
-        if (obj->isDoubleSided_) commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
-        else commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
-    } else if (obj->blendMode_ == BlendMode::kBlendModeNormal || material.color.w < 1.0f) {
+    if (obj->GetBlendMode() == BlendMode::kBlendModeAdd) {
+        if (obj->IsDoubleSided())
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCullAdditive());
+        else
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateAdditive());
+    } else if (obj->GetBlendMode() == BlendMode::kBlendModeNormal || material.color.w < 1.0f) {
         commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateTransparent()); // αブレンド
     } else {
-        if (obj->isDoubleSided_) commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
-        else commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
+        if (obj->IsDoubleSided())
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateNoCull());
+        else
+            commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineState());
     }
 
-    commandList->SetGraphicsRootConstantBufferView(1, obj->ghostTransformResource_->GetGPUVirtualAddress() + transformSize * obj->currentGhostIndex_);
-    commandList->SetGraphicsRootConstantBufferView(0, obj->ghostMaterialResource_->GetGPUVirtualAddress() + materialSize * obj->currentGhostIndex_);
+    commandList->SetGraphicsRootConstantBufferView(1, obj->GetGhostTransformResource()->GetGPUVirtualAddress() + transformSize * obj->GetCurrentGhostIndex());
+    commandList->SetGraphicsRootConstantBufferView(0, obj->GetGhostMaterialResource()->GetGPUVirtualAddress() + materialSize * obj->GetCurrentGhostIndex());
     commandList->SetGraphicsRootConstantBufferView(3, CameraManager::GetInstance()->GetCameraGPUAddress());
-    
-    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = obj->textureHandle_;
-    if (activeTexture.ptr == 0) activeTexture = PrimitiveObject::sDefaultTextureHandle_;
+
+    D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = obj->GetTextureHandle();
+    if (activeTexture.ptr == 0)
+        activeTexture = PrimitiveObject::GetDefaultTextureHandle();
     if (activeTexture.ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(2, activeTexture);
     }
@@ -517,21 +548,25 @@ void Renderer::DrawPrimitiveGhost(PrimitiveObject* obj, const EulerTransform& tr
         commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
     }
 
-    if (ModelCommon* mc = ModelManager::GetInstance()->GetModelCommon()) {
-        if (auto addr = mc->GetDirectionalLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(4, addr);
-        if (auto addr = mc->GetPointLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(5, addr);
-        if (auto addr = mc->GetSpotLightGPUAddress()) commandList->SetGraphicsRootConstantBufferView(6, addr);
+    if (ModelCommon *mc = ModelManager::GetInstance()->GetModelCommon()) {
+        if (auto addr = mc->GetDirectionalLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(4, addr);
+        if (auto addr = mc->GetPointLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(5, addr);
+        if (auto addr = mc->GetSpotLightGPUAddress())
+            commandList->SetGraphicsRootConstantBufferView(6, addr);
     }
 
-    // 9: ShadowMap SRV
     D3D12_GPU_DESCRIPTOR_HANDLE shadowSrv = dxCommon_->GetShadowMapSrvHandleGPU();
     if (shadowSrv.ptr != 0) {
         commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
     }
 
-    obj->primitive_->Draw();
+    if (obj->GetPrimitive()) {
+        obj->GetPrimitive()->Draw();
+    }
 
-    obj->currentGhostIndex_++;
+    obj->IncrementGhostIndex();
 }
 
 void Renderer::AddMeshComponent(MeshRendererComponent* comp) {
@@ -746,7 +781,7 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
 
     D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = comp->GetTextureHandle();
     if (activeTexture.ptr == 0) {
-        activeTexture = PrimitiveObject::sDefaultTextureHandle_;
+        activeTexture = PrimitiveObject::GetDefaultTextureHandle();
     }
 
     commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());

@@ -56,6 +56,27 @@ public:
     void SetAnimator(AnimatorComponent* animator) { animator_ = animator; }
     AnimatorComponent* GetAnimator() const { return animator_; }
 
+    // --- 描画・Renderer用公開Getter ---
+    Model *GetModel() const { return model_; }
+    Material *GetMappedMaterial() { return mappedMaterial_; }
+    TransformMatrix *GetMappedTransform() { return mappedTransform_; }
+    ID3D12Resource *GetTransformResource() const { return transformResource_.Get(); }
+    ID3D12Resource *GetMaterialResource() const { return materialResource_.Get(); }
+    BlendMode GetBlendMode() const { return blendMode_; }
+    bool IsDoubleSided() const { return isDoubleSided_; }
+    bool IsShowTrail() const { return showTrail_; }
+    const std::deque<EulerTransform> &GetTrailHistory() const { return trailHistory_; }
+    int GetTrailLength() const { return trailLength_; }
+    int GetTrailStep() const { return trailStep_; }
+    BlendMode GetTrailBlendMode() const { return trailBlendMode_; }
+    static int GetMaxTrails() { return kMaxTrails; }
+    uint8_t *GetMappedTrailTransform() { return mappedTrailTransform_; }
+    uint8_t *GetMappedTrailMaterial() { return mappedTrailMaterial_; }
+    bool IsTrailFadeOut() const { return trailFadeOut_; }
+    float GetTrailStartAlpha() const { return trailStartAlpha_; }
+    ID3D12Resource *GetTrailTransformResource() const { return trailTransformResource_.Get(); }
+    ID3D12Resource *GetTrailMaterialResource() const { return trailMaterialResource_.Get(); }
+
     // 最後に Update() で計算したワールド行列（Renderer::DrawObject3D が描画に使うSRT行列と同じ構成）
     const Matrix4x4 &GetWorldMatrix() const { return worldMatrix_; }
     // ジョイント名からワールド座標を取得（スケルトンが無い／名前が見つからなければ nullopt）

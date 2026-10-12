@@ -84,6 +84,14 @@ public:
     // ImGuiを描画する関数
     virtual void DrawImGui();
 
+    // --- 描画・Renderer用公開インターフェース ---
+    void TransferToGPU(const Matrix4x4 &viewProjection);
+    ParticleCommon *GetParticleCommon() const { return particleCommon_; }
+    ID3D12Resource *GetMaterialResource() const { return materialResource_.Get(); }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetInstancingSrvHandleGPU() const { return instancingSrvHandleGPU_; }
+    uint32_t GetTextureIndex() const { return textureIndex_; }
+    uint32_t GetNumActiveParticles() const { return numActiveParticles_; }
+
 protected:
     std::string name_ = "ParticleSystem";
 
@@ -98,9 +106,6 @@ protected:
 
     // 当たり判定関数
     bool IsCollision(const AABB &aabb, const Vector3 &point);
-
-    // Updateの最後にこれを呼ばないと描画されない
-    void TransferToGPU(const Matrix4x4 &viewProjection);
 
     // vector から list へ変更
     std::list<ParticleData> particles_{};
