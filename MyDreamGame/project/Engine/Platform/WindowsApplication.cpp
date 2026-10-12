@@ -359,10 +359,10 @@ void WindowsApplication::Update() {
                 // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
                 
                 // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
-                std::string originalPath = GameScene::s_TargetMapFilePath;
+                std::string originalPath = GameScene::GetTargetMapFilePath();
                 std::string currentGifStage = StageGifManager::GetInstance()->GetCurrentStageName();
 
-                GameScene::s_TargetMapFilePath = "resources/json/local/temp_play_map.txt";
+                GameScene::SetTargetMapFilePath("resources/json/local/temp_play_map.txt");
                 
                 sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
                 
@@ -370,7 +370,7 @@ void WindowsApplication::Update() {
                 sceneManager_->ProcessSceneTransition();
                 
                 // パスを元に戻す（次回の正常なロードやSaveなどのため）
-                GameScene::s_TargetMapFilePath = originalPath;
+                GameScene::SetTargetMapFilePath(originalPath);
 
                 // GIFステージを一時マップではなく本来のステージとして復帰
                 StageGifManager::GetInstance()->LoadForStage(currentGifStage);

@@ -48,7 +48,7 @@ void StageSelectScene::OnExit(SceneManager* sceneManager) {
             fullPath = "resources/json/shared/MapData/" + fullPath;
         }
         sceneManager->SetData("SelectedStagePath", fullPath);
-        GameScene::s_TargetMapFilePath = fullPath;
+        GameScene::SetTargetMapFilePath(fullPath);
     }
 }
 
@@ -197,7 +197,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
             if (fullPath.find('/') == std::string::npos && fullPath.find('\\') == std::string::npos) {
                 fullPath = "resources/json/shared/MapData/" + fullPath;
             }
-            GameScene::s_TargetMapFilePath = fullPath;
+            GameScene::SetTargetMapFilePath(fullPath);
             sceneManager->SetData("SelectedStagePath", fullPath);
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kGame));
             return;

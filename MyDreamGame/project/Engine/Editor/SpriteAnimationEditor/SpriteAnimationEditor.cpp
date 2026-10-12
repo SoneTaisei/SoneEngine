@@ -130,7 +130,7 @@ void SpriteAnimationEditor::SyncWithActiveScene() {
         }
     }
     if (sName.empty() || sName == "temp_play_map") {
-        sName = stageMgr->ResolveStageName(GameScene::s_TargetMapFilePath);
+        sName = stageMgr->ResolveStageName(GameScene::GetTargetMapFilePath());
     }
     if (sName.empty() || sName == "temp_play_map") {
         sName = "tutorial";
@@ -257,7 +257,7 @@ void SpriteAnimationEditor::Update(float deltaTime) {
             }
         }
         if (currentSceneStage.empty() || currentSceneStage == "temp_play_map") {
-            currentSceneStage = stageMgr->ResolveStageName(GameScene::s_TargetMapFilePath);
+            currentSceneStage = stageMgr->ResolveStageName(GameScene::GetTargetMapFilePath());
         }
         if (!currentSceneStage.empty() && currentSceneStage != "temp_play_map") {
             if (stageMgr->GetCurrentStageName() != currentSceneStage) {
