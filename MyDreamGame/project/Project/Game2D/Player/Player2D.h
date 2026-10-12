@@ -20,17 +20,22 @@ class PlayerNormalState;
 class PlayerDeadState;
 class PlayerRespawnState;
 class PlayerGoalState;
+class PlayerNormalState;
+class PlayerDeadState;
+class PlayerRespawnState;
+class PlayerGoalState;
 
 /// <summary>
 /// 2Dスクロールゲーム用プレイヤークラス
 /// Componentシステムに対応
 /// </summary>
 class Player2D : public IComponent {
-    friend class PlayerNormalState;
-    friend class PlayerDeadState;
-    friend class PlayerRespawnState;
-    friend class PlayerGoalState;
+   
 public:
+    PlayerState &GetState() { return state_; }
+    PlayerVisuals &GetVisuals() { return visuals_; }
+    PlayerPhysics &GetPhysics() { return physics_; }
+    const InputState &GetCurrentInput() const { return currentInput_; }
     Player2D() = default;
     ~Player2D() override = default;
 

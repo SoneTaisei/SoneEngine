@@ -11,17 +11,17 @@
 // ===================================================================
 
 void PlayerNormalState::Enter(Player2D* player) {
-    player->state_.isDead_ = false;
-    player->state_.isGoal_ = false;
-    player->state_.isRespawning_ = false;
+    player->GetState().isDead_ = false;
+    player->GetState().isGoal_ = false;
+    player->GetState().isRespawning_ = false;
 }
 
 void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    auto& state_ = player->state_;
-    const auto& params_ = player->params_;
-    auto& visuals_ = player->visuals_;
-    auto& physics_ = player->physics_;
-    const auto& currentInput_ = player->currentInput_;
+    auto &state_ = player->GetState();
+    const auto& params_ = player->GetParams();
+    auto& visuals_ = player->GetVisuals();
+    auto& physics_ = player->GetPhysics();
+    const auto& currentInput_ = player->GetCurrentInput();
 
     // 壁ジャンプタイマーの更新
     if (state_.wallJumpTimer_ > 0.0f) {
@@ -94,7 +94,7 @@ void PlayerNormalState::Exit(Player2D* player) {
 // ===================================================================
 
 void PlayerDeadState::Enter(Player2D* player) {
-    auto& state_ = player->state_;
+    auto& state_ = player->GetState();
     state_.isDead_ = true;
     state_.isRespawning_ = false;
     state_.deathTimer_ = 0.0f;
@@ -115,9 +115,9 @@ void PlayerDeadState::Enter(Player2D* player) {
 }
 
 void PlayerDeadState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    auto& state_ = player->state_;
-    const auto& params_ = player->params_;
-    auto& visuals_ = player->visuals_;
+    auto& state_ = player->GetState();
+    const auto& params_ = player->GetParams();
+    auto& visuals_ = player->GetVisuals();
 
     state_.deathTimer_ += deltaTime;
 
@@ -185,7 +185,7 @@ void PlayerDeadState::Update(Player2D* player, MapChip2D& map, float deltaTime) 
 }
 
 void PlayerDeadState::Exit(Player2D* player) {
-    player->visuals_.SetDissolveThreshold(0.0f);
+    player->GetVisuals().SetDissolveThreshold(0.0f);
     TimeManager::GetInstance().SetTimeScale(1.0f); // スローモーション解除
 }
 
@@ -194,16 +194,16 @@ void PlayerDeadState::Exit(Player2D* player) {
 // ===================================================================
 
 void PlayerRespawnState::Enter(Player2D* player) {
-    auto& state_ = player->state_;
+    auto& state_ = player->GetState();
     state_.isRespawning_ = true;
     state_.respawnTimer_ = 0.0f;
-    player->visuals_.SetRespawnVisual(state_.position_, player->params_, 0.0f);
+    player->GetVisuals().SetRespawnVisual(state_.position_, player->GetParams(), 0.0f);
 }
 
 void PlayerRespawnState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    auto& state_ = player->state_;
-    const auto& params_ = player->params_;
-    auto& visuals_ = player->visuals_;
+    auto& state_ = player->GetState();
+    const auto &params_ = player->GetParams();
+    auto& visuals_ = player->GetVisuals();
 
     state_.respawnTimer_ += deltaTime;
     float t = (std::min)(state_.respawnTimer_ / params_.respawnDuration_, 1.0f);
@@ -224,8 +224,8 @@ void PlayerRespawnState::Update(Player2D* player, MapChip2D& map, float deltaTim
 }
 
 void PlayerRespawnState::Exit(Player2D* player) {
-    player->state_.isRespawning_ = false;
-    player->visuals_.SetRespawnVisual(player->state_.position_, player->params_, 1.0f);
+    player->GetState().isRespawning_ = false;
+    player->GetVisuals().SetRespawnVisual(player->GetState().position_, player->GetParams(), 1.0f);
 }
 
 // ===================================================================
@@ -233,17 +233,17 @@ void PlayerRespawnState::Exit(Player2D* player) {
 // ===================================================================
 
 void PlayerGoalState::Enter(Player2D* player) {
-    auto& state_ = player->state_;
+    auto& state_ = player->GetState();
     state_.isGoal_ = true;
     state_.goalTimer_ = 0.0f;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.isDashing_ = false;
-    player->visuals_.SpawnConfetti(state_.position_);
+    player->GetVisuals().SpawnConfetti(state_.position_);
 }
 
 void PlayerGoalState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    player->state_.goalTimer_ += deltaTime;
-    player->state_.velocity_ = { 0.0f, 0.0f, 0.0f };
+    player->GetState().goalTimer_ += deltaTime;
+    player->GetState().velocity_ = {0.0f, 0.0f, 0.0f};
 }
 
 void PlayerGoalState::Exit(Player2D* player) {

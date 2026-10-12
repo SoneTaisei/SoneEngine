@@ -6,6 +6,8 @@
 
 // 前方宣言
 class SpriteCommon;
+class Renderer;
+
 
 // アニメーション設定構造体
 struct SpriteAnimationConfig {
@@ -21,7 +23,6 @@ struct SpriteAnimationConfig {
 };
 
 class Sprite {
-    friend class Renderer;
 public:
     // コンストラクタ・デストラクタ
     Sprite();

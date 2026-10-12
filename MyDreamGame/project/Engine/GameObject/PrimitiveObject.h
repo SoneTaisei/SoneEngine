@@ -4,8 +4,9 @@
 #include "Resource/Primitive/Primitive.h"
 #include "Core/Utility/BlendMode.h"
 
+class Renderer;
+
 class PrimitiveObject {
-    friend class Renderer;
 public:
     void Initialize(ID3D12Device* device, Primitive* primitive);
     void Update();

@@ -99,7 +99,6 @@ public:
     bool LoadFromString(const std::string& data);
 
     // 境界線（ルームトリガー）データの管理 -> Roomに変更
-    std::vector<StageRoom>& GetRooms() { return rooms_; }
     const std::vector<StageRoom>& GetRooms() const { return rooms_; }
     
     // デフォルトルームの生成（マップサイズに基づいて自動生成）

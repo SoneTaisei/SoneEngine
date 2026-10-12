@@ -32,7 +32,6 @@ enum class GameState {
 
 class GameScene : public IScene {
 public:
-    static std::string s_TargetMapFilePath;
 
     void Initialize() override;
     void OnEnter(SceneManager *sceneManager) override;
@@ -113,4 +112,6 @@ private:
 
     // カメラスケール制御（クリア時のズームアップ用）
     float initialCameraScale_ = 1.0f;
+
+    static std::string s_TargetMapFilePath;
 };

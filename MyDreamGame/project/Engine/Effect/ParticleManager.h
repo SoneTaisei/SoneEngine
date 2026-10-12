@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <d3d12.h>
 #include <wrl.h>
 #include <string>
@@ -51,8 +51,9 @@ struct ParticleProperty {
     float lifeTime = 1.0f;
 };
 
+class Renderer;
+
 class ParticleManager {
-    friend class Renderer;
 public:
     ParticleManager() = default;
     virtual~ParticleManager();
