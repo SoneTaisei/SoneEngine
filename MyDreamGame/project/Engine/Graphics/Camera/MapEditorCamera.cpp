@@ -38,7 +38,10 @@ void MapEditorCamera::Update(bool allowInput) {
             ImVec2 delta = io.MouseDelta;
             // ピクセル移動量をワールド座標の移動量に変換
             // zoom_ は 1ワールド単位あたりのピクセル数を表す想定
-            SetTranslation({delta.x / zoom_, delta.y / zoom_});
+            Vector3 translation = GetTranslation();
+            translation.x -= delta.x / zoom_;
+            translation.y += delta.y / zoom_; // Yは上が正なので逆
+            SetTranslation(translation);
         }
 #endif
     }

@@ -288,7 +288,10 @@ void GameCamera::SnapToTarget() {
         }
     }
 
-    SetTranslation({cameraTargetX, cameraTargetY});
+    Vector3 pos = GetTranslation();
+    pos.x = cameraTargetX;
+    pos.y = cameraTargetY;
+    SetTranslation(pos);
     isTransitioning_ = false;
 
     UpdateMatrix();
