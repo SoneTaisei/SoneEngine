@@ -11,25 +11,17 @@
 // ===================================================================
 
 void PlayerNormalState::Enter(Player2D* player) {
-    player->GetState().isDead_ = false;
-    player->GetState().isGoal_ = false;
-    player->GetState().isRespawning_ = false;
+    player->ResetActionFlags();
 }
 
 void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    auto &state_ = player->GetState();
-    const auto& params_ = player->GetParams();
-    auto& visuals_ = player->GetVisuals();
-    auto& physics_ = player->GetPhysics();
-    const auto& currentInput_ = player->GetCurrentInput();
+    const auto &state_ = player->GetState();
 
     // 壁ジャンプタイマーの更新
-    if (state_.wallJumpTimer_ > 0.0f) {
-        state_.wallJumpTimer_ -= deltaTime;
-    }
+    player->UpdateWallJumpTimer(deltaTime);
 
     // 物理演算と移動入力処理
-    physics_.Update(state_, params_, currentInput_, visuals_, deltaTime, player);
+    player->UpdatePhysics(deltaTime);
 
     // 現在のルームを特定する
     const auto& rooms = map.GetRooms();
@@ -37,7 +29,7 @@ void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime
     for (int i = 0; i < static_cast<int>(rooms.size()); ++i) {
         if (state_.position_.x >= rooms[i].x && state_.position_.x <= rooms[i].x + rooms[i].width &&
             state_.position_.y >= rooms[i].y && state_.position_.y <= rooms[i].y + rooms[i].height) {
-            state_.currentRoomIndex_ = i;
+            player->SetCurrentRoomIndex(i);
             isInAnyRoom = true;
             break;
         }
@@ -62,19 +54,10 @@ void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime
     }
 
     // 色の更新
-    visuals_.SetColor((state_.isDashing_ || !state_.canDash_) ? params_.colorDashed_ : params_.colorNormal_);
+    player->UpdateVisualColor();
 
     // 走りエフェクトの発生
-    if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f) {
-        state_.runDustTimer_ += deltaTime;
-        if (state_.runDustTimer_ >= params_.runDustInterval_) {
-            state_.runDustTimer_ = 0.0f;
-            float dirX = (state_.velocity_.x > 0.0f) ? 1.0f : -1.0f;
-            visuals_.SpawnRunDust({ state_.position_.x - dirX * params_.halfWidth_, state_.position_.y - params_.halfHeight_, 0.0f }, dirX);
-        }
-    } else {
-        state_.runDustTimer_ = 0.0f;
-    }
+    player->UpdateRunDust(deltaTime);
 
     // バグ検知処理（リプレイ再生中は無効化）
     if (!ReplayManager::GetInstance()->IsPlaying()) {
@@ -94,43 +77,22 @@ void PlayerNormalState::Exit(Player2D* player) {
 // ===================================================================
 
 void PlayerDeadState::Enter(Player2D* player) {
-    auto& state_ = player->GetState();
-    state_.isDead_ = true;
-    state_.isRespawning_ = false;
-    state_.deathTimer_ = 0.0f;
-
-    if (isFallDeath_) {
-        // 落下・逸脱死の場合：上に跳ねず、下方向への初速を与えて重力で落とす
-        state_.velocity_.y = -5.0f;
-        state_.velocity_.x *= 0.2f;
-        state_.isDashing_ = false;
-        TimeManager::GetInstance().SetTimeScale(1.0f);
-    } else {
-        // 後ろによろける演出のための速度設定
-        state_.velocity_ = { state_.velocity_.x > 0.0f ? -2.5f : (state_.velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f };
-        state_.isDashing_ = false;
-        // スローモーション開始
-        TimeManager::GetInstance().SetTimeScale(0.3f);
-    }
+    player->StartDeathSequence(isFallDeath_);
 }
 
 void PlayerDeadState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    auto& state_ = player->GetState();
+    const auto& state_ = player->GetState();
     const auto& params_ = player->GetParams();
     auto& visuals_ = player->GetVisuals();
 
-    state_.deathTimer_ += deltaTime;
-
-    // ノックバック物理挙動
-    state_.velocity_.y += params_.gravity_ * deltaTime;
-    state_.position_.x += state_.velocity_.x * deltaTime;
-    state_.position_.y += state_.velocity_.y * deltaTime;
+    // ノックバック物理挙動と死亡タイマー加算
+    player->UpdateDeathKnockback(deltaTime);
 
     // ディゾルブ演出の進行
-    float t = (std::min)(state_.deathTimer_ / params_.deathDuration_, 1.0f);
+    float t = (std::min)(player->GetDeathTimer() / params_.deathDuration_, 1.0f);
     visuals_.SetDissolveThreshold(t);
 
-    if (state_.deathTimer_ >= params_.deathDuration_) {
+    if (player->GetDeathTimer() >= params_.deathDuration_) {
         // リスポーン地点の決定
         Vector3 respawnPos = state_.startPosition_;
         const auto& rooms = map.GetRooms();
@@ -154,33 +116,11 @@ void PlayerDeadState::Update(Player2D* player, MapChip2D& map, float deltaTime) 
             }
         }
 
-        // 指定地点に復活
-        state_.position_ = respawnPos;
-        state_.velocity_ = { 0.0f, 0.0f, 0.0f };
-        state_.isDead_ = false;
-        state_.deathTimer_ = 0.0f;
-        state_.isDashing_ = false;
-        state_.canDash_ = true;
-        state_.wallJumpDirLockTimer_ = 0.0f;
-        state_.lockedDirectionX_ = 0.0f;
-
-        // 慣性をリセット
-        state_.isOnMovingPlatform_ = false;
-        state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
-        state_.recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
-        state_.wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
-        state_.platformInertiaTimer_ = 0.0f;
-        state_.externalVelocityX_ = 0.0f;
-        state_.isWallClinging_ = false;
-        state_.isWallSliding_ = false;
-        state_.climbingUpTimer_ = 0.0f;
-        state_.climbLandingTimer_ = 0.0f;
-
         // ステージ内の動的オブジェクト（敵やギミック等）を初期位置・状態にリセット
         map.ResetBlocks();
 
-        // リスポーンステートへ遷移
-        player->ChangeState(std::make_unique<PlayerRespawnState>());
+        // 指定地点へ安全にリスポーン
+        player->RespawnAt(respawnPos);
     }
 }
 
@@ -194,19 +134,16 @@ void PlayerDeadState::Exit(Player2D* player) {
 // ===================================================================
 
 void PlayerRespawnState::Enter(Player2D* player) {
-    auto& state_ = player->GetState();
-    state_.isRespawning_ = true;
-    state_.respawnTimer_ = 0.0f;
-    player->GetVisuals().SetRespawnVisual(state_.position_, player->GetParams(), 0.0f);
+    player->StartRespawnSequence();
 }
 
 void PlayerRespawnState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    auto& state_ = player->GetState();
-    const auto &params_ = player->GetParams();
+    const auto& state_ = player->GetState();
+    const auto& params_ = player->GetParams();
     auto& visuals_ = player->GetVisuals();
 
-    state_.respawnTimer_ += deltaTime;
-    float t = (std::min)(state_.respawnTimer_ / params_.respawnDuration_, 1.0f);
+    player->UpdateRespawnTimer(deltaTime);
+    float t = (std::min)(player->GetRespawnTimer() / params_.respawnDuration_, 1.0f);
 
     // EaseOutBackによる弾むようなポップアップ
     float c1 = 1.70158f;
@@ -224,8 +161,7 @@ void PlayerRespawnState::Update(Player2D* player, MapChip2D& map, float deltaTim
 }
 
 void PlayerRespawnState::Exit(Player2D* player) {
-    player->GetState().isRespawning_ = false;
-    player->GetVisuals().SetRespawnVisual(player->GetState().position_, player->GetParams(), 1.0f);
+    player->FinishRespawn();
 }
 
 // ===================================================================
@@ -233,17 +169,11 @@ void PlayerRespawnState::Exit(Player2D* player) {
 // ===================================================================
 
 void PlayerGoalState::Enter(Player2D* player) {
-    auto& state_ = player->GetState();
-    state_.isGoal_ = true;
-    state_.goalTimer_ = 0.0f;
-    state_.velocity_ = { 0.0f, 0.0f, 0.0f };
-    state_.isDashing_ = false;
-    player->GetVisuals().SpawnConfetti(state_.position_);
+    player->StartGoalSequence();
 }
 
 void PlayerGoalState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    player->GetState().goalTimer_ += deltaTime;
-    player->GetState().velocity_ = {0.0f, 0.0f, 0.0f};
+    player->UpdateGoalTimer(deltaTime);
 }
 
 void PlayerGoalState::Exit(Player2D* player) {

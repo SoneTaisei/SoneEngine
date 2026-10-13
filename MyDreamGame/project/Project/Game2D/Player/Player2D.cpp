@@ -12,6 +12,132 @@
 #include "../../externals/imgui/imgui.h"
 #endif
 
+// -------------------------------------------------------------------
+// 通常移動・アクション関連
+// -------------------------------------------------------------------
+void Player2D::ResetActionFlags() {
+    state_.isDead_ = false;
+    state_.isGoal_ = false;
+    state_.isRespawning_ = false;
+}
+
+void Player2D::UpdateWallJumpTimer(float deltaTime) {
+    if (state_.wallJumpTimer_ > 0.0f) {
+        state_.wallJumpTimer_ -= deltaTime;
+    }
+}
+
+void Player2D::UpdatePhysics(float deltaTime) {
+    // 内部で保持している state_ や visuals_ を直接渡す
+    physics_.Update(state_, params_, currentInput_, visuals_, deltaTime, this);
+}
+
+void Player2D::UpdateRunDust(float deltaTime) {
+    if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f) {
+        state_.runDustTimer_ += deltaTime;
+        if (state_.runDustTimer_ >= params_.runDustInterval_) {
+            state_.runDustTimer_ = 0.0f;
+            float dirX = (state_.velocity_.x > 0.0f) ? 1.0f : -1.0f;
+            visuals_.SpawnRunDust({state_.position_.x - dirX * params_.halfWidth_, state_.position_.y - params_.halfHeight_, 0.0f}, dirX);
+        }
+    } else {
+        state_.runDustTimer_ = 0.0f;
+    }
+}
+
+void Player2D::UpdateVisualColor() {
+    visuals_.SetColor((state_.isDashing_ || !state_.canDash_) ? params_.colorDashed_ : params_.colorNormal_);
+}
+
+// -------------------------------------------------------------------
+// 死亡演出関連
+// -------------------------------------------------------------------
+void Player2D::StartDeathSequence(bool isFallDeath) {
+    state_.isDead_ = true;
+    state_.isRespawning_ = false;
+    state_.deathTimer_ = 0.0f;
+    state_.isDashing_ = false;
+
+    if (isFallDeath) {
+        state_.velocity_.y = -5.0f;
+        state_.velocity_.x *= 0.2f;
+        TimeManager::GetInstance().SetTimeScale(1.0f);
+    } else {
+        state_.velocity_ = {state_.velocity_.x > 0.0f ? -2.5f : (state_.velocity_.x < 0.0f ? 2.5f : -2.5f), 4.0f, 0.0f};
+        TimeManager::GetInstance().SetTimeScale(0.3f); // スローモーション
+    }
+}
+
+void Player2D::UpdateDeathKnockback(float deltaTime) {
+    state_.deathTimer_ += deltaTime;
+    // ノックバック移動
+    state_.velocity_.y += params_.gravity_ * deltaTime;
+    state_.position_.x += state_.velocity_.x * deltaTime;
+    state_.position_.y += state_.velocity_.y * deltaTime;
+}
+
+void Player2D::RespawnAt(const Vector3 &respawnPos) {
+    // 死亡時専用のリスポーン初期化（スコア state_.score_ はリセットせず維持！）
+    state_.position_ = respawnPos;
+    state_.velocity_ = { 0.0f, 0.0f, 0.0f };
+    state_.isOnGround_ = false;
+    state_.isDead_ = false;
+    state_.deathTimer_ = 0.0f;
+    state_.canDash_ = true;
+    state_.isDashing_ = false;
+    state_.dashTimer_ = 0.0f;
+    state_.wallJumpDirLockTimer_ = 0.0f;
+    state_.lockedDirectionX_ = 0.0f;
+    state_.wallJumpTimer_ = 0.0f;
+    state_.isWallSliding_ = false;
+    state_.isWallClinging_ = false;
+
+    // 動く足場の慣性を確実にリセット
+    state_.isOnMovingPlatform_ = false;
+    state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
+    state_.recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
+    state_.wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
+    state_.platformInertiaTimer_ = 0.0f;
+    state_.externalVelocityX_ = 0.0f;
+    state_.climbingUpTimer_ = 0.0f;
+    state_.climbLandingTimer_ = 0.0f;
+
+    visuals_.ClearEffects();
+
+    // リスポーン演出ステートへ遷移
+    ChangeState(std::make_unique<PlayerRespawnState>());
+}
+
+// -------------------------------------------------------------------
+// リスポーン演出関連
+// -------------------------------------------------------------------
+void Player2D::StartRespawnSequence() {
+    state_.isRespawning_ = true;
+    state_.respawnTimer_ = 0.0f;
+    visuals_.SetRespawnVisual(state_.position_, params_, 0.0f);
+}
+
+void Player2D::FinishRespawn() {
+    state_.isRespawning_ = false;
+    visuals_.SetRespawnVisual(state_.position_, params_, 1.0f);
+}
+
+// -------------------------------------------------------------------
+// ゴール演出関連
+// -------------------------------------------------------------------
+void Player2D::StartGoalSequence() {
+    state_.isGoal_ = true;
+    state_.goalTimer_ = 0.0f;
+    state_.velocity_ = {0.0f, 0.0f, 0.0f};
+    state_.isDashing_ = false;
+    visuals_.SpawnConfetti(state_.position_);
+}
+
+void Player2D::UpdateGoalTimer(float deltaTime) {
+    state_.goalTimer_ += deltaTime;
+    state_.velocity_ = {0.0f, 0.0f, 0.0f};
+}
+
 void Player2D::Initialize() {
     Log("Player2D::Initialize: Start\n");
     PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
