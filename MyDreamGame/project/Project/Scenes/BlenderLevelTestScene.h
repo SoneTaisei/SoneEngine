@@ -3,7 +3,7 @@
 #include "Scene/LevelDataLoader.h"
 #include "GameObject/Object3D.h"
 #include "Graphics/Camera.h"
-#include "Graphics/DebugCamera.h"
+#include "Graphics/Camera/DebugCamera.h"
 #include <memory>
 #include <vector>
 

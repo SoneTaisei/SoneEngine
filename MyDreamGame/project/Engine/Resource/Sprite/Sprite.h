@@ -6,6 +6,8 @@
 
 // 前方宣言
 class SpriteCommon;
+class Renderer;
+
 
 // アニメーション設定構造体
 struct SpriteAnimationConfig {
@@ -21,7 +23,6 @@ struct SpriteAnimationConfig {
 };
 
 class Sprite {
-    friend class Renderer;
 public:
     // コンストラクタ・デストラクタ
     Sprite();
@@ -77,6 +78,17 @@ public:
     void SetTextureRect(float x, float y, float w, float h);
     // 切り抜き解除
     void ResetTextureRect();
+
+    // --- 描画用Getter（カプセル化用） ---
+    SpriteCommon *GetSpriteCommon() const { return spriteCommon_; }
+    bool IsCutMode() const { return isCutMode_; }
+    const Vector2 &GetTexSize() const { return texSize_; }
+    const Vector2 &GetTexPos() const { return texPos_; }
+    Material *GetMaterialData() const { return materialData_; }
+    const EulerTransform &GetTransform() const { return transform_; }
+    TransformMatrix *GetMappedTransform() const { return mappedTransform_; }
+    ID3D12Resource *GetMaterialResource() const { return materialResource_.Get(); }
+    ID3D12Resource *GetTransformResource() const { return transformResource_.Get(); }
 
 private:
     // 借りてくる共通部分

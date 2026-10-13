@@ -2,7 +2,7 @@
 #include "Player2D.h"
 #include "Core/TimeManager.h"
 #include "Core/Utility/TransformFunctions.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 #include "../Blocks/BaseBlock.h"
 #include <algorithm>
 #include <cmath>

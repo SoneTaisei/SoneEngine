@@ -117,6 +117,8 @@ private:
 
 public:
     bool HasSkeleton() const { return hasSkeleton_; }
+
+private:
     std::unique_ptr<SkeletonDebugRenderer> debugRenderer_;
 
 };

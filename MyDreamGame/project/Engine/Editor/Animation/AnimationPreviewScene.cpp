@@ -107,11 +107,11 @@ void AnimationPreviewScene::UpdateEditor() {
 }
 
 void AnimationPreviewScene::ApplyAnimationLighting() {
-    if (!modelCommon_) return;
+    if (!GetModelCommon()) return;
 
     // ゲーム本番ライティングモードの場合、カスタムライトを解除してゲーム側のライトをそのまま使用
     if (lightingConfig_.useGameLighting) {
-        modelCommon_->ClearCustomLighting();
+        GetModelCommon()->ClearCustomLighting();
         return;
     }
 
@@ -152,13 +152,13 @@ void AnimationPreviewScene::ApplyAnimationLighting() {
     D3D12_GPU_VIRTUAL_ADDRESS dirAddr = animDirLightResource_ ? animDirLightResource_->GetGPUVirtualAddress() : 0;
     D3D12_GPU_VIRTUAL_ADDRESS pointAddr = animPointLightResource_ ? animPointLightResource_->GetGPUVirtualAddress() : 0;
     D3D12_GPU_VIRTUAL_ADDRESS spotAddr = animSpotLightResource_ ? animSpotLightResource_->GetGPUVirtualAddress() : 0;
-    modelCommon_->SetCustomLighting(dirAddr, pointAddr, spotAddr);
+    GetModelCommon()->SetCustomLighting(dirAddr, pointAddr, spotAddr);
 }
 
 void AnimationPreviewScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
-    if (modelCommon_) {
+    if (GetModelCommon()) {
         ApplyAnimationLighting();
-        modelCommon_->PreDraw();
+        GetModelCommon()->PreDraw();
     }
 
     if (skybox_) {
@@ -168,8 +168,8 @@ void AnimationPreviewScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
         DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
-        if (modelCommon_) {
-            modelCommon_->PreDraw();
+        if (GetModelCommon()) {
+            GetModelCommon()->PreDraw();
         }
     }
 
@@ -187,8 +187,8 @@ void AnimationPreviewScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     Renderer::GetInstance()->RenderComponents();
 
     // 描画コマンド発行完了後、ModelCommonのカスタムライトアドレスをクリア
-    if (modelCommon_) {
-        modelCommon_->ClearCustomLighting();
+    if (GetModelCommon()) {
+        GetModelCommon()->ClearCustomLighting();
     }
 }
 

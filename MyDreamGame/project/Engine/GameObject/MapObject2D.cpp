@@ -1,9 +1,9 @@
 #include "MapObject2D.h"
 #include "../../Project/Game2D/Blocks/BaseBlock.h"
-#include "../../Project/Game2D/Blocks/GoalBlock.h"
-#include "../../Project/Game2D/Blocks/NormalBlock.h"
-#include "../../Project/Game2D/Blocks/DeathBlock.h"
-#include "../../Project/Game2D/Blocks/OneWayBlock.h"
+#include "../../Project/Game2D/Blocks/BaseBlock/GoalBlock.h"
+#include "../../Project/Game2D/Blocks/BaseBlock/NormalBlock.h"
+#include "../../Project/Game2D/Blocks/BaseBlock/DeathBlock.h"
+#include "../../Project/Game2D/Blocks/BaseBlock/OneWayBlock.h"
 #include "../../Project/Game2D/MapChip2D.h"
 #include "Component/TransformComponent.h"
 #ifdef USE_IMGUI
