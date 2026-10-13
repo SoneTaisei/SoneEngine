@@ -25,11 +25,11 @@ StageSelectScene::~StageSelectScene() {}
 
 void StageSelectScene::OnEnter(SceneManager* sceneManager) {
     // シーン開始時にカメラをリセットして正面中央に向ける
-    if (gameCamera_) {
-        gameCamera_->Reset();
-        gameCamera_->SetTranslation(cameraTransform_.translate);
-        gameCamera_->SetRotation(cameraTransform_.rotate);
-        gameCamera_->UpdateMatrix();
+    if (GetGameCamera()) {
+        GetGameCamera()->Reset();
+        GetGameCamera()->SetTranslation(cameraTransform_.translate);
+        GetGameCamera()->SetRotation(cameraTransform_.rotate);
+        GetGameCamera()->UpdateMatrix();
     }
     CameraManager::GetInstance()->ClearCullingCameraInfo();
 }
@@ -61,11 +61,11 @@ void StageSelectScene::Initialize() {
     cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
 
     // カメラの初期化リセット
-    if (gameCamera_) {
-        gameCamera_->Reset();
-        gameCamera_->SetTranslation(cameraTransform_.translate);
-        gameCamera_->SetRotation(cameraTransform_.rotate);
-        gameCamera_->UpdateMatrix();
+    if (GetGameCamera()) {
+        GetGameCamera()->Reset();
+        GetGameCamera()->SetTranslation(cameraTransform_.translate);
+        GetGameCamera()->SetRotation(cameraTransform_.rotate);
+        GetGameCamera()->UpdateMatrix();
     }
     CameraManager::GetInstance()->ClearCullingCameraInfo();
 
@@ -130,14 +130,14 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
     float dt = TimeManager::GetInstance().GetDeltaTime();
 
     // GameCamera（WindowsApplicationでactiveCamera_として使われるカメラ）の状態を同期
-    if (gameCamera_) {
-        gameCamera_->SetOrthographic(false);
-        gameCamera_->SetFollowTarget(nullptr);
-        gameCamera_->SetFollowEnabled(false);
-        gameCamera_->SetTranslation(cameraTransform_.translate);
-        gameCamera_->SetRotation(cameraTransform_.rotate);
-        gameCamera_->SetFov(0.45f);
-        gameCamera_->UpdateMatrix();
+    if (GetGameCamera()) {
+        GetGameCamera()->SetOrthographic(false);
+        GetGameCamera()->SetFollowTarget(nullptr);
+        GetGameCamera()->SetFollowEnabled(false);
+        GetGameCamera()->SetTranslation(cameraTransform_.translate);
+        GetGameCamera()->SetRotation(cameraTransform_.rotate);
+        GetGameCamera()->SetFov(0.45f);
+        GetGameCamera()->UpdateMatrix();
     }
     CameraManager::GetInstance()->ClearCullingCameraInfo();
 
@@ -279,8 +279,8 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
 
 void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // Skyboxの描画前にDescriptorHeapをセットさせるため、PreDrawを呼ぶ
-    if (modelCommon_) {
-        modelCommon_->PreDraw();
+    if (GetModelCommon()) {
+        GetModelCommon()->PreDraw();
     }
 
     if (skybox_) {
@@ -290,8 +290,8 @@ void StageSelectScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
         DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
-        if (modelCommon_) {
-            modelCommon_->PreDraw();
+        if (GetModelCommon()) {
+            GetModelCommon()->PreDraw();
         }
     }
 

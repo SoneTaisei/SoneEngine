@@ -62,7 +62,7 @@ public:
     void SetScale(float scale) {
         scale_ = (scale > 0.01f) ? scale : 0.01f;
         orthoHeight_ = 11.25f / scale_;
-        float aspect = (kClientHeight_ > 0) ? ((float)kClientWidth_ / (float)kClientHeight_) : (16.0f / 9.0f);
+        float aspect = (GetClientHeight() > 0) ? ((float)GetClientWidth() / (float)GetClientHeight()) : (16.0f / 9.0f);
         orthoWidth_ = orthoHeight_ * aspect;
     }
 

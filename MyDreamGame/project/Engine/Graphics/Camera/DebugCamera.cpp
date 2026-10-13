@@ -7,8 +7,8 @@ void DebugCamera::Initialize(int kClientWidth, int kClientHeight) {
     Camera::Initialize(kClientWidth, kClientHeight);
 
     // リセット用に現在の値を保存（transform_は親クラスのメンバ変数）
-    initialRotation_ = transform_.rotate;
-    initialTranslation_ = transform_.translate;
+    initialRotation_ = GetRotation();
+    initialTranslation_ = GetTranslation();
 }
 
 void DebugCamera::Update(bool allowInput) {
@@ -23,15 +23,15 @@ void DebugCamera::Update(bool allowInput) {
 
         // --- 回転 (右クリック) ---
         if (io.MouseDown[1]) {
-            transform_.rotate.y += io.MouseDelta.x * rotateSpeed;
-            transform_.rotate.x += io.MouseDelta.y * rotateSpeed;
-            transform_.rotate.x = std::clamp(transform_.rotate.x, -1.57f, 1.57f);
+            SetRotation({io.MouseDelta.y * rotateSpeed,
+                         io.MouseDelta.x * rotateSpeed});
+            SetRotation({std::clamp(GetRotation().x, -1.57f, 1.57f)});
         }
 
         // --- カメラのベクトル計算 ---
         Matrix4x4 rotationMatrix = TransformFunctions::Multiply(
-            TransformFunctions::MakeRoteXMatrix(transform_.rotate.x),
-            TransformFunctions::MakeRoteYMatrix(transform_.rotate.y));
+            TransformFunctions::MakeRoteXMatrix(GetRotation().x),
+            TransformFunctions::MakeRoteYMatrix(GetRotation().y));
         Vector3 forward = {rotationMatrix.m[2][0], rotationMatrix.m[2][1], rotationMatrix.m[2][2]};
         Vector3 right = {rotationMatrix.m[0][0], rotationMatrix.m[0][1], rotationMatrix.m[0][2]};
         Vector3 up = {rotationMatrix.m[1][0], rotationMatrix.m[1][1], rotationMatrix.m[1][2]};
@@ -39,12 +39,12 @@ void DebugCamera::Update(bool allowInput) {
         // --- 移動 ---
         // ズーム (ホイール)
         if (io.MouseWheel != 0.0f && !io.KeyCtrl && !io.MouseDown[2]) {
-            transform_.translate = TransformFunctions::AddV(transform_.translate, TransformFunctions::MultiplyV(io.MouseWheel * zoomSpeed, forward));
+            SetTranslation(TransformFunctions::AddV(GetTranslation(), TransformFunctions::MultiplyV(io.MouseWheel * zoomSpeed, forward)));
         }
         // 平行移動 (中クリック)
         if (io.MouseDown[2]) {
-            transform_.translate = TransformFunctions::AddV(transform_.translate, TransformFunctions::MultiplyV(-io.MouseDelta.x * moveSpeed, right));
-            transform_.translate = TransformFunctions::AddV(transform_.translate, TransformFunctions::MultiplyV(io.MouseDelta.y * moveSpeed, up));
+            SetTranslation(TransformFunctions::AddV(GetTranslation(), TransformFunctions::MultiplyV(-io.MouseDelta.x * moveSpeed, right)));
+            SetTranslation(TransformFunctions::AddV(GetTranslation(), TransformFunctions::MultiplyV(io.MouseDelta.y * moveSpeed, up)));
         }
     }
 #endif // USE_IMGUI

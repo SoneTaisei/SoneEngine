@@ -10,8 +10,8 @@ void MapEditorCamera::Initialize(int kClientWidth, int kClientHeight) {
     Camera::Initialize(kClientWidth, kClientHeight);
     
     // マップの中心付近を初期位置とする
-    transform_.translate = { 10.0f, 10.0f, -50.0f };
-    transform_.rotate = { 0.0f, 0.0f, 0.0f }; // 正面を向く
+    SetTranslation({10.0f, 10.0f, -50.0f});
+    SetRotation({0.0f, 0.0f, 0.0f});
     zoom_ = 32.0f;
     
     UpdateMatrix();
@@ -38,8 +38,7 @@ void MapEditorCamera::Update(bool allowInput) {
             ImVec2 delta = io.MouseDelta;
             // ピクセル移動量をワールド座標の移動量に変換
             // zoom_ は 1ワールド単位あたりのピクセル数を表す想定
-            transform_.translate.x -= delta.x / zoom_;
-            transform_.translate.y += delta.y / zoom_; // Yは上が正なので逆
+            SetTranslation({delta.x / zoom_, delta.y / zoom_});
         }
 #endif
     }
@@ -49,13 +48,13 @@ void MapEditorCamera::Update(bool allowInput) {
 
 void MapEditorCamera::UpdateMatrix() {
     // 2Dエディタ用のため回転は常に0（正面向き）に固定
-    transform_.rotate = { 0.0f, 0.0f, 0.0f };
-    viewMatrix_ = TransformFunctions::Inverse(TransformFunctions::MakeTranslateMatrix(transform_.translate));
+    SetRotation({0.0f, 0.0f, 0.0f});
+    SetViewMatrix(TransformFunctions::Inverse(TransformFunctions::MakeTranslateMatrix(GetTranslation())));
     
     // Orthographic projection based on zoom
-    float halfWidth = (kClientWidth_ / 2.0f) / zoom_;
-    float halfHeight = (kClientHeight_ / 2.0f) / zoom_;
-    projectionMatrix_ = TransformFunctions::MakeOrthographicMatrix(-halfWidth, halfHeight, halfWidth, -halfHeight, 0.1f, 1000.0f);
+    float halfWidth = (GetClientWidth() / 2.0f) / zoom_;
+    float halfHeight = (GetClientHeight() / 2.0f) / zoom_;
+        SetProjectionMatrix(TransformFunctions::MakeOrthographicMatrix(-halfWidth, halfHeight, halfWidth, -halfHeight, 0.1f, 1000.0f));
 
-    CameraManager::GetInstance()->SetCameraInfo(transform_.translate, viewMatrix_, projectionMatrix_);
+    CameraManager::GetInstance()->SetCameraInfo(GetTranslation(), GetViewMatrix(), GetProjectionMatrix());
 }

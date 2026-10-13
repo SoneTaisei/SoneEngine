@@ -81,7 +81,7 @@ public:
     void OnCollision(ColliderComponent* other) { if (onCollision_) onCollision_(other); }
     void OnPlayerStand(ColliderComponent* other) { if (onPlayerStand_) onPlayerStand_(other); }
 
-protected:
+private:
     ColliderType type_ = ColliderType::kBox;
 
     Vector3 boxSize_{ 1.0f, 1.0f, 1.0f };

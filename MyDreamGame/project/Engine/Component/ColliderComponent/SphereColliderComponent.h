@@ -13,10 +13,4 @@ public:
 
     void DisplayImGui() override;
     AABB2D GetAABB() const override;
-
-    void SetSphereRadius(float radius) override { sphereRadius_ = radius; }
-    float GetSphereRadius() const override { return sphereRadius_; }
-
-    void SetSphereOffset(const Vector3& offset) override { sphereOffset_ = offset; }
-    Vector3 GetSphereOffset() const override { return sphereOffset_; }
 };

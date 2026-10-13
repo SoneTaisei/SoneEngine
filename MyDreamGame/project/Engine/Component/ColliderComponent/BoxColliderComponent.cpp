@@ -6,47 +6,59 @@
 #endif
 
 BoxColliderComponent::BoxColliderComponent() {
-    type_ = ColliderType::kAABB;
-    boxSize_ = { 1.0f, 1.0f, 1.0f };
-    boxOffset_ = { 0.0f, 0.0f, 0.0f };
+    SetColliderType(ColliderType::kAABB);
+    SetBoxSize({1.0f, 1.0f, 1.0f});
+    SetBoxOffset({0.0f, 0.0f, 0.0f});
 }
 
 void BoxColliderComponent::DisplayImGui() {
 #ifdef USE_IMGUI
     ImGui::Text("Box Collider Component");
-    ImGui::DragFloat3("Box Size", &boxSize_.x, 0.05f, 0.01f, 100.0f);
-    ImGui::DragFloat3("Box Offset", &boxOffset_.x, 0.05f, -100.0f, 100.0f);
-
-    bool solid = isSolid_;
-    if (ImGui::Checkbox("Is Solid", &solid)) isSolid_ = solid;
-    bool oneway = isOneWay_;
-    if (ImGui::Checkbox("Is OneWay", &oneway)) isOneWay_ = oneway;
+    // Box Size
+    Vector3 size = GetBoxSize();
+    if (ImGui::DragFloat3("Box Size", &size.x, 0.05f, 0.01f, 100.0f)) {
+        SetBoxSize(size);
+    }
+    // Box Offset
+    Vector3 offset = GetBoxOffset();
+    if (ImGui::DragFloat3("Box Offset", &offset.x, 0.05f, -100.0f, 100.0f)) {
+        SetBoxOffset(offset);
+    }
+    // Is Solid
+    bool solid = IsSolid();
+    if (ImGui::Checkbox("Is Solid", &solid)) {
+        SetIsSolid(solid);
+    }
+    // Is OneWay
+    bool oneway = IsOneWay();
+    if (ImGui::Checkbox("Is OneWay", &oneway)) {
+        SetIsOneWay(oneway);
+    }
 #endif
 }
 
 AABB2D BoxColliderComponent::GetAABB() const {
-    if (hasCustomAABB_) {
-        return customAABB_;
+    if (HasCustomAABB()) {
+        return GetCustomAABB();
     }
 
-    Vector3 pos = { 0.0f, 0.0f, 0.0f };
-    Vector3 scale = boxSize_;
+    Vector3 pos = {0.0f, 0.0f, 0.0f};
+    Vector3 scale = GetBoxSize(); // ← boxSize_ から変更
 
     if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (auto *tc = gameObject_->GetComponent<TransformComponent>()) {
             pos = tc->GetPosition();
             scale.x *= tc->GetScale().x;
             scale.y *= tc->GetScale().y;
         }
     }
 
-    pos.x += boxOffset_.x;
-    pos.y += boxOffset_.y;
+    pos.x += GetBoxOffset().x; // ← boxOffset_.x から変更
+    pos.y += GetBoxOffset().y; // ← boxOffset_.y から変更
 
     return {
         pos.x - scale.x * 0.5f,
         pos.y + scale.y * 0.5f,
         pos.x + scale.x * 0.5f,
-        pos.y - scale.y * 0.5f
-    };
+        pos.y - scale.y * 0.5f};
 }

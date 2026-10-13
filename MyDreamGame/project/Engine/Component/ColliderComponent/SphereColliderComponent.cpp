@@ -6,27 +6,29 @@
 #endif
 
 SphereColliderComponent::SphereColliderComponent() {
-    type_ = ColliderType::kSphere;
-    sphereRadius_ = 1.0f;
-    sphereOffset_ = { 0.0f, 0.0f, 0.0f };
+    SetColliderType(ColliderType::kSphere);
+    SetSphereRadius(1.0f);
+    SetSphereOffset({0.0f, 0.0f, 0.0f});
 }
 
 void SphereColliderComponent::DisplayImGui() {
 #ifdef USE_IMGUI
     ImGui::Text("Sphere Collider Component");
-    ImGui::DragFloat("Sphere Radius", &sphereRadius_, 0.05f, 0.01f, 100.0f);
-    ImGui::DragFloat3("Sphere Offset", &sphereOffset_.x, 0.05f, -100.0f, 100.0f);
+    float sphereRadius = GetSphereRadius();
+    ImGui::DragFloat("Sphere Radius", &sphereRadius, 0.05f, 0.01f, 100.0f);
+    Vector3 sphereOffset = GetSphereOffset();
+    ImGui::DragFloat3("Sphere Offset", &sphereOffset.x, 0.05f, -100.0f, 100.0f);
 
-    bool solid = isSolid_;
-    if (ImGui::Checkbox("Is Solid", &solid)) isSolid_ = solid;
-    bool oneway = isOneWay_;
-    if (ImGui::Checkbox("Is OneWay", &oneway)) isOneWay_ = oneway;
+    bool solid = IsSolid();
+    ImGui::Checkbox("Is Solid", &solid);
+    bool oneway = IsOneWay();
+    ImGui::Checkbox("Is OneWay", &oneway);
 #endif
 }
 
 AABB2D SphereColliderComponent::GetAABB() const {
-    if (hasCustomAABB_) {
-        return customAABB_;
+    if (HasCustomAABB()) {
+        return GetCustomAABB();
     }
 
     Vector3 pos = { 0.0f, 0.0f, 0.0f };
@@ -39,10 +41,10 @@ AABB2D SphereColliderComponent::GetAABB() const {
         }
     }
 
-    pos.x += sphereOffset_.x;
-    pos.y += sphereOffset_.y;
+    pos.x += GetSphereOffset().x;
+    pos.y += GetSphereOffset().y;
 
-    float r = sphereRadius_ * scale;
+    float r = GetSphereRadius() * scale;
 
     return {
         pos.x - r,

@@ -43,19 +43,19 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
     if (player_ && map_) {
         player_->FindSpawnPoint(*map_);
     }
-    if (gameCamera_) {
+    if (GetGameCamera()) {
         float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
         float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
-        gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+        GetGameCamera()->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
         if (map_) {
-            gameCamera_->SetRooms(map_->GetRooms());
+            GetGameCamera()->SetRooms(map_->GetRooms());
         }
         if (player_) {
-            gameCamera_->SetFollowTarget(&player_->GetPosition());
+            GetGameCamera()->SetFollowTarget(&player_->GetPosition());
         }
-        gameCamera_->SetFollowEnabled(true);
-        gameCamera_->SnapToTarget();
-        initialCameraScale_ = gameCamera_->GetScale();
+        GetGameCamera()->SetFollowEnabled(true);
+        GetGameCamera()->SnapToTarget();
+        initialCameraScale_ = GetGameCamera()->GetScale();
     }
 }
 
@@ -135,26 +135,26 @@ void GameScene::Initialize() {
     playerObj_ = std::make_unique<GameObject>("Player");
     playerObj_->AddComponent<TransformComponent>();
     player_ = playerObj_->AddComponent<Player2D>();
-    player_->SetCamera(gameCamera_); // 画面揺れ連携用にカメラを渡す
+    player_->SetCamera(GetGameCamera()); // 画面揺れ連携用にカメラを渡す
     Log("GameScene::Initialize: Player Initialized\n");
     
     player_->FindSpawnPoint(*map_);
     Log("GameScene::Initialize: Player SpawnPoint found\n");
 
     // 7. GameCameraを正射影モード（2D表示）に切り替え
-    if (gameCamera_) {
+    if (GetGameCamera()) {
         Log("GameScene::Initialize: Camera config...\n");
         float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
         float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
-        gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+        GetGameCamera()->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
         if (map_) {
-            gameCamera_->SetRooms(map_->GetRooms());
+            GetGameCamera()->SetRooms(map_->GetRooms());
         }
         // プレイヤーの位置をカメラ追従ターゲットに設定
-        gameCamera_->SetFollowTarget(&player_->GetPosition());
-        gameCamera_->SetFollowEnabled(true);
-        gameCamera_->SnapToTarget();
-        initialCameraScale_ = gameCamera_->GetScale();
+        GetGameCamera()->SetFollowTarget(&player_->GetPosition());
+        GetGameCamera()->SetFollowEnabled(true);
+        GetGameCamera()->SnapToTarget();
+        initialCameraScale_ = GetGameCamera()->GetScale();
         Log("GameScene::Initialize: Camera configured\n");
     }
 
@@ -162,11 +162,11 @@ void GameScene::Initialize() {
     readyTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/ready.png");
     goTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/go.png");
     whiteTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/white.png");
-    if (spriteCommon_) {
+    if (GetSpriteCommon()) {
         float centerX = 1280.0f * 0.5f;
 
         readySprite_ = std::make_unique<Sprite>();
-        readySprite_->Initialize(spriteCommon_, readyTextureHandle_);
+        readySprite_->Initialize(GetSpriteCommon(), readyTextureHandle_);
         float readyScale = ParameterManager::GetInstance()->GetValue("GameScene", "readySpriteScale", 2.0f);
         float readyW = 240.0f * readyScale;
         float readyH = 92.0f * readyScale;
@@ -176,7 +176,7 @@ void GameScene::Initialize() {
         readySprite_->SetColor({ 1.0f, 0.15f, 0.15f, 0.0f }); // 赤色
 
         goSprite_ = std::make_unique<Sprite>();
-        goSprite_->Initialize(spriteCommon_, goTextureHandle_);
+        goSprite_->Initialize(GetSpriteCommon(), goTextureHandle_);
         float goScale = ParameterManager::GetInstance()->GetValue("GameScene", "goSpriteScale", 2.0f);
         float goW = 144.0f * goScale;
         float goH = 92.0f * goScale;
@@ -192,13 +192,13 @@ void GameScene::Initialize() {
         float barY = centerY + barOffsetY;
 
         readyBarBgSprite_ = std::make_unique<Sprite>();
-        readyBarBgSprite_->Initialize(spriteCommon_, whiteTextureHandle_);
+        readyBarBgSprite_->Initialize(GetSpriteCommon(), whiteTextureHandle_);
         readyBarBgSprite_->SetPosition({ centerX - barWidth * 0.5f - 2.0f, barY - 2.0f });
         readyBarBgSprite_->SetSize({ barWidth + 4.0f, barHeight + 4.0f });
         readyBarBgSprite_->SetColor({ 0.1f, 0.1f, 0.1f, 0.0f });
 
         readyBarFillSprite_ = std::make_unique<Sprite>();
-        readyBarFillSprite_->Initialize(spriteCommon_, whiteTextureHandle_);
+        readyBarFillSprite_->Initialize(GetSpriteCommon(), whiteTextureHandle_);
         readyBarFillSprite_->SetPosition({ centerX - barWidth * 0.5f, barY });
         readyBarFillSprite_->SetSize({ barWidth, barHeight });
         readyBarFillSprite_->SetColor({ 1.0f, 0.15f, 0.15f, 0.0f });
@@ -208,9 +208,9 @@ void GameScene::Initialize() {
 
     // 9. クリア演出用スプライトの初期化
     clearTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/clear.png");
-    if (spriteCommon_) {
+    if (GetSpriteCommon()) {
         clearSprite_ = std::make_unique<Sprite>();
-        clearSprite_->Initialize(spriteCommon_, clearTextureHandle_);
+        clearSprite_->Initialize(GetSpriteCommon(), clearTextureHandle_);
         float clearScale = ParameterManager::GetInstance()->GetValue("GameScene", "clearSpriteScale", 2.0f);
         float spriteW = 220.0f * clearScale;
         float spriteH = 92.0f * clearScale;
@@ -256,8 +256,8 @@ void GameScene::Update(SceneManager *sceneManager) {
     
     // GPUパーティクル (snow) の更新（画面右端に設置して常に降らせる）
     if (snowParticle_) {
-        Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
-        float halfW = (gameCamera_ && gameCamera_->IsOrthographic()) ? (gameCamera_->GetOrthoWidth() * 0.5f) : 10.0f;
+        Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
+        float halfW = (GetGameCamera() && GetGameCamera()->IsOrthographic()) ? (GetGameCamera()->GetOrthoWidth() * 0.5f) : 10.0f;
         Vector3 snowPos = { camPos.x + halfW, camPos.y, 0.0f };
         snowParticle_->SetPosition(snowPos);
         snowParticle_->Update(dt);
@@ -398,27 +398,27 @@ void GameScene::Update(SceneManager *sceneManager) {
             float alpha = (std::min)(stateTimer_ / 0.2f, 1.0f);
             clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, alpha });
         }
-        if (gameCamera_) {
+        if (GetGameCamera()) {
             // クリア時はプレイヤーへカメラをズームイン（アップ）
             float targetScale = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomScale", 2.2f);
             float zoomSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomSpeed", 3.0f);
-            float currentScale = gameCamera_->GetScale();
+            float currentScale = GetGameCamera()->GetScale();
             float newScale = currentScale + (targetScale - currentScale) * (1.0f - std::exp(-zoomSpeed * dt));
-            gameCamera_->SetScale(newScale);
+            GetGameCamera()->SetScale(newScale);
 
             // プレイヤーを画面のやや下側に配置するため、カメラの注視点を上方にオフセット
             float targetOffsetY = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraOffsetY", 1.0f);
-            Vector3 currentOffset = gameCamera_->GetFollowOffset();
+            Vector3 currentOffset = GetGameCamera()->GetFollowOffset();
             float newOffsetY = currentOffset.y + (targetOffsetY - currentOffset.y) * (1.0f - std::exp(-zoomSpeed * dt));
-            gameCamera_->SetFollowOffset({ currentOffset.x, newOffsetY, currentOffset.z });
+            GetGameCamera()->SetFollowOffset({currentOffset.x, newOffsetY, currentOffset.z});
         }
         bool isReturn = KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) ||
                         GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::A) ||
                         GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start);
         if (isReturn) {
-            if (gameCamera_) {
-                gameCamera_->SetScale(initialCameraScale_);
-                gameCamera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
+            if (GetGameCamera()) {
+                GetGameCamera()->SetScale(initialCameraScale_);
+                GetGameCamera()->SetFollowOffset({0.0f, 0.0f, 0.0f});
             }
             sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
             return;
@@ -427,12 +427,12 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (clearSprite_) {
             clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
         }
-        if (gameCamera_) {
-            if (std::abs(gameCamera_->GetScale() - initialCameraScale_) > 0.001f) {
-                gameCamera_->SetScale(initialCameraScale_);
+        if (GetGameCamera()) {
+            if (std::abs(GetGameCamera()->GetScale() - initialCameraScale_) > 0.001f) {
+                GetGameCamera()->SetScale(initialCameraScale_);
             }
-            if (std::abs(gameCamera_->GetFollowOffset().y) > 0.001f) {
-                gameCamera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
+            if (std::abs(GetGameCamera()->GetFollowOffset().y) > 0.001f) {
+                GetGameCamera()->SetFollowOffset({0.0f, 0.0f, 0.0f});
             }
         }
     }
@@ -464,9 +464,9 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             player_->FindSpawnPoint(*map_);
-            if (gameCamera_) {
-                gameCamera_->SetRooms(map_->GetRooms());
-                gameCamera_->SnapToTarget();
+            if (GetGameCamera()) {
+                GetGameCamera()->SetRooms(map_->GetRooms());
+                GetGameCamera()->SnapToTarget();
             }
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
@@ -494,9 +494,9 @@ void GameScene::Update(SceneManager *sceneManager) {
                     prim->SetTranslation(poppedFrame.position);
                     prim->Update();
                 }
-                if (gameCamera_) {
-                    gameCamera_->SetFollowTarget(nullptr);
-                    gameCamera_->SetTranslation(poppedFrame.cameraPosition);
+                if (GetGameCamera()) {
+                    GetGameCamera()->SetFollowTarget(nullptr);
+                    GetGameCamera()->SetTranslation(poppedFrame.cameraPosition);
                 }
 
                 // マップチップ（コインなど）の巻き戻し
@@ -573,28 +573,28 @@ void GameScene::Update(SceneManager *sceneManager) {
                 if (!wasPlayingLastFrame_) {
                     // 再生開始時に初期位置へ自動ワープ
                     player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
-                    if (gameCamera_) {
+                    if (GetGameCamera()) {
                         if (ReplayManager::GetInstance()->IsSnapEnabled()) {
                             // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
-                            gameCamera_->SetFollowTarget(nullptr);
+                            GetGameCamera()->SetFollowTarget(nullptr);
                         } else {
                             // 座標補正がOFF（TASモード）の場合はプレイヤーに追従させる
-                            gameCamera_->SetFollowTarget(&player_->GetPosition());
+                            GetGameCamera()->SetFollowTarget(&player_->GetPosition());
                         }
-                        gameCamera_->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
+                        GetGameCamera()->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
                     }
                     wasPlayingLastFrame_ = true;
                 }
                 Vector3 pos = player_->GetPosition();
-                Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+                Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
                 ReplayManager::GetInstance()->UpdatePlayback(pos, camPos);
                 player_->SetPosition(pos);
-                if (gameCamera_) {
+                if (GetGameCamera()) {
                     if (ReplayManager::GetInstance()->IsSnapEnabled()) {
-                        gameCamera_->SetFollowTarget(nullptr);
-                        gameCamera_->SetTranslation(camPos);
+                        GetGameCamera()->SetFollowTarget(nullptr);
+                        GetGameCamera()->SetTranslation(camPos);
                     } else {
-                        gameCamera_->SetFollowTarget(&player_->GetPosition());
+                        GetGameCamera()->SetFollowTarget(&player_->GetPosition());
                         // 追従モードのため、SetTranslation(camPos) は実行しない
                     }
                 }
@@ -602,8 +602,8 @@ void GameScene::Update(SceneManager *sceneManager) {
             } else {
                 if (wasPlayingLastFrame_) {
                     // リプレイが終了した（またはTAKEOVERで停止した）瞬間に、カメラの追従を復元する
-                    if (gameCamera_) {
-                        gameCamera_->SetFollowTarget(&player_->GetPosition());
+                    if (GetGameCamera()) {
+                        GetGameCamera()->SetFollowTarget(&player_->GetPosition());
                     }
                 }
                 wasPlayingLastFrame_ = false;
@@ -611,16 +611,16 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
 
-            if (gameCamera_ && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding) {
+            if (GetGameCamera() && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding) {
                 if (player_->IsDead()) {
-                    gameCamera_->SetFollowTarget(nullptr);
+                    GetGameCamera()->SetFollowTarget(nullptr);
                 } else {
-                    gameCamera_->SetFollowTarget(&player_->GetPosition());
+                    GetGameCamera()->SetFollowTarget(&player_->GetPosition());
                 }
             }
 
-            if (gameCamera_ && map_ && gameState_ != GameState::Clear) {
-                gameCamera_->SetRooms(map_->GetRooms());
+            if (GetGameCamera() && map_ && gameState_ != GameState::Clear) {
+                GetGameCamera()->SetRooms(map_->GetRooms());
             }
 
             // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
@@ -638,14 +638,14 @@ void GameScene::Update(SceneManager *sceneManager) {
                 canControl = false;
             }
 
-            player_->UpdateWithMap(*map_, gameCamera_ && gameCamera_->IsTransitioning(), canControl);
+            player_->UpdateWithMap(*map_, GetGameCamera() && GetGameCamera()->IsTransitioning(), canControl);
 
             // ゴール判定
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
                 gameState_ = GameState::Clear;
                 stateTimer_ = 0.0f;
-                if (gameCamera_) {
-                    gameCamera_->SetRooms({}); // 部屋境界制限を解除してプレイヤー中心へ直接追従
+                if (GetGameCamera()) {
+                    GetGameCamera()->SetRooms({}); // 部屋境界制限を解除してプレイヤー中心へ直接追従
                 }
             }
 
@@ -680,14 +680,14 @@ void GameScene::Update(SceneManager *sceneManager) {
                 cameraLookRotation_.y += (0.0f - cameraLookRotation_.y) * 0.1f;
                 cameraLookRotation_.x += (0.0f - cameraLookRotation_.x) * 0.1f;
             }
-            if (gameCamera_) {
-                gameCamera_->SetRotation({ cameraLookRotation_.x, cameraLookRotation_.y, 0.0f });
+            if (GetGameCamera()) {
+                GetGameCamera()->SetRotation({cameraLookRotation_.x, cameraLookRotation_.y, 0.0f});
             }
         }
 
         if (!isRewinding && wasRewindingLastFrame_) {
-            if (gameCamera_) {
-                gameCamera_->SetFollowTarget(&player_->GetPosition());
+            if (GetGameCamera()) {
+                GetGameCamera()->SetFollowTarget(&player_->GetPosition());
             }
         }
         wasRewindingLastFrame_ = isRewinding;
@@ -695,7 +695,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         // プレイ中の場合、リプレイ録画を行う
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
             if (!isRewinding) {
-                Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : Vector3{ 0.0f, 0.0f, 0.0f };
+                Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
                 if (!ReplayManager::GetInstance()->IsRecording()) {
                     std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
                     ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
@@ -810,9 +810,9 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     }
 
     // 2. 3Dモデル（マップ・プレイヤー）の描画準備
-    if (modelCommon_) {
+    if (GetModelCommon()) {
         OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw Start\n");
-        modelCommon_->PreDraw();
+        GetModelCommon()->PreDraw();
         OutputDebugStringA("[DEBUG] GameScene::Draw ModelCommon::PreDraw End\n");
     }
 
@@ -849,12 +849,12 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #ifdef USE_IMGUI
         if (EditorManager::IsShowEffects() || EditorManager::IsPlaying() || ReplayManager::GetInstance()->IsPlaying()) {
 #endif
-            if (particleCommon_) {
-                particleCommon_->PreDraw();
+            if (GetParticleCommon()) {
+                GetParticleCommon()->PreDraw();
                 auto commandList = DirectXCommon::GetInstance()->GetCommandList();
                 Matrix4x4 cameraMatrix = TransformFunctions::Inverse(CameraManager::GetInstance()->GetViewMatrix());
                 ModelManager* modelManager = ModelManager::GetInstance();
-                snowParticle_->Draw(commandList, viewProjectionMatrix, cameraMatrix, particleCommon_, modelManager);
+                snowParticle_->Draw(commandList, viewProjectionMatrix, cameraMatrix, GetParticleCommon(), modelManager);
             }
 #ifdef USE_IMGUI
         }
@@ -929,13 +929,13 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
     // 3. パーティクルの描画
     // 描画前処理
-    particleCommon_->PreDraw();
+    GetParticleCommon()->PreDraw();
 
     // パーティクルの描画
 #ifdef USE_IMGUI
     if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
 #endif
-        particleCommon_->DrawAll(viewProjectionMatrix);
+        GetParticleCommon()->DrawAll(viewProjectionMatrix);
 #ifdef USE_IMGUI
     }
 #endif
@@ -943,8 +943,8 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 
 void GameScene::Draw2D() {
     if (gameState_ == GameState::StartReady) {
-        if (spriteCommon_) {
-            spriteCommon_->PreDraw();
+        if (GetSpriteCommon()) {
+            GetSpriteCommon()->PreDraw();
             float inputDelay = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyInputDelay", 1.0f);
             if (stateTimer_ < inputDelay) {
                 if (readyBarBgSprite_) readyBarBgSprite_->Draw();
@@ -955,8 +955,8 @@ void GameScene::Draw2D() {
             }
         }
     } else if (gameState_ == GameState::Clear) {
-        if (spriteCommon_ && clearSprite_) {
-            spriteCommon_->PreDraw();
+        if (GetSpriteCommon() && clearSprite_) {
+            GetSpriteCommon()->PreDraw();
             clearSprite_->Draw();
         }
     }
@@ -1106,8 +1106,8 @@ void GameScene::UpdateEditor() {
 
     // GPUパーティクル (snow) の更新（エディタ停止中も画面右端から常時降らせる）
     if (snowParticle_) {
-        Vector3 camPos = gameCamera_ ? gameCamera_->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
-        float halfW = (gameCamera_ && gameCamera_->IsOrthographic()) ? (gameCamera_->GetOrthoWidth() * 0.5f) : 10.0f;
+        Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
+        float halfW = (GetGameCamera() && GetGameCamera()->IsOrthographic()) ? (GetGameCamera()->GetOrthoWidth() * 0.5f) : 10.0f;
         Vector3 snowPos = { camPos.x + halfW, camPos.y, 0.0f };
         snowParticle_->SetPosition(snowPos);
         snowParticle_->Update(dt);
@@ -1142,18 +1142,18 @@ void GameScene::UpdateEditor() {
     }
 
     // エディタ停止中もカメラをプレイヤー位置にスナップ・追従させる
-    if (gameCamera_ && player_) {
-        if (!gameCamera_->IsOrthographic()) {
+    if (GetGameCamera() && player_) {
+        if (!GetGameCamera()->IsOrthographic()) {
             float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
             float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
-            gameCamera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+            GetGameCamera()->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
         }
         if (map_) {
-            gameCamera_->SetRooms(map_->GetRooms());
+            GetGameCamera()->SetRooms(map_->GetRooms());
         }
-        gameCamera_->SetFollowTarget(&player_->GetPosition());
-        gameCamera_->SetFollowEnabled(true);
-        gameCamera_->SnapToTarget();
+        GetGameCamera()->SetFollowTarget(&player_->GetPosition());
+        GetGameCamera()->SetFollowEnabled(true);
+        GetGameCamera()->SnapToTarget();
     }
 
     if (skybox_) {

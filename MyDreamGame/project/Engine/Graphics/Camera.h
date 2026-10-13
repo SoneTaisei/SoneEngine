@@ -25,18 +25,24 @@ public:
     const Matrix4x4 &GetProjectionMatrix() const { return projectionMatrix_; }
     const Vector3 &GetRotation() const { return transform_.rotate; }
     const Vector3 &GetTranslation() const { return transform_.translate; }
-
-    // --- セッター（外部からカメラを動かす用） ---
-    void SetRotation(const Vector3 &rotation) { transform_.rotate = rotation; }
-    void SetTranslation(const Vector3 &translation) { transform_.translate = translation; }
-    void SetFov(float fov) { fov_ = fov; }
     float GetFov() const { return fov_; }
     float GetNearClip() const { return nearClip_; }
     float GetFarClip() const { return farClip_; }
+    int GetClientWidth() const { return kClientWidth_; }
+    int GetClientHeight() const { return kClientHeight_; }
+
+    // --- セッター（外部からカメラを動かす用） ---
+    void SetViewMatrix(const Matrix4x4 &viewMatrix) { viewMatrix_ = viewMatrix; }
+    void SetProjectionMatrix(const Matrix4x4 &projectionMatrix) { projectionMatrix_ = projectionMatrix; }
+    void SetRotation(const Vector3 &rotation) { transform_.rotate = rotation; }
+    void SetTranslation(const Vector3 &translation) { transform_.translate = translation; }
+    void SetFov(float fov) { fov_ = fov; }
     void SetNearClip(float nearClip) { nearClip_ = nearClip; }
     void SetFarClip(float farClip) { farClip_ = farClip; }
 
-protected: // 継承先（DebugCamera）でも使えるように private ではなく protected にする
+
+
+private: // 継承先（DebugCamera）でも使えるように private ではなく protected にする
     // Transform構造体を使うと管理が楽です（無ければVector3 rotation, translationでもOK）
     EulerTransform transform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -5.0f} };
 

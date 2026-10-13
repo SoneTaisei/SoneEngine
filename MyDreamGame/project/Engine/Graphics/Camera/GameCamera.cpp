@@ -26,19 +26,17 @@ void GameCamera::Reset() {
     shakeTimer_ = 0.0f;
     shakeOffset_ = { 0.0f, 0.0f, 0.0f };
     scale_ = 1.0f;
-    transform_.translate = { 0.0f, 0.0f, -9.0f };
-    transform_.rotate = { 0.0f, 0.0f, 0.0f };
-    fov_ = 0.45f;
+    SetTranslation({0.0f, 0.0f, -9.0f});
+    SetRotation({0.0f, 0.0f, 0.0f});
+    SetFov(0.45f);
     UpdateMatrix();
 }
 
 void GameCamera::SetResolution(int kClientWidth, int kClientHeight) {
-    kClientWidth_ = kClientWidth;
-    kClientHeight_ = kClientHeight;
     if (isOrthographic_) {
         // 縦幅を基準にアスペクト比に合わせて横幅を動的拡張
-        if (kClientHeight_ > 0) {
-            orthoWidth_ = orthoHeight_ * ((float)kClientWidth_ / (float)kClientHeight_);
+        if (kClientHeight > 0) {
+            orthoWidth_ = orthoHeight_ * ((float)kClientWidth / (float)kClientHeight);
         }
         UpdateMatrixOrthographic();
     } else {
@@ -81,16 +79,14 @@ void GameCamera::UpdateMatrix() {
 }
 
 void GameCamera::InitializeOrthographic(int kClientWidth, int kClientHeight, float viewWidth, float viewHeight) {
-    kClientWidth_ = kClientWidth;
-    kClientHeight_ = kClientHeight;
     isOrthographic_ = true;
     isFollowEnabled_ = true;
     orthoWidth_ = viewWidth;
     orthoHeight_ = viewHeight;
 
     // 2Dモード：カメラはZ軸上から見下ろす（Z=-10の位置からZ=0を見る）
-    transform_.translate = { 0.0f, 5.0f, -10.0f };
-    transform_.rotate = { 0.0f, 0.0f, 0.0f };
+    SetTranslation({0.0f, 5.0f, -10.0f});
+    SetRotation({0.0f, 0.0f, 0.0f});
 
     // 設定ファイルがあれば読み込む
     LoadConfig();
@@ -108,8 +104,8 @@ void GameCamera::UpdateMatrixOrthographic() {
         // カスタム境界線リストを用いたルーム計算
         int newRoomX = currentRoomX_;
         int newRoomY = currentRoomY_;
-        float cameraTargetX = transform_.translate.x;
-        float cameraTargetY = transform_.translate.y;
+        float cameraTargetX = GetTranslation().x;
+        float cameraTargetY = GetTranslation().y;
 
         if (!rooms_.empty()) {
             int currentRoomIndex = -1;
@@ -186,47 +182,48 @@ void GameCamera::UpdateMatrixOrthographic() {
             isTransitioning_ = true;
         }
 
+        Vector3 pos = GetTranslation();
         // カメラが目標位置へスライド移動する
         // Lerpでの追従
-        transform_.translate.x += (cameraTargetX - transform_.translate.x) * transitionLerp_;
-        transform_.translate.y += (cameraTargetY - transform_.translate.y) * transitionLerp_;
+        pos.x += (cameraTargetX - pos.x) * transitionLerp_;
+        pos.y += (cameraTargetY - pos.y) * transitionLerp_;
 
         // 目標位置に十分近づいたら遷移終了
-        float distX = std::abs(transform_.translate.x - cameraTargetX);
-        float distY = std::abs(transform_.translate.y - cameraTargetY);
+        float distX = std::abs(pos.x - cameraTargetX);
+        float distY = std::abs(pos.y - cameraTargetY);
         if (isTransitioning_ && distX < 0.05f && distY < 0.05f) {
-            transform_.translate.x = cameraTargetX;
-            transform_.translate.y = cameraTargetY;
+            pos.x = cameraTargetX;
+            pos.y = cameraTargetY;
             isTransitioning_ = false;
         }
+        SetTranslation(pos);
     }
 
     // ビュー行列：カメラ位置と3D回転（X, Y, Z）を反映
     Matrix4x4 rotationMatrix = TransformFunctions::Multiply(
         TransformFunctions::Multiply(
-            TransformFunctions::MakeRoteZMatrix(transform_.rotate.z),
-            TransformFunctions::MakeRoteXMatrix(transform_.rotate.x)
+            TransformFunctions::MakeRoteZMatrix(GetRotation().z),
+            TransformFunctions::MakeRoteXMatrix(GetRotation().x)
         ),
-        TransformFunctions::MakeRoteYMatrix(transform_.rotate.y)
+        TransformFunctions::MakeRoteYMatrix(GetRotation().y)
     );
 
     Matrix4x4 translateMatrix = TransformFunctions::MakeTranslateMatrix(
-        { -(transform_.translate.x + shakeOffset_.x), -(transform_.translate.y + shakeOffset_.y), -transform_.translate.z }
+        {-(GetTranslation().x + shakeOffset_.x), -(GetTranslation().y + shakeOffset_.y), -GetTranslation().z}
     );
 
     Matrix4x4 rotateMatrixInv = TransformFunctions::Transpose(rotationMatrix);
 
-    viewMatrix_ = TransformFunctions::Multiply(translateMatrix, rotateMatrixInv);
+    SetViewMatrix(TransformFunctions::Multiply(translateMatrix, rotateMatrixInv));
 
     // 正射影行列
     float halfW = orthoWidth_ * 0.5f;
     float halfH = orthoHeight_ * 0.5f;
-    projectionMatrix_ = TransformFunctions::MakeOrthographicMatrix(
-        -halfW, halfH, halfW, -halfH, 0.1f, 100.0f
-    );
+    SetProjectionMatrix(TransformFunctions::MakeOrthographicMatrix(
+                            -halfW, halfH, halfW, -halfH, 0.1f, 100.0f)); 
 
     // CameraManagerにも反映
-    CameraManager::GetInstance()->SetCameraInfo(transform_.translate, viewMatrix_, projectionMatrix_);
+    CameraManager::GetInstance()->SetCameraInfo(GetTranslation(), GetViewMatrix(), GetProjectionMatrix());
 }
 
 void GameCamera::SnapToTarget() {
@@ -291,8 +288,7 @@ void GameCamera::SnapToTarget() {
         }
     }
 
-    transform_.translate.x = cameraTargetX;
-    transform_.translate.y = cameraTargetY;
+    SetTranslation({cameraTargetX, cameraTargetY});
     isTransitioning_ = false;
 
     UpdateMatrix();
@@ -319,9 +315,11 @@ void GameCamera::LoadConfig(const std::string& filepath) {
         if (j.contains("transitionLerp")) transitionLerp_ = j["transitionLerp"].get<float>();
         
         if (j.contains("rotate")) {
-            transform_.rotate.x = j["rotate"]["x"].get<float>();
-            transform_.rotate.y = j["rotate"]["y"].get<float>();
-            transform_.rotate.z = j["rotate"]["z"].get<float>();
+            SetRotation({
+                j["rotate"]["x"].get<float>(),
+                j["rotate"]["y"].get<float>(),
+                j["rotate"]["z"].get<float>(),
+            });
         }
     } catch (...) {
         // エラー時はデフォルト値のままにする
@@ -346,9 +344,9 @@ void GameCamera::SaveConfig(const std::string& filepath) {
     j["followLerp"] = followLerp_;
     j["transitionLerp"] = transitionLerp_;
 
-    j["rotate"]["x"] = transform_.rotate.x;
-    j["rotate"]["y"] = transform_.rotate.y;
-    j["rotate"]["z"] = transform_.rotate.z;
+    j["rotate"]["x"] = GetRotation().x;
+    j["rotate"]["y"] = GetRotation().y;
+    j["rotate"]["z"] = GetRotation().z;
 
     ofs << j.dump(4);
     ofs.close();
