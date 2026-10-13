@@ -95,7 +95,9 @@ public:
         };
     }
 
-protected:
+     MapChip2D *GetMap() const { return map_; }
+
+private:
     MapChip2D* map_ = nullptr;
     int chipX_ = 0;
     int chipY_ = 0;

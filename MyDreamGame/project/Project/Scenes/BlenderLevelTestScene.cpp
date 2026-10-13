@@ -72,7 +72,7 @@ void BlenderLevelTestScene::Initialize() {
     }
 
     // オブジェクトの生成
-    levelObjects_ = levelDataLoader_->CreateObjects(device, modelCommon_);
+    levelObjects_ = levelDataLoader_->CreateObjects(device, GetModelCommon());
 
     // 自キャラ配置データから自キャラに座標と回転を反映 (資料 02_04.自キャラSpawnPoint 参照)
     const auto& levelData = levelDataLoader_->GetLevelData();
@@ -362,7 +362,7 @@ void BlenderLevelTestScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     // レベルローダーのUI（JSON/Scene ドロップダウン＆リロード）
     if (levelDataLoader_) {
         auto device = DirectXCommon::GetInstance()->GetDevice();
-        levelDataLoader_->DisplayImGui(device, modelCommon_, levelObjects_);
+        levelDataLoader_->DisplayImGui(device, GetModelCommon(), levelObjects_);
     }
 
     ImGui::End();

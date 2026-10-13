@@ -12,10 +12,10 @@
 #include "Editor/GPUParticle/GPUParticlePreviewScene.h"
 #endif
 #include "Effect/ParticleCommon.h"
-#include "Graphics/DebugCamera.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/DebugCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 #ifdef USE_IMGUI
-#include "Graphics/MapEditorCamera.h"
+#include "Graphics/Camera/MapEditorCamera.h"
 #endif
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"
@@ -290,14 +290,14 @@ void WindowsApplication::Update() {
             sceneManager_.get());
 
         // 3. カメラの切り替えと入力受付（シーン更新前にアクティブカメラを決定）
+        bool allowCameraInput = false;
         if (editorManager_->GetActiveMainTab() == "マップチップ画面") {
             // マップエディタ表示時は再生中であっても常に2D専用のMapEditorCameraを使用（回転を完全に排除）
             activeCamera_ = mapEditorCamera_.get();
             isDebugCameraActive_ = false;
             CameraManager::GetInstance()->ClearCullingCameraInfo();
 
-            bool allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
-            mapEditorCamera_->Update(allowCameraInput);
+            allowCameraInput = editorManager_->IsMapEditorHovered() && !editorManager_->IsRoomDragging();
         } else if (editorManager_->UseDebugCamera()) {
             activeCamera_ = debugCamera_.get();
             isDebugCameraActive_ = true;
@@ -308,18 +308,22 @@ void WindowsApplication::Update() {
                 CameraManager::GetInstance()->ClearCullingCameraInfo();
             }
             
-            bool allowCameraInput = editorManager_->IsGameViewHovered() || 
-                                    editorManager_->IsReplayEditorHovered() || 
-                                    editorManager_->IsAnimationEditorHovered() || 
-                                    editorManager_->IsLightEditorHovered() || 
-                                    editorManager_->IsModel3DEditorHovered() || 
-                                    editorManager_->IsGPUParticleEditorHovered() || 
-                                    !ImGui::GetIO().WantCaptureMouse;
-            debugCamera_->Update(allowCameraInput);
+            allowCameraInput = editorManager_->IsGameViewHovered() || 
+                               editorManager_->IsReplayEditorHovered() || 
+                               editorManager_->IsAnimationEditorHovered() || 
+                               editorManager_->IsLightEditorHovered() || 
+                               editorManager_->IsModel3DEditorHovered() || 
+                               editorManager_->IsGPUParticleEditorHovered() || 
+                               !ImGui::GetIO().WantCaptureMouse;
         } else {
             isDebugCameraActive_ = false;
             CameraManager::GetInstance()->ClearCullingCameraInfo();
             activeCamera_ = gameCamera_.get();
+        }
+
+        // 基底ポインタ activeCamera_ によるポリモーフィックな更新呼び出し
+        if (activeCamera_) {
+            activeCamera_->Update(allowCameraInput);
         }
 
         // --- エディターの状態に応じて更新処理を切り替え ---
@@ -355,10 +359,10 @@ void WindowsApplication::Update() {
                 // アクティブから停止状態に切り替わった瞬間：シーンを再生成して初期化リセット！
                 
                 // プレイ開始前の未保存の変更（temp_play_map）を読み込むため、パスを一時的に差し替える
-                std::string originalPath = GameScene::s_TargetMapFilePath;
+                std::string originalPath = GameScene::GetTargetMapFilePath();
                 std::string currentGifStage = StageGifManager::GetInstance()->GetCurrentStageName();
 
-                GameScene::s_TargetMapFilePath = "resources/json/local/temp_play_map.txt";
+                GameScene::SetTargetMapFilePath("resources/json/local/temp_play_map.txt");
                 
                 sceneManager_->ChangeScene(SceneFactory::CreateScene(editorManager_->GetCurrentSceneType()));
                 
@@ -366,7 +370,7 @@ void WindowsApplication::Update() {
                 sceneManager_->ProcessSceneTransition();
                 
                 // パスを元に戻す（次回の正常なロードやSaveなどのため）
-                GameScene::s_TargetMapFilePath = originalPath;
+                GameScene::SetTargetMapFilePath(originalPath);
 
                 // GIFステージを一時マップではなく本来のステージとして復帰
                 StageGifManager::GetInstance()->LoadForStage(currentGifStage);

@@ -16,7 +16,7 @@
 #include "Renderer/Renderer.h"
 #include "Component/TransformComponent.h"
 #include "GameObject/Object3D.h"
-#include "Graphics/GameCamera.h"
+#include "Graphics/Camera/GameCamera.h"
 
 TitleScene::~TitleScene() {
 }
@@ -26,11 +26,11 @@ void TitleScene::OnEnter(SceneManager* sceneManager) {
     cameraTransform_.translate = {0.0f, 0.0f, -10.0f};
     cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
 
-    if (gameCamera_) {
-        gameCamera_->Reset();
-        gameCamera_->SetTranslation(cameraTransform_.translate);
-        gameCamera_->SetRotation(cameraTransform_.rotate);
-        gameCamera_->UpdateMatrix();
+    if (GetGameCamera()) {
+        GetGameCamera()->Reset();
+        GetGameCamera()->SetTranslation(cameraTransform_.translate);
+        GetGameCamera()->SetRotation(cameraTransform_.rotate);
+        GetGameCamera()->UpdateMatrix();
     }
     CameraManager::GetInstance()->ClearCullingCameraInfo();
 }
@@ -47,11 +47,11 @@ void TitleScene::Initialize() {
     cameraTransform_.rotate = {0.0f, 0.0f, 0.0f};
 
     // カメラの初期化リセット
-    if (gameCamera_) {
-        gameCamera_->Reset();
-        gameCamera_->SetTranslation(cameraTransform_.translate);
-        gameCamera_->SetRotation(cameraTransform_.rotate);
-        gameCamera_->UpdateMatrix();
+    if (GetGameCamera()) {
+        GetGameCamera()->Reset();
+        GetGameCamera()->SetTranslation(cameraTransform_.translate);
+        GetGameCamera()->SetRotation(cameraTransform_.rotate);
+        GetGameCamera()->UpdateMatrix();
     }
     CameraManager::GetInstance()->ClearCullingCameraInfo();
 
@@ -65,10 +65,10 @@ void TitleScene::Initialize() {
     titleTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/title.png");
     startTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/start.png");
 
-    if (spriteCommon_) {
+    if (GetSpriteCommon()) {
         // title.png: 元サイズ (800 x 92) の1.2倍 (960 x 110.4)
         titleSprite_ = std::make_unique<Sprite>();
-        titleSprite_->Initialize(spriteCommon_, titleTextureHandle_);
+        titleSprite_->Initialize(GetSpriteCommon(), titleTextureHandle_);
         const float titleWidth = 800.0f * 1.2f;
         const float titleHeight = 92.0f * 1.2f;
         const float titleX = (1280.0f - titleWidth) * 0.5f;
@@ -79,7 +79,7 @@ void TitleScene::Initialize() {
 
         // start.png: 中央下部に配置 (250 x 92)
         startSprite_ = std::make_unique<Sprite>();
-        startSprite_->Initialize(spriteCommon_, startTextureHandle_);
+        startSprite_->Initialize(GetSpriteCommon(), startTextureHandle_);
         const float startWidth = 250.0f;
         const float startHeight = 92.0f;
         const float startX = (1280.0f - startWidth) * 0.5f;
@@ -136,8 +136,8 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     (void)viewProjectionMatrix;
 
     // モデル描画の前準備
-    if (modelCommon_) {
-        modelCommon_->PreDraw();
+    if (GetModelCommon()) {
+        GetModelCommon()->PreDraw();
     }
 
     // Skyboxを描画
@@ -149,16 +149,16 @@ void TitleScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
         DirectXCommon::GetInstance()->GetCommandList()->SetGraphicsRootSignature(dxCommon->GetRootSignature());
         DirectXCommon::GetInstance()->GetCommandList()->SetPipelineState(dxCommon->GetGraphicsPipelineState());
 
-        if (modelCommon_) {
-            modelCommon_->PreDraw();
+        if (GetModelCommon()) {
+            GetModelCommon()->PreDraw();
         }
     }
 }
 
 void TitleScene::Draw2D() {
     // UIスプライトの最前面描画（ポストエフェクト完了後に描画）
-    if (spriteCommon_) {
-        spriteCommon_->PreDraw();
+    if (GetSpriteCommon()) {
+        GetSpriteCommon()->PreDraw();
         if (titleSprite_) {
             titleSprite_->Draw();
         }

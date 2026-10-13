@@ -64,12 +64,6 @@ public:
         return "resources/json/shared/LevelData/placed_models.json";
     }
 
-    // セット用関数
-    void SetSpriteCommon(SpriteCommon* spriteCommon) {
-     // std::move で所有権を渡す
-        spriteCommon_ = spriteCommon;
-    }
-
 #include <format>
 
     virtual void SetModelCommon(ModelCommon* modelCommon) {
@@ -86,7 +80,15 @@ public:
         gameCamera_ = gameCamera;
     }
 
-protected:
+    void SetSpriteCommon(SpriteCommon *spriteCommon) {
+        spriteCommon_ = spriteCommon;
+    }
+    ParticleCommon *GetParticleCommon() const { return particleCommon_; }
+    ModelCommon *GetModelCommon() const { return modelCommon_; }
+    SpriteCommon *GetSpriteCommon() const { return spriteCommon_; }
+    GameCamera *GetGameCamera() const { return gameCamera_; }
+
+private:
     // 継承先(TitleSceneなど)で使えるようにする
     SpriteCommon *spriteCommon_ = nullptr;
     ModelCommon* modelCommon_ = nullptr;

@@ -62,14 +62,14 @@ namespace {
             : mapChip_(chip), oldState_(oldS), newState_(newS) {}
         void Undo() override {
             if (!mapChip_) return;
-            mapChip_->GetRooms() = oldState_.rooms;
+            mapChip_->SetRooms(oldState_.rooms);
             if (EditorManager::IsPlaying()) {
                 EditorManager::GetInstance()->SyncPlayMapData(mapChip_);
             }
         }
         void Redo() override {
             if (!mapChip_) return;
-            mapChip_->GetRooms() = newState_.rooms;
+            mapChip_->SetRooms(newState_.rooms);
             if (EditorManager::IsPlaying()) {
                 EditorManager::GetInstance()->SyncPlayMapData(mapChip_);
             }
