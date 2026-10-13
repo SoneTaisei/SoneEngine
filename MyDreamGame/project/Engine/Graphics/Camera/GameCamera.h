@@ -66,6 +66,9 @@ public:
         orthoWidth_ = orthoHeight_ * aspect;
     }
 
+    const Vector3& GetBaseRotation() const { return baseRotation_; }
+    void SetBaseRotation(const Vector3& rot) { baseRotation_ = rot; }
+
     void LoadConfig(const std::string& filepath = "resources/json/shared/camera_config.json");
     void SaveConfig(const std::string& filepath = "resources/json/shared/camera_config.json");
 
@@ -98,4 +101,7 @@ private:
     float shakeDuration_ = 0.0f;
     float shakeTimer_ = 0.0f;
     Vector3 shakeOffset_ = {0.0f, 0.0f, 0.0f};
+
+    // JSON等から読み込んだ基準回転
+    Vector3 baseRotation_ = {0.0f, 0.0f, 0.0f};
 };

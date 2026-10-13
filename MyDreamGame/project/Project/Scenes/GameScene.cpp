@@ -681,7 +681,12 @@ void GameScene::Update(SceneManager *sceneManager) {
                 cameraLookRotation_.x += (0.0f - cameraLookRotation_.x) * 0.1f;
             }
             if (GetGameCamera()) {
-                GetGameCamera()->SetRotation({cameraLookRotation_.x, cameraLookRotation_.y, 0.0f});
+                Vector3 baseRot = GetGameCamera()->GetBaseRotation();
+                GetGameCamera()->SetRotation({
+                    baseRot.x + cameraLookRotation_.x,
+                    baseRot.y + cameraLookRotation_.y,
+                    baseRot.z
+                });
             }
         }
 

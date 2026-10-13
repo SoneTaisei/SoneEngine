@@ -192,7 +192,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
     if (ReplayManager::GetInstance()->IsPlaying() && ReplayManager::GetInstance()->IsPaused()) {
         state_.stuckTimer_ = 0.0f;
         state_.prevPositionForBugCheck_ = state_.position_;
-        visuals_.SyncTransform(state_.position_);
+        visuals_.SyncTransform(state_.position_, params_);
         if (gameObject_) {
             if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
@@ -202,13 +202,10 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
     }
 
     float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-    
-    // パーティクルや見た目のベース更新 (早めに呼んでおく)
-    visuals_.Update(state_, params_, deltaTime);
 
     // カメラスライド（ルーム遷移）中の硬直処理
     if (isTransitioning) {
-        visuals_.SyncTransform(state_.position_);
+        visuals_.SyncTransform(state_.position_, params_);
         return;
     }
 
@@ -219,8 +216,8 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
 
     state_.prevPositionForBugCheck_ = state_.position_;
 
-    // 描画座標を更新
-    visuals_.SyncTransform(state_.position_);
+    // パーティクルや見た目のベース更新 (移動・物理計算後の最新ステートを反映)
+    visuals_.Update(state_, params_, deltaTime);
 
     if (gameObject_) {
         if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {

@@ -2173,12 +2173,15 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     float rotDeg[3] = { rot.x * 180.0f / 3.14159265f, rot.y * 180.0f / 3.14159265f, rot.z * 180.0f / 3.14159265f };
                     if (TrackActionDragFloat3("カメラ角度 (Rotation)##GameCam", rotDeg, 0.5f, -180.0f, 180.0f, "%.1f", [=](const Vector3& v){ 
                         Vector3 r = { v.x * 3.14159265f / 180.0f, v.y * 3.14159265f / 180.0f, v.z * 3.14159265f / 180.0f };
-                        gameCamera->SetRotation(r); SaveSceneConfig(); 
+                        gameCamera->SetRotation(r); 
+                        gameCamera->SetBaseRotation(r);
+                        SaveSceneConfig(); 
                     })) {
                         rot.x = rotDeg[0] * 3.14159265f / 180.0f;
                         rot.y = rotDeg[1] * 3.14159265f / 180.0f;
                         rot.z = rotDeg[2] * 3.14159265f / 180.0f;
                         gameCamera->SetRotation(rot);
+                        gameCamera->SetBaseRotation(rot);
                     }
 
                     if (TrackActionDragFloat("追従速度 (FollowLerp)##GameCam", &follow, 0.005f, 0.0f, 1.0f, "%.3f", [=](float v){ gameCamera->SetFollowLerp(v); SaveSceneConfig(); })) {
