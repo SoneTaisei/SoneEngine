@@ -34,9 +34,9 @@ void DashRecovery::Initialize(ID3D12Device* device, Primitive* boxPrimitive, flo
     hoverTimer_ = 0.0f;
 
     // 本体 GameObject の生成
-    gameObject_ = std::make_unique<GameObject>("DashRecovery");
-    auto* tc = gameObject_->AddComponent<TransformComponent>();
-    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();
+    SetGameObject(std::make_unique<GameObject>("DashRecovery"));
+    auto* tc = GetGameObject()->AddComponent<TransformComponent>();
+    auto* prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
     prc->GetMaterial().color = color_;
@@ -100,13 +100,13 @@ void DashRecovery::Update() {
             currentScale.y *= scalePop;
         }
 
-        if (gameObject_) {
-            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (GetGameObject()) {
+            if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(currentPos);
                 tc->SetRotation({ 0.0f, rotY, 0.0f });
                 tc->SetScale(currentScale);
             }
-            if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+            if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                 prc->GetMaterial().color = color_;
             }
         }
@@ -120,13 +120,13 @@ void DashRecovery::Update() {
         }
 
         // クールダウン中は半透明・縮小のゴースト表示
-        if (gameObject_) {
-            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (GetGameObject()) {
+            if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(basePosition_);
                 tc->SetRotation({ 0.0f, 0.0f, 0.0f });
                 tc->SetScale({ baseScale_.x * 0.5f, baseScale_.y * 0.5f, baseScale_.z * 0.5f });
             }
-            if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+            if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                 Vector4 ghostColor = color_;
                 ghostColor.w = inactiveAlpha_;
                 prc->GetMaterial().color = ghostColor;
@@ -134,8 +134,8 @@ void DashRecovery::Update() {
         }
     }
 
-    if (gameObject_) {
-        gameObject_->Update();
+    if (GetGameObject()) {
+        GetGameObject()->Update();
     }
 
     // GPUパーティクルの更新
@@ -145,8 +145,8 @@ void DashRecovery::Update() {
 }
 
 void DashRecovery::Draw() {
-    if (gameObject_) {
-        gameObject_->Draw();
+    if (GetGameObject()) {
+        GetGameObject()->Draw();
     }
 
     // GPUパーティクルの描画
@@ -193,7 +193,8 @@ void DashRecovery::Collect(Player2D* player) {
     sTotalCollectCount_++;
 
     OutputDebugStringA(std::format("[DashRecovery] Collected! Chip({}, {}), TotalCount: {}\n",
-        chipX_, chipY_, sTotalCollectCount_).c_str());
+                                   GetChipX(), GetChipY(), sTotalCollectCount_)
+                           .c_str());
 
     // 1. ダッシュ回数を即座に全回復
     player->RefillDash();
@@ -216,8 +217,8 @@ void DashRecovery::Collect(Player2D* player) {
     respawnTimer_ = 0.0f;
 
     // 6. コライダーを一時的に無効化
-    if (gameObject_) {
-        if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+    if (GetGameObject()) {
+        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetLayerMask(0);
             cc->SetIsSolid(false);
         }
@@ -226,8 +227,8 @@ void DashRecovery::Collect(Player2D* player) {
     // 7. GPUパーティクルエフェクト (DashRecaveryEffect) の再生
     if (gpuParticleSystem_) {
         Vector3 effectPos = basePosition_;
-        if (gameObject_) {
-            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (GetGameObject()) {
+            if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 effectPos = tc->GetPosition();
             }
         }
@@ -245,12 +246,12 @@ void DashRecovery::Respawn() {
     respawnTimer_ = 0.0f;
     respawnAnimTimer_ = respawnAnimDuration_;
 
-    if (gameObject_) {
-        if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+    if (GetGameObject()) {
+        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetLayerMask(kLayerBlock);
             cc->SetIsSolid(IsSolid());
         }
-        if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
             prc->GetMaterial().color = color_;
         }
     }
@@ -262,8 +263,8 @@ void DashRecovery::SetProperties(const nlohmann::json& properties) {
     }
     if (properties.contains("isSolid") && properties["isSolid"].is_boolean()) {
         isSolid_ = properties["isSolid"].get<bool>();
-        if (gameObject_) {
-            if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+        if (GetGameObject()) {
+            if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
                 cc->SetIsSolid(IsSolid());
             }
         }
@@ -297,16 +298,16 @@ void DashRecovery::Reset() {
         gpuParticleSystem_->Pause();
     }
 
-    if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition(basePosition_);
             tc->SetScale(baseScale_);
             tc->SetRotation({ 0.0f, 0.0f, 0.0f });
         }
-        if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
             prc->GetMaterial().color = color_;
         }
-        if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetLayerMask(kLayerBlock);
             cc->SetIsSolid(IsSolid());
         }
@@ -317,8 +318,8 @@ void DashRecovery::Reset() {
 void DashRecovery::DrawImGui() {
     ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[%s ロジック調整]", "DashRecovery");
     if (ImGui::Checkbox("固体（足場）にする", &isSolid_)) {
-        if (gameObject_) {
-            if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+        if (GetGameObject()) {
+            if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
                 cc->SetIsSolid(IsSolid());
             }
         }
@@ -348,8 +349,8 @@ void DashRecovery::DrawImGui() {
             gpuParticleSystem_->GetTotalMaxParticles());
         if (ImGui::Button("エフェクト再生テスト (DashRecaveryEffect)")) {
             Vector3 testPos = basePosition_;
-            if (gameObject_) {
-                if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+            if (GetGameObject()) {
+                if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
                     testPos = tc->GetPosition();
                 }
             }

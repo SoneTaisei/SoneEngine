@@ -23,9 +23,9 @@ void BreakableBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, f
     respawnTimer_ = 0.0f;
 
     // 本体 GameObject の生成
-    gameObject_ = std::make_unique<GameObject>("BreakableBlock");
-    auto* tc = gameObject_->AddComponent<TransformComponent>();
-    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();
+    SetGameObject(std::make_unique<GameObject>("BreakableBlock"));
+    auto *tc = GetGameObject()->AddComponent<TransformComponent>();
+    auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
     prc->GetMaterial().color = blockColor_;
@@ -238,12 +238,12 @@ void BreakableBlock::Break(Player2D* player, bool triggerChain) {
 
     // 連結しているブロックを探索
     std::vector<BreakableBlock*> connectedBlocks;
-    if (triggerChain && breakConnected_ && map_) {
+    if (triggerChain && breakConnected_ && GetMap()) {
         std::queue<std::pair<int, int>> queue;
         std::set<std::pair<int, int>> visited;
 
-        queue.push({ chipX_, chipY_ });
-        visited.insert({ chipX_, chipY_ });
+        queue.push({GetChipX(), GetChipY()});
+        visited.insert({GetChipX(), GetChipY()});
 
         const int dx[4] = { 1, -1, 0, 0 };
         const int dy[4] = { 0, 0, 1, -1 };
@@ -259,7 +259,7 @@ void BreakableBlock::Break(Player2D* player, bool triggerChain) {
                 if (visited.count({ nx, ny })) continue;
                 visited.insert({ nx, ny });
 
-                BaseBlock* neighbor = map_->GetBlock(nx, ny);
+                BaseBlock *neighbor = GetMap()->GetBlock(nx, ny);
                 if (neighbor) {
                     if (auto* bBlock = dynamic_cast<BreakableBlock*>(neighbor)) {
                         if (!bBlock->IsBroken()) {
@@ -289,12 +289,12 @@ void BreakableBlock::BreakInternal(Player2D* player, const Vector3& inheritedDas
     respawnTimer_ = 0.0f;
 
     // コライダーを無効化（すり抜け可能にする）
-    if (gameObject_) {
-        if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+    if (GetGameObject()) {
+        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetLayerMask(0);
             cc->SetIsSolid(false);
         }
-        if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
             blockColor_ = prc->GetMaterial().color;
         }
     }
@@ -310,7 +310,7 @@ void BreakableBlock::BreakInternal(Player2D* player, const Vector3& inheritedDas
     }
 
     // 破片を四方に射出
-    std::mt19937 rng(1337 + chipX_ * 100 + chipY_);
+    std::mt19937 rng(1337 + GetChipX() * 100 + GetChipY());
     std::uniform_real_distribution<float> distAngle(-3.14159f, 3.14159f);
     std::uniform_real_distribution<float> distSpeed(4.0f, 9.0f);
     std::uniform_real_distribution<float> distRot(-12.0f, 12.0f);
@@ -371,16 +371,16 @@ void BreakableBlock::Respawn() {
     respawnTimer_ = 0.0f;
 
     // コライダーの復元
-    if (gameObject_) {
-        if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+    if (GetGameObject()) {
+        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetLayerMask(kLayerBlock);
             cc->SetIsSolid(true);
         }
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition(basePosition_);
             tc->SetScale(baseScale_);
         }
-        if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
             prc->GetMaterial().color = blockColor_;
             prc->GetMaterial().color.w = 1.0f;
         }
@@ -418,8 +418,8 @@ void BreakableBlock::SetProperties(const nlohmann::json& properties) {
         if (properties["color"].size() >= 4) {
             blockColor_.w = properties["color"][3].get<float>();
         }
-        if (gameObject_) {
-            if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        if (GetGameObject()) {
+            if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                 prc->GetMaterial().color = blockColor_;
             }
         }
@@ -468,8 +468,8 @@ void BreakableBlock::DrawImGui() {
     float col[4] = { blockColor_.x, blockColor_.y, blockColor_.z, blockColor_.w };
     if (ImGui::ColorEdit4("ブロック色", col)) {
         blockColor_ = { col[0], col[1], col[2], col[3] };
-        if (gameObject_) {
-            if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        if (GetGameObject()) {
+            if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                 prc->GetMaterial().color = blockColor_;
             }
         }

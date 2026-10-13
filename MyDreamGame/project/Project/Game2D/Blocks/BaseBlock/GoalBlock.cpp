@@ -9,9 +9,9 @@
 #include <cmath>
 
 void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
-    gameObject_ = std::make_unique<GameObject>("GoalBlock");
-    auto* tc = gameObject_->AddComponent<TransformComponent>();
-    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();
+    SetGameObject(std::make_unique<GameObject>("GoalBlock"));
+    auto *tc = GetGameObject()->AddComponent<TransformComponent>();
+    auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
     prc->GetMaterial().color = { 0.8f, 0.2f, 0.8f, 1.0f }; // ゴールは紫色
@@ -47,18 +47,18 @@ void GoalBlock::Update() {
 
     float offsetY = std::sin(floatTimer_) * floatAmplitude_;
 
-    if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition({ basePosition_.x, basePosition_.y + offsetY, basePosition_.z });
         }
-        gameObject_->Update();
+        GetGameObject()->Update();
     }
 }
 
 void GoalBlock::Reset() {
     floatTimer_ = 0.0f;
-    if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition(basePosition_);
         }
     }

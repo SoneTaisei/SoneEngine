@@ -1,12 +1,12 @@
 #include "NormalBlock.h"
 
 void NormalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
-    gameObject_ = std::make_unique<GameObject>("NormalBlock");
-    auto* tc = gameObject_->AddComponent<TransformComponent>();
-    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();
+    SetGameObject(std::make_unique<GameObject>("NormalBlock"));
+    auto *tc = GetGameObject()->AddComponent<TransformComponent>();
+    auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
     
     prc->Initialize(device, boxPrimitive);
-    if (chipY_ <= 1) {
+    if (GetChipY() <= 1) {
         // 蝨ｰ髱｢・夊幻濶ｲ
         prc->GetMaterial().color = { 0.55f, 0.35f, 0.17f, 1.0f };
     } else {

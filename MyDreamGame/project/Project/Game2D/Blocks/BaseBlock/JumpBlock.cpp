@@ -11,13 +11,13 @@
 #include "Editor/Replay/ReplayManager.h"
 
 JumpBlock::BounceDirection JumpBlock::DetermineFacingDirection() const {
-    if (!map_) return BounceDirection::kUp;
+    if (!GetMap()) return BounceDirection::kUp;
 
     // 周囲のブロック状況を取得
-    bool hasRight  = map_->GetBlock(chipX_ + 1, chipY_) != nullptr;
-    bool hasLeft   = map_->GetBlock(chipX_ - 1, chipY_) != nullptr;
-    bool hasTop    = map_->GetBlock(chipX_, chipY_ + 1) != nullptr;
-    bool hasBottom = map_->GetBlock(chipX_, chipY_ - 1) != nullptr;
+    bool hasRight = GetMap()->GetBlock(GetChipX() + 1, GetChipY()) != nullptr;
+    bool hasLeft = GetMap()->GetBlock(GetChipX() - 1, GetChipY()) != nullptr;
+    bool hasTop = GetMap()->GetBlock(GetChipX(), GetChipY() + 1) != nullptr;
+    bool hasBottom = GetMap()->GetBlock(GetChipX(), GetChipY() - 1) != nullptr;
 
     bool isFloating = (!hasRight && !hasLeft && !hasTop && !hasBottom);
 
@@ -51,9 +51,9 @@ float JumpBlock::GetRotationZForDirection(BounceDirection dir) const {
 }
 
 void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
-    gameObject_ = std::make_unique<GameObject>("JumpBlock");
-    auto* tc = gameObject_->AddComponent<TransformComponent>();
-    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();
+    SetGameObject(std::make_unique<GameObject>("JumpBlock"));
+    auto *tc = GetGameObject()->AddComponent<TransformComponent>();
+    auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
     
@@ -76,7 +76,7 @@ void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
         basePosition_.x + baseScale_.x * 0.5f,
         basePosition_.y - baseScale_.y * 0.5f
     };
-    if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+    if (auto *cc = GetGameObject()->GetComponent<ColliderComponent>()) {
         cc->SetCustomAABB(baseAABB_);
     }
     baseCaptured_ = true;
@@ -85,8 +85,8 @@ void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 void JumpBlock::Update() {
     BaseBlock::Update();
 
-    if (!gameObject_) return;
-    auto* tc = gameObject_->GetComponent<TransformComponent>();
+    if (!GetGameObject()) return;
+    auto *tc = GetGameObject()->GetComponent<TransformComponent>();
     if (!tc) return;
 
     // バウンドしていない通常時は、現在のTransformをベースとして同期（エディタによる移動やカスタムパレットのスケール変更に対応）
@@ -103,7 +103,7 @@ void JumpBlock::Update() {
             basePosition_.x + baseScale_.x * 0.5f,
             basePosition_.y - baseScale_.y * 0.5f
         };
-        if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+        if (auto *cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetCustomAABB(baseAABB_);
         }
         baseCaptured_ = true;
@@ -202,8 +202,8 @@ void JumpBlock::Reset() {
     isBouncing_ = false;
     bounceAmount_ = 0.0f;
     bounceVelocity_ = 0.0f;
-    if (gameObject_ && baseCaptured_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject() && baseCaptured_) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition(basePosition_);
             tc->SetScale(baseScale_);
             tc->SetRotation(baseRotation_);

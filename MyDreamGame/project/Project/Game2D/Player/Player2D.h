@@ -65,8 +65,7 @@ public:
 
     // ダッシュ状態の取得
     bool IsDashing() const { return state_.isDashing_; }
-    const Vector3& GetDashVelocity() const { return state_.dashVelocity_; }
-    const PlayerState& GetState() const { return state_; }
+    const Vector3& GetDashVelocity() const { return state_.dashVelocity_; }\
     // JSON Parameters
 
     // プレイヤーの位置を取得（カメラ追従用）

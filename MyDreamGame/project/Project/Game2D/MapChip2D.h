@@ -99,8 +99,20 @@ public:
     bool LoadFromString(const std::string& data);
 
     // 境界線（ルームトリガー）データの管理 -> Roomに変更
-    std::vector<StageRoom>& GetRooms(){ return rooms_; }
     const std::vector<StageRoom>& GetRooms() const { return rooms_; }
+
+    // 1. ルーム全体の一括設定（Undo/Redoや復元用）
+    void SetRooms(const std::vector<StageRoom> &rooms) { rooms_ = rooms; }
+    // 2. ルームの追加
+    void AddRoom(const StageRoom &room) { rooms_.push_back(room); }
+    // 3. ルームの削除（範囲外チェック付きで安全！）
+    void RemoveRoom(int index) {
+        if (index >= 0 && index < static_cast<int>(rooms_.size())) {
+            rooms_.erase(rooms_.begin() + index);
+        }
+    }
+    // 4. 指定した1つのルームを取得（エディタでの座標編集用）
+    StageRoom &GetRoom(size_t index) { return rooms_.at(index); }
     
     // デフォルトルームの生成（マップサイズに基づいて自動生成）
     void GenerateDefaultRooms();

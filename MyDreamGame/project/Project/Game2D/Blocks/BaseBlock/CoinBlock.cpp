@@ -7,9 +7,9 @@
 #include "Editor/Replay/ReplayManager.h"
 
 void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
-    gameObject_ = std::make_unique<GameObject>("CoinBlock");
-    auto* tc = gameObject_->AddComponent<TransformComponent>();
-    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();
+    SetGameObject(std::make_unique<GameObject>("CoinBlock"));
+    auto *tc = GetGameObject()->AddComponent<TransformComponent>();
+    auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
     prc->GetMaterial().color = { 1.0f, 0.8f, 0.0f, 1.0f };
@@ -52,24 +52,24 @@ void CoinBlock::Update() {
         rotationY_ += 10.0f * animDeltaTime;
         
         // フェードアウト
-        if (auto* prc = gameObject_->GetComponent<PrimitiveRendererComponent>()) {
+        if (auto *prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
             prc->GetMaterial().color.w = 1.0f - progress;
         }
     } else {
         rotationY_ += 2.0f * animDeltaTime;
     }
     
-    if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition(position_);
             tc->SetRotation({ 0.0f, rotationY_, 0.0f });
         }
-        gameObject_->Update();
+        GetGameObject()->Update();
     }
 }
 
 void CoinBlock::OnCollision(Player2D* player) {
-    if (!isDestroyed_ && !isCollected_ && player) {
+    if (!GetGameObject() && !isCollected_ && player) {
         player->AddScore(100);
         isCollected_ = true;
     }
