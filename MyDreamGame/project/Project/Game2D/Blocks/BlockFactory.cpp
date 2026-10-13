@@ -1,13 +1,13 @@
 #include "BlockFactory.h"
-#include "NormalBlock.h"
-#include "DeathBlock.h"
-#include "GoalBlock.h"
-#include "OneWayBlock.h"
-#include "CoinBlock.h"
-#include "JumpBlock.h"
-#include "LiftBlock.h"
-#include "PatrolEnemyBlock.h"
-#include "RailBlock.h"
+#include "BaseBlock/NormalBlock.h"
+#include "BaseBlock/DeathBlock.h"
+#include "BaseBlock/GoalBlock.h"
+#include "BaseBlock/OneWayBlock.h"
+#include "BaseBlock/CoinBlock.h"
+#include "BaseBlock/JumpBlock.h"
+#include "BaseBlock/LiftBlock.h"
+#include "BaseBlock/PatrolEnemyBlock.h"
+#include "BaseBlock/RailBlock.h"
 #include <algorithm>
 
 BlockFactory& BlockFactory::GetInstance() {

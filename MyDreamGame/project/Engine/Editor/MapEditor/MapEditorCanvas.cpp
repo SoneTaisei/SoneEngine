@@ -247,7 +247,7 @@ void MapEditorCanvas::Draw(
                             }
 
                             if (context_->GetDraggingRoomIndex() != -1 && ImGui::GetIO().KeyCtrl) {
-                                rooms.erase(rooms.begin() + context_->GetDraggingRoomIndex());
+                                mapChip->RemoveRoom(context_->GetDraggingRoomIndex());
                                 context_->SetDraggingRoomIndex(-1);
                                 context_->SetRoomDragHandle(0);
                             } else if (context_->GetDraggingRoomIndex() == -1 && !ImGui::GetIO().KeyCtrl) {
@@ -257,14 +257,14 @@ void MapEditorCanvas::Draw(
                                 newRoom.y = snap ? std::floor(worldPos.y) : worldPos.y;
                                 newRoom.width = 1.0f;
                                 newRoom.height = 1.0f;
-                                rooms.push_back(newRoom);
+                                mapChip->AddRoom(newRoom);
                                 context_->SetDraggingRoomIndex(static_cast<int>(rooms.size()) - 1);
                                 context_->SetRoomDragHandle(5); // BottomRight drag
                             }
                         }
 
                         if ((ImGui::IsMouseDragging(ImGuiMouseButton_Left) || ImGui::IsMouseDragging(ImGuiMouseButton_Right)) && context_->GetDraggingRoomIndex() != -1) {
-                            auto& r = rooms[context_->GetDraggingRoomIndex()];
+                            auto &r = mapChip->GetRoom(context_->GetDraggingRoomIndex());
                             bool snap = ImGui::IsMouseDragging(ImGuiMouseButton_Left);
                             float snapX_left = snap ? std::floor(worldPos.x) : worldPos.x;
                             float snapY_bottom = snap ? std::floor(worldPos.y) : worldPos.y;

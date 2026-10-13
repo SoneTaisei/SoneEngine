@@ -340,7 +340,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
             if (mapChip) {
                 if (loadMapDataStrNextFrame_) {
                     mapChip->LoadFromString(mapDataStrToLoad_);
-                    mapChip->GetRooms() = savedRoomsForPlay_;
+                    mapChip->SetRooms(savedRoomsForPlay_);
                     loadMapDataStrNextFrame_ = false;
                 } else {
                     const char* curStage = mapEditor_ ? mapEditor_->GetStageFilename() : "map_data.txt";
