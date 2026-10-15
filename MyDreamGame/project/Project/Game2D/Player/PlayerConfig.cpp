@@ -20,6 +20,14 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["dashDuration_"] = params.dashDuration_;
         j["dashSpeed_"] = params.dashSpeed_;
         j["dashEndUpwardVelocity_"] = params.dashEndUpwardVelocity_;
+        j["dashEndInertiaRatio_"] = params.dashEndInertiaRatio_;
+        j["dashInertiaDecayGround_"] = params.dashInertiaDecayGround_;
+        j["dashInertiaDecayAir_"] = params.dashInertiaDecayAir_;
+        j["dashJumpPowerMult_"] = params.dashJumpPowerMult_;
+        j["dashJumpBonusSpeed_"] = params.dashJumpBonusSpeed_;
+        j["dashJumpSpeedMult_"] = params.dashJumpSpeedMult_;
+        j["dashJumpWindow_"] = params.dashJumpWindow_;
+        j["dashJumpRefreshDash_"] = params.dashJumpRefreshDash_;
         
         j["wallJumpDuration_"] = params.wallJumpDuration_;
         j["wallJumpPower_"] = { params.wallJumpPower_.x, params.wallJumpPower_.y };
@@ -76,6 +84,14 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         if (j.contains("dashDuration_")) params.dashDuration_ = j["dashDuration_"];
         if (j.contains("dashSpeed_")) params.dashSpeed_ = j["dashSpeed_"];
         if (j.contains("dashEndUpwardVelocity_")) params.dashEndUpwardVelocity_ = j["dashEndUpwardVelocity_"];
+        if (j.contains("dashEndInertiaRatio_")) params.dashEndInertiaRatio_ = j["dashEndInertiaRatio_"];
+        if (j.contains("dashInertiaDecayGround_")) params.dashInertiaDecayGround_ = j["dashInertiaDecayGround_"];
+        if (j.contains("dashInertiaDecayAir_")) params.dashInertiaDecayAir_ = j["dashInertiaDecayAir_"];
+        if (j.contains("dashJumpPowerMult_")) params.dashJumpPowerMult_ = j["dashJumpPowerMult_"];
+        if (j.contains("dashJumpBonusSpeed_")) params.dashJumpBonusSpeed_ = j["dashJumpBonusSpeed_"];
+        if (j.contains("dashJumpSpeedMult_")) params.dashJumpSpeedMult_ = j["dashJumpSpeedMult_"];
+        if (j.contains("dashJumpWindow_")) params.dashJumpWindow_ = j["dashJumpWindow_"];
+        if (j.contains("dashJumpRefreshDash_")) params.dashJumpRefreshDash_ = j["dashJumpRefreshDash_"];
         
         if (j.contains("wallJumpDuration_")) params.wallJumpDuration_ = j["wallJumpDuration_"];
         if (j.contains("wallJumpPower_")) {
