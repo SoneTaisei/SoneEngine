@@ -94,8 +94,8 @@ void AnimatorComponent::Update() {
             Vector3 currentScale = nodeAnim.scale.empty() ? Vector3{1.0f, 1.0f, 1.0f} : CalculateValue(nodeAnim.scale, animationTime_);
 
             // GameObject has TransformComponent
-            if (gameObject_) {
-                auto transform = gameObject_->GetComponent<TransformComponent>();
+            if (GetGameObject()) {
+                auto transform = GetGameObject()->GetComponent<TransformComponent>();
                 if (transform) {
                     transform->SetPosition(currentTranslate);
                     transform->SetRotation(currentRotate.ToEulerAngles());
