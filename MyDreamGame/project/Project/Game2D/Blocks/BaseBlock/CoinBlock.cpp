@@ -7,16 +7,17 @@
 #include "Editor/Replay/ReplayManager.h"
 
 void CoinBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
+    (void)device;
+    (void)boxPrimitive;
     SetGameObject(std::make_unique<GameObject>("CoinBlock"));
     auto *tc = GetGameObject()->AddComponent<TransformComponent>();
-    auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
-    prc->Initialize(device, boxPrimitive);
-    prc->GetMaterial().color = { 1.0f, 0.8f, 0.0f, 1.0f };
     tc->SetScale({ width * 0.5f, height * 0.5f, 0.5f });
     position_ = { worldX, worldY, 0.0f };
+    initialPosition_ = position_;
     tc->SetPosition(position_);
-    prc->GetMaterial().lightingType = 1;
+
+    // コインはJSON指定のモデルを使用するためボックス(PrimitiveRendererComponent)は追加しない
     SetupCollider();
 }
 
@@ -52,6 +53,9 @@ void CoinBlock::Update() {
         rotationY_ += 10.0f * animDeltaTime;
         
         // フェードアウト
+        if (auto *mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
+            mrc->GetMaterial().color.w = 1.0f - progress;
+        }
         if (auto *prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
             prc->GetMaterial().color.w = 1.0f - progress;
         }
@@ -69,8 +73,37 @@ void CoinBlock::Update() {
 }
 
 void CoinBlock::OnCollision(Player2D* player) {
-    if (!GetGameObject() && !isCollected_ && player) {
+    if (GetGameObject() && !isCollected_ && player) {
         player->AddScore(100);
         isCollected_ = true;
+        // 獲得後は二重衝突を防ぐため、コライダーのレイヤーマスクを解除する
+        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+            cc->SetLayerMask(0);
+        }
+    }
+}
+
+void CoinBlock::Reset() {
+    BaseBlock::Reset();
+    isCollected_ = false;
+    collectTimer_ = 0.0f;
+    rotationY_ = 0.0f;
+    position_ = initialPosition_;
+    SetDestroyed(false);
+
+    if (GetGameObject()) {
+        if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
+            tc->SetPosition(position_);
+            tc->SetRotation({ 0.0f, 0.0f, 0.0f });
+        }
+        if (auto* mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
+            mrc->GetMaterial().color.w = 1.0f;
+        }
+        if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+            prc->GetMaterial().color.w = 1.0f;
+        }
+        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+            cc->SetLayerMask(kLayerBlock);
+        }
     }
 }

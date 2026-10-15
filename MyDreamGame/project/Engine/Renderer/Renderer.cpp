@@ -777,6 +777,9 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
         return;
     }
 
+    // アルファ値が0以下の場合は通常描画もスキップ
+    if (comp->GetMaterial().color.w <= 0.0f) return;
+
     mappedTransform->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
 
     D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = comp->GetTextureHandle();
