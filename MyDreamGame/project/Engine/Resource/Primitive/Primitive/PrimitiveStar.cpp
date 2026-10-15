@@ -5,6 +5,7 @@ PrimitiveStar::PrimitiveStar(float size) : size_(size) {
 }
 
 void PrimitiveStar::GenerateModelData() {
+    auto &modelData = GetModelDataRef();
 
     float maxRadius = size_ * 0.5f;
     float minRadius = size_ * 0.15f;
@@ -14,7 +15,7 @@ void PrimitiveStar::GenerateModelData() {
     center.normal = {0.0f, 0.0f, -1.0f};
     center.texcoord = {0.5f, 0.5f};
     center.color = {1.0f, 1.0f, 0.0f, 1.0f}; // Yellow center
-    modelData_.vertices.push_back(center);
+    modelData.vertices.push_back(center);
 
     for (uint32_t i = 0; i < 8; ++i) {
         float angle = i * std::numbers::pi_v<float> / 4.0f;
@@ -25,13 +26,13 @@ void PrimitiveStar::GenerateModelData() {
         v.normal = {0.0f, 0.0f, -1.0f};
         v.texcoord = {0.5f + 0.5f * (radius/maxRadius) * cosf(angle), 0.5f - 0.5f * (radius/maxRadius) * sinf(angle)};
         v.color = {1.0f, 1.0f, 0.0f, 1.0f}; // Yellow edges
-        modelData_.vertices.push_back(v);
+        modelData.vertices.push_back(v);
     }
 
     for (uint32_t i = 1; i <= 8; ++i) {
-        modelData_.indices.push_back(0);
-        modelData_.indices.push_back(i);
-        modelData_.indices.push_back((i % 8) + 1);
+        modelData.indices.push_back(0);
+        modelData.indices.push_back(i);
+        modelData.indices.push_back((i % 8) + 1);
     }
 
 }
