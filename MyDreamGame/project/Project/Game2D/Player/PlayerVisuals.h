@@ -55,7 +55,7 @@ public:
     // 表示制御・カプセル化用メソッド
     void SetDissolveThreshold(float threshold);
     void ResetVisuals(const Vector3& position, const PlayerParams& params);
-    void SyncTransform(const Vector3& position);
+    void SyncTransform(const Vector3& position, const PlayerParams& params);
     void SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress);
     void SetColor(const Vector4& color);
     void SyncSize(const PlayerParams& params);

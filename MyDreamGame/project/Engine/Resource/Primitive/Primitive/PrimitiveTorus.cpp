@@ -6,6 +6,7 @@ PrimitiveTorus::PrimitiveTorus(float ringRadius, float tubeRadius, uint32_t segm
 }
 
 void PrimitiveTorus::GenerateModelData() {
+    auto &modelData = GetModelDataRef();
 
     for (uint32_t i = 0; i <= segments_; ++i) {
         float theta = 2.0f * std::numbers::pi_v<float> * i / segments_;
@@ -28,7 +29,7 @@ void PrimitiveTorus::GenerateModelData() {
             v.texcoord = {static_cast<float>(i) / segments_, static_cast<float>(j) / segments_};
             v.color = {1.0f, 1.0f, 1.0f, 1.0f};
 
-            modelData_.vertices.push_back(v);
+            modelData.vertices.push_back(v);
         }
     }
 
@@ -37,13 +38,13 @@ void PrimitiveTorus::GenerateModelData() {
             uint32_t first = i * (segments_ + 1) + j;
             uint32_t second = first + segments_ + 1;
 
-            modelData_.indices.push_back(first);
-            modelData_.indices.push_back(first + 1);
-            modelData_.indices.push_back(second);
+            modelData.indices.push_back(first);
+            modelData.indices.push_back(first + 1);
+            modelData.indices.push_back(second);
 
-            modelData_.indices.push_back(second);
-            modelData_.indices.push_back(first + 1);
-            modelData_.indices.push_back(second + 1);
+            modelData.indices.push_back(second);
+            modelData.indices.push_back(first + 1);
+            modelData.indices.push_back(second + 1);
         }
     }
 

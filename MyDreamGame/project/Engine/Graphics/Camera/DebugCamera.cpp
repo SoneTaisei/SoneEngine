@@ -23,9 +23,11 @@ void DebugCamera::Update(bool allowInput) {
 
         // --- 回転 (右クリック) ---
         if (io.MouseDown[1]) {
-            SetRotation({io.MouseDelta.y * rotateSpeed,
-                         io.MouseDelta.x * rotateSpeed});
-            SetRotation({std::clamp(GetRotation().x, -1.57f, 1.57f)});
+            Vector3 rot = GetRotation();
+            rot.y += io.MouseDelta.x * rotateSpeed;
+            rot.x += io.MouseDelta.y * rotateSpeed;
+            rot.x = std::clamp(rot.x, -1.57f, 1.57f);
+            SetRotation(rot);
         }
 
         // --- カメラのベクトル計算 ---

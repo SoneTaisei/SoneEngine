@@ -25,6 +25,13 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         state_.dashTimer_ += deltaTime;
         if (state_.dashTimer_ >= params_.dashDuration_) {
             state_.isDashing_ = false;
+            // ダッシュ終了時、水平速度に慣性保持率を適用
+            if (std::abs(state_.dashVelocity_.x) > 0.01f) {
+                state_.velocity_.x = state_.dashVelocity_.x * params_.dashEndInertiaRatio_;
+                state_.hasDashInertia_ = true;
+            } else {
+                state_.hasDashInertia_ = false;
+            }
             // ダッシュ終了時、上向きの速度が残っている場合は設定した上限値にする。
             if (state_.velocity_.y > params_.dashEndUpwardVelocity_) {
                 state_.velocity_.y = params_.dashEndUpwardVelocity_;
@@ -87,10 +94,27 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     if (state_.climbLandingTimer_ > 0.0f) {
         state_.climbLandingTimer_ -= deltaTime;
     }
+    if (state_.dashJumpWindowTimer_ > 0.0f) {
+        state_.dashJumpWindowTimer_ -= deltaTime;
+        if (state_.dashJumpWindowTimer_ <= 0.0f) {
+            state_.lastDashDirX_ = 0.0f;
+        }
+    }
 
+    // ジャンプ先行入力バッファ（約0.12秒保持）
+    if (input_.isJumpPressed) {
+        state_.jumpBufferTimer_ = 0.12f;
+    } else if (state_.jumpBufferTimer_ > 0.0f) {
+        state_.jumpBufferTimer_ -= deltaTime;
+    }
+
+    // 接地コヨーテタイム（地面を離れても約0.1秒間は地上ジャンプを許可）
     if (state_.isOnGround_) {
+        state_.coyoteTimer_ = 0.1f;
         state_.stamina_ = params_.maxStamina_;
         state_.isExhausted_ = false;
+    } else if (state_.coyoteTimer_ > 0.0f) {
+        state_.coyoteTimer_ -= deltaTime;
     }
 
     state_.isWallSliding_ = false;
@@ -113,6 +137,80 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         state_.wallJumpDirLockTimer_ -= dt;
         if (state_.wallJumpDirLockTimer_ <= 0.0f) {
             state_.lockedDirectionX_ = 0.0f;
+        }
+    }
+
+    // ダッシュ中のジャンプアクション判定（接地ダッシュジャンプ、壁キックなど）
+    if (state_.isDashing_) {
+        if (state_.jumpBufferTimer_ > 0.0f && state_.climbLandingTimer_ <= 0.0f) {
+            state_.jumpBufferTimer_ = 0.0f;
+            if (state_.isOnGround_ || state_.coyoteTimer_ > 0.0f) {
+                // 地上ダッシュジャンプ (スーパーダッシュジャンプ)
+                state_.isDashing_ = false;
+                state_.dashJumpWindowTimer_ = 0.0f;
+                state_.coyoteTimer_ = 0.0f;
+                state_.velocity_.y = params_.jumpPower_ * params_.dashJumpPowerMult_;
+                
+                float jumpDirX = state_.lastDashDirX_;
+                if (jumpDirX == 0.0f) {
+                    jumpDirX = (state_.dashVelocity_.x > 0.01f) ? 1.0f : ((state_.dashVelocity_.x < -0.01f) ? -1.0f : 0.0f);
+                }
+                if (jumpDirX != 0.0f) {
+                    float superJumpSpeed = params_.dashSpeed_ * params_.dashJumpSpeedMult_ + params_.dashJumpBonusSpeed_;
+                    state_.velocity_.x = jumpDirX * superJumpSpeed;
+                    state_.hasDashInertia_ = true;
+                } else {
+                    state_.hasDashInertia_ = false;
+                }
+                if (params_.dashJumpRefreshDash_) {
+                    state_.canDash_ = true;
+                }
+                state_.isOnGround_ = false;
+                state_.isOnMovingPlatform_ = false;
+                visuals_.SpawnJumpDust({state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f}, 0.0f);
+            } else if (state_.isTouchingWallRight_) {
+                // 右壁キック
+                state_.isDashing_ = false;
+                state_.hasDashInertia_ = false;
+                state_.velocity_.x = -params_.wallJumpPower_.x;
+                state_.velocity_.y = params_.wallJumpPower_.y;
+                state_.wallJumpTimer_ = params_.wallJumpDuration_;
+                state_.externalVelocityX_ = 0.0f;
+                visuals_.SpawnJumpDust({state_.position_.x + params_.halfWidth_, state_.position_.y, 0.0f}, -1.0f);
+                state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
+                state_.lockedDirectionX_ = 1.0f;
+                state_.wallClingReleaseTimer_ = 0.15f;
+                state_.isTouchingWallRight_ = false;
+                state_.isWallSliding_ = false;
+                state_.isWallClinging_ = false;
+            } else if (state_.isTouchingWallLeft_) {
+                // 左壁キック
+                state_.isDashing_ = false;
+                state_.hasDashInertia_ = false;
+                state_.velocity_.x = params_.wallJumpPower_.x;
+                state_.velocity_.y = params_.wallJumpPower_.y;
+                state_.wallJumpTimer_ = params_.wallJumpDuration_;
+                state_.externalVelocityX_ = 0.0f;
+                visuals_.SpawnJumpDust({state_.position_.x - params_.halfWidth_, state_.position_.y, 0.0f}, 1.0f);
+                state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
+                state_.lockedDirectionX_ = -1.0f;
+                state_.wallClingReleaseTimer_ = 0.15f;
+                state_.isTouchingWallLeft_ = false;
+                state_.isWallSliding_ = false;
+                state_.isWallClinging_ = false;
+            } else {
+                // 空中ダッシュ中のジャンプ（ダッシュをキャンセルしてジャンプ初速を与えて飛び出す）
+                state_.isDashing_ = false;
+                state_.dashJumpWindowTimer_ = 0.0f;
+                state_.velocity_.y = params_.jumpPower_;
+                if (std::abs(state_.dashVelocity_.x) > 0.01f) {
+                    state_.velocity_.x = state_.dashVelocity_.x * params_.dashEndInertiaRatio_;
+                    state_.hasDashInertia_ = true;
+                } else {
+                    state_.hasDashInertia_ = false;
+                }
+                visuals_.SpawnJumpDust(state_.position_, 0.0f);
+            }
         }
     }
 
@@ -180,8 +278,36 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         if (state_.climbLandingTimer_ > 0.0f) {
             state_.velocity_.x = 0.0f;
             state_.externalVelocityX_ = 0.0f;
+            state_.hasDashInertia_ = false;
         } else if (state_.wallJumpTimer_ <= 0.0f) {
-            state_.velocity_.x = targetVelX + state_.externalVelocityX_;
+            if (state_.hasDashInertia_) {
+                float currentVelX = state_.velocity_.x;
+                float decayRate = state_.isOnGround_ ? params_.dashInertiaDecayGround_ : params_.dashInertiaDecayAir_;
+
+                // 逆方向に入力している場合はブレーキを強める
+                if ((targetVelX > 0.0f && currentVelX < 0.0f) || (targetVelX < 0.0f && currentVelX > 0.0f)) {
+                    decayRate *= 2.0f;
+                }
+
+                if (currentVelX > targetVelX) {
+                    currentVelX -= decayRate * deltaTime;
+                    if (currentVelX <= targetVelX) {
+                        currentVelX = targetVelX;
+                        state_.hasDashInertia_ = false;
+                    }
+                } else if (currentVelX < targetVelX) {
+                    currentVelX += decayRate * deltaTime;
+                    if (currentVelX >= targetVelX) {
+                        currentVelX = targetVelX;
+                        state_.hasDashInertia_ = false;
+                    }
+                } else {
+                    state_.hasDashInertia_ = false;
+                }
+                state_.velocity_.x = currentVelX;
+            } else {
+                state_.velocity_.x = targetVelX + state_.externalVelocityX_;
+            }
         } else {
             // 壁キック直後の操作不能時間中の速度補間
             // 初速から「現在のキー入力に基づく目標速度」へ滑らかに減速・加速させる
@@ -211,9 +337,31 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         }
 
         // ジャンプ
-        if (input_.isJumpPressed && state_.climbLandingTimer_ <= 0.0f) {
-            if (state_.isOnGround_) {
-                state_.velocity_.y = params_.jumpPower_;
+        if (state_.jumpBufferTimer_ > 0.0f && state_.climbLandingTimer_ <= 0.0f) {
+            if (state_.isOnGround_ || state_.coyoteTimer_ > 0.0f) {
+                state_.jumpBufferTimer_ = 0.0f;
+                state_.coyoteTimer_ = 0.0f;
+
+                // 直前にダッシュしており猶予時間内の場合 -> ダッシュジャンプ（前方慣性ジャンプ / Super Jump / Wave Dash）
+                bool canSuperJump = (state_.dashJumpWindowTimer_ > 0.0f) && (std::abs(state_.lastDashDirX_) > 0.1f);
+                // 逆方向に入力している場合はダッシュジャンプではなく通常ジャンプ
+                if (canSuperJump && ((state_.lastDashDirX_ > 0.0f && input_.moveX < -0.1f) || (state_.lastDashDirX_ < 0.0f && input_.moveX > 0.1f))) {
+                    canSuperJump = false;
+                }
+
+                if (canSuperJump) {
+                    state_.velocity_.y = params_.jumpPower_ * params_.dashJumpPowerMult_;
+                    float superJumpSpeed = params_.dashSpeed_ * params_.dashJumpSpeedMult_ + params_.dashJumpBonusSpeed_;
+                    state_.velocity_.x = state_.lastDashDirX_ * superJumpSpeed;
+                    state_.hasDashInertia_ = true;
+                    state_.dashJumpWindowTimer_ = 0.0f;
+                    if (params_.dashJumpRefreshDash_) {
+                        state_.canDash_ = true;
+                    }
+                } else {
+                    state_.velocity_.y = params_.jumpPower_;
+                }
+
                 // 足場に乗っている（または猶予期間中）場合は慣性を加算 (セレステ風)
                 if (state_.platformInertiaTimer_ > 0.0f) {
                     state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
@@ -230,6 +378,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isOnMovingPlatform_ = false;
                 visuals_.SpawnJumpDust({state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f}, 0.0f);
             } else if (state_.isTouchingWallRight_) {
+                state_.jumpBufferTimer_ = 0.0f;
                 // 壁張り付き状態（Control入力がある場合）
                 bool isPressingCling = input_.isClingHeld && !state_.isExhausted_;
                 // 壁掴み中で逆方向(左)に入力がある場合は壁キック。それ以外は真上ジャンプ
@@ -273,6 +422,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isWallClinging_ = false;
                 state_.climbingUpTimer_ = 0.0f;
             } else if (state_.isTouchingWallLeft_) {
+                state_.jumpBufferTimer_ = 0.0f;
                 // 壁張り付き状態（Control入力がある場合）
                 bool isPressingCling = input_.isClingHeld && !state_.isExhausted_;
                 // 壁掴み中で逆方向(右)に入力がある場合は壁キック。それ以外は真上ジャンプ
@@ -347,6 +497,9 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         state_.isDashing_ = true;
         state_.canDash_ = false;
         state_.dashTimer_ = 0.0f;
+        state_.hasDashInertia_ = false;
+        state_.lastDashDirX_ = (inputDir.x > 0.01f) ? 1.0f : ((inputDir.x < -0.01f) ? -1.0f : 0.0f);
+        state_.dashJumpWindowTimer_ = params_.dashDuration_ + params_.dashJumpWindow_;
         
         // ダッシュ波紋を発生
         visuals_.SpawnDashRing(state_.position_, inputDir);
@@ -576,10 +729,16 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
             if (state_.position_.x < blockCenterX) {
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.hasDashInertia_ = false;
+                state_.dashJumpWindowTimer_ = 0.0f;
+                state_.lastDashDirX_ = 0.0f;
                 state_.isTouchingWallRight_ = true;
             } else {
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.hasDashInertia_ = false;
+                state_.dashJumpWindowTimer_ = 0.0f;
+                state_.lastDashDirX_ = 0.0f;
                 state_.isTouchingWallLeft_ = true;
             }
         }
@@ -614,12 +773,18 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
             if (state_.position_.x < blockCenterX) {
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.hasDashInertia_ = false;
+                state_.dashJumpWindowTimer_ = 0.0f;
+                state_.lastDashDirX_ = 0.0f;
                 state_.isTouchingWallRight_ = true;
                 state_.wallPlatformCollider_ = collider;
                 state_.wallPlatformVelocity_ = collider->GetVelocity();
             } else {
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.hasDashInertia_ = false;
+                state_.dashJumpWindowTimer_ = 0.0f;
+                state_.lastDashDirX_ = 0.0f;
                 state_.isTouchingWallLeft_ = true;
                 state_.wallPlatformCollider_ = collider;
                 state_.wallPlatformVelocity_ = collider->GetVelocity();

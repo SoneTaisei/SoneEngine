@@ -6,6 +6,7 @@ PrimitiveCone::PrimitiveCone(float radius, float height, uint32_t segments) : ra
 }
 
 void PrimitiveCone::GenerateModelData() {
+    auto &modelData = GetModelDataRef();
 
     float halfH = height_ * 0.5f;
     VertexData tip{};
@@ -13,7 +14,7 @@ void PrimitiveCone::GenerateModelData() {
     tip.normal = {0.0f, 1.0f, 0.0f};
     tip.texcoord = {0.5f, 0.0f};
     tip.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    modelData_.vertices.push_back(tip);
+    modelData.vertices.push_back(tip);
 
     for (uint32_t i = 0; i <= segments_; ++i) {
         float angle = 2.0f * std::numbers::pi_v<float> * i / segments_;
@@ -25,13 +26,13 @@ void PrimitiveCone::GenerateModelData() {
         v.normal = TransformFunctions::Normalize({cosA, radius_ / height_, sinA});
         v.texcoord = {static_cast<float>(i) / segments_, 1.0f};
         v.color = {1.0f, 1.0f, 1.0f, 1.0f};
-        modelData_.vertices.push_back(v);
+        modelData.vertices.push_back(v);
     }
 
     for (uint32_t i = 1; i <= segments_; ++i) {
-        modelData_.indices.push_back(0);
-        modelData_.indices.push_back(i);
-        modelData_.indices.push_back(i + 1);
+        modelData.indices.push_back(0);
+        modelData.indices.push_back(i);
+        modelData.indices.push_back(i + 1);
     }
 
 }

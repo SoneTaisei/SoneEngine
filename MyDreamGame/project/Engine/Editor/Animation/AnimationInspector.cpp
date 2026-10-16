@@ -78,7 +78,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         if (ImGui::DragInt("現在フレーム (Current F)", &curFrame, 1.0f, 0, totalFrames, "%d F")) {
             if (curFrame < 0) curFrame = 0;
             if (curFrame > totalFrames) curFrame = totalFrames;
-            context->GetAnimEditorTime() = static_cast<float>(curFrame) / (context->GetAnimEditorFps() > 0.0f ? context->GetAnimEditorFps() : 60.0f);
+            context->SetAnimEditorTime(static_cast<float>(curFrame) / (context->GetAnimEditorFps() > 0.0f ? context->GetAnimEditorFps() : 60.0f));
             context->GetTempOverrides().clear();
             context->UpdateAnimationPosePreview(sceneManager);
         }
@@ -86,7 +86,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         ImGui::SetNextItemWidth(120.0f);
         if (ImGui::DragInt("最大フレーム数 (Duration)", &totalFrames, 1.0f, 1, 6000, "%d F")) {
             if (totalFrames < 1) totalFrames = 1;
-            context->GetEditingAnimation().duration = static_cast<float>(totalFrames) / (context->GetAnimEditorFps() > 0.0f ? context->GetAnimEditorFps() : 60.0f);
+            context->GetEditingAnimationMutable().duration = static_cast<float>(totalFrames) / (context->GetAnimEditorFps() > 0.0f ? context->GetAnimEditorFps() : 60.0f);
         }
         if (ImGui::IsItemActivated()) {
             context->BeginDragSnapshot("フレーム数変更");
@@ -102,7 +102,10 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[%.2f 秒]", context->GetEditingAnimation().duration);
 
         ImGui::SetNextItemWidth(120.0f);
-        ImGui::DragFloat("フレームレート (FPS)", &context->GetAnimEditorFps(), 1.0f, 10.0f, 120.0f, "%.0f fps");
+        float fps = context->GetAnimEditorFps();
+        if (ImGui::DragFloat("フレームレート (FPS)", &fps, 1.0f, 10.0f, 120.0f, "%.0f fps")) {
+            context->SetAnimEditorFps(fps);
+        }
     }
 
     ImGui::Spacing();
@@ -181,7 +184,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         ImGui::Spacing();
     }
 
-    NodeAnimation& nodeAnim = context->GetEditingAnimation().nodeAnimations[context->GetSelectedJointName()];
+    NodeAnimation& nodeAnim = context->GetEditingAnimationMutable().nodeAnimations[context->GetSelectedJointName()];
     AnimatorComponent* anim = context->GetTargetAnimator(sceneManager);
 
     // ----------------------------------------------------
@@ -274,7 +277,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
             return;
         }
 
-        NodeAnimation& oppNodeAnim = context->GetEditingAnimation().nodeAnimations[oppJointName];
+        NodeAnimation& oppNodeAnim = context->GetEditingAnimationMutable().nodeAnimations[oppJointName];
 
         if (newTrans) {
             bool found = false;
@@ -466,7 +469,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
             if (std::abs(nodeAnim.rotate[idx].time - context->GetAnimEditorTime()) < 0.005f) {
                 nodeAnim.rotate[idx].value = newQ;
-                context->GetSelectedKeyIndex() = static_cast<int>(idx);
+                context->SetSelectedKeyIndex(static_cast<int>(idx));
                 foundKey = true;
                 break;
             }
@@ -602,7 +605,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
                 [curT](const KeyframeVector3& kf) { return std::abs(kf.time - curT) < 0.005f; }),
             nodeAnim.scale.end()
         );
-        context->GetSelectedKeyIndex() = -1;
+        context->SetSelectedKeyIndex(-1);
         context->GetTempOverrides().erase(context->GetSelectedJointName());
         if (!oppJointName.empty()) context->GetTempOverrides().erase(oppJointName);
         context->UpdateAnimationPosePreview(sceneManager);
@@ -611,7 +614,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
     if (ImGui::Button("[-] 全ボーンの現在キー削除 (Shift+Del)", ImVec2(-1, 24))) {
         context->PushAnimUndoState("全ボーン現在キー削除");
         float curT = context->GetAnimEditorTime();
-        for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
+        for (auto& [nName, nAnim] : context->GetEditingAnimationMutable().nodeAnimations) {
             nAnim.rotate.erase(
                 std::remove_if(nAnim.rotate.begin(), nAnim.rotate.end(),
                     [curT](const KeyframeQuaternion& kf) { return std::abs(kf.time - curT) < 0.005f; }),
@@ -628,7 +631,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
                 nAnim.scale.end()
             );
         }
-        context->GetSelectedKeyIndex() = -1;
+        context->SetSelectedKeyIndex(-1);
         context->GetTempOverrides().clear();
         context->UpdateAnimationPosePreview(sceneManager);
     }
@@ -657,7 +660,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
             auto itK = nodeAnim.rotate.begin();
             while (itK != nodeAnim.rotate.end() && itK->time < newKf.time) ++itK;
             auto inserted = nodeAnim.rotate.insert(itK, newKf);
-            context->GetSelectedKeyIndex() = static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted));
+            context->SetSelectedKeyIndex(static_cast<int>(std::distance(nodeAnim.rotate.begin(), inserted)));
         }
         context->GetTempOverrides().erase(context->GetSelectedJointName());
         if (!oppJointName.empty()) context->GetTempOverrides().erase(oppJointName);
@@ -668,7 +671,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         const Skeleton* skelPtr = (anim && anim->HasSkeleton()) ? &anim->GetSkeleton() : nullptr;
 
         for (const auto& jName : context->GetCurrentJointList()) {
-            NodeAnimation& nAnim = context->GetEditingAnimation().nodeAnimations[jName];
+            NodeAnimation& nAnim = context->GetEditingAnimationMutable().nodeAnimations[jName];
 
             Quaternion defRot{ 0.0f, 0.0f, 0.0f, 1.0f };
             Vector3 defTrans{ 0.0f, 0.0f, 0.0f };
@@ -744,7 +747,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
         const Skeleton* skelPtr = (anim && anim->HasSkeleton()) ? &anim->GetSkeleton() : nullptr;
 
         for (const auto& jName : context->GetCurrentJointList()) {
-            NodeAnimation& nAnim = context->GetEditingAnimation().nodeAnimations[jName];
+            NodeAnimation& nAnim = context->GetEditingAnimationMutable().nodeAnimations[jName];
             nAnim.rotate.clear();
             nAnim.translate.clear();
             nAnim.scale.clear();
@@ -767,7 +770,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
             nAnim.translate.push_back({ 0.0f, defTrans });
             nAnim.scale.push_back({ 0.0f, defScale });
         }
-        context->GetSelectedKeyIndex() = -1;
+        context->SetSelectedKeyIndex(-1);
         context->GetTempOverrides().clear();
         context->UpdateAnimationPosePreview(sceneManager);
     }
@@ -812,11 +815,11 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
                 bool isCurTime = (std::abs(context->GetAnimEditorTime() - kTime) < 0.005f);
 
                 if (ImGui::Selectable(kBuf, isCurTime)) {
-                    context->GetAnimEditorTime() = kTime;
-                    context->GetSelectedKeyIndex() = -1;
+                    context->SetAnimEditorTime(kTime);
+                    context->SetSelectedKeyIndex(-1);
                     for (size_t ri = 0; ri < nodeAnim.rotate.size(); ++ri) {
                         if (std::abs(nodeAnim.rotate[ri].time - kTime) < 0.005f) {
-                            context->GetSelectedKeyIndex() = static_cast<int>(ri);
+                            context->SetSelectedKeyIndex(static_cast<int>(ri));
                             break;
                         }
                     }
@@ -858,7 +861,7 @@ void AnimationInspector::DrawInspectorUI(SceneManager* sceneManager, AnimationEd
                     nodeAnim.scale.end()
                 );
 
-                context->GetSelectedKeyIndex() = -1;
+                context->SetSelectedKeyIndex(-1);
                 context->UpdateAnimationPosePreview(sceneManager);
             }
         }
