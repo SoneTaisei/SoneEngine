@@ -3,7 +3,7 @@ name: DevelopBuild
 on:
   push:
     branches:
-      - develop  # 開発用ブランチを指定
+      - master  # 開発用ブランチを指定
       - Game_master
       - 10Days_master
       - Engine_master
