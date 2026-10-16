@@ -202,6 +202,7 @@ public:
     void DeleteBlockRange(int trackIdx, int startFrame, int endFrame);
     void ApplyMacro(int startFrame, const ReplayMacro& macro); // マクロを流し込む
     void RebuildMmlFromFrames(ReplayData& data);
+    void RebuildMmlFromCurrentFrames() { RebuildMmlFromFrames(currentReplay_); }
     void RebuildFramesFromMml(ReplayData& data);
 
     // --- 動的オブジェクト（動く床・扉・スイッチ等）のリプレイ対応 ---
@@ -295,7 +296,8 @@ public:
     bool IsInterpolationEnabled() const { return isInterpolationEnabled_; }
     void SetInterpolationEnabled(bool enable) { isInterpolationEnabled_ = enable; }
 
-    ReplayData& GetCurrentReplay() { return currentReplay_; }
+    const ReplayData& GetCurrentReplay() const { return currentReplay_; }
+    void SetCurrentReplay(const ReplayData& replay) { currentReplay_ = replay; }
     const std::vector<ReplayData>& GetHistory() const { return history_; }
     const std::vector<std::string>& GetSavedList() const { return savedList_; }
 

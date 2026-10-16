@@ -31,14 +31,14 @@ void AnimationDopeSheet::Initialize() {
 void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEditorContext* context) {
     if (!context->GetAnimEditorInitialized()) {
         context->ScanAnimationFiles();
-        if (!LoadAnimationFromJsonFile(context->GetEditingAnimation(), context->GetCurrentAnimFilePath())) {
+        if (!LoadAnimationFromJsonFile(context->GetEditingAnimationMutable(), context->GetCurrentAnimFilePath())) {
             if (context->GetCurrentAnimFilePath().find("wall_climb") != std::string::npos) {
-                context->GetEditingAnimation() = CreateDefaultWallClimbAnimation();
+                context->SetEditingAnimation(CreateDefaultWallClimbAnimation());
             } else if (context->GetCurrentAnimFilePath().find("air_dash") != std::string::npos) {
-                context->GetEditingAnimation() = CreateDefaultAirDashAnimation();
+                context->SetEditingAnimation(CreateDefaultAirDashAnimation());
             }
         }
-        context->GetAnimEditorInitialized() = true;
+        context->SetAnimEditorInitialized(true);
     }
 
     if (context->GetAvailableAnimationFiles().empty()) {
@@ -84,15 +84,15 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 if (ImGui::Selectable(displayName.c_str(), isSel)) {
                     if (context->GetCurrentAnimFilePath() != filePath) {
                         context->GetCurrentAnimFilePath() = filePath;
-                        if (!LoadAnimationFromJsonFile(context->GetEditingAnimation(), context->GetCurrentAnimFilePath())) {
+                        if (!LoadAnimationFromJsonFile(context->GetEditingAnimationMutable(), context->GetCurrentAnimFilePath())) {
                             if (context->GetCurrentAnimFilePath().find("wall_climb") != std::string::npos) {
-                                context->GetEditingAnimation() = CreateDefaultWallClimbAnimation();
+                                context->SetEditingAnimation(CreateDefaultWallClimbAnimation());
                             } else if (context->GetCurrentAnimFilePath().find("air_dash") != std::string::npos) {
-                                context->GetEditingAnimation() = CreateDefaultAirDashAnimation();
+                                context->SetEditingAnimation(CreateDefaultAirDashAnimation());
                             }
                         }
-                        context->GetAnimEditorTime() = 0.0f;
-                        context->GetSelectedKeyIndex() = -1;
+                        context->SetAnimEditorTime(0.0f);
+                        context->SetSelectedKeyIndex(-1);
                         context->ClearAnimUndoRedo();
                         context->UpdateAnimationPosePreview(sceneManager);
                         LogManager::GetInstance()->AddLog(LogLevel::Info, "アニメーション読込: " + context->GetCurrentAnimFilePath());
@@ -200,19 +200,19 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 // 新しく利用可能なファイルから読み込み
                 if (!context->GetAvailableAnimationFiles().empty()) {
                     context->GetCurrentAnimFilePath() = context->GetAvailableAnimationFiles()[0];
-                    if (!LoadAnimationFromJsonFile(context->GetEditingAnimation(), context->GetCurrentAnimFilePath())) {
+                    if (!LoadAnimationFromJsonFile(context->GetEditingAnimationMutable(), context->GetCurrentAnimFilePath())) {
                         if (context->GetCurrentAnimFilePath().find("wall_climb") != std::string::npos) {
-                            context->GetEditingAnimation() = CreateDefaultWallClimbAnimation();
+                            context->SetEditingAnimation(CreateDefaultWallClimbAnimation());
                         } else if (context->GetCurrentAnimFilePath().find("air_dash") != std::string::npos) {
-                            context->GetEditingAnimation() = CreateDefaultAirDashAnimation();
+                            context->SetEditingAnimation(CreateDefaultAirDashAnimation());
                         }
                     }
                 } else {
-                    context->GetEditingAnimation() = Animation{};
+                    context->SetEditingAnimation(Animation{});
                 }
 
-                context->GetAnimEditorTime() = 0.0f;
-                context->GetSelectedKeyIndex() = -1;
+                context->SetAnimEditorTime(0.0f);
+                context->SetSelectedKeyIndex(-1);
                 context->ClearAnimUndoRedo();
                 context->UpdateAnimationPosePreview(sceneManager);
 
@@ -235,8 +235,8 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         // 再生コントロールボタン群
         // 先頭へ (|<<)
         if (ImGui::Button("|<<", ImVec2(32, 0))) {
-            context->GetAnimEditorTime() = 0.0f;
-            context->GetAnimEditorPlaying() = false;
+            context->SetAnimEditorTime(0.0f);
+            context->SetAnimEditorPlaying(false);
             context->GetTempOverrides().clear();
             context->UpdateAnimationPosePreview(sceneManager);
         }
@@ -245,7 +245,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         ImGui::SameLine();
         // 1フレーム戻る (<)
         if (ImGui::Button("<", ImVec2(28, 0))) {
-            context->GetAnimEditorTime() = (std::max)(0.0f, context->GetAnimEditorTime() - 1.0f / context->GetAnimEditorFps());
+            context->SetAnimEditorTime((std::max)(0.0f, context->GetAnimEditorTime() - 1.0f / context->GetAnimEditorFps()));
             context->GetTempOverrides().clear();
             context->UpdateAnimationPosePreview(sceneManager);
         }
@@ -256,13 +256,13 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         if (context->GetAnimEditorPlaying()) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
             if (ImGui::Button("[||] 停止", ImVec2(68, 0))) {
-                context->GetAnimEditorPlaying() = false;
+                context->SetAnimEditorPlaying(false);
             }
             ImGui::PopStyleColor();
         } else {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.3f, 1.0f));
             if (ImGui::Button("[>] 再生", ImVec2(68, 0))) {
-                context->GetAnimEditorPlaying() = true;
+                context->SetAnimEditorPlaying(true);
                 context->GetTempOverrides().clear();
             }
             ImGui::PopStyleColor();
@@ -272,7 +272,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         ImGui::SameLine();
         // 1フレーム進む (>)
         if (ImGui::Button(">", ImVec2(28, 0))) {
-            context->GetAnimEditorTime() = (std::min)(context->GetEditingAnimation().duration, context->GetAnimEditorTime() + 1.0f / context->GetAnimEditorFps());
+            context->SetAnimEditorTime((std::min)(context->GetEditingAnimation().duration, context->GetAnimEditorTime() + 1.0f / context->GetAnimEditorFps()));
             context->GetTempOverrides().clear();
             context->UpdateAnimationPosePreview(sceneManager);
         }
@@ -281,8 +281,8 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         ImGui::SameLine();
         // 末尾へ (>>|)
         if (ImGui::Button(">>|", ImVec2(32, 0))) {
-            context->GetAnimEditorTime() = context->GetEditingAnimation().duration;
-            context->GetAnimEditorPlaying() = false;
+            context->SetAnimEditorTime(context->GetEditingAnimation().duration);
+            context->SetAnimEditorPlaying(false);
             context->GetTempOverrides().clear();
             context->UpdateAnimationPosePreview(sceneManager);
         }
@@ -383,7 +383,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 }
             } else if (!io.WantTextInput) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
-                    context->GetAnimEditorPlaying() = !context->GetAnimEditorPlaying();
+                    context->SetAnimEditorPlaying(!context->GetAnimEditorPlaying());
                     if (context->GetAnimEditorPlaying()) context->GetTempOverrides().clear();
                 }
                 if (ImGui::IsKeyPressed(ImGuiKey_T, false)) context->GetGizmoMode() = 0; // Translate (移動)
@@ -404,7 +404,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                         // Shift+Del または サマリー/全体選択時は全ボーンのキーを一括削除
                         context->PushAnimUndoState("全ボーンキー削除 (Del)");
                         float delTime = context->GetAnimEditorTime();
-                        for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
+                        for (auto& [nName, nAnim] : context->GetEditingAnimationMutable().nodeAnimations) {
                             nAnim.rotate.erase(
                                 std::remove_if(nAnim.rotate.begin(), nAnim.rotate.end(),
                                     [delTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - delTime) < 0.005f; }),
@@ -421,12 +421,12 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                                 nAnim.scale.end()
                             );
                         }
-                        context->GetSelectedKeyIndex() = -1;
+                        context->SetSelectedKeyIndex(-1);
                         context->UpdateAnimationPosePreview(sceneManager);
                     } else {
                         // 選択中ボーンの個別キー削除
                         context->PushAnimUndoState("キー削除 (Del)");
-                        NodeAnimation& nodeAnim = context->GetEditingAnimation().nodeAnimations[context->GetSelectedJointName()];
+                        NodeAnimation& nodeAnim = context->GetEditingAnimationMutable().nodeAnimations[context->GetSelectedJointName()];
                         float delTime = context->GetAnimEditorTime();
                         if (context->GetSelectedKeyIndex() >= 0 && context->GetSelectedKeyIndex() < static_cast<int>(nodeAnim.rotate.size())) {
                             delTime = nodeAnim.rotate[context->GetSelectedKeyIndex()].time;
@@ -450,7 +450,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                             nodeAnim.scale.end()
                         );
 
-                        context->GetSelectedKeyIndex() = -1;
+                        context->SetSelectedKeyIndex(-1);
                         context->UpdateAnimationPosePreview(sceneManager);
                     }
                 }
@@ -636,7 +636,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
                 newT = std::clamp(newT, 0.0f, context->GetEditingAnimation().duration);
                 if (std::abs(newT - dragSummaryCurrentTime_) > 0.0001f) {
-                    for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
+                    for (auto& [nName, nAnim] : context->GetEditingAnimationMutable().nodeAnimations) {
                         for (auto& k : nAnim.rotate) {
                             if (std::abs(k.time - dragSummaryCurrentTime_) < 0.005f) k.time = newT;
                         }
@@ -648,11 +648,11 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                         }
                     }
                     dragSummaryCurrentTime_ = newT;
-                    context->GetAnimEditorTime() = newT;
+                    context->SetAnimEditorTime(newT);
                     context->UpdateAnimationPosePreview(sceneManager);
                 }
             } else {
-                for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
+                for (auto& [nName, nAnim] : context->GetEditingAnimationMutable().nodeAnimations) {
                     std::sort(nAnim.rotate.begin(), nAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) { return a.time < b.time; });
                     std::sort(nAnim.translate.begin(), nAnim.translate.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) { return a.time < b.time; });
                     std::sort(nAnim.scale.begin(), nAnim.scale.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) { return a.time < b.time; });
@@ -676,8 +676,8 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                 float newT = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
                 newT = std::clamp(newT, 0.0f, context->GetEditingAnimation().duration);
                 if (std::abs(newT - dragAnimKeyCurrentTime_) > 0.0001f) {
-                    auto itNodeAnim = context->GetEditingAnimation().nodeAnimations.find(dragAnimKeyJointName_);
-                    if (itNodeAnim != context->GetEditingAnimation().nodeAnimations.end()) {
+                    auto itNodeAnim = context->GetEditingAnimationMutable().nodeAnimations.find(dragAnimKeyJointName_);
+                    if (itNodeAnim != context->GetEditingAnimationMutable().nodeAnimations.end()) {
                         auto& nodeAnim = itNodeAnim->second;
                         for (auto& k : nodeAnim.rotate) {
                             if (std::abs(k.time - dragAnimKeyCurrentTime_) < 0.005f) k.time = newT;
@@ -690,12 +690,12 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                         }
                     }
                     dragAnimKeyCurrentTime_ = newT;
-                    context->GetAnimEditorTime() = newT;
+                    context->SetAnimEditorTime(newT);
                     context->UpdateAnimationPosePreview(sceneManager);
                 }
             } else {
-                auto itNodeAnim = context->GetEditingAnimation().nodeAnimations.find(dragAnimKeyJointName_);
-                if (itNodeAnim != context->GetEditingAnimation().nodeAnimations.end()) {
+                auto itNodeAnim = context->GetEditingAnimationMutable().nodeAnimations.find(dragAnimKeyJointName_);
+                if (itNodeAnim != context->GetEditingAnimationMutable().nodeAnimations.end()) {
                     auto& nodeAnim = itNodeAnim->second;
                     std::sort(nodeAnim.rotate.begin(), nodeAnim.rotate.end(), [](const KeyframeQuaternion& a, const KeyframeQuaternion& b) { return a.time < b.time; });
                     std::sort(nodeAnim.translate.begin(), nodeAnim.translate.end(), [](const KeyframeVector3& a, const KeyframeVector3& b) { return a.time < b.time; });
@@ -718,7 +718,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         if (isAnimRulerScrubbing_) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 float newTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
-                context->GetAnimEditorTime() = std::clamp(newTime, 0.0f, context->GetEditingAnimation().duration);
+                context->SetAnimEditorTime(std::clamp(newTime, 0.0f, context->GetEditingAnimation().duration));
                 context->UpdateAnimationPosePreview(sceneManager);
             } else {
                 isAnimRulerScrubbing_ = false;
@@ -760,8 +760,8 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                     isSummaryKeyDrag_ = true;
                     dragSummaryStartTime_ = sTime;
                     dragSummaryCurrentTime_ = sTime;
-                    context->GetAnimEditorTime() = sTime;
-                    context->GetSelectedKeyIndex() = -1;
+                    context->SetAnimEditorTime(sTime);
+                    context->SetSelectedKeyIndex(-1);
                     context->SetIsSummarySelected(true);
                     context->GetTempOverrides().clear();
                     context->UpdateAnimationPosePreview(sceneManager);
@@ -777,7 +777,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
 
         if (deleteSummaryTime >= 0.0f) {
             context->PushAnimUndoState("全ボーンキー削除");
-            for (auto& [nName, nAnim] : context->GetEditingAnimation().nodeAnimations) {
+            for (auto& [nName, nAnim] : context->GetEditingAnimationMutable().nodeAnimations) {
                 nAnim.rotate.erase(
                     std::remove_if(nAnim.rotate.begin(), nAnim.rotate.end(),
                         [deleteSummaryTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - deleteSummaryTime) < 0.005f; }),
@@ -794,7 +794,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                     nAnim.scale.end()
                 );
             }
-            context->GetSelectedKeyIndex() = -1;
+            context->SetSelectedKeyIndex(-1);
             context->SetIsSummarySelected(true);
             context->UpdateAnimationPosePreview(sceneManager);
         }
@@ -844,10 +844,10 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                                 dragAnimKeyJointName_ = jointName;
                                 dragAnimKeyStartTime_ = kTime;
                                 dragAnimKeyCurrentTime_ = kTime;
-                                context->GetSelectedJointName() = jointName;
-                                context->GetSelectedKeyIndex() = kIdx;
+                                context->SetSelectedJointName(jointName);
+                                context->SetSelectedKeyIndex(kIdx);
                                 context->SetIsSummarySelected(false);
-                                context->GetAnimEditorTime() = kTime;
+                                context->SetAnimEditorTime(kTime);
                                 context->GetTempOverrides().clear();
                                 context->UpdateAnimationPosePreview(sceneManager);
                                 context->BeginDragSnapshot("キーフレーム移動");
@@ -871,7 +871,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
 
         if (!deleteTrackKeyJoint.empty() && deleteTrackKeyTime >= 0.0f) {
             context->PushAnimUndoState("キーフレーム削除");
-            auto& nodeAnim = context->GetEditingAnimation().nodeAnimations[deleteTrackKeyJoint];
+            auto& nodeAnim = context->GetEditingAnimationMutable().nodeAnimations[deleteTrackKeyJoint];
             nodeAnim.rotate.erase(
                 std::remove_if(nodeAnim.rotate.begin(), nodeAnim.rotate.end(),
                     [deleteTrackKeyTime](const KeyframeQuaternion& kf) { return std::abs(kf.time - deleteTrackKeyTime) < 0.005f; }),
@@ -887,7 +887,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
                     [deleteTrackKeyTime](const KeyframeVector3& kf) { return std::abs(kf.time - deleteTrackKeyTime) < 0.005f; }),
                 nodeAnim.scale.end()
             );
-            context->GetSelectedKeyIndex() = -1;
+            context->SetSelectedKeyIndex(-1);
             context->UpdateAnimationPosePreview(sceneManager);
         }
 
@@ -896,7 +896,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
             isAnimRulerScrubbing_ = true;
             context->GetTempOverrides().clear();
             float newTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
-            context->GetAnimEditorTime() = std::clamp(newTime, 0.0f, context->GetEditingAnimation().duration);
+            context->SetAnimEditorTime(std::clamp(newTime, 0.0f, context->GetEditingAnimation().duration));
             context->UpdateAnimationPosePreview(sceneManager);
         }
 
@@ -967,7 +967,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             if (mousePos.x >= p0.x && mousePos.x <= p0.x + trackListWidth && mousePos.y >= summaryY && mousePos.y < summaryY + summaryHeight) {
                 context->SetIsSummarySelected(true);
-                context->GetSelectedKeyIndex() = -1;
+                context->SetSelectedKeyIndex(-1);
             }
         }
 
@@ -1074,7 +1074,7 @@ void AnimationDopeSheet::DrawDopeSheetUI(SceneManager* sceneManager, AnimationEd
         if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             if (mousePos.x >= timelineStartX && mousePos.x <= timelineEndX && mousePos.y > summaryY + summaryHeight && !isDraggingAnimKeyframe_ && !isSummaryKeyDrag_) {
                 float clickTime = (mousePos.x - timelineStartX + animTimelineScrollX_) / animTimelineZoom_;
-                context->GetAnimEditorTime() = std::clamp(clickTime, 0.0f, context->GetEditingAnimation().duration);
+                context->SetAnimEditorTime(std::clamp(clickTime, 0.0f, context->GetEditingAnimation().duration));
                 context->GetTempOverrides().clear();
                 context->UpdateAnimationPosePreview(sceneManager);
             }

@@ -6,6 +6,7 @@ PrimitiveCylinder::PrimitiveCylinder(float radius, float height, uint32_t segmen
 }
 
 void PrimitiveCylinder::GenerateModelData() {
+    auto &modelData = GetModelDataRef();
 
     float kTopRadius = radius_;
     float kBottomRadius = radius_;
@@ -64,10 +65,10 @@ void PrimitiveCylinder::GenerateModelData() {
         v[5].normal = {-sinNext, 0.0f, cosNext};
         v[5].color = {1.0f, 1.0f, 1.0f, 1.0f};
 
-        uint32_t baseIndex = static_cast<uint32_t>(modelData_.vertices.size());
+        uint32_t baseIndex = static_cast<uint32_t>(modelData.vertices.size());
         for (int j = 0; j < 6; ++j) {
-            modelData_.vertices.push_back(v[j]);
-            modelData_.indices.push_back(baseIndex + j);
+            modelData.vertices.push_back(v[j]);
+            modelData.indices.push_back(baseIndex + j);
         }
     }
 

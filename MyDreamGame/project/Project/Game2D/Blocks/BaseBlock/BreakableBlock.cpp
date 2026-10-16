@@ -28,10 +28,10 @@ void BreakableBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, f
     auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
-    prc->GetMaterial().color = blockColor_;
+    prc->SetColor(blockColor_);
     tc->SetScale(baseScale_);
     tc->SetPosition(basePosition_);
-    prc->GetMaterial().lightingType = 1;
+    prc->SetLightingType(1);
 
     // コライダーの初期設定（通常ブロックと同様にSolid）
     SetupCollider();
@@ -46,8 +46,8 @@ void BreakableBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, f
         auto* dprc = d.gameObject->AddComponent<PrimitiveRendererComponent>();
 
         dprc->Initialize(device, boxPrimitive);
-        dprc->GetMaterial().color = blockColor_;
-        dprc->GetMaterial().lightingType = 1;
+        dprc->SetColor(blockColor_);
+        dprc->SetLightingType(1);
 
         d.initialScale = { width * 0.35f, height * 0.35f, 0.35f };
         dtc->SetScale(d.initialScale);
@@ -113,7 +113,9 @@ void BreakableBlock::Update() {
         // フェードアウト
         if (auto* prc = debris.gameObject->GetComponent<PrimitiveRendererComponent>()) {
             float progress = debris.timer / debris.lifetime;
-            prc->GetMaterial().color.w = (std::max)(0.0f, 1.0f - progress);
+            Vector4 c = prc->GetColor();
+            c.w = (std::max)(0.0f, 1.0f - progress);
+            prc->SetColor(c);
         }
 
         debris.gameObject->Update();
@@ -334,8 +336,10 @@ void BreakableBlock::BreakInternal(Player2D* player, const Vector3& inheritedDas
             tc->SetRotation({ 0.0f, 0.0f, 0.0f });
         }
         if (auto* prc = d.gameObject->GetComponent<PrimitiveRendererComponent>()) {
-            prc->GetMaterial().color = blockColor_;
-            prc->GetMaterial().color.w = 1.0f;
+            prc->SetColor(blockColor_);
+            Vector4 c = prc->GetMaterial().color;
+            c.w = 1.0f;
+            prc->SetColor(c);
         }
 
         float speed = distSpeed(rng);
@@ -381,8 +385,10 @@ void BreakableBlock::Respawn() {
             tc->SetScale(baseScale_);
         }
         if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            prc->GetMaterial().color = blockColor_;
-            prc->GetMaterial().color.w = 1.0f;
+            prc->SetColor(blockColor_);
+            Vector4 c = prc->GetMaterial().color;
+            c.w = 1.0f;
+            prc->SetColor(c);
         }
     }
 
@@ -420,7 +426,7 @@ void BreakableBlock::SetProperties(const nlohmann::json& properties) {
         }
         if (GetGameObject()) {
             if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                prc->GetMaterial().color = blockColor_;
+                prc->SetColor(blockColor_);
             }
         }
     }
@@ -470,7 +476,7 @@ void BreakableBlock::DrawImGui() {
         blockColor_ = { col[0], col[1], col[2], col[3] };
         if (GetGameObject()) {
             if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                prc->GetMaterial().color = blockColor_;
+                prc->SetColor(blockColor_);
             }
         }
     }
