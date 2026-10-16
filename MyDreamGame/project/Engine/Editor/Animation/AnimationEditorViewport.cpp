@@ -556,7 +556,7 @@ void AnimationEditorViewport::DrawBoneTransformGizmo(SceneManager* sceneManager,
         IM_COL32(140, 200, 255, 255)
     };
 
-    NodeAnimation& nodeAnim = context->GetEditingAnimation().nodeAnimations[context->GetSelectedJointName()];
+    NodeAnimation& nodeAnim = context->GetEditingAnimationMutable().nodeAnimations[context->GetSelectedJointName()];
 
     bool hasAnySymmetryAxis = context->GetAnimSymmetryAxisX() || context->GetAnimSymmetryAxisY() || context->GetAnimSymmetryAxisZ();
     std::string gizmoOppJoint = (context->GetAnimSymmetryMode() && hasAnySymmetryAxis) ? context->FindOppositeJointName(context->GetSelectedJointName(), context->GetAnimSymmetryAxisX(), context->GetAnimSymmetryAxisY(), context->GetAnimSymmetryAxisZ(), &skeleton) : "";
@@ -588,7 +588,7 @@ void AnimationEditorViewport::DrawBoneTransformGizmo(SceneManager* sceneManager,
             return;
         }
 
-        NodeAnimation& oppNode = context->GetEditingAnimation().nodeAnimations[gizmoOppJoint];
+        NodeAnimation& oppNode = context->GetEditingAnimationMutable().nodeAnimations[gizmoOppJoint];
 
         if (newT) {
             bool found = false;
@@ -856,7 +856,7 @@ void AnimationEditorViewport::DrawBoneTransformGizmo(SceneManager* sceneManager,
                 for (size_t idx = 0; idx < nodeAnim.rotate.size(); ++idx) {
                     if (std::abs(nodeAnim.rotate[idx].time - context->GetAnimEditorTime()) < 0.005f) {
                         nodeAnim.rotate[idx].value = newQ;
-                        context->GetSelectedKeyIndex() = static_cast<int>(idx);
+                        context->SetSelectedKeyIndex(static_cast<int>(idx));
                         found = true;
                         break;
                     }
