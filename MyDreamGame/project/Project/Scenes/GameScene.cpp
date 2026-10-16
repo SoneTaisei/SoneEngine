@@ -471,61 +471,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
-        bool isRewinding = false;
-        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
-            auto keyboard = KeyboardInput::GetInstance();
-            auto gamepad = GamepadInput::GetInstance();
-            bool keyRewind = (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) &&
-                             keyboard->IsKeyDown(DIK_LEFT);
-            bool padRewind = gamepad->IsButtonDown(GamepadButton::LB) || (gamepad->GetLeftTrigger() > 0.3f);
-            if (keyRewind || padRewind) {
-                isRewinding = true;
-            }
-        }
 
-        if (isRewinding) {
-            FrameData poppedFrame;
-            if (ReplayManager::GetInstance()->PopRecordedFrame(poppedFrame)) {
-                player_->SetPosition(poppedFrame.position);
-                if (auto* prim = player_->GetPrimitiveObject()) {
-                    prim->GetMaterial().color = poppedFrame.color;
-                    prim->SetScale(poppedFrame.scale);
-                    prim->SetRotation(poppedFrame.rotation);
-                    prim->SetTranslation(poppedFrame.position);
-                    prim->Update();
-                }
-                if (GetGameCamera()) {
-                    GetGameCamera()->SetFollowTarget(nullptr);
-                    GetGameCamera()->SetTranslation(poppedFrame.cameraPosition);
-                }
-
-                // マップチップ（コインなど）の巻き戻し
-                std::string initMapStr = ReplayManager::GetInstance()->GetCurrentMapDataStr();
-                if (!initMapStr.empty()) {
-                    // 再構築を一時停止
-                    map_->SetRebuildEnabled(false);
-
-                    // 初期状態のマップに戻す
-                    map_->LoadFromString(initMapStr);
-                    player_->SetScore(0);
-                    
-                    // 録画されているフレームを最初からたどってコインの取得状態を再構築する
-                    const auto& frames = ReplayManager::GetInstance()->GetTemporaryRecordedFrames();
-                    for (const auto& frame : frames) {
-                        player_->SetPosition(frame.position);
-                    }
-                    
-                    // 今ポップしたフレームの座標でも判定しておく
-                    player_->SetPosition(poppedFrame.position);
-                    
-                    // 再構築を再開（ここで一括構築される）
-                    map_->SetRebuildEnabled(true);
-
-                    // スコアを同期
-                    previousScore_ = player_->GetScore();
-                }
-            }
-        } else {
             // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
             if (ReplayManager::GetInstance()->IsPlaying()) {
                 // ループ判定を再生処理の一番最初で行う
@@ -611,7 +557,7 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
 
-            if (GetGameCamera() && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding) {
+            if (GetGameCamera() && !ReplayManager::GetInstance()->IsPlaying()) {
                 if (player_->IsDead()) {
                     GetGameCamera()->SetFollowTarget(nullptr);
                 } else {
@@ -665,7 +611,6 @@ void GameScene::Update(SceneManager *sceneManager) {
                 }
                 previousScore_ = currentScore;
             }
-        }
 
         // 右スティック（RStick）によるカメラ見渡し回転
         auto gamepad = GamepadInput::GetInstance();
@@ -690,26 +635,17 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
 
-        if (!isRewinding && wasRewindingLastFrame_) {
-            if (GetGameCamera()) {
-                GetGameCamera()->SetFollowTarget(&player_->GetPosition());
-            }
-        }
-        wasRewindingLastFrame_ = isRewinding;
-
         // プレイ中の場合、リプレイ録画を行う
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
-            if (!isRewinding) {
-                Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
-                if (!ReplayManager::GetInstance()->IsRecording()) {
-                    std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
-                    ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
-                }
-                Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-                Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
-                Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
-                ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
+            Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
+            if (!ReplayManager::GetInstance()->IsRecording()) {
+                std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
+                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
             }
+            Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+            Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
+            Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
+            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
         } else {
             if (ReplayManager::GetInstance()->IsRecording()) {
                 ReplayManager::GetInstance()->StopRecord();
@@ -762,13 +698,11 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "[A] : Jump / Wall Jump");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "[X] : Dash");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "[RB] / [RT] : Wall Cling");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[LB] / [LT] : Rewind");
         } else {
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "Ctrl + Left : Rewind");
         }
         ImGui::End();
     }

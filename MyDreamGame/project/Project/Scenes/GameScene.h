@@ -81,7 +81,6 @@ private:
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
     bool wasCurrentlyPlaying_ = false;
     bool wasPlayingLastFrame_ = false;
-    bool wasRewindingLastFrame_ = false;
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;

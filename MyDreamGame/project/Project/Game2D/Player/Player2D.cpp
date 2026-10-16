@@ -57,6 +57,11 @@ void Player2D::StartDeathSequence(bool isFallDeath) {
     state_.isRespawning_ = false;
     state_.deathTimer_ = 0.0f;
     state_.isDashing_ = false;
+    state_.hasDashInertia_ = false;
+    state_.dashJumpWindowTimer_ = 0.0f;
+    state_.lastDashDirX_ = 0.0f;
+    state_.jumpBufferTimer_ = 0.0f;
+    state_.coyoteTimer_ = 0.0f;
 
     if (isFallDeath) {
         state_.velocity_.y = -5.0f;
@@ -86,6 +91,11 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.canDash_ = true;
     state_.isDashing_ = false;
     state_.dashTimer_ = 0.0f;
+    state_.hasDashInertia_ = false;
+    state_.dashJumpWindowTimer_ = 0.0f;
+    state_.lastDashDirX_ = 0.0f;
+    state_.jumpBufferTimer_ = 0.0f;
+    state_.coyoteTimer_ = 0.0f;
     state_.wallJumpDirLockTimer_ = 0.0f;
     state_.lockedDirectionX_ = 0.0f;
     state_.wallJumpTimer_ = 0.0f;
@@ -130,6 +140,11 @@ void Player2D::StartGoalSequence() {
     state_.goalTimer_ = 0.0f;
     state_.velocity_ = {0.0f, 0.0f, 0.0f};
     state_.isDashing_ = false;
+    state_.hasDashInertia_ = false;
+    state_.dashJumpWindowTimer_ = 0.0f;
+    state_.lastDashDirX_ = 0.0f;
+    state_.jumpBufferTimer_ = 0.0f;
+    state_.coyoteTimer_ = 0.0f;
     visuals_.SpawnConfetti(state_.position_);
 }
 
@@ -290,6 +305,16 @@ void Player2D::DisplayImGui() {
             ImGui::DragFloat("ダッシュ継続時間", &params_.dashDuration_, 0.01f, 0.0f, 2.0f);
             ImGui::DragFloat("ダッシュ速度", &params_.dashSpeed_, 0.1f, 0.0f, 50.0f);
             ImGui::DragFloat("ダッシュ終了時の上向き速度", &params_.dashEndUpwardVelocity_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("ダッシュ慣性保持率", &params_.dashEndInertiaRatio_, 0.05f, 0.0f, 2.0f);
+            ImGui::DragFloat("ダッシュ慣性減速率(地上)", &params_.dashInertiaDecayGround_, 0.5f, 0.0f, 100.0f);
+            ImGui::DragFloat("ダッシュ慣性減速率(空中)", &params_.dashInertiaDecayAir_, 0.5f, 0.0f, 100.0f);
+            ImGui::Separator();
+            ImGui::Text("ダッシュジャンプ (スーパージャンプ)");
+            ImGui::DragFloat("ダッシュジャンプ力倍率", &params_.dashJumpPowerMult_, 0.05f, 0.1f, 3.0f);
+            ImGui::DragFloat("ダッシュジャンプ追加速度", &params_.dashJumpBonusSpeed_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("ダッシュジャンプ速度倍率", &params_.dashJumpSpeedMult_, 0.05f, 0.5f, 3.0f);
+            ImGui::DragFloat("ダッシュジャンプ受付猶予時間", &params_.dashJumpWindow_, 0.01f, 0.0f, 1.0f);
+            ImGui::Checkbox("ダッシュジャンプ時ダッシュ回復", &params_.dashJumpRefreshDash_);
             ImGui::TreePop();
         }
 
