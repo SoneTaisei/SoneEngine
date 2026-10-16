@@ -1653,14 +1653,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         PushActionCommand(
                             [oldD, oldB, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = oldD;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(oldD);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = oldB;
                             },
                             [newData, newBlock, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = newData;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(newData);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = newBlock;
                             }
                         );
@@ -1711,7 +1711,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                 // ノードごとの手振れ/Jitter補正強度編集
                 auto replayMgrInstance = ReplayManager::GetInstance();
-                auto& currentJitters = replayMgrInstance->GetCurrentReplay().jitters;
+                ReplayData curReplay = replayMgrInstance->GetCurrentReplay();
+                auto& currentJitters = curReplay.jitters;
                 int currentJitterVal = 0;
                 for (const auto& j : currentJitters) {
                     if (j.keyIdx == selectedReplayBlock_.trackIdx && j.startFrame == selectedReplayBlock_.startFrame) {
@@ -1737,6 +1738,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         newJitter.maxJitter = currentJitterVal;
                         currentJitters.push_back(newJitter);
                     }
+                    replayMgrInstance->SetCurrentReplay(curReplay);
                 }
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("再生時に設定フレーム数の範囲内でキー入力をブレ（揺らぎ）させる強度を設定します");
@@ -1770,14 +1772,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     PushActionCommand(
                         [oldData, oldBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = oldData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(oldData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = oldBlock;
                         },
                         [newData, newBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = newData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(newData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = newBlock;
                         }
                     );
@@ -2738,14 +2740,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         PushActionCommand(
                             [oldData, oldBlock, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = oldData;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(oldData);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = oldBlock;
                             },
                             [newData, newBlock, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = newData;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(newData);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = newBlock;
                             }
                         );
@@ -2772,14 +2774,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     PushActionCommand(
                         [oldData, oldBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = oldData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(oldData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = oldBlock;
                         },
                         [newData, newBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = newData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(newData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = newBlock;
                         }
                     );

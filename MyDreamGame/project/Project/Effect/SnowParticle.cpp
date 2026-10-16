@@ -5,28 +5,28 @@ void SnowParticle::Update() {
 
     // ■■■ 1. 新規発生処理 (追加) ■■■
     // エミッタのタイマーを進める
-    emitter_.frequencyTime += kDeltaTime;
+    GetEmitter().frequencyTime += kDeltaTime;
     // 設定された頻度(frequency)を超えたら発生させる
-    if(emitter_.frequencyTime >= emitter_.frequency) {
+    if(GetEmitter().frequencyTime >= GetEmitter().frequency) {
         // 設定された個数分、リストに追加
         // ※Emitterの設定はInitializeなどでされている前提ですが、
         //   ここでお好みで調整してもOKです
-        emitter_.frequencyTime -= emitter_.frequency; // タイマーリセット
+        GetEmitter().frequencyTime -= GetEmitter().frequency; // タイマーリセット
 
 
-        // 発生場所をランダムに変えたい場合はここで emitter_.transform.translate をいじる
+        // 発生場所をランダムに変えたい場合はここで GetEmitter().transform.translate をいじる
         // 例: カメラの上空から降らせるなど
 
-        Emit(emitter_); // 親クラスのEmitを呼ぶ
+        Emit(GetEmitter()); // 親クラスのEmitを呼ぶ
     }
 
     // ■■■ 2. 既存パーティクルの更新 (元の処理) ■■■
-    for(auto it = particles_.begin(); it != particles_.end(); ) {
+    for(auto it = GetParticles().begin(); it != GetParticles().end(); ) {
         // ... (省略：元の移動処理や寿命チェック) ...
 
         // 寿命チェック
         if(it->lifeTime <= it->currentTime) {
-            it = particles_.erase(it);
+            it = GetParticles().erase(it);
             continue;
         }
 

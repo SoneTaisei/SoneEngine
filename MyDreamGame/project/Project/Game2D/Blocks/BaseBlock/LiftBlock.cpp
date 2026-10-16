@@ -58,10 +58,10 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     prc->Initialize(device, boxPrimitive);
     
     // リフトの色�E�例：�Eるい黁E��めE��レンジ�E�E
-    prc->GetMaterial().color = { 0.9f, 0.6f, 0.1f, 1.0f };
+    prc->SetColor({0.9f, 0.6f, 0.1f, 1.0f});
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->GetMaterial().lightingType = 1;
+    prc->SetLightingType(1);
 
     // レールの篁E��を探索して移動篁E��を決定すめE
     int spanWidth = static_cast<int>(std::round(width / GetMap()->GetChipSize()));

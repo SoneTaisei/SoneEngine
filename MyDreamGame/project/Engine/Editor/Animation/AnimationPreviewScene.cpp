@@ -249,9 +249,9 @@ std::shared_ptr<GameObject> AnimationPreviewScene::AddGameObjectFromModel(const 
         meshRenderer->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
         meshRenderer->SetTexturePath(texPath);
     }
-    meshRenderer->GetMaterial().color = { 0.85f, 0.85f, 0.88f, 1.0f };
-    meshRenderer->GetMaterial().lightingType = 1;
-    meshRenderer->GetMaterial().shininess = 40.0f;
+    meshRenderer->SetColor({0.85f, 0.85f, 0.88f, 1.0f});
+    meshRenderer->SetLightingType(1);
+    meshRenderer->SetShininess(40.0f);
 
     auto animator = newObj->AddComponent<AnimatorComponent>();
     animator->Initialize();
@@ -315,9 +315,9 @@ std::shared_ptr<GameObject> AnimationPreviewScene::CreateDefaultPlayerObject() {
     playerRenderer->SetTexturePath(texPath);
     playerRenderer->SetTextureHandle(playerTH);
     playerModel->SetTextureHandle(playerTH);
-    playerRenderer->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    playerRenderer->GetMaterial().lightingType = 1;
-    playerRenderer->GetMaterial().shininess = 40.0f;
+    playerRenderer->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+    playerRenderer->SetLightingType(1);
+    playerRenderer->SetShininess(40.0f);
 
     auto animator = playerObj->AddComponent<AnimatorComponent>();
     animator->Initialize();
@@ -467,13 +467,13 @@ bool AnimationPreviewScene::LoadHierarchyFromJson(const std::string& filePath) {
             if (item.contains("material")) {
                 const auto& m = item["material"];
                 if (m.contains("color") && m["color"].is_array() && m["color"].size() == 4) {
-                    meshRenderer->GetMaterial().color = { m["color"][0], m["color"][1], m["color"][2], m["color"][3] };
+                    meshRenderer->SetColor({m["color"][0], m["color"][1], m["color"][2], m["color"][3]});
                 }
                 if (m.contains("lightingType")) {
-                    meshRenderer->GetMaterial().lightingType = m["lightingType"].get<int>();
+                    meshRenderer->SetLightingType(m["lightingType"].get<int>());
                 }
                 if (m.contains("shininess")) {
-                    meshRenderer->GetMaterial().shininess = m["shininess"].get<float>();
+                    meshRenderer->SetShininess(m["shininess"].get<float>());
                 }
                 if (m.contains("isDoubleSided")) {
                     meshRenderer->SetIsDoubleSided(m["isDoubleSided"].get<bool>());
