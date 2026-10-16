@@ -54,7 +54,9 @@ void CoinBlock::Update() {
 
         // フェードアウト
         if (auto *mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
-            mrc->GetMaterial().color.w = 1.0f - progress;
+            Vector4 c = mrc->GetColor();
+            c.w = 1.0f - progress;
+            mrc->SetColor(c);
         }
         if (auto *prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
             Vector4 c = prc->GetColor();
@@ -99,10 +101,14 @@ void CoinBlock::Reset() {
             tc->SetRotation({ 0.0f, 0.0f, 0.0f });
         }
         if (auto* mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
-            mrc->GetMaterial().color.w = 1.0f;
+            Vector4 c = mrc->GetColor();
+            c.w = 1.0f;
+            mrc->SetColor(c);
         }
         if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            prc->GetMaterial().color.w = 1.0f;
+            Vector4 c = prc->GetColor();
+            c.w = 1.0f;
+            prc->SetColor(c);
         }
         if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetLayerMask(kLayerBlock);

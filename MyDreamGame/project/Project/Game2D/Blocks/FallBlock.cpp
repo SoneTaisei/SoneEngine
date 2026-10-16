@@ -21,8 +21,8 @@ void FallBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     auto* prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
-    prc->GetMaterial().color = defaultColor_;
-    prc->GetMaterial().lightingType = 1;
+    prc->SetColor(defaultColor_);
+    prc->SetLightingType(1);
 
     width_ = width;
     height_ = height;
@@ -54,7 +54,7 @@ void FallBlock::SetDefaultColor(const Vector4& color) {
     UpdateShakeColor();
     if (GetGameObject()) {
         if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            prc->GetMaterial().color = defaultColor_;
+            prc->SetColor(defaultColor_);
         }
     }
 }
@@ -122,7 +122,7 @@ void FallBlock::Update() {
         currentPos_ = initialPos_;
 
         if (prc) {
-            prc->GetMaterial().color = defaultColor_;
+            prc->SetColor(defaultColor_);
         }
 
         // 乗るか、掴まり接触があったら落下シークエンス開始
@@ -152,7 +152,7 @@ void FallBlock::Update() {
             blendedColor.y = defaultColor_.y + (shakeColor_.y - defaultColor_.y) * blink;
             blendedColor.z = defaultColor_.z + (shakeColor_.z - defaultColor_.z) * blink;
             blendedColor.w = defaultColor_.w;
-            prc->GetMaterial().color = blendedColor;
+            prc->SetColor(blendedColor);
         }
 
         // 予兆時間が経過したら自由落下へ移行
@@ -164,7 +164,7 @@ void FallBlock::Update() {
             currentPos_ = initialPos_;
             currentPos_.y -= sinkAmount_;
             if (prc) {
-                prc->GetMaterial().color = shakeColor_;
+                prc->SetColor(shakeColor_);
             }
         }
         break;
@@ -189,7 +189,7 @@ void FallBlock::Update() {
             state_ = State::Landed;
             stateTimer_ = 0.0f;
             if (prc) {
-                prc->GetMaterial().color = defaultColor_;
+                prc->SetColor(defaultColor_);
             }
         } else {
             currentPos_.y = nextY;
@@ -401,7 +401,7 @@ void FallBlock::Reset() {
             cc->SetBoxOffset({ 0.0f, 0.0f, 0.0f });
         }
         if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            prc->GetMaterial().color = defaultColor_;
+            prc->SetColor(defaultColor_);
         }
         GetGameObject()->Update();
     }
