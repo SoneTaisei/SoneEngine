@@ -79,6 +79,7 @@ void GameCamera::UpdateMatrix() {
 }
 
 void GameCamera::InitializeOrthographic(int kClientWidth, int kClientHeight, float viewWidth, float viewHeight) {
+    Camera::SetResolution(kClientWidth, kClientHeight);
     isOrthographic_ = true;
     isFollowEnabled_ = true;
     orthoWidth_ = viewWidth;
@@ -288,17 +289,37 @@ void GameCamera::SnapToTarget() {
         }
     }
 
-    SetTranslation({cameraTargetX, cameraTargetY});
+    Vector3 pos = GetTranslation();
+    pos.x = cameraTargetX;
+    pos.y = cameraTargetY;
+    SetTranslation(pos);
     isTransitioning_ = false;
 
     UpdateMatrix();
 }
 
 void GameCamera::LoadConfig(const std::string& filepath) {
-    if (!std::filesystem::exists(filepath)) {
+    std::vector<std::string> searchPaths = {
+        filepath,
+        "resources/json/shared/camera_config.json",
+        "resources/json/camera_config.json",
+        "../../project/resources/json/shared/camera_config.json",
+        "../project/resources/json/shared/camera_config.json"
+    };
+
+    std::string targetPath = "";
+    for (const auto& path : searchPaths) {
+        if (!path.empty() && std::filesystem::exists(path)) {
+            targetPath = path;
+            break;
+        }
+    }
+
+    if (targetPath.empty()) {
         return;
     }
-    std::ifstream ifs(filepath);
+
+    std::ifstream ifs(targetPath);
     if (!ifs.is_open()) {
         return;
     }
@@ -315,11 +336,13 @@ void GameCamera::LoadConfig(const std::string& filepath) {
         if (j.contains("transitionLerp")) transitionLerp_ = j["transitionLerp"].get<float>();
         
         if (j.contains("rotate")) {
-            SetRotation({
+            Vector3 rot = {
                 j["rotate"]["x"].get<float>(),
                 j["rotate"]["y"].get<float>(),
                 j["rotate"]["z"].get<float>(),
-            });
+            };
+            SetRotation(rot);
+            baseRotation_ = rot;
         }
     } catch (...) {
         // エラー時はデフォルト値のままにする
@@ -344,9 +367,10 @@ void GameCamera::SaveConfig(const std::string& filepath) {
     j["followLerp"] = followLerp_;
     j["transitionLerp"] = transitionLerp_;
 
-    j["rotate"]["x"] = GetRotation().x;
-    j["rotate"]["y"] = GetRotation().y;
-    j["rotate"]["z"] = GetRotation().z;
+    baseRotation_ = GetRotation();
+    j["rotate"]["x"] = baseRotation_.x;
+    j["rotate"]["y"] = baseRotation_.y;
+    j["rotate"]["z"] = baseRotation_.z;
 
     ofs << j.dump(4);
     ofs.close();

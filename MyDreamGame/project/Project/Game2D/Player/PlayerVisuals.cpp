@@ -603,7 +603,9 @@ void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& pa
         primitiveObj_->Update();
     }
     if (modelObj_) {
-        modelObj_->SetTranslation(position);
+        Vector3 modelPos = position;
+        modelPos.y -= params.halfHeight_;
+        modelObj_->SetTranslation(modelPos);
         modelObj_->GetMaterial().color = params.colorNormal_;
         modelObj_->GetMaterial().dissolveThreshold = 0.0f;
         modelObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
@@ -611,13 +613,15 @@ void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& pa
     }
 }
 
-void PlayerVisuals::SyncTransform(const Vector3& position) {
+void PlayerVisuals::SyncTransform(const Vector3& position, const PlayerParams& params) {
     if (primitiveObj_) {
         primitiveObj_->SetTranslation(position);
         primitiveObj_->Update();
     }
     if (modelObj_) {
-        modelObj_->SetTranslation(position);
+        Vector3 modelPos = position;
+        modelPos.y -= params.halfHeight_;
+        modelObj_->SetTranslation(modelPos);
         modelObj_->Update();
     }
 }
@@ -630,7 +634,9 @@ void PlayerVisuals::SetRespawnVisual(const Vector3& position, const PlayerParams
         primitiveObj_->Update();
     }
     if (modelObj_) {
-        modelObj_->SetTranslation(position);
+        Vector3 modelPos = position;
+        modelPos.y -= params.halfHeight_;
+        modelObj_->SetTranslation(modelPos);
         modelObj_->GetMaterial().color = params.colorNormal_;
         modelObj_->Update();
     }

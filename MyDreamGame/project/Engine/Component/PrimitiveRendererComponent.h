@@ -21,7 +21,6 @@ public:
     void DisplayImGui() override;
 
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) { textureHandle_ = handle; }
-    Material& GetMaterial() { return material_; }
     const Material& GetMaterial() const { return material_; }
     void SetMaterial(const Material& material) { material_ = material; }
     void SetColor(const Vector4& color) { material_.color = color; }
@@ -30,6 +29,8 @@ public:
     void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
     BlendMode GetBlendMode() const { return blendMode_; }
+    void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
+    void SetEnableBoxMapping(float enable) { material_.enableBoxMapping = enable; }
     
     // トレイル描画用
     bool GetShowTrail() const { return showTrail_; }
