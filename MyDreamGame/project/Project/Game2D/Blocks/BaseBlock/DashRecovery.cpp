@@ -39,10 +39,10 @@ void DashRecovery::Initialize(ID3D12Device* device, Primitive* boxPrimitive, flo
     auto* prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
-    prc->GetMaterial().color = color_;
+    prc->SetColor(color_);
     tc->SetScale(baseScale_);
     tc->SetPosition(basePosition_);
-    prc->GetMaterial().lightingType = 1;
+    prc->SetLightingType(1);
 
     SetupCollider();
 
@@ -107,7 +107,7 @@ void DashRecovery::Update() {
                 tc->SetScale(currentScale);
             }
             if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                prc->GetMaterial().color = color_;
+                prc->SetColor(color_);
             }
         }
     } else {
@@ -129,7 +129,7 @@ void DashRecovery::Update() {
             if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
                 Vector4 ghostColor = color_;
                 ghostColor.w = inactiveAlpha_;
-                prc->GetMaterial().color = ghostColor;
+                prc->SetColor(ghostColor);
             }
         }
     }
@@ -252,7 +252,7 @@ void DashRecovery::Respawn() {
             cc->SetIsSolid(IsSolid());
         }
         if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            prc->GetMaterial().color = color_;
+            prc->SetColor(color_);
         }
     }
 }
@@ -305,7 +305,7 @@ void DashRecovery::Reset() {
             tc->SetRotation({ 0.0f, 0.0f, 0.0f });
         }
         if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            prc->GetMaterial().color = color_;
+            prc->SetColor(color_);
         }
         if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
             cc->SetLayerMask(kLayerBlock);

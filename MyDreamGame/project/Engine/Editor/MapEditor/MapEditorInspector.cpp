@@ -34,22 +34,10 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
     bool changed = false;
 
     if (selectedTool >= 100) {
-        auto& palette = mapChip->GetCustomPalette();
-        for (auto& def : palette) {
-            if (def.id == selectedTool) {
-                targetDef = &def;
-                break;
-            }
-        }
+        targetDef = mapChip->FindCustomBlockDef(selectedTool);
     } else {
-        auto& templates = mapChip->GetTemplatePalette();
-        for (auto& def : templates) {
-            if (def.id == selectedTool) {
-                targetDef = &def;
-                isTemplate = true;
-                break;
-            }
-        }
+        targetDef = mapChip->FindTemplateBlockDef(selectedTool);
+        if (targetDef) isTemplate = true;
     }
 
     if (!targetDef) return false;
@@ -317,7 +305,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
     ImGui::Checkbox("自動適用 (Auto Apply)", &autoApply);
     ImGui::SameLine();
     if (ImGui::Button("デフォルトに戻す (Reset to Default)")) {
-        auto& templates = mapChip->GetTemplatePalette();
+        const auto& templates = mapChip->GetTemplatePalette();
         for (const auto& t : templates) {
             if (t.type == targetDef->type) {
                 targetDef->color = t.color;

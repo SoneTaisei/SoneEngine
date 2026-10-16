@@ -5,13 +5,14 @@ PrimitiveCircle::PrimitiveCircle(float size, uint32_t segments) : size_(size), s
 }
 
 void PrimitiveCircle::GenerateModelData() {
+    auto &modelData = GetModelDataRef();
 
     VertexData center{};
     center.position = {0.0f, 0.0f, 0.0f, 1.0f};
     center.normal = {0.0f, 0.0f, 1.0f};
     center.texcoord = {0.5f, 0.5f};
     center.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    modelData_.vertices.push_back(center);
+    modelData.vertices.push_back(center);
 
     for (uint32_t i = 0; i <= segments_; ++i) {
         float angle = 2.0f * std::numbers::pi_v<float> * i / segments_;
@@ -20,13 +21,13 @@ void PrimitiveCircle::GenerateModelData() {
         v.normal = {0.0f, 0.0f, 1.0f};
         v.texcoord = {0.5f + 0.5f * cosf(angle), 0.5f - 0.5f * sinf(angle)};
         v.color = {1.0f, 1.0f, 1.0f, 1.0f};
-        modelData_.vertices.push_back(v);
+        modelData.vertices.push_back(v);
     }
 
     for (uint32_t i = 1; i <= segments_; ++i) {
-        modelData_.indices.push_back(0);
-        modelData_.indices.push_back(i);
-        modelData_.indices.push_back(i + 1);
+        modelData.indices.push_back(0);
+        modelData.indices.push_back(i);
+        modelData.indices.push_back(i + 1);
     }
 
 }
