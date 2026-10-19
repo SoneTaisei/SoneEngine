@@ -16,8 +16,7 @@ public:
 
 private:
     Vector3 basePosition_ = { 0.0f, 0.0f, 0.0f };
-    float floatAmplitude_ = 0.25f; // 上下�E浮遊�E振幁E
-    float floatSpeed_ = 2.0f;      // 浮遊�E速度・周波数
-    float floatTimer_ = 0.0f;      // 浮遊用タイマ�E
+    float floatAmplitude_ = 0.25f; // 上下の浮遊の振幅
+    float floatSpeed_ = 2.0f;      // 浮遊の速度・周波数
+    float floatTimer_ = 0.0f;      // 浮遊用タイマー
 };
-

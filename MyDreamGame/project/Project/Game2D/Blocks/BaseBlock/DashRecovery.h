@@ -4,59 +4,59 @@
 #include "Effect/GPUParticle/GPUParticleSystem.h"
 
 /// <summary>
-/// DashRecovery - ダチE��ュ回復ブロチE��/アイチE��
-/// プレイヤーが接触するとダチE��ュ回数を即座に回復し、GPUパ�EチE��クルエフェクトを再生します、E
+/// DashRecovery - ダッシュ回復ブロック/アイテム
+/// プレイヤーが接触するとダッシュ回数を即座に回復し、GPUパーティクルエフェクトを再生します。
 /// </summary>
 class DashRecovery : public BaseBlock {
 public:
     using BaseBlock::BaseBlock;
     ~DashRecovery() override;
 
-    // 初期化�E琁E��モチE��・マテリアル・コライダー・GPUパ�EチE��クルのセチE��アチE�E�E�E
+    // 初期化処理（モデル・マテリアル・コライダー・GPUパーティクルのセットアップ）
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
 
-    // 毎フレームの更新処琁E��浮遊アニメーション・リスポ�Eン管琁E�EGPUパ�EチE��クル更新�E�E
+    // 毎フレームの更新処理（浮遊アニメーション・リスポーン管理・GPUパーティクル更新）
     void Update() override;
 
-    // 描画処琁E��本体およ�EGPUパ�EチE��クル描画�E�E
+    // 描画処理（本体およびGPUパーティクル描画）
     void Draw() override;
 
-    // 当たり判定�E性質�E�デフォルトですり抜けアイチE��、設定で足場化可能�E�E
+    // 当たり判定の性質（デフォルトですり抜けアイテム、設定で足場化可能）
     bool IsSolid() const override { return isSolid_ && isActive_; }
     bool IsOneWay() const override { return false; }
 
-    // プレイヤーが接触した瞬間�E処琁E��ダチE��ュ回復・エフェクト発動！E
+    // プレイヤーが接触した瞬間の処理（ダッシュ回復・エフェクト発動）
     void OnCollision(Player2D* player) override;
 
-    // プレイヤーがブロチE��の上に乗ってぁE��時�E処琁E
+    // プレイヤーがブロックの上に乗っている時の処理
     void OnPlayerStand() override;
 
-    // プレイヤーが横めE��から触れた時�E処琁E
+    // プレイヤーが横や下から触れた時の処理
     void OnPlayerTouch() override;
 
-    // JSONプロパティの読み込み�E�エチE��タのインスペクターからのパラメータ設定！E
+    // JSONプロパティの読み込み（エディタのインスペクターからのパラメータ設定）
     void SetProperties(const nlohmann::json& properties) override;
 
-    // スチE�Eジ再開時�Eリトライ時�E状態リセチE��処琁E
+    // ステージ再開時・リトライ時の状態リセット処理
     void Reset() override;
 
 #ifdef USE_IMGUI
-    // ImGuiによるリアルタイムパラメータ調整・チE��チE��用UI関数
+    // ImGuiによるリアルタイムパラメータ調整・デバッグ用UI関数
     void DrawImGui() override;
 #endif
 
-    // 回復・取得�E琁E��EashRecaveryEffectの再生含む�E�E
+    // 回復・取得処理（DashRecaveryEffectの再生含む）
     void Collect(Player2D* player);
 
-    // リスポ�Eン�E�復活�E��E琁E
+    // リスポーン（復活）処理
     void Respawn();
 
 private:
     // 配置・外観パラメータ
     Vector3 basePosition_{ 0.0f, 0.0f, 0.0f };
     Vector3 baseScale_{ 1.0f, 1.0f, 1.0f };
-    Vector4 color_{ 0.35f, 0.85f, 1.0f, 1.0f }; // 鮮めE��なシアンクリスタル色
-    float inactiveAlpha_ = 0.25f;               // クールダウン中のゴースト透�E度
+    Vector4 color_{ 0.35f, 0.85f, 1.0f, 1.0f }; // 鮮やかなシアンクリスタル色
+    float inactiveAlpha_ = 0.25f;               // クールダウン中のゴースト透明度
 
     // アニメーション用
     float hoverTimer_ = 0.0f;
@@ -67,20 +67,20 @@ private:
     const float respawnAnimDuration_ = 0.35f;
 
     // ゲームプレイパラメータ
-    bool isSolid_ = false;              // 足場として乗れるよぁE��するか！Ealseですり抜けアイチE���E�E
-    bool isActive_ = true;              // 現在取得可能ぁE
-    float respawnTime_ = 2.5f;          // 取得後�E復活時間�E�秒！E
-    float respawnTimer_ = 0.0f;         // クールダウンタイマ�E
-    float hitstopDuration_ = 0.03f;     // 取得時のヒットストップ時閁E
+    bool isSolid_ = false;              // 足場として乗れるようにするか（falseですり抜けアイテム）
+    bool isActive_ = true;              // 現在取得可能か
+    float respawnTime_ = 2.5f;          // 取得後の復活時間（秒）
+    float respawnTimer_ = 0.0f;         // クールダウンタイマー
+    float hitstopDuration_ = 0.03f;     // 取得時のヒットストップ時間
     float cameraShakePower_ = 0.15f;    // 取得時の微小なカメラシェイク
 
     // エフェクト調整パラメータ
-    bool useBurstTrigger_ = false;      // バ�Eスト強制全放出モード！EFF: エチE��タ通りの自然な発生！E
+    bool useBurstTrigger_ = false;      // バースト強制全放出モード（OFF: エディタ通りの自然な発生）
 
-    // GPUパ�EチE��クルエフェクチE(DashRecaveryEffect)
+    // GPUパーティクルエフェクト (DashRecaveryEffect)
     std::unique_ptr<GPUParticleSystem> gpuParticleSystem_;
 
-    // グローバル連続取得防止ガーチE& チE��チE��統訁E
+    // グローバル連続取得防止ガード & デバッグ統計
     static float sGlobalCollectCooldown_;
     static int sTotalCollectCount_;
 };

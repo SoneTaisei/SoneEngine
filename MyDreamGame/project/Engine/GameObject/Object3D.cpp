@@ -100,7 +100,7 @@ void Object3D::DisplayImGui(const std::string &label) {
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Trail (霆瑚ｷ｡繝ｻ谿句ワ)")) {
+        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
             ImGui::Checkbox("Show Trail", &showTrail_);
             if (showTrail_) {
                 ImGui::Checkbox("Fade Out", &trailFadeOut_);
