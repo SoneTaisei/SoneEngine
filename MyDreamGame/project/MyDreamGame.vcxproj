@@ -16,6 +16,7 @@
       <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DashRecovery.h" />
     <ClInclude Include="Project\Game2D\Blocks\FallBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\Lvy.h" />
 </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -210,6 +211,7 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\Lvy.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\FallBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DashRecovery.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.cpp" />

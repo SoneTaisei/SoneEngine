@@ -17,6 +17,12 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         return; // ヒットストップ中は物理演算・入力をスキップ
     }
 
+    if (state_.isGrabbingVine_) {
+        // ツタに掴まっている間はツタ側で位置と速度を直接制御するため、
+        // 通常の重力・移動・壁衝突処理をスキップ
+        return;
+    }
+
     HandleInputLogic(state_, params_, input_, visuals_, deltaTime, player);
     ApplyGravity(state_, params_, input_, deltaTime);
 

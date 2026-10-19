@@ -92,6 +92,8 @@ public:
     float GetStamina() const { return state_.stamina_; }
     void ApplyHitstop(float duration) { state_.hitstopTimer_ = duration; }
     void SetSpringControlDisable(float duration) { state_.springControlDisableTimer_ = duration; }
+    void SetIsGrabbingVine(bool grabbing) { state_.isGrabbingVine_ = grabbing; }
+    bool IsGrabbingVine() const { return state_.isGrabbingVine_; }
 
     // ダッシュ状態の取得
     bool IsDashing() const { return state_.isDashing_; }

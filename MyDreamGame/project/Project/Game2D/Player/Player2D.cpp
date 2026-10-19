@@ -19,6 +19,7 @@ void Player2D::ResetActionFlags() {
     state_.isDead_ = false;
     state_.isGoal_ = false;
     state_.isRespawning_ = false;
+    state_.isGrabbingVine_ = false;
 }
 
 void Player2D::UpdateWallJumpTimer(float deltaTime) {
@@ -55,6 +56,7 @@ void Player2D::UpdateVisualColor() {
 void Player2D::StartDeathSequence(bool isFallDeath) {
     state_.isDead_ = true;
     state_.isRespawning_ = false;
+    state_.isGrabbingVine_ = false;
     state_.deathTimer_ = 0.0f;
     state_.isDashing_ = false;
     state_.hasDashInertia_ = false;
@@ -433,6 +435,7 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.hitstopTimer_ = 0.0f;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
+    state_.isGrabbingVine_ = false;
     
     visuals_.ResetVisuals(state_.position_, params_);
     visuals_.ClearEffects();
