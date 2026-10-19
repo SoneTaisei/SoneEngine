@@ -146,11 +146,11 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         }
     }
 
-    // ダッシュ中のジャンプアクション判定（接地ダッシュジャンプ、壁キックなど）
+    // ダッシュ中のジャンプアクション判定（接地ダッシュジャンプ、壁キックなど。空中ではジャンプ不可）
     if (state_.isDashing_) {
         if (state_.jumpBufferTimer_ > 0.0f && state_.climbLandingTimer_ <= 0.0f) {
-            state_.jumpBufferTimer_ = 0.0f;
             if (state_.isOnGround_ || state_.coyoteTimer_ > 0.0f) {
+                state_.jumpBufferTimer_ = 0.0f;
                 // 地上ダッシュジャンプ (スーパーダッシュジャンプ)
                 state_.isDashing_ = false;
                 state_.dashJumpWindowTimer_ = 0.0f;
@@ -175,6 +175,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isOnMovingPlatform_ = false;
                 visuals_.SpawnJumpDust({state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f}, 0.0f);
             } else if (state_.isTouchingWallRight_) {
+                state_.jumpBufferTimer_ = 0.0f;
                 // 右壁キック
                 state_.isDashing_ = false;
                 state_.hasDashInertia_ = false;
@@ -190,6 +191,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
             } else if (state_.isTouchingWallLeft_) {
+                state_.jumpBufferTimer_ = 0.0f;
                 // 左壁キック
                 state_.isDashing_ = false;
                 state_.hasDashInertia_ = false;
@@ -204,18 +206,6 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isTouchingWallLeft_ = false;
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
-            } else {
-                // 空中ダッシュ中のジャンプ（ダッシュをキャンセルしてジャンプ初速を与えて飛び出す）
-                state_.isDashing_ = false;
-                state_.dashJumpWindowTimer_ = 0.0f;
-                state_.velocity_.y = params_.jumpPower_;
-                if (std::abs(state_.dashVelocity_.x) > 0.01f) {
-                    state_.velocity_.x = state_.dashVelocity_.x * params_.dashEndInertiaRatio_;
-                    state_.hasDashInertia_ = true;
-                } else {
-                    state_.hasDashInertia_ = false;
-                }
-                visuals_.SpawnJumpDust(state_.position_, 0.0f);
             }
         }
     }
