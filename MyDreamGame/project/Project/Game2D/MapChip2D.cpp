@@ -199,7 +199,8 @@ bool MapChip2D::GetPlayerSpawnChipPosition(int& outX, int& outY) const {
             if (mapData_[y][x] == ChipType::kPlayerSpawn) {
                 outX = x;
                 outY = y;
-                return true;
+
+        return true;
             }
         }
     }
@@ -681,6 +682,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
         }
         
         RebuildChipObjects();
+        SaveInitialMapState();
         return true;
     } catch (const nlohmann::json::parse_error&) {
         // フォールバック（古いテキスト形式の読み込み）
@@ -703,6 +705,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
         }
         // customPalette_.clear(); // 古い形式のテキスト読み込みでもクリアしない
         RebuildChipObjects();
+        SaveInitialMapState();
         return true;
     }
 }
@@ -840,6 +843,7 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                 templatePalette_.push_back(def);
             }
         }
+        SaveInitialMapState();
         return true;
     } catch (...) {
         return false;
@@ -1015,6 +1019,27 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
 }
 
 void MapChip2D::ResetBlocks() {
+    bool needsFullRebuild = false;
+    if (!initialMapData_.empty()) {
+        if (mapData_.size() != initialMapData_.size() || (mapData_.empty() ? 0 : mapData_[0].size()) != (initialMapData_.empty() ? 0 : initialMapData_[0].size())) {
+            needsFullRebuild = true;
+        } else {
+            for (size_t y = 0; y < mapData_.size(); ++y) {
+                for (size_t x = 0; x < mapData_[y].size(); ++x) {
+                    if (mapData_[y][x] != initialMapData_[y][x]) {
+                        needsFullRebuild = true;
+                        break;
+                    }
+                }
+                if (needsFullRebuild) break;
+            }
+        }
+    }
+    if (needsFullRebuild) {
+        mapData_ = initialMapData_;
+        RebuildChipObjects();
+        return;
+    }
     for (auto& block : updateBlocks_) {
         if (block) {
             block->Reset();

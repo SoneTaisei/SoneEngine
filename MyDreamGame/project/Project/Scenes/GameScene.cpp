@@ -557,6 +557,17 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
 
+            if (player_) {
+                bool isRespawning = player_->IsRespawning();
+                if (isRespawning && !wasRespawning_) {
+                    for (auto& effect : effects_) {
+                        if (effect) effect->Reset();
+                    }
+                    previousScore_ = player_->GetScore();
+                }
+                wasRespawning_ = isRespawning;
+            }
+
             if (GetGameCamera() && !ReplayManager::GetInstance()->IsPlaying()) {
                 if (player_->IsDead()) {
                     GetGameCamera()->SetFollowTarget(nullptr);

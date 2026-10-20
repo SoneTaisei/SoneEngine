@@ -14,6 +14,7 @@ public:
     void OnPlayerTouch() override { isPlayerStandingThisFrame_ = true; }
 
     void SetProperties(const nlohmann::json& properties) override;
+    void Reset() override;
 
     Vector3 GetVelocity() const override { return velocity_; }
     bool IsMoving() const override { return true; }

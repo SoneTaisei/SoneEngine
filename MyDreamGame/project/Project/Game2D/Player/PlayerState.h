@@ -41,6 +41,8 @@ struct PlayerState {
     bool isDead_ = false;
     float deathTimer_ = 0.0f;
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f };
+    Vector3 lastCheckpointPosition_ = { 2.0f, 5.0f, 0.0f };
+    int checkpointScore_ = 0;
     int currentRoomIndex_ = -1;
     bool isRespawning_ = false;
     float respawnTimer_ = 0.0f;

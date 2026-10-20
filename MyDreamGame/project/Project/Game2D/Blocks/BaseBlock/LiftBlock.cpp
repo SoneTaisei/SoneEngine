@@ -279,3 +279,25 @@ void LiftBlock::Update() {
     // 1フレームのフラグをリセット
     isPlayerStandingThisFrame_ = false;
 }
+
+void LiftBlock::Reset() {
+    BaseBlock::Reset();
+    state_ = LiftState::IdleAtStart;
+    waitTimer_ = 0.0f;
+    currentSpeed_ = 0.0f;
+    currentT_ = 0.0f;
+    shakeTimer_ = 0.0f;
+    velocity_ = { 0.0f, 0.0f, 0.0f };
+    isPlayerStandingThisFrame_ = false;
+
+    if (auto* tc = GetGameObject() ? GetGameObject()->GetComponent<TransformComponent>() : nullptr) {
+        tc->SetPosition(startPos_);
+    }
+    if (auto* cc = GetGameObject() ? GetGameObject()->GetComponent<ColliderComponent>() : nullptr) {
+        cc->SetVelocity(velocity_);
+        cc->SetBoxOffset({ 0.0f, 0.0f, 0.0f });
+    }
+    if (GetGameObject()) {
+        GetGameObject()->Update();
+    }
+}

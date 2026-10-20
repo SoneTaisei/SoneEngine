@@ -47,6 +47,10 @@ public:
     void StartDeathSequence(bool isFallDeath);  // 死亡開始（初速・スロー・フラグ設定）
     void UpdateDeathKnockback(float deltaTime); // 死亡時のノックバック物理とタイマー進行
     void RespawnAt(const Vector3 &respawnPos);  // リスポーン地点へ復帰＆慣性リセット
+    void SetCheckpoint(const Vector3& pos, int score) { state_.lastCheckpointPosition_ = pos; state_.checkpointScore_ = score; }
+    const Vector3& GetCheckpointPosition() const { return state_.lastCheckpointPosition_; }
+    int GetCheckpointScore() const { return state_.checkpointScore_; }
+    void RestoreCheckpointScore() { state_.score_ = state_.checkpointScore_; }
     float GetDeathTimer() const { return state_.deathTimer_; }
     // --- 4. リスポーンステート用 ---
     void StartRespawnSequence(); // リスポーン開始（タイマー初期化等）
@@ -161,6 +165,7 @@ public:
     // ゲーム状態取得用ゲッター追加
     AABB2D GetAABB() const;
     bool IsDead() const { return state_.isDead_; }
+    bool IsRespawning() const { return state_.isRespawning_; }
     bool IsGoal() const { return state_.isGoal_; }
     const PlayerParams &GetParams() const { return params_; }
 

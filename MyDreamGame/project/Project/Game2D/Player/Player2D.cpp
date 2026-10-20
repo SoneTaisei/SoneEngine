@@ -2,6 +2,7 @@
 #include "States/PlayerStates.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"
+#include "Graphics/Camera/GameCamera.h"
 #include "Graphics/TextureManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Resource/Model/ModelManager.h"
@@ -114,6 +115,10 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.externalVelocityX_ = 0.0f;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
+    if (camera_) {
+        camera_->SetFollowTarget(&state_.position_);
+        camera_->SnapToTarget();
+    }
 
     visuals_.ClearEffects();
 
@@ -191,6 +196,8 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
     if (map.HasPlayerSpawn()) {
         state_.startPosition_ = map.GetPlayerSpawnWorldPosition(state_.startPosition_);
         state_.position_ = state_.startPosition_;
+        state_.lastCheckpointPosition_ = state_.startPosition_;
+        state_.checkpointScore_ = 0;
         if (gameObject_) {
             if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
@@ -413,6 +420,9 @@ void Player2D::DisplayImGui() {
 
 void Player2D::ResetState(const Vector3& initPos) {
     state_.position_ = initPos;
+    state_.startPosition_ = initPos;
+    state_.lastCheckpointPosition_ = initPos;
+    state_.checkpointScore_ = 0;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.isOnGround_ = false;
     state_.canDash_ = true;
@@ -437,6 +447,10 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.hitstopTimer_ = 0.0f;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
+    if (camera_) {
+        camera_->SetFollowTarget(&state_.position_);
+        camera_->SnapToTarget();
+    }
     state_.isGrabbingVine_ = false;
     
     visuals_.ResetVisuals(state_.position_, params_);

@@ -43,7 +43,12 @@ void CoinBlock::Update() {
         collectTimer_ += animDeltaTime;
         float progress = collectTimer_ / collectDuration_;
         if (progress >= 1.0f) {
-            Destroy();
+            if (auto *mrc = GetGameObject() ? GetGameObject()->GetComponent<MeshRendererComponent>() : nullptr) {
+                mrc->GetMaterial().color.w = 0.0f;
+            }
+            if (auto *prc = GetGameObject() ? GetGameObject()->GetComponent<PrimitiveRendererComponent>() : nullptr) {
+                prc->GetMaterial().color.w = 0.0f;
+            }
             return;
         }
         // 上に上がる演出
