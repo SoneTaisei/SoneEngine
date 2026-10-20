@@ -63,6 +63,7 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     gpuParticleEditor_->Initialize(device);
     mapEditor_ = std::make_unique<MapEditor>();
     mapEditor_->Initialize();
+    if (strlen(stageFilename_) > 0) mapEditor_->SetStageFilename(stageFilename_);
     model3DEditor_ = std::make_unique<Model3DEditor>();
     model3DEditor_->Initialize(device);
     if (!lightEditor_) {
@@ -263,7 +264,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     }
 
     // 現在のマップファイル名をReplayManagerに教える（録画時に保存するため）
-    ReplayManager::GetInstance()->SetCurrentStageFilename(stageFilename_);
+    const char* currentStageNameForReplay = (mapEditor_ && strlen(mapEditor_->GetStageFilename()) > 0) ? mapEditor_->GetStageFilename() : stageFilename_;
+    ReplayManager::GetInstance()->SetCurrentStageFilename(currentStageNameForReplay);
 
     // --- 初回起動時 / マップロード時のA*座標初期化および前回マップ読み込み ---
     if (!isAStarPosInitialized_) {
@@ -466,6 +468,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     if (mapChip) {
                         mapDataStrToLoad_ = mapChip->GetMapDataAsString();
                         savedRoomsForPlay_ = mapChip->GetRooms();
+    mapChip->SaveInitialMapState();
                         mapChip->ResetBlocks();
                     }
                 }
@@ -2972,6 +2975,9 @@ void EditorManager::SaveSceneConfig() {
         j["activeMainTab"] = activeMainTab_;
 
         // 現在のマップファイル名
+        if (mapEditor_ && strlen(mapEditor_->GetStageFilename()) > 0) {
+            strcpy_s(stageFilename_, sizeof(stageFilename_), mapEditor_->GetStageFilename());
+        }
         j["currentMapFile"] = stageFilename_;
 
         // 現在の3Dモデル配置JSONファイルパス
@@ -3072,6 +3078,9 @@ void EditorManager::LoadSceneConfig() {
             std::string mapFile = j["currentMapFile"].get<std::string>();
             if (!mapFile.empty()) {
                 strcpy_s(stageFilename_, sizeof(stageFilename_), mapFile.c_str());
+                if (mapEditor_) {
+                    mapEditor_->SetStageFilename(stageFilename_);
+                }
             }
         }
 
@@ -3509,6 +3518,7 @@ void EditorManager::SyncPlayMapData(MapChip2D* mapChip) {
     if (!mapChip) return;
     mapDataStrToLoad_ = mapChip->GetMapDataAsString();
     savedRoomsForPlay_ = mapChip->GetRooms();
+    mapChip->SaveInitialMapState();
     mapChip->SaveToFile("resources/json/local/temp_play_map.txt");
 }
 

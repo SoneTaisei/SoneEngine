@@ -555,6 +555,7 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
     }
     SaveRoomsToFile(boundsPath);
 
+    SaveInitialMapState();
     return true;
 }
 
