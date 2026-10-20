@@ -48,6 +48,9 @@ void LiftBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("maxSpeedBackward")) {
         maxSpeedBackward_ = properties["maxSpeedBackward"].get<float>();
     }
+    if (properties.contains("inertiaTime")) {
+        inertiaTime_ = properties["inertiaTime"].get<float>();
+    }
 }
 
 void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {

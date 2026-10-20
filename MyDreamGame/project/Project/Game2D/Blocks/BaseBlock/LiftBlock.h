@@ -17,6 +17,7 @@ public:
 
     Vector3 GetVelocity() const override { return velocity_; }
     bool IsMoving() const override { return true; }
+    float GetInertiaTime() const override { return inertiaTime_; }
 
 private:
     Vector3 velocity_ = { 0.0f, 0.0f, 0.0f };
@@ -28,6 +29,7 @@ private:
     float acceleration_ = 2.0f;
     float maxSpeedForward_ = 10.0f;
     float maxSpeedBackward_ = 5.0f;
+    float inertiaTime_ = 0.5f;
     
     float currentSpeed_ = 0.0f;
     float shakeTimer_ = 0.0f;

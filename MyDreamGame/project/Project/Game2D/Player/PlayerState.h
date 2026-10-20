@@ -1,4 +1,6 @@
 #pragma once
+#include "Core/Utility/Structs.h"
+
 struct PlayerState {
     class ColliderComponent* standingPlatformCollider_ = nullptr;
     class ColliderComponent* wallPlatformCollider_ = nullptr;
@@ -11,6 +13,10 @@ struct PlayerState {
     Vector3 wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
     float platformInertiaTimer_ = 0.0f;
     float externalVelocityX_ = 0.0f;
+    float externalVelocityDuration_ = 0.5f;
+    float externalVelocityTimer_ = 0.0f;
+    float initialExternalVelocityX_ = 0.0f;
+    float lastPlatformInertiaTime_ = 0.5f;
     bool isOnGround_ = false;
     bool canDash_ = true;
     bool isDashing_ = false;

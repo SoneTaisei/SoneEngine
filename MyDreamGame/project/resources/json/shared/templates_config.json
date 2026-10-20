@@ -109,11 +109,12 @@
             "modelName": "",
             "name": "Lift",
             "properties": {
-                "acceleration": 15.0,
+                "acceleration": 20.0,
+                "inertiaTime": 0.8999999761581421,
                 "maxSpeedBackward": 2.5,
-                "maxSpeedForward": 10.0,
+                "maxSpeedForward": 30.0,
                 "speedBackward": 0.5,
-                "speedForward": 6.0,
+                "speedForward": 10.0,
                 "waitTime": 1.0
             },
             "scale": {

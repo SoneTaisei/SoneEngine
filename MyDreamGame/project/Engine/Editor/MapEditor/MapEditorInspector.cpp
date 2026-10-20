@@ -259,6 +259,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (k == "floatAmplitude") return std::string("浮遊の振幅 (floatAmplitude)");
         if (k == "floatSpeed") return std::string("浮遊の速度 (floatSpeed)");
         if (k == "breakConnected") return std::string("連結破壊 (breakConnected)");
+        if (k == "inertiaTime") return std::string("ジャンプ慣性持続時間 (inertiaTime)");
         return k;
     };
 
@@ -272,14 +273,25 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
             changed = true;
         }
     }
+    if (targetDef->type == "LiftBlock") {
+        if (!targetDef->properties.contains("inertiaTime")) {
+            targetDef->properties["inertiaTime"] = 0.5f;
+            changed = true;
+        }
+    }
 
     for (auto& [key, value] : targetDef->properties.items()) {
         std::string jpKey = getJpKey(key);
         if (value.is_number()) {
             float v = value.get<float>();
-            if (ImGui::DragFloat(jpKey.c_str(), &v, 0.1f)) {
+            float dragSpeed = (key == "inertiaTime") ? 0.01f : 0.1f;
+            if (ImGui::DragFloat(jpKey.c_str(), &v, dragSpeed, (key == "inertiaTime") ? 0.0f : -1000.0f, 1000.0f, "%.2f")) {
+                if (key == "inertiaTime" && v < 0.0f) v = 0.0f;
                 value = v;
                 changed = true;
+            }
+            if (key == "inertiaTime" && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("リフトからジャンプした際に、空中でプレイヤーにリフトの慣性が残る時間（秒）です。\n数値を増やすとジャンプ後もより長い時間慣性が残ります。");
             }
         } else if (value.is_string()) {
             std::string v = value.get<std::string>();

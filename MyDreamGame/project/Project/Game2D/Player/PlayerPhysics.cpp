@@ -59,7 +59,13 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         
         if (std::abs(state_.wallPlatformVelocity_.x) > 0.01f || std::abs(state_.wallPlatformVelocity_.y) > 0.01f) {
             state_.recentPlatformVelocity_ = state_.wallPlatformVelocity_;
-            state_.platformInertiaTimer_ = 0.1f;
+            float inertiaTime = 0.5f;
+            if (state_.wallPlatformCollider_ && state_.wallPlatformCollider_->GetUserData()) {
+                auto* block = static_cast<BaseBlock*>(state_.wallPlatformCollider_->GetUserData());
+                inertiaTime = block->GetInertiaTime();
+            }
+            state_.lastPlatformInertiaTime_ = inertiaTime;
+            state_.platformInertiaTimer_ = 0.15f;
         }
     }
 
@@ -132,7 +138,13 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         // リフトが動いていれば最新の速度を記録し、猶予時間をリセット
         if (std::abs(state_.platformVelocity_.x) > 0.01f || std::abs(state_.platformVelocity_.y) > 0.01f) {
             state_.recentPlatformVelocity_ = state_.platformVelocity_;
-            state_.platformInertiaTimer_ = 0.1f; // コヨーテタイムを0.1秒に変更
+            float inertiaTime = 0.5f;
+            if (state_.standingPlatformCollider_ && state_.standingPlatformCollider_->GetUserData()) {
+                auto* block = static_cast<BaseBlock*>(state_.standingPlatformCollider_->GetUserData());
+                inertiaTime = block->GetInertiaTime();
+            }
+            state_.lastPlatformInertiaTime_ = inertiaTime;
+            state_.platformInertiaTimer_ = 0.15f;
         }
     }
     if (state_.platformInertiaTimer_ > 0.0f) {
@@ -168,6 +180,18 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 } else {
                     state_.hasDashInertia_ = false;
                 }
+                // 足場に乗っている（または猶予期間中）場合は慣性を加算
+                if (state_.platformInertiaTimer_ > 0.0f) {
+                    state_.externalVelocityDuration_ = (state_.lastPlatformInertiaTime_ > 0.0f) ? state_.lastPlatformInertiaTime_ : 0.5f;
+                    state_.externalVelocityTimer_ = state_.externalVelocityDuration_;
+                    state_.initialExternalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.externalVelocityX_ = state_.initialExternalVelocityX_;
+                    state_.velocity_.x += state_.externalVelocityX_;
+                    if (state_.recentPlatformVelocity_.y > 0.0f) {
+                        state_.velocity_.y += state_.recentPlatformVelocity_.y;
+                    }
+                    state_.platformInertiaTimer_ = 0.0f;
+                }
                 if (params_.dashJumpRefreshDash_) {
                     state_.canDash_ = true;
                 }
@@ -184,6 +208,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.velocity_.y = params_.wallJumpPower_.y;
                 state_.wallJumpTimer_ = params_.wallJumpDuration_;
                 state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
                 visuals_.SpawnJumpDust({state_.position_.x + params_.halfWidth_, state_.position_.y, 0.0f}, -1.0f);
                 state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
                 state_.lockedDirectionX_ = 1.0f;
@@ -201,6 +226,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.velocity_.y = params_.wallJumpPower_.y;
                 state_.wallJumpTimer_ = params_.wallJumpDuration_;
                 state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
                 visuals_.SpawnJumpDust({state_.position_.x - params_.halfWidth_, state_.position_.y, 0.0f}, 1.0f);
                 state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
                 state_.lockedDirectionX_ = -1.0f;
@@ -265,23 +291,28 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
 
         // 外部速度(慣性)の加算と減衰
         if (state_.isOnGround_) {
-            state_.externalVelocityX_ = 0.0f; // 地上にいるときは慣性をリセット
-        } else {
-            // 空中では緩やかに減衰（空気抵抗）
+            state_.externalVelocityX_ = 0.0f;
+            state_.externalVelocityTimer_ = 0.0f;
+        } else if (state_.externalVelocityTimer_ > 0.0f && state_.externalVelocityDuration_ > 0.0f) {
+            // 空中ではリフトの慣性持続時間 (inertiaTime) に基づいて滑らかに減衰
             float dt = TimeManager::GetInstance().GetDeltaTime();
-            float decayRate = 5.0f * dt;
-            if (state_.externalVelocityX_ > 0.0f) {
-                state_.externalVelocityX_ -= decayRate;
-                if (state_.externalVelocityX_ < 0.0f) state_.externalVelocityX_ = 0.0f;
-            } else if (state_.externalVelocityX_ < 0.0f) {
-                state_.externalVelocityX_ += decayRate;
-                if (state_.externalVelocityX_ > 0.0f) state_.externalVelocityX_ = 0.0f;
+            state_.externalVelocityTimer_ -= dt;
+            if (state_.externalVelocityTimer_ <= 0.0f) {
+                state_.externalVelocityTimer_ = 0.0f;
+                state_.externalVelocityX_ = 0.0f;
+            } else {
+                float ratio = state_.externalVelocityTimer_ / state_.externalVelocityDuration_;
+                state_.externalVelocityX_ = state_.initialExternalVelocityX_ * ratio;
             }
+        } else {
+            state_.externalVelocityX_ = 0.0f;
+            state_.externalVelocityTimer_ = 0.0f;
         }
 
         if (state_.climbLandingTimer_ > 0.0f) {
             state_.velocity_.x = 0.0f;
             state_.externalVelocityX_ = 0.0f;
+            state_.externalVelocityTimer_ = 0.0f;
             state_.hasDashInertia_ = false;
         } else if (state_.wallJumpTimer_ <= 0.0f) {
             if (state_.hasDashInertia_) {
@@ -334,6 +365,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             if (touchingWall && (state_.velocity_.y <= 0.0f || tryingToCling)) {
                 state_.isWallSliding_ = true;
                 state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
                 if (tryingToCling) {
                     state_.isWallClinging_ = true;
                 }
@@ -368,7 +400,10 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
 
                 // 足場に乗っている（または猶予期間中）場合は慣性を加算 (セレステ風)
                 if (state_.platformInertiaTimer_ > 0.0f) {
-                    state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.externalVelocityDuration_ = (state_.lastPlatformInertiaTime_ > 0.0f) ? state_.lastPlatformInertiaTime_ : 0.5f;
+                    state_.externalVelocityTimer_ = state_.externalVelocityDuration_;
+                    state_.initialExternalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.externalVelocityX_ = state_.initialExternalVelocityX_;
                     state_.velocity_.x += state_.externalVelocityX_;
                     // 上方向（ジャンプ補助）の慣性のみ加算し、下方向へはジャンプ力を殺さないようにする
                     if (state_.recentPlatformVelocity_.y > 0.0f) {
@@ -406,6 +441,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     state_.velocity_.y = params_.wallJumpPower_.y;
                     state_.wallJumpTimer_ = params_.wallJumpDuration_;
                     state_.externalVelocityX_ = 0.0f; // デフォルトでリセット（動くブロックからの場合は後で上書きされる）
+                    state_.externalVelocityTimer_ = 0.0f;
                     visuals_.SpawnJumpDust({state_.position_.x + params_.halfWidth_, state_.position_.y, 0.0f}, -1.0f);
                     
                     state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
@@ -415,7 +451,10 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 
                 // 慣性を加算 (真上ジャンプ・壁キック共通)
                 if (state_.platformInertiaTimer_ > 0.0f) {
-                    state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.externalVelocityDuration_ = (state_.lastPlatformInertiaTime_ > 0.0f) ? state_.lastPlatformInertiaTime_ : 0.5f;
+                    state_.externalVelocityTimer_ = state_.externalVelocityDuration_;
+                    state_.initialExternalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.externalVelocityX_ = state_.initialExternalVelocityX_;
                     state_.velocity_.x += state_.externalVelocityX_;
                     if (state_.recentPlatformVelocity_.y > 0.0f) {
                         state_.velocity_.y += state_.recentPlatformVelocity_.y;
@@ -451,6 +490,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     state_.velocity_.y = params_.wallJumpPower_.y;
                     state_.wallJumpTimer_ = params_.wallJumpDuration_;
                     state_.externalVelocityX_ = 0.0f; // デフォルトでリセット（動くブロックからの場合は後で上書きされる）
+                    state_.externalVelocityTimer_ = 0.0f;
                     visuals_.SpawnJumpDust({state_.position_.x - params_.halfWidth_, state_.position_.y, 0.0f}, 1.0f);
                     
                     state_.wallJumpDirLockTimer_ = params_.wallJumpDirLockDuration_;
@@ -460,7 +500,10 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 
                 // 慣性を加算 (真上ジャンプ・壁キック共通)
                 if (state_.platformInertiaTimer_ > 0.0f) {
-                    state_.externalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.externalVelocityDuration_ = (state_.lastPlatformInertiaTime_ > 0.0f) ? state_.lastPlatformInertiaTime_ : 0.5f;
+                    state_.externalVelocityTimer_ = state_.externalVelocityDuration_;
+                    state_.initialExternalVelocityX_ = state_.recentPlatformVelocity_.x;
+                    state_.externalVelocityX_ = state_.initialExternalVelocityX_;
                     state_.velocity_.x += state_.externalVelocityX_;
                     if (state_.recentPlatformVelocity_.y > 0.0f) {
                         state_.velocity_.y += state_.recentPlatformVelocity_.y;
@@ -630,6 +673,7 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
                     state_.climbingUpTimer_ = 0.0f;
                     state_.velocity_.x = 0.0f;
                     state_.externalVelocityX_ = 0.0f;
+                    state_.externalVelocityTimer_ = 0.0f;
                 }
                 
                 if (collider->GetUserData()) {
@@ -682,6 +726,7 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                     state_.climbingUpTimer_ = 0.0f;
                     state_.velocity_.x = 0.0f;
                     state_.externalVelocityX_ = 0.0f;
+                    state_.externalVelocityTimer_ = 0.0f;
                 }
 
                 if (collider->GetUserData()) {
@@ -741,6 +786,8 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
             if (state_.position_.x < blockCenterX) {
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
                 state_.hasDashInertia_ = false;
                 state_.dashJumpWindowTimer_ = 0.0f;
                 state_.lastDashDirX_ = 0.0f;
@@ -748,6 +795,8 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
             } else {
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
                 state_.hasDashInertia_ = false;
                 state_.dashJumpWindowTimer_ = 0.0f;
                 state_.lastDashDirX_ = 0.0f;
@@ -779,12 +828,14 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
         if (CheckAABBCollision(shrunkAABBX, blockAABB)) {
             float overlapX = (std::min)(shrunkAABBX.right, blockAABB.right) - (std::max)(shrunkAABBX.left, blockAABB.left);
             float overlapY = (std::min)(shrunkAABBX.top, blockAABB.top) - (std::max)(shrunkAABBX.bottom, blockAABB.bottom);
-            if (overlapX > overlapY) continue; // 上下へのめり込みの場合はX軸判定をスキップ
+            if (overlapY > overlapX) continue; // 上下へのめり込みの場合はX軸判定をスキップ
             
             float blockCenterX = (blockAABB.left + blockAABB.right) * 0.5f;
             if (state_.position_.x < blockCenterX) {
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
                 state_.hasDashInertia_ = false;
                 state_.dashJumpWindowTimer_ = 0.0f;
                 state_.lastDashDirX_ = 0.0f;
@@ -794,6 +845,8 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
             } else {
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
+                state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
                 state_.hasDashInertia_ = false;
                 state_.dashJumpWindowTimer_ = 0.0f;
                 state_.lastDashDirX_ = 0.0f;
@@ -848,4 +901,3 @@ bool PlayerPhysics::CheckAABBCollision(const AABB2D& a, const AABB2D& b) const {
     if (a.top < b.bottom || a.bottom > b.top) return false;
     return true;
 }
-

@@ -64,6 +64,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         liftProps["speedBackward"] = 3.0f;
         liftProps["waitTime"] = 1.0f;
         liftProps["acceleration"] = 2.0f;
+        liftProps["inertiaTime"] = 0.5f;
         addTemplate(7, "Lift", "LiftBlock", {0.9f, 0.6f, 0.1f, 1.0f}, liftProps);
         
         addTemplate(8, "Rail", "RailBlock", {0.7f, 0.7f, 0.7f, 1.0f}, nlohmann::json::object());
@@ -635,6 +636,9 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
+                if (def.type == "LiftBlock" && !def.properties.contains("inertiaTime")) {
+                    def.properties["inertiaTime"] = 0.5f;
+                }
                 
                 bool found = false;
                 for (auto& existing : customPalette_) {
@@ -830,6 +834,9 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
+                if (def.type == "LiftBlock" && !def.properties.contains("inertiaTime")) {
+                    def.properties["inertiaTime"] = 0.5f;
+                }
                 templatePalette_.push_back(def);
             }
         }
