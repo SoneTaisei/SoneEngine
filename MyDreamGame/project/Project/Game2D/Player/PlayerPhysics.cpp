@@ -177,6 +177,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             } else if (state_.isTouchingWallRight_) {
                 state_.jumpBufferTimer_ = 0.0f;
                 // 右壁キック
+                state_.facingDirectionX_ = -1.0f;
                 state_.isDashing_ = false;
                 state_.hasDashInertia_ = false;
                 state_.velocity_.x = -params_.wallJumpPower_.x;
@@ -193,6 +194,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             } else if (state_.isTouchingWallLeft_) {
                 state_.jumpBufferTimer_ = 0.0f;
                 // 左壁キック
+                state_.facingDirectionX_ = 1.0f;
                 state_.isDashing_ = false;
                 state_.hasDashInertia_ = false;
                 state_.velocity_.x = params_.wallJumpPower_.x;
@@ -214,6 +216,12 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     if (!state_.isDashing_) {
         bool inputLeft = input_.moveX < 0.0f;
         bool inputRight = input_.moveX > 0.0f;
+
+        if (inputRight) {
+            state_.facingDirectionX_ = 1.0f;
+        } else if (inputLeft) {
+            state_.facingDirectionX_ = -1.0f;
+        }
 
         // 壁掴み（Kキー）を押している場合、前フレームで壁に接触していれば、その方向への仮想入力を維持する
         // これにより方向キーを離しても張り付き続ける
@@ -393,6 +401,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     state_.wallClingReleaseTimer_ = 0.15f;
                 } else {
                     // 右壁キック（左へ跳ね返る）
+                    state_.facingDirectionX_ = -1.0f;
                     state_.velocity_.x = -params_.wallJumpPower_.x;
                     state_.velocity_.y = params_.wallJumpPower_.y;
                     state_.wallJumpTimer_ = params_.wallJumpDuration_;
@@ -437,6 +446,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                     state_.wallClingReleaseTimer_ = 0.15f;
                 } else {
                     // 左壁キック（右へ跳ね返る）
+                    state_.facingDirectionX_ = 1.0f;
                     state_.velocity_.x = params_.wallJumpPower_.x;
                     state_.velocity_.y = params_.wallJumpPower_.y;
                     state_.wallJumpTimer_ = params_.wallJumpDuration_;
@@ -483,9 +493,15 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
 
         // 入力が無い場合は向いている方向にするなどの処理が必要だが、とりあえず右とする
         if (inputDir.x == 0.0f && inputDir.y == 0.0f) {
-            inputDir.x = 1.0f;
+            inputDir.x = (state_.facingDirectionX_ != 0.0f) ? state_.facingDirectionX_ : 1.0f;
         } else {
             inputDir = TransformFunctions::Normalize(inputDir);
+        }
+
+        if (inputDir.x > 0.01f) {
+            state_.facingDirectionX_ = 1.0f;
+        } else if (inputDir.x < -0.01f) {
+            state_.facingDirectionX_ = -1.0f;
         }
 
         state_.dashVelocity_ = { inputDir.x * params_.dashSpeed_, inputDir.y * params_.dashSpeed_, 0.0f };

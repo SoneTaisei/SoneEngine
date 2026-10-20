@@ -18,6 +18,7 @@ struct PlayerState {
     bool hasDashInertia_ = false;
     float dashJumpWindowTimer_ = 0.0f;
     float lastDashDirX_ = 0.0f;
+    float facingDirectionX_ = 1.0f; // 1.0f: 右, -1.0f: 左
     float jumpBufferTimer_ = 0.0f;
     float coyoteTimer_ = 0.0f;
     bool isTouchingWallRight_ = false;

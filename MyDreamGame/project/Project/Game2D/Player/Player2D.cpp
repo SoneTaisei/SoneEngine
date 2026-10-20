@@ -96,6 +96,7 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.hasDashInertia_ = false;
     state_.dashJumpWindowTimer_ = 0.0f;
     state_.lastDashDirX_ = 0.0f;
+    state_.facingDirectionX_ = 1.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
     state_.wallJumpDirLockTimer_ = 0.0f;
@@ -415,6 +416,7 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.isOnGround_ = false;
     state_.canDash_ = true;
+    state_.facingDirectionX_ = 1.0f;
     state_.isDashing_ = false;
     state_.dashTimer_ = 0.0f;
     state_.isTouchingWallRight_ = false;

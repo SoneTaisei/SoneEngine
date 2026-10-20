@@ -203,9 +203,9 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 modelPos.x += 0.2f; // 左壁から少し離す（右へずらす）
             }
         } else {
-            if (state.velocity_.x < -0.01f) {
+            if (state.facingDirectionX_ < 0.0f) {
                 rotationY = 1.57079632f;
-            } else if (state.velocity_.x > 0.01f) {
+            } else if (state.facingDirectionX_ > 0.0f) {
                 rotationY = -1.57079632f;
             }
         }
