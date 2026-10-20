@@ -1,6 +1,16 @@
 #include "Graphics/TextureManager.h"
 #include "PlayerVisuals.h"
 #include "Core/TimeManager.h"
+#include "Effect/GPUParticle/GPUParticleSystem.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Graphics/CameraManager.h"
+#include "Resource/Model/ModelManager.h"
+#include "Effect/ParticleCommon.h"
+#include "Core/Utility/TransformFunctions.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#include "Editor/Replay/ReplayManager.h"
+#endif
 #include <random>
 #include <cmath>
 
@@ -66,6 +76,13 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     confettiPrimitive_->Initialize(device, boxPrimitive);
     confettiPrimitive_->SetName("Confetti");
     confettiPrimitive_->GetMaterial().lightingType = 0;
+
+    dashAuraParticle_ = std::make_unique<GPUParticleSystem>();
+    dashAuraParticle_->Initialize(device);
+    if (dashAuraParticle_->LoadFromFile("resources/json/shared/Particle/DashAura.json")) {
+        dashAuraParticle_->SetIsLoop(true);
+        dashAuraParticle_->Play();
+    }
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
@@ -298,6 +315,22 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             }
         }
     }
+
+    if (dashAuraParticle_) {
+        // ダッシュゲージを使っていない（canDash_ == true）かつ死亡・リスポーン・ゴール中ではない場合に出す
+        bool shouldEmitAura = state.canDash_ && !state.isDead_ && !state.isRespawning_ && !state.isGoal_;
+        dashAuraParticle_->SetEmitting(shouldEmitAura);
+        if (shouldEmitAura) {
+            if (!dashAuraParticle_->IsPlaying()) {
+                dashAuraParticle_->Play();
+            }
+            dashAuraParticle_->SetPosition(state.position_);
+        }
+        // 再生中または生存パーティクルが残っている場合は更新を継続（自然なフェードアウト・消滅処理）
+        if (dashAuraParticle_->IsPlaying() || dashAuraParticle_->GetTotalActiveParticles() > 0) {
+            dashAuraParticle_->Update(deltaTime);
+        }
+    }
 }
 
 void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
@@ -418,6 +451,26 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
                 m.color = confetti.color;
                 
                 confettiPrimitive_->DrawGhost(t, m);
+            }
+        }
+    }
+
+    // DashAura GPUパーティクルの描画（ダッシュゲージ未使用時に発生中）
+    if (dashAuraParticle_ && (dashAuraParticle_->IsPlaying() || dashAuraParticle_->GetTotalActiveParticles() > 0)) {
+        bool canDrawEffect = true;
+#ifdef USE_IMGUI
+        canDrawEffect = EditorManager::IsShowEffects() || EditorManager::IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
+#endif
+        if (canDrawEffect) {
+            ParticleCommon* particleCommon = ParticleCommon::GetInstance();
+            if (particleCommon) {
+                particleCommon->PreDraw();
+                auto commandList = DirectXCommon::GetInstance()->GetCommandList();
+                auto cameraMgr = CameraManager::GetInstance();
+                Matrix4x4 viewProj = TransformFunctions::Multiply(cameraMgr->GetViewMatrix(), cameraMgr->GetProjectionMatrix());
+                Matrix4x4 camMat = TransformFunctions::Inverse(cameraMgr->GetViewMatrix());
+                ModelManager* modelMgr = ModelManager::GetInstance();
+                dashAuraParticle_->Draw(commandList, viewProj, camMat, particleCommon, modelMgr);
             }
         }
     }
@@ -585,6 +638,9 @@ void PlayerVisuals::ClearEffects() {
     dustParticles_.clear();
     confettiParticles_.clear();
     dashRingParticles_.clear();
+    if (dashAuraParticle_) {
+        dashAuraParticle_->Restart();
+    }
 }
 
 void PlayerVisuals::SetDissolveThreshold(float threshold) {
