@@ -222,6 +222,35 @@ void GameScene::Initialize() {
         Log("GameScene::Initialize: ClearSprite Initialized\n");
     }
 
+    // ポーズ用スプライトの初期化
+    pauseContinueTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/tudukeru.png");
+    pauseSelectTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/serekutonimodoru.png");
+    if (GetSpriteCommon()) {
+        pauseOverlaySprite_ = std::make_unique<Sprite>();
+        pauseOverlaySprite_->Initialize(GetSpriteCommon(), whiteTextureHandle_);
+        pauseOverlaySprite_->SetPosition({ 640.0f - 5000.0f, 360.0f - 5000.0f });
+        pauseOverlaySprite_->SetSize({ 10000.0f, 10000.0f });
+        pauseOverlaySprite_->SetColor({ 0.2f, 0.2f, 0.2f, 0.65f }); // 薄灰色の半透明スクリーン
+
+        float centerX = 1280.0f * 0.5f;
+
+        // つづける
+        pauseContinueSprite_ = std::make_unique<Sprite>();
+        pauseContinueSprite_->Initialize(GetSpriteCommon(), pauseContinueTextureHandle_);
+        pauseContinueSprite_->SetPosition({ centerX - 200.0f, 310.0f - 40.0f });
+        pauseContinueSprite_->SetSize({ 400.0f, 80.0f });
+        pauseContinueSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        // セレクトに戻る
+        pauseSelectSprite_ = std::make_unique<Sprite>();
+        pauseSelectSprite_->Initialize(GetSpriteCommon(), pauseSelectTextureHandle_);
+        pauseSelectSprite_->SetPosition({ centerX - 200.0f, 430.0f - 40.0f });
+        pauseSelectSprite_->SetSize({ 400.0f, 80.0f });
+        pauseSelectSprite_->SetColor({ 0.45f, 0.45f, 0.45f, 0.65f });
+
+        Log("GameScene::Initialize: Pause Sprites Initialized\n");
+    }
+
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -238,7 +267,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         isPlayingOrReplaying = true;
     }
 
-    bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+    bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused() && gameState_ != GameState::Pause;
 
     if (isGameActive) {
         for (auto& effect : effects_) {
@@ -450,6 +479,90 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (goSprite_) {
             goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, 0.0f });
         }
+    }
+
+    // ポーズ画面への移行（ゲームプレイ中にESCまたはコントローラーのSTARTボタン）
+    if (gameState_ == GameState::Playing) {
+        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE) ||
+            GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start)) {
+            gameState_ = GameState::Pause;
+            pauseSelectedIndex_ = 0; // 初期選択は「つづける」
+        }
+    } else if (gameState_ == GameState::Pause) {
+        // ポーズ画面の操作（キーボード / コントローラー両対応）
+        bool isMoveUp = KeyboardInput::GetInstance()->IsKeyPressed(DIK_UP) ||
+                        KeyboardInput::GetInstance()->IsKeyPressed(DIK_W) ||
+                        GamepadInput::GetInstance()->IsDPadPressedUp() ||
+                        GamepadInput::GetInstance()->IsLeftStickPushedUp();
+        bool isMoveDown = KeyboardInput::GetInstance()->IsKeyPressed(DIK_DOWN) ||
+                          KeyboardInput::GetInstance()->IsKeyPressed(DIK_S) ||
+                          GamepadInput::GetInstance()->IsDPadPressedDown() ||
+                          GamepadInput::GetInstance()->IsLeftStickPushedDown();
+
+        if (isMoveUp) {
+            pauseSelectedIndex_ = 0;
+        } else if (isMoveDown) {
+            pauseSelectedIndex_ = 1;
+        }
+
+        // 決定操作（SPACE / RETURN / Pad A）
+        bool isSubmit = KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) ||
+                        KeyboardInput::GetInstance()->IsKeyPressed(DIK_RETURN) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::A);
+
+        // キャンセル操作（ESC / Pad B / Pad START でゲーム画面へ戻る）
+        bool isCancel = KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::B) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start);
+
+        if (isCancel) {
+            gameState_ = GameState::Playing;
+        } else if (isSubmit) {
+            if (pauseSelectedIndex_ == 0) {
+                // つづける: ゲーム画面に戻る
+                gameState_ = GameState::Playing;
+            } else if (pauseSelectedIndex_ == 1) {
+                // セレクトに戻る
+                if (GetGameCamera()) {
+                    GetGameCamera()->SetScale(initialCameraScale_);
+                    GetGameCamera()->SetFollowOffset({0.0f, 0.0f, 0.0f});
+                }
+                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
+                return;
+            }
+        }
+
+        // ポーズ中スプライトの更新（選択中は白色、非選択は薄色）
+        const Vector4 kSelectedColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        const Vector4 kUnselectedColor = { 0.45f, 0.45f, 0.45f, 0.65f };
+        float centerX = 1280.0f * 0.5f;
+
+        if (pauseOverlaySprite_) {
+            pauseOverlaySprite_->SetPosition({ centerX - 5000.0f, 360.0f - 5000.0f });
+            pauseOverlaySprite_->SetSize({ 10000.0f, 10000.0f });
+            pauseOverlaySprite_->Update();
+        }
+        if (pauseContinueSprite_) {
+            bool isSelected = (pauseSelectedIndex_ == 0);
+            pauseContinueSprite_->SetColor(isSelected ? kSelectedColor : kUnselectedColor);
+            float w = isSelected ? 410.0f : 390.0f;
+            float h = isSelected ? 82.0f : 78.0f;
+            pauseContinueSprite_->SetSize({ w, h });
+            pauseContinueSprite_->SetPosition({ centerX - w * 0.5f, 310.0f - h * 0.5f });
+            pauseContinueSprite_->Update();
+        }
+        if (pauseSelectSprite_) {
+            bool isSelected = (pauseSelectedIndex_ == 1);
+            pauseSelectSprite_->SetColor(isSelected ? kSelectedColor : kUnselectedColor);
+            float w = isSelected ? 410.0f : 390.0f;
+            float h = isSelected ? 82.0f : 78.0f;
+            pauseSelectSprite_->SetSize({ w, h });
+            pauseSelectSprite_->SetPosition({ centerX - w * 0.5f, 430.0f - h * 0.5f });
+            pauseSelectSprite_->Update();
+        }
+
+        // ポーズ中は以降のゲーム更新（プレイヤー、マップ、GIF等）を停止
+        return;
     }
 
     // ステージ配置ワールドGIFの更新
@@ -678,7 +791,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
-    if (!EditorManager::IsPlaying()) {
+    if (!EditorManager::IsPlaying() || gameState_ == GameState::Pause) {
         return;
     }
 
@@ -908,6 +1021,13 @@ void GameScene::Draw2D() {
         if (GetSpriteCommon() && clearSprite_) {
             GetSpriteCommon()->PreDraw();
             clearSprite_->Draw();
+        }
+    } else if (gameState_ == GameState::Pause) {
+        if (GetSpriteCommon()) {
+            GetSpriteCommon()->PreDraw();
+            if (pauseOverlaySprite_) pauseOverlaySprite_->Draw();
+            if (pauseContinueSprite_) pauseContinueSprite_->Draw();
+            if (pauseSelectSprite_) pauseSelectSprite_->Draw();
         }
     }
 }

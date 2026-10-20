@@ -27,6 +27,7 @@ class Skybox;
 enum class GameState {
     StartReady,
     Playing,
+    Pause,
     Clear
 };
 
@@ -115,6 +116,14 @@ private:
 
     // カメラスケール制御（クリア時のズームアップ用）
     float initialCameraScale_ = 1.0f;
+
+    // ポーズUIスプライトと状態
+    int pauseSelectedIndex_ = 0; // 0: つづける, 1: セレクトに戻る
+    std::unique_ptr<Sprite> pauseOverlaySprite_;
+    std::unique_ptr<Sprite> pauseContinueSprite_;
+    uint32_t pauseContinueTextureHandle_ = 0;
+    std::unique_ptr<Sprite> pauseSelectSprite_;
+    uint32_t pauseSelectTextureHandle_ = 0;
 
     static std::string s_TargetMapFilePath;
 };
