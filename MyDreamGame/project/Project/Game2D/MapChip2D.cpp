@@ -15,6 +15,7 @@
 #include "Blocks/BaseBlock/PatrolEnemyBlock.h"
 #include "Blocks/BaseBlock/BreakableBlock.h"
 #include "Blocks/BaseBlock/DashRecovery.h"
+#include "Blocks/FallBlock.h"
 #include "Blocks/BlockFactory.h"
 #include <algorithm>
 #include <filesystem>
@@ -77,6 +78,8 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         nlohmann::json enemyProps;
         enemyProps["moveSpeed"] = 2.5f;
         addTemplate(12, "Enemy", "PatrolEnemyBlock", {1.0f, 1.0f, 1.0f, 1.0f}, enemyProps, "Object/Original/enemy/monsterBall.png");
+
+        addTemplate(15, "FallBlock", "FallBlock", {0.189f, 0.448f, 0.168f, 1.0f}, nlohmann::json::object());
 
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
@@ -199,8 +202,7 @@ bool MapChip2D::GetPlayerSpawnChipPosition(int& outX, int& outY) const {
             if (mapData_[y][x] == ChipType::kPlayerSpawn) {
                 outX = x;
                 outY = y;
-
-        return true;
+                return true;
             }
         }
     }
@@ -398,22 +400,26 @@ void MapChip2D::RebuildChipObjects() {
             int spanHeight = 1;
             int typeId = static_cast<int>(type);
             
-            bool canMerge = false;
-            if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kLift);
-            } else {
-                // カスタムブロックの場合、ベースの型がマージ可能であればマージする
-                const CustomBlockDef* def = nullptr;
+            const CustomBlockDef* def = nullptr;
+            if (typeId >= 100) {
                 for (const auto& d : customPalette_) {
                     if (d.id == typeId) { def = &d; break; }
                 }
-                if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock");
-                    // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
-                    if (!def->modelName.empty()) {
-                        canMerge = false;
-                    }
+            } else {
+                for (const auto& d : templatePalette_) {
+                    if (d.id == typeId) { def = &d; break; }
                 }
+            }
+
+            bool canMerge = false;
+            if (def) {
+                canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock" || def->type == "FallBlock");
+                // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
+                if (!def->modelName.empty()) {
+                    canMerge = false;
+                }
+            } else {
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kLift);
             }
 
             if (canMerge) {
@@ -455,6 +461,35 @@ void MapChip2D::RebuildChipObjects() {
             x += spanWidth - 1;
         }
     }
+
+    // 隣接する FallBlock 同士を相互接続（マップチップ上でくっついていたら連動して落下するようにつなげる）
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            auto block = activeBlocks_[y][x];
+            if (!block) continue;
+            auto* fallBlock = dynamic_cast<FallBlock*>(block.get());
+            if (!fallBlock) continue;
+
+            // 上下左右の4近傍をチェック
+            const int dx[4] = { 1, -1, 0, 0 };
+            const int dy[4] = { 0, 0, 1, -1 };
+            for (int i = 0; i < 4; ++i) {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+                if (nx >= 0 && nx < mapWidth_ && ny >= 0 && ny < mapHeight_) {
+                    auto neighbor = activeBlocks_[ny][nx];
+                    if (neighbor && neighbor != block) {
+                        auto* neighborFall = dynamic_cast<FallBlock*>(neighbor.get());
+                        if (neighborFall) {
+                            fallBlock->AddConnectedBlock(neighborFall);
+                            neighborFall->AddConnectedBlock(fallBlock);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     CreateBoundaries();
 }
 
@@ -897,6 +932,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             else if (def->type == "PatrolEnemyBlock") newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
             else if (def->type == "BreakableBlock") newBlock = std::make_shared<BreakableBlock>(this, x, y);
             else if (def->type == "DashRecovery") newBlock = std::make_shared<DashRecovery>(this, x, y);
+            else if (def->type == "FallBlock") newBlock = std::make_shared<FallBlock>(this, x, y);
             else if (BlockFactory::GetInstance().HasType(def->type)) {
                 newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
             }
@@ -912,6 +948,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                 newBlock = std::make_shared<BreakableBlock>(this, x, y);
             } else if (def->type == "DashRecovery") {
                 newBlock = std::make_shared<DashRecovery>(this, x, y);
+            } else if (def->type == "FallBlock") {
+                newBlock = std::make_shared<FallBlock>(this, x, y);
             } else if (BlockFactory::GetInstance().HasType(def->type)) {
                 newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
             }
