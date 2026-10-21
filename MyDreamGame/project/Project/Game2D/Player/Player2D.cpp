@@ -276,6 +276,35 @@ void Player2D::DisplayImGui() {
             PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
         }
 
+        ImGui::Separator();
+        ImGui::Text("プリセット一時適用 (※ファイル保存はされません)");
+        if (ImGui::Button("現実的物理 (リアル志向アクション)")) {
+            params_.gravity_ = -15.0f;
+            params_.jumpPower_ = 6.5f;
+            params_.moveSpeed_ = 4.5f;
+            params_.maxFallSpeed_ = -30.0f;
+            params_.wallClimbSpeed_ = 2.0f;
+            params_.wallSlideSpeed_ = -3.0f;
+            params_.wallJumpPower_ = { 4.0f, 5.5f };
+            params_.dashSpeed_ = 8.0f;
+            params_.dashDuration_ = 0.15f;
+            params_.dashInertiaDecayGround_ = 15.0f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("完全現実 (人間シミュレーション)")) {
+            params_.gravity_ = -9.8f;
+            params_.jumpPower_ = 4.2f;
+            params_.moveSpeed_ = 3.8f;
+            params_.maxFallSpeed_ = -45.0f;
+            params_.wallClimbSpeed_ = 1.0f;
+            params_.wallSlideSpeed_ = -4.0f;
+            params_.wallJumpPower_ = { 2.5f, 3.5f };
+            params_.dashSpeed_ = 6.0f;
+            params_.dashDuration_ = 0.15f;
+            params_.dashInertiaDecayGround_ = 12.0f;
+        }
+        ImGui::Separator();
+
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);
         ImGui::DragFloat3("速度", &state_.velocity_.x, 0.1f);
 
