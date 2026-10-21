@@ -1085,3 +1085,25 @@ void MapChip2D::ResetBlocks() {
         }
     }
 }
+
+int MapChip2D::GetTotalCoinCount() const {
+    int count = 0;
+    for (const auto& block : updateBlocks_) {
+        if (dynamic_cast<CoinBlock*>(block.get())) {
+            count++;
+        }
+    }
+    return count;
+}
+
+int MapChip2D::GetCollectedCoinCount() const {
+    int count = 0;
+    for (const auto& block : updateBlocks_) {
+        if (auto* coin = dynamic_cast<CoinBlock*>(block.get())) {
+            if (coin->IsCollected()) {
+                count++;
+            }
+        }
+    }
+    return count;
+}

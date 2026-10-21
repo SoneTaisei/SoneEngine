@@ -123,6 +123,8 @@ public:
 
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
+    int GetTotalCoinCount() const;
+    int GetCollectedCoinCount() const;
 
     // 全ブロックのリセット（プレイヤー死亡・リトライ時）
     void ResetBlocks();

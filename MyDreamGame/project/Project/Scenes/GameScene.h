@@ -125,5 +125,15 @@ private:
     std::unique_ptr<Sprite> pauseSelectSprite_;
     uint32_t pauseSelectTextureHandle_ = 0;
 
+    // コインUI
+    uint32_t coinTextureHandle_ = 0;
+    std::unique_ptr<Sprite> coinSprite_;
+    uint32_t numbersTextureHandle_ = 0;
+    std::vector<std::unique_ptr<Sprite>> numberSprites_;
+    float coinPopAnimTimer_ = 0.0f;
+    int lastCollectedCoins_ = 0;
+    void UpdateCoinUI(float deltaTime);
+    void DrawCoinUI();
+
     static std::string s_TargetMapFilePath;
 };

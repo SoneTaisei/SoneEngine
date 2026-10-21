@@ -251,6 +251,24 @@ void GameScene::Initialize() {
         Log("GameScene::Initialize: Pause Sprites Initialized\n");
     }
 
+    // コインUIの初期化
+    coinTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/coin.png");
+    numbersTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/numbers.png");
+    if (GetSpriteCommon()) {
+        coinSprite_ = std::make_unique<Sprite>();
+        coinSprite_->Initialize(GetSpriteCommon(), coinTextureHandle_);
+        coinSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        numberSprites_.clear();
+        for (int i = 0; i < 16; ++i) {
+            auto numSprite = std::make_unique<Sprite>();
+            numSprite->Initialize(GetSpriteCommon(), numbersTextureHandle_);
+            numSprite->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+            numberSprites_.push_back(std::move(numSprite));
+        }
+        Log("GameScene::Initialize: Coin UI Initialized\n");
+    }
+
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -777,6 +795,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     }
 
+    UpdateCoinUI(dt);
 }
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
@@ -1005,6 +1024,24 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 }
 
 void GameScene::Draw2D() {
+    bool isPlayingOrReplaying = false;
+#ifdef USE_IMGUI
+    if (EditorManager::IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+#else
+    isPlayingOrReplaying = true;
+#endif
+    if (ReplayManager::GetInstance()->IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+
+    if (isPlayingOrReplaying && gameState_ != GameState::Pause) {
+        if (GetSpriteCommon()) {
+            GetSpriteCommon()->PreDraw();
+            DrawCoinUI();
+        }
+    }
     if (gameState_ == GameState::StartReady) {
         if (GetSpriteCommon()) {
             GetSpriteCommon()->PreDraw();
@@ -1228,5 +1265,75 @@ void GameScene::UpdateEditor() {
 
     if (skybox_) {
         skybox_->Update();
+    }
+}
+
+void GameScene::UpdateCoinUI(float deltaTime) {
+    if (!map_) return;
+    int collectedCoins = map_->GetCollectedCoinCount();
+    if (collectedCoins > lastCollectedCoins_) {
+        coinPopAnimTimer_ = 0.35f;
+    }
+    lastCollectedCoins_ = collectedCoins;
+
+    if (coinPopAnimTimer_ > 0.0f) {
+        coinPopAnimTimer_ -= deltaTime;
+        if (coinPopAnimTimer_ < 0.0f) {
+            coinPopAnimTimer_ = 0.0f;
+        }
+    }
+}
+
+void GameScene::DrawCoinUI() {
+    if (!map_ || !coinSprite_ || !GetSpriteCommon()) return;
+    int totalCoins = map_->GetTotalCoinCount();
+    if (totalCoins <= 0) return;
+
+    int collectedCoins = map_->GetCollectedCoinCount();
+    std::string text = std::to_string(collectedCoins) + "/" + std::to_string(totalCoins);
+
+    float baseX = ParameterManager::GetInstance()->GetValue("CoinUI", "posX", 40.0f);
+    float baseY = ParameterManager::GetInstance()->GetValue("CoinUI", "posY", 35.0f);
+    float iconSize = ParameterManager::GetInstance()->GetValue("CoinUI", "iconSize", 44.0f);
+    float charW = ParameterManager::GetInstance()->GetValue("CoinUI", "charWidth", 24.0f);
+    float charH = ParameterManager::GetInstance()->GetValue("CoinUI", "charHeight", 32.0f);
+    float spacing = ParameterManager::GetInstance()->GetValue("CoinUI", "spacing", 2.0f);
+
+    float scaleAnim = 1.0f;
+    if (coinPopAnimTimer_ > 0.0f) {
+        float progress = coinPopAnimTimer_ / 0.35f;
+        scaleAnim = 1.0f + 0.4f * std::sin(progress * 3.14159265f);
+    }
+
+    float currentIconSize = iconSize * scaleAnim;
+    float iconOffset = (currentIconSize - iconSize) * 0.5f;
+    coinSprite_->SetPosition({ baseX - iconOffset, baseY - iconOffset });
+    coinSprite_->SetSize({ currentIconSize, currentIconSize });
+    coinSprite_->Update();
+    coinSprite_->Draw();
+
+    float currentX = baseX + iconSize + 12.0f;
+    float textY = baseY + (iconSize - charH) * 0.5f;
+
+    size_t spriteIdx = 0;
+    for (char c : text) {
+        if (spriteIdx >= numberSprites_.size()) break;
+        int charIndex = -1;
+        if (c >= '0' && c <= '9') {
+            charIndex = c - '0';
+        } else if (c == '/') {
+            charIndex = 10;
+        }
+
+        if (charIndex >= 0) {
+            auto& numSprite = numberSprites_[spriteIdx];
+            numSprite->SetTextureRect(charIndex * 48.0f, 0.0f, 48.0f, 64.0f);
+            numSprite->SetPosition({ currentX, textY });
+            numSprite->SetSize({ charW, charH });
+            numSprite->Update();
+            numSprite->Draw();
+            spriteIdx++;
+        }
+        currentX += charW + spacing;
     }
 }
