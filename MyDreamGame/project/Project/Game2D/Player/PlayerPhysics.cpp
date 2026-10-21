@@ -797,9 +797,9 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
         float earliestX = state_.position_.x;
         bool collided = false;
         for (const auto& blockAABB : hitBlocks) {
-            // 現在の右端がブロック左端を超えており、かつ移動前の左端がブロック右端より手前にあった
+            // 現在の右端がブロック左端を超えており、かつ移動前の右端がブロック左端の手前側にあった
             if (state_.position_.x + params_.halfWidth_ > blockAABB.left &&
-                prevPosX - params_.halfWidth_ < blockAABB.right) {
+                prevPosX + params_.halfWidth_ <= blockAABB.left + 0.05f) {
                 float targetPosX = blockAABB.left - params_.halfWidth_;
                 if (!collided || targetPosX < earliestX) {
                     earliestX = targetPosX;
@@ -823,8 +823,9 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
         float earliestX = state_.position_.x;
         bool collided = false;
         for (const auto& blockAABB : hitBlocks) {
+            // 現在の左端がブロック右端を超えており、かつ移動前の左端がブロック右端の手前側にあった
             if (state_.position_.x - params_.halfWidth_ < blockAABB.right &&
-                prevPosX + params_.halfWidth_ > blockAABB.left) {
+                prevPosX - params_.halfWidth_ >= blockAABB.right - 0.05f) {
                 float targetPosX = blockAABB.right + params_.halfWidth_;
                 if (!collided || targetPosX > earliestX) {
                     earliestX = targetPosX;
@@ -912,7 +913,7 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
             (state_.position_.x + params_.halfWidth_ > blockAABB.left && state_.position_.x - params_.halfWidth_ < blockAABB.right)) {
             
             // 相対移動方向または移動前の位置から押し戻し方向を決定
-            if (relMoveDeltaX > 0.0001f || (prevPosX + params_.halfWidth_ <= blockAABB.left + 0.05f)) {
+            if ((relMoveDeltaX > 0.0001f && prevPosX + params_.halfWidth_ <= blockAABB.left + 0.05f) || (prevPosX + params_.halfWidth_ <= blockAABB.left)) {
                 state_.position_.x = blockAABB.left - params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.externalVelocityX_ = 0.0f;
@@ -923,7 +924,7 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
                 state_.isTouchingWallRight_ = true;
                 state_.wallPlatformCollider_ = collider;
                 state_.wallPlatformVelocity_ = platVel;
-            } else if (relMoveDeltaX < -0.0001f || (prevPosX - params_.halfWidth_ >= blockAABB.right - 0.05f)) {
+            } else if ((relMoveDeltaX < -0.0001f && prevPosX - params_.halfWidth_ >= blockAABB.right - 0.05f) || (prevPosX - params_.halfWidth_ >= blockAABB.right)) {
                 state_.position_.x = blockAABB.right + params_.halfWidth_;
                 state_.velocity_.x = 0.0f;
                 state_.externalVelocityX_ = 0.0f;

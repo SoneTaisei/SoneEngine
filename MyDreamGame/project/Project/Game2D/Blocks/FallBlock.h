@@ -42,6 +42,7 @@ public:
 
     // JSONプロパティの読み込み（エディタのインスペクターからのパラメータ設定）
     void SetProperties(const nlohmann::json& properties) override;
+    void GetProperties(nlohmann::json& properties) const override;
 
     // ステージ再開時・リトライ時の状態リセット処理
     void Reset() override;
@@ -57,6 +58,7 @@ public:
 
     // デフォルトカラーの設定
     void SetDefaultColor(const Vector4& color);
+    const Vector4& GetDefaultColor() const { return defaultColor_; }
 
 #ifdef USE_IMGUI
     // ImGuiによるリアルタイムパラメータ調整・デバッグ用UI関数

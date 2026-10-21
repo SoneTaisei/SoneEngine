@@ -79,7 +79,15 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         enemyProps["moveSpeed"] = 2.5f;
         addTemplate(12, "Enemy", "PatrolEnemyBlock", {1.0f, 1.0f, 1.0f, 1.0f}, enemyProps, "Object/Original/enemy/monsterBall.png");
 
-        addTemplate(15, "FallBlock", "FallBlock", {0.189f, 0.448f, 0.168f, 1.0f}, nlohmann::json::object());
+        nlohmann::json fallProps;
+        fallProps["shakeDuration"] = 0.28f;
+        fallProps["shakeIntensity"] = 0.08f;
+        fallProps["sinkAmount"] = 0.12f;
+        fallProps["gravity"] = -32.0f;
+        fallProps["terminalVelocity"] = -28.0f;
+        fallProps["stopOnGround"] = true;
+        fallProps["respawnTime"] = 0.0f;
+        addTemplate(15, "FallBlock", "FallBlock", {0.189f, 0.448f, 0.168f, 1.0f}, fallProps);
 
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }

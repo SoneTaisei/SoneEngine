@@ -53,6 +53,7 @@ public:
 
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
+    virtual void GetProperties(nlohmann::json& properties) const {}
 
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}
