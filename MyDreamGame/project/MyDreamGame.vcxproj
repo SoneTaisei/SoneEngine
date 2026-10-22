@@ -287,6 +287,7 @@
     <ClCompile Include="Engine\Collision\CollisionFunctions.cpp" />
     <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
     <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp" />
+    <ClCompile Include="Engine\Editor\Common\SpriteSelectModal.cpp" />
     <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditor.cpp" />
     <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.cpp" />
     <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.cpp" />
@@ -544,6 +545,7 @@
     <ClInclude Include="Engine\Editor\Animation\AnimationLightingConfig.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
     <ClInclude Include="Engine\Editor\Common\ModelSelectModal.h" />
+    <ClInclude Include="Engine\Editor\Common\SpriteSelectModal.h" />
     <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditor.h" />
     <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.h" />
     <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.h" />

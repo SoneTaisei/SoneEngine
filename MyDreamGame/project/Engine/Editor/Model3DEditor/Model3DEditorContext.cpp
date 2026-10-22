@@ -108,6 +108,10 @@ Model3DEditorContext::Model3DEditorSnapshot Model3DEditorContext::CreateSnapshot
         os.color = obj->GetColor();
         os.doubleSided = obj->IsDoubleSided();
         os.texturePath = obj->GetTexturePath();
+        os.uvTranslation = obj->GetUVTranslation();
+        os.uvScale = obj->GetUVScale();
+        os.uvRotation = obj->GetUVRotation();
+        os.uvPivot = obj->GetUVPivot();
         snap.objects.push_back(os);
     }
     return snap;
@@ -140,6 +144,10 @@ void Model3DEditorContext::RestoreSnapshot(const Model3DEditorSnapshot& snap) {
             obj->SetScale(os.scale);
             obj->SetColor(os.color);
             obj->SetDoubleSided(os.doubleSided);
+            obj->SetUVTranslation(os.uvTranslation);
+            obj->SetUVScale(os.uvScale);
+            obj->SetUVRotation(os.uvRotation);
+            obj->SetUVPivot(os.uvPivot);
             if (obj->GetTexturePath() != os.texturePath) {
                 obj->SetTexture(os.texturePath);
             }
@@ -157,6 +165,10 @@ void Model3DEditorContext::RestoreSnapshot(const Model3DEditorSnapshot& snap) {
             obj->SetScale(os.scale);
             obj->SetColor(os.color);
             obj->SetDoubleSided(os.doubleSided);
+            obj->SetUVTranslation(os.uvTranslation);
+            obj->SetUVScale(os.uvScale);
+            obj->SetUVRotation(os.uvRotation);
+            obj->SetUVPivot(os.uvPivot);
             if (!os.texturePath.empty()) {
                 obj->SetTexture(os.texturePath);
             }

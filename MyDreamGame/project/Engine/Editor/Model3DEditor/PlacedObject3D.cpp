@@ -39,10 +39,20 @@ bool PlacedObject3D::Initialize(ID3D12Device* device) {
     object3D_->SetScale(scale_);
     object3D_->GetMaterial().color = color_;
     object3D_->SetIsDoubleSided(isDoubleSided_);
+    Matrix4x4 tNegPivot = TransformFunctions::MakeTranslateMatrix({ -uvPivot_.x, -uvPivot_.y, 0.0f });
+    Matrix4x4 sMat = TransformFunctions::MakeScaleMatrix({ uvScale_.x, uvScale_.y, 1.0f });
+    Matrix4x4 rMat = TransformFunctions::MakeRoteZMatrix(uvRotation_);
+    Matrix4x4 tPosPivot = TransformFunctions::MakeTranslateMatrix({ uvPivot_.x + uvTranslation_.x, uvPivot_.y + uvTranslation_.y, 0.0f });
+    object3D_->GetMaterial().uvTransform = TransformFunctions::Multiply(
+        TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat),
+        tPosPivot
+    );
 
     if (!texturePath_.empty()) {
         uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);
         object3D_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
+    } else {
+        object3D_->SetTextureHandle({ 0 });
     }
 
     object3D_->Update();
@@ -57,6 +67,14 @@ void PlacedObject3D::Update() {
         object3D_->SetScale(scale_);
         object3D_->GetMaterial().color = color_;
         object3D_->SetIsDoubleSided(isDoubleSided_);
+        Matrix4x4 tNegPivot = TransformFunctions::MakeTranslateMatrix({ -uvPivot_.x, -uvPivot_.y, 0.0f });
+        Matrix4x4 sMat = TransformFunctions::MakeScaleMatrix({ uvScale_.x, uvScale_.y, 1.0f });
+        Matrix4x4 rMat = TransformFunctions::MakeRoteZMatrix(uvRotation_);
+        Matrix4x4 tPosPivot = TransformFunctions::MakeTranslateMatrix({ uvPivot_.x + uvTranslation_.x, uvPivot_.y + uvTranslation_.y, 0.0f });
+        object3D_->GetMaterial().uvTransform = TransformFunctions::Multiply(
+            TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat),
+            tPosPivot
+        );
         object3D_->Update();
     }
 }
@@ -89,9 +107,13 @@ void PlacedObject3D::SetModel(const std::string& modelDirectory, const std::stri
 
 void PlacedObject3D::SetTexture(const std::string& texturePath) {
     texturePath_ = texturePath;
-    if (object3D_ && !texturePath_.empty()) {
-        uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);
-        object3D_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
+    if (object3D_) {
+        if (!texturePath_.empty()) {
+            uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);
+            object3D_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
+        } else {
+            object3D_->SetTextureHandle({ 0 });
+        }
     }
 }
 
@@ -105,6 +127,14 @@ Vector3 PlacedObject3D::GetRotation() const {
 
 Vector3 PlacedObject3D::GetRotationDegrees() const {
     return { rotation_.x * kRadToDeg, rotation_.y * kRadToDeg, rotation_.z * kRadToDeg };
+}
+
+float PlacedObject3D::GetUVRotationDegrees() const {
+    return uvRotation_ * kRadToDeg;
+}
+
+void PlacedObject3D::SetUVRotationDegrees(float uvRotationDeg) {
+    uvRotation_ = uvRotationDeg * kDegToRad;
 }
 
 Vector3 PlacedObject3D::GetScale() const {
@@ -252,6 +282,10 @@ nlohmann::json PlacedObject3D::ToJson() const {
     j["rotation"] = { rotation_.x, rotation_.y, rotation_.z };
     j["scale"] = { scale_.x, scale_.y, scale_.z };
     j["color"] = { color_.x, color_.y, color_.z, color_.w };
+    j["uvTranslation"] = { uvTranslation_.x, uvTranslation_.y };
+    j["uvScale"] = { uvScale_.x, uvScale_.y };
+    j["uvRotation"] = uvRotation_;
+    j["uvPivot"] = { uvPivot_.x, uvPivot_.y };
     return j;
 }
 
@@ -273,6 +307,18 @@ bool PlacedObject3D::FromJson(const nlohmann::json& j, ID3D12Device* device) {
     }
     if (j.contains("color") && j["color"].is_array() && j["color"].size() == 4) {
         color_ = { j["color"][0], j["color"][1], j["color"][2], j["color"][3] };
+    }
+    if (j.contains("uvTranslation") && j["uvTranslation"].is_array() && j["uvTranslation"].size() == 2) {
+        uvTranslation_ = { j["uvTranslation"][0], j["uvTranslation"][1] };
+    }
+    if (j.contains("uvScale") && j["uvScale"].is_array() && j["uvScale"].size() == 2) {
+        uvScale_ = { j["uvScale"][0], j["uvScale"][1] };
+    }
+    if (j.contains("uvPivot") && j["uvPivot"].is_array() && j["uvPivot"].size() == 2) {
+        uvPivot_ = { j["uvPivot"][0], j["uvPivot"][1] };
+    }
+    if (j.contains("uvRotation")) {
+        uvRotation_ = j["uvRotation"].get<float>();
     }
 
     return Initialize(device);

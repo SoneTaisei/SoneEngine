@@ -21,6 +21,9 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
     material_.shininess = 50.0f;
     material_.enableEnvironmentMap = 1;
     material_.environmentCoefficient = 0.1f;
+    material_.alphaReference = 0.0f;
+    material_.dissolveThreshold = 0.0f;
+    material_.enableBoxMapping = 0.0f;
 
     // マテリアルと座標変換リソースの作成（1つ分だけ！）
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
