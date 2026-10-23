@@ -19,13 +19,13 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     primitiveObj_->Initialize(device, boxPrimitive);
     primitiveObj_->SetName("Player");
     primitiveObj_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
-    primitiveObj_->GetMaterial().lightingType = 1;
+    primitiveObj_->SetLightingType(1);
 
     if (playerModel) {
         modelObj_ = std::make_unique<Object3D>();
         modelObj_->Initialize(device, playerModel);
         modelObj_->SetName("Player3DModel");
-        modelObj_->GetMaterial().lightingType = 1;
+        modelObj_->SetLightingType(1);
 
         animator_ = std::make_unique<AnimatorComponent>();
         animator_->Initialize();
@@ -60,8 +60,8 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     dashRingPrimitive_->Initialize(device, ringPrimitive);
     dashRingPrimitive_->SetName("DashRing");
     dashRingPrimitive_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
-    dashRingPrimitive_->GetMaterial().lightingType = 0;
-    dashRingPrimitive_->GetMaterial().enableEnvironmentMap = 0;
+    dashRingPrimitive_->SetLightingType(0);
+    dashRingPrimitive_->SetEnableEnvironmentMap(0);
     dashRingPrimitive_->SetIsBillboard(false);
     dashRingPrimitive_->SetIsDoubleSided(true);
     dashRingPrimitive_->SetBlendMode(BlendMode::kBlendModeAdd);
@@ -69,13 +69,13 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     dustPrimitive_ = std::make_unique<PrimitiveObject>();
     dustPrimitive_->Initialize(device, boxPrimitive);
     dustPrimitive_->SetName("Dust");
-    dustPrimitive_->GetMaterial().lightingType = 0;
-    dustPrimitive_->GetMaterial().color = { 0.8f, 0.8f, 0.8f, 0.8f }; // 白っぽい砂ぼこり
+    dustPrimitive_->SetLightingType(0);
+    dustPrimitive_->SetColor({ 0.8f, 0.8f, 0.8f, 0.8f }); // 白っぽい砂ぼこり
 
     confettiPrimitive_ = std::make_unique<PrimitiveObject>();
     confettiPrimitive_->Initialize(device, boxPrimitive);
     confettiPrimitive_->SetName("Confetti");
-    confettiPrimitive_->GetMaterial().lightingType = 0;
+    confettiPrimitive_->SetLightingType(0);
 
     dashAuraParticle_ = std::make_unique<GPUParticleSystem>();
     dashAuraParticle_->Initialize(device);
@@ -97,7 +97,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         primitiveObj_->SetTranslation(primPos);
         
         if (state.isDashing_) {
-            primitiveObj_->GetMaterial().color = params.colorDashed_;
+            primitiveObj_->SetColor(params.colorDashed_);
             // ダッシュ中は少し細長くする
             Vector3 dashDir = state.velocity_;
             dashDir.z = 0.0f;
@@ -117,19 +117,19 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
                 float blink = std::sin(visualTime_ * 40.0f);
                 if (blink > 0.0f) {
-                    primitiveObj_->GetMaterial().color = params.colorTired_;
+                    primitiveObj_->SetColor(params.colorTired_);
                 } else {
-                    primitiveObj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                    primitiveObj_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
                 }
             } else if (state.stamina_ <= params.maxStamina_ * 0.5f) {
                 float blink = std::sin(visualTime_ * 20.0f);
                 if (blink > 0.0f) {
-                    primitiveObj_->GetMaterial().color = params.colorTired_;
+                    primitiveObj_->SetColor(params.colorTired_);
                 } else {
-                    primitiveObj_->GetMaterial().color = params.colorNormal_;
+                    primitiveObj_->SetColor(params.colorNormal_);
                 }
             } else {
-                primitiveObj_->GetMaterial().color = params.colorNormal_;
+                primitiveObj_->SetColor(params.colorNormal_);
             }
             primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
             primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
@@ -230,7 +230,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         modelObj_->SetTranslation(modelPos);
         
         if (state.isDashing_) {
-            modelObj_->GetMaterial().color = params.colorDashed_;
+            modelObj_->SetColor(params.colorDashed_);
             Vector3 dashDir = state.velocity_;
             dashDir.z = 0.0f;
             float speed = 1.0f;
@@ -246,19 +246,19 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
                 float blink = std::sin(visualTime_ * 40.0f);
                 if (blink > 0.0f) {
-                    modelObj_->GetMaterial().color = params.colorTired_;
+                    modelObj_->SetColor(params.colorTired_);
                 } else {
-                    modelObj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                    modelObj_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
                 }
             } else if (state.stamina_ <= params.maxStamina_ * 0.5f) {
                 float blink = std::sin(visualTime_ * 20.0f);
                 if (blink > 0.0f) {
-                    modelObj_->GetMaterial().color = params.colorTired_;
+                    modelObj_->SetColor(params.colorTired_);
                 } else {
-                    modelObj_->GetMaterial().color = params.colorNormal_;
+                    modelObj_->SetColor(params.colorNormal_);
                 }
             } else {
-                modelObj_->GetMaterial().color = params.colorNormal_;
+                modelObj_->SetColor(params.colorNormal_);
             }
             modelObj_->SetScale({ 1.0f, 1.0f, 1.0f });
             modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
@@ -645,15 +645,15 @@ void PlayerVisuals::ClearEffects() {
 
 void PlayerVisuals::SetDissolveThreshold(float threshold) {
     if (primitiveObj_) {
-        primitiveObj_->GetMaterial().dissolveThreshold = threshold;
+        primitiveObj_->SetDissolveThreshold(threshold);
     }
 }
 
 void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& params) {
     if (primitiveObj_) {
         primitiveObj_->SetTranslation(position);
-        primitiveObj_->GetMaterial().color = params.colorNormal_;
-        primitiveObj_->GetMaterial().dissolveThreshold = 0.0f;
+        primitiveObj_->SetColor(params.colorNormal_);
+        primitiveObj_->SetDissolveThreshold(0.0f);
         primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
         primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
         primitiveObj_->Update();
@@ -662,8 +662,8 @@ void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& pa
         Vector3 modelPos = position;
         modelPos.y -= params.halfHeight_;
         modelObj_->SetTranslation(modelPos);
-        modelObj_->GetMaterial().color = params.colorNormal_;
-        modelObj_->GetMaterial().dissolveThreshold = 0.0f;
+        modelObj_->SetColor(params.colorNormal_);
+        modelObj_->SetDissolveThreshold(0.0f);
         modelObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
         modelObj_->Update();
     }
@@ -685,7 +685,7 @@ void PlayerVisuals::SyncTransform(const Vector3& position, const PlayerParams& p
 void PlayerVisuals::SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress) {
     if (primitiveObj_) {
         primitiveObj_->SetScale({ params.halfWidth_ * 2.0f * scaleProgress, params.halfHeight_ * 2.0f * scaleProgress, 1.0f });
-        primitiveObj_->GetMaterial().color = params.colorNormal_;
+        primitiveObj_->SetColor(params.colorNormal_);
         primitiveObj_->SetTranslation(position);
         primitiveObj_->Update();
     }
@@ -693,17 +693,17 @@ void PlayerVisuals::SetRespawnVisual(const Vector3& position, const PlayerParams
         Vector3 modelPos = position;
         modelPos.y -= params.halfHeight_;
         modelObj_->SetTranslation(modelPos);
-        modelObj_->GetMaterial().color = params.colorNormal_;
+        modelObj_->SetColor(params.colorNormal_);
         modelObj_->Update();
     }
 }
 
 void PlayerVisuals::SetColor(const Vector4& color) {
     if (primitiveObj_) {
-        primitiveObj_->GetMaterial().color = color;
+        primitiveObj_->SetColor(color);
     }
     if (modelObj_) {
-        modelObj_->GetMaterial().color = color;
+        modelObj_->SetColor(color);
     }
 }
 

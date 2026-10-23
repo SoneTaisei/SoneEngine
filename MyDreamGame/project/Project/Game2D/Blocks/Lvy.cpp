@@ -42,8 +42,8 @@ void Lvy::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX
 
     prc->Initialize(device, boxPrimitive);
     // ツタらしい緑色のマテリアルカラー
-    prc->GetMaterial().color = { 0.28f, 0.78f, 0.35f, 1.00f };
-    prc->GetMaterial().lightingType = 1;
+    prc->SetColor({ 0.28f, 0.78f, 0.35f, 1.00f });
+    prc->SetLightingType(1);
 
     tc->SetPosition({ worldX, worldY, 0.0f });
     tc->SetScale({ thickness_, height, 1.0f });

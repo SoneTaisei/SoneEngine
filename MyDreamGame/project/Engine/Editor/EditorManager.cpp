@@ -1379,6 +1379,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     std::string label = "  " + placedObj->GetName() + "##Placed_" + std::to_string((uintptr_t)placedObj.get());
                                     if (ImGui::Selectable(label.c_str(), isSelected)) {
                                         model3DEditor_->SetSelectedObject(placedObj.get());
+                                        isPlayerSelected_ = false;
                                         selectedGameObject_ = nullptr;
                                         selectedObject_ = nullptr;
                                         selectedParticle_ = nullptr;
@@ -1403,16 +1404,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     } else {
                         // 通常モード時: 全カテゴリを表示
                         // 1. プレイヤー（存在する場合）
+
+                        // 1. プレイヤー（存在する場合）
                         if (activeScene->GetPlayer()) {
-                            auto* player = activeScene->GetPlayer();
-                            bool isSelected = (selectedPrimitive_ == player->GetPrimitiveObject() || (selectedObject_ && selectedObject_ == player->GetModelObject()));
-                            if (ImGui::Selectable("[Player] プレイヤー", isSelected)) {
+                            if (ImGui::Selectable("[Player] プレイヤー", isPlayerSelected_)) {
                                 selectedGameObject_ = nullptr;
                                 selectedParticle_ = nullptr;
-                                selectedPrimitive_ = player->GetPrimitiveObject();
-                                selectedObject_ = player->GetModelObject();
-                                if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
-                                if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
+                                selectedPrimitive_ = nullptr;
+                                selectedObject_ = nullptr;
+                                isPlayerSelected_ = true;
+                                if (model3DEditor_)
+                                    model3DEditor_->SetSelectedObject(nullptr);
                             }
                         }
 
@@ -1426,6 +1428,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     std::string label = "  " + placedObj->GetName() + "##Placed_" + std::to_string((uintptr_t)placedObj.get());
                                     if (ImGui::Selectable(label.c_str(), isSelected)) {
                                         model3DEditor_->SetSelectedObject(placedObj.get());
+                                        isPlayerSelected_ = false;
                                         selectedGameObject_ = nullptr;
                                         selectedObject_ = nullptr;
                                         selectedParticle_ = nullptr;
@@ -1457,6 +1460,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = nullptr;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
+                                    isPlayerSelected_ = false;
                                     if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
                                 }
                             }
@@ -1470,6 +1474,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = nullptr;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
+                                    isPlayerSelected_ = false;
                                     if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
                                 }
                             }
@@ -1481,6 +1486,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedGameObject_ = nullptr;
                                     selectedObject_ = nullptr;
                                     selectedParticle_ = particle;
+                                    isPlayerSelected_ = false;
                                     selectedPrimitive_ = nullptr;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
                                 }
@@ -1494,6 +1500,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedObject_ = nullptr;
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = primitive;
+                                    isPlayerSelected_ = false;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
                                 }
                             }
@@ -1794,8 +1801,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 selectedObject_->DisplayImGui("Object Properties");
             } else if (selectedParticle_ && !forceShowGlobalSettings_) {
                 selectedParticle_->DrawImGui();
+            } else if (isPlayerSelected_ && sceneManager && sceneManager->GetCurrentScene() && sceneManager->GetCurrentScene()->GetPlayer() && !forceShowGlobalSettings_) {
+                sceneManager->GetCurrentScene()->GetPlayer()->DisplayImGui();
             } else if (selectedPrimitive_ && !forceShowGlobalSettings_) {
+
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
+            } else if (selectedGameObject_ && !forceShowGlobalSettings_) {
+
             } else {
                 if (currentMode_ == EditorMode::Replay) {
                     ImGui::TextColored(ImVec4(0.55f, 0.4f, 1.0f, 1.0f), "リプレイ グローバル設定 (手振れ補正 & 高速デバッグ)");

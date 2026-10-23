@@ -53,7 +53,7 @@ AnimatorComponent* AnimationEditorContext::GetTargetAnimator(SceneManager* scene
         if (a) return a;
     }
     if (selectedObject_) {
-        auto* a = selectedObject_->GetAnimator();
+        auto* a = const_cast<AnimatorComponent*>(selectedObject_->GetAnimator());
         if (a) return a;
     }
     if (sceneManager && sceneManager->GetCurrentScene()) {
@@ -66,12 +66,12 @@ AnimatorComponent* AnimationEditorContext::GetTargetAnimator(SceneManager* scene
         }
         for (auto* obj : scene->GetObjects()) {
             if (obj && obj->GetAnimator() && obj->GetAnimator()->HasSkeleton()) {
-                return obj->GetAnimator();
+                return const_cast<AnimatorComponent*>(obj->GetAnimator());
             }
         }
         auto* player = scene->GetPlayer();
         if (player && player->GetAnimator()) {
-            return player->GetAnimator();
+            return const_cast<AnimatorComponent*>(player->GetAnimator());
         }
     }
     return nullptr;

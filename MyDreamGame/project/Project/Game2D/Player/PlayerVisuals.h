@@ -62,13 +62,10 @@ public:
     void SetColor(const Vector4& color);
     void SyncSize(const PlayerParams& params);
 
-    PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
     const PrimitiveObject* GetPrimitiveObject() const { return primitiveObj_.get(); }
-    Object3D* GetModelObject() { return modelObj_.get(); }
     const Object3D* GetModelObject() const { return modelObj_.get(); }
-    AnimatorComponent* GetAnimator() { return animator_.get(); }
     const AnimatorComponent* GetAnimator() const { return animator_.get(); }
-    GPUParticleSystem* GetDashAuraParticle() const { return dashAuraParticle_.get(); }
+    const GPUParticleSystem* GetDashAuraParticle() const { return dashAuraParticle_.get(); }
 
 #ifdef USE_IMGUI
     void DisplayImGui();

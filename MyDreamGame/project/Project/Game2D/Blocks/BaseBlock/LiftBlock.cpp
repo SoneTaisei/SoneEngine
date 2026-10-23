@@ -61,10 +61,10 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     prc->Initialize(device, boxPrimitive);
     
     // リフトの色（例：明るい黄色やオレンジ）
-    prc->GetMaterial().color = { 0.9f, 0.6f, 0.1f, 1.0f };
+    prc->SetColor({ 0.9f, 0.6f, 0.1f, 1.0f });
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->GetMaterial().lightingType = 1;
+    prc->SetLightingType(1);
 
     // レールの範囲を探索して移動範囲を決定する
     int spanWidth = static_cast<int>(std::round(width / GetMap()->GetChipSize()));

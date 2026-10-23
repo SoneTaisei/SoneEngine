@@ -132,11 +132,8 @@ public:
     static bool CheckCollisionOBB(const OBB2D &obb1, const OBB2D &obb2, Vector3 &outMTV);
 
     // ヒエラルキー用
-    PrimitiveObject *GetPrimitiveObject() { return visuals_.GetPrimitiveObject(); }
     const PrimitiveObject *GetPrimitiveObject() const { return visuals_.GetPrimitiveObject(); }
-    Object3D *GetModelObject() { return visuals_.GetModelObject(); }
     const Object3D *GetModelObject() const { return visuals_.GetModelObject(); }
-    AnimatorComponent *GetAnimator() { return visuals_.GetAnimator(); }
     const AnimatorComponent *GetAnimator() const { return visuals_.GetAnimator(); }
 
     // ゲーム状態取得用

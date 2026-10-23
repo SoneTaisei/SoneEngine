@@ -30,9 +30,9 @@ void AnimationPreviewScene::Initialize() {
         gridFloorObj_->SetTranslation({ 0.0f, -0.05f, 0.0f });
         gridFloorObj_->SetScale({ 40.0f, 0.1f, 40.0f });
         gridFloorObj_->SetIsDoubleSided(true);
-        gridFloorObj_->GetMaterial().lightingType = 0; // 均一ライティングでどの角度からも一定の明るさを維持
-        gridFloorObj_->GetMaterial().color = { 0.18f, 0.18f, 0.20f, 1.0f };
-        gridFloorObj_->GetMaterial().enableBoxMapping = 2.0f; // プロシージャル3D床グリッドを有効化
+        gridFloorObj_->SetLightingType(0);
+        gridFloorObj_->SetColor({0.18f, 0.18f, 0.20f, 1.0f});
+        gridFloorObj_->SetEnableBoxMapping(2.0f);
         gridFloorObj_->Update();
     }
 
@@ -249,9 +249,9 @@ std::shared_ptr<GameObject> AnimationPreviewScene::AddGameObjectFromModel(const 
         meshRenderer->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
         meshRenderer->SetTexturePath(texPath);
     }
-    meshRenderer->GetMaterial().color = { 0.85f, 0.85f, 0.88f, 1.0f };
-    meshRenderer->GetMaterial().lightingType = 1;
-    meshRenderer->GetMaterial().shininess = 40.0f;
+    meshRenderer->SetColor({0.85f, 0.85f, 0.88f, 1.0f});
+    meshRenderer->SetLightingType(1);
+    meshRenderer->SetShininess(40.0f);
 
     auto animator = newObj->AddComponent<AnimatorComponent>();
     animator->Initialize();
@@ -315,9 +315,9 @@ std::shared_ptr<GameObject> AnimationPreviewScene::CreateDefaultPlayerObject() {
     playerRenderer->SetTexturePath(texPath);
     playerRenderer->SetTextureHandle(playerTH);
     playerModel->SetTextureHandle(playerTH);
-    playerRenderer->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    playerRenderer->GetMaterial().lightingType = 1;
-    playerRenderer->GetMaterial().shininess = 40.0f;
+    playerRenderer->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+    playerRenderer->SetLightingType(1);
+    playerRenderer->SetShininess(40.0f);
 
     auto animator = playerObj->AddComponent<AnimatorComponent>();
     animator->Initialize();
@@ -467,13 +467,13 @@ bool AnimationPreviewScene::LoadHierarchyFromJson(const std::string& filePath) {
             if (item.contains("material")) {
                 const auto& m = item["material"];
                 if (m.contains("color") && m["color"].is_array() && m["color"].size() == 4) {
-                    meshRenderer->GetMaterial().color = { m["color"][0], m["color"][1], m["color"][2], m["color"][3] };
+                    meshRenderer->SetColor({m["color"][0], m["color"][1], m["color"][2], m["color"][3]});
                 }
                 if (m.contains("lightingType")) {
-                    meshRenderer->GetMaterial().lightingType = m["lightingType"].get<int>();
+                    meshRenderer->SetLightingType(m["lightingType"].get<int>());
                 }
                 if (m.contains("shininess")) {
-                    meshRenderer->GetMaterial().shininess = m["shininess"].get<float>();
+                    meshRenderer->SetShininess(m["shininess"].get<float>());
                 }
                 if (m.contains("isDoubleSided")) {
                     meshRenderer->SetIsDoubleSided(m["isDoubleSided"].get<bool>());

@@ -102,9 +102,9 @@ void StageSelectScene::Initialize() {
         renderer->Initialize(device.Get(), boxPrimitive);
         renderer->SetTextureHandle(texHandle);
 
-        Material& mat = renderer->GetMaterial();
-        mat.color = {1.0f, 1.0f, 1.0f, 1.0f};
-        mat.lightingType = enableLighting_ ? 1 : 0;
+        renderer->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+
+        renderer->SetLightingType(enableLighting_ ? 1 : 0);
 
         stageBoxes_[i].gameObject = boxObj;
         stageBoxes_[i].position = {initialX, 0.0f, initialZ};
@@ -262,7 +262,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
                 tc->SetScale({stageBoxes_[i].scale, stageBoxes_[i].scale, stageBoxes_[i].scale});
             }
             if (auto prc = stageBoxes_[i].gameObject->GetComponent<PrimitiveRendererComponent>()) {
-                prc->GetMaterial().lightingType = enableLighting_ ? 1 : 0;
+                prc->SetLightingType(enableLighting_ ? 1 : 0);
             }
         }
     }
