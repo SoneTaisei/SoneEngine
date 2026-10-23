@@ -7,10 +7,10 @@ void DeathBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float
     auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
     
     prc->Initialize(device, boxPrimitive);
-    prc->GetMaterial().color = { 1.0f, 0.2f, 0.2f, 1.0f };
+    prc->SetColor({1.0f, 0.2f, 0.2f, 1.0f});
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->GetMaterial().lightingType = 1; // ライティング無効化
+    prc->SetLightingType(1);
     SetupCollider();
 }
 

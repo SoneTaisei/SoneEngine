@@ -147,11 +147,20 @@ public:
         int shaderMode = kShaderStandard;
     };
 
-    std::vector<CustomBlockDef>& GetCustomPalette() { return customPalette_; }
     const std::vector<CustomBlockDef>& GetCustomPalette() const { return customPalette_; }
-
-    std::vector<CustomBlockDef>& GetTemplatePalette() { return templatePalette_; }
     const std::vector<CustomBlockDef>& GetTemplatePalette() const { return templatePalette_; }
+
+    void SetCustomPalette(const std::vector<CustomBlockDef>& palette) { customPalette_ = palette; }
+    void AddCustomBlockDef(const CustomBlockDef& def) { customPalette_.push_back(def); }
+    bool RemoveCustomBlockDef(int id);
+    CustomBlockDef* FindCustomBlockDef(int id);
+    const CustomBlockDef* FindCustomBlockDef(int id) const;
+
+    void SetTemplatePalette(const std::vector<CustomBlockDef>& templates) { templatePalette_ = templates; }
+    void AddTemplateBlockDef(const CustomBlockDef& def) { templatePalette_.push_back(def); }
+    bool RemoveTemplateBlockDef(int id);
+    CustomBlockDef* FindTemplateBlockDef(int id);
+    const CustomBlockDef* FindTemplateBlockDef(int id) const;
 
     // テンプレートのグローバル保存/読込
     bool SaveTemplatesToFile(const std::string& filepath);

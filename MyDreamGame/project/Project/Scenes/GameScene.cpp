@@ -949,11 +949,11 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (!EditorManager::IsPlaying() && player_) {
         ReplayManager* replayManager = ReplayManager::GetInstance();
         if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
-            ReplayData& currentReplay = replayManager->GetCurrentReplay();
+            const ReplayData& currentReplay = replayManager->GetCurrentReplay();
             if (!currentReplay.frames.empty()) {
                 const float GHOST_ALPHA = 0.5f;
                 const int FRAME_STEP = 10;
-                auto* playerPrim = player_->GetPrimitiveObject();
+                auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
                 if (playerPrim && playerPrim->GetShowTrail()) {
                     playerPrim->ResetGhostIndex();
                     for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
@@ -989,7 +989,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             // --- 物理ベースA* 探索ルート（AIゴースト）の描画 ---
             const auto& aiPath = replayManager->GetAIPathPositions();
             if (replayManager->IsShowAIGhost() && !aiPath.empty()) {
-                auto* playerPrim = player_->GetPrimitiveObject();
+                auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
                 if (playerPrim) {
                     const int AI_STEP = 5;
                     const float GHOST_ALPHA = 0.6f;
@@ -1074,14 +1074,14 @@ void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
     if (!EditorManager::IsPlaying() && player_) {
         ReplayManager* replayManager = ReplayManager::GetInstance();
         if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
-            auto* playerPrim = player_->GetPrimitiveObject();
+            auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
             ImVec2 gameViewPos = EditorManager::GetGameViewPos();
             ImVec2 gameViewSize = EditorManager::GetGameViewSize();
             ImDrawList* drawList = ImGui::GetWindowDrawList();
 
             // 1. プレイヤー残像の2D軌跡描画
             if (playerPrim && playerPrim->GetShowTrail()) {
-                ReplayData& currentReplay = replayManager->GetCurrentReplay();
+                const ReplayData& currentReplay = replayManager->GetCurrentReplay();
                 if (!currentReplay.frames.empty()) {
                     const int FRAME_STEP = 10;
                     drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
@@ -1193,7 +1193,7 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 
     // 2. プレイヤー
     if (player_) {
-        result.push_back(player_->GetPrimitiveObject());
+        result.push_back(const_cast<PrimitiveObject*>(player_->GetPrimitiveObject()));
     }
 
     // 3. マップチップ
@@ -1241,7 +1241,7 @@ void GameScene::UpdateEditor() {
         if (map_) {
             player_->FindSpawnPoint(*map_);
         }
-        auto* playerPrim = player_->GetPrimitiveObject();
+        auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
         if (playerPrim) {
             playerPrim->SetTranslation(player_->GetPosition());
             playerPrim->Update();

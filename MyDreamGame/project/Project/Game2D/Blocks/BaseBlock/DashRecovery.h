@@ -1,7 +1,8 @@
 #pragma once
 #include "Game2D/Blocks/BaseBlock.h"
 #include <memory>
-#include "Effect/GPUParticle/GPUParticleSystem.h"
+
+class GPUParticleSystem;
 
 /// <summary>
 /// DashRecovery - ダッシュ回復ブロック/アイテム

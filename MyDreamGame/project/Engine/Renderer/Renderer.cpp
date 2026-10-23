@@ -173,7 +173,7 @@ void Renderer::DrawObject3D(Object3D *obj) {
 
     auto commandList = dxCommon_->GetCommandList();
     if (obj->GetMappedMaterial()) {
-        *obj->GetMappedMaterial() = obj->GetMaterial();
+        *const_cast<Material *>(obj->GetMappedMaterial()) = obj->GetMaterial();
     }
 
     const EulerTransform &transform = obj->GetTransform();
@@ -181,8 +181,8 @@ void Renderer::DrawObject3D(Object3D *obj) {
     Matrix4x4 finalWorldMatrix = worldMatrix;
 
     if (obj->GetMappedTransform()) {
-        obj->GetMappedTransform()->World = finalWorldMatrix;
-        obj->GetMappedTransform()->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
+        const_cast<TransformMatrix *>(obj->GetMappedTransform())->World = finalWorldMatrix;
+        const_cast<TransformMatrix *>(obj->GetMappedTransform())->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(finalWorldMatrix));
     }
 
     // シャドウパス時は深度専用パイプラインで高速描画
@@ -190,7 +190,7 @@ void Renderer::DrawObject3D(Object3D *obj) {
         if (obj->GetMaterial().color.w <= 0.0f)
             return;
 
-        AnimatorComponent *animator = obj->GetAnimator();
+        const AnimatorComponent *animator = obj->GetAnimator();
         bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
 
         if (useSkinning) {
@@ -199,12 +199,12 @@ void Renderer::DrawObject3D(Object3D *obj) {
             commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
             const SkinCluster &skinCluster = animator->GetSkinCluster();
             commandList->SetGraphicsRootDescriptorTable(2, skinCluster.paletteSrvHandle.second);
-            obj->GetModel()->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
+            const_cast<Model *>(obj->GetModel())->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
         } else {
             commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
             commandList->SetGraphicsRootConstantBufferView(0, obj->GetTransformResource()->GetGPUVirtualAddress());
             commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
-            obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
+            const_cast<Model *>(obj->GetModel())->Draw(nullptr, obj->GetTextureHandle());
         }
         return;
     }
@@ -213,7 +213,7 @@ void Renderer::DrawObject3D(Object3D *obj) {
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
     if (obj->GetMappedTransform()) {
-        obj->GetMappedTransform()->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(obj->GetMappedTransform()->World, viewMatrix), projectionMatrix);
+        const_cast<TransformMatrix *>(obj->GetMappedTransform())->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(obj->GetMappedTransform()->World, viewMatrix), projectionMatrix);
     }
 
     if (obj->IsShowTrail() && obj->GetModel()) {
@@ -240,12 +240,12 @@ void Renderer::DrawObject3D(Object3D *obj) {
                 Matrix4x4 tWorldMatrix = TransformFunctions::MakeAffineMatrix(pastScale, pastRot, pastPos);
                 Matrix4x4 tFinalWorldMatrix = tWorldMatrix;
 
-                TransformMatrix *tMat = reinterpret_cast<TransformMatrix *>(obj->GetMappedTrailTransform() + transformSize * trailCount);
+                TransformMatrix *tMat = reinterpret_cast<TransformMatrix *>(const_cast<uint8_t *>(obj->GetMappedTrailTransform()) + transformSize * trailCount);
                 tMat->World = tFinalWorldMatrix;
                 tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(tFinalWorldMatrix));
                 tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(tFinalWorldMatrix, viewMatrix), projectionMatrix);
 
-                Material *mMat = reinterpret_cast<Material *>(obj->GetMappedTrailMaterial() + materialSize * trailCount);
+                Material *mMat = reinterpret_cast<Material *>(const_cast<uint8_t *>(obj->GetMappedTrailMaterial()) + materialSize * trailCount);
                 *mMat = obj->GetMaterial();
                 float alphaFactor = 1.0f;
                 if (obj->IsTrailFadeOut()) {
@@ -259,14 +259,14 @@ void Renderer::DrawObject3D(Object3D *obj) {
                 if (Object3D::GetEnvironmentMapHandle().ptr != 0) {
                     commandList->SetGraphicsRootDescriptorTable(7, Object3D::GetEnvironmentMapHandle());
                 }
-                obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
+                const_cast<Model *>(obj->GetModel())->Draw(nullptr, obj->GetTextureHandle());
 
                 trailCount++;
             }
         }
     }
 
-    AnimatorComponent *animator = obj->GetAnimator();
+    const AnimatorComponent *animator = obj->GetAnimator();
     bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
 
     if (useSkinning) {
@@ -320,14 +320,14 @@ void Renderer::DrawObject3D(Object3D *obj) {
     if (useSkinning) {
         const SkinCluster &skinCluster = animator->GetSkinCluster();
         commandList->SetGraphicsRootDescriptorTable(10, skinCluster.paletteSrvHandle.second);
-        obj->GetModel()->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
+        const_cast<Model *>(obj->GetModel())->Draw(&skinCluster.influenceBufferView, obj->GetTextureHandle());
     } else {
-        obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
+        const_cast<Model *>(obj->GetModel())->Draw(nullptr, obj->GetTextureHandle());
 
         if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
             commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
-            obj->GetModel()->Draw(nullptr, obj->GetTextureHandle());
+            const_cast<Model *>(obj->GetModel())->Draw(nullptr, obj->GetTextureHandle());
         }
     }
 }
@@ -338,7 +338,7 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject *obj) {
 
     auto commandList = dxCommon_->GetCommandList();
     if (obj->GetMappedMaterial()) {
-        *obj->GetMappedMaterial() = obj->GetMaterial();
+        *const_cast<Material *>(obj->GetMappedMaterial()) = obj->GetMaterial();
     }
 
     CameraManager *cameraMgr = CameraManager::GetInstance();
@@ -376,8 +376,8 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject *obj) {
     obj->SetWorldMatrix(worldMatrix);
 
     if (obj->GetMappedTransform()) {
-        obj->GetMappedTransform()->World = worldMatrix;
-        obj->GetMappedTransform()->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
+        const_cast<TransformMatrix *>(obj->GetMappedTransform())->World = worldMatrix;
+        const_cast<TransformMatrix *>(obj->GetMappedTransform())->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
     }
 
     // シャドウパス時は深度専用パイプラインで描画
@@ -388,13 +388,13 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject *obj) {
         commandList->SetGraphicsRootConstantBufferView(0, obj->GetTransformResource()->GetGPUVirtualAddress());
         commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
         if (obj->GetPrimitive()) {
-            obj->GetPrimitive()->Draw();
+            const_cast<Primitive *>(obj->GetPrimitive())->Draw();
         }
         return;
     }
 
     if (obj->GetMappedTransform()) {
-        obj->GetMappedTransform()->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
+        const_cast<TransformMatrix *>(obj->GetMappedTransform())->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
     }
 
     D3D12_GPU_DESCRIPTOR_HANDLE activeTexture = obj->GetTextureHandle();
@@ -452,7 +452,7 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject *obj) {
     }
 
     if (obj->GetPrimitive()) {
-        obj->GetPrimitive()->Draw();
+        const_cast<Primitive *>(obj->GetPrimitive())->Draw();
     }
 
     if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
@@ -460,7 +460,7 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject *obj) {
         commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
 
         if (obj->GetPrimitive()) {
-            obj->GetPrimitive()->Draw();
+            const_cast<Primitive *>(obj->GetPrimitive())->Draw();
         }
     }
 }
@@ -509,12 +509,12 @@ void Renderer::DrawPrimitiveGhost(PrimitiveObject *obj, const EulerTransform &tr
     uint32_t transformSize = (sizeof(TransformMatrix) + 255) & ~255u;
     uint32_t materialSize = (sizeof(Material) + 255) & ~255u;
 
-    TransformMatrix *tMat = reinterpret_cast<TransformMatrix *>(obj->GetMappedGhostTransform() + transformSize * obj->GetCurrentGhostIndex());
+    TransformMatrix *tMat = reinterpret_cast<TransformMatrix *>(const_cast<uint8_t *>(obj->GetMappedGhostTransform()) + transformSize * obj->GetCurrentGhostIndex());
     tMat->World = worldMatrix;
     tMat->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
     tMat->WVP = TransformFunctions::Multiply(TransformFunctions::Multiply(worldMatrix, viewMatrix), projectionMatrix);
 
-    Material *mMat = reinterpret_cast<Material *>(obj->GetMappedGhostMaterial() + materialSize * obj->GetCurrentGhostIndex());
+    Material *mMat = reinterpret_cast<Material *>(const_cast<uint8_t *>(obj->GetMappedGhostMaterial()) + materialSize * obj->GetCurrentGhostIndex());
     *mMat = material;
 
     commandList->SetGraphicsRootSignature(dxCommon_->GetRootSignature());
@@ -563,7 +563,7 @@ void Renderer::DrawPrimitiveGhost(PrimitiveObject *obj, const EulerTransform &tr
     }
 
     if (obj->GetPrimitive()) {
-        obj->GetPrimitive()->Draw();
+        const_cast<Primitive *>(obj->GetPrimitive())->Draw();
     }
 
     obj->IncrementGhostIndex();
@@ -610,7 +610,7 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
     Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, rotateMatrix), translateMatrix);
     // TODO: Parent logic if needed
 
-    TransformMatrix* mappedTransform = comp->GetMappedTransform();
+    TransformMatrix* mappedTransform = const_cast<TransformMatrix*>(comp->GetMappedTransform());
     if (!mappedTransform) return; // 定数バッファを確保できていない（未初期化）ものは描かない
     mappedTransform->World = worldMatrix;
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
@@ -762,7 +762,7 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
     
     Matrix4x4 worldMatrix = TransformFunctions::Multiply(TransformFunctions::Multiply(scaleMatrix, localMatrix), translateMatrix);
     
-    TransformMatrix* mappedTransform = comp->GetMappedTransform();
+    TransformMatrix* mappedTransform = const_cast<TransformMatrix*>(comp->GetMappedTransform());
     if (!mappedTransform) return; // 定数バッファを確保できていない（未初期化）ものは描かない
     mappedTransform->World = worldMatrix;
     mappedTransform->WorldInverseTranspose = TransformFunctions::Transpose(TransformFunctions::Inverse(worldMatrix));
@@ -773,7 +773,7 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
         commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
         commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformGPUAddress());
         commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
-        comp->GetPrimitive()->Draw();
+        const_cast<Primitive*>(comp->GetPrimitive())->Draw();
         return;
     }
 
@@ -831,11 +831,11 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
         commandList->SetGraphicsRootDescriptorTable(9, shadowSrv);
     }
 
-    comp->GetPrimitive()->Draw();
+    const_cast<Primitive*>(comp->GetPrimitive())->Draw();
 
     if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
         commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
         commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
-        comp->GetPrimitive()->Draw();
+        const_cast<Primitive*>(comp->GetPrimitive())->Draw();
     }
 }

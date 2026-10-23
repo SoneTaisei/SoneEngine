@@ -6,12 +6,10 @@
 #include "Component/IComponent.h"
 #include "Core/TimeManager.h"
 #include "GameObject/PrimitiveObject.h"
-#include "Input/KeyboardInput.h"
 #include "PlayerState.h"
 #include "PlayerVisuals.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "States/IPlayerState.h"
-#include <nlohmann/json.hpp>
 
 // 前方宣言
 class MapChip2D;
@@ -132,11 +130,8 @@ public:
     static bool CheckCollisionOBB(const OBB2D &obb1, const OBB2D &obb2, Vector3 &outMTV);
 
     // ヒエラルキー用
-    PrimitiveObject *GetPrimitiveObject() { return visuals_.GetPrimitiveObject(); }
     const PrimitiveObject *GetPrimitiveObject() const { return visuals_.GetPrimitiveObject(); }
-    Object3D *GetModelObject() { return visuals_.GetModelObject(); }
     const Object3D *GetModelObject() const { return visuals_.GetModelObject(); }
-    AnimatorComponent *GetAnimator() { return visuals_.GetAnimator(); }
     const AnimatorComponent *GetAnimator() const { return visuals_.GetAnimator(); }
 
     // ゲーム状態取得用

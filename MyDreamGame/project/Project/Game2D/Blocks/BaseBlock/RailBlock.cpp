@@ -8,7 +8,7 @@ void RailBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     prc->Initialize(device, boxPrimitive);
     
     // レール：少し暗い灰色
-    prc->GetMaterial().color = { 0.4f, 0.4f, 0.4f, 1.0f };
+    prc->SetColor({ 0.4f, 0.4f, 0.4f, 1.0f });
     
     // 背景にあるように見せるため、少し奥に配置
     tc->SetPosition({ worldX, worldY, 0.5f });
@@ -16,6 +16,6 @@ void RailBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     // レールとしての見た目を作るために少し細くする
     tc->SetScale({ width * 0.2f, height * 0.2f, 1.0f });
     
-    prc->GetMaterial().lightingType = 1; // ライティング無効化
+    prc->SetLightingType(1); // ライティング無効化
     SetupCollider();
 }

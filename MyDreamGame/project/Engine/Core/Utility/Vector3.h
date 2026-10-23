@@ -10,9 +10,7 @@ struct Vector3 {
 		return { x * scalar, y * scalar, z * scalar };
 	}
 
-	friend Vector3 operator*(float scalar, const Vector3 &vec) {
-		return vec * scalar;
-	}
+	
 
 	// スカラー除算（必要なら）
 	Vector3 operator/(float scalar) const {
@@ -41,3 +39,7 @@ struct Vector3 {
 		return *this;
 	}
 };
+
+inline Vector3 operator*(float scalar, const Vector3 &vec) {
+    return vec * scalar;
+}

@@ -198,8 +198,8 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
         state_.position_ = state_.startPosition_;
         state_.lastCheckpointPosition_ = state_.startPosition_;
         state_.checkpointScore_ = 0;
-        if (gameObject_) {
-            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (GetGameObject()) {
+            if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
             }
         }
@@ -218,8 +218,8 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
         state_.stuckTimer_ = 0.0f;
         state_.prevPositionForBugCheck_ = state_.position_;
         visuals_.SyncTransform(state_.position_, params_);
-        if (gameObject_) {
-            if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (GetGameObject()) {
+            if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
             }
         }
@@ -244,8 +244,8 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
     // パーティクルや見た目のベース更新 (移動・物理計算後の最新ステートを反映)
     visuals_.Update(state_, params_, deltaTime);
 
-    if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition(state_.position_);
         }
     }

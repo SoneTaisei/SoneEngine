@@ -19,7 +19,7 @@ public:
     bool IsEnabled() const { return enabled_; }
     void SetEnabled(bool enabled) { enabled_ = enabled; }
 
-protected:
+private:
     GameObject* gameObject_ = nullptr;
     bool enabled_ = true;
 };

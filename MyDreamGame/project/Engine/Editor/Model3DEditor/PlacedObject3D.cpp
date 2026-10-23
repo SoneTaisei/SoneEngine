@@ -37,16 +37,13 @@ bool PlacedObject3D::Initialize(ID3D12Device* device) {
     object3D_->SetTranslation(translation_);
     object3D_->SetRotation(rotation_);
     object3D_->SetScale(scale_);
-    object3D_->GetMaterial().color = color_;
+    object3D_->SetColor(color_);
     object3D_->SetIsDoubleSided(isDoubleSided_);
     Matrix4x4 tNegPivot = TransformFunctions::MakeTranslateMatrix({ -uvPivot_.x, -uvPivot_.y, 0.0f });
     Matrix4x4 sMat = TransformFunctions::MakeScaleMatrix({ uvScale_.x, uvScale_.y, 1.0f });
     Matrix4x4 rMat = TransformFunctions::MakeRoteZMatrix(uvRotation_);
     Matrix4x4 tPosPivot = TransformFunctions::MakeTranslateMatrix({ uvPivot_.x + uvTranslation_.x, uvPivot_.y + uvTranslation_.y, 0.0f });
-    object3D_->GetMaterial().uvTransform = TransformFunctions::Multiply(
-        TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat),
-        tPosPivot
-    );
+    object3D_->SetUVTransform(TransformFunctions::Multiply(TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat), tPosPivot));
 
     if (!texturePath_.empty()) {
         uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);
@@ -65,16 +62,13 @@ void PlacedObject3D::Update() {
         object3D_->SetTranslation(translation_);
         object3D_->SetRotation(rotation_);
         object3D_->SetScale(scale_);
-        object3D_->GetMaterial().color = color_;
+        object3D_->SetColor(color_);
         object3D_->SetIsDoubleSided(isDoubleSided_);
         Matrix4x4 tNegPivot = TransformFunctions::MakeTranslateMatrix({ -uvPivot_.x, -uvPivot_.y, 0.0f });
         Matrix4x4 sMat = TransformFunctions::MakeScaleMatrix({ uvScale_.x, uvScale_.y, 1.0f });
         Matrix4x4 rMat = TransformFunctions::MakeRoteZMatrix(uvRotation_);
         Matrix4x4 tPosPivot = TransformFunctions::MakeTranslateMatrix({ uvPivot_.x + uvTranslation_.x, uvPivot_.y + uvTranslation_.y, 0.0f });
-        object3D_->GetMaterial().uvTransform = TransformFunctions::Multiply(
-            TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat),
-            tPosPivot
-        );
+        object3D_->SetUVTransform(TransformFunctions::Multiply(TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat), tPosPivot));
         object3D_->Update();
     }
 }
@@ -176,7 +170,7 @@ Vector4 PlacedObject3D::GetColor() const {
 void PlacedObject3D::SetColor(const Vector4& color) {
     color_ = color;
     if (object3D_) {
-        object3D_->GetMaterial().color = color;
+        object3D_->SetColor(color);
     }
 }
 

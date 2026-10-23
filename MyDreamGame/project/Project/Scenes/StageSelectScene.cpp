@@ -2,8 +2,6 @@
 #include "../externals/imgui/imgui.h"
 #include "Graphics/TextureManager.h"
 #include "Scene/SceneManager.h"
-#include "Core/Utility/ImGuiHelper.h"
-#include "Resource/Model/ModelManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Resource/Model/ModelCommon.h"
 #include "Input/KeyboardInput.h"
@@ -16,7 +14,6 @@
 #include <fstream>
 #include <filesystem>
 #include "Component/TransformComponent.h"
-#include "GameObject/Object3D.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Graphics/Camera/GameCamera.h"
 #include <cmath>
@@ -102,9 +99,8 @@ void StageSelectScene::Initialize() {
         renderer->Initialize(device.Get(), boxPrimitive);
         renderer->SetTextureHandle(texHandle);
 
-        Material& mat = renderer->GetMaterial();
-        mat.color = {1.0f, 1.0f, 1.0f, 1.0f};
-        mat.lightingType = enableLighting_ ? 1 : 0;
+        renderer->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+        renderer->SetLightingType(enableLighting_ ? 1 : 0);
 
         stageBoxes_[i].gameObject = boxObj;
         stageBoxes_[i].position = {initialX, 0.0f, initialZ};
@@ -262,7 +258,7 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
                 tc->SetScale({stageBoxes_[i].scale, stageBoxes_[i].scale, stageBoxes_[i].scale});
             }
             if (auto prc = stageBoxes_[i].gameObject->GetComponent<PrimitiveRendererComponent>()) {
-                prc->GetMaterial().lightingType = enableLighting_ ? 1 : 0;
+                prc->SetLightingType(enableLighting_ ? 1 : 0);
             }
         }
     }

@@ -983,7 +983,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             newBlock->SetProperties(def->properties);
             if (newBlock->GetGameObject()) {
                 if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                    prc->GetMaterial().color = def->color;
+                    prc->SetColor(def->color);
                     
                     if (!def->textureName.empty()) {
                         uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
@@ -1028,7 +1028,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     } else {
                         mrc->SetTextureHandle(gpuHandle_);
                     }
-                    mrc->GetMaterial().color = def->color;
+                    mrc->SetColor(def->color);
 
                     if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
                         tc->SetPosition({ worldX, worldY, 0.0f });
@@ -1037,7 +1037,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     
                     // モデルがある場合はプリミティブを非表示または削除（コンポーネントを取り除く機能がない場合はアルファ0にする等）
                     if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                        prc->GetMaterial().color.w = 0.0f; // 透明にして見えなくする
+                        prc->SetAlpha(0.0f); // 透明にして見えなくする
                     }
                 }
             }
@@ -1052,12 +1052,12 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                         float tileY = tc->GetScale().y / chipSize_;
                         float tileZ = tc->GetScale().z / chipSize_;
                         Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
-                        prc->GetMaterial().uvTransform = uvTrans;
-                        prc->GetMaterial().enableBoxMapping = 1.0f;
+                        prc->SetUVTransform(uvTrans);
+                        prc->SetEnableBoxMapping(1.0f);
                     }
                 } else {
-                    prc->GetMaterial().uvTransform = TransformFunctions::MakeIdentity4x4();
-                    prc->GetMaterial().enableBoxMapping = 0.0f;
+                    prc->SetUVTransform(TransformFunctions::MakeIdentity4x4());
+                    prc->SetEnableBoxMapping(0.0f);
                 }
             }
         }
@@ -1115,3 +1115,50 @@ int MapChip2D::GetCollectedCoinCount() const {
     }
     return count;
 }
+
+bool MapChip2D::RemoveCustomBlockDef(int id) {
+    auto it = std::remove_if(customPalette_.begin(), customPalette_.end(), [id](const CustomBlockDef& d) { return d.id == id; });
+    if (it != customPalette_.end()) {
+        customPalette_.erase(it, customPalette_.end());
+        return true;
+    }
+    return false;
+}
+
+MapChip2D::CustomBlockDef* MapChip2D::FindCustomBlockDef(int id) {
+    for (auto& def : customPalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+
+const MapChip2D::CustomBlockDef* MapChip2D::FindCustomBlockDef(int id) const {
+    for (const auto& def : customPalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+
+bool MapChip2D::RemoveTemplateBlockDef(int id) {
+    auto it = std::remove_if(templatePalette_.begin(), templatePalette_.end(), [id](const CustomBlockDef& d) { return d.id == id; });
+    if (it != templatePalette_.end()) {
+        templatePalette_.erase(it, templatePalette_.end());
+        return true;
+    }
+    return false;
+}
+
+MapChip2D::CustomBlockDef* MapChip2D::FindTemplateBlockDef(int id) {
+    for (auto& def : templatePalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+
+const MapChip2D::CustomBlockDef* MapChip2D::FindTemplateBlockDef(int id) const {
+    for (const auto& def : templatePalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+

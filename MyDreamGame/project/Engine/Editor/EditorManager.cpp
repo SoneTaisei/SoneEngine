@@ -13,13 +13,9 @@
 #include "Replay/PhysicsAStar.h"
 #include "Replay/LevelEvolutionAI.h"
 #include "Core/TimeManager.h"
-#include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
 #include "GameObject/MapObject2D.h"
-#include "Resource/Primitive/PrimitiveManager.h"
-#include "Resource/Model/ModelManager.h"
 #include "Game2D/Player/Player2D.h"
-#include "Component/TransformComponent.h"
 #include "Animation/AnimationPreviewScene.h"
 #include "GPUParticle/GPUParticlePreviewScene.h"
 #include "Core/Utility/ParameterManager.h"
@@ -1379,6 +1375,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     std::string label = "  " + placedObj->GetName() + "##Placed_" + std::to_string((uintptr_t)placedObj.get());
                                     if (ImGui::Selectable(label.c_str(), isSelected)) {
                                         model3DEditor_->SetSelectedObject(placedObj.get());
+                                        isPlayerSelected_ = false;
                                         selectedGameObject_ = nullptr;
                                         selectedObject_ = nullptr;
                                         selectedParticle_ = nullptr;
@@ -1403,16 +1400,17 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     } else {
                         // 通常モード時: 全カテゴリを表示
                         // 1. プレイヤー（存在する場合）
+
+                        // 1. プレイヤー（存在する場合）
                         if (activeScene->GetPlayer()) {
-                            auto* player = activeScene->GetPlayer();
-                            bool isSelected = (selectedPrimitive_ == player->GetPrimitiveObject() || (selectedObject_ && selectedObject_ == player->GetModelObject()));
-                            if (ImGui::Selectable("[Player] プレイヤー", isSelected)) {
+                            if (ImGui::Selectable("[Player] プレイヤー", isPlayerSelected_)) {
                                 selectedGameObject_ = nullptr;
                                 selectedParticle_ = nullptr;
-                                selectedPrimitive_ = player->GetPrimitiveObject();
-                                selectedObject_ = player->GetModelObject();
-                                if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
-                                if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
+                                selectedPrimitive_ = nullptr;
+                                selectedObject_ = nullptr;
+                                isPlayerSelected_ = true;
+                                if (model3DEditor_)
+                                    model3DEditor_->SetSelectedObject(nullptr);
                             }
                         }
 
@@ -1426,6 +1424,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     std::string label = "  " + placedObj->GetName() + "##Placed_" + std::to_string((uintptr_t)placedObj.get());
                                     if (ImGui::Selectable(label.c_str(), isSelected)) {
                                         model3DEditor_->SetSelectedObject(placedObj.get());
+                                        isPlayerSelected_ = false;
                                         selectedGameObject_ = nullptr;
                                         selectedObject_ = nullptr;
                                         selectedParticle_ = nullptr;
@@ -1457,6 +1456,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = nullptr;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
+                                    isPlayerSelected_ = false;
                                     if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
                                 }
                             }
@@ -1470,6 +1470,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = nullptr;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
+                                    isPlayerSelected_ = false;
                                     if (animationEditor_) { animationEditor_->SetSelectedTargets(selectedObject_, selectedGameObject_, selectedPrimitive_); animationEditor_->RefreshAnimationJointList(sceneManager); }
                                 }
                             }
@@ -1481,6 +1482,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedGameObject_ = nullptr;
                                     selectedObject_ = nullptr;
                                     selectedParticle_ = particle;
+                                    isPlayerSelected_ = false;
                                     selectedPrimitive_ = nullptr;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
                                 }
@@ -1494,6 +1496,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                                     selectedObject_ = nullptr;
                                     selectedParticle_ = nullptr;
                                     selectedPrimitive_ = primitive;
+                                    isPlayerSelected_ = false;
                                     if (model3DEditor_) model3DEditor_->SetSelectedObject(nullptr);
                                 }
                             }
@@ -1656,14 +1659,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         PushActionCommand(
                             [oldD, oldB, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = oldD;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(oldD);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = oldB;
                             },
                             [newData, newBlock, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = newData;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(newData);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = newBlock;
                             }
                         );
@@ -1714,7 +1717,8 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
                 // ノードごとの手振れ/Jitter補正強度編集
                 auto replayMgrInstance = ReplayManager::GetInstance();
-                auto& currentJitters = replayMgrInstance->GetCurrentReplay().jitters;
+                ReplayData curReplay = replayMgrInstance->GetCurrentReplay();
+                auto& currentJitters = curReplay.jitters;
                 int currentJitterVal = 0;
                 for (const auto& j : currentJitters) {
                     if (j.keyIdx == selectedReplayBlock_.trackIdx && j.startFrame == selectedReplayBlock_.startFrame) {
@@ -1740,6 +1744,7 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         newJitter.maxJitter = currentJitterVal;
                         currentJitters.push_back(newJitter);
                     }
+                    replayMgrInstance->SetCurrentReplay(curReplay);
                 }
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("再生時に設定フレーム数の範囲内でキー入力をブレ（揺らぎ）させる強度を設定します");
@@ -1773,14 +1778,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     PushActionCommand(
                         [oldData, oldBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = oldData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(oldData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = oldBlock;
                         },
                         [newData, newBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = newData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(newData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = newBlock;
                         }
                     );
@@ -1794,8 +1799,13 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                 selectedObject_->DisplayImGui("Object Properties");
             } else if (selectedParticle_ && !forceShowGlobalSettings_) {
                 selectedParticle_->DrawImGui();
+            } else if (isPlayerSelected_ && sceneManager && sceneManager->GetCurrentScene() && sceneManager->GetCurrentScene()->GetPlayer() && !forceShowGlobalSettings_) {
+                sceneManager->GetCurrentScene()->GetPlayer()->DisplayImGui();
             } else if (selectedPrimitive_ && !forceShowGlobalSettings_) {
+
                 selectedPrimitive_->DisplayImGui("Primitive Properties");
+            } else if (selectedGameObject_ && !forceShowGlobalSettings_) {
+
             } else {
                 if (currentMode_ == EditorMode::Replay) {
                     ImGui::TextColored(ImVec4(0.55f, 0.4f, 1.0f, 1.0f), "リプレイ グローバル設定 (手振れ補正 & 高速デバッグ)");
@@ -2741,14 +2751,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                         PushActionCommand(
                             [oldData, oldBlock, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = oldData;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(oldData);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = oldBlock;
                             },
                             [newData, newBlock, this]() {
                                 auto replayMgr = ReplayManager::GetInstance();
-                                replayMgr->GetCurrentReplay() = newData;
-                                replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                                replayMgr->SetCurrentReplay(newData);
+                                replayMgr->RebuildMmlFromCurrentFrames();
                                 this->selectedReplayBlock_ = newBlock;
                             }
                         );
@@ -2775,14 +2785,14 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
                     PushActionCommand(
                         [oldData, oldBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = oldData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(oldData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = oldBlock;
                         },
                         [newData, newBlock, this]() {
                             auto replayMgr = ReplayManager::GetInstance();
-                            replayMgr->GetCurrentReplay() = newData;
-                            replayMgr->RebuildMmlFromFrames(replayMgr->GetCurrentReplay());
+                            replayMgr->SetCurrentReplay(newData);
+                            replayMgr->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = newBlock;
                         }
                     );

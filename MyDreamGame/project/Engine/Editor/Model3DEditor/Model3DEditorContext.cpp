@@ -1,7 +1,6 @@
 #include "Model3DEditorContext.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Graphics/CameraManager.h"
-#include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include <fstream>
 #include <filesystem>
@@ -40,9 +39,9 @@ void Model3DEditorContext::Initialize(ID3D12Device* device) {
             gridFloorObj_->SetTranslation({ 0.0f, -0.01f, 0.0f });
             gridFloorObj_->SetScale({ 4000.0f, 0.02f, 4000.0f });
             gridFloorObj_->SetIsDoubleSided(true);
-            gridFloorObj_->GetMaterial().lightingType = 0; // Unlit
-            gridFloorObj_->GetMaterial().color = { 0.0f, 0.0f, 0.0f, 0.0f }; // Transparent floor, only grid lines
-            gridFloorObj_->GetMaterial().enableBoxMapping = 2.0f; // Procedural 3D Grid
+            gridFloorObj_->SetLightingType(0); // Unlit
+            gridFloorObj_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f }); // Transparent floor, only grid lines
+            gridFloorObj_->SetEnableBoxMapping(2.0f); // Procedural 3D Grid
             gridFloorObj_->Update();
         }
     }

@@ -19,7 +19,7 @@ void SkeletonDebugRenderer::Draw(const Skeleton& skeleton, const Matrix4x4& worl
     while (boneCylinders_.size() < jointCount) {
         auto cylinder = std::make_unique<PrimitiveObject>();
         cylinder->Initialize(DirectXCommon::GetInstance()->GetDevice(), PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Cylinder));
-        cylinder->GetMaterial().color = Vector4{0.15f, 0.15f, 0.15f, 1.0f}; // 暗めのグレー
+        cylinder->SetColor(Vector4{0.15f, 0.15f, 0.15f, 1.0f}); // 暗めのグレー
         boneCylinders_.push_back(std::move(cylinder));
     }
 

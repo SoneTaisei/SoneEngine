@@ -14,11 +14,11 @@ void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
     prc->Initialize(device, boxPrimitive);
-    prc->GetMaterial().color = { 0.8f, 0.2f, 0.8f, 1.0f }; // ゴールは紫色
+    prc->SetColor({ 0.8f, 0.2f, 0.8f, 1.0f }); // ゴールは紫色
     tc->SetScale({ width, height, 1.0f });
     basePosition_ = { worldX, worldY, 0.0f };
     tc->SetPosition(basePosition_);
-    prc->GetMaterial().lightingType = 1;
+    prc->SetLightingType(1);
     SetupCollider();
 }
 
