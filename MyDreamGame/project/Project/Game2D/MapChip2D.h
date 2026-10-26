@@ -123,9 +123,12 @@ public:
 
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
+    int GetTotalCoinCount() const;
+    int GetCollectedCoinCount() const;
 
     // 全ブロックのリセット（プレイヤー死亡・リトライ時）
     void ResetBlocks();
+    void SaveInitialMapState() { initialMapData_ = mapData_; }
 
     enum ShaderPreset : int {
         kShaderStandard = 0, // 通常シェーダー (Standard / LightingType 1)
@@ -174,6 +177,7 @@ private:
 private:
     // マップデータ（左下が(0,0)）
     std::vector<std::vector<ChipType>> mapData_;
+    std::vector<std::vector<ChipType>> initialMapData_;
     int mapWidth_ = 0;
     int mapHeight_ = 0;
     float chipSize_ = 1.0f; // 1チップのサイズ（ワールド座標）
