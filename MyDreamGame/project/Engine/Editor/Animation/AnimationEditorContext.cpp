@@ -1,13 +1,21 @@
 #ifdef USE_IMGUI
 #include "AnimationEditorContext.h"
 #include "Editor/EditorManager.h"
+#include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
+#include "GameObject/PrimitiveObject.h"
 #include "GameObject/GameObject.h"
+#include "Input/KeyboardInput.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/SrvManager.h"
+#include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
+#include "AnimationPreviewScene.h"
 #include "Core/TimeManager.h"
+#include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
 #include "Component/AnimatorComponent.h"
+#include "Resource/Model/Model.h"
 #include "Game2D/Player/Player2D.h"
 
 #include <filesystem>
@@ -45,7 +53,7 @@ AnimatorComponent* AnimationEditorContext::GetTargetAnimator(SceneManager* scene
         if (a) return a;
     }
     if (selectedObject_) {
-        auto* a = const_cast<AnimatorComponent*>(selectedObject_->GetAnimator());
+        auto* a = selectedObject_->GetAnimator();
         if (a) return a;
     }
     if (sceneManager && sceneManager->GetCurrentScene()) {
@@ -58,12 +66,12 @@ AnimatorComponent* AnimationEditorContext::GetTargetAnimator(SceneManager* scene
         }
         for (auto* obj : scene->GetObjects()) {
             if (obj && obj->GetAnimator() && obj->GetAnimator()->HasSkeleton()) {
-                return const_cast<AnimatorComponent*>(obj->GetAnimator());
+                return obj->GetAnimator();
             }
         }
         auto* player = scene->GetPlayer();
         if (player && player->GetAnimator()) {
-            return const_cast<AnimatorComponent*>(player->GetAnimator());
+            return player->GetAnimator();
         }
     }
     return nullptr;

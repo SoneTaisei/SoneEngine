@@ -27,7 +27,6 @@ class Skybox;
 enum class GameState {
     StartReady,
     Playing,
-    Pause,
     Clear
 };
 
@@ -82,7 +81,6 @@ private:
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
     bool wasCurrentlyPlaying_ = false;
     bool wasPlayingLastFrame_ = false;
-    bool wasRespawning_ = false;
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
@@ -116,24 +114,6 @@ private:
 
     // カメラスケール制御（クリア時のズームアップ用）
     float initialCameraScale_ = 1.0f;
-
-    // ポーズUIスプライトと状態
-    int pauseSelectedIndex_ = 0; // 0: つづける, 1: セレクトに戻る
-    std::unique_ptr<Sprite> pauseOverlaySprite_;
-    std::unique_ptr<Sprite> pauseContinueSprite_;
-    uint32_t pauseContinueTextureHandle_ = 0;
-    std::unique_ptr<Sprite> pauseSelectSprite_;
-    uint32_t pauseSelectTextureHandle_ = 0;
-
-    // コインUI
-    uint32_t coinTextureHandle_ = 0;
-    std::unique_ptr<Sprite> coinSprite_;
-    uint32_t numbersTextureHandle_ = 0;
-    std::vector<std::unique_ptr<Sprite>> numberSprites_;
-    float coinPopAnimTimer_ = 0.0f;
-    int lastCollectedCoins_ = 0;
-    void UpdateCoinUI(float deltaTime);
-    void DrawCoinUI();
 
     static std::string s_TargetMapFilePath;
 };

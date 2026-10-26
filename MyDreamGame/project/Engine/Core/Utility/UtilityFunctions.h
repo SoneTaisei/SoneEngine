@@ -1,6 +1,7 @@
 #pragma once
 #include"Core/Utility/Structs.h"
 #include "Animation.h"
+#include"GameObject/ResourceObject.h"
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
