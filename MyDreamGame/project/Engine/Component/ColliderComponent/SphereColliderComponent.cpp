@@ -34,8 +34,8 @@ AABB2D SphereColliderComponent::GetAABB() const {
     Vector3 pos = { 0.0f, 0.0f, 0.0f };
     float scale = 1.0f;
 
-    if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             pos = tc->GetPosition();
             scale = tc->GetScale().x; // 球体はXスケールを基準にする
         }

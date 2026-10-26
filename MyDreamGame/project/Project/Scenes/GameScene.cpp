@@ -949,7 +949,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (!EditorManager::IsPlaying() && player_) {
         ReplayManager* replayManager = ReplayManager::GetInstance();
         if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
-            ReplayData& currentReplay = replayManager->GetCurrentReplay();
+            const ReplayData& currentReplay = replayManager->GetCurrentReplay();
             if (!currentReplay.frames.empty()) {
                 const float GHOST_ALPHA = 0.5f;
                 const int FRAME_STEP = 10;
@@ -1081,7 +1081,7 @@ void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
 
             // 1. プレイヤー残像の2D軌跡描画
             if (playerPrim && playerPrim->GetShowTrail()) {
-                ReplayData& currentReplay = replayManager->GetCurrentReplay();
+                const ReplayData& currentReplay = replayManager->GetCurrentReplay();
                 if (!currentReplay.frames.empty()) {
                     const int FRAME_STEP = 10;
                     drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);

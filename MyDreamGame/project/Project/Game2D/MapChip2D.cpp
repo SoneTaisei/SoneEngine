@@ -1115,3 +1115,50 @@ int MapChip2D::GetCollectedCoinCount() const {
     }
     return count;
 }
+
+bool MapChip2D::RemoveCustomBlockDef(int id) {
+    auto it = std::remove_if(customPalette_.begin(), customPalette_.end(), [id](const CustomBlockDef& d) { return d.id == id; });
+    if (it != customPalette_.end()) {
+        customPalette_.erase(it, customPalette_.end());
+        return true;
+    }
+    return false;
+}
+
+MapChip2D::CustomBlockDef* MapChip2D::FindCustomBlockDef(int id) {
+    for (auto& def : customPalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+
+const MapChip2D::CustomBlockDef* MapChip2D::FindCustomBlockDef(int id) const {
+    for (const auto& def : customPalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+
+bool MapChip2D::RemoveTemplateBlockDef(int id) {
+    auto it = std::remove_if(templatePalette_.begin(), templatePalette_.end(), [id](const CustomBlockDef& d) { return d.id == id; });
+    if (it != templatePalette_.end()) {
+        templatePalette_.erase(it, templatePalette_.end());
+        return true;
+    }
+    return false;
+}
+
+MapChip2D::CustomBlockDef* MapChip2D::FindTemplateBlockDef(int id) {
+    for (auto& def : templatePalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+
+const MapChip2D::CustomBlockDef* MapChip2D::FindTemplateBlockDef(int id) const {
+    for (const auto& def : templatePalette_) {
+        if (def.id == id) return &def;
+    }
+    return nullptr;
+}
+

@@ -6,20 +6,14 @@
 #include "Component/IComponent.h"
 #include "Core/TimeManager.h"
 #include "GameObject/PrimitiveObject.h"
-#include "Input/KeyboardInput.h"
 #include "PlayerState.h"
 #include "PlayerVisuals.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "States/IPlayerState.h"
-#include <nlohmann/json.hpp>
 
 // 前方宣言
 class MapChip2D;
 class GameCamera;
-class PlayerNormalState;
-class PlayerDeadState;
-class PlayerRespawnState;
-class PlayerGoalState;
 class PlayerNormalState;
 class PlayerDeadState;
 class PlayerRespawnState;

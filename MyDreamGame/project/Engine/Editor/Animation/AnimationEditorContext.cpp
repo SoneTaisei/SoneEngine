@@ -1,21 +1,13 @@
 #ifdef USE_IMGUI
 #include "AnimationEditorContext.h"
 #include "Editor/EditorManager.h"
-#include "Effect/ParticleManager.h"
 #include "GameObject/Object3D.h"
-#include "GameObject/PrimitiveObject.h"
 #include "GameObject/GameObject.h"
-#include "Input/KeyboardInput.h"
-#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/SrvManager.h"
-#include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
-#include "AnimationPreviewScene.h"
 #include "Core/TimeManager.h"
-#include "Graphics/TextureManager.h"
 #include "Core/Utility/LogManager.h"
 #include "Component/AnimatorComponent.h"
-#include "Resource/Model/Model.h"
 #include "Game2D/Player/Player2D.h"
 
 #include <filesystem>
