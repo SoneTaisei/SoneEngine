@@ -1,4 +1,4 @@
-#include "SpriteAnimationEditor.h"
+﻿#include "SpriteAnimationEditor.h"
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
