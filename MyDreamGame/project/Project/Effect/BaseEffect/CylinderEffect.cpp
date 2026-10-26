@@ -16,8 +16,8 @@ void CylinderEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
     {
         cylinderObject_ = std::make_unique<PrimitiveObject>();
         cylinderObject_->Initialize(device, PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Cylinder, 1.0f, 64));
-        cylinderObject_->GetMaterial().enableEnvironmentMap = 0;
-        cylinderObject_->GetMaterial().lightingType = 0;
+        cylinderObject_->SetEnableEnvironmentMap(0);
+        cylinderObject_->SetLightingType(0);
         cylinderObject_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(textureHandle));
         cylinderObject_->SetTranslation({0.0f, 0.0f, 0.0f});
         cylinderObject_->SetScale({1.5f, 2.0f, 1.5f});
@@ -25,7 +25,7 @@ void CylinderEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
         cylinderObject_->SetIsBillboard(false);
         cylinderObject_->SetIsDoubleSided(true);
         cylinderObject_->SetBlendMode(BlendMode::kBlendModeAdd);
-        cylinderObject_->GetMaterial().alphaReference = 0.0f;
+        cylinderObject_->SetAlphaReference(0.0f);
         cylinderObject_->SetName("Cylinder");
         cylinderObject_->SetParent(cylinderEffectRoot_.get());
     }

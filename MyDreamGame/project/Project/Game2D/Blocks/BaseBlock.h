@@ -41,6 +41,7 @@ public:
     // リフトなどの動く足場用
     virtual bool IsMoving() const { return false; }
     virtual Vector3 GetVelocity() const { return {0.0f, 0.0f, 0.0f}; }
+    virtual float GetInertiaTime() const { return 0.5f; }
 
     // プレイヤーと接触した際の処理
     virtual void OnCollision(Player2D* player) {}
@@ -52,6 +53,7 @@ public:
 
     // Jsonプロパティの受け取り
     virtual void SetProperties(const nlohmann::json& properties) {}
+    virtual void GetProperties(nlohmann::json& properties) const {}
 
     // リセット処理（プレイヤー死亡時・リトライ時等）
     virtual void Reset() {}

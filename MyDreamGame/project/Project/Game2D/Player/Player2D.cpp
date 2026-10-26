@@ -2,6 +2,7 @@
 #include "States/PlayerStates.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"
+#include "Graphics/Camera/GameCamera.h"
 #include "Graphics/TextureManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Resource/Model/ModelManager.h"
@@ -19,6 +20,7 @@ void Player2D::ResetActionFlags() {
     state_.isDead_ = false;
     state_.isGoal_ = false;
     state_.isRespawning_ = false;
+    state_.isGrabbingVine_ = false;
 }
 
 void Player2D::UpdateWallJumpTimer(float deltaTime) {
@@ -55,6 +57,7 @@ void Player2D::UpdateVisualColor() {
 void Player2D::StartDeathSequence(bool isFallDeath) {
     state_.isDead_ = true;
     state_.isRespawning_ = false;
+    state_.isGrabbingVine_ = false;
     state_.deathTimer_ = 0.0f;
     state_.isDashing_ = false;
     state_.hasDashInertia_ = false;
@@ -94,6 +97,7 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.hasDashInertia_ = false;
     state_.dashJumpWindowTimer_ = 0.0f;
     state_.lastDashDirX_ = 0.0f;
+    state_.facingDirectionX_ = 1.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
     state_.wallJumpDirLockTimer_ = 0.0f;
@@ -111,6 +115,10 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.externalVelocityX_ = 0.0f;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
+    if (camera_) {
+        camera_->SetFollowTarget(&state_.position_);
+        camera_->SnapToTarget();
+    }
 
     visuals_.ClearEffects();
 
@@ -188,6 +196,8 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
     if (map.HasPlayerSpawn()) {
         state_.startPosition_ = map.GetPlayerSpawnWorldPosition(state_.startPosition_);
         state_.position_ = state_.startPosition_;
+        state_.lastCheckpointPosition_ = state_.startPosition_;
+        state_.checkpointScore_ = 0;
         if (gameObject_) {
             if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
@@ -265,6 +275,35 @@ void Player2D::DisplayImGui() {
         if (ImGui::Button("パラメータ読込 (Load)")) {
             PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
         }
+
+        ImGui::Separator();
+        ImGui::Text("プリセット一時適用 (※ファイル保存はされません)");
+        if (ImGui::Button("現実的物理 (リアル志向アクション)")) {
+            params_.gravity_ = -15.0f;
+            params_.jumpPower_ = 6.5f;
+            params_.moveSpeed_ = 4.5f;
+            params_.maxFallSpeed_ = -30.0f;
+            params_.wallClimbSpeed_ = 2.0f;
+            params_.wallSlideSpeed_ = -3.0f;
+            params_.wallJumpPower_ = { 4.0f, 5.5f };
+            params_.dashSpeed_ = 8.0f;
+            params_.dashDuration_ = 0.15f;
+            params_.dashInertiaDecayGround_ = 15.0f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("完全現実 (人間シミュレーション)")) {
+            params_.gravity_ = -9.8f;
+            params_.jumpPower_ = 4.2f;
+            params_.moveSpeed_ = 3.8f;
+            params_.maxFallSpeed_ = -45.0f;
+            params_.wallClimbSpeed_ = 1.0f;
+            params_.wallSlideSpeed_ = -4.0f;
+            params_.wallJumpPower_ = { 2.5f, 3.5f };
+            params_.dashSpeed_ = 6.0f;
+            params_.dashDuration_ = 0.15f;
+            params_.dashInertiaDecayGround_ = 12.0f;
+        }
+        ImGui::Separator();
 
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);
         ImGui::DragFloat3("速度", &state_.velocity_.x, 0.1f);
@@ -410,9 +449,13 @@ void Player2D::DisplayImGui() {
 
 void Player2D::ResetState(const Vector3& initPos) {
     state_.position_ = initPos;
+    state_.startPosition_ = initPos;
+    state_.lastCheckpointPosition_ = initPos;
+    state_.checkpointScore_ = 0;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.isOnGround_ = false;
     state_.canDash_ = true;
+    state_.facingDirectionX_ = 1.0f;
     state_.isDashing_ = false;
     state_.dashTimer_ = 0.0f;
     state_.isTouchingWallRight_ = false;
@@ -433,6 +476,11 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.hitstopTimer_ = 0.0f;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
+    if (camera_) {
+        camera_->SetFollowTarget(&state_.position_);
+        camera_->SnapToTarget();
+    }
+    state_.isGrabbingVine_ = false;
     
     visuals_.ResetVisuals(state_.position_, params_);
     visuals_.ClearEffects();

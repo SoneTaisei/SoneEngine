@@ -31,7 +31,7 @@ bool WorldGifObject::Initialize(ID3D12Device* device, const WorldGifConfig& conf
     primitiveObj_->Initialize(device, planePrim);
     primitiveObj_->SetName(config_.name);
     primitiveObj_->SetIsDoubleSided(config_.isDoubleSided);
-    primitiveObj_->GetMaterial().lightingType = 0; // アニメーション画像本来の色を出すためUnlit設定
+    primitiveObj_->SetLightingType(0); // アニメーション画像本来の色を出すためUnlit設定
 
     // テクスチャ読み込み
     if (!config_.texturePath.empty()) {
@@ -109,11 +109,7 @@ void WorldGifObject::UpdateMaterialAndTransform() {
     float v = static_cast<float>(row) * frameH;
 
     // UV切り抜き行列を設定
-    primitiveObj_->GetMaterial().uvTransform = TransformFunctions::MakeAffineMatrix(
-        { frameW, frameH, 1.0f },
-        { 0.0f, 0.0f, 0.0f },
-        { u, v, 0.0f }
-    );
+    primitiveObj_->SetUVTransform(TransformFunctions::MakeAffineMatrix({ frameW, frameH, 1.0f }, { 0.0f, 0.0f, 0.0f }, { u, v, 0.0f }));
 
     primitiveObj_->SetTranslation(config_.translation);
     primitiveObj_->SetRotation(config_.rotation);
@@ -127,7 +123,7 @@ void WorldGifObject::UpdateMaterialAndTransform() {
     primitiveObj_->SetScale(actualScale);
     primitiveObj_->SetIsBillboard(config_.isBillboard);
     primitiveObj_->SetIsDoubleSided(config_.isDoubleSided);
-    primitiveObj_->GetMaterial().color = config_.color;
+    primitiveObj_->SetColor(config_.color);
 
     primitiveObj_->Update();
 }

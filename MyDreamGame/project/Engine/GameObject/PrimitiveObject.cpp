@@ -123,7 +123,7 @@ void PrimitiveObject::DisplayImGui(const std::string& label) {
             ImGui::DragFloat("Alpha Reference", &material_.alphaReference, 0.01f, 0.0f, 1.0f);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Trail (霆瑚ｷ｡繝ｻ谿句ワ)")) {
+        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
             ImGui::Checkbox("Show Trail", &showTrail_);
             ImGui::TreePop();
         }

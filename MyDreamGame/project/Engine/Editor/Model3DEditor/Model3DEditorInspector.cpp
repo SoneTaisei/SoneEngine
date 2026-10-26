@@ -3,9 +3,12 @@
 #include "Scene/SceneManager.h"
 #include <imgui.h>
 #include <cstring>
+#include "Graphics/TextureManager.h"
 
 Model3DEditorInspector::Model3DEditorInspector(Model3DEditorContext* context)
     : context_(context) {
+    spriteSelectModal_ = std::make_unique<SpriteSelectModal>();
+    spriteSelectModal_->Initialize();
 }
 
 bool Model3DEditorInspector::Draw(SceneManager* sceneManager) {
@@ -132,17 +135,206 @@ bool Model3DEditorInspector::Draw(SceneManager* sceneManager) {
         sel->Update();
     }
 
-    // Texture
-    strcpy_s(texBuf_, sel->GetTexturePath().c_str());
-    if (ImGui::InputText("テクスチャパス (Texture)", texBuf_, sizeof(texBuf_))) {
-        sel->SetTexture(texBuf_);
-        sel->Update();
+    // Texture / Sprite
+    ImGui::Text("貼り付けスプライト / テクスチャ:");
+    std::string currentTex = sel->GetTexturePath();
+
+    if (!currentTex.empty()) {
+        uint32_t texIdx = TextureManager::GetInstance()->Load(currentTex);
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = TextureManager::GetInstance()->GetGpuHandle(texIdx);
+        if (gpuHandle.ptr != 0) {
+            ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(48.0f, 48.0f), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+            ImGui::SameLine();
+        }
     }
-    if (ImGui::IsItemActivated()) {
-        preEditSnapshot_ = context_->CreateSnapshot();
+
+    ImGui::BeginGroup();
+    std::string previewName = currentTex.empty() ? "なし (モデル標準テクスチャ)" : currentTex;
+    size_t lastSlash = previewName.find_last_of("/\\");
+    std::string shortName = (lastSlash != std::string::npos) ? previewName.substr(lastSlash + 1) : previewName;
+
+    ImGui::Text("選択中: %s", shortName.c_str());
+    if (ImGui::Button("スプライトを選択...")) {
+        isSpriteModalOpen_ = true;
+        if (spriteSelectModal_) {
+            spriteSelectModal_->RefreshSpriteList();
+        }
     }
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
-        context_->PushSnapshotToUndo(preEditSnapshot_);
+    ImGui::SameLine();
+    if (ImGui::Button("解除 (なし)")) {
+        if (!currentTex.empty()) {
+            context_->PushUndoState();
+            sel->SetTexture("");
+            sel->Update();
+        }
+    }
+    ImGui::EndGroup();
+
+    if (spriteSelectModal_) {
+        const auto& spriteList = spriteSelectModal_->GetSpriteList();
+        std::string comboPreview = currentTex.empty() ? "なし (モデル標準)" : currentTex;
+        if (ImGui::BeginCombo("スプライト一覧", comboPreview.c_str())) {
+            bool isNoneSelected = currentTex.empty();
+            if (ImGui::Selectable("なし (モデル標準)", isNoneSelected)) {
+                if (!currentTex.empty()) {
+                    context_->PushUndoState();
+                    sel->SetTexture("");
+                    sel->Update();
+                }
+            }
+            if (isNoneSelected) ImGui::SetItemDefaultFocus();
+
+            for (const auto& sp : spriteList) {
+                bool isSelected = (currentTex == sp.fullPath);
+                std::string label = sp.displayName + " (" + sp.subCategory + ")";
+                if (ImGui::Selectable(label.c_str(), isSelected)) {
+                    context_->PushUndoState();
+                    sel->SetTexture(sp.fullPath);
+                    sel->Update();
+                }
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+
+    if (ImGui::TreeNode("手動パス入力 (詳細設定)")) {
+        strcpy_s(texBuf_, sel->GetTexturePath().c_str());
+        if (ImGui::InputText("パス", texBuf_, sizeof(texBuf_))) {
+            sel->SetTexture(texBuf_);
+            sel->Update();
+        }
+        if (ImGui::IsItemActivated()) {
+            preEditSnapshot_ = context_->CreateSnapshot();
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            context_->PushSnapshotToUndo(preEditSnapshot_);
+        }
+        ImGui::TreePop();
+    }
+
+    // --- スプライトの映す範囲 (UV設定) ---
+    if (!currentTex.empty()) {
+        ImGui::Spacing();
+        if (ImGui::TreeNodeEx("スプライトの映す範囲 (UV設定)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            Vector2 uvOffset = sel->GetUVTranslation();
+            Vector2 uvScale = sel->GetUVScale();
+            Vector2 uvPivot = sel->GetUVPivot();
+            float uvRotDeg = sel->GetUVRotationDegrees();
+            bool uvChanged = false;
+
+            // 基準点 (Pivot) 切替
+            int pivotMode = (std::abs(uvPivot.x - 0.5f) < 0.01f && std::abs(uvPivot.y - 0.5f) < 0.01f) ? 0 : 1;
+            ImGui::Text("伸縮の基準点:");
+            ImGui::SameLine();
+            if (ImGui::RadioButton("中心 (Center)", pivotMode == 0)) {
+                context_->PushUndoState();
+                uvPivot = { 0.5f, 0.5f };
+                uvChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("左上 (Top-Left)", pivotMode == 1)) {
+                context_->PushUndoState();
+                uvPivot = { 0.0f, 0.0f };
+                uvChanged = true;
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("中心基準: サイズ変更時にも中心座標がズレず、左右均等にサイズが変化します。\n左上基準: 左上角を固定して伸縮します。");
+            }
+
+            // テクスチャの実ピクセルサイズを取得（参考情報およびピクセル指定用）
+            uint32_t currentTexHandle = TextureManager::GetInstance()->Load(currentTex);
+            const D3D12_RESOURCE_DESC resDesc = TextureManager::GetInstance()->GetResourceDesc(currentTexHandle);
+            float texW = static_cast<float>(resDesc.Width);
+            float texH = static_cast<float>(resDesc.Height);
+
+            if (texW > 0.0f && texH > 0.0f) {
+                ImGui::TextDisabled("元画像解像度: %.0f x %.0f px", texW, texH);
+            }
+
+            // 1. 範囲サイズ / スケール (UV Scale / Tiling)
+            if (ImGui::DragFloat2("映すサイズ / スケール (Scale)", &uvScale.x, 0.01f, -100.0f, 100.0f, "%.3f")) {
+                uvChanged = true;
+            }
+            if (ImGui::IsItemActivated()) preEditSnapshot_ = context_->CreateSnapshot();
+            if (ImGui::IsItemDeactivatedAfterEdit()) context_->PushSnapshotToUndo(preEditSnapshot_);
+
+            // 2. 映す位置 / オフセット (UV Offset / Translation)
+            if (ImGui::DragFloat2("映す位置 / オフセット (Offset)", &uvOffset.x, 0.01f, -100.0f, 100.0f, "%.3f")) {
+                uvChanged = true;
+            }
+            if (ImGui::IsItemActivated()) preEditSnapshot_ = context_->CreateSnapshot();
+            if (ImGui::IsItemDeactivatedAfterEdit()) context_->PushSnapshotToUndo(preEditSnapshot_);
+
+            // 3. 回転 (UV Rotation)
+            if (ImGui::DragFloat("スプライト回転 (Rotation deg)", &uvRotDeg, 1.0f, -360.0f, 360.0f, "%.1f°")) {
+                uvChanged = true;
+            }
+            if (ImGui::IsItemActivated()) preEditSnapshot_ = context_->CreateSnapshot();
+            if (ImGui::IsItemDeactivatedAfterEdit()) context_->PushSnapshotToUndo(preEditSnapshot_);
+
+            // ピクセル単位切り出し指定 (Pixel Rect Mode)
+            if (texW > 0.0f && texH > 0.0f) {
+                if (ImGui::TreeNode("ピクセル単位で指定 (px)")) {
+                    float pxPos[2] = { uvOffset.x * texW, uvOffset.y * texH };
+                    float pxSize[2] = { uvScale.x * texW, uvScale.y * texH };
+
+                    bool pxChanged = false;
+                    if (ImGui::DragFloat2("位置 (X, Y px)", pxPos, 1.0f, -texW * 10.0f, texW * 10.0f, "%.0f px")) {
+                        uvOffset.x = pxPos[0] / texW;
+                        uvOffset.y = pxPos[1] / texH;
+                        pxChanged = true;
+                    }
+                    if (ImGui::IsItemActivated()) preEditSnapshot_ = context_->CreateSnapshot();
+                    if (ImGui::IsItemDeactivatedAfterEdit()) context_->PushSnapshotToUndo(preEditSnapshot_);
+
+                    if (ImGui::DragFloat2("サイズ (W, H px)", pxSize, 1.0f, 1.0f, texW * 10.0f, "%.0f px")) {
+                        uvScale.x = pxSize[0] / texW;
+                        uvScale.y = pxSize[1] / texH;
+                        pxChanged = true;
+                    }
+                    if (ImGui::IsItemActivated()) preEditSnapshot_ = context_->CreateSnapshot();
+                    if (ImGui::IsItemDeactivatedAfterEdit()) context_->PushSnapshotToUndo(preEditSnapshot_);
+
+                    if (pxChanged) {
+                        uvChanged = true;
+                    }
+                    ImGui::TreePop();
+                }
+            }
+
+            // クイック操作ボタン
+            if (ImGui::Button("全体を表示 (リセット)")) {
+                context_->PushUndoState();
+                uvOffset = { 0.0f, 0.0f };
+                uvScale = { 1.0f, 1.0f };
+                uvRotDeg = 0.0f;
+                uvPivot = { 0.5f, 0.5f };
+                uvChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("左右反転")) {
+                context_->PushUndoState();
+                uvScale.x = -uvScale.x;
+                uvChanged = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("上下反転")) {
+                context_->PushUndoState();
+                uvScale.y = -uvScale.y;
+                uvChanged = true;
+            }
+
+            if (uvChanged) {
+                sel->SetUVTranslation(uvOffset);
+                sel->SetUVScale(uvScale);
+                sel->SetUVPivot(uvPivot);
+                sel->SetUVRotationDegrees(uvRotDeg);
+                sel->Update();
+            }
+
+            ImGui::TreePop();
+        }
     }
 
     ImGui::Spacing();
@@ -201,6 +393,21 @@ bool Model3DEditorInspector::Draw(SceneManager* sceneManager) {
 
     if (ImGui::CollapsingHeader("3D配置データ JSONファイル管理", ImGuiTreeNodeFlags_DefaultOpen)) {
         DrawFileManagementSection();
+    }
+
+    // スプライト選択モーダルダイアログ
+    if (isSpriteModalOpen_) {
+        ImGui::OpenPopup("スプライトを選択##SpriteSelectModalPopup");
+    }
+    if (spriteSelectModal_) {
+        spriteSelectModal_->DrawModal("スプライトを選択##SpriteSelectModalPopup", isSpriteModalOpen_, [&](const std::string& selectedPath) {
+            PlacedObject3D* currentSel = context_->GetSelectedObject();
+            if (currentSel) {
+                context_->PushUndoState();
+                currentSel->SetTexture(selectedPath);
+                currentSel->Update();
+            }
+        });
     }
 
     return true;

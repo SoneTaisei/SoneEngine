@@ -1,4 +1,6 @@
 #pragma once
+#include "Core/Utility/Structs.h"
+
 struct PlayerState {
     class ColliderComponent* standingPlatformCollider_ = nullptr;
     class ColliderComponent* wallPlatformCollider_ = nullptr;
@@ -11,6 +13,10 @@ struct PlayerState {
     Vector3 wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
     float platformInertiaTimer_ = 0.0f;
     float externalVelocityX_ = 0.0f;
+    float externalVelocityDuration_ = 0.5f;
+    float externalVelocityTimer_ = 0.0f;
+    float initialExternalVelocityX_ = 0.0f;
+    float lastPlatformInertiaTime_ = 0.5f;
     bool isOnGround_ = false;
     bool canDash_ = true;
     bool isDashing_ = false;
@@ -18,6 +24,7 @@ struct PlayerState {
     bool hasDashInertia_ = false;
     float dashJumpWindowTimer_ = 0.0f;
     float lastDashDirX_ = 0.0f;
+    float facingDirectionX_ = 1.0f; // 1.0f: 右, -1.0f: 左
     float jumpBufferTimer_ = 0.0f;
     float coyoteTimer_ = 0.0f;
     bool isTouchingWallRight_ = false;
@@ -34,6 +41,8 @@ struct PlayerState {
     bool isDead_ = false;
     float deathTimer_ = 0.0f;
     Vector3 startPosition_ = { 2.0f, 5.0f, 0.0f };
+    Vector3 lastCheckpointPosition_ = { 2.0f, 5.0f, 0.0f };
+    int checkpointScore_ = 0;
     int currentRoomIndex_ = -1;
     bool isRespawning_ = false;
     float respawnTimer_ = 0.0f;
@@ -50,4 +59,5 @@ struct PlayerState {
     float hitstopTimer_ = 0.0f; // ヒットストップ用のタイマー
     float climbingUpTimer_ = 0.0f; // 崖（壁）登りを行っていた直近猶予タイマー
     float climbLandingTimer_ = 0.0f; // 崖登り着地後の停止タイマー
+    bool isGrabbingVine_ = false; // ツタに掴まっているかどうかのフラグ
 };

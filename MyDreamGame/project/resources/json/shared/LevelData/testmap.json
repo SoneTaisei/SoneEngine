@@ -1,0 +1,125 @@
+[
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/block",
+        "modelFileName": "block.obj",
+        "name": "block",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            1.0,
+            1.0,
+            0.0010000000474974513
+        ],
+        "texturePath": "resources/Sprite/Original/UI/A.png",
+        "translation": [
+            10.846370697021484,
+            11.770898818969727,
+            0.0
+        ],
+        "uvPivot": [
+            0.5,
+            0.5
+        ],
+        "uvRotation": -1.5707963705062866,
+        "uvScale": [
+            4.0,
+            3.0
+        ],
+        "uvTranslation": [
+            0.05000000074505806,
+            0.0
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/block",
+        "modelFileName": "block.obj",
+        "name": "block_Copy",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            1.0,
+            1.0,
+            0.0010000000474974513
+        ],
+        "texturePath": "resources/Sprite/Original/UI/X.png",
+        "translation": [
+            46.31767654418945,
+            11.770898818969727,
+            0.0
+        ],
+        "uvPivot": [
+            0.5,
+            0.5
+        ],
+        "uvRotation": -1.5707963705062866,
+        "uvScale": [
+            4.0,
+            3.0
+        ],
+        "uvTranslation": [
+            0.05000000074505806,
+            0.0
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/block",
+        "modelFileName": "block.obj",
+        "name": "block_Copy_Copy",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            1.5,
+            1.0,
+            0.0010000000474974513
+        ],
+        "texturePath": "resources/Sprite/Original/UI/RB.png",
+        "translation": [
+            44.24829864501953,
+            37.40850830078125,
+            0.0
+        ],
+        "uvPivot": [
+            0.5,
+            0.5
+        ],
+        "uvRotation": -1.5707963705062866,
+        "uvScale": [
+            4.150000095367432,
+            4.25
+        ],
+        "uvTranslation": [
+            1.559999942779541,
+            0.0
+        ]
+    }
+]
