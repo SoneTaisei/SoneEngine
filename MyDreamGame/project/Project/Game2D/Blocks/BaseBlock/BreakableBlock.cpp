@@ -113,7 +113,7 @@ void BreakableBlock::Update() {
         // フェードアウト
         if (auto* prc = debris.gameObject->GetComponent<PrimitiveRendererComponent>()) {
             float progress = debris.timer / debris.lifetime;
-            Vector4 c = prc->GetColor();
+            Vector4 c = prc->GetMaterial().color;
             c.w = (std::max)(0.0f, 1.0f - progress);
             prc->SetColor(c);
         }
@@ -336,7 +336,6 @@ void BreakableBlock::BreakInternal(Player2D* player, const Vector3& inheritedDas
             tc->SetRotation({ 0.0f, 0.0f, 0.0f });
         }
         if (auto* prc = d.gameObject->GetComponent<PrimitiveRendererComponent>()) {
-            prc->SetColor(blockColor_);
             Vector4 c = prc->GetMaterial().color;
             c.w = 1.0f;
             prc->SetColor(c);
@@ -385,7 +384,6 @@ void BreakableBlock::Respawn() {
             tc->SetScale(baseScale_);
         }
         if (auto* prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            prc->SetColor(blockColor_);
             Vector4 c = prc->GetMaterial().color;
             c.w = 1.0f;
             prc->SetColor(c);

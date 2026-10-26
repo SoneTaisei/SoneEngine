@@ -198,7 +198,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
     }
 
     // --- シェーダー設定UI ---
-    const char* shaderItems[] = { "通常 (Standard)", "宝石 (Gem / Crystal)" };
+    const char* shaderItems[] = { "通常 (Standard)", "宝石 (Gem / Crystal)", "モヤ・邪気 (Dust Miasma)" };
     int currentShader = targetDef->shaderMode;
     if (currentShader < 0 || currentShader >= IM_ARRAYSIZE(shaderItems)) {
         currentShader = 0;
@@ -211,7 +211,8 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         ImGui::SetTooltip(
             "オブジェクトの描画シェーダープリセットを切り替えます。\n"
             "・通常 (Standard): 一般的な拡散光・陰影・シャドウ・環境光\n"
-            "・宝石 (Gem / Crystal): ウズシオクリスタルと同じ薄膜干渉虹色、擬似屈折、インナーグロー、表面光沢"
+            "・宝石 (Gem / Crystal): ウズシオクリスタルと同じ薄膜干渉虹色、擬似屈折、インナーグロー、表面光沢\n"
+            "・モヤ・邪気 (Dust Miasma): Celeste風の蠢く黒いコア＋赤いアウトラインと浮遊する泡（ドット絵調）"
         );
     }
 
