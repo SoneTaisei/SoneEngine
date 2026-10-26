@@ -18,10 +18,6 @@ class PlayerNormalState;
 class PlayerDeadState;
 class PlayerRespawnState;
 class PlayerGoalState;
-class PlayerNormalState;
-class PlayerDeadState;
-class PlayerRespawnState;
-class PlayerGoalState;
 
 /// <summary>
 /// 2Dスクロールゲーム用プレイヤークラス

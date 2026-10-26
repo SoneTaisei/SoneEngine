@@ -227,32 +227,28 @@ public:
     // 対称編集
     std::string FindOppositeJointName(const std::string& jointName, bool axisX = true, bool axisY = false, bool axisZ = false, const Skeleton* skeleton = nullptr);
 
-    // ゲッター / セッター (参照渡し含む)
-    Animation& GetEditingAnimation() { return editingAnimation_; }
+    // ゲッター / セッター (カプセル化)
     const Animation& GetEditingAnimation() const { return editingAnimation_; }
+    Animation& GetEditingAnimationMutable() { return editingAnimation_; }
     void SetEditingAnimation(const Animation& anim) { editingAnimation_ = anim; }
 
-    float& GetAnimEditorTime() { return animEditorTime_; }
     float GetAnimEditorTime() const { return animEditorTime_; }
     void SetAnimEditorTime(float t) { animEditorTime_ = t; }
 
-    bool& GetAnimEditorPlaying() { return animEditorPlaying_; }
     bool GetAnimEditorPlaying() const { return animEditorPlaying_; }
     void SetAnimEditorPlaying(bool p) { animEditorPlaying_ = p; }
 
-    AnimationWrapMode& GetAnimEditorWrapMode() { return animEditorWrapMode_; }
     AnimationWrapMode GetAnimEditorWrapMode() const { return animEditorWrapMode_; }
     void SetAnimEditorWrapMode(AnimationWrapMode mode) { animEditorWrapMode_ = mode; }
 
     bool GetAnimEditorLoop() const { return animEditorWrapMode_ == AnimationWrapMode::Loop; }
     void SetAnimEditorLoop(bool loop) { animEditorWrapMode_ = loop ? AnimationWrapMode::Loop : AnimationWrapMode::Once; }
 
-    float& GetAnimEditorFps() { return animEditorFps_; }
     float GetAnimEditorFps() const { return animEditorFps_; }
+    void SetAnimEditorFps(float fps) { animEditorFps_ = fps; }
 
     void EnsureJointVisibleInTree(const std::string& jointName);
 
-    std::string& GetSelectedJointName() { return animEditorSelectedJointName_; }
     const std::string& GetSelectedJointName() const { return animEditorSelectedJointName_; }
     void SetSelectedJointName(const std::string& name) {
         animEditorSelectedJointName_ = name;
@@ -261,19 +257,17 @@ public:
         EnsureJointVisibleInTree(name);
     }
 
-    bool& GetIsSummarySelected() { return isSummarySelected_; }
     bool GetIsSummarySelected() const { return isSummarySelected_; }
     void SetIsSummarySelected(bool s) { isSummarySelected_ = s; }
 
-    int& GetSelectedProperty() { return animEditorSelectedProperty_; }
     int GetSelectedProperty() const { return animEditorSelectedProperty_; }
+    void SetSelectedProperty(int prop) { animEditorSelectedProperty_ = prop; }
 
-    int& GetSelectedKeyIndex() { return animEditorSelectedKeyIndex_; }
     int GetSelectedKeyIndex() const { return animEditorSelectedKeyIndex_; }
     void SetSelectedKeyIndex(int idx) { animEditorSelectedKeyIndex_ = idx; }
 
-    int& GetTargetAnim() { return animEditorTargetAnim_; }
     int GetTargetAnim() const { return animEditorTargetAnim_; }
+    void SetTargetAnim(int target) { animEditorTargetAnim_ = target; }
 
     const std::vector<std::string>& GetCurrentJointList() const { return currentJointList_; }
     const std::vector<AnimJointTreeNode>& GetAnimJointTreeNodes() const { return animJointTreeNodes_; }
