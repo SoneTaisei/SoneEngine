@@ -36,7 +36,6 @@ public:
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
     const BlendMode GetBlendMode() const { return blendMode_; }
     void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
-    void SetEnableBoxMapping(float enable) { material_.enableBoxMapping = enable; }
     
     // トレイル描画用
     const bool GetShowTrail() const { return showTrail_; }

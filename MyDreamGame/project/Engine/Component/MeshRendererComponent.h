@@ -37,8 +37,6 @@ public:
     void SetShininess(float shininess) { material_.shininess = shininess; }
     BlendMode GetBlendMode() const { return blendMode_; }
     void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
-    void SetEnableBoxMapping(float enable) { material_.enableBoxMapping = enable; }
-    void SetShininess(float shininess) { material_.shininess = shininess; }
 
     Model* GetModel() const { return model_; }
     void SetModel(Model* model) { model_ = model; }

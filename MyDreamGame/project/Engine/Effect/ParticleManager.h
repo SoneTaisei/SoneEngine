@@ -107,6 +107,14 @@ protected:
     // 当たり判定関数
     bool IsCollision(const AABB &aabb, const Vector3 &point);
 
+    // 派生クラス用アクセサ
+    Emitter &GetEmitter() { return emitter_; }
+    const Emitter &GetEmitter() const { return emitter_; }
+    std::list<ParticleData> &GetParticles() { return particles_; }
+    const std::list<ParticleData> &GetParticles() const { return particles_; }
+    std::mt19937 &GetRandomEngine() { return randomEngine_; }
+    const AccelerationField &GetAccelerationField() const { return accelerationField_; }
+
     // vector から list へ変更
     std::list<ParticleData> particles_{};
 
