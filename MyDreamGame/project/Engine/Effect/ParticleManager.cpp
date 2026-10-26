@@ -1,9 +1,10 @@
-﻿#include "ParticleManager.h"
+#include "ParticleManager.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/TextureManager.h"
 #include "Renderer/SrvManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/TimeManager.h"
+#include <numbers>
 //#include "imgui.h"
 
 ParticleManager::~ParticleManager() {

@@ -14,6 +14,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/Camera/GameCamera.h"
+#include "Resource/Sprite/SpriteCommon.h"
 
 TitleScene::~TitleScene() {
 }

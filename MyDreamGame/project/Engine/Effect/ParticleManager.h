@@ -3,10 +3,8 @@
 #include <wrl.h>
 #include <string>
 #include "Core/Utility/Utilityfunctions.h"
-#include "Resource/Model/ModelCommon.h" 
 #include "ParticleCommon.h"
 #include "Core/Utility/BlendMode.h"
-#include <numbers>
 #include <list>
 #include <random>
 
