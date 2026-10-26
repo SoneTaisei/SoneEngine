@@ -6,6 +6,7 @@
 #include "Game2D/MapChip2D.h"
 #include "Game2D/Blocks/BlockFactory.h"
 #include "Game2D/Blocks/BaseBlock.h"
+#include "Game2D/Blocks/FallBlock.h"
 #include "Graphics/TextureManager.h"
 #include <string>
 #include <algorithm>
@@ -247,6 +248,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
         if (k == "floatAmplitude") return std::string("浮遊の振幅 (floatAmplitude)");
         if (k == "floatSpeed") return std::string("浮遊の速度 (floatSpeed)");
         if (k == "breakConnected") return std::string("連結破壊 (breakConnected)");
+        if (k == "inertiaTime") return std::string("ジャンプ慣性持続時間 (inertiaTime)");
         return k;
     };
 
@@ -260,14 +262,41 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
             changed = true;
         }
     }
+    if (targetDef->type == "LiftBlock") {
+        if (!targetDef->properties.contains("inertiaTime")) {
+            targetDef->properties["inertiaTime"] = 0.5f;
+            changed = true;
+        }
+    }
+    if (targetDef->type == "FallBlock") {
+        auto checkProp = [&](const std::string& k, auto val) {
+            if (!targetDef->properties.contains(k)) {
+                targetDef->properties[k] = val;
+                changed = true;
+            }
+        };
+        checkProp("shakeDuration", 0.28f);
+        checkProp("shakeIntensity", 0.08f);
+        checkProp("sinkAmount", 0.12f);
+        checkProp("gravity", -32.0f);
+        checkProp("terminalVelocity", -28.0f);
+        checkProp("stopOnGround", true);
+        checkProp("respawnTime", 0.0f);
+    }
 
-    for (auto& [key, value] : targetDef->properties.items()) {
+    if (targetDef->type != "FallBlock") {
+        for (auto& [key, value] : targetDef->properties.items()) {
         std::string jpKey = getJpKey(key);
         if (value.is_number()) {
             float v = value.get<float>();
-            if (ImGui::DragFloat(jpKey.c_str(), &v, 0.1f)) {
+            float dragSpeed = (key == "inertiaTime") ? 0.01f : 0.1f;
+            if (ImGui::DragFloat(jpKey.c_str(), &v, dragSpeed, (key == "inertiaTime") ? 0.0f : -1000.0f, 1000.0f, "%.2f")) {
+                if (key == "inertiaTime" && v < 0.0f) v = 0.0f;
                 value = v;
                 changed = true;
+            }
+            if (key == "inertiaTime" && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("リフトからジャンプした際に、空中でプレイヤーにリフトの慣性が残る時間（秒）です。\n数値を増やすとジャンプ後もより長い時間慣性が残ります。");
             }
         } else if (value.is_string()) {
             std::string v = value.get<std::string>();
@@ -285,19 +314,48 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
             }
         }
     }
+    }
     
     // ブロッククラス固有の ImGui UI (DrawImGui) の表示
     if (BlockFactory::GetInstance().HasType(targetDef->type)) {
         ImGui::Separator();
         static std::shared_ptr<BaseBlock> previewBlock = nullptr;
         static std::string lastPreviewType = "";
-        if (!previewBlock || lastPreviewType != targetDef->type) {
+        static int lastTargetId = -1;
+        if (!previewBlock || lastPreviewType != targetDef->type || lastTargetId != targetDef->id) {
             previewBlock = BlockFactory::GetInstance().Create(targetDef->type, mapChip, 0, 0);
             lastPreviewType = targetDef->type;
+            lastTargetId = targetDef->id;
+            if (previewBlock) {
+                previewBlock->SetProperties(targetDef->properties);
+            }
         }
         if (previewBlock) {
-            previewBlock->SetProperties(targetDef->properties);
+            nlohmann::json beforeProps;
+            previewBlock->GetProperties(beforeProps);
+
             previewBlock->DrawImGui();
+
+            nlohmann::json afterProps;
+            previewBlock->GetProperties(afterProps);
+            if (beforeProps != afterProps) {
+                for (auto& [k, v] : afterProps.items()) {
+                    targetDef->properties[k] = v;
+                }
+                changed = true;
+            }
+
+            // FallBlock の場合、プレビューでの色変更を targetDef->color に同期
+            if (auto* fb = dynamic_cast<FallBlock*>(previewBlock.get())) {
+                const Vector4& fbColor = fb->GetDefaultColor();
+                if (std::abs(fbColor.x - targetDef->color.x) > 0.001f ||
+                    std::abs(fbColor.y - targetDef->color.y) > 0.001f ||
+                    std::abs(fbColor.z - targetDef->color.z) > 0.001f ||
+                    std::abs(fbColor.w - targetDef->color.w) > 0.001f) {
+                    targetDef->color = fbColor;
+                    changed = true;
+                }
+            }
         }
     }
 

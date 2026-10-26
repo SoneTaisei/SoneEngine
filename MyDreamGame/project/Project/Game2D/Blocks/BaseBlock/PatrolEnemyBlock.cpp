@@ -21,10 +21,10 @@ void PatrolEnemyBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive,
     if (texHandle != 0) {
         prc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
     }
-    prc->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+    prc->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
     prc->SetLightingType(1);
     prc->SetEnableBoxMapping(0.0f);
-    prc->SetUvTransform(TransformFunctions::MakeIdentity4x4());
+    prc->SetUVTransform(TransformFunctions::MakeIdentity4x4());
 
     radius_ = width * 0.5f;
     if (radius_ <= 0.0f) radius_ = 0.5f;

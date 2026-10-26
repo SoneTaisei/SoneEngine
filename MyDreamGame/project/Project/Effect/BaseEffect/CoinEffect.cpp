@@ -21,10 +21,9 @@ void CoinEffect::Update(float deltaTime) {
         it->obj->SetRotation({0.0f, 0.0f, it->rotationZ});
 
         // 縮小させながら消える
-        float alpha = it->lifeTime / it->maxLifeTime;
-        it->obj->SetScale({it->scale.x * alpha, it->scale.y * alpha, it->scale.z * alpha});
-        
-        it->obj->GetMaterial().color.w = alpha;
+        Vector4 c = it->obj->GetMaterial().color;
+        it->obj->SetScale({it->scale.x * c.w, it->scale.y * c.w, it->scale.z * c.w});
+        it->obj->SetColor(c);
 
         it->obj->Update();
 
@@ -52,8 +51,8 @@ void CoinEffect::Emit(const Vector3& position) {
         p.obj = std::make_unique<PrimitiveObject>();
         p.obj->Initialize(device_, PrimitiveManager::GetInstance()->GetPrimitive(PrimitiveType::Star, 1.0f));
         
-        p.obj->GetMaterial().lightingType = 0; // Unlit
-        p.obj->GetMaterial().enableEnvironmentMap = 0;
+        p.obj->SetLightingType(0);             // Unlit
+        p.obj->SetEnableEnvironmentMap(0);
         p.obj->SetBlendMode(BlendMode::kBlendModeAdd);
         p.obj->SetIsBillboard(true); // カメラの方向を向かせる
         p.obj->SetIsDoubleSided(true);

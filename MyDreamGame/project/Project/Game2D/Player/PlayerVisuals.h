@@ -9,6 +9,8 @@
 #include "GameObject/Object3D.h"
 #include "Component/AnimatorComponent.h"
 
+class GPUParticleSystem;
+
 struct DustParticle {
     Vector3 position;
     Vector3 velocity;
@@ -60,12 +62,10 @@ public:
     void SetColor(const Vector4& color);
     void SyncSize(const PlayerParams& params);
 
-    PrimitiveObject* GetPrimitiveObject() { return primitiveObj_.get(); }
     const PrimitiveObject* GetPrimitiveObject() const { return primitiveObj_.get(); }
-    Object3D* GetModelObject() { return modelObj_.get(); }
     const Object3D* GetModelObject() const { return modelObj_.get(); }
-    AnimatorComponent* GetAnimator() { return animator_.get(); }
     const AnimatorComponent* GetAnimator() const { return animator_.get(); }
+    const GPUParticleSystem* GetDashAuraParticle() const { return dashAuraParticle_.get(); }
 
 #ifdef USE_IMGUI
     void DisplayImGui();
@@ -85,6 +85,7 @@ private:
     std::unique_ptr<PrimitiveObject> dashRingPrimitive_;
     std::unique_ptr<PrimitiveObject> dustPrimitive_;
     std::unique_ptr<PrimitiveObject> confettiPrimitive_;
+    std::unique_ptr<GPUParticleSystem> dashAuraParticle_;
 
     std::vector<DustParticle> dustParticles_;
     std::vector<ConfettiParticle> confettiParticles_;

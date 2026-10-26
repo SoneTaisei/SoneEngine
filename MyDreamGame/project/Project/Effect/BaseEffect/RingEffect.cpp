@@ -16,8 +16,8 @@ void RingEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
     {
         auto ring = std::make_unique<PrimitiveObject>();
         ring->Initialize(device, PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
+        ring->SetEnableEnvironmentMap(0);
+        ring->SetLightingType(0);
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(textureHandle));
         ring->SetTranslation({0.0f, 0.0f, 0.0f});
         ring->SetRotation({0.4f, 0.0f, 0.0f}); // 少し傾ける
@@ -33,8 +33,8 @@ void RingEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
     {
         auto ring = std::make_unique<PrimitiveObject>();
         ring->Initialize(device, PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
+        ring->SetEnableEnvironmentMap(0);
+        ring->SetLightingType(0);
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(textureHandle));
         ring->SetTranslation({0.0f, 0.0f, 0.0f});
         ring->SetRotation({0.4f, 0.785f, 0.0f}); // 45度
@@ -50,8 +50,8 @@ void RingEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
     {
         auto ring = std::make_unique<PrimitiveObject>();
         ring->Initialize(device, PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1,1,1,1}, {1,1,1,1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
+        ring->SetEnableEnvironmentMap(0);
+        ring->SetLightingType(0);
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(textureHandle));
         ring->SetTranslation({0.0f, 0.0f, 0.0f});
         ring->SetRotation({0.4f, 1.57f, 0.0f});  // 90度
@@ -67,8 +67,8 @@ void RingEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
     {
         auto ring = std::make_unique<PrimitiveObject>();
         ring->Initialize(device, PrimitiveManager::GetInstance()->GetRing(0.5f, 1.0f, 64, 0.0f, 2.0f * 3.14159f, {1, 1, 1, 1}, {1, 1, 1, 1}, false));
-        ring->GetMaterial().enableEnvironmentMap = 0;
-        ring->GetMaterial().lightingType = 0;
+        ring->SetEnableEnvironmentMap(0);
+        ring->SetLightingType(0);
         ring->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(textureHandle));
         ring->SetTranslation({0.0f, 0.0f, 0.0f});
         ring->SetRotation({0.4f, 2.355f, 0.0f}); // 135度
@@ -98,7 +98,7 @@ void RingEffect::Update(float deltaTime) {
 
     // リングのみフェードアニメーションと更新を行う
     for (auto& ring : primitiveParticles_) {
-        ring->GetMaterial().color.w = alpha; // 透明度を適用
+        ring->SetAlpha(alpha); // 透明度を適用
         ring->Update();
     }
 }

@@ -180,12 +180,12 @@ IDxcBlob *CompileShader(
 	IDxcIncludeHandler *includeHandler) {
 
 	/*********************************************************
-	*1. hlsl繝輔ぃ繧､繝ｫ繧定ｪｭ繧
+	*1. hlslファイルを読む
 	*********************************************************/
 
 	// これからシェーダーをコンパイルする旨をログに出す
 	Log(ConvertString(std::format(L"Begin CompileShader, path:{},profile:{}\n", filePath, profile)));
-	// hlsl繝輔ぃ繧､繝ｫ繧定ｪｭ繧
+	// hlslファイルを読む
 	IDxcBlobEncoding *shaderSource = nullptr;
 	HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
 	if (FAILED(hr)) {
@@ -376,7 +376,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateTextureResource(Microsoft::WRL::Com
 	// metadataをもとにResourceの設定
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = UINT(metadata.width);// 横幅
-	resourceDesc.Height = UINT(metadata.height);// 鬮倥＆
+	resourceDesc.Height = UINT(metadata.height);// 高さ
 	resourceDesc.MipLevels = UINT(metadata.mipLevels);// mipmapの数
 	resourceDesc.DepthOrArraySize = UINT(metadata.arraySize);// 奥行き or 配列Textureの配列数
 	resourceDesc.Format = metadata.format;// TextureのFormat
@@ -434,7 +434,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateDepthStencilTextureResource(Microso
 	resourceDesc.Width = width;
 	resourceDesc.Height = height;
 	resourceDesc.MipLevels = 1;
-	resourceDesc.DepthOrArraySize = 1;// 螂･陦後″
+	resourceDesc.DepthOrArraySize = 1;// 奥行き
 	resourceDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 	resourceDesc.SampleDesc.Count = 1;
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;// 2次元
@@ -507,7 +507,7 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 			v.normal = {v.position.x / radius, v.position.y / radius, v.position.z / radius};
             v.texcoord = { (float)lon / lonDiv, (float)lat / latDiv };
             v.color = {1.0f, 1.0f, 1.0f, 1.0f};
-            vertices.push_back(v); // 鬆らせ繝ｪ繧ｹ繝医↓霑ｽ蜉
+            vertices.push_back(v); // 頂点リストに追加
 		}
 	}
 	// 三角形インデックスの生成（頂点をつなぐ）
@@ -794,7 +794,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
 }
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename) {
-	MaterialData materialData;// 讒狗ｯ峨☆繧貴aterialData
+	MaterialData materialData;// 構築するMaterialData
 	std::string line;//　ファイルから読んだ1行目を格納する
 	std::ifstream file(directoryPath + "/" + filename);// ファイルを開く
 	assert(file.is_open());// 開けなかったら止める
@@ -820,12 +820,12 @@ MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const st
 SoundData SoundLoadWave(const char *filename) {
 	//HRESULT result;
 
-	/*繝輔ぃ繧､繝ｫ繧ｪ繝ｼ繝励Φ
+	/*ファイルオープン
 	*********************************************************/
 
 	// ファイル入力ストリームのインスタンス
 	std::ifstream file;
-	// .wav繝輔ぃ繧､繝ｫ繧偵ヰ繧､繝翫Μ繝｢繝ｼ繝峨〒髢九￥
+	// .wavファイルをバイナリモードで開く
 	file.open(filename, std::ios_base::binary);
 	// ファイルオープン失敗を検出する
 	assert(file.is_open());
@@ -850,7 +850,7 @@ SoundData SoundLoadWave(const char *filename) {
 	FormatChunk format = {};
 	// fmtチャンクを探すループ
 	while(true) {
-		// 繝√Ε繝ｳ繧ｯ繝倥ャ繝繝ｼ繧定ｪｭ繧
+		// チャンクヘッダーを読む
 		file.read((char *)&format.chunk, sizeof(ChunkHeader));
 
 		// チャンクIDが"fmt " ならbreak
@@ -979,7 +979,7 @@ SoundData SoundLoadMediaFoundation(const char *filename) {
         pBuffer->Unlock();
     }
 
-    // SoundData讒矩菴薙↓隧ｰ繧√※霑斐☆
+    // SoundData構造体に詰めて返す
     SoundData soundData = {};
     soundData.wfex = *pWfex;
     soundData.pBuffer = std::make_unique<BYTE[]>(audioData.size());
@@ -1043,32 +1043,32 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
     vertices.resize(24);
 
     // --- 頂点座標の定義 ---
-    // 蜿ｳ髱｢ (+X)
+    // 右面 (+X)
     vertices[0].position = {1.0f, 1.0f, 1.0f, 1.0f};
     vertices[1].position = {1.0f, 1.0f, -1.0f, 1.0f};
     vertices[2].position = {1.0f, -1.0f, 1.0f, 1.0f};
     vertices[3].position = {1.0f, -1.0f, -1.0f, 1.0f};
-    // 蟾ｦ髱｢ (-X)
+    // 左面 (-X)
     vertices[4].position = {-1.0f, 1.0f, -1.0f, 1.0f};
     vertices[5].position = {-1.0f, 1.0f, 1.0f, 1.0f};
     vertices[6].position = {-1.0f, -1.0f, -1.0f, 1.0f};
     vertices[7].position = {-1.0f, -1.0f, 1.0f, 1.0f};
-    // 蜑埼擇 (+Z)
+    // 前面 (+Z)
     vertices[8].position = {-1.0f, 1.0f, 1.0f, 1.0f};
     vertices[9].position = {1.0f, 1.0f, 1.0f, 1.0f};
     vertices[10].position = {-1.0f, -1.0f, 1.0f, 1.0f};
     vertices[11].position = {1.0f, -1.0f, 1.0f, 1.0f};
-    // 蠕碁擇 (-Z)
+    // 後面 (-Z)
     vertices[12].position = {1.0f, 1.0f, -1.0f, 1.0f};
     vertices[13].position = {-1.0f, 1.0f, -1.0f, 1.0f};
     vertices[14].position = {1.0f, -1.0f, -1.0f, 1.0f};
     vertices[15].position = {-1.0f, -1.0f, -1.0f, 1.0f};
-    // 荳企擇 (+Y)
+    // 上面 (+Y)
     vertices[16].position = {-1.0f, 1.0f, -1.0f, 1.0f};
     vertices[17].position = {1.0f, 1.0f, -1.0f, 1.0f};
     vertices[18].position = {-1.0f, 1.0f, 1.0f, 1.0f};
     vertices[19].position = {1.0f, 1.0f, 1.0f, 1.0f};
-    // 荳矩擇 (-Y)
+    // 下面 (-Y)
     vertices[20].position = {-1.0f, -1.0f, 1.0f, 1.0f};
     vertices[21].position = {1.0f, -1.0f, 1.0f, 1.0f};
     vertices[22].position = {-1.0f, -1.0f, -1.0f, 1.0f};
