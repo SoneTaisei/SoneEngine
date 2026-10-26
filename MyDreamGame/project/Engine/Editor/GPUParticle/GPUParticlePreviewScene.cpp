@@ -3,8 +3,6 @@
 #include "Graphics/TextureManager.h"
 #include "Scene/SceneManager.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
-#include "Resource/Primitive/PrimitiveManager.h"
-#include "Renderer/Renderer.h"
 #include "Effect/GPUParticle/GPUParticleSystem.h"
 
 void GPUParticlePreviewScene::Initialize() {

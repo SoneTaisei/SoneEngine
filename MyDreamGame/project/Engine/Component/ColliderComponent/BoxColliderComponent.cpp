@@ -45,8 +45,8 @@ AABB2D BoxColliderComponent::GetAABB() const {
     Vector3 pos = {0.0f, 0.0f, 0.0f};
     Vector3 scale = GetBoxSize(); // ← boxSize_ から変更
 
-    if (gameObject_) {
-        if (auto *tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             pos = tc->GetPosition();
             scale.x *= tc->GetScale().x;
             scale.y *= tc->GetScale().y;

@@ -1,9 +1,7 @@
 #pragma once
 #include "Scene/IScene.h"
-#include "Resource/Model/Model.h"
 #include <memory>
 #include "GameObject/GameObject.h"
-#include "Component/MeshRendererComponent.h"
 #include "Component/PrimitiveRendererComponent.h"
 #include "Graphics/Skybox.h"
 

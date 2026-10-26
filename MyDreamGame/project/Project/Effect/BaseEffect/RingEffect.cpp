@@ -1,5 +1,4 @@
 #include "RingEffect.h"
-#include "Core/TimeManager.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Graphics/TextureManager.h"
 

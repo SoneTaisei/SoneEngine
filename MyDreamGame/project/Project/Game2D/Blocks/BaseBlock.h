@@ -1,8 +1,6 @@
-#pragma once
-#include "GameObject/PrimitiveObject.h"
+﻿#pragma once
 #include <memory>
 #include <nlohmann/json.hpp>
-#include "GameObject/Object3D.h"
 #include "Core/Utility/Structs.h"
 #include "GameObject/GameObject.h"
 #include "Component/TransformComponent.h"

@@ -1087,9 +1087,6 @@ void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t
     }
 }
 
-
-#include "LogManager.h"
-
 Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename) {
     Animation animation; // create animation
     Assimp::Importer importer;

@@ -113,7 +113,6 @@ public:
     void SetAmbientIntensity(float intensity) { ambientIntensity_ = intensity; }
 
     const std::vector<SpotLightItem>& GetSpotLights() const { return spotLights_; }
-    std::vector<SpotLightItem>& GetSpotLights() { return spotLights_; }
 
 private:
     bool isVisible_ = true;

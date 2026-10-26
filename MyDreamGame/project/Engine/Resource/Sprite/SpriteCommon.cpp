@@ -2,7 +2,6 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Sprite.h" // Spriteの定義が必要
 #include <d3dcompiler.h>
-#include "Graphics/TextureManager.h"
 #include "Renderer/SrvManager.h"
 #pragma comment(lib, "d3dcompiler.lib")
 

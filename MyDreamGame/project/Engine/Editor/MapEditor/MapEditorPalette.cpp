@@ -515,7 +515,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                             int payload_id = *(const int*)payload->Data;
                             int target_id = tool.id;
 
-                            auto& palette = mapChip->GetCustomPalette();
+                            auto palette = mapChip->GetCustomPalette();
                             int srcIdx = -1, dstIdx = -1;
                             for (size_t k = 0; k < palette.size(); ++k) {
                                 if (palette[k].id == payload_id) srcIdx = static_cast<int>(k);
@@ -526,6 +526,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                                 palette.erase(palette.begin() + srcIdx);
                                 if (srcIdx < dstIdx) dstIdx--;
                                 palette.insert(palette.begin() + dstIdx, item);
+                                mapChip->SetCustomPalette(palette);
                             }
                         }
                         ImGui::EndDragDropTarget();
@@ -571,12 +572,12 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.32f, 0.42f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.20f, 0.26f, 1.0f));
                 if (ImGui::Button("＋\n追加", ImVec2(cardWidth, cardHeight))) {
-                    auto& palette = mapChip->GetCustomPalette();
+                    const auto& palette = mapChip->GetCustomPalette();
                     MapChip2D::CustomBlockDef newDef;
                     newDef.id = 100 + static_cast<int>(palette.size());
                     newDef.name = "Custom " + std::to_string(palette.size() + 1);
                     newDef.type = "NormalBlock";
-                    palette.push_back(newDef);
+                    mapChip->AddCustomBlockDef(newDef);
                     context_->SetSelectedTool(newDef.id);
                     if (onSelectionCleared) {
                         onSelectionCleared();
@@ -657,7 +658,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
 
             ImGui::Separator();
             if (ImGui::Button("はい", ImVec2(120, 0))) {
-                auto& templates = mapChip->GetTemplatePalette();
+                const auto& templates = mapChip->GetTemplatePalette();
                 std::string typeToDelete = "";
                 for (const auto& d : templates) {
                     if (d.id == templateToDelete_) {
@@ -666,8 +667,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                     }
                 }
 
-                auto it = std::remove_if(templates.begin(), templates.end(), [&](const MapChip2D::CustomBlockDef& d) { return d.id == templateToDelete_; });
-                templates.erase(it, templates.end());
+                mapChip->RemoveTemplateBlockDef(templateToDelete_);
                 mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
                 ClearPreviewCache();
                 
@@ -741,7 +741,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                 auto genRes = BlockClassGenerator::GenerateBlockClass(params);
                 if (genRes.success) {
                     // テンプレートパレットにも登録
-                    auto& templates = mapChip->GetTemplatePalette();
+                    const auto& templates = mapChip->GetTemplatePalette();
                     int maxId = 0;
                     for (const auto& t : templates) {
                         if (t.id > maxId) maxId = t.id;
@@ -752,7 +752,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                     newDef.type = params.className;
                     newDef.color = params.color;
                     newDef.scale = { 1.0f, 1.0f, 1.0f };
-                    templates.push_back(newDef);
+                    mapChip->AddTemplateBlockDef(newDef);
 
                     mapChip->SaveTemplatesToFile("resources/json/shared/templates_config.json");
 
@@ -823,9 +823,7 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
             ImGui::Text("本当に削除しますか？\n(マップ上で使用されている場合はエラーになる可能性があります)");
             ImGui::Separator();
             if (ImGui::Button("はい", ImVec2(120, 0))) {
-                auto& palette = mapChip->GetCustomPalette();
-                auto it = std::remove_if(palette.begin(), palette.end(), [&](const MapChip2D::CustomBlockDef& d) { return d.id == toolToDelete_; });
-                palette.erase(it, palette.end());
+                mapChip->RemoveCustomBlockDef(toolToDelete_);
                 mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
                 ClearPreviewCache();
                 toolToDelete_ = -1;

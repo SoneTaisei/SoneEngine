@@ -4,6 +4,7 @@ PrimitiveRing::PrimitiveRing(float innerRadius, float outerRadius, uint32_t segm
 }
 
 void PrimitiveRing::GenerateModelData() {
+    auto &modelData = GetModelDataRef();
 
     float angleRange = endAngle_ - startAngle_;
 
@@ -54,18 +55,18 @@ void PrimitiveRing::GenerateModelData() {
             vertices[j].normal = { 0.0f, 0.0f, 1.0f };
         }
 
-        uint32_t baseIndex = static_cast<uint32_t>(modelData_.vertices.size());
+        uint32_t baseIndex = static_cast<uint32_t>(modelData.vertices.size());
         for (int j = 0; j < 4; ++j) {
-            modelData_.vertices.push_back(vertices[j]);
+            modelData.vertices.push_back(vertices[j]);
         }
 
-        modelData_.indices.push_back(baseIndex + 2); // 内周(現)
-        modelData_.indices.push_back(baseIndex + 0); // 外周(現)
-        modelData_.indices.push_back(baseIndex + 1); // 外周(次)
+        modelData.indices.push_back(baseIndex + 2); // 内周(現)
+        modelData.indices.push_back(baseIndex + 0); // 外周(現)
+        modelData.indices.push_back(baseIndex + 1); // 外周(次)
 
-        modelData_.indices.push_back(baseIndex + 2); // 内周(現)
-        modelData_.indices.push_back(baseIndex + 1); // 外周(次)
-        modelData_.indices.push_back(baseIndex + 3); // 内周(次)
+        modelData.indices.push_back(baseIndex + 2); // 内周(現)
+        modelData.indices.push_back(baseIndex + 1); // 外周(次)
+        modelData.indices.push_back(baseIndex + 3); // 内周(次)
     }
 
 }

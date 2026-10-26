@@ -2,16 +2,10 @@
 #include "Scene/IScene.h"
 #include "Resource/Sprite/Sprite.h"
 #include "Core/Utility/Utilityfunctions.h"
-#include "Effect/ParticleManager.h"
 #include <memory>
-#include "Effect/ParticleCommon.h"
-#include "GameObject/GameObject.h"
 #include "Graphics/Skybox.h"
-#include "Graphics/Camera/DebugCamera.h"
 #include "GameObject/PrimitiveObject.h"
 #include <vector>
-#include "Resource/Model/ModelCommon.h"
-#include "Resource/Sprite/SpriteCommon.h"
 
 class TitleScene : public IScene {
 public:

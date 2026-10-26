@@ -4,9 +4,9 @@ PrimitiveBox::PrimitiveBox(float size) : size_(size) {
 }
 
 void PrimitiveBox::GenerateModelData() {
-
+    auto &modelData = GetModelDataRef();
     float h = size_ * 0.5f;
-    modelData_.vertices = {
+    modelData.vertices = {
         // Front
         {{-h, -h,  h, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
         {{ h, -h,  h, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
@@ -40,12 +40,12 @@ void PrimitiveBox::GenerateModelData() {
     };
     for (int i = 0; i < 6; ++i) {
         uint32_t offset = i * 4;
-        modelData_.indices.push_back(offset + 0);
-        modelData_.indices.push_back(offset + 1);
-        modelData_.indices.push_back(offset + 2);
-        modelData_.indices.push_back(offset + 2);
-        modelData_.indices.push_back(offset + 1);
-        modelData_.indices.push_back(offset + 3);
+        modelData.indices.push_back(offset + 0);
+        modelData.indices.push_back(offset + 1);
+        modelData.indices.push_back(offset + 2);
+        modelData.indices.push_back(offset + 2);
+        modelData.indices.push_back(offset + 1);
+        modelData.indices.push_back(offset + 3);
     }
 
 }

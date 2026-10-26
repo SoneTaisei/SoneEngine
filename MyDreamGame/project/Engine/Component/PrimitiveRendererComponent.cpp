@@ -1,4 +1,4 @@
-﻿#include "PrimitiveRendererComponent.h"
+#include "PrimitiveRendererComponent.h"
 #include "GameObject/GameObject.h"
 #include "TransformComponent.h"
 #include "Renderer/Renderer.h"
@@ -67,8 +67,8 @@ void PrimitiveRendererComponent::Update() {
         *mappedMaterial_ = material_;
     }
 
-    if (showTrail_ && gameObject_) {
-        if (auto transformComp = gameObject_->GetComponent<TransformComponent>()) {
+    if (showTrail_ && GetGameObject()) {
+        if (auto transformComp = GetGameObject()->GetComponent<TransformComponent>()) {
             UpdateGhost(transformComp->GetTransform());
         }
     }
@@ -83,8 +83,8 @@ void PrimitiveRendererComponent::UpdateGhost(const EulerTransform& currentTransf
 
         // 現在のTransformとMaterialをGPUに書き込む
         TransformMatrix* mappedTrans = reinterpret_cast<TransformMatrix*>(mappedGhostTransform_ + (currentGhostIndex_ * transformSize));
-        if (gameObject_) {
-            if (auto tc = gameObject_->GetComponent<TransformComponent>()) {
+        if (GetGameObject()) {
+            if (auto tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 mappedTrans->WVP = tc->GetWorldMatrix();
                 mappedTrans->World = tc->GetWorldMatrix();
             }

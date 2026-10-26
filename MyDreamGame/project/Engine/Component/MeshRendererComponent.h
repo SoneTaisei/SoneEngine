@@ -36,6 +36,7 @@ public:
     void SetAlphaReference(float alphaRef) { material_.alphaReference = alphaRef; }
     void SetShininess(float shininess) { material_.shininess = shininess; }
     BlendMode GetBlendMode() const { return blendMode_; }
+    void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
 
     Model* GetModel() const { return model_; }
     void SetModel(Model* model) { model_ = model; }

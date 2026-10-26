@@ -1,7 +1,6 @@
 #include "CylinderEffect.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Graphics/TextureManager.h"
-#include "Core/TimeManager.h"
 
 CylinderEffect::CylinderEffect() {}
 

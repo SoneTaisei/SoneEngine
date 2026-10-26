@@ -52,8 +52,8 @@ AABB2D ColliderComponent::GetAABB() const {
     Vector3 pos = {0.0f, 0.0f, 0.0f};
     Vector3 scale = boxSize_;
 
-    if (gameObject_) {
-        if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
             pos = tc->GetPosition();
             scale.x *= tc->GetScale().x;
             scale.y *= tc->GetScale().y;

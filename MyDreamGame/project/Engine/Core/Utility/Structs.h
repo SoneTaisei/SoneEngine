@@ -193,6 +193,8 @@ struct ViewProjectionData {
 struct CameraForGPU {
     Vector3 worldPosition;
     float padding;
+    Vector3 forward;
+    float isOrthographic;
 };
 
 struct MaterialData {

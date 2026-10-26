@@ -116,7 +116,7 @@ BlockClassGenResult BlockClassGenerator::GenerateBlockClass(const BlockClassGenP
               << std::fixed << std::setprecision(2) << params.color.x << "f, " 
               << params.color.y << "f, " 
               << params.color.z << "f, " 
-              << params.color.w << "f };\n";
+              << params.color.w << "f });\n";
     cppStream << "    tc->SetScale({ width, height, 1.0f });\n";
     cppStream << "    tc->SetPosition({ worldX, worldY, 0.0f });\n";
     cppStream << "    prc->SetLightingType(1);\n\n";

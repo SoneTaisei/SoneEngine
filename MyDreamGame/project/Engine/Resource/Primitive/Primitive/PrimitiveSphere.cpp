@@ -5,7 +5,8 @@ PrimitiveSphere::PrimitiveSphere(float size, uint32_t segments) : size_(size), s
 }
 
 void PrimitiveSphere::GenerateModelData() {
+    auto &modelData = GetModelDataRef();
 
-    CreateSphereMesh(modelData_.vertices, modelData_.indices, size_, segments_, segments_);
+    CreateSphereMesh(modelData.vertices, modelData.indices, size_, segments_, segments_);
 
 }
