@@ -27,13 +27,18 @@ public:
     const Vector4& GetColor() const { return material_.color; }
     void SetLightingType(int32_t type) { material_.lightingType = type; }
     void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
-    void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
-    BlendMode GetBlendMode() const { return blendMode_; }
-    void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
+    void SetAlpha(float alpha) { material_.color.w = alpha; }
+    void SetEnableEnvironmentMap(int32_t enable) { material_.enableEnvironmentMap = enable; }
     void SetEnableBoxMapping(float enable) { material_.enableBoxMapping = enable; }
+    void SetUVTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
+    void SetAlphaReference(float alphaRef) { material_.alphaReference = alphaRef; }
+    void SetShininess(float shininess) { material_.shininess = shininess; }
+    void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
+    const BlendMode GetBlendMode() const { return blendMode_; }
+    void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
     
     // トレイル描画用
-    bool GetShowTrail() const { return showTrail_; }
+    const bool GetShowTrail() const { return showTrail_; }
     void SetShowTrail(bool show) { showTrail_ = show; }
     void DrawGhost(ID3D12GraphicsCommandList* commandList, const EulerTransform& transform, const Material& material);
 
@@ -75,16 +80,16 @@ public:
     void SetIsDoubleSided(bool d) { isDoubleSided_ = d; }
     bool IsDoubleSided() const { return isDoubleSided_; }
 
-    D3D12_GPU_VIRTUAL_ADDRESS GetTransformGPUAddress() const { return transformCB_.gpuAddress; }
-    TransformMatrix* GetMappedTransform() const { return mappedTransform_; }
-    D3D12_GPU_VIRTUAL_ADDRESS GetMaterialGPUAddress() const { return materialCB_.gpuAddress; }
-    D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const { return textureHandle_; }
-    Primitive* GetPrimitive() const { return primitive_; }
+    const D3D12_GPU_VIRTUAL_ADDRESS GetTransformGPUAddress() const { return transformCB_.gpuAddress; }
+    const TransformMatrix* GetMappedTransform() const { return mappedTransform_; }
+    const D3D12_GPU_VIRTUAL_ADDRESS GetMaterialGPUAddress() const { return materialCB_.gpuAddress; }
+    const D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const { return textureHandle_; }
+    const Primitive* GetPrimitive() const { return primitive_; }
 
-    int GetCurrentGhostIndex() const { return currentGhostIndex_; }
-    ID3D12Resource* GetGhostTransformResource() const { return ghostTransformResource_.Get(); }
-    ID3D12Resource* GetGhostMaterialResource() const { return ghostMaterialResource_.Get(); }
-    uint8_t* GetMappedGhostTransform() const { return mappedGhostTransform_; }
-    uint8_t* GetMappedGhostMaterial() const { return mappedGhostMaterial_; }
+    const int GetCurrentGhostIndex() const { return currentGhostIndex_; }
+    const ID3D12Resource* GetGhostTransformResource() const { return ghostTransformResource_.Get(); }
+    const ID3D12Resource* GetGhostMaterialResource() const { return ghostMaterialResource_.Get(); }
+    const uint8_t* GetMappedGhostTransform() const { return mappedGhostTransform_; }
+    const uint8_t* GetMappedGhostMaterial() const { return mappedGhostMaterial_; }
     void IncrementGhostIndex() { currentGhostIndex_++; }
 };

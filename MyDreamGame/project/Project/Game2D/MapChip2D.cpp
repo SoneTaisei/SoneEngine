@@ -15,6 +15,7 @@
 #include "Blocks/BaseBlock/PatrolEnemyBlock.h"
 #include "Blocks/BaseBlock/BreakableBlock.h"
 #include "Blocks/BaseBlock/DashRecovery.h"
+#include "Blocks/FallBlock.h"
 #include "Blocks/BlockFactory.h"
 #include <algorithm>
 #include <filesystem>
@@ -64,6 +65,7 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         liftProps["speedBackward"] = 3.0f;
         liftProps["waitTime"] = 1.0f;
         liftProps["acceleration"] = 2.0f;
+        liftProps["inertiaTime"] = 0.5f;
         addTemplate(7, "Lift", "LiftBlock", {0.9f, 0.6f, 0.1f, 1.0f}, liftProps);
         
         addTemplate(8, "Rail", "RailBlock", {0.7f, 0.7f, 0.7f, 1.0f}, nlohmann::json::object());
@@ -76,6 +78,16 @@ void MapChip2D::Initialize(const std::string& mapFilePath) {
         nlohmann::json enemyProps;
         enemyProps["moveSpeed"] = 2.5f;
         addTemplate(12, "Enemy", "PatrolEnemyBlock", {1.0f, 1.0f, 1.0f, 1.0f}, enemyProps, "Object/Original/enemy/monsterBall.png");
+
+        nlohmann::json fallProps;
+        fallProps["shakeDuration"] = 0.28f;
+        fallProps["shakeIntensity"] = 0.08f;
+        fallProps["sinkAmount"] = 0.12f;
+        fallProps["gravity"] = -32.0f;
+        fallProps["terminalVelocity"] = -28.0f;
+        fallProps["stopOnGround"] = true;
+        fallProps["respawnTime"] = 0.0f;
+        addTemplate(15, "FallBlock", "FallBlock", {0.189f, 0.448f, 0.168f, 1.0f}, fallProps);
 
         SaveTemplatesToFile("resources/json/shared/templates_config.json");
     }
@@ -396,22 +408,26 @@ void MapChip2D::RebuildChipObjects() {
             int spanHeight = 1;
             int typeId = static_cast<int>(type);
             
-            bool canMerge = false;
-            if (typeId < 100) {
-                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kLift);
-            } else {
-                // カスタムブロックの場合、ベースの型がマージ可能であればマージする
-                const CustomBlockDef* def = nullptr;
+            const CustomBlockDef* def = nullptr;
+            if (typeId >= 100) {
                 for (const auto& d : customPalette_) {
                     if (d.id == typeId) { def = &d; break; }
                 }
-                if (def) {
-                    canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock");
-                    // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
-                    if (!def->modelName.empty()) {
-                        canMerge = false;
-                    }
+            } else {
+                for (const auto& d : templatePalette_) {
+                    if (d.id == typeId) { def = &d; break; }
                 }
+            }
+
+            bool canMerge = false;
+            if (def) {
+                canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock" || def->type == "FallBlock");
+                // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
+                if (!def->modelName.empty()) {
+                    canMerge = false;
+                }
+            } else {
+                canMerge = (type == ChipType::kBlock || type == ChipType::kDeathBlock || type == ChipType::kOneWayBlock || type == ChipType::kLift);
             }
 
             if (canMerge) {
@@ -453,6 +469,35 @@ void MapChip2D::RebuildChipObjects() {
             x += spanWidth - 1;
         }
     }
+
+    // 隣接する FallBlock 同士を相互接続（マップチップ上でくっついていたら連動して落下するようにつなげる）
+    for (int y = 0; y < mapHeight_; ++y) {
+        for (int x = 0; x < mapWidth_; ++x) {
+            auto block = activeBlocks_[y][x];
+            if (!block) continue;
+            auto* fallBlock = dynamic_cast<FallBlock*>(block.get());
+            if (!fallBlock) continue;
+
+            // 上下左右の4近傍をチェック
+            const int dx[4] = { 1, -1, 0, 0 };
+            const int dy[4] = { 0, 0, 1, -1 };
+            for (int i = 0; i < 4; ++i) {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+                if (nx >= 0 && nx < mapWidth_ && ny >= 0 && ny < mapHeight_) {
+                    auto neighbor = activeBlocks_[ny][nx];
+                    if (neighbor && neighbor != block) {
+                        auto* neighborFall = dynamic_cast<FallBlock*>(neighbor.get());
+                        if (neighborFall) {
+                            fallBlock->AddConnectedBlock(neighborFall);
+                            neighborFall->AddConnectedBlock(fallBlock);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     CreateBoundaries();
 }
 
@@ -518,6 +563,7 @@ bool MapChip2D::SaveToFile(const std::string& filepath) {
     }
     SaveRoomsToFile(boundsPath);
 
+    SaveInitialMapState();
     return true;
 }
 
@@ -635,6 +681,9 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
+                if (def.type == "LiftBlock" && !def.properties.contains("inertiaTime")) {
+                    def.properties["inertiaTime"] = 0.5f;
+                }
                 
                 bool found = false;
                 for (auto& existing : customPalette_) {
@@ -677,6 +726,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
         }
         
         RebuildChipObjects();
+        SaveInitialMapState();
         return true;
     } catch (const nlohmann::json::parse_error&) {
         // フォールバック（古いテキスト形式の読み込み）
@@ -699,6 +749,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
         }
         // customPalette_.clear(); // 古い形式のテキスト読み込みでもクリアしない
         RebuildChipObjects();
+        SaveInitialMapState();
         return true;
     }
 }
@@ -830,9 +881,13 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
                 if (p.contains("properties")) def.properties = p["properties"];
+                if (def.type == "LiftBlock" && !def.properties.contains("inertiaTime")) {
+                    def.properties["inertiaTime"] = 0.5f;
+                }
                 templatePalette_.push_back(def);
             }
         }
+        SaveInitialMapState();
         return true;
     } catch (...) {
         return false;
@@ -886,6 +941,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             else if (def->type == "PatrolEnemyBlock") newBlock = std::make_shared<PatrolEnemyBlock>(this, x, y);
             else if (def->type == "BreakableBlock") newBlock = std::make_shared<BreakableBlock>(this, x, y);
             else if (def->type == "DashRecovery") newBlock = std::make_shared<DashRecovery>(this, x, y);
+            else if (def->type == "FallBlock") newBlock = std::make_shared<FallBlock>(this, x, y);
             else if (BlockFactory::GetInstance().HasType(def->type)) {
                 newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
             }
@@ -901,6 +957,8 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                 newBlock = std::make_shared<BreakableBlock>(this, x, y);
             } else if (def->type == "DashRecovery") {
                 newBlock = std::make_shared<DashRecovery>(this, x, y);
+            } else if (def->type == "FallBlock") {
+                newBlock = std::make_shared<FallBlock>(this, x, y);
             } else if (BlockFactory::GetInstance().HasType(def->type)) {
                 newBlock = BlockFactory::GetInstance().Create(def->type, this, x, y);
             }
@@ -979,9 +1037,7 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     
                     // モデルがある場合はプリミティブを非表示または削除（コンポーネントを取り除く機能がない場合はアルファ0にする等）
                     if (auto* prc = newBlock->GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-                        Vector4 c = prc->GetColor();
-                        c.w = 0.0f;
-                        prc->SetColor(c);
+                        prc->SetAlpha(0.0f); // 透明にして見えなくする
                     }
                 }
             }
@@ -996,11 +1052,11 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                         float tileY = tc->GetScale().y / chipSize_;
                         float tileZ = tc->GetScale().z / chipSize_;
                         Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
-                        prc->SetUvTransform(uvTrans);
+                        prc->SetUVTransform(uvTrans);
                         prc->SetEnableBoxMapping(1.0f);
                     }
                 } else {
-                    prc->SetUvTransform(TransformFunctions::MakeIdentity4x4());
+                    prc->SetUVTransform(TransformFunctions::MakeIdentity4x4());
                     prc->SetEnableBoxMapping(0.0f);
                 }
             }
@@ -1010,11 +1066,54 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
 }
 
 void MapChip2D::ResetBlocks() {
+    bool needsFullRebuild = false;
+    if (!initialMapData_.empty()) {
+        if (mapData_.size() != initialMapData_.size() || (mapData_.empty() ? 0 : mapData_[0].size()) != (initialMapData_.empty() ? 0 : initialMapData_[0].size())) {
+            needsFullRebuild = true;
+        } else {
+            for (size_t y = 0; y < mapData_.size(); ++y) {
+                for (size_t x = 0; x < mapData_[y].size(); ++x) {
+                    if (mapData_[y][x] != initialMapData_[y][x]) {
+                        needsFullRebuild = true;
+                        break;
+                    }
+                }
+                if (needsFullRebuild) break;
+            }
+        }
+    }
+    if (needsFullRebuild) {
+        mapData_ = initialMapData_;
+        RebuildChipObjects();
+        return;
+    }
     for (auto& block : updateBlocks_) {
         if (block) {
             block->Reset();
         }
     }
+}
+
+int MapChip2D::GetTotalCoinCount() const {
+    int count = 0;
+    for (const auto& block : updateBlocks_) {
+        if (dynamic_cast<CoinBlock*>(block.get())) {
+            count++;
+        }
+    }
+    return count;
+}
+
+int MapChip2D::GetCollectedCoinCount() const {
+    int count = 0;
+    for (const auto& block : updateBlocks_) {
+        if (auto* coin = dynamic_cast<CoinBlock*>(block.get())) {
+            if (coin->IsCollected()) {
+                count++;
+            }
+        }
+    }
+    return count;
 }
 
 bool MapChip2D::RemoveCustomBlockDef(int id) {

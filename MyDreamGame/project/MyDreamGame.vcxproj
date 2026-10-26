@@ -16,6 +16,7 @@
       <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DashRecovery.h" />
     <ClInclude Include="Project\Game2D\Blocks\FallBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\Lvy.h" />
 </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -82,7 +83,7 @@
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalOptions>/utf-8 /FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
@@ -109,7 +110,7 @@
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalOptions>/utf-8 /FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(ProjectDir)externals;$(ProjectDir)src;$(ProjectDir)externals/imgui;$(ProjectDir)externals/imgui/backends;$(ProjectDir)externals\assimp\include;$(ProjectDir)resources;$(ProjectDir)Engine;$(ProjectDir)Project</AdditionalIncludeDirectories>
@@ -135,7 +136,7 @@
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalOptions>/utf-8 /FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/FS /utf-8 %(AdditionalOptions)</AdditionalOptions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
@@ -210,6 +211,7 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">MaxSpeed</Optimization>
       <WholeProgramOptimization Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</WholeProgramOptimization>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\Lvy.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\FallBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DashRecovery.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.cpp" />
@@ -285,6 +287,7 @@
     <ClCompile Include="Engine\Collision\CollisionFunctions.cpp" />
     <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
     <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp" />
+    <ClCompile Include="Engine\Editor\Common\SpriteSelectModal.cpp" />
     <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditor.cpp" />
     <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.cpp" />
     <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.cpp" />
@@ -542,6 +545,7 @@
     <ClInclude Include="Engine\Editor\Animation\AnimationLightingConfig.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />
     <ClInclude Include="Engine\Editor\Common\ModelSelectModal.h" />
+    <ClInclude Include="Engine\Editor\Common\SpriteSelectModal.h" />
     <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditor.h" />
     <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorContext.h" />
     <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditorViewport.h" />
