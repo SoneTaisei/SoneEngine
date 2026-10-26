@@ -1,4 +1,4 @@
-#include "SpriteAnimationEditor.h"
+﻿#include "SpriteAnimationEditor.h"
 #include <filesystem>
 #include <algorithm>
 #include <fstream>
@@ -12,9 +12,6 @@
 #include "Game2D/MapChip2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 
-#ifdef USE_IMGUI
-#include <imgui.h>
-#endif
 
 SpriteAnimationEditor::SpriteAnimationEditor() {
 }
