@@ -1,6 +1,7 @@
 #pragma once
 #ifdef USE_IMGUI
 #include "Model3DEditorContext.h"
+#include "Editor/Common/SpriteSelectModal.h"
 
 class SceneManager;
 
@@ -19,5 +20,7 @@ private:
     char texBuf_[256] = "";
     char saveFileNameBuf_[128] = "placed_models";
     int selectedFileComboIdx_ = -1;
+    std::unique_ptr<SpriteSelectModal> spriteSelectModal_;
+    bool isSpriteModalOpen_ = false;
 };
 #endif

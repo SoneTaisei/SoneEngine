@@ -48,6 +48,9 @@ void LiftBlock::SetProperties(const nlohmann::json& properties) {
     if (properties.contains("maxSpeedBackward")) {
         maxSpeedBackward_ = properties["maxSpeedBackward"].get<float>();
     }
+    if (properties.contains("inertiaTime")) {
+        inertiaTime_ = properties["inertiaTime"].get<float>();
+    }
 }
 
 void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {
@@ -57,13 +60,13 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 
     prc->Initialize(device, boxPrimitive);
     
-    // リフトの色�E�例：�Eるい黁E��めE��レンジ�E�E
-    prc->GetMaterial().color = { 0.9f, 0.6f, 0.1f, 1.0f };
+    // リフトの色（例：明るい黄色やオレンジ）
+    prc->SetColor({ 0.9f, 0.6f, 0.1f, 1.0f });
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->GetMaterial().lightingType = 1;
+    prc->SetLightingType(1);
 
-    // レールの篁E��を探索して移動篁E��を決定すめE
+    // レールの範囲を探索して移動範囲を決定する
     int spanWidth = static_cast<int>(std::round(width / GetMap()->GetChipSize()));
     int spanHeight = static_cast<int>(std::round(height / GetMap()->GetChipSize()));
 
@@ -101,8 +104,8 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     bool hasVerticalRail = (minY < GetChipY()) || (maxY > GetChipY() + spanHeight - 1);
 
     if (hasHorizontalRail) {
-        direction_ = { 1.0f, 0.0f, 0.0f }; // 水平移勁E
-        // 実際の移動�E中忁E��置からなので調整
+        direction_ = { 1.0f, 0.0f, 0.0f }; // 水平移動
+        // 実際の移動は中心位置からなので調整
         minRailWorldX_ = GetMap()->ChipToWorldX(minX) + width * 0.5f;
         maxRailWorldX_ = GetMap()->ChipToWorldX(maxX - spanWidth + 1) + width * 0.5f;
 
@@ -114,7 +117,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
             endPos_ = { minRailWorldX_, worldY, 0.0f };
         }
     } else if (hasVerticalRail) {
-        direction_ = { 0.0f, 1.0f, 0.0f }; // 垂直移勁E
+        direction_ = { 0.0f, 1.0f, 0.0f }; // 垂直移動
         minRailWorldY_ = GetMap()->ChipToWorldY(minY) + height * 0.5f;
         maxRailWorldY_ = GetMap()->ChipToWorldY(maxY - spanHeight + 1) + height * 0.5f;
 
@@ -126,7 +129,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
             endPos_ = { worldX, minRailWorldY_, 0.0f };
         }
     } else {
-        direction_ = { 0.0f, 0.0f, 0.0f }; // レールがなぁE��合�E動かなぁE
+        direction_ = { 0.0f, 0.0f, 0.0f }; // レールがない場合は動かない
         startPos_ = { worldX, worldY, 0.0f };
         endPos_ = { worldX, worldY, 0.0f };
     }
@@ -273,6 +276,28 @@ void LiftBlock::Update() {
         GetGameObject()->Update();
     }
 
-    // 1フレームのフラグをリセチE��
+    // 1フレームのフラグをリセット
     isPlayerStandingThisFrame_ = false;
+}
+
+void LiftBlock::Reset() {
+    BaseBlock::Reset();
+    state_ = LiftState::IdleAtStart;
+    waitTimer_ = 0.0f;
+    currentSpeed_ = 0.0f;
+    currentT_ = 0.0f;
+    shakeTimer_ = 0.0f;
+    velocity_ = { 0.0f, 0.0f, 0.0f };
+    isPlayerStandingThisFrame_ = false;
+
+    if (auto* tc = GetGameObject() ? GetGameObject()->GetComponent<TransformComponent>() : nullptr) {
+        tc->SetPosition(startPos_);
+    }
+    if (auto* cc = GetGameObject() ? GetGameObject()->GetComponent<ColliderComponent>() : nullptr) {
+        cc->SetVelocity(velocity_);
+        cc->SetBoxOffset({ 0.0f, 0.0f, 0.0f });
+    }
+    if (GetGameObject()) {
+        GetGameObject()->Update();
+    }
 }

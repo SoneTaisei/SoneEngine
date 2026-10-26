@@ -5,6 +5,7 @@
 #include <d3d12.h>
 #include "PlacedObject3D.h"
 #include "GameObject/PrimitiveObject.h"
+#include "Core/Utility/Vector2.h"
 #include "Core/Utility/Vector3.h"
 
 class Model3DEditorContext {
@@ -99,6 +100,10 @@ public:
         Vector4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
         bool doubleSided = false;
         std::string texturePath = "";
+        Vector2 uvTranslation{ 0.0f, 0.0f };
+        Vector2 uvScale{ 1.0f, 1.0f };
+        float uvRotation = 0.0f;
+        Vector2 uvPivot{ 0.5f, 0.5f };
     };
 
     struct Model3DEditorSnapshot {
