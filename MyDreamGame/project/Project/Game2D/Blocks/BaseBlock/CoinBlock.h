@@ -8,7 +8,6 @@ public:
     void Update() override;
     void OnCollision(Player2D* player) override;
     void Reset() override;
-    bool IsCollected() const { return isCollected_; }
 private:
     float rotationY_ = 0.0f;
     bool isCollected_ = false;

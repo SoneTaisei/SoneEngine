@@ -4,60 +4,60 @@
 #include <memory>
 
 /// <summary>
-/// BreakableBlock - 通常時は普通のブロックとして機能し、
-/// ダッシュで激突した時のみ破壊されるブロッククラス
+/// BreakableBlock - 通常時�E普通�EブロチE��として機�Eし、E
+/// ダチE��ュで激突した時のみ破壊されるブロチE��クラス
 /// </summary>
 class BreakableBlock : public BaseBlock {
 public:
     using BaseBlock::BaseBlock;
 
-    // 初期化処理（モデル・マテリアル・コライダー・破片演出のセットアップ）
+    // 初期化�E琁E��モチE��・マテリアル・コライダー・破牁E���EのセチE��アチE�E�E�E
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
 
-    // 毎フレームの更新処理（破片アニメーション・復活タイマーなど）
+    // 毎フレームの更新処琁E��破牁E��ニメーション・復活タイマ�Eなど�E�E
     void Update() override;
 
-    // 描画処理（壊れていない時は本体、壊れている時は破片を描画）
+    // 描画処琁E��壊れてぁE��ぁE��は本体、壊れてぁE��時�E破牁E��描画�E�E
     void Draw() override;
 
-    // 当たり判定の性質（壊れていない時は通常ブロックと同じSolid）
+    // 当たり判定�E性質�E�壊れてぁE��ぁE��は通常ブロチE��と同じSolid�E�E
     bool IsSolid() const override { return !isBroken_; }
     bool IsOneWay() const override { return false; }
 
-    // プレイヤーが接触した瞬間の処理（ダッシュ中なら破壊）
+    // プレイヤーが接触した瞬間�E処琁E��ダチE��ュ中なら破壊！E
     void OnCollision(Player2D* player) override;
 
-    // プレイヤーがブロックの上に乗っている時の毎フレーム処理
+    // プレイヤーがブロチE��の上に乗ってぁE��時�E毎フレーム処琁E
     void OnPlayerStand() override;
 
-    // プレイヤーが横や下から触れた時の処理
+    // プレイヤーが横めE��から触れた時�E処琁E
     void OnPlayerTouch() override;
 
-    // ブロックの破壊処理
+    // ブロチE��の破壊�E琁E
     void Break(Player2D* player = nullptr, bool triggerChain = true);
 
-    // 単体ブロックの内部破壊処理
+    // 単体ブロチE��の冁E��破壊�E琁E
     void BreakInternal(Player2D* player, const Vector3& inheritedDashDir = { 1.0f, 0.0f, 0.0f });
 
-    // ブロックの復活処理
+    // ブロチE��の復活処琁E
     void Respawn();
 
-    // JSONプロパティの読み込み（エディタのインスペクターからのパラメータ設定）
+    // JSONプロパティの読み込み�E�エチE��タのインスペクターからのパラメータ設定！E
     void SetProperties(const nlohmann::json& properties) override;
 
-    // ステージ再開時・リトライ時の状態リセット処理
+    // スチE�Eジ再開時�Eリトライ時�E状態リセチE��処琁E
     void Reset() override;
 
-    // 状態取得
+    // 状態取征E
     bool IsBroken() const { return isBroken_; }
     bool IsBreakConnected() const { return breakConnected_; }
     void SetBreakConnected(bool enable) { breakConnected_ = enable; }
 
-    // 接触面とダッシュ方向から破壊すべきかを判定するヘルパー関数
+    // 接触面とダチE��ュ方向から破壊すべきかを判定する�Eルパ�E関数
     bool ShouldBreakFromContact(Player2D* player) const;
 
 #ifdef USE_IMGUI
-    // ImGuiによるリアルタイムパラメータ調整・デバッグ用UI関数
+    // ImGuiによるリアルタイムパラメータ調整・チE��チE��用UI関数
     void DrawImGui() override;
 #endif
 
@@ -73,21 +73,21 @@ private:
     };
 
     bool isBroken_ = false;               // 破壊状態フラグ
-    bool requireDirectionalDash_ = true;  // 接触面に応じた方向のダッシュのみで壊れるか
-    bool breakConnected_ = true;          // 連結しているブロックをまとめて破壊するか
-    float respawnTimer_ = 0.0f;           // 自動復活カウントタイマー
-    float respawnTime_ = 0.0f;            // 自動復活までの秒数（0以下なら復活しない）
+    bool requireDirectionalDash_ = true;  // 接触面に応じた方向�EダチE��ュのみで壊れるか
+    bool breakConnected_ = true;          // 連結してぁE��ブロチE��をまとめて破壊するか
+    float respawnTimer_ = 0.0f;           // 自動復活カウントタイマ�E
+    float respawnTime_ = 0.0f;            // 自動復活までの秒数�E�E以下なら復活しなぁE��E
     
-    // 演出パラメータ
-    Vector4 blockColor_ = { 0.72f, 0.48f, 0.34f, 1.0f }; // ブロックの色（壊れやすい岩/レンガ調）
-    float hitstopDuration_ = 0.06f;       // 破壊時のヒットストップ時間（秒）
-    float cameraShakePower_ = 0.25f;      // 破壊時のカメラ揺れの強さ
-    float cameraShakeDuration_ = 0.15f;   // 破壊時のカメラ揺れ時間（秒）
+    // 演�Eパラメータ
+    Vector4 blockColor_ = { 0.72f, 0.48f, 0.34f, 1.0f }; // ブロチE��の色�E�壊れめE��ぁE��/レンガ調�E�E
+    float hitstopDuration_ = 0.06f;       // 破壊時のヒットストップ時間（秒！E
+    float cameraShakePower_ = 0.25f;      // 破壊時のカメラ揺れ�E強ぁE
+    float cameraShakeDuration_ = 0.15f;   // 破壊時のカメラ揺れ時間（秒！E
 
-    // 初期配置情報
+    // 初期配置惁E��
     Vector3 basePosition_{ 0.0f, 0.0f, 0.0f };
     Vector3 baseScale_{ 1.0f, 1.0f, 1.0f };
 
-    // 破片パーティクルリスト
+    // 破牁E��ーチE��クルリスチE
     std::vector<Debris> debrisList_;
 };
