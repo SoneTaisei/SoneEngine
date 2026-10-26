@@ -290,6 +290,7 @@ private:
     std::shared_ptr<GameObject> selectedGameObject_ = nullptr;
     ParticleManager *selectedParticle_ = nullptr;
     PrimitiveObject *selectedPrimitive_ = nullptr;
+    bool isPlayerSelected_ = false;
     bool selectedReplaySeekbar_ = false; // シークバー/リプレイ全般が選択されているかのフラグ
 
 

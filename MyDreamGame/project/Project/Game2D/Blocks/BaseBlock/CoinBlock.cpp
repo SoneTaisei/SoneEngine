@@ -7,16 +7,17 @@
 #include "Editor/Replay/ReplayManager.h"
 
 void CoinBlock::Initialize(ID3D12Device *device, Primitive *boxPrimitive, float worldX, float worldY, float width, float height) {
+    (void)device;
+    (void)boxPrimitive;
     SetGameObject(std::make_unique<GameObject>("CoinBlock"));
     auto *tc = GetGameObject()->AddComponent<TransformComponent>();
-    auto *prc = GetGameObject()->AddComponent<PrimitiveRendererComponent>();
 
-    prc->Initialize(device, boxPrimitive);
-    prc->SetColor({1.0f, 0.8f, 0.0f, 1.0f});
     tc->SetScale({width * 0.5f, height * 0.5f, 0.5f});
     position_ = {worldX, worldY, 0.0f};
+    initialPosition_ = position_;
     tc->SetPosition(position_);
-    prc->SetLightingType(1); // ライティング無効
+
+    // コインはJSON指定のモデルを使用するためボックス(PrimitiveRendererComponent)は追加しない
     SetupCollider();
 }
 
@@ -42,7 +43,16 @@ void CoinBlock::Update() {
         collectTimer_ += animDeltaTime;
         float progress = collectTimer_ / collectDuration_;
         if (progress >= 1.0f) {
-            Destroy();
+            if (auto *mrc = GetGameObject() ? GetGameObject()->GetComponent<MeshRendererComponent>() : nullptr) {
+                Vector4 c = mrc->GetMaterial().color;
+                c.w = 0.0f;
+                mrc->SetColor(c);
+            }
+            if (auto *prc = GetGameObject() ? GetGameObject()->GetComponent<PrimitiveRendererComponent>() : nullptr) {
+                Vector4 c = prc->GetMaterial().color;
+                c.w = 0.0f;
+                prc->SetColor(c);
+            }
             return;
         }
         // 上に上がる演出
@@ -52,8 +62,13 @@ void CoinBlock::Update() {
         rotationY_ += 10.0f * animDeltaTime;
 
         // フェードアウト
+        if (auto *mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
+            Vector4 c = mrc->GetMaterial().color;
+            c.w = 1.0f - progress;
+            mrc->SetColor(c);
+        }
         if (auto *prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
-            Vector4 c = prc->GetColor();
+            Vector4 c = prc->GetMaterial().color;
             c.w = 1.0f - progress;
             prc->SetColor(c);
         }
@@ -71,8 +86,41 @@ void CoinBlock::Update() {
 }
 
 void CoinBlock::OnCollision(Player2D *player) {
-    if (!GetGameObject() && !isCollected_ && player) {
+    if (GetGameObject() && !isCollected_ && player) {
         player->AddScore(100);
         isCollected_ = true;
+        // 獲得後は二重衝突を防ぐため、コライダーのレイヤーマスクを解除する
+        if (auto *cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+            cc->SetLayerMask(0);
+        }
+    }
+}
+
+void CoinBlock::Reset() {
+    BaseBlock::Reset();
+    isCollected_ = false;
+    collectTimer_ = 0.0f;
+    rotationY_ = 0.0f;
+    position_ = initialPosition_;
+    SetDestroyed(false);
+
+    if (GetGameObject()) {
+        if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
+            tc->SetPosition(position_);
+            tc->SetRotation({0.0f, 0.0f, 0.0f});
+        }
+        if (auto *mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
+            Vector4 c = mrc->GetMaterial().color;
+            c.w = 1.0f;
+            mrc->SetColor(c);
+        }
+        if (auto *prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+            Vector4 c = prc->GetMaterial().color;
+            c.w = 1.0f;
+            prc->SetColor(c);
+        }
+        if (auto *cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+            cc->SetLayerMask(kLayerBlock);
+        }
     }
 }

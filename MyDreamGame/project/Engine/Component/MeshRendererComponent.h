@@ -29,6 +29,12 @@ public:
     void SetLightingType(int32_t type) { material_.lightingType = type; }
     void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
+    void SetAlpha(float alpha) { material_.color.w = alpha; }
+    void SetEnableEnvironmentMap(int32_t enable) { material_.enableEnvironmentMap = enable; }
+    void SetEnableBoxMapping(float enable) { material_.enableBoxMapping = enable; }
+    void SetUVTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
+    void SetAlphaReference(float alphaRef) { material_.alphaReference = alphaRef; }
+    void SetShininess(float shininess) { material_.shininess = shininess; }
     BlendMode GetBlendMode() const { return blendMode_; }
     void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
     void SetEnableBoxMapping(float enable) { material_.enableBoxMapping = enable; }

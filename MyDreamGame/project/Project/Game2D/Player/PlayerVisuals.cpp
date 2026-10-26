@@ -1,6 +1,16 @@
 #include "Graphics/TextureManager.h"
 #include "PlayerVisuals.h"
 #include "Core/TimeManager.h"
+#include "Effect/GPUParticle/GPUParticleSystem.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
+#include "Graphics/CameraManager.h"
+#include "Resource/Model/ModelManager.h"
+#include "Effect/ParticleCommon.h"
+#include "Core/Utility/TransformFunctions.h"
+#ifdef USE_IMGUI
+#include "Editor/EditorManager.h"
+#include "Editor/Replay/ReplayManager.h"
+#endif
 #include <random>
 #include <cmath>
 
@@ -9,13 +19,13 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     primitiveObj_->Initialize(device, boxPrimitive);
     primitiveObj_->SetName("Player");
     primitiveObj_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
-    primitiveObj_->GetMaterial().lightingType = 1;
+    primitiveObj_->SetLightingType(1);
 
     if (playerModel) {
         modelObj_ = std::make_unique<Object3D>();
         modelObj_->Initialize(device, playerModel);
         modelObj_->SetName("Player3DModel");
-        modelObj_->GetMaterial().lightingType = 1;
+        modelObj_->SetLightingType(1);
 
         animator_ = std::make_unique<AnimatorComponent>();
         animator_->Initialize();
@@ -50,8 +60,8 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     dashRingPrimitive_->Initialize(device, ringPrimitive);
     dashRingPrimitive_->SetName("DashRing");
     dashRingPrimitive_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texHandle));
-    dashRingPrimitive_->GetMaterial().lightingType = 0;
-    dashRingPrimitive_->GetMaterial().enableEnvironmentMap = 0;
+    dashRingPrimitive_->SetLightingType(0);
+    dashRingPrimitive_->SetEnableEnvironmentMap(0);
     dashRingPrimitive_->SetIsBillboard(false);
     dashRingPrimitive_->SetIsDoubleSided(true);
     dashRingPrimitive_->SetBlendMode(BlendMode::kBlendModeAdd);
@@ -59,13 +69,20 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     dustPrimitive_ = std::make_unique<PrimitiveObject>();
     dustPrimitive_->Initialize(device, boxPrimitive);
     dustPrimitive_->SetName("Dust");
-    dustPrimitive_->GetMaterial().lightingType = 0;
-    dustPrimitive_->GetMaterial().color = { 0.8f, 0.8f, 0.8f, 0.8f }; // 白っぽい砂ぼこり
+    dustPrimitive_->SetLightingType(0);
+    dustPrimitive_->SetColor({ 0.8f, 0.8f, 0.8f, 0.8f }); // 白っぽい砂ぼこり
 
     confettiPrimitive_ = std::make_unique<PrimitiveObject>();
     confettiPrimitive_->Initialize(device, boxPrimitive);
     confettiPrimitive_->SetName("Confetti");
-    confettiPrimitive_->GetMaterial().lightingType = 0;
+    confettiPrimitive_->SetLightingType(0);
+
+    dashAuraParticle_ = std::make_unique<GPUParticleSystem>();
+    dashAuraParticle_->Initialize(device);
+    if (dashAuraParticle_->LoadFromFile("resources/json/shared/Particle/DashAura.json")) {
+        dashAuraParticle_->SetIsLoop(true);
+        dashAuraParticle_->Play();
+    }
 }
 
 void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
@@ -80,7 +97,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         primitiveObj_->SetTranslation(primPos);
         
         if (state.isDashing_) {
-            primitiveObj_->GetMaterial().color = params.colorDashed_;
+            primitiveObj_->SetColor(params.colorDashed_);
             // ダッシュ中は少し細長くする
             Vector3 dashDir = state.velocity_;
             dashDir.z = 0.0f;
@@ -100,19 +117,19 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
                 float blink = std::sin(visualTime_ * 40.0f);
                 if (blink > 0.0f) {
-                    primitiveObj_->GetMaterial().color = params.colorTired_;
+                    primitiveObj_->SetColor(params.colorTired_);
                 } else {
-                    primitiveObj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                    primitiveObj_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
                 }
             } else if (state.stamina_ <= params.maxStamina_ * 0.5f) {
                 float blink = std::sin(visualTime_ * 20.0f);
                 if (blink > 0.0f) {
-                    primitiveObj_->GetMaterial().color = params.colorTired_;
+                    primitiveObj_->SetColor(params.colorTired_);
                 } else {
-                    primitiveObj_->GetMaterial().color = params.colorNormal_;
+                    primitiveObj_->SetColor(params.colorNormal_);
                 }
             } else {
-                primitiveObj_->GetMaterial().color = params.colorNormal_;
+                primitiveObj_->SetColor(params.colorNormal_);
             }
             primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
             primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
@@ -203,9 +220,9 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 modelPos.x += 0.2f; // 左壁から少し離す（右へずらす）
             }
         } else {
-            if (state.velocity_.x < -0.01f) {
+            if (state.facingDirectionX_ < 0.0f) {
                 rotationY = 1.57079632f;
-            } else if (state.velocity_.x > 0.01f) {
+            } else if (state.facingDirectionX_ > 0.0f) {
                 rotationY = -1.57079632f;
             }
         }
@@ -213,7 +230,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         modelObj_->SetTranslation(modelPos);
         
         if (state.isDashing_) {
-            modelObj_->GetMaterial().color = params.colorDashed_;
+            modelObj_->SetColor(params.colorDashed_);
             Vector3 dashDir = state.velocity_;
             dashDir.z = 0.0f;
             float speed = 1.0f;
@@ -229,19 +246,19 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             if (state.stamina_ <= params.maxStamina_ * 0.2f || state.isExhausted_) {
                 float blink = std::sin(visualTime_ * 40.0f);
                 if (blink > 0.0f) {
-                    modelObj_->GetMaterial().color = params.colorTired_;
+                    modelObj_->SetColor(params.colorTired_);
                 } else {
-                    modelObj_->GetMaterial().color = { 1.0f, 1.0f, 1.0f, 1.0f };
+                    modelObj_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
                 }
             } else if (state.stamina_ <= params.maxStamina_ * 0.5f) {
                 float blink = std::sin(visualTime_ * 20.0f);
                 if (blink > 0.0f) {
-                    modelObj_->GetMaterial().color = params.colorTired_;
+                    modelObj_->SetColor(params.colorTired_);
                 } else {
-                    modelObj_->GetMaterial().color = params.colorNormal_;
+                    modelObj_->SetColor(params.colorNormal_);
                 }
             } else {
-                modelObj_->GetMaterial().color = params.colorNormal_;
+                modelObj_->SetColor(params.colorNormal_);
             }
             modelObj_->SetScale({ 1.0f, 1.0f, 1.0f });
             modelObj_->SetRotation({ 0.0f, rotationY, 0.0f });
@@ -296,6 +313,22 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
             if (ring.timer >= ring.duration) {
                 ring.active = false;
             }
+        }
+    }
+
+    if (dashAuraParticle_) {
+        // ダッシュゲージを使っていない（canDash_ == true）かつ死亡・リスポーン・ゴール中ではない場合に出す
+        bool shouldEmitAura = state.canDash_ && !state.isDead_ && !state.isRespawning_ && !state.isGoal_;
+        dashAuraParticle_->SetEmitting(shouldEmitAura);
+        if (shouldEmitAura) {
+            if (!dashAuraParticle_->IsPlaying()) {
+                dashAuraParticle_->Play();
+            }
+            dashAuraParticle_->SetPosition(state.position_);
+        }
+        // 再生中または生存パーティクルが残っている場合は更新を継続（自然なフェードアウト・消滅処理）
+        if (dashAuraParticle_->IsPlaying() || dashAuraParticle_->GetTotalActiveParticles() > 0) {
+            dashAuraParticle_->Update(deltaTime);
         }
     }
 }
@@ -418,6 +451,26 @@ void PlayerVisuals::Draw(const PlayerState& state, const PlayerParams& params) {
                 m.color = confetti.color;
                 
                 confettiPrimitive_->DrawGhost(t, m);
+            }
+        }
+    }
+
+    // DashAura GPUパーティクルの描画（ダッシュゲージ未使用時に発生中）
+    if (dashAuraParticle_ && (dashAuraParticle_->IsPlaying() || dashAuraParticle_->GetTotalActiveParticles() > 0)) {
+        bool canDrawEffect = true;
+#ifdef USE_IMGUI
+        canDrawEffect = EditorManager::IsShowEffects() || EditorManager::IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
+#endif
+        if (canDrawEffect) {
+            ParticleCommon* particleCommon = ParticleCommon::GetInstance();
+            if (particleCommon) {
+                particleCommon->PreDraw();
+                auto commandList = DirectXCommon::GetInstance()->GetCommandList();
+                auto cameraMgr = CameraManager::GetInstance();
+                Matrix4x4 viewProj = TransformFunctions::Multiply(cameraMgr->GetViewMatrix(), cameraMgr->GetProjectionMatrix());
+                Matrix4x4 camMat = TransformFunctions::Inverse(cameraMgr->GetViewMatrix());
+                ModelManager* modelMgr = ModelManager::GetInstance();
+                dashAuraParticle_->Draw(commandList, viewProj, camMat, particleCommon, modelMgr);
             }
         }
     }
@@ -585,19 +638,22 @@ void PlayerVisuals::ClearEffects() {
     dustParticles_.clear();
     confettiParticles_.clear();
     dashRingParticles_.clear();
+    if (dashAuraParticle_) {
+        dashAuraParticle_->Restart();
+    }
 }
 
 void PlayerVisuals::SetDissolveThreshold(float threshold) {
     if (primitiveObj_) {
-        primitiveObj_->GetMaterial().dissolveThreshold = threshold;
+        primitiveObj_->SetDissolveThreshold(threshold);
     }
 }
 
 void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& params) {
     if (primitiveObj_) {
         primitiveObj_->SetTranslation(position);
-        primitiveObj_->GetMaterial().color = params.colorNormal_;
-        primitiveObj_->GetMaterial().dissolveThreshold = 0.0f;
+        primitiveObj_->SetColor(params.colorNormal_);
+        primitiveObj_->SetDissolveThreshold(0.0f);
         primitiveObj_->SetScale({ params.halfWidth_ * 2.0f, params.halfHeight_ * 2.0f, 1.0f });
         primitiveObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
         primitiveObj_->Update();
@@ -606,8 +662,8 @@ void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& pa
         Vector3 modelPos = position;
         modelPos.y -= params.halfHeight_;
         modelObj_->SetTranslation(modelPos);
-        modelObj_->GetMaterial().color = params.colorNormal_;
-        modelObj_->GetMaterial().dissolveThreshold = 0.0f;
+        modelObj_->SetColor(params.colorNormal_);
+        modelObj_->SetDissolveThreshold(0.0f);
         modelObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
         modelObj_->Update();
     }
@@ -629,7 +685,7 @@ void PlayerVisuals::SyncTransform(const Vector3& position, const PlayerParams& p
 void PlayerVisuals::SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress) {
     if (primitiveObj_) {
         primitiveObj_->SetScale({ params.halfWidth_ * 2.0f * scaleProgress, params.halfHeight_ * 2.0f * scaleProgress, 1.0f });
-        primitiveObj_->GetMaterial().color = params.colorNormal_;
+        primitiveObj_->SetColor(params.colorNormal_);
         primitiveObj_->SetTranslation(position);
         primitiveObj_->Update();
     }
@@ -637,17 +693,17 @@ void PlayerVisuals::SetRespawnVisual(const Vector3& position, const PlayerParams
         Vector3 modelPos = position;
         modelPos.y -= params.halfHeight_;
         modelObj_->SetTranslation(modelPos);
-        modelObj_->GetMaterial().color = params.colorNormal_;
+        modelObj_->SetColor(params.colorNormal_);
         modelObj_->Update();
     }
 }
 
 void PlayerVisuals::SetColor(const Vector4& color) {
     if (primitiveObj_) {
-        primitiveObj_->GetMaterial().color = color;
+        primitiveObj_->SetColor(color);
     }
     if (modelObj_) {
-        modelObj_->GetMaterial().color = color;
+        modelObj_->SetColor(color);
     }
 }
 

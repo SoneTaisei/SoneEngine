@@ -58,14 +58,14 @@ void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     prc->Initialize(device, boxPrimitive);
     
     // ジャンプ台の色：オレンジ色
-    prc->SetColor({1.0f, 0.5f, 0.0f, 1.0f});
+    prc->SetColor({ 1.0f, 0.5f, 0.0f, 1.0f });
     
     BounceDirection initialDir = DetermineFacingDirection();
     baseRotation_ = { 0.0f, 0.0f, GetRotationZForDirection(initialDir) };
     tc->SetRotation(baseRotation_);
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition({ worldX, worldY, 0.0f });
-    prc->SetLightingType(1);             // ライティング無効化
+    prc->SetLightingType(1); // ライティング無効化
     SetupCollider();
 
     basePosition_ = { worldX, worldY, 0.0f };

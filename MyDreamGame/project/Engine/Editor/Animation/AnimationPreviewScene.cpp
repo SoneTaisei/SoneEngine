@@ -30,9 +30,9 @@ void AnimationPreviewScene::Initialize() {
         gridFloorObj_->SetTranslation({ 0.0f, -0.05f, 0.0f });
         gridFloorObj_->SetScale({ 40.0f, 0.1f, 40.0f });
         gridFloorObj_->SetIsDoubleSided(true);
-        gridFloorObj_->GetMaterial().lightingType = 0; // 均一ライティングでどの角度からも一定の明るさを維持
-        gridFloorObj_->GetMaterial().color = { 0.18f, 0.18f, 0.20f, 1.0f };
-        gridFloorObj_->GetMaterial().enableBoxMapping = 2.0f; // プロシージャル3D床グリッドを有効化
+        gridFloorObj_->SetLightingType(0);
+        gridFloorObj_->SetColor({0.18f, 0.18f, 0.20f, 1.0f});
+        gridFloorObj_->SetEnableBoxMapping(2.0f);
         gridFloorObj_->Update();
     }
 

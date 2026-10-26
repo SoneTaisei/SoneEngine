@@ -28,7 +28,7 @@ private:
     void ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb);
     void ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb);
 
-    void ResolveCollisionX(PlayerState& state_, const PlayerParams& params_);
-    void ResolveStaticCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb);
-    void ResolveDynamicCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb);
+    void ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, float prevPosX, float moveDeltaX);
+    void ResolveStaticCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb, float prevPosX, float moveDeltaX);
+    void ResolveDynamicCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb, float prevPosX, float moveDeltaX);
 };
