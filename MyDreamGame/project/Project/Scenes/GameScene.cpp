@@ -222,6 +222,53 @@ void GameScene::Initialize() {
         Log("GameScene::Initialize: ClearSprite Initialized\n");
     }
 
+    // ポーズ用スプライトの初期化
+    pauseContinueTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/tudukeru.png");
+    pauseSelectTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/serekutonimodoru.png");
+    if (GetSpriteCommon()) {
+        pauseOverlaySprite_ = std::make_unique<Sprite>();
+        pauseOverlaySprite_->Initialize(GetSpriteCommon(), whiteTextureHandle_);
+        pauseOverlaySprite_->SetPosition({ 640.0f - 5000.0f, 360.0f - 5000.0f });
+        pauseOverlaySprite_->SetSize({ 10000.0f, 10000.0f });
+        pauseOverlaySprite_->SetColor({ 0.2f, 0.2f, 0.2f, 0.65f }); // 薄灰色の半透明スクリーン
+
+        float centerX = 1280.0f * 0.5f;
+
+        // つづける
+        pauseContinueSprite_ = std::make_unique<Sprite>();
+        pauseContinueSprite_->Initialize(GetSpriteCommon(), pauseContinueTextureHandle_);
+        pauseContinueSprite_->SetPosition({ centerX - 200.0f, 310.0f - 40.0f });
+        pauseContinueSprite_->SetSize({ 400.0f, 80.0f });
+        pauseContinueSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        // セレクトに戻る
+        pauseSelectSprite_ = std::make_unique<Sprite>();
+        pauseSelectSprite_->Initialize(GetSpriteCommon(), pauseSelectTextureHandle_);
+        pauseSelectSprite_->SetPosition({ centerX - 200.0f, 430.0f - 40.0f });
+        pauseSelectSprite_->SetSize({ 400.0f, 80.0f });
+        pauseSelectSprite_->SetColor({ 0.45f, 0.45f, 0.45f, 0.65f });
+
+        Log("GameScene::Initialize: Pause Sprites Initialized\n");
+    }
+
+    // コインUIの初期化
+    coinTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/coin.png");
+    numbersTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/numbers.png");
+    if (GetSpriteCommon()) {
+        coinSprite_ = std::make_unique<Sprite>();
+        coinSprite_->Initialize(GetSpriteCommon(), coinTextureHandle_);
+        coinSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        numberSprites_.clear();
+        for (int i = 0; i < 16; ++i) {
+            auto numSprite = std::make_unique<Sprite>();
+            numSprite->Initialize(GetSpriteCommon(), numbersTextureHandle_);
+            numSprite->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+            numberSprites_.push_back(std::move(numSprite));
+        }
+        Log("GameScene::Initialize: Coin UI Initialized\n");
+    }
+
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -238,7 +285,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         isPlayingOrReplaying = true;
     }
 
-    bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+    bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused() && gameState_ != GameState::Pause;
 
     if (isGameActive) {
         for (auto& effect : effects_) {
@@ -452,6 +499,90 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     }
 
+    // ポーズ画面への移行（ゲームプレイ中にESCまたはコントローラーのSTARTボタン）
+    if (gameState_ == GameState::Playing) {
+        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE) ||
+            GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start)) {
+            gameState_ = GameState::Pause;
+            pauseSelectedIndex_ = 0; // 初期選択は「つづける」
+        }
+    } else if (gameState_ == GameState::Pause) {
+        // ポーズ画面の操作（キーボード / コントローラー両対応）
+        bool isMoveUp = KeyboardInput::GetInstance()->IsKeyPressed(DIK_UP) ||
+                        KeyboardInput::GetInstance()->IsKeyPressed(DIK_W) ||
+                        GamepadInput::GetInstance()->IsDPadPressedUp() ||
+                        GamepadInput::GetInstance()->IsLeftStickPushedUp();
+        bool isMoveDown = KeyboardInput::GetInstance()->IsKeyPressed(DIK_DOWN) ||
+                          KeyboardInput::GetInstance()->IsKeyPressed(DIK_S) ||
+                          GamepadInput::GetInstance()->IsDPadPressedDown() ||
+                          GamepadInput::GetInstance()->IsLeftStickPushedDown();
+
+        if (isMoveUp) {
+            pauseSelectedIndex_ = 0;
+        } else if (isMoveDown) {
+            pauseSelectedIndex_ = 1;
+        }
+
+        // 決定操作（SPACE / RETURN / Pad A）
+        bool isSubmit = KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) ||
+                        KeyboardInput::GetInstance()->IsKeyPressed(DIK_RETURN) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::A);
+
+        // キャンセル操作（ESC / Pad B / Pad START でゲーム画面へ戻る）
+        bool isCancel = KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::B) ||
+                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start);
+
+        if (isCancel) {
+            gameState_ = GameState::Playing;
+        } else if (isSubmit) {
+            if (pauseSelectedIndex_ == 0) {
+                // つづける: ゲーム画面に戻る
+                gameState_ = GameState::Playing;
+            } else if (pauseSelectedIndex_ == 1) {
+                // セレクトに戻る
+                if (GetGameCamera()) {
+                    GetGameCamera()->SetScale(initialCameraScale_);
+                    GetGameCamera()->SetFollowOffset({0.0f, 0.0f, 0.0f});
+                }
+                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
+                return;
+            }
+        }
+
+        // ポーズ中スプライトの更新（選択中は白色、非選択は薄色）
+        const Vector4 kSelectedColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        const Vector4 kUnselectedColor = { 0.45f, 0.45f, 0.45f, 0.65f };
+        float centerX = 1280.0f * 0.5f;
+
+        if (pauseOverlaySprite_) {
+            pauseOverlaySprite_->SetPosition({ centerX - 5000.0f, 360.0f - 5000.0f });
+            pauseOverlaySprite_->SetSize({ 10000.0f, 10000.0f });
+            pauseOverlaySprite_->Update();
+        }
+        if (pauseContinueSprite_) {
+            bool isSelected = (pauseSelectedIndex_ == 0);
+            pauseContinueSprite_->SetColor(isSelected ? kSelectedColor : kUnselectedColor);
+            float w = isSelected ? 410.0f : 390.0f;
+            float h = isSelected ? 82.0f : 78.0f;
+            pauseContinueSprite_->SetSize({ w, h });
+            pauseContinueSprite_->SetPosition({ centerX - w * 0.5f, 310.0f - h * 0.5f });
+            pauseContinueSprite_->Update();
+        }
+        if (pauseSelectSprite_) {
+            bool isSelected = (pauseSelectedIndex_ == 1);
+            pauseSelectSprite_->SetColor(isSelected ? kSelectedColor : kUnselectedColor);
+            float w = isSelected ? 410.0f : 390.0f;
+            float h = isSelected ? 82.0f : 78.0f;
+            pauseSelectSprite_->SetSize({ w, h });
+            pauseSelectSprite_->SetPosition({ centerX - w * 0.5f, 430.0f - h * 0.5f });
+            pauseSelectSprite_->Update();
+        }
+
+        // ポーズ中は以降のゲーム更新（プレイヤー、マップ、GIF等）を停止
+        return;
+    }
+
     // ステージ配置ワールドGIFの更新
     StageGifManager::GetInstance()->Update(TimeManager::GetInstance().GetDeltaTime());
 
@@ -471,61 +602,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
-        bool isRewinding = false;
-        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
-            auto keyboard = KeyboardInput::GetInstance();
-            auto gamepad = GamepadInput::GetInstance();
-            bool keyRewind = (keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) &&
-                             keyboard->IsKeyDown(DIK_LEFT);
-            bool padRewind = gamepad->IsButtonDown(GamepadButton::LB) || (gamepad->GetLeftTrigger() > 0.3f);
-            if (keyRewind || padRewind) {
-                isRewinding = true;
-            }
-        }
 
-        if (isRewinding) {
-            FrameData poppedFrame;
-            if (ReplayManager::GetInstance()->PopRecordedFrame(poppedFrame)) {
-                player_->SetPosition(poppedFrame.position);
-                if (auto* prim = player_->GetPrimitiveObject()) {
-                    prim->GetMaterial().color = poppedFrame.color;
-                    prim->SetScale(poppedFrame.scale);
-                    prim->SetRotation(poppedFrame.rotation);
-                    prim->SetTranslation(poppedFrame.position);
-                    prim->Update();
-                }
-                if (GetGameCamera()) {
-                    GetGameCamera()->SetFollowTarget(nullptr);
-                    GetGameCamera()->SetTranslation(poppedFrame.cameraPosition);
-                }
-
-                // マップチップ（コインなど）の巻き戻し
-                std::string initMapStr = ReplayManager::GetInstance()->GetCurrentMapDataStr();
-                if (!initMapStr.empty()) {
-                    // 再構築を一時停止
-                    map_->SetRebuildEnabled(false);
-
-                    // 初期状態のマップに戻す
-                    map_->LoadFromString(initMapStr);
-                    player_->SetScore(0);
-                    
-                    // 録画されているフレームを最初からたどってコインの取得状態を再構築する
-                    const auto& frames = ReplayManager::GetInstance()->GetTemporaryRecordedFrames();
-                    for (const auto& frame : frames) {
-                        player_->SetPosition(frame.position);
-                    }
-                    
-                    // 今ポップしたフレームの座標でも判定しておく
-                    player_->SetPosition(poppedFrame.position);
-                    
-                    // 再構築を再開（ここで一括構築される）
-                    map_->SetRebuildEnabled(true);
-
-                    // スコアを同期
-                    previousScore_ = player_->GetScore();
-                }
-            }
-        } else {
             // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
             if (ReplayManager::GetInstance()->IsPlaying()) {
                 // ループ判定を再生処理の一番最初で行う
@@ -611,7 +688,18 @@ void GameScene::Update(SceneManager *sceneManager) {
                 // 巻き戻しから通常に戻ったときにカメラ追従を再開する
             }
 
-            if (GetGameCamera() && !ReplayManager::GetInstance()->IsPlaying() && !isRewinding) {
+            if (player_) {
+                bool isRespawning = player_->IsRespawning();
+                if (isRespawning && !wasRespawning_) {
+                    for (auto& effect : effects_) {
+                        if (effect) effect->Reset();
+                    }
+                    previousScore_ = player_->GetScore();
+                }
+                wasRespawning_ = isRespawning;
+            }
+
+            if (GetGameCamera() && !ReplayManager::GetInstance()->IsPlaying()) {
                 if (player_->IsDead()) {
                     GetGameCamera()->SetFollowTarget(nullptr);
                 } else {
@@ -665,7 +753,6 @@ void GameScene::Update(SceneManager *sceneManager) {
                 }
                 previousScore_ = currentScore;
             }
-        }
 
         // 右スティック（RStick）によるカメラ見渡し回転
         auto gamepad = GamepadInput::GetInstance();
@@ -690,26 +777,17 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
 
-        if (!isRewinding && wasRewindingLastFrame_) {
-            if (GetGameCamera()) {
-                GetGameCamera()->SetFollowTarget(&player_->GetPosition());
-            }
-        }
-        wasRewindingLastFrame_ = isRewinding;
-
         // プレイ中の場合、リプレイ録画を行う
         if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
-            if (!isRewinding) {
-                Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
-                if (!ReplayManager::GetInstance()->IsRecording()) {
-                    std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
-                    ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
-                }
-                Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-                Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
-                Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
-                ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
+            Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
+            if (!ReplayManager::GetInstance()->IsRecording()) {
+                std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
+                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
             }
+            Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+            Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
+            Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
+            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
         } else {
             if (ReplayManager::GetInstance()->IsRecording()) {
                 ReplayManager::GetInstance()->StopRecord();
@@ -717,6 +795,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     }
 
+    UpdateCoinUI(dt);
 }
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
@@ -731,7 +810,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
-    if (!EditorManager::IsPlaying()) {
+    if (!EditorManager::IsPlaying() || gameState_ == GameState::Pause) {
         return;
     }
 
@@ -762,13 +841,11 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "[A] : Jump / Wall Jump");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "[X] : Dash");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "[RB] / [RT] : Wall Cling");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[LB] / [LT] : Rewind");
         } else {
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
             ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "Ctrl + Left : Rewind");
         }
         ImGui::End();
     }
@@ -876,7 +953,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             if (!currentReplay.frames.empty()) {
                 const float GHOST_ALPHA = 0.5f;
                 const int FRAME_STEP = 10;
-                auto* playerPrim = player_->GetPrimitiveObject();
+                auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
                 if (playerPrim && playerPrim->GetShowTrail()) {
                     playerPrim->ResetGhostIndex();
                     for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
@@ -912,7 +989,7 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
             // --- 物理ベースA* 探索ルート（AIゴースト）の描画 ---
             const auto& aiPath = replayManager->GetAIPathPositions();
             if (replayManager->IsShowAIGhost() && !aiPath.empty()) {
-                auto* playerPrim = player_->GetPrimitiveObject();
+                auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
                 if (playerPrim) {
                     const int AI_STEP = 5;
                     const float GHOST_ALPHA = 0.6f;
@@ -947,6 +1024,24 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 }
 
 void GameScene::Draw2D() {
+    bool isPlayingOrReplaying = false;
+#ifdef USE_IMGUI
+    if (EditorManager::IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+#else
+    isPlayingOrReplaying = true;
+#endif
+    if (ReplayManager::GetInstance()->IsPlaying()) {
+        isPlayingOrReplaying = true;
+    }
+
+    if (isPlayingOrReplaying && gameState_ != GameState::Pause) {
+        if (GetSpriteCommon()) {
+            GetSpriteCommon()->PreDraw();
+            DrawCoinUI();
+        }
+    }
     if (gameState_ == GameState::StartReady) {
         if (GetSpriteCommon()) {
             GetSpriteCommon()->PreDraw();
@@ -964,6 +1059,13 @@ void GameScene::Draw2D() {
             GetSpriteCommon()->PreDraw();
             clearSprite_->Draw();
         }
+    } else if (gameState_ == GameState::Pause) {
+        if (GetSpriteCommon()) {
+            GetSpriteCommon()->PreDraw();
+            if (pauseOverlaySprite_) pauseOverlaySprite_->Draw();
+            if (pauseContinueSprite_) pauseContinueSprite_->Draw();
+            if (pauseSelectSprite_) pauseSelectSprite_->Draw();
+        }
     }
 }
 
@@ -972,7 +1074,7 @@ void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
     if (!EditorManager::IsPlaying() && player_) {
         ReplayManager* replayManager = ReplayManager::GetInstance();
         if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
-            auto* playerPrim = player_->GetPrimitiveObject();
+            auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
             ImVec2 gameViewPos = EditorManager::GetGameViewPos();
             ImVec2 gameViewSize = EditorManager::GetGameViewSize();
             ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -1091,7 +1193,7 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 
     // 2. プレイヤー
     if (player_) {
-        result.push_back(player_->GetPrimitiveObject());
+        result.push_back(const_cast<PrimitiveObject*>(player_->GetPrimitiveObject()));
     }
 
     // 3. マップチップ
@@ -1139,7 +1241,7 @@ void GameScene::UpdateEditor() {
         if (map_) {
             player_->FindSpawnPoint(*map_);
         }
-        auto* playerPrim = player_->GetPrimitiveObject();
+        auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
         if (playerPrim) {
             playerPrim->SetTranslation(player_->GetPosition());
             playerPrim->Update();
@@ -1163,5 +1265,75 @@ void GameScene::UpdateEditor() {
 
     if (skybox_) {
         skybox_->Update();
+    }
+}
+
+void GameScene::UpdateCoinUI(float deltaTime) {
+    if (!map_) return;
+    int collectedCoins = map_->GetCollectedCoinCount();
+    if (collectedCoins > lastCollectedCoins_) {
+        coinPopAnimTimer_ = 0.35f;
+    }
+    lastCollectedCoins_ = collectedCoins;
+
+    if (coinPopAnimTimer_ > 0.0f) {
+        coinPopAnimTimer_ -= deltaTime;
+        if (coinPopAnimTimer_ < 0.0f) {
+            coinPopAnimTimer_ = 0.0f;
+        }
+    }
+}
+
+void GameScene::DrawCoinUI() {
+    if (!map_ || !coinSprite_ || !GetSpriteCommon()) return;
+    int totalCoins = map_->GetTotalCoinCount();
+    if (totalCoins <= 0) return;
+
+    int collectedCoins = map_->GetCollectedCoinCount();
+    std::string text = std::to_string(collectedCoins) + "/" + std::to_string(totalCoins);
+
+    float baseX = ParameterManager::GetInstance()->GetValue("CoinUI", "posX", 40.0f);
+    float baseY = ParameterManager::GetInstance()->GetValue("CoinUI", "posY", 35.0f);
+    float iconSize = ParameterManager::GetInstance()->GetValue("CoinUI", "iconSize", 44.0f);
+    float charW = ParameterManager::GetInstance()->GetValue("CoinUI", "charWidth", 24.0f);
+    float charH = ParameterManager::GetInstance()->GetValue("CoinUI", "charHeight", 32.0f);
+    float spacing = ParameterManager::GetInstance()->GetValue("CoinUI", "spacing", 2.0f);
+
+    float scaleAnim = 1.0f;
+    if (coinPopAnimTimer_ > 0.0f) {
+        float progress = coinPopAnimTimer_ / 0.35f;
+        scaleAnim = 1.0f + 0.4f * std::sin(progress * 3.14159265f);
+    }
+
+    float currentIconSize = iconSize * scaleAnim;
+    float iconOffset = (currentIconSize - iconSize) * 0.5f;
+    coinSprite_->SetPosition({ baseX - iconOffset, baseY - iconOffset });
+    coinSprite_->SetSize({ currentIconSize, currentIconSize });
+    coinSprite_->Update();
+    coinSprite_->Draw();
+
+    float currentX = baseX + iconSize + 12.0f;
+    float textY = baseY + (iconSize - charH) * 0.5f;
+
+    size_t spriteIdx = 0;
+    for (char c : text) {
+        if (spriteIdx >= numberSprites_.size()) break;
+        int charIndex = -1;
+        if (c >= '0' && c <= '9') {
+            charIndex = c - '0';
+        } else if (c == '/') {
+            charIndex = 10;
+        }
+
+        if (charIndex >= 0) {
+            auto& numSprite = numberSprites_[spriteIdx];
+            numSprite->SetTextureRect(charIndex * 48.0f, 0.0f, 48.0f, 64.0f);
+            numSprite->SetPosition({ currentX, textY });
+            numSprite->SetSize({ charW, charH });
+            numSprite->Update();
+            numSprite->Draw();
+            spriteIdx++;
+        }
+        currentX += charW + spacing;
     }
 }

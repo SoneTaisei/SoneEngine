@@ -3,6 +3,7 @@
 #include <memory>
 #include <d3d12.h>
 #include <nlohmann/json.hpp>
+#include "Core/Utility/Vector2.h"
 #include "Core/Utility/Vector3.h"
 #include "Core/Utility/Vector4.h"
 #include "GameObject/Object3D.h"
@@ -49,6 +50,20 @@ public:
     bool IsDoubleSided() const { return isDoubleSided_; }
     void SetDoubleSided(bool doubleSided);
 
+    Vector2 GetUVTranslation() const { return uvTranslation_; }
+    void SetUVTranslation(const Vector2& uvTranslation) { uvTranslation_ = uvTranslation; }
+
+    Vector2 GetUVScale() const { return uvScale_; }
+    void SetUVScale(const Vector2& uvScale) { uvScale_ = uvScale; }
+
+    float GetUVRotation() const { return uvRotation_; }
+    void SetUVRotation(float uvRotation) { uvRotation_ = uvRotation; }
+    float GetUVRotationDegrees() const;
+    void SetUVRotationDegrees(float uvRotationDeg);
+
+    Vector2 GetUVPivot() const { return uvPivot_; }
+    void SetUVPivot(const Vector2& uvPivot) { uvPivot_ = uvPivot; }
+
     Object3D* GetObject3D() { return object3D_.get(); }
     const Object3D* GetObject3D() const { return object3D_.get(); }
 
@@ -69,6 +84,11 @@ private:
     std::string modelFileName_ = "";
     std::string texturePath_ = "";
     bool isDoubleSided_ = false;
+
+    Vector2 uvTranslation_ = { 0.0f, 0.0f };
+    Vector2 uvScale_ = { 1.0f, 1.0f };
+    float uvRotation_ = 0.0f; // Radians
+    Vector2 uvPivot_ = { 0.5f, 0.5f }; // Default center pivot for scaling/rotating
 
     Vector3 translation_ = { 0.0f, 0.0f, 0.0f };
     Vector3 rotation_ = { 0.0f, 0.0f, 0.0f }; // Radians

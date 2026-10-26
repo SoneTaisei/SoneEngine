@@ -39,6 +39,10 @@ public:
     void SetPosition(const Vector3& position);
     const Vector3& GetPosition() const { return position_; }
 
+    // 放出（エミット）制御
+    void SetEmitting(bool emitting) { isEmitting_ = emitting; }
+    bool IsEmitting() const { return isEmitting_; }
+
     bool IsPlaying() const { return isPlaying_; }
     float GetCurrentTime() const { return systemTime_; }
     void SetCurrentTime(float t) {
@@ -90,4 +94,5 @@ private:
 
     float systemTime_ = 0.0f;
     bool isPlaying_ = false;
+    bool isEmitting_ = true;
 };

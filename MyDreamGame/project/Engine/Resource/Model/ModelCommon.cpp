@@ -2,7 +2,6 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Model.h"
 #include <cassert>
-#include "Graphics/TextureManager.h"
 #include "Renderer/SrvManager.h"
 #include <numbers> // 数学定数用 (C++20以上)
 #include <cmath>   // std::cos, std::sin用

@@ -112,14 +112,14 @@ BlockClassGenResult BlockClassGenerator::GenerateBlockClass(const BlockClassGenP
     cppStream << "    auto* tc = gameObject_->AddComponent<TransformComponent>();\n";
     cppStream << "    auto* prc = gameObject_->AddComponent<PrimitiveRendererComponent>();\n\n";
     cppStream << "    prc->Initialize(device, boxPrimitive);\n";
-    cppStream << "    prc->GetMaterial().color = { " 
+    cppStream << "    prc->SetColor({ " 
               << std::fixed << std::setprecision(2) << params.color.x << "f, " 
               << params.color.y << "f, " 
               << params.color.z << "f, " 
-              << params.color.w << "f };\n";
+              << params.color.w << "f });\n";
     cppStream << "    tc->SetScale({ width, height, 1.0f });\n";
     cppStream << "    tc->SetPosition({ worldX, worldY, 0.0f });\n";
-    cppStream << "    prc->GetMaterial().lightingType = 1;\n\n";
+    cppStream << "    prc->SetLightingType(1);\n\n";
     cppStream << "    SetupCollider();\n";
     cppStream << "}\n\n";
     cppStream << "void " << params.className << "::Update() {\n";

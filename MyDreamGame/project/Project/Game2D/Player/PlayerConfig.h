@@ -10,6 +10,14 @@ struct PlayerParams {
     float dashDuration_ = 0.15f;
     float dashSpeed_ = 15.0f;
     float dashEndUpwardVelocity_ = 10.0f;
+    float dashEndInertiaRatio_ = 1.0f;
+    float dashInertiaDecayGround_ = 35.0f;
+    float dashInertiaDecayAir_ = 16.0f;
+    float dashJumpPowerMult_ = 0.75f;
+    float dashJumpBonusSpeed_ = 5.0f;
+    float dashJumpSpeedMult_ = 1.15f;
+    float dashJumpWindow_ = 0.15f;
+    bool dashJumpRefreshDash_ = true;
     Vector4 colorNormal_ = { 0.2f, 0.6f, 1.0f, 1.0f };
     Vector4 colorDashed_ = { 1.0f, 1.0f, 1.0f, 1.0f };
     float wallJumpDuration_ = 0.5f;

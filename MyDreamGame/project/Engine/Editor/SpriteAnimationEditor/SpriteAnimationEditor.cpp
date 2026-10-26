@@ -12,9 +12,6 @@
 #include "Game2D/MapChip2D.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 
-#ifdef USE_IMGUI
-#include <imgui.h>
-#endif
 
 SpriteAnimationEditor::SpriteAnimationEditor() {
 }

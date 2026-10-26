@@ -2,6 +2,7 @@
 #include "States/PlayerStates.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"
+#include "Graphics/Camera/GameCamera.h"
 #include "Graphics/TextureManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Resource/Model/ModelManager.h"
@@ -19,6 +20,7 @@ void Player2D::ResetActionFlags() {
     state_.isDead_ = false;
     state_.isGoal_ = false;
     state_.isRespawning_ = false;
+    state_.isGrabbingVine_ = false;
 }
 
 void Player2D::UpdateWallJumpTimer(float deltaTime) {
@@ -55,8 +57,14 @@ void Player2D::UpdateVisualColor() {
 void Player2D::StartDeathSequence(bool isFallDeath) {
     state_.isDead_ = true;
     state_.isRespawning_ = false;
+    state_.isGrabbingVine_ = false;
     state_.deathTimer_ = 0.0f;
     state_.isDashing_ = false;
+    state_.hasDashInertia_ = false;
+    state_.dashJumpWindowTimer_ = 0.0f;
+    state_.lastDashDirX_ = 0.0f;
+    state_.jumpBufferTimer_ = 0.0f;
+    state_.coyoteTimer_ = 0.0f;
 
     if (isFallDeath) {
         state_.velocity_.y = -5.0f;
@@ -86,6 +94,12 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.canDash_ = true;
     state_.isDashing_ = false;
     state_.dashTimer_ = 0.0f;
+    state_.hasDashInertia_ = false;
+    state_.dashJumpWindowTimer_ = 0.0f;
+    state_.lastDashDirX_ = 0.0f;
+    state_.facingDirectionX_ = 1.0f;
+    state_.jumpBufferTimer_ = 0.0f;
+    state_.coyoteTimer_ = 0.0f;
     state_.wallJumpDirLockTimer_ = 0.0f;
     state_.lockedDirectionX_ = 0.0f;
     state_.wallJumpTimer_ = 0.0f;
@@ -101,6 +115,10 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.externalVelocityX_ = 0.0f;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
+    if (camera_) {
+        camera_->SetFollowTarget(&state_.position_);
+        camera_->SnapToTarget();
+    }
 
     visuals_.ClearEffects();
 
@@ -130,6 +148,11 @@ void Player2D::StartGoalSequence() {
     state_.goalTimer_ = 0.0f;
     state_.velocity_ = {0.0f, 0.0f, 0.0f};
     state_.isDashing_ = false;
+    state_.hasDashInertia_ = false;
+    state_.dashJumpWindowTimer_ = 0.0f;
+    state_.lastDashDirX_ = 0.0f;
+    state_.jumpBufferTimer_ = 0.0f;
+    state_.coyoteTimer_ = 0.0f;
     visuals_.SpawnConfetti(state_.position_);
 }
 
@@ -173,6 +196,8 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
     if (map.HasPlayerSpawn()) {
         state_.startPosition_ = map.GetPlayerSpawnWorldPosition(state_.startPosition_);
         state_.position_ = state_.startPosition_;
+        state_.lastCheckpointPosition_ = state_.startPosition_;
+        state_.checkpointScore_ = 0;
         if (GetGameObject()) {
             if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
@@ -251,6 +276,35 @@ void Player2D::DisplayImGui() {
             PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
         }
 
+        ImGui::Separator();
+        ImGui::Text("プリセット一時適用 (※ファイル保存はされません)");
+        if (ImGui::Button("現実的物理 (リアル志向アクション)")) {
+            params_.gravity_ = -15.0f;
+            params_.jumpPower_ = 6.5f;
+            params_.moveSpeed_ = 4.5f;
+            params_.maxFallSpeed_ = -30.0f;
+            params_.wallClimbSpeed_ = 2.0f;
+            params_.wallSlideSpeed_ = -3.0f;
+            params_.wallJumpPower_ = { 4.0f, 5.5f };
+            params_.dashSpeed_ = 8.0f;
+            params_.dashDuration_ = 0.15f;
+            params_.dashInertiaDecayGround_ = 15.0f;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("完全現実 (人間シミュレーション)")) {
+            params_.gravity_ = -9.8f;
+            params_.jumpPower_ = 4.2f;
+            params_.moveSpeed_ = 3.8f;
+            params_.maxFallSpeed_ = -45.0f;
+            params_.wallClimbSpeed_ = 1.0f;
+            params_.wallSlideSpeed_ = -4.0f;
+            params_.wallJumpPower_ = { 2.5f, 3.5f };
+            params_.dashSpeed_ = 6.0f;
+            params_.dashDuration_ = 0.15f;
+            params_.dashInertiaDecayGround_ = 12.0f;
+        }
+        ImGui::Separator();
+
         ImGui::DragFloat3("座標", &state_.position_.x, 0.1f);
         ImGui::DragFloat3("速度", &state_.velocity_.x, 0.1f);
 
@@ -290,6 +344,16 @@ void Player2D::DisplayImGui() {
             ImGui::DragFloat("ダッシュ継続時間", &params_.dashDuration_, 0.01f, 0.0f, 2.0f);
             ImGui::DragFloat("ダッシュ速度", &params_.dashSpeed_, 0.1f, 0.0f, 50.0f);
             ImGui::DragFloat("ダッシュ終了時の上向き速度", &params_.dashEndUpwardVelocity_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("ダッシュ慣性保持率", &params_.dashEndInertiaRatio_, 0.05f, 0.0f, 2.0f);
+            ImGui::DragFloat("ダッシュ慣性減速率(地上)", &params_.dashInertiaDecayGround_, 0.5f, 0.0f, 100.0f);
+            ImGui::DragFloat("ダッシュ慣性減速率(空中)", &params_.dashInertiaDecayAir_, 0.5f, 0.0f, 100.0f);
+            ImGui::Separator();
+            ImGui::Text("ダッシュジャンプ (スーパージャンプ)");
+            ImGui::DragFloat("ダッシュジャンプ力倍率", &params_.dashJumpPowerMult_, 0.05f, 0.1f, 3.0f);
+            ImGui::DragFloat("ダッシュジャンプ追加速度", &params_.dashJumpBonusSpeed_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("ダッシュジャンプ速度倍率", &params_.dashJumpSpeedMult_, 0.05f, 0.5f, 3.0f);
+            ImGui::DragFloat("ダッシュジャンプ受付猶予時間", &params_.dashJumpWindow_, 0.01f, 0.0f, 1.0f);
+            ImGui::Checkbox("ダッシュジャンプ時ダッシュ回復", &params_.dashJumpRefreshDash_);
             ImGui::TreePop();
         }
 
@@ -385,9 +449,13 @@ void Player2D::DisplayImGui() {
 
 void Player2D::ResetState(const Vector3& initPos) {
     state_.position_ = initPos;
+    state_.startPosition_ = initPos;
+    state_.lastCheckpointPosition_ = initPos;
+    state_.checkpointScore_ = 0;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.isOnGround_ = false;
     state_.canDash_ = true;
+    state_.facingDirectionX_ = 1.0f;
     state_.isDashing_ = false;
     state_.dashTimer_ = 0.0f;
     state_.isTouchingWallRight_ = false;
@@ -408,6 +476,11 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.hitstopTimer_ = 0.0f;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
+    if (camera_) {
+        camera_->SetFollowTarget(&state_.position_);
+        camera_->SnapToTarget();
+    }
+    state_.isGrabbingVine_ = false;
     
     visuals_.ResetVisuals(state_.position_, params_);
     visuals_.ClearEffects();

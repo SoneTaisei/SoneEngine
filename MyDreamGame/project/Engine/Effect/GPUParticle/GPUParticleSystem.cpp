@@ -4,6 +4,7 @@
 
 void GPUParticleSystem::Initialize(ID3D12Device* device) {
     device_ = device;
+    isEmitting_ = true;
 
     // デフォルトのシステム構成を作成
     systemData_.systemName = "NewEffect";
@@ -37,6 +38,7 @@ void GPUParticleSystem::Initialize(ID3D12Device* device) {
 void GPUParticleSystem::Initialize(ID3D12Device* device, const GPUParticleSystemData& data) {
     device_ = device;
     systemData_ = data;
+    isEmitting_ = true;
     RebuildEmitters();
     Restart();
     isPlaying_ = false;
@@ -74,6 +76,7 @@ void GPUParticleSystem::SyncDataFromEmitters() {
 
 void GPUParticleSystem::SetData(const GPUParticleSystemData& data) {
     systemData_ = data;
+    isEmitting_ = true;
     RebuildEmitters();
     Restart();
     isPlaying_ = false;
@@ -81,6 +84,7 @@ void GPUParticleSystem::SetData(const GPUParticleSystemData& data) {
 
 void GPUParticleSystem::Restart() {
     systemTime_ = 0.0f;
+    isEmitting_ = true;
     for (auto& emitter : emitters_) {
         if (emitter) emitter->Reset();
     }
@@ -136,7 +140,8 @@ void GPUParticleSystem::Update(float deltaTime) {
         if (hasSolo && !emitter->GetData().solo) continue;
 
         // システムが非ループの場合、全体のdurationに達していたら新規発生は停止
-        bool allowEmit = systemData_.isLoop || (systemTime_ < systemData_.duration);
+        // isEmitting_ が false の場合も新規発生を停止（既存パーティクルは寿命まで自然更新）
+        bool allowEmit = isEmitting_ && (systemData_.isLoop || (systemTime_ < systemData_.duration));
         emitter->Update(deltaTime, allowEmit);
     }
 }

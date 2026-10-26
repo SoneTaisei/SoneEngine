@@ -1,7 +1,6 @@
 #include "Model3DEditorContext.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Graphics/CameraManager.h"
-#include "Core/Utility/UtilityFunctions.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include <fstream>
 #include <filesystem>
@@ -40,9 +39,9 @@ void Model3DEditorContext::Initialize(ID3D12Device* device) {
             gridFloorObj_->SetTranslation({ 0.0f, -0.01f, 0.0f });
             gridFloorObj_->SetScale({ 4000.0f, 0.02f, 4000.0f });
             gridFloorObj_->SetIsDoubleSided(true);
-            gridFloorObj_->GetMaterial().lightingType = 0; // Unlit
-            gridFloorObj_->GetMaterial().color = { 0.0f, 0.0f, 0.0f, 0.0f }; // Transparent floor, only grid lines
-            gridFloorObj_->GetMaterial().enableBoxMapping = 2.0f; // Procedural 3D Grid
+            gridFloorObj_->SetLightingType(0); // Unlit
+            gridFloorObj_->SetColor({ 0.0f, 0.0f, 0.0f, 0.0f }); // Transparent floor, only grid lines
+            gridFloorObj_->SetEnableBoxMapping(2.0f); // Procedural 3D Grid
             gridFloorObj_->Update();
         }
     }
@@ -108,6 +107,10 @@ Model3DEditorContext::Model3DEditorSnapshot Model3DEditorContext::CreateSnapshot
         os.color = obj->GetColor();
         os.doubleSided = obj->IsDoubleSided();
         os.texturePath = obj->GetTexturePath();
+        os.uvTranslation = obj->GetUVTranslation();
+        os.uvScale = obj->GetUVScale();
+        os.uvRotation = obj->GetUVRotation();
+        os.uvPivot = obj->GetUVPivot();
         snap.objects.push_back(os);
     }
     return snap;
@@ -140,6 +143,10 @@ void Model3DEditorContext::RestoreSnapshot(const Model3DEditorSnapshot& snap) {
             obj->SetScale(os.scale);
             obj->SetColor(os.color);
             obj->SetDoubleSided(os.doubleSided);
+            obj->SetUVTranslation(os.uvTranslation);
+            obj->SetUVScale(os.uvScale);
+            obj->SetUVRotation(os.uvRotation);
+            obj->SetUVPivot(os.uvPivot);
             if (obj->GetTexturePath() != os.texturePath) {
                 obj->SetTexture(os.texturePath);
             }
@@ -157,6 +164,10 @@ void Model3DEditorContext::RestoreSnapshot(const Model3DEditorSnapshot& snap) {
             obj->SetScale(os.scale);
             obj->SetColor(os.color);
             obj->SetDoubleSided(os.doubleSided);
+            obj->SetUVTranslation(os.uvTranslation);
+            obj->SetUVScale(os.uvScale);
+            obj->SetUVRotation(os.uvRotation);
+            obj->SetUVPivot(os.uvPivot);
             if (!os.texturePath.empty()) {
                 obj->SetTexture(os.texturePath);
             }

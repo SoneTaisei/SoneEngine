@@ -26,10 +26,27 @@ void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime
     // 現在のルームを特定する
     const auto& rooms = map.GetRooms();
     bool isInAnyRoom = false;
+    int prevRoom = state_.currentRoomIndex_;
     for (int i = 0; i < static_cast<int>(rooms.size()); ++i) {
         if (state_.position_.x >= rooms[i].x && state_.position_.x <= rooms[i].x + rooms[i].width &&
             state_.position_.y >= rooms[i].y && state_.position_.y <= rooms[i].y + rooms[i].height) {
             player->SetCurrentRoomIndex(i);
+            if (i != prevRoom) {
+                const auto& room = rooms[i];
+                for (int cy = 0; cy < map.GetHeight(); ++cy) {
+                    for (int cx = 0; cx < map.GetWidth(); ++cx) {
+                        if (map.GetChipType(cx, cy) == MapChip2D::ChipType::kRoomRespawn) {
+                            float wx = map.ChipToWorldX(cx) + map.GetChipSize() * 0.5f;
+                            float wy = map.ChipToWorldY(cy) + map.GetChipSize() * 0.5f;
+                            if (wx >= room.x && wx <= room.x + room.width &&
+                                wy >= room.y && wy <= room.y + room.height) {
+                                player->SetCheckpoint({ wx, wy, 0.0f }, state_.score_);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
             isInAnyRoom = true;
             break;
         }
@@ -94,7 +111,7 @@ void PlayerDeadState::Update(Player2D* player, MapChip2D& map, float deltaTime) 
 
     if (player->GetDeathTimer() >= params_.deathDuration_) {
         // リスポーン地点の決定
-        Vector3 respawnPos = state_.startPosition_;
+        Vector3 respawnPos = player->GetCheckpointPosition();
         const auto& rooms = map.GetRooms();
         if (state_.currentRoomIndex_ >= 0 && state_.currentRoomIndex_ < static_cast<int>(rooms.size())) {
             const auto& room = rooms[state_.currentRoomIndex_];
@@ -118,6 +135,12 @@ void PlayerDeadState::Update(Player2D* player, MapChip2D& map, float deltaTime) 
 
         // ステージ内の動的オブジェクト（敵やギミック等）を初期位置・状態にリセット
         map.ResetBlocks();
+
+        // スコアをチェックポイント到達時のスコアに復元（コイン復活によるスコア増殖防止）
+        player->RestoreCheckpointScore();
+
+        // プレイヤーの残留エフェクトをクリア
+        player->ClearEffects();
 
         // 指定地点へ安全にリスポーン
         player->RespawnAt(respawnPos);

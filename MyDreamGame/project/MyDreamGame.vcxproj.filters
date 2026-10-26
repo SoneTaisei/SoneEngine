@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <FxCompile Include="resources\shaders\CopyImage.PS.hlsl">
@@ -372,6 +372,9 @@
     <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp">
       <Filter>Engine\Editor\Common</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Editor\Common\SpriteSelectModal.cpp">
+      <Filter>Engine\Editor\Common</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Editor\GPUParticle\GPUParticleEditor.cpp">
       <Filter>Engine\Editor\GPUParticle</Filter>
     </ClCompile>
@@ -448,6 +451,12 @@
       <Filter>Engine\Renderer</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\BlockFactory.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\FallBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\Lvy.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
   </ItemGroup>
@@ -818,6 +827,9 @@
     <ClInclude Include="Engine\Editor\Common\ModelSelectModal.h">
       <Filter>Engine\Editor\Common</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Editor\Common\SpriteSelectModal.h">
+      <Filter>Engine\Editor\Common</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Editor\GPUParticle\GPUParticleEditor.h">
       <Filter>Engine\Editor\GPUParticle</Filter>
     </ClInclude>
@@ -897,6 +909,12 @@
       <Filter>Engine\Renderer</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\BlockFactory.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\FallBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\Lvy.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
   </ItemGroup>

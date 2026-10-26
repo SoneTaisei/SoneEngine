@@ -2,10 +2,7 @@
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include "Component/AnimatorComponent.h"
-#include <DirectXMath.h>
 #include "../externals/imgui/imgui.h"
-#include "Editor/Replay/ReplayManager.h"
-#include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE Object3D::sEnvironmentMapHandle = {};
 
@@ -21,6 +18,9 @@ void Object3D::Initialize(ID3D12Device *device, Model *model) {
     material_.shininess = 50.0f;
     material_.enableEnvironmentMap = 1;
     material_.environmentCoefficient = 0.1f;
+    material_.alphaReference = 0.0f;
+    material_.dissolveThreshold = 0.0f;
+    material_.enableBoxMapping = 0.0f;
 
     // マテリアルと座標変換リソースの作成（1つ分だけ！）
     transformResource_ = CreateBufferResource(device, (sizeof(TransformMatrix) + 255) & ~255u);
@@ -100,7 +100,7 @@ void Object3D::DisplayImGui(const std::string &label) {
             ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Trail (霆瑚ｷ｡繝ｻ谿句ワ)")) {
+        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
             ImGui::Checkbox("Show Trail", &showTrail_);
             if (showTrail_) {
                 ImGui::Checkbox("Fade Out", &trailFadeOut_);
