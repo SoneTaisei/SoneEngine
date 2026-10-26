@@ -1,5 +1,6 @@
 #pragma once
 #include "BaseBlock.h"
+#include <vector>
 
 /// <summary>
 /// FallBlock - プレイヤーが上から乗った時、または側面につかまった時に物理的に落下するブロック
@@ -41,6 +42,7 @@ public:
 
     // JSONプロパティの読み込み（エディタのインスペクターからのパラメータ設定）
     void SetProperties(const nlohmann::json& properties) override;
+    void GetProperties(nlohmann::json& properties) const override;
 
     // ステージ再開時・リトライ時の状態リセット処理
     void Reset() override;
@@ -48,8 +50,15 @@ public:
     // 落下をトリガーする外部・内部関数
     void TriggerFall();
 
+    // 接続されている隣接ブロックの追加・管理
+    void AddConnectedBlock(FallBlock* block);
+    void ClearConnectedBlocks();
+    const std::vector<FallBlock*>& GetConnectedBlocks() const { return connectedFallBlocks_; }
+    State GetState() const { return state_; }
+
     // デフォルトカラーの設定
     void SetDefaultColor(const Vector4& color);
+    const Vector4& GetDefaultColor() const { return defaultColor_; }
 
 #ifdef USE_IMGUI
     // ImGuiによるリアルタイムパラメータ調整・デバッグ用UI関数
@@ -77,6 +86,10 @@ private:
     bool isPlayerStanding_ = false;
     bool isPlayerTouchingSide_ = false;
     bool isSolid_ = true;
+    bool isResetting_ = false; // 再帰リセット防止フラグ
+
+    // マップチップ上で接続されている隣接FallBlock
+    std::vector<FallBlock*> connectedFallBlocks_;
 
     // --- 物理・演出パラメータ ---
     float shakeDuration_ = 0.28f;       // 落下前の揺れ・予兆時間（秒）

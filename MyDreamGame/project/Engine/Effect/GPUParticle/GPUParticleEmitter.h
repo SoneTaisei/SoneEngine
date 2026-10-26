@@ -6,7 +6,6 @@
 #include "GPUParticleData.h"
 #include "Effect/ParticleCommon.h"
 #include "Effect/ParticleManager.h"
-#include "Resource/Model/Model.h"
 #include "Resource/Model/ModelManager.h"
 
 // CPU側でシミュレーションする1パーティクルの状態

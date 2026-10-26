@@ -6,20 +6,14 @@
 #include "Component/IComponent.h"
 #include "Core/TimeManager.h"
 #include "GameObject/PrimitiveObject.h"
-#include "Input/KeyboardInput.h"
 #include "PlayerState.h"
 #include "PlayerVisuals.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "States/IPlayerState.h"
-#include <nlohmann/json.hpp>
 
 // 前方宣言
 class MapChip2D;
 class GameCamera;
-class PlayerNormalState;
-class PlayerDeadState;
-class PlayerRespawnState;
-class PlayerGoalState;
 class PlayerNormalState;
 class PlayerDeadState;
 class PlayerRespawnState;
@@ -47,6 +41,10 @@ public:
     void StartDeathSequence(bool isFallDeath);  // 死亡開始（初速・スロー・フラグ設定）
     void UpdateDeathKnockback(float deltaTime); // 死亡時のノックバック物理とタイマー進行
     void RespawnAt(const Vector3 &respawnPos);  // リスポーン地点へ復帰＆慣性リセット
+    void SetCheckpoint(const Vector3& pos, int score) { state_.lastCheckpointPosition_ = pos; state_.checkpointScore_ = score; }
+    const Vector3& GetCheckpointPosition() const { return state_.lastCheckpointPosition_; }
+    int GetCheckpointScore() const { return state_.checkpointScore_; }
+    void RestoreCheckpointScore() { state_.score_ = state_.checkpointScore_; }
     float GetDeathTimer() const { return state_.deathTimer_; }
     // --- 4. リスポーンステート用 ---
     void StartRespawnSequence(); // リスポーン開始（タイマー初期化等）
@@ -92,6 +90,8 @@ public:
     float GetStamina() const { return state_.stamina_; }
     void ApplyHitstop(float duration) { state_.hitstopTimer_ = duration; }
     void SetSpringControlDisable(float duration) { state_.springControlDisableTimer_ = duration; }
+    void SetIsGrabbingVine(bool grabbing) { state_.isGrabbingVine_ = grabbing; }
+    bool IsGrabbingVine() const { return state_.isGrabbingVine_; }
 
     // ダッシュ状態の取得
     bool IsDashing() const { return state_.isDashing_; }
@@ -126,11 +126,8 @@ public:
     static bool CheckCollisionOBB(const OBB2D &obb1, const OBB2D &obb2, Vector3 &outMTV);
 
     // ヒエラルキー用
-    PrimitiveObject *GetPrimitiveObject() { return visuals_.GetPrimitiveObject(); }
     const PrimitiveObject *GetPrimitiveObject() const { return visuals_.GetPrimitiveObject(); }
-    Object3D *GetModelObject() { return visuals_.GetModelObject(); }
     const Object3D *GetModelObject() const { return visuals_.GetModelObject(); }
-    AnimatorComponent *GetAnimator() { return visuals_.GetAnimator(); }
     const AnimatorComponent *GetAnimator() const { return visuals_.GetAnimator(); }
 
     // ゲーム状態取得用
@@ -159,6 +156,7 @@ public:
     // ゲーム状態取得用ゲッター追加
     AABB2D GetAABB() const;
     bool IsDead() const { return state_.isDead_; }
+    bool IsRespawning() const { return state_.isRespawning_; }
     bool IsGoal() const { return state_.isGoal_; }
     const PlayerParams &GetParams() const { return params_; }
 

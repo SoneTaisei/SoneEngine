@@ -4,7 +4,7 @@
 #include "Renderer/SrvManager.h"
 #include "Core/Utility/TransformFunctions.h"
 #include "Core/TimeManager.h"
-#include <random>
+#include <numbers>
 //#include "imgui.h"
 
 ParticleManager::~ParticleManager() {

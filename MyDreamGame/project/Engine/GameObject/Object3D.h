@@ -36,17 +36,22 @@ public:
     void SetTextureHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle) {
         overrideTextureHandle_ = handle;
     }
-    D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const {
+    const D3D12_GPU_DESCRIPTOR_HANDLE GetTextureHandle() const {
         return overrideTextureHandle_;
     }
 
-    Material &GetMaterial() { return material_; }
     const Material &GetMaterial() const { return material_; }
     void SetMaterial(const Material& material) { material_ = material; }
     void SetColor(const Vector4& color) { material_.color = color; }
     const Vector4& GetColor() const { return material_.color; }
     void SetLightingType(int32_t type) { material_.lightingType = type; }
     void SetDissolveThreshold(float threshold) { material_.dissolveThreshold = threshold; }
+    void SetAlpha(float alpha) { material_.color.w = alpha; }
+    void SetEnableEnvironmentMap(int32_t enable) { material_.enableEnvironmentMap = enable; }
+    void SetEnableBoxMapping(float enable) { material_.enableBoxMapping = enable; }
+    void SetUVTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
+    void SetAlphaReference(float alphaRef) { material_.alphaReference = alphaRef; }
+    void SetShininess(float shininess) { material_.shininess = shininess; }
 
     // --- 名前関連 ---
     const std::string &GetName() const { return name_; }
@@ -54,33 +59,33 @@ public:
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
     void SetIsDoubleSided(bool isDoubleSided) { isDoubleSided_ = isDoubleSided; }
     void SetAnimator(AnimatorComponent* animator) { animator_ = animator; }
-    AnimatorComponent* GetAnimator() const { return animator_; }
+    const AnimatorComponent *GetAnimator() const { return animator_; }
 
     // --- 描画・Renderer用公開Getter ---
-    Model *GetModel() const { return model_; }
-    Material *GetMappedMaterial() { return mappedMaterial_; }
-    TransformMatrix *GetMappedTransform() { return mappedTransform_; }
+    const Model *GetModel() const { return model_; }
+    const Material *GetMappedMaterial() const { return mappedMaterial_; }
+    const TransformMatrix *GetMappedTransform() const { return mappedTransform_; }
     ID3D12Resource *GetTransformResource() const { return transformResource_.Get(); }
     ID3D12Resource *GetMaterialResource() const { return materialResource_.Get(); }
-    BlendMode GetBlendMode() const { return blendMode_; }
+    const BlendMode GetBlendMode() const { return blendMode_; }
     bool IsDoubleSided() const { return isDoubleSided_; }
     bool IsShowTrail() const { return showTrail_; }
     const std::deque<EulerTransform> &GetTrailHistory() const { return trailHistory_; }
-    int GetTrailLength() const { return trailLength_; }
-    int GetTrailStep() const { return trailStep_; }
-    BlendMode GetTrailBlendMode() const { return trailBlendMode_; }
+    const int GetTrailLength() const { return trailLength_; }
+    const int GetTrailStep() const { return trailStep_; }
+    const BlendMode GetTrailBlendMode() const { return trailBlendMode_; }
     static int GetMaxTrails() { return kMaxTrails; }
-    uint8_t *GetMappedTrailTransform() { return mappedTrailTransform_; }
-    uint8_t *GetMappedTrailMaterial() { return mappedTrailMaterial_; }
+    const uint8_t *GetMappedTrailTransform() const { return mappedTrailTransform_; }
+    const uint8_t *GetMappedTrailMaterial() const { return mappedTrailMaterial_; }
     bool IsTrailFadeOut() const { return trailFadeOut_; }
-    float GetTrailStartAlpha() const { return trailStartAlpha_; }
+    const float GetTrailStartAlpha() const { return trailStartAlpha_; }
     ID3D12Resource *GetTrailTransformResource() const { return trailTransformResource_.Get(); }
     ID3D12Resource *GetTrailMaterialResource() const { return trailMaterialResource_.Get(); }
 
     // 最後に Update() で計算したワールド行列（Renderer::DrawObject3D が描画に使うSRT行列と同じ構成）
     const Matrix4x4 &GetWorldMatrix() const { return worldMatrix_; }
     // ジョイント名からワールド座標を取得（スケルトンが無い／名前が見つからなければ nullopt）
-    std::optional<Vector3> GetJointWorldPosition(const std::string &jointName) const;
+    std::optional<Vector3> GetJointWorldPosition(const std::string &jointName)const;
 
 private:
     std::string name_ = "GameObject"; // ヒエラルキー表示用の名前

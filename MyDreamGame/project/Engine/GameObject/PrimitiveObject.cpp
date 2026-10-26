@@ -2,10 +2,7 @@
 #include "Renderer/Renderer.h"
 #include "Graphics/CameraManager.h"
 #include "Core/Utility/TransformFunctions.h"
-#include "GameObject/Object3D.h"
 #include "../externals/imgui/imgui.h"
-#include "Editor/Replay/ReplayManager.h"
-#include <algorithm>
 
 D3D12_GPU_DESCRIPTOR_HANDLE PrimitiveObject::sDefaultTextureHandle_ = {};
 
@@ -123,7 +120,7 @@ void PrimitiveObject::DisplayImGui(const std::string& label) {
             ImGui::DragFloat("Alpha Reference", &material_.alphaReference, 0.01f, 0.0f, 1.0f);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Trail (霆瑚ｷ｡繝ｻ谿句ワ)")) {
+        if (ImGui::TreeNode("Trail (軌跡・残像)")) {
             ImGui::Checkbox("Show Trail", &showTrail_);
             ImGui::TreePop();
         }

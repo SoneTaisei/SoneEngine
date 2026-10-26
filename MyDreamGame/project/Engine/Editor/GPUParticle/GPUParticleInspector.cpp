@@ -3,7 +3,6 @@
 #include "GPUParticleEditorContext.h"
 #include "Graphics/TextureManager.h"
 #include "Scene/SceneManager.h"
-#include "Effect/ParticleCommon.h"
 #include <algorithm>
 
 void GPUParticleInspector::Initialize() {}
