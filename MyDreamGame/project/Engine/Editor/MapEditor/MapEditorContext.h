@@ -109,8 +109,6 @@ public:
     int GetInputWidth() const { return inputWidth_; }
     int GetInputHeight() const { return inputHeight_; }
     void SetInputSize(int w, int h) { inputWidth_ = w; inputHeight_ = h; }
-    int* GetInputWidthPtr() { return &inputWidth_; }
-    int* GetInputHeightPtr() { return &inputHeight_; }
 
     // フィルター
     std::set<std::string>& GetCustomToolFilters() { return customToolFilters_; }
@@ -144,7 +142,6 @@ public:
     // グリッド線表示設定
     bool IsShowGrid() const { return showGrid_; }
     void SetShowGrid(bool show) { showGrid_ = show; }
-    bool* GetShowGridPtr() { return &showGrid_; }
 
 private:
     bool showGrid_ = true;

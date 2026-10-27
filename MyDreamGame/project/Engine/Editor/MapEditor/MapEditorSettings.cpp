@@ -135,11 +135,17 @@ void MapEditorSettings::Draw(
                 ImGui::Text("マップサイズ設定 (1画面 ＝ 幅:20, 高さ:11)");
                 ImGui::TextDisabled("※ ステージを広げたい場合はサイズを拡張してください (Ctrl+ZでUndo可能)");
 
+                int inputWidth = context_->GetInputWidth();
                 ImGui::SetNextItemWidth(90.0f);
-                ImGui::InputInt("幅 (Width)", context_->GetInputWidthPtr());
+                if (ImGui::InputInt("幅 (Width)", &inputWidth)) {
+                    context_->SetInputSize(inputWidth, context_->GetInputHeight());
+                }
                 ImGui::SameLine();
+                int inputHeight = context_->GetInputHeight();
                 ImGui::SetNextItemWidth(90.0f);
-                ImGui::InputInt("高さ (Height)", context_->GetInputHeightPtr());
+                if (ImGui::InputInt("高さ (Height)", &inputHeight)) {
+                    context_->SetInputSize(context_->GetInputWidth(), inputHeight);
+                }
                 ImGui::SameLine();
                 if (ImGui::Button("サイズ適用 (Apply)")) {
                     context_->BeginMapHistoryCapture(mapChip);
