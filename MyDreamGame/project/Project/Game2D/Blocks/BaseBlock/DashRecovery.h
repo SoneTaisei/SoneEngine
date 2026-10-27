@@ -2,7 +2,7 @@
 #include "Game2D/Blocks/BaseBlock.h"
 #include <memory>
 
-class GPUParticleSystem;
+#include "Effect/GPUParticle/GPUParticleSystem.h"
 
 /// <summary>
 /// DashRecovery - ダッシュ回復ブロック/アイテム

@@ -1,4 +1,5 @@
 #include "Core/Utility/LogManager.h"
+#include "Resource/Model/ModelBinaryIO.h"
 #pragma warning(disable: 4828)
 #include "UtilityFunctions.h"
 #include <fstream>
@@ -555,6 +556,13 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     Assimp::Importer importer;
     std::string filePath = directoryPath + "/" + filename;
 
+
+
+    // バイナリキャッシュ（.modelbin）が存在し、元モデルより新しければ高速ロード
+    if (ModelBinaryIO::TryLoadCache(filePath, modelData)) {
+    return modelData;
+    }
+
     // 1. ファイルの読み込み
     const aiScene *scene = nullptr;
     try {
@@ -570,7 +578,7 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
 
     // メッシュがないファイル（アニメーション専用ファイルや無効なファイル）の場合は空のModelDataを安全に返却
     if (!scene || !scene->HasMeshes() || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
-        return modelData;
+    return modelData;
     }
 
     // 2. マテリアルの解析（テクスチャ収集およびマルチマテリアルカラーの抽出）
@@ -789,8 +797,13 @@ ModelData LoadModelFile(const std::string &directoryPath, const std::string &fil
     if (scene->mRootNode) {
         modelData.rootNode = ReadNode(scene->mRootNode);
     }
+    // 次回以降の高速起動のため、バイナリキャッシュ（.modelbin）を保存
+    ModelBinaryIO::SaveCache(filePath, modelData);
+    if (false) {
 
-    return modelData;
+    }
+
+return modelData;
 }
 
 MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename) {
@@ -1091,6 +1104,8 @@ Animation LoadAnimationFile(const std::string& directoryPath, const std::string&
     Animation animation; // create animation
     Assimp::Importer importer;
     std::string filePath = directoryPath + "/" + filename;
+
+
     const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
     assert(scene->mNumAnimations != 0); // assert animation exists
     aiAnimation* animationAssimp = scene->mAnimations[0]; // use first animation
@@ -1135,6 +1150,8 @@ Animation LoadAnimationFile(const std::string& directoryPath, const std::string&
     Animation animation;
     Assimp::Importer importer;
     std::string filePath = directoryPath + "/" + filename;
+
+
     const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
     if (!scene || scene->mNumAnimations == 0) {
         return animation;
