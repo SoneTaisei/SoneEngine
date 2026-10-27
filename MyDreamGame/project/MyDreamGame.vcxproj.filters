@@ -276,6 +276,12 @@
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp">
       <Filter>Project\Game2D\UI</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Replay\GameReplayController.cpp">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Replay\ReplayGhostRenderer.cpp">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Project\Game2D</Filter>
     </ClCompile>
@@ -770,6 +776,12 @@
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h">
       <Filter>Project\Game2D\UI</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Replay\GameReplayController.h">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Replay\ReplayGhostRenderer.h">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
@@ -1097,6 +1109,9 @@
     </Filter>
     <Filter Include="Project\Game2D\UI">
       <UniqueIdentifier>{e8b62831-2947-4f6b-8521-72f5c9314781}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Replay">
+      <UniqueIdentifier>{6f9827a1-3829-4d22-b501-c82736124599}</UniqueIdentifier>
     </Filter>
     <Filter Include="Project\Game2D\Blocks">
       <UniqueIdentifier>{fe4fa6a4-5f8e-403c-b820-fc97fc4334e6}</UniqueIdentifier>

@@ -17,6 +17,8 @@
 #include "Game2D/MapChip2D.h"
 #include "Game2D/UI/CoinHUD.h"
 #include "Game2D/UI/PauseMenu.h"
+#include "Game2D/Replay/GameReplayController.h"
+#include "Game2D/Replay/ReplayGhostRenderer.h"
 #include "Resource/Sprite/Sprite.h"
 
 class GameCamera;
@@ -83,7 +85,6 @@ private:
     
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
     bool wasCurrentlyPlaying_ = false;
-    bool wasPlayingLastFrame_ = false;
     bool wasRespawning_ = false;
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
@@ -122,6 +123,10 @@ private:
     // UIコンポーネント
     std::unique_ptr<PauseMenu> pauseMenu_;
     std::unique_ptr<CoinHUD> coinHUD_;
+
+    // リプレイ・ゴースト描画
+    std::unique_ptr<GameReplayController> replayController_;
+    std::unique_ptr<ReplayGhostRenderer> ghostRenderer_;
 
     static std::string s_TargetMapFilePath;
 };

@@ -100,11 +100,7 @@
       <AdditionalDependencies>assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D
-if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib"
-if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb"
-if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso"
-if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D &amp; if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib" &amp; if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb" &amp; if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso" &amp; if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -132,11 +128,7 @@ if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D
-if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib"
-if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb"
-if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso"
-if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D &amp; if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib" &amp; if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb" &amp; if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso" &amp; if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
@@ -167,11 +159,7 @@ if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D
-if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib"
-if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb"
-if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso"
-if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D &amp; if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib" &amp; if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb" &amp; if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso" &amp; if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -273,6 +261,8 @@ if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
     <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp" />
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp" />
+    <ClCompile Include="Project\Game2D\Replay\GameReplayController.cpp" />
+    <ClCompile Include="Project\Game2D\Replay\ReplayGhostRenderer.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\RailBlock.cpp" />
@@ -546,6 +536,8 @@ if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />
     <ClInclude Include="Project\Game2D\UI\CoinHUD.h" />
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h" />
+    <ClInclude Include="Project\Game2D\Replay\GameReplayController.h" />
+    <ClInclude Include="Project\Game2D\Replay\ReplayGhostRenderer.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.h" />

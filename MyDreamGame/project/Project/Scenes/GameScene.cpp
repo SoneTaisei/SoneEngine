@@ -229,6 +229,9 @@ void GameScene::Initialize() {
     coinHUD_ = std::make_unique<CoinHUD>();
     coinHUD_->Initialize(GetSpriteCommon());
 
+    replayController_ = std::make_unique<GameReplayController>();
+    ghostRenderer_ = std::make_unique<ReplayGhostRenderer>();
+
     Log("GameScene::Initialize: Finish\n");
 }
 
@@ -506,90 +509,10 @@ void GameScene::Update(SceneManager *sceneManager) {
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
 
-            // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
-            if (ReplayManager::GetInstance()->IsPlaying()) {
-                // ループ判定を再生処理の一番最初で行う
-                if (ReplayManager::GetInstance()->GetCurrentFrame() >= ReplayManager::GetInstance()->GetCurrentReplay().totalFrames) {
-                    if (ReplayManager::GetInstance()->IsLoopPlay()) {
-                        ReplayManager::GetInstance()->SetCurrentFrame(0); // これにより forceSnapNextFrame_ = true がセットされる
-                    } else {
-                        ReplayManager::GetInstance()->StopPlayback();
-                    }
-                }
-
-                if (ReplayManager::GetInstance()->IsPlaying()) {
-                    bool shouldRebuildState = !wasPlayingLastFrame_ || ReplayManager::GetInstance()->IsForceSnapNextFrame();
-                if (shouldRebuildState) {
-                    auto& replayData = ReplayManager::GetInstance()->GetCurrentReplay();
-                    int curFrame = ReplayManager::GetInstance()->GetCurrentFrame();
-
-                    // 1. マップを初期状態（文字列）から復元
-                    if (!replayData.mapDataStr.empty()) {
-                        map_->LoadFromString(replayData.mapDataStr);
-                    }
-                    
-                    // 2. プレイヤー状態(速度含む)とスコアをリセット
-                    player_->ResetState(replayData.playerInitPos);
-                    player_->ClearEffects();
-                    for (auto& effect : effects_) {
-                        if (effect) effect->Reset();
-                    }
-                    
-                    // 3. 0フレーム目から現在フレームまで、記録された座標をたどってコインを回収
-                    for (int i = 0; i <= curFrame; ++i) {
-                        player_->SetPosition(replayData.frames[i].position);
-                    }
-                    map_->SetRebuildEnabled(true);
-
-                    // 4. コイン回収用に座標を動かしたので、シミュレーション再開用の正しい座標に戻す
-                    if (curFrame == 0) {
-                        player_->SetPosition(replayData.playerInitPos);
-                    } else {
-                        player_->SetPosition(replayData.frames[curFrame - 1].position);
-                    }
-                    previousScore_ = player_->GetScore();
-                }
-
-                if (!wasPlayingLastFrame_) {
-                    // 再生開始時に初期位置へ自動ワープ
-                    player_->SetPosition(ReplayManager::GetInstance()->GetCurrentReplay().playerInitPos);
-                    if (GetGameCamera()) {
-                        if (ReplayManager::GetInstance()->IsSnapEnabled()) {
-                            // 再生中は自動追従を一時的に無効化し、記録されたカメラ座標に同期させる
-                            GetGameCamera()->SetFollowTarget(nullptr);
-                        } else {
-                            // 座標補正がOFF（TASモード）の場合はプレイヤーに追従させる
-                            GetGameCamera()->SetFollowTarget(&player_->GetPosition());
-                        }
-                        GetGameCamera()->SetTranslation(ReplayManager::GetInstance()->GetCurrentReplay().cameraInitPos);
-                    }
-                    wasPlayingLastFrame_ = true;
-                }
-                Vector3 pos = player_->GetPosition();
-                Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
-                ReplayManager::GetInstance()->UpdatePlayback(pos, camPos);
-                player_->SetPosition(pos);
-                if (GetGameCamera()) {
-                    if (ReplayManager::GetInstance()->IsSnapEnabled()) {
-                        GetGameCamera()->SetFollowTarget(nullptr);
-                        GetGameCamera()->SetTranslation(camPos);
-                    } else {
-                        GetGameCamera()->SetFollowTarget(&player_->GetPosition());
-                        // 追従モードのため、SetTranslation(camPos) は実行しない
-                    }
-                }
-                }
-            } else {
-                if (wasPlayingLastFrame_) {
-                    // リプレイが終了した（またはTAKEOVERで停止した）瞬間に、カメラの追従を復元する
-                    if (GetGameCamera()) {
-                        GetGameCamera()->SetFollowTarget(&player_->GetPosition());
-                    }
-                }
-                wasPlayingLastFrame_ = false;
-
-                // 巻き戻しから通常に戻ったときにカメラ追従を再開する
-            }
+        // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
+        if (replayController_) {
+            replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effects_, previousScore_);
+        }
 
             if (player_) {
                 bool isRespawning = player_->IsRespawning();
@@ -681,20 +604,8 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
 
         // プレイ中の場合、リプレイ録画を行う
-        if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
-            Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
-            if (!ReplayManager::GetInstance()->IsRecording()) {
-                std::string mapStr = map_ ? map_->GetMapDataAsString() : "";
-                ReplayManager::GetInstance()->StartRecord(player_->GetPosition(), camPos, mapStr);
-            }
-            Vector4 pColor = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetMaterial().color : Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-            Vector3 pScale = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetScale() : Vector3(1.0f, 1.0f, 1.0f);
-            Vector3 pRot = player_->GetPrimitiveObject() ? player_->GetPrimitiveObject()->GetRotation() : Vector3(0.0f, 0.0f, 0.0f);
-            ReplayManager::GetInstance()->RecordFrame(player_->GetPosition(), camPos, pColor, pScale, pRot);
-        } else {
-            if (ReplayManager::GetInstance()->IsRecording()) {
-                ReplayManager::GetInstance()->StopRecord();
-            }
+        if (replayController_) {
+            replayController_->UpdateRecording(player_, map_.get(), GetGameCamera(), isCurrentlyPlaying);
         }
     }
 
@@ -848,71 +759,10 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
 #endif
     }
 
-#ifdef USE_IMGUI
-    // --- ゴースト残像の描画（マリオメーカー仕様） ---
-    // エディタ停止中で、かつリプレイの再生/録画もしていない時に「選択中のリプレイ全体」の軌跡を表示する
-    if (!EditorManager::IsPlaying() && player_) {
-        ReplayManager* replayManager = ReplayManager::GetInstance();
-        if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
-            const ReplayData& currentReplay = replayManager->GetCurrentReplay();
-            if (!currentReplay.frames.empty()) {
-                const float GHOST_ALPHA = 0.5f;
-                const int FRAME_STEP = 10;
-                auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
-                if (playerPrim && playerPrim->GetShowTrail()) {
-                    playerPrim->ResetGhostIndex();
-                    for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
-                        const FrameData& frameData = currentReplay.frames[i];
-                        if (i >= FRAME_STEP) {
-                            int prevIndex = i - FRAME_STEP;
-                            if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
-                                Vector3 diff;
-                                diff.x = frameData.position.x - currentReplay.frames[prevIndex].position.x;
-                                diff.y = frameData.position.y - currentReplay.frames[prevIndex].position.y;
-                                diff.z = frameData.position.z - currentReplay.frames[prevIndex].position.z;
-                                float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-                                if (distSq < 0.0001f) {
-                                    continue;
-                                }
-                            }
-                        }
-                        EulerTransform ghostTransform = playerPrim->GetTransform();
-                        ghostTransform.translate = frameData.position;
-                        ghostTransform.scale = frameData.scale;
-                        ghostTransform.rotate = frameData.rotation;
-
-                        Material ghostMaterial = playerPrim->GetMaterial();
-                        Vector4 ghostColor = frameData.color;
-                        ghostColor.w *= GHOST_ALPHA;
-                        ghostMaterial.color = ghostColor;
-
-                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
-                    }
-                }
-            }
-
-            // --- 物理ベースA* 探索ルート（AIゴースト）の描画 ---
-            const auto& aiPath = replayManager->GetAIPathPositions();
-            if (replayManager->IsShowAIGhost() && !aiPath.empty()) {
-                auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
-                if (playerPrim) {
-                    const int AI_STEP = 5;
-                    const float GHOST_ALPHA = 0.6f;
-                    for (int i = 0; i < static_cast<int>(aiPath.size()); i += AI_STEP) {
-                        const Vector3& pos = aiPath[i];
-                        EulerTransform ghostTransform = playerPrim->GetTransform();
-                        ghostTransform.translate = pos;
-
-                        Material ghostMaterial = playerPrim->GetMaterial();
-                        ghostMaterial.color = Vector4{ 0.0f, 0.9f, 1.0f, GHOST_ALPHA };
-
-                        playerPrim->DrawGhost(ghostTransform, ghostMaterial);
-                    }
-                }
-            }
-        }
+    // ゴースト残像・AI探索パスの描画
+    if (ghostRenderer_) {
+        ghostRenderer_->Draw3D(player_);
     }
-#endif
 
     // 3. パーティクルの描画
     // 描画前処理
@@ -975,104 +825,9 @@ void GameScene::Draw2D() {
 }
 
 void GameScene::DrawEditorOverlay(const Matrix4x4 &viewProjectionMatrix) {
-#ifdef USE_IMGUI
-    if (!EditorManager::IsPlaying() && player_) {
-        ReplayManager* replayManager = ReplayManager::GetInstance();
-        if (replayManager && !replayManager->IsPlaying() && !replayManager->IsRecording()) {
-            auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
-            ImVec2 gameViewPos = EditorManager::GetGameViewPos();
-            ImVec2 gameViewSize = EditorManager::GetGameViewSize();
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-            // 1. プレイヤー残像の2D軌跡描画
-            if (playerPrim && playerPrim->GetShowTrail()) {
-                const ReplayData& currentReplay = replayManager->GetCurrentReplay();
-                if (!currentReplay.frames.empty()) {
-                    const int FRAME_STEP = 10;
-                    drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
-
-                    for (int i = 0; i < static_cast<int>(currentReplay.frames.size()); i += FRAME_STEP) {
-                        const FrameData& frameData = currentReplay.frames[i];
-                        if (i >= FRAME_STEP) {
-                            int prevIndex = i - FRAME_STEP;
-                            if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
-                                Vector3 diff;
-                                diff.x = frameData.position.x - currentReplay.frames[prevIndex].position.x;
-                                diff.y = frameData.position.y - currentReplay.frames[prevIndex].position.y;
-                                diff.z = frameData.position.z - currentReplay.frames[prevIndex].position.z;
-                                float distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
-                                if (distSq < 0.0001f) {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        Vector3 ndcCurr = TransformFunctions::EulerTransform(frameData.position, viewProjectionMatrix);
-                        ImVec2 pCurr;
-                        bool isCurrVisible = false;
-
-                        if (ndcCurr.z >= 0.0f && ndcCurr.z <= 1.0f) {
-                            isCurrVisible = true;
-                            pCurr = ImVec2(
-                                gameViewPos.x + (ndcCurr.x + 1.0f) * 0.5f * gameViewSize.x,
-                                gameViewPos.y + (1.0f - ndcCurr.y) * 0.5f * gameViewSize.y
-                            );
-                            drawList->AddCircleFilled(pCurr, 4.0f, IM_COL32(255, 50, 50, 255));
-                        }
-
-                        if (i >= FRAME_STEP) {
-                            int prevIndex = i - FRAME_STEP;
-                            if (prevIndex >= 0 && prevIndex < static_cast<int>(currentReplay.frames.size())) {
-                                Vector3 ndcPrev = TransformFunctions::EulerTransform(currentReplay.frames[prevIndex].position, viewProjectionMatrix);
-                                if (isCurrVisible && ndcPrev.z >= 0.0f && ndcPrev.z <= 1.0f) {
-                                    ImVec2 pPrev(
-                                        gameViewPos.x + (ndcPrev.x + 1.0f) * 0.5f * gameViewSize.x,
-                                        gameViewPos.y + (1.0f - ndcPrev.y) * 0.5f * gameViewSize.y
-                                    );
-                                    drawList->AddLine(pPrev, pCurr, IM_COL32(255, 200, 0, 255), 2.0f);
-                                }
-                            }
-                        }
-                    }
-                    drawList->PopClipRect();
-                }
-            }
-
-            // 2. 物理ベースA* AIゴーストの2D軌跡描画
-            const auto& aiPath = replayManager->GetAIPathPositions();
-            if (replayManager->IsShowAIGhost() && !aiPath.empty()) {
-                if (playerPrim) {
-                    drawList->PushClipRect(gameViewPos, ImVec2(gameViewPos.x + gameViewSize.x, gameViewPos.y + gameViewSize.y), true);
-                    const int AI_STEP = 5;
-
-                    for (int i = 0; i < static_cast<int>(aiPath.size()); i += AI_STEP) {
-                        const Vector3& pos = aiPath[i];
-                        Vector3 ndcCurr = TransformFunctions::EulerTransform(pos, viewProjectionMatrix);
-                        if (ndcCurr.z >= 0.0f && ndcCurr.z <= 1.0f) {
-                            ImVec2 pCurr(
-                                gameViewPos.x + (ndcCurr.x + 1.0f) * 0.5f * gameViewSize.x,
-                                gameViewPos.y + (1.0f - ndcCurr.y) * 0.5f * gameViewSize.y
-                            );
-                            drawList->AddCircleFilled(pCurr, 3.5f, IM_COL32(0, 220, 255, 255));
-
-                            if (i >= AI_STEP) {
-                                Vector3 ndcPrev = TransformFunctions::EulerTransform(aiPath[i - AI_STEP], viewProjectionMatrix);
-                                if (ndcPrev.z >= 0.0f && ndcPrev.z <= 1.0f) {
-                                    ImVec2 pPrev(
-                                        gameViewPos.x + (ndcPrev.x + 1.0f) * 0.5f * gameViewSize.x,
-                                        gameViewPos.y + (1.0f - ndcPrev.y) * 0.5f * gameViewSize.y
-                                    );
-                                    drawList->AddLine(pPrev, pCurr, IM_COL32(0, 220, 255, 255), 2.0f);
-                                }
-                            }
-                        }
-                    }
-                    drawList->PopClipRect();
-                }
-            }
-        }
+    if (ghostRenderer_) {
+        ghostRenderer_->DrawEditorOverlay(player_, viewProjectionMatrix);
     }
-#endif
 }
 
 std::vector<ParticleManager *> GameScene::GetParticles() {
@@ -1132,8 +887,8 @@ void GameScene::UpdateEditor() {
     }
 
     // 録画状態のままエディタが停止した場合、確実に停止させて履歴に保存する
-    if (ReplayManager::GetInstance()->IsRecording()) {
-        ReplayManager::GetInstance()->StopRecord();
+    if (replayController_) {
+        replayController_->StopRecording();
     }
 
     // エディタ停止中もマップの変更（isDirty_時の再構築など）に追従させる
