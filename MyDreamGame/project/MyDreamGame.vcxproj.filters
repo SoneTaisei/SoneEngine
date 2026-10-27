@@ -72,6 +72,9 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <Filter>externals\imgui</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Resource\Model\ModelBinaryIO.cpp">
+      <Filter>Engine\Resource\Model</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp">
       <Filter>Engine\Resource\Model</Filter>
     </ClCompile>
@@ -206,6 +209,9 @@
     </ClCompile>
     <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp">
       <Filter>Engine\Core\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\TextureConverter.cpp">
+      <Filter>Engine\Graphics</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\TextureManager.cpp">
       <Filter>Engine\Graphics</Filter>
@@ -500,6 +506,9 @@
     <ClInclude Include="externals\imgui\imstb_truetype.h">
       <Filter>externals\imgui</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Resource\Model\ModelBinaryIO.h">
+      <Filter>Engine\Resource\Model</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Resource\Model\ModelManager.h">
       <Filter>Engine\Resource\Model</Filter>
     </ClInclude>
@@ -643,6 +652,9 @@
     </ClInclude>
     <ClInclude Include="Engine\Core\Utility\ParameterManager.h">
       <Filter>Engine\Core\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\TextureConverter.h">
+      <Filter>Engine\Graphics</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\TextureManager.h">
       <Filter>Engine\Graphics</Filter>

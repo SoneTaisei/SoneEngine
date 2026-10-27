@@ -182,6 +182,7 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="Engine\Resource\Model\ModelBinaryIO.cpp" />
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
     <ClCompile Include="Project\Effect\SnowParticle.cpp" />
     <ClCompile Include="Project\Effect\BaseEffect\RingEffect.cpp" />
@@ -232,6 +233,7 @@
     <ClCompile Include="Engine\Core\Utility\Quaternion.cpp" />
     <ClCompile Include="Engine\Core\Utility\Animation.cpp" />
     <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp" />
+    <ClCompile Include="Engine\Graphics\TextureConverter.cpp" />
     <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
     <ClCompile Include="Project\Scenes\StageSelectScene.cpp" />
@@ -436,6 +438,7 @@
     <ClInclude Include="externals\imgui\imstb_rectpack.h" />
     <ClInclude Include="externals\imgui\imstb_textedit.h" />
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
+    <ClInclude Include="Engine\Resource\Model\ModelBinaryIO.h" />
     <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
     <ClInclude Include="Project\Effect\SnowParticle.h" />
     <ClInclude Include="Project\Effect\BaseEffect\RingEffect.h" />
@@ -484,6 +487,7 @@
     <ClInclude Include="Engine\Core\Utility\Quaternion.h" />
     <ClInclude Include="Engine\Core\Utility\Animation.h" />
     <ClInclude Include="Engine\Core\Utility\ParameterManager.h" />
+    <ClInclude Include="Engine\Graphics\TextureConverter.h" />
     <ClInclude Include="Engine\Graphics\TextureManager.h" />
     <ClInclude Include="Project\Scenes\TitleScene.h" />
     <ClInclude Include="Project\Scenes\StageSelectScene.h" />
