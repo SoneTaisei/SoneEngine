@@ -222,52 +222,12 @@ void GameScene::Initialize() {
         Log("GameScene::Initialize: ClearSprite Initialized\n");
     }
 
-    // ポーズ用スプライトの初期化
-    pauseContinueTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/tudukeru.png");
-    pauseSelectTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/serekutonimodoru.png");
-    if (GetSpriteCommon()) {
-        pauseOverlaySprite_ = std::make_unique<Sprite>();
-        pauseOverlaySprite_->Initialize(GetSpriteCommon(), whiteTextureHandle_);
-        pauseOverlaySprite_->SetPosition({ 640.0f - 5000.0f, 360.0f - 5000.0f });
-        pauseOverlaySprite_->SetSize({ 10000.0f, 10000.0f });
-        pauseOverlaySprite_->SetColor({ 0.2f, 0.2f, 0.2f, 0.65f }); // 薄灰色の半透明スクリーン
+    // ポーズメニューとコインHUDの初期化
+    pauseMenu_ = std::make_unique<PauseMenu>();
+    pauseMenu_->Initialize(GetSpriteCommon());
 
-        float centerX = 1280.0f * 0.5f;
-
-        // つづける
-        pauseContinueSprite_ = std::make_unique<Sprite>();
-        pauseContinueSprite_->Initialize(GetSpriteCommon(), pauseContinueTextureHandle_);
-        pauseContinueSprite_->SetPosition({ centerX - 200.0f, 310.0f - 40.0f });
-        pauseContinueSprite_->SetSize({ 400.0f, 80.0f });
-        pauseContinueSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-
-        // セレクトに戻る
-        pauseSelectSprite_ = std::make_unique<Sprite>();
-        pauseSelectSprite_->Initialize(GetSpriteCommon(), pauseSelectTextureHandle_);
-        pauseSelectSprite_->SetPosition({ centerX - 200.0f, 430.0f - 40.0f });
-        pauseSelectSprite_->SetSize({ 400.0f, 80.0f });
-        pauseSelectSprite_->SetColor({ 0.45f, 0.45f, 0.45f, 0.65f });
-
-        Log("GameScene::Initialize: Pause Sprites Initialized\n");
-    }
-
-    // コインUIの初期化
-    coinTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/coin.png");
-    numbersTextureHandle_ = TextureManager::GetInstance()->Load("resources/Sprite/Original/UI/numbers.png");
-    if (GetSpriteCommon()) {
-        coinSprite_ = std::make_unique<Sprite>();
-        coinSprite_->Initialize(GetSpriteCommon(), coinTextureHandle_);
-        coinSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-
-        numberSprites_.clear();
-        for (int i = 0; i < 16; ++i) {
-            auto numSprite = std::make_unique<Sprite>();
-            numSprite->Initialize(GetSpriteCommon(), numbersTextureHandle_);
-            numSprite->SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
-            numberSprites_.push_back(std::move(numSprite));
-        }
-        Log("GameScene::Initialize: Coin UI Initialized\n");
-    }
+    coinHUD_ = std::make_unique<CoinHUD>();
+    coinHUD_->Initialize(GetSpriteCommon());
 
     Log("GameScene::Initialize: Finish\n");
 }
@@ -504,43 +464,16 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE) ||
             GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start)) {
             gameState_ = GameState::Pause;
-            pauseSelectedIndex_ = 0; // 初期選択は「つづける」
+            if (pauseMenu_) {
+                pauseMenu_->Reset();
+            }
         }
     } else if (gameState_ == GameState::Pause) {
-        // ポーズ画面の操作（キーボード / コントローラー両対応）
-        bool isMoveUp = KeyboardInput::GetInstance()->IsKeyPressed(DIK_UP) ||
-                        KeyboardInput::GetInstance()->IsKeyPressed(DIK_W) ||
-                        GamepadInput::GetInstance()->IsDPadPressedUp() ||
-                        GamepadInput::GetInstance()->IsLeftStickPushedUp();
-        bool isMoveDown = KeyboardInput::GetInstance()->IsKeyPressed(DIK_DOWN) ||
-                          KeyboardInput::GetInstance()->IsKeyPressed(DIK_S) ||
-                          GamepadInput::GetInstance()->IsDPadPressedDown() ||
-                          GamepadInput::GetInstance()->IsLeftStickPushedDown();
-
-        if (isMoveUp) {
-            pauseSelectedIndex_ = 0;
-        } else if (isMoveDown) {
-            pauseSelectedIndex_ = 1;
-        }
-
-        // 決定操作（SPACE / RETURN / Pad A）
-        bool isSubmit = KeyboardInput::GetInstance()->IsKeyPressed(DIK_SPACE) ||
-                        KeyboardInput::GetInstance()->IsKeyPressed(DIK_RETURN) ||
-                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::A);
-
-        // キャンセル操作（ESC / Pad B / Pad START でゲーム画面へ戻る）
-        bool isCancel = KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE) ||
-                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::B) ||
-                        GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start);
-
-        if (isCancel) {
-            gameState_ = GameState::Playing;
-        } else if (isSubmit) {
-            if (pauseSelectedIndex_ == 0) {
-                // つづける: ゲーム画面に戻る
+        if (pauseMenu_) {
+            PauseMenuAction action = pauseMenu_->Update(dt);
+            if (action == PauseMenuAction::Resume) {
                 gameState_ = GameState::Playing;
-            } else if (pauseSelectedIndex_ == 1) {
-                // セレクトに戻る
+            } else if (action == PauseMenuAction::ExitToStageSelect) {
                 if (GetGameCamera()) {
                     GetGameCamera()->SetScale(initialCameraScale_);
                     GetGameCamera()->SetFollowOffset({0.0f, 0.0f, 0.0f});
@@ -549,36 +482,6 @@ void GameScene::Update(SceneManager *sceneManager) {
                 return;
             }
         }
-
-        // ポーズ中スプライトの更新（選択中は白色、非選択は薄色）
-        const Vector4 kSelectedColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-        const Vector4 kUnselectedColor = { 0.45f, 0.45f, 0.45f, 0.65f };
-        float centerX = 1280.0f * 0.5f;
-
-        if (pauseOverlaySprite_) {
-            pauseOverlaySprite_->SetPosition({ centerX - 5000.0f, 360.0f - 5000.0f });
-            pauseOverlaySprite_->SetSize({ 10000.0f, 10000.0f });
-            pauseOverlaySprite_->Update();
-        }
-        if (pauseContinueSprite_) {
-            bool isSelected = (pauseSelectedIndex_ == 0);
-            pauseContinueSprite_->SetColor(isSelected ? kSelectedColor : kUnselectedColor);
-            float w = isSelected ? 410.0f : 390.0f;
-            float h = isSelected ? 82.0f : 78.0f;
-            pauseContinueSprite_->SetSize({ w, h });
-            pauseContinueSprite_->SetPosition({ centerX - w * 0.5f, 310.0f - h * 0.5f });
-            pauseContinueSprite_->Update();
-        }
-        if (pauseSelectSprite_) {
-            bool isSelected = (pauseSelectedIndex_ == 1);
-            pauseSelectSprite_->SetColor(isSelected ? kSelectedColor : kUnselectedColor);
-            float w = isSelected ? 410.0f : 390.0f;
-            float h = isSelected ? 82.0f : 78.0f;
-            pauseSelectSprite_->SetSize({ w, h });
-            pauseSelectSprite_->SetPosition({ centerX - w * 0.5f, 430.0f - h * 0.5f });
-            pauseSelectSprite_->Update();
-        }
-
         // ポーズ中は以降のゲーム更新（プレイヤー、マップ、GIF等）を停止
         return;
     }
@@ -795,7 +698,9 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     }
 
-    UpdateCoinUI(dt);
+    if (map_ && coinHUD_) {
+        coinHUD_->Update(dt, map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
+    }
 }
 
 void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
@@ -1039,7 +944,9 @@ void GameScene::Draw2D() {
     if (isPlayingOrReplaying && gameState_ != GameState::Pause) {
         if (GetSpriteCommon()) {
             GetSpriteCommon()->PreDraw();
-            DrawCoinUI();
+            if (coinHUD_) {
+                coinHUD_->Draw();
+            }
         }
     }
     if (gameState_ == GameState::StartReady) {
@@ -1060,11 +967,9 @@ void GameScene::Draw2D() {
             clearSprite_->Draw();
         }
     } else if (gameState_ == GameState::Pause) {
-        if (GetSpriteCommon()) {
+        if (GetSpriteCommon() && pauseMenu_) {
             GetSpriteCommon()->PreDraw();
-            if (pauseOverlaySprite_) pauseOverlaySprite_->Draw();
-            if (pauseContinueSprite_) pauseContinueSprite_->Draw();
-            if (pauseSelectSprite_) pauseSelectSprite_->Draw();
+            pauseMenu_->Draw();
         }
     }
 }
@@ -1268,72 +1173,3 @@ void GameScene::UpdateEditor() {
     }
 }
 
-void GameScene::UpdateCoinUI(float deltaTime) {
-    if (!map_) return;
-    int collectedCoins = map_->GetCollectedCoinCount();
-    if (collectedCoins > lastCollectedCoins_) {
-        coinPopAnimTimer_ = 0.35f;
-    }
-    lastCollectedCoins_ = collectedCoins;
-
-    if (coinPopAnimTimer_ > 0.0f) {
-        coinPopAnimTimer_ -= deltaTime;
-        if (coinPopAnimTimer_ < 0.0f) {
-            coinPopAnimTimer_ = 0.0f;
-        }
-    }
-}
-
-void GameScene::DrawCoinUI() {
-    if (!map_ || !coinSprite_ || !GetSpriteCommon()) return;
-    int totalCoins = map_->GetTotalCoinCount();
-    if (totalCoins <= 0) return;
-
-    int collectedCoins = map_->GetCollectedCoinCount();
-    std::string text = std::to_string(collectedCoins) + "/" + std::to_string(totalCoins);
-
-    float baseX = ParameterManager::GetInstance()->GetValue("CoinUI", "posX", 40.0f);
-    float baseY = ParameterManager::GetInstance()->GetValue("CoinUI", "posY", 35.0f);
-    float iconSize = ParameterManager::GetInstance()->GetValue("CoinUI", "iconSize", 44.0f);
-    float charW = ParameterManager::GetInstance()->GetValue("CoinUI", "charWidth", 24.0f);
-    float charH = ParameterManager::GetInstance()->GetValue("CoinUI", "charHeight", 32.0f);
-    float spacing = ParameterManager::GetInstance()->GetValue("CoinUI", "spacing", 2.0f);
-
-    float scaleAnim = 1.0f;
-    if (coinPopAnimTimer_ > 0.0f) {
-        float progress = coinPopAnimTimer_ / 0.35f;
-        scaleAnim = 1.0f + 0.4f * std::sin(progress * 3.14159265f);
-    }
-
-    float currentIconSize = iconSize * scaleAnim;
-    float iconOffset = (currentIconSize - iconSize) * 0.5f;
-    coinSprite_->SetPosition({ baseX - iconOffset, baseY - iconOffset });
-    coinSprite_->SetSize({ currentIconSize, currentIconSize });
-    coinSprite_->Update();
-    coinSprite_->Draw();
-
-    float currentX = baseX + iconSize + 12.0f;
-    float textY = baseY + (iconSize - charH) * 0.5f;
-
-    size_t spriteIdx = 0;
-    for (char c : text) {
-        if (spriteIdx >= numberSprites_.size()) break;
-        int charIndex = -1;
-        if (c >= '0' && c <= '9') {
-            charIndex = c - '0';
-        } else if (c == '/') {
-            charIndex = 10;
-        }
-
-        if (charIndex >= 0) {
-            auto& numSprite = numberSprites_[spriteIdx];
-            numSprite->SetTextureRect(charIndex * 48.0f, 0.0f, 48.0f, 64.0f);
-            numSprite->SetPosition({ currentX, textY });
-            numSprite->SetSize({ charW, charH });
-            numSprite->Update();
-            numSprite->Draw();
-            spriteIdx++;
-        }
-        currentX += charW + spacing;
-    }
-}

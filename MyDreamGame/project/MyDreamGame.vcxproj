@@ -13,11 +13,11 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-      <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DashRecovery.h" />
     <ClInclude Include="Project\Game2D\Blocks\FallBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\Lvy.h" />
-</ItemGroup>
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -77,8 +77,10 @@
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    <ClCompile>
+      <DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
@@ -98,12 +100,18 @@
       <AdditionalDependencies>assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D
+if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib"
+if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb"
+if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso"
+if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    <ClCompile>
+      <DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -124,12 +132,18 @@
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D
+if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib"
+if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb"
+if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso"
+if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    <ClCompile>
+      <DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -153,7 +167,11 @@
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D
+if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib"
+if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb"
+if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso"
+if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -253,6 +271,8 @@
     <ClCompile Include="Project\Game2D\Player\States\PlayerStates.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
+    <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp" />
+    <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\RailBlock.cpp" />
@@ -402,12 +422,14 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Pixel</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ObjectFileOutput>$(ProjectDir)resources\shaders\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="resources\shaders\Sprite.VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ObjectFileOutput>$(ProjectDir)resources\shaders\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="resources\shaders\Outline.PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -522,6 +544,8 @@
     <ClInclude Include="Project\Game2D\Player\PlayerState.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerConfig.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />
+    <ClInclude Include="Project\Game2D\UI\CoinHUD.h" />
+    <ClInclude Include="Project\Game2D\UI\PauseMenu.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.h" />
@@ -614,6 +638,3 @@
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
-
-
-

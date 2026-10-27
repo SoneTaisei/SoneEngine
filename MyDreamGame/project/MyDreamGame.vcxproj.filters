@@ -270,6 +270,12 @@
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp">
       <Filter>Project\Game2D\Player</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Project\Game2D</Filter>
     </ClCompile>
@@ -758,6 +764,12 @@
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h">
       <Filter>Project\Game2D\Player</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\CoinHUD.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\PauseMenu.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
@@ -1083,6 +1095,9 @@
     <Filter Include="Project\Game2D">
       <UniqueIdentifier>{f6303e04-941d-4116-b0cb-06fd727a4fc5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Project\Game2D\UI">
+      <UniqueIdentifier>{e8b62831-2947-4f6b-8521-72f5c9314781}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Project\Game2D\Blocks">
       <UniqueIdentifier>{fe4fa6a4-5f8e-403c-b820-fc97fc4334e6}</UniqueIdentifier>
     </Filter>
@@ -1104,5 +1119,8 @@
     <Filter Include="resources\shaders">
       <UniqueIdentifier>{24a5ea27-25b0-4002-ab06-921a3116409c}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="externals\imgui\LICENSE.txt" />
   </ItemGroup>
 </Project>

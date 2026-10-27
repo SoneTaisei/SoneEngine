@@ -15,6 +15,8 @@
 // 2Dゲーム用クラス
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
+#include "Game2D/UI/CoinHUD.h"
+#include "Game2D/UI/PauseMenu.h"
 #include "Resource/Sprite/Sprite.h"
 
 class GameCamera;
@@ -117,23 +119,9 @@ private:
     // カメラスケール制御（クリア時のズームアップ用）
     float initialCameraScale_ = 1.0f;
 
-    // ポーズUIスプライトと状態
-    int pauseSelectedIndex_ = 0; // 0: つづける, 1: セレクトに戻る
-    std::unique_ptr<Sprite> pauseOverlaySprite_;
-    std::unique_ptr<Sprite> pauseContinueSprite_;
-    uint32_t pauseContinueTextureHandle_ = 0;
-    std::unique_ptr<Sprite> pauseSelectSprite_;
-    uint32_t pauseSelectTextureHandle_ = 0;
-
-    // コインUI
-    uint32_t coinTextureHandle_ = 0;
-    std::unique_ptr<Sprite> coinSprite_;
-    uint32_t numbersTextureHandle_ = 0;
-    std::vector<std::unique_ptr<Sprite>> numberSprites_;
-    float coinPopAnimTimer_ = 0.0f;
-    int lastCollectedCoins_ = 0;
-    void UpdateCoinUI(float deltaTime);
-    void DrawCoinUI();
+    // UIコンポーネント
+    std::unique_ptr<PauseMenu> pauseMenu_;
+    std::unique_ptr<CoinHUD> coinHUD_;
 
     static std::string s_TargetMapFilePath;
 };
