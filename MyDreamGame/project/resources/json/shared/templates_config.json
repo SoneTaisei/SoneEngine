@@ -68,7 +68,7 @@
                 "r": 1.0
             },
             "id": 4,
-            "modelName": "Object/Original/coin/coin.obj",
+            "modelName": "Object/Original/coin/coin.gltf",
             "name": "Coin",
             "properties": {},
             "scale": {
@@ -152,7 +152,7 @@
                 "r": 1.0
             },
             "id": 9,
-            "modelName": "Object/Original/jumpBlock/jumpBlock.obj",
+            "modelName": "Object/Original/jumpBlock/jumpBlock.gltf",
             "name": "Jump",
             "properties": {
                 "jumpVelocityHorizontal": 15.0,

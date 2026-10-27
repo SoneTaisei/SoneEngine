@@ -15,13 +15,7 @@
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"\u5186.005",
-			"rotation":[
-				0.7071068286895752,
-				0,
-				0,
-				0.7071068286895752
-			]
+			"name":"\u5186.005"
 		}
 	],
 	"meshes":[
@@ -43,29 +37,29 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":30228,
+			"count":38433,
 			"max":[
 				0.49679800868034363,
-				0.0525519996881485,
-				0.49679800868034363
+				0.4967980682849884,
+				0.05255206301808357
 			],
 			"min":[
 				-0.49679800868034363,
-				-0.0525519996881485,
-				-0.49679800868034363
+				-0.4967980682849884,
+				-0.05255206301808357
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":30228,
+			"count":38433,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":30228,
+			"count":38433,
 			"type":"VEC2"
 		},
 		{
@@ -78,32 +72,32 @@
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":362736,
+			"byteLength":461196,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":362736,
-			"byteOffset":362736,
+			"byteLength":461196,
+			"byteOffset":461196,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":241824,
-			"byteOffset":725472,
+			"byteLength":307464,
+			"byteOffset":922392,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":144384,
-			"byteOffset":967296,
+			"byteOffset":1229856,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":1111680,
+			"byteLength":1374240,
 			"uri":"coin.bin"
 		}
 	]
