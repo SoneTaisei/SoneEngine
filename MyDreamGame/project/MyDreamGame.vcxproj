@@ -261,6 +261,8 @@
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
     <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp" />
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp" />
+    <ClCompile Include="Project\Game2D\UI\ReadyGoUI.cpp" />
+    <ClCompile Include="Project\Game2D\UI\ClearUI.cpp" />
     <ClCompile Include="Project\Game2D\Replay\GameReplayController.cpp" />
     <ClCompile Include="Project\Game2D\Replay\ReplayGhostRenderer.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
@@ -536,6 +538,8 @@
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />
     <ClInclude Include="Project\Game2D\UI\CoinHUD.h" />
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h" />
+    <ClInclude Include="Project\Game2D\UI\ReadyGoUI.h" />
+    <ClInclude Include="Project\Game2D\UI\ClearUI.h" />
     <ClInclude Include="Project\Game2D\Replay\GameReplayController.h" />
     <ClInclude Include="Project\Game2D\Replay\ReplayGhostRenderer.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />

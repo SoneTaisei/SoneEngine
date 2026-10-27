@@ -276,6 +276,12 @@
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp">
       <Filter>Project\Game2D\UI</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\ReadyGoUI.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\ClearUI.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\Replay\GameReplayController.cpp">
       <Filter>Project\Game2D\Replay</Filter>
     </ClCompile>
@@ -774,6 +780,12 @@
       <Filter>Project\Game2D\UI</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\ReadyGoUI.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\ClearUI.h">
       <Filter>Project\Game2D\UI</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Replay\GameReplayController.h">

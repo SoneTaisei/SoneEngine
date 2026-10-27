@@ -17,6 +17,8 @@
 #include "Game2D/MapChip2D.h"
 #include "Game2D/UI/CoinHUD.h"
 #include "Game2D/UI/PauseMenu.h"
+#include "Game2D/UI/ReadyGoUI.h"
+#include "Game2D/UI/ClearUI.h"
 #include "Game2D/Replay/GameReplayController.h"
 #include "Game2D/Replay/ReplayGhostRenderer.h"
 #include "Resource/Sprite/Sprite.h"
@@ -99,28 +101,14 @@ private:
 
 
     GameState gameState_ = GameState::StartReady;
-    float stateTimer_ = 0.0f;
     float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
 
-    // 開始UIスプライト (READY / GO)
-    std::unique_ptr<Sprite> readySprite_;
-    uint32_t readyTextureHandle_ = 0;
-    std::unique_ptr<Sprite> goSprite_;
-    uint32_t goTextureHandle_ = 0;
-
-    // レディー用タイマーバー (背景と前面ゲージ)
-    uint32_t whiteTextureHandle_ = 0;
-    std::unique_ptr<Sprite> readyBarBgSprite_;
-    std::unique_ptr<Sprite> readyBarFillSprite_;
-
-    // クリアUIスプライト
-    std::unique_ptr<Sprite> clearSprite_;
-    uint32_t clearTextureHandle_ = 0;
-
-    // カメラスケール制御（クリア時のズームアップ用）
+    // カメラスケール制御（クリア時のズームアップ・リスポーン復帰用）
     float initialCameraScale_ = 1.0f;
 
     // UIコンポーネント
+    std::unique_ptr<ReadyGoUI> readyGoUI_;
+    std::unique_ptr<ClearUI> clearUI_;
     std::unique_ptr<PauseMenu> pauseMenu_;
     std::unique_ptr<CoinHUD> coinHUD_;
 
