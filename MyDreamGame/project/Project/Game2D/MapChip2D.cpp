@@ -1003,9 +1003,12 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
             
             if (!def->modelName.empty()) {
                 Model* model = nullptr;
-                if (def->modelName.length() >= 4 && def->modelName.substr(def->modelName.length() - 4) == ".obj") {
-                    std::string fullPath = "resources/" + def->modelName;
-                    std::filesystem::path p(fullPath);
+                std::string fullPath = (def->modelName.find("resources/") == 0) ? def->modelName : ("resources/" + def->modelName);
+                std::filesystem::path p(fullPath);
+                std::string ext = p.extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+
+                if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
                     std::string dirPath = p.parent_path().string();
                     std::string fileName = p.filename().string();
                     std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
@@ -1015,6 +1018,12 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     if (!model) {
                         model = ModelManager::GetInstance()->GetModel("resources/models", def->modelName + ".obj");
                     }
+                    if (!model) {
+                        model = ModelManager::GetInstance()->GetModel("resources/Object/Original/" + def->modelName, def->modelName + ".gltf");
+                    }
+                    if (!model) {
+                        model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + def->modelName, def->modelName + ".gltf");
+                    }
                 }
                 
                 if (model && newBlock->GetGameObject()) {
@@ -1023,10 +1032,17 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     mrc->Initialize(device_.Get(), model);
                     
                     if (!def->textureName.empty()) {
-                        uint32_t handle = TextureManager::GetInstance()->Load("resources/" + def->textureName);
+                        std::string fullTex = (def->textureName.find("resources/") == 0) ? def->textureName : ("resources/" + def->textureName);
+                        uint32_t handle = TextureManager::GetInstance()->Load(fullTex);
                         mrc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
                     } else {
-                        mrc->SetTextureHandle(gpuHandle_);
+                        std::string modelTex = model->GetModelData().material.textureFilePath;
+                        if (!modelTex.empty() && std::filesystem::exists(modelTex)) {
+                            uint32_t handle = TextureManager::GetInstance()->Load(modelTex);
+                            mrc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
+                        } else {
+                            mrc->SetTextureHandle(gpuHandle_);
+                        }
                     }
                     mrc->SetColor(def->color);
 

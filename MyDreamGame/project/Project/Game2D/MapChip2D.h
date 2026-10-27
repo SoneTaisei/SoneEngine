@@ -142,6 +142,7 @@ public:
         nlohmann::json properties = nlohmann::json::object();
         Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         Vector3 scale = {1.0f, 1.0f, 1.0f};
+        Vector3 rotation = {0.0f, 0.0f, 0.0f};
         std::string modelName = "";
         std::string textureName = "";
         int shaderMode = kShaderStandard;

@@ -101,16 +101,29 @@ void MapEditorContext::Initialize() {
 
 void MapEditorContext::ScanAvailableModels() {
     availableModels_.clear();
-    std::filesystem::path basePath("resources/Object");
-    if (!std::filesystem::exists(basePath) || !std::filesystem::is_directory(basePath)) return;
+    auto scanDir = [&](const std::string& rootDir) {
+        std::filesystem::path basePath(rootDir);
+        if (!std::filesystem::exists(basePath) || !std::filesystem::is_directory(basePath)) return;
 
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(basePath)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".obj") {
-            std::string relativePath = std::filesystem::relative(entry.path(), "resources").string();
-            std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
-            availableModels_.push_back(relativePath);
-        }
-    }
+        try {
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(basePath)) {
+                if (entry.is_regular_file()) {
+                    std::string ext = entry.path().extension().string();
+                    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+                    if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
+                        std::string relativePath = std::filesystem::relative(entry.path(), "resources").string();
+                        std::replace(relativePath.begin(), relativePath.end(), '\\', '/');
+                        if (std::find(availableModels_.begin(), availableModels_.end(), relativePath) == availableModels_.end()) {
+                            availableModels_.push_back(relativePath);
+                        }
+                    }
+                }
+            }
+        } catch (...) {}
+    };
+
+    scanDir("resources/Object");
+    scanDir("resources/models");
 }
 
 void MapEditorContext::ScanAvailableTextures() {

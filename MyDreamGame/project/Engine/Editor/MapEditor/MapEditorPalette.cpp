@@ -44,9 +44,12 @@ namespace {
         bool hasTexture = false;
 
         if (!mdlName.empty()) {
-            if (mdlName.length() >= 4 && mdlName.substr(mdlName.length() - 4) == ".obj") {
-                std::string fullPath = (mdlName.find("resources/") == 0) ? mdlName : ("resources/" + mdlName);
-                std::filesystem::path p(fullPath);
+            std::string fullPath = (mdlName.find("resources/") == 0) ? mdlName : ("resources/" + mdlName);
+            std::filesystem::path p(fullPath);
+            std::string ext = p.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+
+            if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
                 std::string dirPath = p.parent_path().string();
                 std::string fileName = p.filename().string();
                 std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
@@ -55,6 +58,12 @@ namespace {
                 model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + mdlName, mdlName + ".obj");
                 if (!model) {
                     model = ModelManager::GetInstance()->GetModel("resources/models", mdlName + ".obj");
+                }
+                if (!model) {
+                    model = ModelManager::GetInstance()->GetModel("resources/Object/Original/" + mdlName, mdlName + ".gltf");
+                }
+                if (!model) {
+                    model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + mdlName, mdlName + ".gltf");
                 }
             }
         }
