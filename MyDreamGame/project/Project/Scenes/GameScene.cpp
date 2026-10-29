@@ -92,31 +92,10 @@ void GameScene::Initialize() {
     Object3D::SetEnvironmentMapHandle(TextureManager::GetInstance()->GetGpuHandle(skyboxTextureHandle_));
     Log("GameScene::Initialize: Skybox loaded\n");
 
-    // エフェクト群の作成（BaseEffectによるポリモーフィズム）
-    effects_.clear();
-
-    auto coinEffect = std::make_unique<CoinEffect>();
-    coinEffect->Initialize(DirectXCommon::GetInstance()->GetDevice());
-    coinEffect_ = coinEffect.get();
-    effects_.push_back(std::move(coinEffect));
-    Log("GameScene::Initialize: CoinEffect Initialized\n");
-
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
-    auto ringEffect = std::make_unique<RingEffect>();
-    ringEffect->Initialize(device.Get(), gradationHandle);
-    effects_.push_back(std::move(ringEffect));
-
-    auto cylinderEffect = std::make_unique<CylinderEffect>();
-    cylinderEffect->Initialize(device.Get(), gradationHandle);
-    effects_.push_back(std::move(cylinderEffect));
-
-    // GPUパーティクル (snow) の初期化
-    snowParticle_ = std::make_unique<GPUParticleSystem>();
-    snowParticle_->Initialize(device.Get());
-    if (snowParticle_->LoadFromFile("resources/json/shared/Particle/snow.json")) {
-        snowParticle_->Play();
-    }
-    Log("GameScene::Initialize: Effects and Snow Particle Initialized\n");
+    // エフェクトマネージャーの生成と初期化
+    effectManager_ = std::make_unique<GameEffectManager>();
+    effectManager_->Initialize();
+    Log("GameScene::Initialize: EffectManager Initialized\n");
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
@@ -193,27 +172,14 @@ void GameScene::Update(SceneManager *sceneManager) {
 
     bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused() && gameState_ != GameState::Pause;
 
-    if (isGameActive) {
-        for (auto& effect : effects_) {
-            if (effect) {
-                effect->Update(1.0f / 60.0f);
-            }
-        }
-    }
-
     if (skybox_) {
         skybox_->Update();
     }
 
     float dt = TimeManager::GetInstance().GetDeltaTime();
-    
-    // GPUパーティクル (snow) の更新（画面右端に設置して常に降らせる）
-    if (snowParticle_) {
-        Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
-        float halfW = (GetGameCamera() && GetGameCamera()->IsOrthographic()) ? (GetGameCamera()->GetOrthoWidth() * 0.5f) : 10.0f;
-        Vector3 snowPos = { camPos.x + halfW, camPos.y, 0.0f };
-        snowParticle_->SetPosition(snowPos);
-        snowParticle_->Update(dt);
+
+    if (effectManager_) {
+        effectManager_->Update(dt, isGameActive, GetGameCamera());
     }
 
     // フェードイン演出
@@ -298,15 +264,15 @@ void GameScene::Update(SceneManager *sceneManager) {
 
 
         // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
-        if (replayController_) {
-            replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effects_, previousScore_);
+        if (replayController_ && effectManager_) {
+            replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effectManager_->GetEffects(), previousScore_);
         }
 
             if (player_) {
                 bool isRespawning = player_->IsRespawning();
                 if (isRespawning && !wasRespawning_) {
-                    for (auto& effect : effects_) {
-                        if (effect) effect->Reset();
+                    if (effectManager_) {
+                        effectManager_->ResetAllEffects();
                     }
                     previousScore_ = player_->GetScore();
                 }
@@ -355,16 +321,8 @@ void GameScene::Update(SceneManager *sceneManager) {
             // コイン獲得エフェクト
             int currentScore = player_->GetScore();
             if (currentScore > previousScore_) {
-                if (coinEffect_) {
-                    Vector3 playerPos = player_->GetPosition();
-                    float playerWidth = 1.0f; // 実際のプレイヤーサイズに合わせて調整
-                    float playerHeight = 1.0f;
-                    Vector3 hitEmitterPos = {
-                        playerPos.x + playerWidth / 2.0f,
-                        playerPos.y + playerHeight / 2.0f,
-                        0.0f
-                    };
-                    coinEffect_->Emit(hitEmitterPos);
+                if (effectManager_) {
+                    effectManager_->EmitCoin(player_->GetPosition());
                 }
                 previousScore_ = currentScore;
             }
@@ -520,32 +478,8 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     // コンポーネントの描画を実行
     Renderer::GetInstance()->RenderComponents();
 
-#ifdef USE_IMGUI
-    if (EditorManager::IsShowEffects() || ReplayManager::GetInstance()->IsPlaying()) {
-        for (auto& effect : effects_) {
-            if (effect) effect->Draw();
-        }
-    }
-#else
-    for (auto& effect : effects_) {
-        if (effect) effect->Draw();
-    }
-#endif
-
-    if (snowParticle_) {
-#ifdef USE_IMGUI
-        if (EditorManager::IsShowEffects() || EditorManager::IsPlaying() || ReplayManager::GetInstance()->IsPlaying()) {
-#endif
-            if (GetParticleCommon()) {
-                GetParticleCommon()->PreDraw();
-                auto commandList = DirectXCommon::GetInstance()->GetCommandList();
-                Matrix4x4 cameraMatrix = TransformFunctions::Inverse(CameraManager::GetInstance()->GetViewMatrix());
-                ModelManager* modelManager = ModelManager::GetInstance();
-                snowParticle_->Draw(commandList, viewProjectionMatrix, cameraMatrix, GetParticleCommon(), modelManager);
-            }
-#ifdef USE_IMGUI
-        }
-#endif
+    if (effectManager_) {
+        effectManager_->Draw(GetParticleCommon(), viewProjectionMatrix);
     }
 
     // ゴースト残像・AI探索パスの描画
@@ -625,12 +559,10 @@ std::vector<Object3D *> GameScene::GetObjects() {
 std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
     std::vector<PrimitiveObject *> result;
 
-    // 1. エフェクト群（BaseEffectのポリモーフィズム）
-    for (const auto& effect : effects_) {
-        if (effect) {
-            auto effectPrims = effect->GetPrimitives();
-            result.insert(result.end(), effectPrims.begin(), effectPrims.end());
-        }
+    // 1. エフェクト群
+    if (effectManager_) {
+        auto effectPrims = effectManager_->GetPrimitives();
+        result.insert(result.end(), effectPrims.begin(), effectPrims.end());
     }
 
     // 2. プレイヤー
@@ -654,12 +586,8 @@ void GameScene::UpdateEditor() {
     StageGifManager::GetInstance()->Update(dt);
 
     // GPUパーティクル (snow) の更新（エディタ停止中も画面右端から常時降らせる）
-    if (snowParticle_) {
-        Vector3 camPos = GetGameCamera() ? GetGameCamera()->GetTranslation() : CameraManager::GetInstance()->GetCameraPos();
-        float halfW = (GetGameCamera() && GetGameCamera()->IsOrthographic()) ? (GetGameCamera()->GetOrthoWidth() * 0.5f) : 10.0f;
-        Vector3 snowPos = { camPos.x + halfW, camPos.y, 0.0f };
-        snowParticle_->SetPosition(snowPos);
-        snowParticle_->Update(dt);
+    if (effectManager_) {
+        effectManager_->Update(dt, false, GetGameCamera());
     }
 
     // フェードイン演出 (エディタ停止中もフェードインさせる)

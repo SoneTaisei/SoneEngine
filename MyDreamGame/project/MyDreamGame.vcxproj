@@ -265,6 +265,7 @@
     <ClCompile Include="Project\Game2D\UI\ClearUI.cpp" />
     <ClCompile Include="Project\Game2D\Replay\GameReplayController.cpp" />
     <ClCompile Include="Project\Game2D\Replay\ReplayGhostRenderer.cpp" />
+    <ClCompile Include="Project\Game2D\Effect\GameEffectManager.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\RailBlock.cpp" />
@@ -542,6 +543,7 @@
     <ClInclude Include="Project\Game2D\UI\ClearUI.h" />
     <ClInclude Include="Project\Game2D\Replay\GameReplayController.h" />
     <ClInclude Include="Project\Game2D\Replay\ReplayGhostRenderer.h" />
+    <ClInclude Include="Project\Game2D\Effect\GameEffectManager.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.h" />

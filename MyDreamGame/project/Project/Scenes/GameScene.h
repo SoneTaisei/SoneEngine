@@ -2,11 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
-#include "Effect/GPUParticle/GPUParticleSystem.h"
-#include "Effect/BaseEffect.h"
-#include "Effect/BaseEffect/CoinEffect.h"
-#include "Effect/BaseEffect/CylinderEffect.h"
-#include "Effect/BaseEffect/RingEffect.h"
+#include "Game2D/Effect/GameEffectManager.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <memory>
@@ -66,12 +62,9 @@ public:
 
 private:
     // ---------------------------------------------------
-    // 3D・パーティクル関連 (develop)
+    // 3D・エフェクト関連 (develop)
     // ---------------------------------------------------
-    // エフェクト管理（BaseEffectによるポリモーフィズム）
-    std::vector<std::unique_ptr<BaseEffect>> effects_;
-    CoinEffect* coinEffect_ = nullptr; // コイン獲得時の発生(Emit)用ポインタ
-    std::unique_ptr<GPUParticleSystem> snowParticle_;
+    std::unique_ptr<GameEffectManager> effectManager_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();
