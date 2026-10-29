@@ -291,6 +291,9 @@
     <ClCompile Include="Project\Game2D\Effect\GameEffectManager.cpp">
       <Filter>Project\Game2D\Effect</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\Camera\GameCameraController.cpp">
+      <Filter>Project\Game2D\Camera</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Project\Game2D</Filter>
     </ClCompile>
@@ -800,6 +803,9 @@
     <ClInclude Include="Project\Game2D\Effect\GameEffectManager.h">
       <Filter>Project\Game2D\Effect</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\Camera\GameCameraController.h">
+      <Filter>Project\Game2D\Camera</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
@@ -1130,6 +1136,9 @@
     </Filter>
     <Filter Include="Project\Game2D\Effect">
       <UniqueIdentifier>{41c425c0-bb7c-491f-83be-33e8ce0ce5b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Camera">
+      <UniqueIdentifier>{3d95f834-e503-4325-94ad-8db6e350ce46}</UniqueIdentifier>
     </Filter>
     <Filter Include="Project\Game2D\Replay">
       <UniqueIdentifier>{6f9827a1-3829-4d22-b501-c82736124599}</UniqueIdentifier>

@@ -17,6 +17,7 @@
 #include "Game2D/UI/ClearUI.h"
 #include "Game2D/Replay/GameReplayController.h"
 #include "Game2D/Replay/ReplayGhostRenderer.h"
+#include "Game2D/Camera/GameCameraController.h"
 #include "Resource/Sprite/Sprite.h"
 
 class GameCamera;
@@ -84,7 +85,6 @@ private:
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
-    Vector3 cameraLookRotation_ = { 0.0f, 0.0f, 0.0f }; // 右スティック等の見渡し用カメラ回転
 
     // ---------------------------------------------------
     // 共通システム
@@ -96,14 +96,14 @@ private:
     GameState gameState_ = GameState::StartReady;
     float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
 
-    // カメラスケール制御（クリア時のズームアップ・リスポーン復帰用）
-    float initialCameraScale_ = 1.0f;
-
     // UIコンポーネント
     std::unique_ptr<ReadyGoUI> readyGoUI_;
     std::unique_ptr<ClearUI> clearUI_;
     std::unique_ptr<PauseMenu> pauseMenu_;
     std::unique_ptr<CoinHUD> coinHUD_;
+
+    // カメラ制御
+    std::unique_ptr<GameCameraController> cameraController_;
 
     // リプレイ・ゴースト描画
     std::unique_ptr<GameReplayController> replayController_;
