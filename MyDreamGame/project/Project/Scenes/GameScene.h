@@ -36,6 +36,8 @@ enum class GameState {
 
 class GameScene : public IScene {
 public:
+    GameScene();
+    ~GameScene() override;
 
     static void SetTargetMapFilePath(const std::string &path) { s_TargetMapFilePath = path; }
     static const std::string &GetTargetMapFilePath() { return s_TargetMapFilePath; }

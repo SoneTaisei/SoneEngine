@@ -14,6 +14,9 @@
 #include <random>
 #include <cmath>
 
+PlayerVisuals::PlayerVisuals() = default;
+PlayerVisuals::~PlayerVisuals() = default;
+
 void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel) {
     primitiveObj_ = std::make_unique<PrimitiveObject>();
     primitiveObj_->Initialize(device, boxPrimitive);

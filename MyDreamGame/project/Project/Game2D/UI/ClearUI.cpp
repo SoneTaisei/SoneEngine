@@ -35,12 +35,7 @@ void ClearUI::Start(float initialCameraScale) {
 }
 
 void ClearUI::Reset(GameCamera* camera) {
-    isActive_ = false;
-    timer_ = 0.0f;
-    if (clearSprite_) {
-        clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
-    }
-    if (camera) {
+    if (isActive_ && camera) {
         if (std::abs(camera->GetScale() - initialCameraScale_) > 0.001f) {
             camera->SetScale(initialCameraScale_);
         }
@@ -48,20 +43,17 @@ void ClearUI::Reset(GameCamera* camera) {
             camera->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
         }
     }
+    isActive_ = false;
+    timer_ = 0.0f;
+    if (clearSprite_) {
+        clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
+    }
 }
 
 void ClearUI::Update(float deltaTime, GameCamera* camera) {
     if (!isActive_) {
         if (clearSprite_) {
             clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
-        }
-        if (camera) {
-            if (std::abs(camera->GetScale() - initialCameraScale_) > 0.001f) {
-                camera->SetScale(initialCameraScale_);
-            }
-            if (std::abs(camera->GetFollowOffset().y) > 0.001f) {
-                camera->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
-            }
         }
         return;
     }

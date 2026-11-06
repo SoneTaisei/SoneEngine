@@ -166,7 +166,14 @@
     <ClCompile Include="Engine\Graphics\CameraManager.cpp" />
     <ClCompile Include="Engine\Renderer\Renderer.cpp" />
     <ClCompile Include="Engine\Renderer\SkeletonDebugRenderer.cpp" />
-    <ClCompile Include="Engine\Editor\EditorManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorCommandManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorConfigManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorHierarchy.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorLayoutManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorMenuBar.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorReplayUI.cpp" />
     <ClCompile Include="externals\imgui\backends\imgui_impl_dx12.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
@@ -447,6 +454,14 @@
     <ClInclude Include="Engine\Renderer\Renderer.h" />
     <ClInclude Include="Engine\Renderer\SkeletonDebugRenderer.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorCommandManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorConfigManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorHierarchy.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorInspector.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorLayoutManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorMenuBar.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorReplayUI.h" />
     <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />

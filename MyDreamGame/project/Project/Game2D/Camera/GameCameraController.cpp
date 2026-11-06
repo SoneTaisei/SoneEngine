@@ -82,6 +82,13 @@ void GameCameraController::ResetView() {
     camera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
 }
 
+float GameCameraController::GetInitialScale() const {
+    if (camera_) {
+        return camera_->GetScale();
+    }
+    return initialCameraScale_;
+}
+
 void GameCameraController::UpdateEditor(Player2D* player, MapChip2D* map) {
     if (!camera_ || !player) return;
 

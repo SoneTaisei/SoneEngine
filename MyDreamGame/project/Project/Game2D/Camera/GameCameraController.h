@@ -28,8 +28,9 @@ public:
     // カメラの取得
     GameCamera* GetCamera() const { return camera_; }
 
-    // 初期カメラスケールの取得
-    float GetInitialScale() const { return initialCameraScale_; }
+    // 初期カメラスケールの取得・設定
+    float GetInitialScale() const;
+    void SetInitialScale(float scale) { initialCameraScale_ = scale; }
 
 private:
     GameCamera* camera_ = nullptr;

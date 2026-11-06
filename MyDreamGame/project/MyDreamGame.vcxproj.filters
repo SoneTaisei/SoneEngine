@@ -48,7 +48,28 @@
     <ClCompile Include="Engine\Renderer\SkeletonDebugRenderer.cpp">
       <Filter>Engine\Renderer</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Editor\EditorManager.cpp">
+    <ClCompile Include="Engine\Editor\EditorManager\EditorManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorCommandManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorConfigManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorHierarchy.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorInspector.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorLayoutManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorMenuBar.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorReplayUI.cpp">
       <Filter>Engine\Editor</Filter>
     </ClCompile>
     <ClCompile Include="externals\imgui\backends\imgui_impl_dx12.cpp">
@@ -507,6 +528,30 @@
       <Filter>Engine\Renderer</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\EditorManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorCommandManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorConfigManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorHierarchy.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorInspector.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorLayoutManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorMenuBar.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorReplayUI.h">
       <Filter>Engine\Editor</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h">

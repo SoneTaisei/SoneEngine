@@ -23,6 +23,9 @@
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
+GameScene::GameScene() = default;
+GameScene::~GameScene() = default;
+
 void GameScene::OnEnter(SceneManager* sceneManager) {
     // StageSelectSceneから選択されたステージのパスを受け取る
     if (sceneManager->HasData("SelectedStagePath")) {
@@ -182,7 +185,7 @@ void GameScene::Update(SceneManager *sceneManager) {
             }
         }
     } else {
-        if (clearUI_) {
+        if (clearUI_ && clearUI_->IsActive()) {
             clearUI_->Reset(GetGameCamera());
         }
     }
@@ -273,8 +276,9 @@ void GameScene::Update(SceneManager *sceneManager) {
             // ゴール判定
             if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
                 gameState_ = GameState::Clear;
-                if (clearUI_ && cameraController_) {
-                    clearUI_->Start(cameraController_->GetInitialScale());
+                if (clearUI_) {
+                    float currentScale = GetGameCamera() ? GetGameCamera()->GetScale() : (cameraController_ ? cameraController_->GetInitialScale() : 1.0f);
+                    clearUI_->Start(currentScale);
                 }
             }
 
