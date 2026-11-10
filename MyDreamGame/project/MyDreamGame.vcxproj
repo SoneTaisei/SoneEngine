@@ -243,6 +243,12 @@
     <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp" />
     <ClCompile Include="Engine\Core\Utility\LogManager.cpp" />
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp" />
+    <ClCompile Include="Engine\Core\StringUtils.cpp" />
+    <ClCompile Include="Engine\Core\Utility\DxResourceUtils.cpp" />
+    <ClCompile Include="Engine\Core\Utility\ShaderCompiler.cpp" />
+    <ClCompile Include="Engine\Resource\Model\ModelLoader.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\MeshGenerator.cpp" />
+    <ClCompile Include="Engine\Resource\Texture\TextureLoader.cpp" />
     <ClCompile Include="Engine\Core\Utility\Quaternion.cpp" />
     <ClCompile Include="Engine\Core\Utility\Animation.cpp" />
     <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp" />
@@ -515,6 +521,12 @@
     <ClInclude Include="Engine\Core\Utility\TransformFunctions.h" />
     <ClInclude Include="Engine\Core\Utility\LogManager.h" />
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h" />
+    <ClInclude Include="Engine\Core\StringUtils.h" />
+    <ClInclude Include="Engine\Core\Utility\DxResourceUtils.h" />
+    <ClInclude Include="Engine\Core\Utility\ShaderCompiler.h" />
+    <ClInclude Include="Engine\Resource\Model\ModelLoader.h" />
+    <ClInclude Include="Engine\Resource\Primitive\MeshGenerator.h" />
+    <ClInclude Include="Engine\Resource\Texture\TextureLoader.h" />
     <ClInclude Include="Engine\Core\Utility\Quaternion.h" />
     <ClInclude Include="Engine\Core\Utility\Animation.h" />
     <ClInclude Include="Engine\Core\Utility\ParameterManager.h" />

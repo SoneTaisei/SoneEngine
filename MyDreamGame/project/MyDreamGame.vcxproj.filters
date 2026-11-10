@@ -222,6 +222,24 @@
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp">
       <Filter>Engine\Core\Utility</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Core\StringUtils.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\DxResourceUtils.cpp">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\ShaderCompiler.cpp">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Model\ModelLoader.cpp">
+      <Filter>Engine\Resource\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\MeshGenerator.cpp">
+      <Filter>Engine\Resource\Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Texture\TextureLoader.cpp">
+      <Filter>Engine\Resource\Texture</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Core\Utility\Quaternion.cpp">
       <Filter>Engine\Core\Utility</Filter>
     </ClCompile>
@@ -712,6 +730,24 @@
     </ClInclude>
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h">
       <Filter>Engine\Core\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\StringUtils.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\DxResourceUtils.h">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\ShaderCompiler.h">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Model\ModelLoader.h">
+      <Filter>Engine\Resource\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\MeshGenerator.h">
+      <Filter>Engine\Resource\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Texture\TextureLoader.h">
+      <Filter>Engine\Resource\Texture</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Core\Utility\Quaternion.h">
       <Filter>Engine\Core\Utility</Filter>
@@ -1208,6 +1244,9 @@
     </Filter>
     <Filter Include="resources\shaders">
       <UniqueIdentifier>{24a5ea27-25b0-4002-ab06-921a3116409c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\Resource\Texture">
+      <UniqueIdentifier>{1ca24662-3236-45f5-85e5-a79da4eb95d5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
