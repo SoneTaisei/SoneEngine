@@ -1,5 +1,6 @@
 #pragma once
 #ifdef USE_IMGUI
+#include <imgui.h>
 #include <string>
 #include <vector>
 
@@ -32,7 +33,7 @@ public:
     bool DeleteLayoutPreset(const std::string &name);
     bool ExportLayoutPresetToFile(const std::string &name, const std::string &filePath);
     bool ImportLayoutPresetFromFile(const std::string &filePath);
-    void ApplyDefaultLayout();
+    void ApplyDefaultLayout(ImGuiID explicitDockspaceId = 0);
     void ApplyStyle();
 
     void DrawSavePresetModal(bool *pOpen);

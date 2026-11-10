@@ -45,12 +45,7 @@ bool PlacedObject3D::Initialize(ID3D12Device* device) {
     Matrix4x4 tPosPivot = TransformFunctions::MakeTranslateMatrix({ uvPivot_.x + uvTranslation_.x, uvPivot_.y + uvTranslation_.y, 0.0f });
     object3D_->SetUVTransform(TransformFunctions::Multiply(TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat), tPosPivot));
 
-    if (!texturePath_.empty()) {
-        uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);
-        object3D_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
-    } else {
-        object3D_->SetTextureHandle({ 0 });
-    }
+    SetTexture(texturePath_);
 
     object3D_->Update();
     return true;
@@ -69,6 +64,13 @@ void PlacedObject3D::Update() {
         Matrix4x4 rMat = TransformFunctions::MakeRoteZMatrix(uvRotation_);
         Matrix4x4 tPosPivot = TransformFunctions::MakeTranslateMatrix({ uvPivot_.x + uvTranslation_.x, uvPivot_.y + uvTranslation_.y, 0.0f });
         object3D_->SetUVTransform(TransformFunctions::Multiply(TransformFunctions::Multiply(TransformFunctions::Multiply(tNegPivot, sMat), rMat), tPosPivot));
+
+        // テクスチャハンドルの同期（未適用状態の復旧）
+        if (!texturePath_.empty() && object3D_->GetTextureHandle().ptr == 0) {
+            uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);
+            object3D_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
+        }
+
         object3D_->Update();
     }
 }
@@ -95,12 +97,28 @@ void PlacedObject3D::SetModel(const std::string& modelDirectory, const std::stri
             object3D_ = std::make_unique<Object3D>();
         }
         object3D_->Initialize(device, model_);
+        if (!texturePath_.empty()) {
+            uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);
+            object3D_->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(texIdx));
+        }
         Update();
     }
 }
 
 void PlacedObject3D::SetTexture(const std::string& texturePath) {
-    texturePath_ = texturePath;
+    std::string normalized = texturePath;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+
+    // パス補完: resources/ が抜けている場合のフォールバック
+    if (!normalized.empty() && !std::filesystem::exists(normalized)) {
+        if (std::filesystem::exists("resources/" + normalized)) {
+            normalized = "resources/" + normalized;
+        } else if (std::filesystem::exists("resources/Sprite/" + normalized)) {
+            normalized = "resources/Sprite/" + normalized;
+        }
+    }
+
+    texturePath_ = normalized;
     if (object3D_) {
         if (!texturePath_.empty()) {
             uint32_t texIdx = TextureManager::GetInstance()->Load(texturePath_);

@@ -2,6 +2,7 @@
 #ifdef USE_IMGUI
 #include <Windows.h>
 #include <d3d12.h>
+#include <imgui.h>
 #include <memory>
 #include <functional>
 #include <vector>
@@ -199,7 +200,7 @@ public:
     bool DeleteLayoutPreset(const std::string& name);
     bool ExportLayoutPresetToFile(const std::string& name, const std::string& filePath);
     bool ImportLayoutPresetFromFile(const std::string& filePath);
-    void ApplyDefaultLayout();
+    void ApplyDefaultLayout(ImGuiID explicitDockspaceId = 0);
     const std::vector<WindowLayoutPreset>& GetLayoutPresets() const { return layoutPresets_; }
 
     // シーン設定のJSON保存・読込み

@@ -8,13 +8,13 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-void EditorLayoutManager::ApplyDefaultLayout() {
+void EditorLayoutManager::ApplyDefaultLayout(ImGuiID explicitDockspaceId) {
 
     ImGuiViewport *viewport = ImGui::GetMainViewport();
     if (!viewport)
         return;
 
-    ImGuiID dockspace_id = ImGui::GetID("##DockSpaceOverViewport_0");
+    ImGuiID dockspace_id = explicitDockspaceId;
     if (dockspace_id == 0) {
         dockspace_id = ImGui::DockSpaceOverViewport(0, viewport);
     }

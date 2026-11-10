@@ -332,8 +332,6 @@ void EditorMenuBar::SetupDockspace(EditorManager* em) {
                     if (strstr(buffer, "ドープシート")) hasDopeSheet = true;
                     if (strstr(buffer, "ライトエディター")) hasLightEditor = true;
                     if (strstr(buffer, "スポットライト")) hasSpotLight = true;
-                }
-                if (!hasReplayEditor || !hasStageSelectEditor || !hasDopeSheet || !hasLightEditor || !hasSpotLight) {
                     if (strstr(buffer, "3Dモデル配置")) hasModelPlacement = true;
                     if (strstr(buffer, "3Dモデルパレット")) hasModelPalette = true;
                 }
@@ -345,7 +343,7 @@ void EditorMenuBar::SetupDockspace(EditorManager* em) {
         }
 
         if (resetLayout || !hasIniFile) {
-            em->ApplyDefaultLayout();
+            em->ApplyDefaultLayout(dockspace_id);
         }
     }
 }

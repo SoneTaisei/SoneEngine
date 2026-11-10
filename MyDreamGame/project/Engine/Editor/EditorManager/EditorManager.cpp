@@ -106,14 +106,39 @@ void EditorManager::Initialize(HWND hwnd, ID3D12Device *device, ID3D12CommandQue
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
 
-    std::filesystem::path fontPath("resources/Fonts/GenEiNuGothic-EB.ttf");
-    if (std::filesystem::exists(fontPath)) {
-        ImFontConfig config;
-        config.MergeMode = false;
-        config.PixelSnapH = true;
-        io.Fonts->AddFontFromFileTTF(fontPath.string().c_str(), 14.0f, &config, io.Fonts->GetGlyphRangesJapanese());
-        io.Fonts->Build();
-    } else {
+    // 日本語基本文字に加え、矢印記号や幾何学図形（■, ▲, ▼, ◆等）のグリフ範囲もマージして文字化けを防止
+    static const ImWchar extra_ranges[] = {
+        0x2000, 0x206F, // 一般句読点
+        0x2190, 0x21FF, // 矢印記号 (↑, ↓, ←, → 等)
+        0x2200, 0x22FF, // 数学記号 (±, ×, ÷, ∞ 等)
+        0x25A0, 0x25FF, // 幾何学図形 (■, □, ▲, △, ▼, ▽, ◆, ◇ 等)
+        0x2600, 0x26FF, // その他の記号 (★, ☆ 等)
+        0,
+    };
+    ImFontGlyphRangesBuilder builder;
+    builder.AddRanges(io.Fonts->GetGlyphRangesJapanese());
+    builder.AddRanges(extra_ranges);
+    static ImVector<ImWchar> glyph_ranges;
+    glyph_ranges.clear();
+    builder.BuildRanges(&glyph_ranges);
+
+    bool fontLoaded = false;
+    const std::vector<std::pair<std::string, float>> fontCandidates = {
+        { "resources/Fonts/GenEiNuGothic-EB.ttf", 14.0f },
+        { "C:\\Windows\\Fonts\\meiryo.ttc", 18.0f },
+        { "C:\\Windows\\Fonts\\msgothic.ttc", 18.0f },
+        { "C:\\Windows\\Fonts\\YuGothM.ttc", 18.0f },
+    };
+
+    for (const auto& [pathStr, size] : fontCandidates) {
+        if (std::filesystem::exists(pathStr)) {
+            io.Fonts->AddFontFromFileTTF(pathStr.c_str(), size, nullptr, glyph_ranges.Data);
+            fontLoaded = true;
+            break;
+        }
+    }
+
+    if (!fontLoaded) {
         io.Fonts->AddFontDefault();
     }
 
@@ -468,7 +493,7 @@ void EditorManager::LoadPlacedModelsForScene(IScene* scene) { if (configManager_
 void EditorManager::Undo() { if (commandManager_) commandManager_->Undo(); }
 void EditorManager::Redo() { if (commandManager_) commandManager_->Redo(); }
 void EditorManager::UpdateAStarPositionsFromMap(MapChip2D* mapChip, SceneManager* sceneManager) { if (mapEditor_) mapEditor_->UpdateAStarPositionsFromMap(mapChip, sceneManager); }
-void EditorManager::ApplyDefaultLayout() { if (layoutManager_) layoutManager_->ApplyDefaultLayout(); }
+void EditorManager::ApplyDefaultLayout(ImGuiID explicitDockspaceId) { if (layoutManager_) layoutManager_->ApplyDefaultLayout(explicitDockspaceId); }
 void EditorManager::ScanLayoutPresets() { if (layoutManager_) layoutManager_->ScanLayoutPresets(); }
 void EditorManager::SaveLayoutPreset(const std::string& name) { if (layoutManager_) layoutManager_->SaveLayoutPreset(name); }
 bool EditorManager::ApplyLayoutPreset(const std::string& name) { return layoutManager_ ? layoutManager_->ApplyLayoutPreset(name) : false; }
