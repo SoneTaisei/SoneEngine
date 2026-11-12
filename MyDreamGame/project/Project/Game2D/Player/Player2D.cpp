@@ -1,4 +1,7 @@
 #include "Player2D.h"
+
+Player2D::Player2D() = default;
+Player2D::~Player2D() = default;
 #include "States/PlayerStates.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "../MapChip2D.h"

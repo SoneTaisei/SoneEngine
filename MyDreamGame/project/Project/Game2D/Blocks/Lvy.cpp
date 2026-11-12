@@ -34,7 +34,7 @@ void Lvy::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX
     baseWorldY_ = worldY;
     width_ = width;
     height_ = height;
-    thickness_ = 0.24f;
+    thickness_ = 1.0f;
 
     SetGameObject(std::make_unique<GameObject>("Lvy"));
     auto* tc = GetGameObject()->AddComponent<TransformComponent>();

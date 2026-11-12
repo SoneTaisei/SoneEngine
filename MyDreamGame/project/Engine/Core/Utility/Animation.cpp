@@ -1,5 +1,14 @@
 #include "Animation.h"
 #include "TransformFunctions.h"
+#include "Core/Utility/DxResourceUtils.h"
+#include "Core/Utility/LogManager.h"
+#include "Renderer/SrvManager.h"
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+#include <cassert>
+#include <set>
+#include <algorithm>
 
 Vector3 CalculateValue(const std::vector<KeyframeVector3>& keyframes, float time) {
     if (keyframes.empty()) {
@@ -324,4 +333,268 @@ Animation CreateDefaultAirDashAnimation() {
     }
 
     return anim;
+}
+
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename) {
+    Animation animation; // create animation
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
+
+    const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
+    assert(scene && scene->mNumAnimations != 0); // assert animation exists
+    aiAnimation* animationAssimp = scene->mAnimations[0]; // use first animation
+    animation.duration = float(animationAssimp->mDuration / animationAssimp->mTicksPerSecond); // convert to seconds
+
+    // loop channels for node animations
+    for (uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex) {
+        aiNodeAnim* nodeAnimationAssimp = animationAssimp->mChannels[channelIndex];
+        NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimationAssimp->mNodeName.C_Str()];
+        
+        // Translate
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumPositionKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mPositionKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z}; // Converter already handled by Assimp
+            nodeAnimation.translate.push_back(keyframe);
+        }
+
+        // Rotate
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumRotationKeys; ++keyIndex) {
+            aiQuatKey& keyAssimp = nodeAnimationAssimp->mRotationKeys[keyIndex];
+            KeyframeQuaternion keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z, keyAssimp.mValue.w}; // Converter already handled by Assimp
+            nodeAnimation.rotate.push_back(keyframe);
+        }
+
+        // Scale
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumScalingKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond); // convert to seconds
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.scale.push_back(keyframe);
+        }
+    }
+    return animation;
+}
+
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename, const std::string& animationName) {
+    Animation animation;
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
+
+    const aiScene* scene = importer.ReadFile(filePath.c_str(), aiProcess_ConvertToLeftHanded | aiProcess_GlobalScale);
+    if (!scene || scene->mNumAnimations == 0) {
+        return animation;
+    }
+
+    aiAnimation* animationAssimp = nullptr;
+    for (uint32_t i = 0; i < scene->mNumAnimations; ++i) {
+        if (std::string(scene->mAnimations[i]->mName.C_Str()) == animationName) {
+            animationAssimp = scene->mAnimations[i];
+            break;
+        }
+    }
+
+    if (!animationAssimp) {
+        animationAssimp = scene->mAnimations[0]; // Fallback to first animation if name not found
+    }
+
+    animation.duration = float(animationAssimp->mDuration / animationAssimp->mTicksPerSecond);
+
+    for (uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex) {
+        aiNodeAnim* nodeAnimationAssimp = animationAssimp->mChannels[channelIndex];
+        NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimationAssimp->mNodeName.C_Str()];
+        
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumPositionKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mPositionKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.translate.push_back(keyframe);
+        }
+
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumRotationKeys; ++keyIndex) {
+            aiQuatKey& keyAssimp = nodeAnimationAssimp->mRotationKeys[keyIndex];
+            KeyframeQuaternion keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z, keyAssimp.mValue.w};
+            nodeAnimation.rotate.push_back(keyframe);
+        }
+
+        for (uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumScalingKeys; ++keyIndex) {
+            aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
+            KeyframeVector3 keyframe;
+            keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
+            keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+            nodeAnimation.scale.push_back(keyframe);
+        }
+    }
+
+    // デバッグログ: ロードされたチャンネル名を出力
+    std::string keysLog = "Loaded animation [" + animationName + "] channels: ";
+    for (const auto& [key, val] : animation.nodeAnimations) {
+        keysLog += key + ", ";
+    }
+    LogManager::GetInstance()->AddLog(LogLevel::Info, keysLog);
+
+    return animation;
+}
+
+int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints) {
+    Joint joint;
+    joint.name = node.name;
+    joint.localMatrix = node.localMatrix;
+    joint.skeletonSpaceMatrix = TransformFunctions::MakeIdentity4x4();
+    joint.transform = node.transform;
+    joint.defaultTransform = node.transform;
+    joint.index = int32_t(joints.size());
+    joint.parent = parent;
+    joints.push_back(joint);
+    for (const Node& child : node.children) {
+        int32_t childIndex = CreateJoint(child, joint.index, joints);
+        joints[joint.index].children.push_back(childIndex);
+    }
+    return joint.index;
+}
+
+Skeleton CreateSkeleton(const Node& rootNode) {
+    Skeleton skeleton;
+    skeleton.root = CreateJoint(rootNode, {}, skeleton.joints);
+
+    for (const Joint& joint : skeleton.joints) {
+        skeleton.jointMap.emplace(joint.name, joint.index);
+    }
+
+    Update(skeleton);
+    return skeleton;
+}
+
+void Update(Skeleton& skeleton) {
+    for (Joint& joint : skeleton.joints) {
+        joint.localMatrix = TransformFunctions::MakeAffineMatrix(joint.transform.scale, joint.transform.rotate, joint.transform.translate);
+        if (joint.parent) {
+            joint.skeletonSpaceMatrix = joint.localMatrix * skeleton.joints[*joint.parent].skeletonSpaceMatrix;
+        } else {
+            joint.skeletonSpaceMatrix = joint.localMatrix;
+        }
+    }
+}
+
+void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime) {
+    static std::set<std::string> reportedMissingNodes;
+    for (Joint& joint : skeleton.joints) {
+        if (auto it = animation.nodeAnimations.find(joint.name); it != animation.nodeAnimations.end()) {
+            const NodeAnimation& rootNodeAnimation = (*it).second;
+            if (!rootNodeAnimation.translate.empty()) {
+                joint.transform.translate = CalculateValue(rootNodeAnimation.translate, animationTime);
+            } else {
+                joint.transform.translate = joint.defaultTransform.translate;
+            }
+
+            if (!rootNodeAnimation.rotate.empty()) {
+                joint.transform.rotate = CalculateValue(rootNodeAnimation.rotate, animationTime);
+            } else {
+                joint.transform.rotate = joint.defaultTransform.rotate;
+            }
+
+            if (!rootNodeAnimation.scale.empty()) {
+                joint.transform.scale = CalculateValue(rootNodeAnimation.scale, animationTime);
+            } else {
+                joint.transform.scale = joint.defaultTransform.scale;
+            }
+        } else {
+            joint.transform = joint.defaultTransform;
+            if (reportedMissingNodes.find(joint.name) == reportedMissingNodes.end()) {
+                reportedMissingNodes.insert(joint.name);
+                LogManager::GetInstance()->AddLog(LogLevel::Info, "Animation channel not found for joint: " + joint.name);
+            }
+        }
+    }
+}
+
+SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const Skeleton& skeleton, const ModelData& modelData) {
+    SkinCluster skinCluster;
+
+    // paletteResourceの生成 (関節数分のマトリックス配列)
+    skinCluster.paletteResource = DxResourceUtils::CreateBufferResource(device, sizeof(WellForGPU) * skeleton.joints.size());
+    WellForGPU* mappedPalette = nullptr;
+    skinCluster.paletteResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedPalette));
+    skinCluster.mappedPalette = {mappedPalette, skeleton.joints.size()};
+
+    // SRVの生成
+    SrvManager::GetInstance()->Allocate(&skinCluster.paletteSrvHandle.first, &skinCluster.paletteSrvHandle.second, "CreateSkinCluster");
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srvDesc.Buffer.FirstElement = 0;
+    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    srvDesc.Buffer.NumElements = UINT(skeleton.joints.size());
+    srvDesc.Buffer.StructureByteStride = sizeof(WellForGPU);
+
+    device->CreateShaderResourceView(skinCluster.paletteResource.Get(), &srvDesc, skinCluster.paletteSrvHandle.first);
+
+    // influenceResourceの生成 (頂点ごとのウェイトデータ)
+    skinCluster.influenceResource = DxResourceUtils::CreateBufferResource(device, sizeof(VertexInfluence) * modelData.vertices.size());
+    VertexInfluence* mappedInfluence = nullptr;
+    skinCluster.influenceResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedInfluence));
+    std::memset(mappedInfluence, 0, sizeof(VertexInfluence) * modelData.vertices.size());
+    skinCluster.mappedInfluence = {mappedInfluence, modelData.vertices.size()};
+
+    skinCluster.influenceBufferView.BufferLocation = skinCluster.influenceResource->GetGPUVirtualAddress();
+    skinCluster.influenceBufferView.SizeInBytes = UINT(sizeof(VertexInfluence) * modelData.vertices.size());
+    skinCluster.influenceBufferView.StrideInBytes = sizeof(VertexInfluence);
+
+    // InverseBindPoseMatrix の保存
+    skinCluster.inverseBindPoseMatrices.resize(skeleton.joints.size());
+    std::generate(skinCluster.inverseBindPoseMatrices.begin(), skinCluster.inverseBindPoseMatrices.end(), TransformFunctions::MakeIdentity4x4);
+
+    // ウェイト情報のパース
+    for (const auto& jointWeight : modelData.skinClusterData) {
+        auto it = skeleton.jointMap.find(jointWeight.first);
+        if (it == skeleton.jointMap.end()) {
+            LogManager::GetInstance()->AddLog(LogLevel::Warning, "[SkinCluster] Joint NOT FOUND in skeleton: " + jointWeight.first);
+            continue; // そのボーンは存在しない
+        }
+
+        int32_t jointIndex = it->second;
+        LogManager::GetInstance()->AddLog(LogLevel::Info, "[SkinCluster] Bound joint [" + jointWeight.first + "] -> index " + std::to_string(jointIndex) + ", weights count: " + std::to_string(jointWeight.second.vertexWeights.size()));
+        skinCluster.inverseBindPoseMatrices[jointIndex] = jointWeight.second.inverseBindPoseMatrix;
+
+        for (const auto& weightInfo : jointWeight.second.vertexWeights) {
+            uint32_t vIndex = weightInfo.vertexIndex;
+            if (vIndex >= modelData.vertices.size()) continue;
+
+            // 空いているウェイトスロットを探す
+            for (uint32_t slot = 0; slot < kNumMaxInfluence; ++slot) {
+                if (skinCluster.mappedInfluence[vIndex].weights[slot] == 0.0f) {
+                    skinCluster.mappedInfluence[vIndex].weights[slot] = weightInfo.weight;
+                    skinCluster.mappedInfluence[vIndex].jointIndices[slot] = jointIndex;
+                    break;
+                }
+            }
+        }
+    }
+
+    return skinCluster;
+}
+
+void Update(SkinCluster& skinCluster, const Skeleton& skeleton) {
+    for (size_t jointIndex = 0; jointIndex < skeleton.joints.size(); ++jointIndex) {
+        assert(jointIndex < skinCluster.inverseBindPoseMatrices.size());
+        
+        Matrix4x4 inverseBindPose = skinCluster.inverseBindPoseMatrices[jointIndex];
+        Matrix4x4 skeletonSpaceMatrix = skeleton.joints[jointIndex].skeletonSpaceMatrix;
+
+        // パレットに格納する行列 = inverseBindPose * skeletonSpaceMatrix
+        Matrix4x4 paletteMatrix = inverseBindPose * skeletonSpaceMatrix;
+        skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix = paletteMatrix;
+        
+        // 法線用の逆転置行列
+        skinCluster.mappedPalette[jointIndex].skeletonSpaceInverseTransposeMatrix = TransformFunctions::Transpose(TransformFunctions::Inverse(paletteMatrix));
+    }
 }

@@ -344,6 +344,11 @@ void GameCamera::LoadConfig(const std::string& filepath) {
             SetRotation(rot);
             baseRotation_ = rot;
         }
+        if (j.contains("followOffset")) {
+            followOffset_.x = j["followOffset"].value("x", followOffset_.x);
+            followOffset_.y = j["followOffset"].value("y", followOffset_.y);
+            followOffset_.z = j["followOffset"].value("z", followOffset_.z);
+        }
     } catch (...) {
         // エラー時はデフォルト値のままにする
     }
@@ -371,6 +376,10 @@ void GameCamera::SaveConfig(const std::string& filepath) {
     j["rotate"]["x"] = baseRotation_.x;
     j["rotate"]["y"] = baseRotation_.y;
     j["rotate"]["z"] = baseRotation_.z;
+
+    j["followOffset"]["x"] = followOffset_.x;
+    j["followOffset"]["y"] = followOffset_.y;
+    j["followOffset"]["z"] = followOffset_.z;
 
     ofs << j.dump(4);
     ofs.close();

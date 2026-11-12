@@ -44,9 +44,12 @@ namespace {
         bool hasTexture = false;
 
         if (!mdlName.empty()) {
-            if (mdlName.length() >= 4 && mdlName.substr(mdlName.length() - 4) == ".obj") {
-                std::string fullPath = (mdlName.find("resources/") == 0) ? mdlName : ("resources/" + mdlName);
-                std::filesystem::path p(fullPath);
+            std::string fullPath = (mdlName.find("resources/") == 0) ? mdlName : ("resources/" + mdlName);
+            std::filesystem::path p(fullPath);
+            std::string ext = p.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+
+            if (ext == ".obj" || ext == ".gltf" || ext == ".glb") {
                 std::string dirPath = p.parent_path().string();
                 std::string fileName = p.filename().string();
                 std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
@@ -55,6 +58,12 @@ namespace {
                 model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + mdlName, mdlName + ".obj");
                 if (!model) {
                     model = ModelManager::GetInstance()->GetModel("resources/models", mdlName + ".obj");
+                }
+                if (!model) {
+                    model = ModelManager::GetInstance()->GetModel("resources/Object/Original/" + mdlName, mdlName + ".gltf");
+                }
+                if (!model) {
+                    model = ModelManager::GetInstance()->GetModel("resources/Object/School/" + mdlName, mdlName + ".gltf");
                 }
             }
         }
@@ -463,6 +472,13 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                         drawList->AddRectFilled(gemBadgeMin, gemBadgeMax, IM_COL32(180, 50, 180, 230), 3.0f);
                         drawList->AddRect(gemBadgeMin, gemBadgeMax, IM_COL32(255, 150, 255, 200), 3.0f);
                         drawList->AddText(ImVec2(gemBadgeMin.x + 3.0f, gemBadgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "GEM");
+                    } else if (tool.shaderMode == MapChip2D::kShaderDustMiasma) {
+                        float bx = !tool.modelName.empty() ? (p.x + 30.0f) : (p.x + 5.0f);
+                        ImVec2 dustBadgeMin(bx, p.y + 5.0f);
+                        ImVec2 dustBadgeMax(bx + 32.0f, p.y + 18.0f);
+                        drawList->AddRectFilled(dustBadgeMin, dustBadgeMax, IM_COL32(160, 20, 40, 230), 3.0f);
+                        drawList->AddRect(dustBadgeMin, dustBadgeMax, IM_COL32(255, 80, 100, 200), 3.0f);
+                        drawList->AddText(ImVec2(dustBadgeMin.x + 3.0f, dustBadgeMin.y + 1.0f), IM_COL32(255, 255, 255, 255), "DUST");
                     }
 
                     drawList->PushClipRect(ImVec2(p.x + 2.0f, p.y + 2.0f), ImVec2(p.x + cardWidth - 2.0f, p.y + cardHeight - 2.0f), true);
@@ -486,6 +502,8 @@ void MapEditorPalette::Draw(SceneManager* sceneManager, const std::function<void
                     }
                     if (tool.shaderMode == MapChip2D::kShaderGem) {
                         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.9f, 1.0f), "Shader: 宝石 (Gem / Crystal)");
+                    } else if (tool.shaderMode == MapChip2D::kShaderDustMiasma) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.3f, 1.0f), "Shader: モヤ・邪気 (Dust Miasma)");
                     } else {
                         ImGui::TextDisabled("Shader: 通常 (Standard)");
                     }

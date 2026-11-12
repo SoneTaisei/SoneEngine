@@ -324,7 +324,7 @@ void Renderer::DrawObject3D(Object3D *obj) {
     } else {
         const_cast<Model *>(obj->GetModel())->Draw(nullptr, obj->GetTextureHandle());
 
-        if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
+        if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().lightingType != 3 && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
             commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
             const_cast<Model *>(obj->GetModel())->Draw(nullptr, obj->GetTextureHandle());
@@ -455,7 +455,7 @@ void Renderer::DrawPrimitiveObject(PrimitiveObject *obj) {
         const_cast<Primitive *>(obj->GetPrimitive())->Draw();
     }
 
-    if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
+    if (dxCommon_->IsOutlineEnabled() && obj->GetMaterial().lightingType != 3 && obj->GetMaterial().color.w >= 1.0f && obj->GetBlendMode() != BlendMode::kBlendModeAdd) {
         commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
         commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
 
@@ -600,7 +600,13 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
     Matrix4x4 viewMatrix = cameraMgr->GetViewMatrix();
     Matrix4x4 projectionMatrix = cameraMgr->GetProjectionMatrix();
 
-    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(tc->GetScale());
+    Vector3 renderScale = tc->GetScale();
+    if (comp->GetMaterial().lightingType == 3) {
+        renderScale.x += 0.12f;
+        renderScale.y += 0.12f;
+        renderScale.z += 0.12f;
+    }
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(renderScale);
     Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(tc->GetRotation().x);
     Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(tc->GetRotation().y);
     Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(tc->GetRotation().z);
@@ -621,7 +627,7 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
 
     // シャドウパス時は深度専用パイプラインで描画
     if (isShadowPass_) {
-        if (comp->GetMaterial().color.w <= 0.0f) return;
+        if (comp->GetMaterial().color.w <= 0.0f || comp->GetMaterial().lightingType == 3) return;
         AnimatorComponent* animator = comp->GetGameObject()->GetComponent<AnimatorComponent>();
         bool useSkinning = (animator != nullptr && animator->HasSkeleton() && animator->HasSkinCluster());
         if (useSkinning) {
@@ -718,7 +724,7 @@ void Renderer::DrawMeshRendererComponent(MeshRendererComponent* comp) {
 
         comp->GetModel()->Draw(nullptr, comp->GetTextureHandle());
 
-        if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
+        if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().lightingType != 3 && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
             commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
             commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
             comp->GetModel()->Draw(nullptr, comp->GetTextureHandle());
@@ -746,7 +752,13 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
         billboardMatrix.m[3][2] = 0.0f;
     }
 
-    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(tc->GetScale());
+    Vector3 renderScale = tc->GetScale();
+    if (comp->GetMaterial().lightingType == 3) {
+        renderScale.x += 0.12f;
+        renderScale.y += 0.12f;
+        renderScale.z += 0.12f;
+    }
+    Matrix4x4 scaleMatrix = TransformFunctions::MakeScaleMatrix(renderScale);
     Matrix4x4 rotateXMatrix = TransformFunctions::MakeRoteXMatrix(tc->GetRotation().x);
     Matrix4x4 rotateYMatrix = TransformFunctions::MakeRoteYMatrix(tc->GetRotation().y);
     Matrix4x4 rotateZMatrix = TransformFunctions::MakeRoteZMatrix(tc->GetRotation().z);
@@ -769,7 +781,7 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
 
     // シャドウパス時は深度専用パイプラインで描画
     if (isShadowPass_) {
-        if (comp->GetMaterial().color.w <= 0.0f) return;
+        if (comp->GetMaterial().color.w <= 0.0f || comp->GetMaterial().lightingType == 3) return;
         commandList->SetPipelineState(dxCommon_->GetShadowMapPipelineState());
         commandList->SetGraphicsRootConstantBufferView(0, comp->GetTransformGPUAddress());
         commandList->SetGraphicsRootConstantBufferView(1, dxCommon_->GetShadowGlobalGPUAddress());
@@ -833,7 +845,7 @@ void Renderer::DrawPrimitiveRendererComponent(PrimitiveRendererComponent* comp) 
 
     const_cast<Primitive*>(comp->GetPrimitive())->Draw();
 
-    if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
+    if (dxCommon_->IsOutlineEnabled() && comp->GetMaterial().lightingType != 3 && comp->GetMaterial().color.w >= 1.0f && comp->GetBlendMode() != BlendMode::kBlendModeAdd) {
         commandList->SetPipelineState(dxCommon_->GetGraphicsPipelineStateOutline());
         commandList->SetGraphicsRootConstantBufferView(8, dxCommon_->GetOutlineParamsGPUAddress());
         const_cast<Primitive*>(comp->GetPrimitive())->Draw();

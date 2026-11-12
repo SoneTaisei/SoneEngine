@@ -2,11 +2,7 @@
 #include "Renderer/DirectXCommon/DirectXCommon.h"
 #include "Effect/ParticleCommon.h"  // これが必要
 #include "Effect/ParticleManager.h" // これが必要
-#include "Effect/GPUParticle/GPUParticleSystem.h"
-#include "Effect/BaseEffect.h"
-#include "Effect/BaseEffect/CoinEffect.h"
-#include "Effect/BaseEffect/CylinderEffect.h"
-#include "Effect/BaseEffect/RingEffect.h"
+#include "Game2D/Effect/GameEffectManager.h"
 #include "Scene/IScene.h"
 #include "Core/Utility/TransformFunctions.h" // 行列計算用
 #include <memory>
@@ -15,6 +11,13 @@
 // 2Dゲーム用クラス
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
+#include "Game2D/UI/CoinHUD.h"
+#include "Game2D/UI/PauseMenu.h"
+#include "Game2D/UI/ReadyGoUI.h"
+#include "Game2D/UI/ClearUI.h"
+#include "Game2D/Replay/GameReplayController.h"
+#include "Game2D/Replay/ReplayGhostRenderer.h"
+#include "Game2D/Camera/GameCameraController.h"
 #include "Resource/Sprite/Sprite.h"
 
 class GameCamera;
@@ -33,6 +36,8 @@ enum class GameState {
 
 class GameScene : public IScene {
 public:
+    GameScene();
+    ~GameScene() override;
 
     static void SetTargetMapFilePath(const std::string &path) { s_TargetMapFilePath = path; }
     static const std::string &GetTargetMapFilePath() { return s_TargetMapFilePath; }
@@ -60,12 +65,9 @@ public:
 
 private:
     // ---------------------------------------------------
-    // 3D・パーティクル関連 (develop)
+    // 3D・エフェクト関連 (develop)
     // ---------------------------------------------------
-    // エフェクト管理（BaseEffectによるポリモーフィズム）
-    std::vector<std::unique_ptr<BaseEffect>> effects_;
-    CoinEffect* coinEffect_ = nullptr; // コイン獲得時の発生(Emit)用ポインタ
-    std::unique_ptr<GPUParticleSystem> snowParticle_;
+    std::unique_ptr<GameEffectManager> effectManager_;
 
     // カメラ用行列（Updateで必要なためメンバに追加）
     Matrix4x4 viewProjection_ = TransformFunctions::MakeIdentity4x4();
@@ -81,12 +83,10 @@ private:
     
     // 状態追跡用フラグ（Update内のstatic変数をメンバ化）
     bool wasCurrentlyPlaying_ = false;
-    bool wasPlayingLastFrame_ = false;
     bool wasRespawning_ = false;
     
     std::unique_ptr<Skybox> skybox_; // Skyboxのインスタンス
     uint32_t skyboxTextureHandle_ = 0;
-    Vector3 cameraLookRotation_ = { 0.0f, 0.0f, 0.0f }; // 右スティック等の見渡し用カメラ回転
 
     // ---------------------------------------------------
     // 共通システム
@@ -96,44 +96,20 @@ private:
 
 
     GameState gameState_ = GameState::StartReady;
-    float stateTimer_ = 0.0f;
     float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
 
-    // 開始UIスプライト (READY / GO)
-    std::unique_ptr<Sprite> readySprite_;
-    uint32_t readyTextureHandle_ = 0;
-    std::unique_ptr<Sprite> goSprite_;
-    uint32_t goTextureHandle_ = 0;
+    // UIコンポーネント
+    std::unique_ptr<ReadyGoUI> readyGoUI_;
+    std::unique_ptr<ClearUI> clearUI_;
+    std::unique_ptr<PauseMenu> pauseMenu_;
+    std::unique_ptr<CoinHUD> coinHUD_;
 
-    // レディー用タイマーバー (背景と前面ゲージ)
-    uint32_t whiteTextureHandle_ = 0;
-    std::unique_ptr<Sprite> readyBarBgSprite_;
-    std::unique_ptr<Sprite> readyBarFillSprite_;
+    // カメラ制御
+    std::unique_ptr<GameCameraController> cameraController_;
 
-    // クリアUIスプライト
-    std::unique_ptr<Sprite> clearSprite_;
-    uint32_t clearTextureHandle_ = 0;
-
-    // カメラスケール制御（クリア時のズームアップ用）
-    float initialCameraScale_ = 1.0f;
-
-    // ポーズUIスプライトと状態
-    int pauseSelectedIndex_ = 0; // 0: つづける, 1: セレクトに戻る
-    std::unique_ptr<Sprite> pauseOverlaySprite_;
-    std::unique_ptr<Sprite> pauseContinueSprite_;
-    uint32_t pauseContinueTextureHandle_ = 0;
-    std::unique_ptr<Sprite> pauseSelectSprite_;
-    uint32_t pauseSelectTextureHandle_ = 0;
-
-    // コインUI
-    uint32_t coinTextureHandle_ = 0;
-    std::unique_ptr<Sprite> coinSprite_;
-    uint32_t numbersTextureHandle_ = 0;
-    std::vector<std::unique_ptr<Sprite>> numberSprites_;
-    float coinPopAnimTimer_ = 0.0f;
-    int lastCollectedCoins_ = 0;
-    void UpdateCoinUI(float deltaTime);
-    void DrawCoinUI();
+    // リプレイ・ゴースト描画
+    std::unique_ptr<GameReplayController> replayController_;
+    std::unique_ptr<ReplayGhostRenderer> ghostRenderer_;
 
     static std::string s_TargetMapFilePath;
 };

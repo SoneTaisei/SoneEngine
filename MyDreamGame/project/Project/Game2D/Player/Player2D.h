@@ -26,6 +26,8 @@ class PlayerGoalState;
 class Player2D : public IComponent {
 
 public:
+
+
     // --- 1. 状態取得（読み取り専用にする！） ---
     // 非constの GetState() を廃止し、const参照のみ公開
     const PlayerState &GetState() const { return state_; }
@@ -58,8 +60,8 @@ public:
     PlayerVisuals &GetVisuals() { return visuals_; }
     PlayerPhysics &GetPhysics() { return physics_; }
     const InputState &GetCurrentInput() const { return currentInput_; }
-    Player2D() = default;
-    ~Player2D() override = default;
+    Player2D();
+    ~Player2D() override;
 
     void Initialize() override;
     void Update() override;
