@@ -8,8 +8,8 @@ void DustBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     
     prc->Initialize(device, boxPrimitive);
     
-    // Core dark miasma color
-    prc->SetColor({ 0.05f, 0.02f, 0.06f, 0.999f });
+    // Core dark miasma color (alpha 1.0f enables hardware backface culling & depth write)
+    prc->SetColor({ 0.05f, 0.02f, 0.06f, 1.0f });
     // lightingType 3 = Dust Miasma Shading Mode
     prc->SetLightingType(3);
     // Pixelation resolution (e.g. 32x32 pixels per block)

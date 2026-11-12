@@ -470,6 +470,8 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
             input.localPosition,
             input.normal,
             gCamera.worldPosition,
+            gCamera.forward,
+            gCamera.isOrthographic,
             gMaterial.color,
             gMaterial.uvTransform,
             gMaterial.shininess,

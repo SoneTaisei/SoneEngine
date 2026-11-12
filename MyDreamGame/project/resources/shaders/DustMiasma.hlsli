@@ -217,14 +217,23 @@ float4 ComputeDustMiasma(
     float3 localPos,
     float3 normal,
     float3 cameraPos,
+    float3 cameraForward,
+    float isOrthographic,
     float4 baseCoreColor,
     float4x4 uvTransform,
     float pixelResolution,
     float customSpeed
 ) {
-    // 0. Back-face cull in shader matching hardware rasterizer
-    float3 viewToSurface = worldPos - cameraPos;
-    if (dot(normal, -viewToSurface) <= 0.0f) {
+    // 0. Compute accurate surface-to-eye view vector for both orthographic and perspective cameras
+    float3 viewDir3D;
+    if (isOrthographic > 0.5f) {
+        viewDir3D = -cameraForward;
+    } else {
+        viewDir3D = normalize(cameraPos - worldPos);
+    }
+
+    // Back-face cull in shader: only discard surfaces facing away from camera view
+    if (dot(normal, viewDir3D) <= 0.0f) {
         return float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
@@ -258,13 +267,25 @@ float4 ComputeDustMiasma(
     float3 p0 = localPos * (boxHalf * 2.0f);
     float3 boxCenter = worldPos - p0;
 
-    // Exact visibility of the 6 faces of this block from cameraPos
-    bool visL    = !hasL && !solidL && (cameraPos.x < boxCenter.x - boxHalf.x);
-    bool visR    = !hasR && !solidR && (cameraPos.x > boxCenter.x + boxHalf.x);
-    bool visB    = !hasB && !solidB && (cameraPos.y < boxCenter.y - boxHalf.y);
-    bool visT    = !hasT && !solidT && (cameraPos.y > boxCenter.y + boxHalf.y);
-    bool visF    = (cameraPos.z < boxCenter.z - boxHalf.z);
-    bool visBack = (cameraPos.z > boxCenter.z + boxHalf.z);
+    // Exact visibility of the 6 faces of this block from camera view
+    bool visL, visR, visB, visT, visF, visBack;
+    if (isOrthographic > 0.5f) {
+        // In orthographic projection, face visibility is determined by camera tilt / forward direction
+        visL    = !hasL && !solidL && (cameraForward.x >  0.01f);
+        visR    = !hasR && !solidR && (cameraForward.x < -0.01f);
+        visB    = !hasB && !solidB && (cameraForward.y >  0.01f);
+        visT    = !hasT && !solidT && (cameraForward.y < -0.01f);
+        visF    = (cameraForward.z > -0.01f);
+        visBack = (cameraForward.z <  0.01f);
+    } else {
+        // In perspective projection, face visibility depends on relative world position
+        visL    = !hasL && !solidL && (cameraPos.x < boxCenter.x - boxHalf.x);
+        visR    = !hasR && !solidR && (cameraPos.x > boxCenter.x + boxHalf.x);
+        visB    = !hasB && !solidB && (cameraPos.y < boxCenter.y - boxHalf.y);
+        visT    = !hasT && !solidT && (cameraPos.y > boxCenter.y + boxHalf.y);
+        visF    = (cameraPos.z < boxCenter.z - boxHalf.z);
+        visBack = (cameraPos.z > boxCenter.z + boxHalf.z);
+    }
 
     // Clip overhang on sides connected to another miasma tile so adjacent hulls meet flush at +/-nominalHalf
     if (hasL && p0.x < -nominalHalf.x - 0.002f) return float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -307,7 +328,6 @@ float4 ComputeDustMiasma(
 
     float outlineThickness = 0.055f;
     float4 crimsonOutline = float4(0.98f, 0.08f, 0.20f, 1.0f);
-    float3 viewDir3D = normalize(cameraPos - worldPos);
     float zNorm = saturate((p0.z + boxHalf.z) / max(boxHalf.z * 2.0f, 0.1f));
 
     // 4. Front / Back Face (abs(normal.z) > 0.5f): 100% Exact 2D Billowing Cloud Appearance + Seamless 3D Corner Bridge

@@ -65,6 +65,7 @@ void GameCameraController::Update(float deltaTime, Player2D* player, MapChip2D* 
             baseRot.y + cameraLookRotation_.y,
             baseRot.z
         });
+        camera_->UpdateMatrix();
     }
 }
 
