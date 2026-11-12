@@ -84,4 +84,6 @@ struct ViewProjection {
 struct Camera {
     float3 worldPosition;
     float padding; // Match 16-byte alignment
+    float3 forward;
+    float isOrthographic;
 };

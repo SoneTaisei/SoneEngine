@@ -46,51 +46,66 @@ void SpriteSelectModal::RefreshSpriteList() {
     categories_.push_back("すべて (All)");
     selectedSpriteIdx_ = -1;
 
-    auto scanDir = [&](const std::string& rootDir) {
+    auto scanDir = [&](const std::string& rootDir, bool recursive = true) {
         if (!std::filesystem::exists(rootDir)) return;
         try {
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(rootDir)) {
-                if (entry.is_regular_file()) {
-                    auto path = entry.path();
-                    std::string ext = path.extension().string();
-                    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+            auto processEntry = [&](const std::filesystem::path& path) {
+                std::string ext = path.extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(::tolower(c)); });
 
-                    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".dds" || ext == ".tga") {
-                        SpriteSelectItem item;
-                        std::string fullPath = path.string();
-                        std::replace(fullPath.begin(), fullPath.end(), '\\', '/');
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".dds" || ext == ".tga") {
+                    SpriteSelectItem item;
+                    std::string fullPath = path.string();
+                    std::replace(fullPath.begin(), fullPath.end(), '\\', '/');
 
-                        std::string dirPath = path.parent_path().string();
-                        std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
+                    std::string dirPath = path.parent_path().string();
+                    std::replace(dirPath.begin(), dirPath.end(), '\\', '/');
 
-                        std::string subCat = "";
-                        std::string spriteRoot = "resources/Sprite";
-                        if (dirPath.find(spriteRoot) == 0 && dirPath.length() > spriteRoot.length()) {
-                            subCat = dirPath.substr(spriteRoot.length() + 1);
-                        } else {
-                            subCat = dirPath;
-                        }
+                    std::string subCat = "";
+                    std::string spriteRoot = "resources/Sprite";
+                    if (dirPath.find(spriteRoot) == 0 && dirPath.length() > spriteRoot.length()) {
+                        subCat = dirPath.substr(spriteRoot.length() + 1);
+                    } else {
+                        subCat = dirPath;
+                    }
 
-                        item.fullPath = fullPath;
-                        item.directoryPath = dirPath;
-                        item.fileName = path.filename().string();
-                        item.extension = ext;
-                        item.displayName = path.stem().string();
-                        item.subCategory = subCat.empty() ? "Sprite" : subCat;
+                    item.fullPath = fullPath;
+                    item.directoryPath = dirPath;
+                    item.fileName = path.filename().string();
+                    item.extension = ext;
+                    item.displayName = path.stem().string();
+                    item.subCategory = subCat.empty() ? "Sprite" : subCat;
 
-                        if (std::find(categories_.begin(), categories_.end(), item.subCategory) == categories_.end()) {
-                            categories_.push_back(item.subCategory);
-                        }
+                    if (std::find(categories_.begin(), categories_.end(), item.subCategory) == categories_.end()) {
+                        categories_.push_back(item.subCategory);
+                    }
 
-                        spriteList_.push_back(item);
+                    spriteList_.push_back(item);
+                }
+            };
+
+            if (recursive) {
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(rootDir)) {
+                    if (entry.is_regular_file()) {
+                        processEntry(entry.path());
+                    }
+                }
+            } else {
+                for (const auto& entry : std::filesystem::directory_iterator(rootDir)) {
+                    if (entry.is_regular_file()) {
+                        processEntry(entry.path());
                     }
                 }
             }
         } catch (...) {}
     };
 
-    scanDir("resources/Sprite");
-    scanDir("resources");
+    // 主要スプライト・テクスチャフォルダを走査
+    scanDir("resources/Sprite", true);
+    scanDir("resources/Texture", true);
+    scanDir("resources/Textures", true);
+    // resources 直下の画像ファイルのみ走査（モデルフォルダへの過剰走査を回避）
+    scanDir("resources", false);
 
     // 重複除去
     std::vector<SpriteSelectItem> uniqueList;
@@ -216,21 +231,30 @@ void SpriteSelectModal::DrawModal(const char* popupId, bool& isOpen, const std::
             const float itemHeight = 115.0f;
             float windowVisibleX2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
 
+            int loadsThisFrame = 0;
+            constexpr int kMaxLoadsPerFrame = 2; // 1フレームあたりの最大ロード数（UI応答性確保）
+
             for (size_t fIdx = 0; fIdx < filteredIndices.size(); ++fIdx) {
                 int itemIdx = filteredIndices[fIdx];
                 auto& item = spriteList_[itemIdx];
-                EnsureTextureLoaded(item);
 
                 ImGui::PushID(itemIdx);
                 ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+                ImVec2 boxMin = cursorPos;
+                ImVec2 boxMax = ImVec2(boxMin.x + itemWidth, boxMin.y + itemHeight);
+
+                // 画面内可視判定: 見えているアイテムのみフレーム分散ロード
+                bool isVisible = ImGui::IsRectVisible(boxMin, boxMax);
+                if (isVisible && !item.isResourceLoaded && loadsThisFrame < kMaxLoadsPerFrame) {
+                    EnsureTextureLoaded(item);
+                    loadsThisFrame++;
+                }
 
                 bool isSelected = (selectedSpriteIdx_ == itemIdx);
                 ImVec4 bgColor = isSelected ? ImVec4(0.25f, 0.45f, 0.75f, 0.6f) : ImVec4(0.18f, 0.18f, 0.20f, 0.5f);
                 ImVec4 borderColor = isSelected ? ImVec4(0.4f, 0.7f, 1.0f, 1.0f) : ImVec4(0.3f, 0.3f, 0.35f, 0.5f);
 
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
-                ImVec2 boxMin = cursorPos;
-                ImVec2 boxMax = ImVec2(boxMin.x + itemWidth, boxMin.y + itemHeight);
 
                 // 背景
                 drawList->AddRectFilled(boxMin, boxMax, ImGui::ColorConvertFloat4ToU32(bgColor), 4.0f);
@@ -251,12 +275,14 @@ void SpriteSelectModal::DrawModal(const char* popupId, bool& isOpen, const std::
                     drawList->AddRectFilled(
                         thumbPos,
                         ImVec2(thumbPos.x + thumbSize, thumbPos.y + thumbSize),
-                        IM_COL32(50, 50, 50, 255), 2.0f
+                        IM_COL32(40, 40, 45, 255), 2.0f
                     );
+                    const char* placeText = item.isResourceLoaded ? "No Image" : "Loading...";
+                    ImVec2 pTextSize = ImGui::CalcTextSize(placeText);
                     drawList->AddText(
-                        ImVec2(thumbPos.x + 12.0f, thumbPos.y + 26.0f),
-                        IM_COL32(180, 180, 180, 255),
-                        "No Image"
+                        ImVec2(thumbPos.x + (thumbSize - pTextSize.x) * 0.5f, thumbPos.y + (thumbSize - pTextSize.y) * 0.5f),
+                        item.isResourceLoaded ? IM_COL32(140, 140, 140, 255) : IM_COL32(180, 200, 240, 255),
+                        placeText
                     );
                 }
 

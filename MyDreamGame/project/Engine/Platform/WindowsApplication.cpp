@@ -429,13 +429,13 @@ void WindowsApplication::Update() {
         lightEditor_->Update(dt, modelCommon_.get(), playerPos);
     }
 
-    // 現在のアクティブカメラの行列をViewProjectionに反映
-    viewProjection_->UpdateMatrix(
-        activeCamera_->GetViewMatrix(),
-        activeCamera_->GetProjectionMatrix());
-    
-    // 他のオブジェクトが使うCameraManagerも同期させる
-    activeCamera_->UpdateMatrix(); 
+    // まずアクティブカメラの最新の姿勢（位置・回転）を行列とCameraManagerに反映
+    if (activeCamera_) {
+        activeCamera_->UpdateMatrix(); 
+        viewProjection_->UpdateMatrix(
+            activeCamera_->GetViewMatrix(),
+            activeCamera_->GetProjectionMatrix());
+    } 
 
     // 音声の更新処理（再生終了ボイスの破棄など）
     AudioManager::Update();

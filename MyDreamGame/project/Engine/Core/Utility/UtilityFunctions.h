@@ -1,20 +1,12 @@
 #pragma once
 #include"Core/Utility/Structs.h"
 #include "Animation.h"
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> origin/master
-
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-=======
 #include "Core/StringUtils.h"
 #include "Resource/Primitive/MeshGenerator.h"
 #include "Resource/Texture/TextureLoader.h"
 #include "Core/Utility/ShaderCompiler.h"
 #include "Core/Utility/DxResourceUtils.h"
 #include "Resource/Model/ModelLoader.h"
->>>>>>> develop
 
 void Log(const std::string &message);
 

@@ -42,6 +42,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     float32_t2 texelSize = float32_t2(1.0f / width, 1.0f / height);
     
     float32_t2 difference = float32_t2(0.0f, 0.0f);
+    bool touchesMiasma = false;
     
     // Convolution loop (3x3 neighborhood)
     for (int y = -1; y <= 1; ++y)
@@ -50,6 +51,12 @@ PixelShaderOutput main(VertexShaderOutput input)
         {
             float32_t2 offset = float32_t2(x, y) * texelSize;
             float32_t2 uv = input.texcoord + offset;
+            
+            float32_t3 neighborColor = gTexture.Sample(gSamplerPoint, uv).rgb;
+            if (neighborColor.g < 0.16f && (neighborColor.r > 0.60f || neighborColor.b < 0.18f))
+            {
+                touchesMiasma = true;
+            }
             
             // Sample depth from texture
             float32_t ndcDepth = gDepthTexture.Sample(gSamplerPoint, uv).r;
@@ -66,7 +73,7 @@ PixelShaderOutput main(VertexShaderOutput input)
     
     // Calculate edge weight (length of difference vector)
     float32_t weight = length(difference);
-    weight = saturate(weight);
+    weight = touchesMiasma ? 0.0f : saturate(weight);
     
     // Sample original color texture
     float32_t4 originalColor = gTexture.Sample(gSamplerLinear, input.texcoord);

@@ -156,7 +156,7 @@ bool Model3DEditorInspector::Draw(SceneManager* sceneManager) {
     ImGui::Text("選択中: %s", shortName.c_str());
     if (ImGui::Button("スプライトを選択...")) {
         isSpriteModalOpen_ = true;
-        if (spriteSelectModal_) {
+        if (spriteSelectModal_ && spriteSelectModal_->GetSpriteList().empty()) {
             spriteSelectModal_->RefreshSpriteList();
         }
     }
@@ -198,12 +198,20 @@ bool Model3DEditorInspector::Draw(SceneManager* sceneManager) {
         }
     }
 
-    if (ImGui::TreeNode("手動パス入力 (詳細設定)")) {
+    if (lastSelectedObjId_ != sel->GetId()) {
+        lastSelectedObjId_ = sel->GetId();
         strcpy_s(texBuf_, sel->GetTexturePath().c_str());
+    }
+
+    if (ImGui::TreeNode("手動パス入力 (詳細設定)")) {
+        if (!isPathInputActive_) {
+            strcpy_s(texBuf_, sel->GetTexturePath().c_str());
+        }
         if (ImGui::InputText("パス", texBuf_, sizeof(texBuf_))) {
             sel->SetTexture(texBuf_);
             sel->Update();
         }
+        isPathInputActive_ = ImGui::IsItemActive();
         if (ImGui::IsItemActivated()) {
             preEditSnapshot_ = context_->CreateSnapshot();
         }

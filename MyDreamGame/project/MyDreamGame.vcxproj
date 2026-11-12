@@ -13,11 +13,11 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-      <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DashRecovery.h" />
     <ClInclude Include="Project\Game2D\Blocks\FallBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\Lvy.h" />
-</ItemGroup>
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -77,8 +77,10 @@
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    <ClCompile>
+      <DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>DIRECTINPUT_VERSION=0x0800;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
@@ -98,12 +100,14 @@
       <AdditionalDependencies>assimp-vc143-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D &amp; if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib" &amp; if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb" &amp; if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso" &amp; if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    <ClCompile>
+      <DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -124,12 +128,14 @@
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D &amp; if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib" &amp; if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb" &amp; if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso" &amp; if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
-    <ClCompile><DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    <ClCompile>
+      <DisableSpecificWarnings>4828;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -153,14 +159,21 @@
       <AdditionalDependencies>assimp-vc143-md.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D</Command>
+      <Command>copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxcompiler.dll" "$(TargetDir)dxcompiler.dll" &amp; copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dxil.dll" &amp; xcopy "$(ProjectDir)resources" "$(TargetDir)resources" /E /I /Y /D &amp; if exist "$(OutDir)DirectXTex.lib" del "$(OutDir)DirectXTex.lib" &amp; if exist "$(OutDir)DirectXTex.pdb" del "$(OutDir)DirectXTex.pdb" &amp; if exist "$(OutDir)Sprite.PS.cso" del "$(OutDir)Sprite.PS.cso" &amp; if exist "$(OutDir)Sprite.VS.cso" del "$(OutDir)Sprite.VS.cso"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Graphics\CameraManager.cpp" />
     <ClCompile Include="Engine\Renderer\Renderer.cpp" />
     <ClCompile Include="Engine\Renderer\SkeletonDebugRenderer.cpp" />
-    <ClCompile Include="Engine\Editor\EditorManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorCommandManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorConfigManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorHierarchy.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorInspector.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorLayoutManager.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorMenuBar.cpp" />
+    <ClCompile Include="Engine\Editor\EditorManager\EditorReplayUI.cpp" />
     <ClCompile Include="externals\imgui\backends\imgui_impl_dx12.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
@@ -182,6 +195,7 @@
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="Engine\Resource\Model\ModelBinaryIO.cpp" />
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
     <ClCompile Include="Project\Effect\SnowParticle.cpp" />
     <ClCompile Include="Project\Effect\BaseEffect\RingEffect.cpp" />
@@ -229,9 +243,16 @@
     <ClCompile Include="Engine\Core\Utility\TransformFunctions.cpp" />
     <ClCompile Include="Engine\Core\Utility\LogManager.cpp" />
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp" />
+    <ClCompile Include="Engine\Core\StringUtils.cpp" />
+    <ClCompile Include="Engine\Core\Utility\DxResourceUtils.cpp" />
+    <ClCompile Include="Engine\Core\Utility\ShaderCompiler.cpp" />
+    <ClCompile Include="Engine\Resource\Model\ModelLoader.cpp" />
+    <ClCompile Include="Engine\Resource\Primitive\MeshGenerator.cpp" />
+    <ClCompile Include="Engine\Resource\Texture\TextureLoader.cpp" />
     <ClCompile Include="Engine\Core\Utility\Quaternion.cpp" />
     <ClCompile Include="Engine\Core\Utility\Animation.cpp" />
     <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp" />
+    <ClCompile Include="Engine\Graphics\TextureConverter.cpp" />
     <ClCompile Include="Engine\Graphics\TextureManager.cpp" />
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
     <ClCompile Include="Project\Scenes\StageSelectScene.cpp" />
@@ -251,12 +272,21 @@
     <ClCompile Include="Project\Game2D\Player\States\PlayerStates.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
+    <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp" />
+    <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp" />
+    <ClCompile Include="Project\Game2D\UI\ReadyGoUI.cpp" />
+    <ClCompile Include="Project\Game2D\UI\ClearUI.cpp" />
+    <ClCompile Include="Project\Game2D\Replay\GameReplayController.cpp" />
+    <ClCompile Include="Project\Game2D\Replay\ReplayGhostRenderer.cpp" />
+    <ClCompile Include="Project\Game2D\Effect\GameEffectManager.cpp" />
+    <ClCompile Include="Project\Game2D\Camera\GameCameraController.cpp" />
     <ClCompile Include="Project\Game2D\MapChip2D.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\RailBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\JumpBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\NormalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DeathBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DustBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\CoinBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\OneWayBlock.cpp" />
@@ -400,12 +430,14 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Pixel</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ObjectFileOutput>$(ProjectDir)resources\shaders\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="resources\shaders\Sprite.VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ObjectFileOutput>$(ProjectDir)resources\shaders\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="resources\shaders\Outline.PS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
@@ -429,6 +461,14 @@
     <ClInclude Include="Engine\Renderer\Renderer.h" />
     <ClInclude Include="Engine\Renderer\SkeletonDebugRenderer.h" />
     <ClInclude Include="Engine\Editor\EditorManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorCommandManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorConfigManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorHierarchy.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorInspector.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorLayoutManager.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorMenuBar.h" />
+    <ClInclude Include="Engine\Editor\EditorManager\EditorReplayUI.h" />
     <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h" />
     <ClInclude Include="externals\imgui\imconfig.h" />
     <ClInclude Include="externals\imgui\imgui.h" />
@@ -436,6 +476,7 @@
     <ClInclude Include="externals\imgui\imstb_rectpack.h" />
     <ClInclude Include="externals\imgui\imstb_textedit.h" />
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
+    <ClInclude Include="Engine\Resource\Model\ModelBinaryIO.h" />
     <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
     <ClInclude Include="Project\Effect\SnowParticle.h" />
     <ClInclude Include="Project\Effect\BaseEffect\RingEffect.h" />
@@ -481,9 +522,16 @@
     <ClInclude Include="Engine\Core\Utility\TransformFunctions.h" />
     <ClInclude Include="Engine\Core\Utility\LogManager.h" />
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h" />
+    <ClInclude Include="Engine\Core\StringUtils.h" />
+    <ClInclude Include="Engine\Core\Utility\DxResourceUtils.h" />
+    <ClInclude Include="Engine\Core\Utility\ShaderCompiler.h" />
+    <ClInclude Include="Engine\Resource\Model\ModelLoader.h" />
+    <ClInclude Include="Engine\Resource\Primitive\MeshGenerator.h" />
+    <ClInclude Include="Engine\Resource\Texture\TextureLoader.h" />
     <ClInclude Include="Engine\Core\Utility\Quaternion.h" />
     <ClInclude Include="Engine\Core\Utility\Animation.h" />
     <ClInclude Include="Engine\Core\Utility\ParameterManager.h" />
+    <ClInclude Include="Engine\Graphics\TextureConverter.h" />
     <ClInclude Include="Engine\Graphics\TextureManager.h" />
     <ClInclude Include="Project\Scenes\TitleScene.h" />
     <ClInclude Include="Project\Scenes\StageSelectScene.h" />
@@ -518,6 +566,14 @@
     <ClInclude Include="Project\Game2D\Player\PlayerState.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerConfig.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />
+    <ClInclude Include="Project\Game2D\UI\CoinHUD.h" />
+    <ClInclude Include="Project\Game2D\UI\PauseMenu.h" />
+    <ClInclude Include="Project\Game2D\UI\ReadyGoUI.h" />
+    <ClInclude Include="Project\Game2D\UI\ClearUI.h" />
+    <ClInclude Include="Project\Game2D\Replay\GameReplayController.h" />
+    <ClInclude Include="Project\Game2D\Replay\ReplayGhostRenderer.h" />
+    <ClInclude Include="Project\Game2D\Effect\GameEffectManager.h" />
+    <ClInclude Include="Project\Game2D\Camera\GameCameraController.h" />
     <ClInclude Include="Project\Game2D\MapChip2D.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\LiftBlock.h" />
@@ -525,6 +581,7 @@
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\JumpBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\NormalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DeathBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DustBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\CoinBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\OneWayBlock.h" />
@@ -610,6 +667,3 @@
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
-
-
-

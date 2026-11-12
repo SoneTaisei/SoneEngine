@@ -48,7 +48,28 @@
     <ClCompile Include="Engine\Renderer\SkeletonDebugRenderer.cpp">
       <Filter>Engine\Renderer</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Editor\EditorManager.cpp">
+    <ClCompile Include="Engine\Editor\EditorManager\EditorManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorCommandManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorConfigManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorHierarchy.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorInspector.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorLayoutManager.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorMenuBar.cpp">
+      <Filter>Engine\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Editor\EditorManager\EditorReplayUI.cpp">
       <Filter>Engine\Editor</Filter>
     </ClCompile>
     <ClCompile Include="externals\imgui\backends\imgui_impl_dx12.cpp">
@@ -71,6 +92,9 @@
     </ClCompile>
     <ClCompile Include="externals\imgui\imgui_widgets.cpp">
       <Filter>externals\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Model\ModelBinaryIO.cpp">
+      <Filter>Engine\Resource\Model</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp">
       <Filter>Engine\Resource\Model</Filter>
@@ -198,6 +222,24 @@
     <ClCompile Include="Engine\Core\Utility\UtilityFunctions.cpp">
       <Filter>Engine\Core\Utility</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Core\StringUtils.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\DxResourceUtils.cpp">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Core\Utility\ShaderCompiler.cpp">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Model\ModelLoader.cpp">
+      <Filter>Engine\Resource\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Primitive\MeshGenerator.cpp">
+      <Filter>Engine\Resource\Primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Resource\Texture\TextureLoader.cpp">
+      <Filter>Engine\Resource\Texture</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Core\Utility\Quaternion.cpp">
       <Filter>Engine\Core\Utility</Filter>
     </ClCompile>
@@ -206,6 +248,9 @@
     </ClCompile>
     <ClCompile Include="Engine\Core\Utility\ParameterManager.cpp">
       <Filter>Engine\Core\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\TextureConverter.cpp">
+      <Filter>Engine\Graphics</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\TextureManager.cpp">
       <Filter>Engine\Graphics</Filter>
@@ -264,6 +309,30 @@
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp">
       <Filter>Project\Game2D\Player</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\ReadyGoUI.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\ClearUI.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Replay\GameReplayController.cpp">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Replay\ReplayGhostRenderer.cpp">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Effect\GameEffectManager.cpp">
+      <Filter>Project\Game2D\Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Camera\GameCameraController.cpp">
+      <Filter>Project\Game2D\Camera</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\MapChip2D.cpp">
       <Filter>Project\Game2D</Filter>
     </ClCompile>
@@ -280,6 +349,9 @@
       <Filter>Project\Game2D\Blocks\BaseBlock</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DeathBlock.cpp">
+      <Filter>Project\Game2D\Blocks\BaseBlock</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DustBlock.cpp">
       <Filter>Project\Game2D\Blocks\BaseBlock</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\GoalBlock.cpp">
@@ -479,6 +551,30 @@
     <ClInclude Include="Engine\Editor\EditorManager.h">
       <Filter>Engine\Editor</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorCommandManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorConfigManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorHierarchy.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorInspector.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorLayoutManager.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorMenuBar.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Editor\EditorManager\EditorReplayUI.h">
+      <Filter>Engine\Editor</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Editor\Replay\PhysicsAStar.h">
       <Filter>Engine\Editor\Replay</Filter>
     </ClInclude>
@@ -499,6 +595,9 @@
     </ClInclude>
     <ClInclude Include="externals\imgui\imstb_truetype.h">
       <Filter>externals\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Model\ModelBinaryIO.h">
+      <Filter>Engine\Resource\Model</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Resource\Model\ModelManager.h">
       <Filter>Engine\Resource\Model</Filter>
@@ -635,6 +734,24 @@
     <ClInclude Include="Engine\Core\Utility\UtilityFunctions.h">
       <Filter>Engine\Core\Utility</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Core\StringUtils.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\DxResourceUtils.h">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Core\Utility\ShaderCompiler.h">
+      <Filter>Engine\Core\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Model\ModelLoader.h">
+      <Filter>Engine\Resource\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Primitive\MeshGenerator.h">
+      <Filter>Engine\Resource\Primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Resource\Texture\TextureLoader.h">
+      <Filter>Engine\Resource\Texture</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\Core\Utility\Quaternion.h">
       <Filter>Engine\Core\Utility</Filter>
     </ClInclude>
@@ -643,6 +760,9 @@
     </ClInclude>
     <ClInclude Include="Engine\Core\Utility\ParameterManager.h">
       <Filter>Engine\Core\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\TextureConverter.h">
+      <Filter>Engine\Graphics</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\TextureManager.h">
       <Filter>Engine\Graphics</Filter>
@@ -746,6 +866,30 @@
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h">
       <Filter>Project\Game2D\Player</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\CoinHUD.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\PauseMenu.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\ReadyGoUI.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\ClearUI.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Replay\GameReplayController.h">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Replay\ReplayGhostRenderer.h">
+      <Filter>Project\Game2D\Replay</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Effect\GameEffectManager.h">
+      <Filter>Project\Game2D\Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Camera\GameCameraController.h">
+      <Filter>Project\Game2D\Camera</Filter>
+    </ClInclude>
     <ClInclude Include="Project\Game2D\MapChip2D.h">
       <Filter>Project\Game2D</Filter>
     </ClInclude>
@@ -765,6 +909,9 @@
       <Filter>Project\Game2D\Blocks\BaseBlock</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DeathBlock.h">
+      <Filter>Project\Game2D\Blocks\BaseBlock</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DustBlock.h">
       <Filter>Project\Game2D\Blocks\BaseBlock</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\GoalBlock.h">
@@ -1071,6 +1218,18 @@
     <Filter Include="Project\Game2D">
       <UniqueIdentifier>{f6303e04-941d-4116-b0cb-06fd727a4fc5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Project\Game2D\UI">
+      <UniqueIdentifier>{e8b62831-2947-4f6b-8521-72f5c9314781}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Effect">
+      <UniqueIdentifier>{41c425c0-bb7c-491f-83be-33e8ce0ce5b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Camera">
+      <UniqueIdentifier>{3d95f834-e503-4325-94ad-8db6e350ce46}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Game2D\Replay">
+      <UniqueIdentifier>{6f9827a1-3829-4d22-b501-c82736124599}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Project\Game2D\Blocks">
       <UniqueIdentifier>{fe4fa6a4-5f8e-403c-b820-fc97fc4334e6}</UniqueIdentifier>
     </Filter>
@@ -1092,5 +1251,11 @@
     <Filter Include="resources\shaders">
       <UniqueIdentifier>{24a5ea27-25b0-4002-ab06-921a3116409c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Engine\Resource\Texture">
+      <UniqueIdentifier>{1ca24662-3236-45f5-85e5-a79da4eb95d5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="externals\imgui\LICENSE.txt" />
   </ItemGroup>
 </Project>

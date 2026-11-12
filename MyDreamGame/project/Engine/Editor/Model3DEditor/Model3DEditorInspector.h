@@ -20,7 +20,9 @@ private:
     char texBuf_[256] = "";
     char saveFileNameBuf_[128] = "placed_models";
     int selectedFileComboIdx_ = -1;
+    uint64_t lastSelectedObjId_ = 0;
     std::unique_ptr<SpriteSelectModal> spriteSelectModal_;
     bool isSpriteModalOpen_ = false;
+    bool isPathInputActive_ = false;
 };
 #endif
