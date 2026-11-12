@@ -1,4 +1,5 @@
 #include "Object3d.hlsli"
+#include "DustMiasma.hlsli"
 
 Texture2D<float4> gTexture : register(t0);
 TextureCube<float4> gEnvironmentMap : register(t1);
@@ -460,6 +461,26 @@ float4 main(VertexShaderOutput input) : SV_TARGET {
         float3 crystalColor = litInnerGlow * 0.85f + refractedLight * 0.8f + crystalSpecularTotal + envSpecular + rimLight;
         outputColor.rgb = crystalColor * input.color.rgb;
         outputColor.a = gMaterial.color.a * textureColor.a * input.color.a;
+
+    } else if (gMaterial.lightingType == 3) {
+        // Dust / Miasma 3D Volumetric Cloud Shading Mode
+        float4 miasmaColor = ComputeDustMiasma(
+            input.texcoord,
+            input.worldPosition,
+            input.localPosition,
+            input.normal,
+            gCamera.worldPosition,
+            gMaterial.color,
+            gMaterial.uvTransform,
+            gMaterial.shininess,
+            gMaterial.environmentCoefficient
+        );
+
+        if (miasmaColor.a <= 0.001f) {
+            discard;
+        }
+
+        outputColor = miasmaColor * input.color;
 
     } else {
         outputColor = gMaterial.color * textureColor * input.color;

@@ -131,8 +131,9 @@ public:
     void SaveInitialMapState() { initialMapData_ = mapData_; }
 
     enum ShaderPreset : int {
-        kShaderStandard = 0, // 通常シェーダー (Standard / LightingType 1)
-        kShaderGem = 1      // 宝石シェーダー (Gem / Crystal / LightingType 2)
+        kShaderStandard = 0,   // 通常シェーダー (Standard / LightingType 1)
+        kShaderGem = 1,        // 宝石シェーダー (Gem / Crystal / LightingType 2)
+        kShaderDustMiasma = 2  // モヤ・邪気シェーダー (Dust Miasma / LightingType 3)
     };
 
     struct CustomBlockDef {

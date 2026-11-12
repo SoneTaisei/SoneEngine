@@ -286,6 +286,7 @@
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\JumpBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\NormalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DeathBlock.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\BaseBlock\DustBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\GoalBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\CoinBlock.cpp" />
     <ClCompile Include="Project\Game2D\Blocks\BaseBlock\OneWayBlock.cpp" />
@@ -580,6 +581,7 @@
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\JumpBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\NormalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DeathBlock.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DustBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\GoalBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\CoinBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\OneWayBlock.h" />

@@ -422,8 +422,8 @@ void MapChip2D::RebuildChipObjects() {
             bool canMerge = false;
             if (def) {
                 canMerge = (def->type == "NormalBlock" || def->type == "DeathBlock" || def->type == "OneWayBlock" || def->type == "LiftBlock" || def->type == "FallBlock");
-                // モデルが設定されている場合は、引き伸ばされないようにマージを無効化する
-                if (!def->modelName.empty()) {
+                // モデルが設定されている場合や、モヤシェーダー（8近傍の接続判定を使う場合）はマージを無効化する
+                if (!def->modelName.empty() || def->shaderMode == kShaderDustMiasma || def->type == "DustBlock") {
                     canMerge = false;
                 }
             } else {
@@ -630,6 +630,7 @@ std::string MapChip2D::GetMapDataAsString() const {
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
         p["textureName"] = def.textureName;
+        p["shaderMode"] = def.shaderMode;
         p["properties"] = def.properties;
         paletteArray.push_back(p);
     }
@@ -680,6 +681,7 @@ bool MapChip2D::LoadFromString(const std::string& data) {
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
+                if (p.contains("shaderMode")) def.shaderMode = p["shaderMode"];
                 if (p.contains("properties")) def.properties = p["properties"];
                 if (def.type == "LiftBlock" && !def.properties.contains("inertiaTime")) {
                     def.properties["inertiaTime"] = 0.5f;
@@ -839,6 +841,7 @@ bool MapChip2D::SaveTemplatesToFile(const std::string& filepath) {
         p["scale"] = {{"x", def.scale.x}, {"y", def.scale.y}, {"z", def.scale.z}};
         p["modelName"] = def.modelName;
         p["textureName"] = def.textureName;
+        p["shaderMode"] = def.shaderMode;
         p["properties"] = def.properties;
         templatesArray.push_back(p);
     }
@@ -880,6 +883,7 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
                 }
                 if (p.contains("modelName")) def.modelName = p["modelName"];
                 if (p.contains("textureName")) def.textureName = p["textureName"];
+                if (p.contains("shaderMode")) def.shaderMode = p["shaderMode"];
                 if (p.contains("properties")) def.properties = p["properties"];
                 if (def.type == "LiftBlock" && !def.properties.contains("inertiaTime")) {
                     def.properties["inertiaTime"] = 0.5f;
@@ -990,6 +994,19 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                         prc->SetTextureHandle(TextureManager::GetInstance()->GetGpuHandle(handle));
                     }
                     
+                    if (def->shaderMode == kShaderGem) {
+                        prc->SetLightingType(2);
+                    } else if (def->shaderMode == kShaderDustMiasma) {
+                        prc->SetLightingType(3);
+                        prc->SetShininess(32.0f);
+                        prc->SetEnvironmentCoefficient(1.6f);
+                        prc->SetEnableAutoTime(true);
+                        prc->SetTimeScale(1.4f);
+                        prc->SetIsDoubleSided(false);
+                    } else {
+                        prc->SetLightingType(1);
+                    }
+                    
 
                     if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
                         tc->SetScale({ 
@@ -1046,6 +1063,16 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                     }
                     mrc->SetColor(def->color);
 
+                    if (def->shaderMode == kShaderGem) {
+                        mrc->SetLightingType(2);
+                    } else if (def->shaderMode == kShaderDustMiasma) {
+                        mrc->SetLightingType(3);
+                        mrc->SetShininess(32.0f);
+                        mrc->SetEnvironmentCoefficient(1.6f);
+                    } else {
+                        mrc->SetLightingType(1);
+                    }
+
                     if (auto* tc = newBlock->GetGameObject()->GetComponent<TransformComponent>()) {
                         tc->SetPosition({ worldX, worldY, 0.0f });
                         tc->SetScale(def->scale);
@@ -1068,6 +1095,45 @@ std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType ty
                         float tileY = tc->GetScale().y / chipSize_;
                         float tileZ = tc->GetScale().z / chipSize_;
                         Matrix4x4 uvTrans = TransformFunctions::MakeScaleMatrix({tileX, tileY, tileZ});
+                        if (prc->GetMaterial().lightingType == 3) {
+                            auto isMiasmaNeighbor = [&](int nx, int ny) -> bool {
+                                if (nx < 0 || nx >= mapWidth_ || ny < 0 || ny >= mapHeight_) return false;
+                                ChipType nt = mapData_[ny][nx];
+                                if (nt == ChipType::kNone) return false;
+                                if (nt == type) return true;
+                                int nId = static_cast<int>(nt);
+                                const CustomBlockDef* nDef = (nId >= 100) ? FindCustomBlockDef(nId) : FindTemplateBlockDef(nId);
+                                return (nDef && (nDef->shaderMode == kShaderDustMiasma || nDef->type == "DustBlock"));
+                            };
+                            auto isSolidNonMiasmaNeighbor = [&](int nx, int ny) -> bool {
+                                if (nx < 0 || nx >= mapWidth_ || ny < 0 || ny >= mapHeight_) return false;
+                                ChipType nt = mapData_[ny][nx];
+                                if (nt == ChipType::kNone || nt == ChipType::kPlayerSpawn || nt == ChipType::kRoomRespawn ||
+                                    nt == ChipType::kCoin || nt == ChipType::kGoal || nt == ChipType::kEnemy ||
+                                    nt == ChipType::kRail || nt == ChipType::kDashRecovery) return false;
+                                if (isMiasmaNeighbor(nx, ny)) return false;
+                                int nId = static_cast<int>(nt);
+                                const CustomBlockDef* nDef = (nId >= 100) ? FindCustomBlockDef(nId) : FindTemplateBlockDef(nId);
+                                if (nDef) {
+                                    return (nDef->type == "NormalBlock" || nDef->type == "DeathBlock" || nDef->type == "OneWayBlock" || nDef->type == "BreakableBlock");
+                                }
+                                return (nt == ChipType::kBlock || nt == ChipType::kDeathBlock || nt == ChipType::kOneWayBlock || nt == ChipType::kBreakableBlock);
+                            };
+                            int neighborMask = 0;
+                            if (isMiasmaNeighbor(x - 1, y))     neighborMask |= 1;
+                            if (isMiasmaNeighbor(x + 1, y))     neighborMask |= 2;
+                            if (isMiasmaNeighbor(x, y - 1))     neighborMask |= 4;
+                            if (isMiasmaNeighbor(x, y + 1))     neighborMask |= 8;
+                            if (isMiasmaNeighbor(x - 1, y - 1)) neighborMask |= 16;
+                            if (isMiasmaNeighbor(x + 1, y - 1)) neighborMask |= 32;
+                            if (isMiasmaNeighbor(x - 1, y + 1)) neighborMask |= 64;
+                            if (isMiasmaNeighbor(x + 1, y + 1)) neighborMask |= 128;
+                            if (isSolidNonMiasmaNeighbor(x - 1, y)) neighborMask |= 256;
+                            if (isSolidNonMiasmaNeighbor(x + 1, y)) neighborMask |= 512;
+                            if (isSolidNonMiasmaNeighbor(x, y - 1)) neighborMask |= 1024;
+                            if (isSolidNonMiasmaNeighbor(x, y + 1)) neighborMask |= 2048;
+                            uvTrans.m[3][1] = static_cast<float>(neighborMask + 256);
+                        }
                         prc->SetUVTransform(uvTrans);
                         prc->SetEnableBoxMapping(1.0f);
                     }

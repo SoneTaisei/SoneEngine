@@ -3,6 +3,7 @@
 #include "TransformComponent.h"
 #include "Renderer/Renderer.h"
 #include "Core/Utility/UtilityFunctions.h"
+#include "Core/TimeManager.h"
 #ifdef USE_IMGUI
 #include "imgui.h"
 #endif
@@ -63,6 +64,12 @@ void PrimitiveRendererComponent::Initialize() {
 }
 
 void PrimitiveRendererComponent::Update() {
+    if (enableAutoTime_ || material_.lightingType == 3) {
+        float dt = TimeManager::GetInstance().GetDeltaTime();
+        elapsedTime_ += dt * timeScale_;
+        material_.uvTransform.m[3][0] = elapsedTime_;
+    }
+
     if (mappedMaterial_) {
         *mappedMaterial_ = material_;
     }
@@ -114,9 +121,23 @@ void PrimitiveRendererComponent::DisplayImGui() {
             ImGui::DragFloat("Shininess", &material_.shininess, 0.1f, 0.1f, 100.0f);
             ImGui::SliderFloat("Environment Coefficient", &material_.environmentCoefficient, 0.0f, 1.0f);
             ImGui::Checkbox("Enable Environment Map", (bool*)&material_.enableEnvironmentMap);
-            ImGui::Checkbox("Lighting Enable", (bool*)&material_.lightingType);
+            const char* lightingTypeNames[] = { "Unlit (0)", "Standard (1)", "Crystal (2)", "Dust Miasma (3)" };
+            int currentLightingType = material_.lightingType;
+            if (ImGui::Combo("Lighting / Shader Type", &currentLightingType, lightingTypeNames, IM_ARRAYSIZE(lightingTypeNames))) {
+                material_.lightingType = currentLightingType;
+            }
             ImGui::DragFloat("Alpha Reference", &material_.alphaReference, 0.01f, 0.0f, 1.0f);
             ImGui::TreePop();
+        }
+        if (material_.lightingType == 3) {
+            if (ImGui::TreeNode("Dust Miasma (Celeste) Settings")) {
+                ImGui::ColorEdit4("Core Color", &material_.color.x);
+                ImGui::DragFloat("Pixel Resolution", &material_.shininess, 1.0f, 8.0f, 128.0f, "%.0f");
+                ImGui::DragFloat("Anim Speed", &material_.environmentCoefficient, 0.05f, 0.0f, 10.0f);
+                ImGui::DragFloat("Time Scale", &timeScale_, 0.05f, 0.0f, 10.0f);
+                ImGui::Checkbox("Auto Time", &enableAutoTime_);
+                ImGui::TreePop();
+            }
         }
         if (ImGui::TreeNode("Trail")) {
             ImGui::Checkbox("Show Trail", &showTrail_);
