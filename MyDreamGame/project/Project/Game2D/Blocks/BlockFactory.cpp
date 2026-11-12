@@ -8,6 +8,7 @@
 #include "BaseBlock/LiftBlock.h"
 #include "BaseBlock/PatrolEnemyBlock.h"
 #include "BaseBlock/RailBlock.h"
+#include "BaseBlock/DustBlock.h"
 #include <algorithm>
 
 BlockFactory& BlockFactory::GetInstance() {
@@ -42,6 +43,9 @@ BlockFactory::BlockFactory() {
     });
     Register("RailBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
         return std::make_shared<RailBlock>(map, x, y);
+    });
+    Register("DustBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+        return std::make_shared<DustBlock>(map, x, y);
     });
 }
 

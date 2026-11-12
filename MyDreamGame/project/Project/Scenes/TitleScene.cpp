@@ -1,4 +1,6 @@
 #include "TitleScene.h"
+#include "GameObject/Object3D.h"
+#include "Resource/Model/ModelCommon.h"
 #include <cmath>
 #include "Core/TimeManager.h"
 #include "Graphics/TextureManager.h"

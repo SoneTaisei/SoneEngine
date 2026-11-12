@@ -273,7 +273,6 @@ void ModelSelectModal::RefreshModelList() {
 
     scanDir("resources/Object");
     scanDir("resources/models");
-    scanDir("resources");
 
     // 重複除去
     std::vector<ModelSelectItem> uniqueList;
@@ -365,7 +364,6 @@ void ModelSelectModal::DrawModal(const char* popupId, bool& isOpen, const std::f
         for (size_t fIdx = 0; fIdx < filteredIndices.size(); ++fIdx) {
             int i = filteredIndices[fIdx];
             auto& item = modelList_[i];
-            EnsureModelLoaded(item);
 
             ImGui::PushID(i);
 
@@ -403,18 +401,17 @@ void ModelSelectModal::DrawModal(const char* popupId, bool& isOpen, const std::f
             bool isCardVisible = ImGui::IsRectVisible(p, ImVec2(p.x + cardWidth, p.y + cardHeight));
 
             if (isCardVisible) {
-                // 3Dプレビュー
+                // 3Dプレビュー (超軽量アイソメトリックボックスアイコン)
                 ImVec2 previewCenter(p.x + cardWidth * 0.5f, p.y + 40.0f);
-                float previewRadius = 24.0f;
-
-                if (!item.isPreviewGenerated) {
-                    BuildModelPreviewTriangles(item, previewRadius, ImVec4(0.92f, 0.92f, 0.95f, 1.0f));
+                ImVec4 iconColor = ImVec4(0.4f, 0.65f, 0.9f, 1.0f);
+                if (item.extension == ".gltf") {
+                    iconColor = ImVec4(0.8f, 0.45f, 0.85f, 1.0f);
+                } else if (item.extension == ".fbx") {
+                    iconColor = ImVec4(0.95f, 0.6f, 0.3f, 1.0f);
+                } else if (item.extension == ".obj") {
+                    iconColor = ImVec4(0.35f, 0.8f, 0.75f, 1.0f);
                 }
-
-                bool rendered = DrawCachedModelPreview(drawList, previewCenter, item);
-                if (!rendered) {
-                    Draw3DIsometricBoxFallback(drawList, previewCenter, 16.0f, ImVec4(0.4f, 0.6f, 0.85f, 1.0f));
-                }
+                Draw3DIsometricBoxFallback(drawList, previewCenter, 18.0f, iconColor);
             }
 
             // 拡張子バッジ (右上)

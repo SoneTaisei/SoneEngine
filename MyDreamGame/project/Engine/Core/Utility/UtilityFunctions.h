@@ -1,8 +1,12 @@
 #pragma once
 #include"Core/Utility/Structs.h"
 #include "Animation.h"
-
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+#include "Core/StringUtils.h"
+#include "Resource/Primitive/MeshGenerator.h"
+#include "Resource/Texture/TextureLoader.h"
+#include "Core/Utility/ShaderCompiler.h"
+#include "Core/Utility/DxResourceUtils.h"
+#include "Resource/Model/ModelLoader.h"
 
 void Log(const std::string &message);
 
@@ -10,17 +14,12 @@ std::wstring ConvertString(const std::string &str);
 
 std::string ConvertString(const std::wstring &str);
 
-LONG WINAPI ExportDump(EXCEPTION_POINTERS *exception);
-
 IDxcBlob *CompileShader(
-	// CompilerするShaderファイルへのパス
-	const std::wstring &filePath,
-	// Compilerに使用するProfile
-	const wchar_t *profile,
-	// 初期化で生成したものを3つ
-	IDxcUtils *dxcUtils,
-	IDxcCompiler3 *dxcCompiler,
-	IDxcIncludeHandler *includeHandler);
+    const std::wstring &filePath,
+    const wchar_t *profile,
+    IDxcUtils *dxcUtils,
+    IDxcCompiler3 *dxcCompiler,
+    IDxcIncludeHandler *includeHandler);
 
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(Microsoft::WRL::ComPtr<ID3D12Device> device, size_t sizeInBytes);
 
@@ -56,31 +55,6 @@ void CreateSphereMesh(std::vector<VertexData> &vertices, std::vector<uint32_t> &
 /// <param name="filename"></param>
 /// <returns></returns>
 ModelData LoadModelFile(const std::string &directoryPath, const std::string &filename);
-Animation LoadAnimationFile(const std::string &directoryPath, const std::string &filename);
-Animation LoadAnimationFile(const std::string &directoryPath, const std::string &filename, const std::string &animationName);
-
-MaterialData LoadMaterialTemplateFile(const std::string &directoryPath, const std::string &filename);
-
-SoundData SoundLoadWave(const char *filename);
-
-void SoundUnload(SoundData *soundData);
-
-/*キー入力の取得
-*********************************************************/
-
-// 押されている時
-bool IsKeyHeld(BYTE keys);
-
-// キーが離された瞬間
-bool IsKeyReleased(BYTE keys, BYTE preKeys);
-
-// キーが押された瞬間
-bool IsKeyPressed(BYTE keys, BYTE preKeys);
-
-// 押されていないとき
-bool IsKeyUp(BYTE keys);
-
-SoundData SoundLoadMediaFoundation(const char *filename);
 
 Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     Microsoft::WRL::ComPtr<ID3D12Device> device,
@@ -91,12 +65,3 @@ Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(
     D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 void CreateBoxMesh(std::vector<SkyboxVertexData> &vertices, std::vector<uint32_t> &indices);
-
-
-int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints);
-Skeleton CreateSkeleton(const Node& rootNode);
-void Update(Skeleton& skeleton);
-void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
-
-SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const Skeleton& skeleton, const ModelData& modelData);
-void Update(SkinCluster& skinCluster, const Skeleton& skeleton);

@@ -44,7 +44,7 @@ namespace {
         Vector3 bCenter = { (bMin.x + bMax.x) * 0.5f, (bMin.y + bMax.y) * 0.5f, (bMin.z + bMax.z) * 0.5f };
         Vector3 bSize = { bMax.x - bMin.x, bMax.y - bMin.y, bMax.z - bMin.z };
         float maxDim = (std::max)({ bSize.x, bSize.y, bSize.z, 0.001f });
-        float scale = (boxSize * 0.70f) / maxDim;
+        float scale = (boxSize * 0.85f) / maxDim;
 
         // 2. 回転（斜めアングル: Yaw = 35度, Pitch = 22度）
         float yaw = 35.0f * 3.14159265f / 180.0f;
@@ -72,15 +72,19 @@ namespace {
         size_t totalTriangles = numIndices > 0 ? numIndices / 3 : modelData.vertices.size() / 3;
         if (totalTriangles == 0) return;
 
+        // マップエディタと同様、ポリゴンを飛ばさずに全三角形を順番に描画（最大21000ポリゴンで安全性確保）
+        constexpr size_t kMaxSafeTriangles = 21000;
+        size_t renderTriangles = (std::min)(totalTriangles, kMaxSafeTriangles);
+
         Vector3 lightDir = { 0.4f, 0.8f, 0.5f };
         float lightLen = std::sqrt(lightDir.x * lightDir.x + lightDir.y * lightDir.y + lightDir.z * lightDir.z);
         if (lightLen > 1e-4f) {
             lightDir.x /= lightLen; lightDir.y /= lightLen; lightDir.z /= lightLen;
         }
 
-        item.cachedTriangles.reserve(totalTriangles);
+        item.cachedTriangles.reserve(renderTriangles);
 
-        for (size_t t = 0; t < totalTriangles; ++t) {
+        for (size_t t = 0; t < renderTriangles; ++t) {
             size_t idx0 = t * 3;
             size_t idx1 = t * 3 + 1;
             size_t idx2 = t * 3 + 2;
@@ -229,9 +233,20 @@ void Model3DEditorPalette::EnsureModelLoaded(ModelAssetItem& item) {
     try {
         item.modelPtr = ModelManager::GetInstance()->GetModel(item.directoryPath, item.fileName);
         if (item.modelPtr) {
-            const std::string& texPath = item.modelPtr->GetModelData().material.textureFilePath;
+            std::string texPath = item.modelPtr->GetModelData().material.textureFilePath;
+            std::string resolvedTex;
             if (!texPath.empty() && std::filesystem::exists(texPath)) {
-                uint32_t texIdx = TextureManager::GetInstance()->Load(texPath);
+                resolvedTex = texPath;
+            } else if (!texPath.empty()) {
+                std::string combined = item.directoryPath + "/" + texPath;
+                if (std::filesystem::exists(combined)) {
+                    resolvedTex = combined;
+                }
+            }
+
+            // テクスチャファイルが見つかった場合はロード
+            if (!resolvedTex.empty()) {
+                uint32_t texIdx = TextureManager::GetInstance()->Load(resolvedTex);
                 item.textureGpuHandle = TextureManager::GetInstance()->GetGpuHandle(texIdx);
                 item.hasTexture = true;
             }
@@ -276,7 +291,6 @@ void Model3DEditorPalette::RefreshModelList() {
 
     scanDir("resources/Object");
     scanDir("resources/models");
-    scanDir("resources");
 
     // Remove duplicates based on fullPath
     std::vector<ModelAssetItem> uniqueList;
@@ -440,10 +454,12 @@ void Model3DEditorPalette::Draw(bool& showModelPalette, SceneManager* sceneManag
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
+        // 1フレームあたり2個ずつモデルをロード＆プレビュー生成（フリーズ防止＆高速反映）
+        int loadsRemainingThisFrame = 2;
+
         for (size_t fIdx = 0; fIdx < filteredIndices.size(); ++fIdx) {
             int i = filteredIndices[fIdx];
             auto& item = modelList_[i];
-            EnsureModelLoaded(item);
 
             ImGui::PushID(i);
 
@@ -492,17 +508,29 @@ void Model3DEditorPalette::Draw(bool& showModelPalette, SceneManager* sceneManag
             bool isCardVisible = ImGui::IsRectVisible(p, ImVec2(p.x + cardWidth, p.y + cardHeight));
 
             if (isCardVisible) {
-                // --- 3Dモデルプレビュー画像の描画 (キャッシュから超高速描画) ---
-                ImVec2 previewCenter(p.x + cardWidth * 0.5f, p.y + 40.0f);
-                float previewRadius = 24.0f;
+                // マップエディタと同じ位置・サイズ基準
+                ImVec2 previewCenter(p.x + cardWidth * 0.5f, p.y + 36.0f);
+                float previewRadius = 44.0f;
 
-                if (!item.isPreviewGenerated) {
-                    BuildModelPreviewTriangles(item, previewRadius, ImVec4(0.92f, 0.92f, 0.95f, 1.0f));
+                // 画面内にある未ロードのモデルを1フレームに2個ずつ安全にロード
+                if (!item.isResourceLoaded && loadsRemainingThisFrame > 0) {
+                    EnsureModelLoaded(item);
+                    BuildModelPreviewTriangles(item, previewRadius, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                    loadsRemainingThisFrame--;
                 }
 
-                bool rendered = DrawCachedModelPreview(drawList, previewCenter, item);
+                // プレビュー生成が完了していれば固有モデル形状を描画、未完了なら仮アイコン
+                bool rendered = false;
+                if (item.isPreviewGenerated) {
+                    rendered = DrawCachedModelPreview(drawList, previewCenter, item);
+                }
+
                 if (!rendered) {
-                    Draw3DIsometricBoxFallback(drawList, previewCenter, 16.0f, ImVec4(0.4f, 0.6f, 0.85f, 1.0f));
+                    ImVec4 iconColor = ImVec4(0.4f, 0.65f, 0.9f, 1.0f);
+                    if (item.extension == ".gltf") iconColor = ImVec4(0.8f, 0.45f, 0.85f, 1.0f);
+                    else if (item.extension == ".fbx") iconColor = ImVec4(0.95f, 0.6f, 0.3f, 1.0f);
+                    else if (item.extension == ".obj") iconColor = ImVec4(0.35f, 0.8f, 0.75f, 1.0f);
+                    Draw3DIsometricBoxFallback(drawList, previewCenter, 18.0f, iconColor);
                 }
             }
 

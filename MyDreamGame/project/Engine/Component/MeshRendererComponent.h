@@ -35,6 +35,7 @@ public:
     void SetUVTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
     void SetAlphaReference(float alphaRef) { material_.alphaReference = alphaRef; }
     void SetShininess(float shininess) { material_.shininess = shininess; }
+    void SetEnvironmentCoefficient(float coeff) { material_.environmentCoefficient = coeff; }
     BlendMode GetBlendMode() const { return blendMode_; }
     void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
 

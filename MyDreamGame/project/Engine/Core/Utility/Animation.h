@@ -5,6 +5,10 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <optional>
+#include <d3d12.h>
+#include <wrl.h>
+#include "Core/Utility/Structs.h"
 
 template <typename tValue>
 struct Keyframe {
@@ -79,3 +83,14 @@ bool SaveAnimationToJsonFile(const Animation& animation, const std::string& file
 bool LoadAnimationFromJsonFile(Animation& outAnimation, const std::string& filepath);
 Animation CreateDefaultWallClimbAnimation();
 Animation CreateDefaultAirDashAnimation();
+
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename);
+Animation LoadAnimationFile(const std::string& directoryPath, const std::string& filename, const std::string& animationName);
+
+int32_t CreateJoint(const Node& node, const std::optional<int32_t>& parent, std::vector<Joint>& joints);
+Skeleton CreateSkeleton(const Node& rootNode);
+void Update(Skeleton& skeleton);
+void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
+
+SkinCluster CreateSkinCluster(Microsoft::WRL::ComPtr<ID3D12Device> device, const Skeleton& skeleton, const ModelData& modelData);
+void Update(SkinCluster& skinCluster, const Skeleton& skeleton);

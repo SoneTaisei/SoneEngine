@@ -33,10 +33,18 @@ public:
     void SetUVTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
     void SetAlphaReference(float alphaRef) { material_.alphaReference = alphaRef; }
     void SetShininess(float shininess) { material_.shininess = shininess; }
+    void SetEnvironmentCoefficient(float coeff) { material_.environmentCoefficient = coeff; }
     void SetBlendMode(BlendMode blendMode) { blendMode_ = blendMode; }
     const BlendMode GetBlendMode() const { return blendMode_; }
     void SetUvTransform(const Matrix4x4 &uvTransform) { material_.uvTransform = uvTransform; }
     
+    // アニメーション/シェーダータイマー用
+    void SetCustomTime(float time) { material_.uvTransform.m[3][0] = time; }
+    void SetEnableAutoTime(bool enable) { enableAutoTime_ = enable; }
+    bool IsEnableAutoTime() const { return enableAutoTime_; }
+    void SetTimeScale(float scale) { timeScale_ = scale; }
+    float GetTimeScale() const { return timeScale_; }
+
     // トレイル描画用
     const bool GetShowTrail() const { return showTrail_; }
     void SetShowTrail(bool show) { showTrail_ = show; }
@@ -73,6 +81,11 @@ private:
 
     bool isBillboard_ = false;
     bool isDoubleSided_ = false;
+
+    // アニメーションタイマー
+    bool enableAutoTime_ = false;
+    float timeScale_ = 1.0f;
+    float elapsedTime_ = 0.0f;
 
 public:
     void SetIsBillboard(bool b) { isBillboard_ = b; }
