@@ -2,6 +2,9 @@
 #include"Core/Utility/Structs.h"
 #include "Animation.h"
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> origin/master
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 =======
