@@ -77,17 +77,7 @@ void FallBlock::Update() {
     auto* cc = GetGameObject() ? GetGameObject()->GetComponent<ColliderComponent>() : nullptr;
     auto* prc = GetGameObject() ? GetGameObject()->GetComponent<PrimitiveRendererComponent>() : nullptr;
 
-    bool isPlayingOrReplaying = false;
-#ifdef USE_IMGUI
-    if (EditorManager::IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-#else
-    isPlayingOrReplaying = true;
-#endif
-    if (ReplayManager::GetInstance()->IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
+    float dt = Time::GetDeltaTime();
 
     // MapChip2Dやエディタ（JSON）によって設定された色を初回または非プレイ時にキャプチャして同期
     if (prc) {
@@ -95,7 +85,7 @@ void FallBlock::Update() {
             defaultColor_ = prc->GetMaterial().color;
             UpdateShakeColor();
             colorInitialized_ = true;
-        } else if (!isPlayingOrReplaying && state_ == State::Idle) {
+        } else if (!dt && state_ == State::Idle) {
             // エディタ上での色変更を同期
             const Vector4& currentColor = prc->GetMaterial().color;
             if (std::abs(currentColor.x - defaultColor_.x) > 0.001f ||
@@ -108,7 +98,7 @@ void FallBlock::Update() {
         }
     }
 
-    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
+    bool isAnimActive = dt && !ReplayManager::GetInstance()->IsPaused();
     if (!isAnimActive) {
         // 非プレイ時は初期配置位置で静止
         velocity_ = { 0.0f, 0.0f, 0.0f };
@@ -122,7 +112,6 @@ void FallBlock::Update() {
         return;
     }
 
-    float dt = TimeManager::GetInstance().GetDeltaTime();
     if (dt <= 0.0f) return;
 
     Vector3 shakeOffset = { 0.0f, 0.0f, 0.0f };

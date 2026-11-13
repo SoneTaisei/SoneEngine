@@ -151,6 +151,7 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused() && gameState_ != GameState::Pause;
+    Time::SetPaused(!isGameActive);
 
     if (skybox_) {
         skybox_->Update();

@@ -44,37 +44,24 @@ void PatrolEnemyBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive,
 }
 
 void PatrolEnemyBlock::Update() {
-    bool isPlayingOrReplaying = false;
-#ifdef USE_IMGUI
-    if (EditorManager::IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-#else
-    isPlayingOrReplaying = true;
-#endif
-    if (ReplayManager::GetInstance()->IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-
-    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
-    if (!isAnimActive) {
-        // Playしていない時は初期位置で停止して描画のみ更新
+    float dt = Time::GetDeltaTime();
+    // 停止中・ポーズ中は初期位置で静止
+    if (dt <= 0.0f) {
         currentPos_ = startPos_;
-        velocity_ = { 0.0f, 0.0f, 0.0f };
+        velocity_ = {0.0f, 0.0f, 0.0f};
         moveDir_ = 1.0f;
         rollAngle_ = 0.0f;
         isOnGround_ = false;
         if (GetGameObject()) {
             if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(startPos_);
-                tc->SetRotation({ 0.0f, 1.57079632f, 0.0f });
+                tc->SetRotation({0.0f, 1.57079632f, 0.0f});
             }
             GetGameObject()->Update();
         }
         return;
     }
 
-    float dt = TimeManager::GetInstance().GetDeltaTime();
     if (dt <= 0.0f) {
         if (GetGameObject())
             GetGameObject()->Update();

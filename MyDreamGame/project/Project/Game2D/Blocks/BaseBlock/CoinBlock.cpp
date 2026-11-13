@@ -22,25 +22,10 @@ void CoinBlock::Initialize(ID3D12Device *device, Primitive *boxPrimitive, float 
 }
 
 void CoinBlock::Update() {
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-
-    bool isPlayingOrReplaying = false;
-#ifdef USE_IMGUI
-    if (EditorManager::IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-#else
-    isPlayingOrReplaying = true;
-#endif
-    if (ReplayManager::GetInstance()->IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-
-    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
-    float animDeltaTime = isAnimActive ? deltaTime : 0.0f;
+    float dt = Time::GetDeltaTime();
 
     if (isCollected_) {
-        collectTimer_ += animDeltaTime;
+        collectTimer_ += dt;
         float progress = collectTimer_ / collectDuration_;
         if (progress >= 1.0f) {
             if (auto *mrc = GetGameObject() ? GetGameObject()->GetComponent<MeshRendererComponent>() : nullptr) {
@@ -56,10 +41,10 @@ void CoinBlock::Update() {
             return;
         }
         // 上に上がる演出
-        position_.y += 5.0f * animDeltaTime;
+        position_.y += 5.0f * dt;
 
         // 回転を早める
-        rotationY_ += 10.0f * animDeltaTime;
+        rotationY_ += 10.0f * dt;
 
         // フェードアウト
         if (auto *mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
@@ -73,7 +58,7 @@ void CoinBlock::Update() {
             prc->SetColor(c);
         }
     } else {
-        rotationY_ += 2.0f * animDeltaTime;
+        rotationY_ += 2.0f * dt;
     }
 
     if (GetGameObject()) {

@@ -23,27 +23,13 @@ void GoalBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 }
 
 void GoalBlock::Update() {
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-
-    bool isPlayingOrReplaying = false;
-#ifdef USE_IMGUI
-    if (EditorManager::IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-#else
-    isPlayingOrReplaying = true;
-#endif
-    if (ReplayManager::GetInstance()->IsPlaying()) {
-        isPlayingOrReplaying = true;
+    float dt = Time::GetDeltaTime();
+    if (dt <= 0.0f) {
+        return;
     }
 
-    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
-    float animDeltaTime = isAnimActive ? deltaTime : 0.0f;
-
-    // 上下浮遊の更新
-    if (animDeltaTime > 0.0f) {
-        floatTimer_ += animDeltaTime * floatSpeed_;
-    }
+    // 浮遊アニメーションの更新
+    floatTimer_ += dt * floatSpeed_;
 
     float offsetY = std::sin(floatTimer_) * floatAmplitude_;
 

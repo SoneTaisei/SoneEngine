@@ -332,6 +332,9 @@ void WindowsApplication::Update() {
         bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
         bool isEditorPaused = EditorManager::IsPlaying() && EditorManager::IsPaused();
 
+        bool shouldPause = !isCurrentlyActive || isTakeoverPausing || isEditorPaused;
+        Time::SetPaused(shouldPause);
+
         if (isCurrentlyActive && !isTakeoverPausing && !isEditorPaused) {
             if (!wasActive) {
                 // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する

@@ -58,7 +58,7 @@ void BreakableBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, f
 }
 
 void BreakableBlock::Update() {
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    float dt = Time::GetDeltaTime();
 
     if (!isBroken_) {
         // 通常時：普通のブロックとしてGameObjectを更新
@@ -66,7 +66,7 @@ void BreakableBlock::Update() {
     } else {
         // 破壊状態時：自動復活の設定があればタイマーを加算
         if (respawnTime_ > 0.0f) {
-            respawnTimer_ += deltaTime;
+            respawnTimer_ += dt;
             if (respawnTimer_ >= respawnTime_) {
                 Respawn();
             }
@@ -77,27 +77,27 @@ void BreakableBlock::Update() {
     for (auto& debris : debrisList_) {
         if (!debris.active || !debris.gameObject) continue;
 
-        debris.timer += deltaTime;
+        debris.timer += dt;
         if (debris.timer >= debris.lifetime) {
             debris.active = false;
             continue;
         }
 
         // 重力適用
-        debris.velocity.y -= 25.0f * deltaTime;
+        debris.velocity.y -= 25.0f * dt;
 
         // 位置と回転の更新
         if (auto* tc = debris.gameObject->GetComponent<TransformComponent>()) {
             Vector3 pos = tc->GetPosition();
-            pos.x += debris.velocity.x * deltaTime;
-            pos.y += debris.velocity.y * deltaTime;
-            pos.z += debris.velocity.z * deltaTime;
+            pos.x += debris.velocity.x * dt;
+            pos.y += debris.velocity.y * dt;
+            pos.z += debris.velocity.z * dt;
             tc->SetPosition(pos);
 
             Vector3 rot = tc->GetRotation();
-            rot.x += debris.rotationVelocity.x * deltaTime;
-            rot.y += debris.rotationVelocity.y * deltaTime;
-            rot.z += debris.rotationVelocity.z * deltaTime;
+            rot.x += debris.rotationVelocity.x * dt;
+            rot.y += debris.rotationVelocity.y * dt;
+            rot.z += debris.rotationVelocity.z * dt;
             tc->SetRotation(rot);
 
             // 時間経過で縮小

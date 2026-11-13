@@ -19,6 +19,7 @@
 #ifdef USE_IMGUI
 #include "Editor/EditorManager.h"
 #endif
+#include "Core/TimeManager.h"
 
 GameEffectManager::GameEffectManager() = default;
 GameEffectManager::~GameEffectManager() = default;
@@ -57,7 +58,7 @@ void GameEffectManager::Update(float deltaTime, bool isGameActive, GameCamera* c
     if (isGameActive) {
         for (auto& effect : effects_) {
             if (effect) {
-                effect->Update(1.0f / 60.0f);
+                effect->Update(Time::GetDeltaTime());
             }
         }
     }

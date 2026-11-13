@@ -12,6 +12,7 @@
 void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
     if (state_.isDead_ || state_.isGoal_) return;
 
+    dt_ = Time::GetDeltaTime();
     if (state_.hitstopTimer_ > 0.0f) {
         state_.hitstopTimer_ -= deltaTime;
         return; // ヒットストップ中は物理演算・入力をスキップ
@@ -136,7 +137,6 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     state_.isWallClinging_ = false;
 
     // リフトの慣性猶予（コヨーテタイム）の更新
-    float dt = TimeManager::GetInstance().GetDeltaTime();
     if (state_.isOnMovingPlatform_) {
         // リフトが動いていれば最新の速度を記録し、猶予時間をリセット
         if (std::abs(state_.platformVelocity_.x) > 0.01f || std::abs(state_.platformVelocity_.y) > 0.01f) {
@@ -151,11 +151,11 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         }
     }
     if (state_.platformInertiaTimer_ > 0.0f) {
-        state_.platformInertiaTimer_ -= dt;
+        state_.platformInertiaTimer_ -= dt_;
     }
 
     if (state_.wallJumpDirLockTimer_ > 0.0f) {
-        state_.wallJumpDirLockTimer_ -= dt;
+        state_.wallJumpDirLockTimer_ -= dt_;
         if (state_.wallJumpDirLockTimer_ <= 0.0f) {
             state_.lockedDirectionX_ = 0.0f;
         }
@@ -298,8 +298,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             state_.externalVelocityTimer_ = 0.0f;
         } else if (state_.externalVelocityTimer_ > 0.0f && state_.externalVelocityDuration_ > 0.0f) {
             // 空中ではリフトの慣性持続時間 (inertiaTime) に基づいて滑らかに減衰
-            float dt = TimeManager::GetInstance().GetDeltaTime();
-            state_.externalVelocityTimer_ -= dt;
+            state_.externalVelocityTimer_ -= dt_;
             if (state_.externalVelocityTimer_ <= 0.0f) {
                 state_.externalVelocityTimer_ = 0.0f;
                 state_.externalVelocityX_ = 0.0f;
@@ -647,7 +646,7 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
         AABB2D blockAABB = collider->GetAABB();
         
         if (collider->IsOneWay()) {
-            float previousBottom = state_.position_.y - state_.velocity_.y * TimeManager::GetInstance().GetDeltaTime() - params_.halfHeight_;
+            float previousBottom = state_.position_.y - state_.velocity_.y * dt_ - params_.halfHeight_;
             if (previousBottom < blockAABB.top - 0.05f) {
                 continue;
             }
@@ -905,8 +904,7 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
         if (queryAABB.top <= blockAABB.bottom || queryAABB.bottom >= blockAABB.top) continue;
 
         Vector3 platVel = collider->GetVelocity();
-        float dt = TimeManager::GetInstance().GetDeltaTime();
-        float relMoveDeltaX = moveDeltaX - platVel.x * dt;
+        float relMoveDeltaX = moveDeltaX - platVel.x * dt_;
 
         AABB2D currentAABB = GetAABB(state_, params_);
         if (CheckAABBCollision(currentAABB, blockAABB) || 
