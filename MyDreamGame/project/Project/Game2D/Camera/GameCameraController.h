@@ -14,7 +14,7 @@ public:
     void Setup(GameCamera* camera, Player2D* player, MapChip2D* map);
 
     // 通常プレイ中の更新（追従ターゲット設定、部屋境界、右スティック見渡し回転）
-    void Update(float deltaTime, Player2D* player, MapChip2D* map, bool isClear, bool isReplaying);
+    void Update(Player2D* player, MapChip2D* map, bool isClear, bool isReplaying);
 
     // リスポーン時のカメラスナップ・部屋再設定
     void OnRespawn(MapChip2D* map);

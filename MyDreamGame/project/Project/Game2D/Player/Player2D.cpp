@@ -26,20 +26,20 @@ void Player2D::ResetActionFlags() {
     state_.isGrabbingVine_ = false;
 }
 
-void Player2D::UpdateWallJumpTimer(float deltaTime) {
+void Player2D::UpdateWallJumpTimer() {
     if (state_.wallJumpTimer_ > 0.0f) {
-        state_.wallJumpTimer_ -= deltaTime;
+        state_.wallJumpTimer_ -= Time::GetDeltaTime();
     }
 }
 
-void Player2D::UpdatePhysics(float deltaTime) {
+void Player2D::UpdatePhysics() {
     // 内部で保持している state_ や visuals_ を直接渡す
-    physics_.Update(state_, params_, currentInput_, visuals_, deltaTime, this);
+    physics_.Update(state_, params_, currentInput_, visuals_, this);
 }
 
-void Player2D::UpdateRunDust(float deltaTime) {
+void Player2D::UpdateRunDust() {
     if (state_.isOnGround_ && std::abs(state_.velocity_.x) > 0.1f) {
-        state_.runDustTimer_ += deltaTime;
+        state_.runDustTimer_ += Time::GetDeltaTime();
         if (state_.runDustTimer_ >= params_.runDustInterval_) {
             state_.runDustTimer_ = 0.0f;
             float dirX = (state_.velocity_.x > 0.0f) ? 1.0f : -1.0f;
@@ -79,12 +79,12 @@ void Player2D::StartDeathSequence(bool isFallDeath) {
     }
 }
 
-void Player2D::UpdateDeathKnockback(float deltaTime) {
-    state_.deathTimer_ += deltaTime;
+void Player2D::UpdateDeathKnockback() {
+    state_.deathTimer_ += Time::GetDeltaTime();
     // ノックバック移動
-    state_.velocity_.y += params_.gravity_ * deltaTime;
-    state_.position_.x += state_.velocity_.x * deltaTime;
-    state_.position_.y += state_.velocity_.y * deltaTime;
+    state_.velocity_.y += params_.gravity_ * Time::GetDeltaTime();
+    state_.position_.x += state_.velocity_.x * Time::GetDeltaTime();
+    state_.position_.y += state_.velocity_.y * Time::GetDeltaTime();
 }
 
 void Player2D::RespawnAt(const Vector3 &respawnPos) {
@@ -159,8 +159,8 @@ void Player2D::StartGoalSequence() {
     visuals_.SpawnConfetti(state_.position_);
 }
 
-void Player2D::UpdateGoalTimer(float deltaTime) {
-    state_.goalTimer_ += deltaTime;
+void Player2D::UpdateGoalTimer() {
+    state_.goalTimer_ += Time::GetDeltaTime();
     state_.velocity_ = {0.0f, 0.0f, 0.0f};
 }
 
@@ -229,8 +229,6 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
         return;
     }
 
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-
     // カメラスライド（ルーム遷移）中の硬直処理
     if (isTransitioning) {
         visuals_.SyncTransform(state_.position_, params_);
@@ -239,13 +237,13 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
 
     // ステートマシンによるポリモーフィックな更新処理
     if (currentState_) {
-        currentState_->Update(this, map, deltaTime);
+        currentState_->Update(this, map);
     }
 
     state_.prevPositionForBugCheck_ = state_.position_;
 
     // パーティクルや見た目のベース更新 (移動・物理計算後の最新ステートを反映)
-    visuals_.Update(state_, params_, deltaTime);
+    visuals_.Update(state_, params_);
 
     if (GetGameObject()) {
         if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {

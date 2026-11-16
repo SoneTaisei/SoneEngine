@@ -34,14 +34,14 @@ public:
 
     // --- 2. 通常移動・部屋管理用 ---
     void ResetActionFlags();                   // 死亡・ゴール・リスポーンフラグのリセット
-    void UpdateWallJumpTimer(float deltaTime); // 壁ジャンプタイマーの減算
-    void UpdatePhysics(float deltaTime);       // 物理演算の実行（内部でphysics_.Updateを呼ぶ）
+    void UpdateWallJumpTimer(); // 壁ジャンプタイマーの減算
+    void UpdatePhysics();       // 物理演算の実行（内部でphysics_.Updateを呼ぶ）
     void SetCurrentRoomIndex(int roomIndex) { state_.currentRoomIndex_ = roomIndex; }
-    void UpdateRunDust(float deltaTime); // 走りエフェクトタイマー更新
+    void UpdateRunDust(); // 走りエフェクトタイマー更新
     void UpdateVisualColor();            // 状態（ダッシュ・疲労等）に応じた描画色の更新
     // --- 3. 死亡ステート用 ---
     void StartDeathSequence(bool isFallDeath);  // 死亡開始（初速・スロー・フラグ設定）
-    void UpdateDeathKnockback(float deltaTime); // 死亡時のノックバック物理とタイマー進行
+    void UpdateDeathKnockback(); // 死亡時のノックバック物理とタイマー進行
     void RespawnAt(const Vector3 &respawnPos);  // リスポーン地点へ復帰＆慣性リセット
     void SetCheckpoint(const Vector3& pos, int score) { state_.lastCheckpointPosition_ = pos; state_.checkpointScore_ = score; }
     const Vector3& GetCheckpointPosition() const { return state_.lastCheckpointPosition_; }
@@ -50,12 +50,14 @@ public:
     float GetDeathTimer() const { return state_.deathTimer_; }
     // --- 4. リスポーンステート用 ---
     void StartRespawnSequence(); // リスポーン開始（タイマー初期化等）
-    void UpdateRespawnTimer(float deltaTime) { state_.respawnTimer_ += deltaTime; }
+    void UpdateRespawnTimer() {
+        state_.respawnTimer_ += Time::GetDeltaTime();
+    }
     void FinishRespawn(); // リスポーン完了時の後処理
     float GetRespawnTimer() const { return state_.respawnTimer_; }
     // --- 5. ゴールステート用 ---
     void StartGoalSequence();              // ゴール開始（紙吹雪・速度ゼロ等）
-    void UpdateGoalTimer(float deltaTime); // ゴールタイマー進行
+    void UpdateGoalTimer(); // ゴールタイマー進行
     float GetGoalTimer() const { return state_.goalTimer_; }
     PlayerVisuals &GetVisuals() { return visuals_; }
     PlayerPhysics &GetPhysics() { return physics_; }

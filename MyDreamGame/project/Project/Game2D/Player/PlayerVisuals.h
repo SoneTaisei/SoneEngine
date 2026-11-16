@@ -48,7 +48,7 @@ public:
     ~PlayerVisuals();
 
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, Primitive* ringPrimitive, uint32_t texHandle, Model* playerModel);
-    void Update(const PlayerState& state, const PlayerParams& params, float deltaTime);
+    void Update(const PlayerState& state, const PlayerParams& params);
     void Draw(const PlayerState& state, const PlayerParams& params);
 
     void SpawnJumpDust(const Vector3& basePos, float dirX);

@@ -10,7 +10,7 @@ public:
     ~CoinEffect() override = default;
 
     void Initialize(ID3D12Device* device);
-    void Update(float deltaTime) override;
+    void Update() override;
     void Draw() override;
     void Reset() override { Clear(); }
     std::vector<PrimitiveObject*> GetPrimitives() override { return GetParticles(); }

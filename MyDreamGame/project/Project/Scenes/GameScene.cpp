@@ -160,7 +160,7 @@ void GameScene::Update(SceneManager *sceneManager) {
     float dt = TimeManager::GetInstance().GetDeltaTime();
 
     if (effectManager_) {
-        effectManager_->Update(dt, isGameActive, GetGameCamera());
+        effectManager_->Update(isGameActive, GetGameCamera());
     }
 
     // フェードイン演出
@@ -172,13 +172,13 @@ void GameScene::Update(SceneManager *sceneManager) {
 
     if (gameState_ == GameState::StartReady) {
         if (readyGoUI_) {
-            if (readyGoUI_->Update(dt)) {
+            if (readyGoUI_->Update()) {
                 gameState_ = GameState::Playing;
             }
         }
     } else if (gameState_ == GameState::Clear) {
         if (clearUI_) {
-            clearUI_->Update(dt, GetGameCamera());
+            clearUI_->Update(GetGameCamera());
             if (clearUI_->IsReturnRequested()) {
                 clearUI_->Reset(GetGameCamera());
                 sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
@@ -208,7 +208,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     } else if (gameState_ == GameState::Pause) {
         if (pauseMenu_) {
-            PauseMenuAction action = pauseMenu_->Update(dt);
+            PauseMenuAction action = pauseMenu_->Update();
             if (action == PauseMenuAction::Resume) {
                 gameState_ = GameState::Playing;
             } else if (action == PauseMenuAction::ExitToStageSelect) {
@@ -294,7 +294,7 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         // カメラの更新（追従・部屋境界・見渡し回転）
         if (cameraController_) {
-            cameraController_->Update(dt, player_, map_.get(), gameState_ == GameState::Clear, ReplayManager::GetInstance()->IsPlaying());
+            cameraController_->Update(player_, map_.get(), gameState_ == GameState::Clear, ReplayManager::GetInstance()->IsPlaying());
         }
 
         // プレイ中の場合、リプレイ録画を行う
@@ -304,7 +304,7 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     if (map_ && coinHUD_) {
-        coinHUD_->Update(dt, map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
+        coinHUD_->Update(map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
     }
 }
 
@@ -534,7 +534,7 @@ void GameScene::UpdateEditor() {
 
     // GPUパーティクル (snow) の更新（エディタ停止中も画面右端から常時降らせる）
     if (effectManager_) {
-        effectManager_->Update(dt, false, GetGameCamera());
+        effectManager_->Update(false, GetGameCamera());
     }
 
     // フェードイン演出 (エディタ停止中もフェードインさせる)

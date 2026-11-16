@@ -14,7 +14,7 @@ public:
     virtual void Enter(Player2D* player) {}
 
     // 毎フレームの更新処理
-    virtual void Update(Player2D* player, MapChip2D& map, float deltaTime) = 0;
+    virtual void Update(Player2D* player, MapChip2D& map) = 0;
 
     // 状態から抜ける時の処理
     virtual void Exit(Player2D* player) {}

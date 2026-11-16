@@ -9,12 +9,14 @@
 
 #include "Collision/CollisionManager.h"
 
-void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
+void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, Player2D* player) {
+    float dt = Time::GetDeltaTime();
+    
     if (state_.isDead_ || state_.isGoal_) return;
 
     dt_ = Time::GetDeltaTime();
     if (state_.hitstopTimer_ > 0.0f) {
-        state_.hitstopTimer_ -= deltaTime;
+        state_.hitstopTimer_ -= dt;
         return; // ヒットストップ中は物理演算・入力をスキップ
     }
 
@@ -24,12 +26,12 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         return;
     }
 
-    HandleInputLogic(state_, params_, input_, visuals_, deltaTime, player);
-    ApplyGravity(state_, params_, input_, deltaTime);
+    HandleInputLogic(state_, params_, input_, visuals_, player);
+    ApplyGravity(state_, params_, input_);
 
     // ダッシュタイマーの更新
     if (state_.isDashing_) {
-        state_.dashTimer_ += deltaTime;
+        state_.dashTimer_ += dt;
         if (state_.dashTimer_ >= params_.dashDuration_) {
             state_.isDashing_ = false;
             // ダッシュ終了時、水平速度に慣性保持率を適用
@@ -72,24 +74,24 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
 
     // --- Y軸（上下）の移動と当たり判定 ---
     if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
-        state_.position_.y += state_.platformVelocity_.y * deltaTime;
+        state_.position_.y += state_.platformVelocity_.y * dt;
     }
     if (state_.isWallClinging_ || state_.isWallSliding_) {
-        state_.position_.y += state_.wallPlatformVelocity_.y * deltaTime;
+        state_.position_.y += state_.wallPlatformVelocity_.y * dt;
     }
-    state_.position_.y += state_.velocity_.y * deltaTime;
+    state_.position_.y += state_.velocity_.y * dt;
     ResolveCollisionY(state_, params_);
 
     // --- X軸（左右）の移動と当たり判定 ---
     float prevPosX = state_.position_.x;
     float moveDeltaX = 0.0f;
     if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
-        moveDeltaX += state_.platformVelocity_.x * deltaTime;
+        moveDeltaX += state_.platformVelocity_.x * dt;
     }
     if (state_.isWallClinging_ || state_.isWallSliding_) {
-        moveDeltaX += state_.wallPlatformVelocity_.x * deltaTime;
+        moveDeltaX += state_.wallPlatformVelocity_.x * dt;
     }
-    moveDeltaX += state_.velocity_.x * deltaTime;
+    moveDeltaX += state_.velocity_.x * dt;
     state_.position_.x += moveDeltaX;
     ResolveCollisionX(state_, params_, prevPosX, moveDeltaX);
 
@@ -97,21 +99,22 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     SimulateCollisions(state_, params_, player);
 }
 
-void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
+void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, Player2D* player) {
+    float dt = Time::GetDeltaTime();
     if (state_.wallClingReleaseTimer_ > 0.0f) {
-        state_.wallClingReleaseTimer_ -= deltaTime;
+        state_.wallClingReleaseTimer_ -= dt;
     }
     if (state_.springControlDisableTimer_ > 0.0f) {
-        state_.springControlDisableTimer_ -= deltaTime;
+        state_.springControlDisableTimer_ -= dt;
     }
     if (state_.climbingUpTimer_ > 0.0f) {
-        state_.climbingUpTimer_ -= deltaTime;
+        state_.climbingUpTimer_ -= dt;
     }
     if (state_.climbLandingTimer_ > 0.0f) {
-        state_.climbLandingTimer_ -= deltaTime;
+        state_.climbLandingTimer_ -= dt;
     }
     if (state_.dashJumpWindowTimer_ > 0.0f) {
-        state_.dashJumpWindowTimer_ -= deltaTime;
+        state_.dashJumpWindowTimer_ -= dt;
         if (state_.dashJumpWindowTimer_ <= 0.0f) {
             state_.lastDashDirX_ = 0.0f;
         }
@@ -121,7 +124,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     if (input_.isJumpPressed) {
         state_.jumpBufferTimer_ = 0.12f;
     } else if (state_.jumpBufferTimer_ > 0.0f) {
-        state_.jumpBufferTimer_ -= deltaTime;
+        state_.jumpBufferTimer_ -= dt;
     }
 
     // 接地コヨーテタイム（地面を離れても約0.1秒間は地上ジャンプを許可）
@@ -130,7 +133,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         state_.stamina_ = params_.maxStamina_;
         state_.isExhausted_ = false;
     } else if (state_.coyoteTimer_ > 0.0f) {
-        state_.coyoteTimer_ -= deltaTime;
+        state_.coyoteTimer_ -= dt;
     }
 
     state_.isWallSliding_ = false;
@@ -327,13 +330,13 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 }
 
                 if (currentVelX > targetVelX) {
-                    currentVelX -= decayRate * deltaTime;
+                    currentVelX -= decayRate * dt;
                     if (currentVelX <= targetVelX) {
                         currentVelX = targetVelX;
                         state_.hasDashInertia_ = false;
                     }
                 } else if (currentVelX < targetVelX) {
-                    currentVelX += decayRate * deltaTime;
+                    currentVelX += decayRate * dt;
                     if (currentVelX >= targetVelX) {
                         currentVelX = targetVelX;
                         state_.hasDashInertia_ = false;
@@ -568,17 +571,18 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
     }
 }
 
-void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime) {
+void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params_, const InputState& input_) {
+    float dt = Time::GetDeltaTime();
     if (state_.isDashing_) return; // ダッシュ中は重力を無視
 
     if (state_.isWallClinging_ && !state_.isExhausted_) {
         float moveY = input_.moveY;
         
         if (moveY > 0.1f) {
-            state_.stamina_ -= params_.staminaConsumeClimb_ * deltaTime;
+            state_.stamina_ -= params_.staminaConsumeClimb_ * dt;
             state_.climbingUpTimer_ = 0.25f; // 上登り中を記録（着地検知用の猶予時間）
         } else {
-            state_.stamina_ -= params_.staminaConsumeCling_ * deltaTime;
+            state_.stamina_ -= params_.staminaConsumeCling_ * dt;
         }
         
         if (state_.stamina_ <= 0.0f) {
@@ -594,7 +598,7 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
         }
     }
 
-    state_.velocity_.y += params_.gravity_ * deltaTime;
+    state_.velocity_.y += params_.gravity_ * dt;
 
     // 最大落下速度を制限
     float currentMaxFallSpeed = params_.maxFallSpeed_;

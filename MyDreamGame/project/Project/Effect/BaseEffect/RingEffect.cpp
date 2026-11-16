@@ -1,6 +1,7 @@
 #include "RingEffect.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Graphics/TextureManager.h"
+#include "core/TimeManager.h"
 
 RingEffect::RingEffect() {}
 
@@ -80,9 +81,10 @@ void RingEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
     }
 }
 
-void RingEffect::Update(float deltaTime) {
+void RingEffect::Update() {
     // リングのアニメーション更新 (1秒周期でパッと出てゆっくり消える)
-    ringEffectTimer_ += deltaTime;
+    float dt = Time::GetDeltaTime();
+    ringEffectTimer_ += dt;
     if (ringEffectTimer_ > kRingEffectDuration) {
         ringEffectTimer_ = 0.0f; // ループ
     }
