@@ -5,7 +5,7 @@
 #include "Scene/SceneManager.h"
 #include "Scene/IScene.h"
 #include "Game2D/MapChip2D.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include <filesystem>
 #include <vector>
 #include <string>
