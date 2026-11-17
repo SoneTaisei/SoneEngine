@@ -125,6 +125,8 @@ public:
     const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
     int GetTotalCoinCount() const;
     int GetCollectedCoinCount() const;
+    void SaveCollectedCoins();
+    void ClearSavedCoins();
 
     // 全ブロックのリセット（プレイヤー死亡・リトライ時）
     void ResetBlocks();
@@ -209,4 +211,5 @@ private:
     bool isRebuildEnabled_ = true;
     bool isDirty_ = false;
     std::string currentFilePath_ = "";
+    std::vector<Vector3> savedCoinPositions_;
 };
