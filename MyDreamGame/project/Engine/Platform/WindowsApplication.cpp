@@ -343,6 +343,7 @@ void WindowsApplication::Update() {
                 }
                 // GIFの現在の配置状態も自動保存してプレイ開始
                 StageGifManager::GetInstance()->SaveForStage(StageGifManager::GetInstance()->GetCurrentStageName());
+                Model3DEditorContext::GetInstance()->SaveToFile();
             }
 
             // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
@@ -374,6 +375,7 @@ void WindowsApplication::Update() {
 
                 // GIFステージを一時マップではなく本来のステージとして復帰
                 StageGifManager::GetInstance()->LoadForStage(currentGifStage);
+                Model3DEditorContext::GetInstance()->LoadForStage(currentGifStage);
                 
                 // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
                 editorManager_->ClearSelection();
