@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include <imgui.h>
 #endif
 #include "Editor/Replay/ReplayManager.h"

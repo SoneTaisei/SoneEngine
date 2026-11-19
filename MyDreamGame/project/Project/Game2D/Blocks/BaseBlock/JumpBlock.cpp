@@ -5,7 +5,7 @@
 #include <cmath>
 #include <algorithm>
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include <imgui.h>
 #endif
 #include "Editor/Replay/ReplayManager.h"
@@ -110,25 +110,9 @@ void JumpBlock::Update() {
         return;
     }
 
-    // ゲーム再生中かつ非一時停止中のみアニメーションを進行
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-    bool isPlayingOrReplaying = false;
-#ifdef USE_IMGUI
-    if (EditorManager::IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-#else
-    isPlayingOrReplaying = true;
-#endif
-    if (ReplayManager::GetInstance()->IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-
-    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
-    if (!isAnimActive) return;
+    float dt = Time::GetDeltaTime();
 
     // 物理スプリング計算（サブステップによる数値安定化）
-    float dt = (std::min)(deltaTime, 0.05f);
     const int subSteps = 2;
     float subDt = dt / static_cast<float>(subSteps);
 

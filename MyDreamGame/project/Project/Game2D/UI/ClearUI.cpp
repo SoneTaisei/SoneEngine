@@ -7,6 +7,7 @@
 #include "Core/Utility/ParameterManager.h"
 #include <cmath>
 #include <algorithm>
+#include "core/Timemanager.h"
 
 void ClearUI::Initialize(SpriteCommon* spriteCommon) {
     if (!spriteCommon) return;
@@ -50,7 +51,7 @@ void ClearUI::Reset(GameCamera* camera) {
     }
 }
 
-void ClearUI::Update(float deltaTime, GameCamera* camera) {
+void ClearUI::Update(GameCamera* camera) {
     if (!isActive_) {
         if (clearSprite_) {
             clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
@@ -58,7 +59,9 @@ void ClearUI::Update(float deltaTime, GameCamera* camera) {
         return;
     }
 
-    timer_ += deltaTime;
+    float dt = Time::GetDeltaTime();
+
+    timer_ += dt;
 
     if (clearSprite_) {
         // 文字が遠くからズームして出てくる演出 (EaseOutBack)
@@ -92,13 +95,13 @@ void ClearUI::Update(float deltaTime, GameCamera* camera) {
         float targetScale = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomScale", 2.2f);
         float zoomSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomSpeed", 3.0f);
         float currentScale = camera->GetScale();
-        float newScale = currentScale + (targetScale - currentScale) * (1.0f - std::exp(-zoomSpeed * deltaTime));
+        float newScale = currentScale + (targetScale - currentScale) * (1.0f - std::exp(-zoomSpeed * dt));
         camera->SetScale(newScale);
 
         // プレイヤーを画面のやや下側に配置するため、カメラの注視点を上方にオフセット
         float targetOffsetY = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraOffsetY", 1.0f);
         Vector3 currentOffset = camera->GetFollowOffset();
-        float newOffsetY = currentOffset.y + (targetOffsetY - currentOffset.y) * (1.0f - std::exp(-zoomSpeed * deltaTime));
+        float newOffsetY = currentOffset.y + (targetOffsetY - currentOffset.y) * (1.0f - std::exp(-zoomSpeed * dt));
         camera->SetFollowOffset({ currentOffset.x, newOffsetY, currentOffset.z });
     }
 }

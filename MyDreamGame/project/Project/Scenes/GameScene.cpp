@@ -5,7 +5,7 @@
 #include "Scene/SceneFactory.h"
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
 #include "Renderer/Renderer.h"
@@ -164,6 +164,7 @@ void GameScene::Update(SceneManager *sceneManager) {
     }
 
     bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused() && gameState_ != GameState::Pause;
+    Time::SetPaused(!isGameActive);
 
     if (skybox_) {
         skybox_->Update();
@@ -172,7 +173,7 @@ void GameScene::Update(SceneManager *sceneManager) {
     float dt = TimeManager::GetInstance().GetDeltaTime();
 
     if (effectManager_) {
-        effectManager_->Update(dt, isGameActive, GetGameCamera());
+        effectManager_->Update(isGameActive, GetGameCamera());
     }
 
     // フェードイン演出
@@ -182,15 +183,22 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
     }
 
+    if (ReplayManager::GetInstance()->IsPlaying() && gameState_ == GameState::StartReady) {
+        gameState_ = GameState::Playing;
+        if (readyGoUI_) {
+            readyGoUI_->Reset();
+        }
+    }
+
     if (gameState_ == GameState::StartReady) {
         if (readyGoUI_) {
-            if (readyGoUI_->Update(dt)) {
+            if (readyGoUI_->Update()) {
                 gameState_ = GameState::Playing;
             }
         }
     } else if (gameState_ == GameState::Clear) {
         if (clearUI_) {
-            clearUI_->Update(dt, GetGameCamera());
+            clearUI_->Update(GetGameCamera());
             if (clearUI_->IsReturnRequested()) {
                 clearUI_->Reset(GetGameCamera());
                 sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
@@ -220,7 +228,7 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     } else if (gameState_ == GameState::Pause) {
         if (pauseMenu_) {
-            PauseMenuAction action = pauseMenu_->Update(dt);
+            PauseMenuAction action = pauseMenu_->Update();
             if (action == PauseMenuAction::Resume) {
                 gameState_ = GameState::Playing;
             } else if (action == PauseMenuAction::ExitToStageSelect) {
@@ -257,7 +265,15 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
         if (replayController_ && effectManager_) {
-            replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effectManager_->GetEffects(), previousScore_);
+            if (replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effectManager_->GetEffects(), previousScore_)) {
+                gameState_ = GameState::Playing;
+                if (clearUI_) {
+                    clearUI_->Reset(GetGameCamera());
+                }
+                if (cameraController_) {
+                    cameraController_->OnRespawn(map_.get());
+                }
+            }
         }
 
             if (player_) {
@@ -285,6 +301,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                 canControl = false;
             }
 
+            if (replayController_) {
+                replayController_->EnsureRecordingStarted(player_, map_.get(), GetGameCamera(), isCurrentlyPlaying && canControl);
+            }
+
             player_->UpdateWithMap(*map_, GetGameCamera() && GetGameCamera()->IsTransitioning(), canControl);
 
             // ゴール判定
@@ -307,17 +327,17 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         // カメラの更新（追従・部屋境界・見渡し回転）
         if (cameraController_) {
-            cameraController_->Update(dt, player_, map_.get(), gameState_ == GameState::Clear, ReplayManager::GetInstance()->IsPlaying());
+            cameraController_->Update(player_, map_.get(), gameState_ == GameState::Clear, ReplayManager::GetInstance()->IsPlaying());
         }
 
-        // プレイ中の場合、リプレイ録画を行う
+        // プレイ中の場合、操作可能状態であればリプレイ録画を行う
         if (replayController_) {
-            replayController_->UpdateRecording(player_, map_.get(), GetGameCamera(), isCurrentlyPlaying);
+            replayController_->UpdateRecording(player_, map_.get(), GetGameCamera(), isCurrentlyPlaying && canControl);
         }
     }
 
     if (map_ && coinHUD_) {
-        coinHUD_->Update(dt, map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
+        coinHUD_->Update(map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
     }
 }
 
@@ -332,8 +352,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         player_->DisplayImGui();
     }
 
-    // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
-    if (!EditorManager::IsPlaying() || gameState_ == GameState::Pause) {
+    // エディター側でプレイ状態（またはリプレイ再生中）になっていないときは、インゲームUI（スコア等）を描画しない
+    if ((!EditorManager::IsPlaying() && !ReplayManager::GetInstance()->IsPlaying()) || gameState_ == GameState::Pause) {
         return;
     }
 
@@ -547,7 +567,7 @@ void GameScene::UpdateEditor() {
 
     // GPUパーティクル (snow) の更新（エディタ停止中も画面右端から常時降らせる）
     if (effectManager_) {
-        effectManager_->Update(dt, false, GetGameCamera());
+        effectManager_->Update(false, GetGameCamera());
     }
 
     // フェードイン演出 (エディタ停止中もフェードインさせる)

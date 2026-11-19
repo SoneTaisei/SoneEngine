@@ -8,7 +8,7 @@
 #include "Effect/ParticleCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #endif
 #include <random>
@@ -88,8 +88,9 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
     }
 }
 
-void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params, float deltaTime) {
-    visualTime_ += deltaTime;
+void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params) {
+    float dt = Time::GetDeltaTime();
+    visualTime_ += dt;
     
     if (primitiveObj_) {
         Vector3 primPos = state.position_;
@@ -147,7 +148,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         if (animator_) {
             if (state.isDashing_) {
                 // ダッシュアニメーションの再生
-                dashAnimTime_ = AdvanceAnimationTime(dashAnimTime_, dashAnimation_.duration, deltaTime, AnimationWrapMode::Loop);
+                dashAnimTime_ = AdvanceAnimationTime(dashAnimTime_, dashAnimation_.duration, dt, AnimationWrapMode::Loop);
                 animator_->ClearJointOverrides();
                 animator_->SetAnimation(dashAnimation_);
                 animator_->SetTime(dashAnimTime_);
@@ -158,7 +159,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                 // しがみつき中ならブレンド率を上げ、それ以外は下げる
                 bool isClinging = state.isWallClinging_ || state.isWallSliding_;
                 if (isClinging) {
-                    climbBlendFactor_ += deltaTime * 5.0f; // 約0.2秒で最大値1.0fへ遷移
+                    climbBlendFactor_ += dt * 5.0f; // 約0.2秒で最大値1.0fへ遷移
                     if (climbBlendFactor_ > 1.0f) climbBlendFactor_ = 1.0f;
 
                     // 壁つかまり移動（登り・降り）のアニメーション判定
@@ -166,21 +167,21 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
                     if (isClimbMoving) {
                         // 上下移動に合わせてアニメーション時間を進行
                         float speedFactor = std::clamp(std::abs(state.velocity_.y) / 4.0f, 0.6f, 2.5f);
-                        holdingWallMoveAnimTime_ = AdvanceAnimationTime(holdingWallMoveAnimTime_, holdingWallMoveAnimation_.duration, deltaTime * speedFactor, AnimationWrapMode::Loop);
+                        holdingWallMoveAnimTime_ = AdvanceAnimationTime(holdingWallMoveAnimTime_, holdingWallMoveAnimation_.duration, dt * speedFactor, AnimationWrapMode::Loop);
                         animator_->ClearJointOverrides();
                         animator_->SetAnimation(holdingWallMoveAnimation_);
                         animator_->SetTime(holdingWallMoveAnimTime_);
                         animator_->Stop(); // 手動で時間を制御
                     } else {
                         // 静止した崖つかまり・壁つかまり時は holding_wall アニメーションを再生（最後のフレームで停止）
-                        holdingWallAnimTime_ = AdvanceAnimationTime(holdingWallAnimTime_, holdingWallAnimation_.duration, deltaTime, AnimationWrapMode::HoldLastFrame);
+                        holdingWallAnimTime_ = AdvanceAnimationTime(holdingWallAnimTime_, holdingWallAnimation_.duration, dt, AnimationWrapMode::HoldLastFrame);
                         animator_->ClearJointOverrides();
                         animator_->SetAnimation(holdingWallAnimation_);
                         animator_->SetTime(holdingWallAnimTime_);
                         animator_->Stop(); // 手動で時間を制御（最後のフレームの姿勢を維持）
                     }
                 } else {
-                    climbBlendFactor_ -= deltaTime * 5.0f;
+                    climbBlendFactor_ -= dt * 5.0f;
                     if (climbBlendFactor_ < 0.0f) climbBlendFactor_ = 0.0f;
                     wallClimbAnimTime_ = 0.0f;
                     holdingWallAnimTime_ = 0.0f;
@@ -274,7 +275,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
 
     if (state.isGoal_) {
         // ゴール中、一定間隔で紙吹雪を補充
-        float prevT = state.goalTimer_ - deltaTime;
+        float prevT = state.goalTimer_ - dt;
         if (prevT > 0.0f && std::floor(prevT / 0.8f) < std::floor(state.goalTimer_ / 0.8f)) {
             SpawnConfetti(state.position_);
         }
@@ -283,36 +284,36 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
     // パーティクル更新
     for (auto& confetti : confettiParticles_) {
         if (confetti.active) {
-            confetti.timer += deltaTime;
+            confetti.timer += dt;
             if (confetti.timer >= confetti.duration) {
                 confetti.active = false;
             } else {
-                confetti.velocity.y += (params.gravity_ * 0.3f) * deltaTime;
+                confetti.velocity.y += (params.gravity_ * 0.3f) * dt;
                 confetti.velocity.x *= 0.98f; 
-                confetti.position.x += confetti.velocity.x * deltaTime;
-                confetti.position.y += confetti.velocity.y * deltaTime;
-                confetti.rotation.x += confetti.rotationSpeed.x * deltaTime;
-                confetti.rotation.y += confetti.rotationSpeed.y * deltaTime;
-                confetti.rotation.z += confetti.rotationSpeed.z * deltaTime;
+                confetti.position.x += confetti.velocity.x * dt;
+                confetti.position.y += confetti.velocity.y * dt;
+                confetti.rotation.x += confetti.rotationSpeed.x * dt;
+                confetti.rotation.y += confetti.rotationSpeed.y * dt;
+                confetti.rotation.z += confetti.rotationSpeed.z * dt;
             }
         }
     }
     
     for (auto& dust : dustParticles_) {
         if (dust.active) {
-            dust.timer += deltaTime;
+            dust.timer += dt;
             if (dust.timer >= dust.duration) {
                 dust.active = false;
             } else {
-                dust.position.x += dust.velocity.x * deltaTime;
-                dust.position.y += dust.velocity.y * deltaTime;
+                dust.position.x += dust.velocity.x * dt;
+                dust.position.y += dust.velocity.y * dt;
             }
         }
     }
 
     for (auto& ring : dashRingParticles_) {
         if (ring.active) {
-            ring.timer += deltaTime;
+            ring.timer += dt;
             if (ring.timer >= ring.duration) {
                 ring.active = false;
             }
@@ -331,7 +332,7 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         }
         // 再生中または生存パーティクルが残っている場合は更新を継続（自然なフェードアウト・消滅処理）
         if (dashAuraParticle_->IsPlaying() || dashAuraParticle_->GetTotalActiveParticles() > 0) {
-            dashAuraParticle_->Update(deltaTime);
+            dashAuraParticle_->Update(dt);
         }
     }
 }

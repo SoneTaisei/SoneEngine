@@ -333,9 +333,9 @@ private:
     bool isRecording_ = false;
     bool isPlaying_ = false;
     bool isPaused_ = false;
-    bool isLoopPlay_ = false;
-    bool isSnapEnabled_ = true;
-    bool isInterpolationEnabled_ = true; // フレーム間の座標補間フラグ
+    bool isLoopPlay_ = true;
+    bool isSnapEnabled_ = false;
+    bool isInterpolationEnabled_ = false; // フレーム間の座標補間フラグ
     bool forceSnapNextFrame_ = false; // シーク時に強制スナップするフラグ
     bool hasLoggedDesync_ = false;    // 再生中にズレをすでにログ出力したかどうか
     bool isTakeoverRecording_ = false; // 乗っ取り（割り込み）からの録画フラグ

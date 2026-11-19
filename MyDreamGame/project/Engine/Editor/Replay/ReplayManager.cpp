@@ -7,6 +7,7 @@
 #include "ReplayTester.h"
 #include "Core/Utility/LogManager.h"
 #include "Input/KeyboardInput.h"
+#include "Input/GamepadInput.h"
 #include <sstream>
 #include <ctime>
 #include <iomanip>
@@ -118,6 +119,9 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
     if (!isRecording_) return;
 
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
+    GamepadInput* gamepad = GamepadInput::GetInstance();
+    Vector2 stick = gamepad->GetLeftStick();
+
     FrameData frame;
     frame.position = pos;
     frame.cameraPosition = cameraPos;
@@ -126,14 +130,22 @@ void ReplayManager::RecordFrame(const Vector3& pos, const Vector3& cameraPos, co
     frame.rotation = rotation;
     frame.time = playTime_;
 
-    // "LRJDCWS" の初期文字列
-    frame.keys[0] = (keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT)) ? 'L' : '-';
-    frame.keys[1] = (keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT)) ? 'R' : '-';
-    frame.keys[2] = keyboard->IsKeyDown(DIK_SPACE) ? 'J' : '-';
-    frame.keys[3] = (keyboard->IsKeyDown(DIK_J) || keyboard->IsKeyDown(DIK_LSHIFT) || keyboard->IsKeyDown(DIK_RSHIFT)) ? 'D' : '-';
-    frame.keys[4] = (keyboard->IsKeyDown(DIK_K) || keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL)) ? 'C' : '-';
-    frame.keys[5] = (keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP)) ? 'W' : '-';
-    frame.keys[6] = (keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN)) ? 'S' : '-';
+    // "LRJDCWS" の初期文字列（キーボード + コントローラー統合）
+    bool pressLeft  = keyboard->IsKeyDown(DIK_A) || keyboard->IsKeyDown(DIK_LEFT) || gamepad->IsDPadLeft() || (stick.x < -0.05f);
+    bool pressRight = keyboard->IsKeyDown(DIK_D) || keyboard->IsKeyDown(DIK_RIGHT) || gamepad->IsDPadRight() || (stick.x > 0.05f);
+    bool pressJump  = keyboard->IsKeyDown(DIK_SPACE) || gamepad->IsButtonDown(GamepadButton::A);
+    bool pressDash  = keyboard->IsKeyDown(DIK_J) || keyboard->IsKeyDown(DIK_LSHIFT) || keyboard->IsKeyDown(DIK_RSHIFT) || gamepad->IsButtonDown(GamepadButton::X);
+    bool pressCling = keyboard->IsKeyDown(DIK_K) || keyboard->IsKeyDown(DIK_LCONTROL) || keyboard->IsKeyDown(DIK_RCONTROL) || gamepad->IsButtonDown(GamepadButton::RB) || (gamepad->GetRightTrigger() > 0.3f);
+    bool pressUp    = keyboard->IsKeyDown(DIK_W) || keyboard->IsKeyDown(DIK_UP) || gamepad->IsDPadUp() || (stick.y > 0.05f);
+    bool pressDown  = keyboard->IsKeyDown(DIK_S) || keyboard->IsKeyDown(DIK_DOWN) || gamepad->IsDPadDown() || (stick.y < -0.05f);
+
+    frame.keys[0] = pressLeft  ? 'L' : '-';
+    frame.keys[1] = pressRight ? 'R' : '-';
+    frame.keys[2] = pressJump  ? 'J' : '-';
+    frame.keys[3] = pressDash  ? 'D' : '-';
+    frame.keys[4] = pressCling ? 'C' : '-';
+    frame.keys[5] = pressUp    ? 'W' : '-';
+    frame.keys[6] = pressDown  ? 'S' : '-';
     frame.keys[7] = '\0';
 
     temporaryRecordedFrames_.push_back(frame);

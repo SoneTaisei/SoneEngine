@@ -1,7 +1,7 @@
 #ifdef USE_IMGUI
 #include "MapEditorCanvas.h"
 #include "MapEditorContext.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Scene/SceneManager.h"
 #include "Scene/IScene.h"

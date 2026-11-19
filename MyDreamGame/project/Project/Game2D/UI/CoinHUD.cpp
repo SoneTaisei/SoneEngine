@@ -4,6 +4,7 @@
 #include "Core/Utility/ParameterManager.h"
 #include <cmath>
 #include <string>
+#include "core/TimeManager.h"
 
 void CoinHUD::Initialize(SpriteCommon* spriteCommon) {
     if (!spriteCommon) return;
@@ -36,7 +37,8 @@ void CoinHUD::Reset() {
     currentTotalCoins_ = 0;
 }
 
-void CoinHUD::Update(float deltaTime, int collectedCoins, int totalCoins) {
+void CoinHUD::Update(int collectedCoins, int totalCoins) {
+    float dt = Time::GetDeltaTime();
     currentCollectedCoins_ = collectedCoins;
     currentTotalCoins_ = totalCoins;
 
@@ -46,7 +48,7 @@ void CoinHUD::Update(float deltaTime, int collectedCoins, int totalCoins) {
     lastCollectedCoins_ = collectedCoins;
 
     if (coinPopAnimTimer_ > 0.0f) {
-        coinPopAnimTimer_ -= deltaTime;
+        coinPopAnimTimer_ -= dt;
         if (coinPopAnimTimer_ < 0.0f) {
             coinPopAnimTimer_ = 0.0f;
         }

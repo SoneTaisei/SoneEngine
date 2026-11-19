@@ -1,11 +1,12 @@
 #include "SnowParticle.h"
+#include "Core/TimeManager.h"
 
 void SnowParticle::Update() {
-    const float kDeltaTime = 1.0f / 60.0f; // 固定フレームレート前提
-
-    // ■■■ 1. 新規発生処理 (追加) ■■■
-    // エミッタのタイマーを進める
-    GetEmitter().frequencyTime += kDeltaTime;
+    float dt = Time::GetDeltaTime();
+    if (dt <= 0.0f) {
+        return;
+    }
+    GetEmitter().frequencyTime += dt;
     // 設定された頻度(frequency)を超えたら発生させる
     if(GetEmitter().frequencyTime >= GetEmitter().frequency) {
         // 設定された個数分、リストに追加
@@ -34,11 +35,11 @@ void SnowParticle::Update() {
         it->velocity.y = -2.0f;
         it->velocity.x = std::sin(it->currentTime * 5.0f) * 0.5f;
 
-        it->transform.translate.x += it->velocity.x * kDeltaTime;
-        it->transform.translate.y += it->velocity.y * kDeltaTime;
-        it->transform.translate.z += it->velocity.z * kDeltaTime;
+        it->transform.translate.x += it->velocity.x * dt;
+        it->transform.translate.y += it->velocity.y * dt;
+        it->transform.translate.z += it->velocity.z * dt;
 
-        it->currentTime += kDeltaTime;
+        it->currentTime += dt;
         float alpha = 1.0f - (it->currentTime / it->lifeTime);
         it->color.w = alpha;
         ++it;

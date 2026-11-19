@@ -17,8 +17,9 @@
 #include "Editor/Replay/ReplayManager.h"
 
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
+#include "Core/TimeManager.h"
 
 GameEffectManager::GameEffectManager() = default;
 GameEffectManager::~GameEffectManager() = default;
@@ -52,12 +53,13 @@ void GameEffectManager::Initialize() {
     }
 }
 
-void GameEffectManager::Update(float deltaTime, bool isGameActive, GameCamera* camera) {
+void GameEffectManager::Update(bool isGameActive, GameCamera* camera) {
+    float dt = Time::GetDeltaTime();
     // ゲームプレイ中のみBaseEffectを更新
     if (isGameActive) {
-        for (auto& effect : effects_) {
+        for (auto &effect : effects_) {
             if (effect) {
-                effect->Update(1.0f / 60.0f);
+                effect->Update();
             }
         }
     }
@@ -68,7 +70,7 @@ void GameEffectManager::Update(float deltaTime, bool isGameActive, GameCamera* c
         float halfW = (camera && camera->IsOrthographic()) ? (camera->GetOrthoWidth() * 0.5f) : 10.0f;
         Vector3 snowPos = { camPos.x + halfW, camPos.y, 0.0f };
         snowParticle_->SetPosition(snowPos);
-        snowParticle_->Update(deltaTime);
+        snowParticle_->Update(dt);
     }
 }
 

@@ -11,7 +11,7 @@ public:
     virtual ~BaseEffect() = default;
 
     // 毎フレームの更新処理
-    virtual void Update(float deltaTime) = 0;
+    virtual void Update() = 0;
 
     // 描画処理
     virtual void Draw() = 0;
