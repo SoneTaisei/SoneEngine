@@ -41,7 +41,7 @@ void PauseMenu::Reset() {
     selectedIndex_ = 0;
 }
 
-PauseMenuAction PauseMenu::Update(float /*deltaTime*/) {
+PauseMenuAction PauseMenu::Update() {
     // ポーズ画面の操作（キーボード / コントローラー両対応）
     bool isMoveUp = KeyboardInput::GetInstance()->IsKeyPressed(DIK_UP) ||
                     KeyboardInput::GetInstance()->IsKeyPressed(DIK_W) ||

@@ -347,7 +347,7 @@ private:
 
     static bool isPlaying_; // ゲーム再生中かどうか
     static bool isPaused_;  // ゲーム再生中の一時停止かどうか
-    bool useDebugCamera_ = true; // デバッグカメラを使用するかどうか
+    bool useDebugCamera_ = false; // デバッグカメラを使用するかどうか
     float takeoverCountdown_ = 0.0f; // 操作引き継ぎ時のカウントダウン
 
     // 選択中のオブジェクト
