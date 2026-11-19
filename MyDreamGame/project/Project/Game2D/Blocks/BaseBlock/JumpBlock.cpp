@@ -286,6 +286,7 @@ void JumpBlock::OnCollision(Player2D* player) {
         // 2. ダッシュ状態の中断とダッシュ回数の全回復
         player->CancelDash();
         player->RefillDash();
+        player->RefillStamina();
 
         // 3. ヒットストップ（約1〜2フレーム：0.03秒）
         player->ApplyHitstop(0.03f);
