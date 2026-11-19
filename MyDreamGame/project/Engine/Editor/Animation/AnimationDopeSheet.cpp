@@ -1,7 +1,7 @@
 #ifdef USE_IMGUI
 #include "AnimationDopeSheet.h"
 #include "AnimationEditorContext.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include "Core/Utility/LogManager.h"
 #include "Scene/IScene.h"
 #include "Scene/SceneManager.h"
