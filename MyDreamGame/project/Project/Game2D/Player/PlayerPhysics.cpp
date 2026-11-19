@@ -576,9 +576,15 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
     if (state_.isDashing_) return; // ダッシュ中は重力を無視
 
     if (state_.isWallClinging_ && !state_.isExhausted_) {
-        float moveY = input_.moveY;
+        // 斜め入力による壁登り速度の減衰をなくすため、上下入力は方向のみ (-1, 0, 1) に正規化する
+        float climbDirY = 0.0f;
+        if (input_.moveY > 0.1f) {
+            climbDirY = 1.0f;
+        } else if (input_.moveY < -0.1f) {
+            climbDirY = -1.0f;
+        }
         
-        if (moveY > 0.1f) {
+        if (climbDirY > 0.0f) {
             state_.stamina_ -= params_.staminaConsumeClimb_ * deltaTime;
             state_.climbingUpTimer_ = 0.25f; // 上登り中を記録（着地検知用の猶予時間）
         } else {
@@ -593,7 +599,7 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
         }
         
         if (state_.isWallClinging_) {
-            state_.velocity_.y = moveY * params_.wallClimbSpeed_; // W/スティック上で上、S/スティック下で下へ移動
+            state_.velocity_.y = climbDirY * params_.wallClimbSpeed_; // W/スティック上で上、S/スティック下で下へ移動
             return;
         }
     }
