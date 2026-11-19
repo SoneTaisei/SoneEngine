@@ -59,14 +59,18 @@ void CollisionManager::Draw3D(ID3D12GraphicsCommandList* commandList, const Matr
     for (auto* col : colliders_) {
         if (!col || !col->IsEnabled()) continue;
 
+        bool isPlayerCollider = (col->GetLayerMask() & kLayerPlayer) != 0;
         ColliderType type = col->GetColliderType();
 
-        // 形状タイプごとの色分け
+        // 形状タイプ・対象ごとの色分け
+        // Player: 黄 (1.0f, 1.0f, 0.0f, 1.0f)
         // AABB: 緑 (0.0f, 1.0f, 0.0f, 1.0f)
         // OBB: オレンジ (1.0f, 0.65f, 0.0f, 1.0f)
         // Sphere: 水色 (0.0f, 0.86f, 1.0f, 1.0f)
         Vector4 wireColor = { 0.0f, 1.0f, 0.0f, 1.0f };
-        if (type == ColliderType::kOBB) {
+        if (isPlayerCollider) {
+            wireColor = { 1.0f, 1.0f, 0.0f, 1.0f };
+        } else if (type == ColliderType::kOBB) {
             wireColor = { 1.0f, 0.65f, 0.0f, 1.0f };
         } else if (type == ColliderType::kSphere) {
             wireColor = { 0.0f, 0.86f, 1.0f, 1.0f };
@@ -85,11 +89,17 @@ void CollisionManager::Draw3D(ID3D12GraphicsCommandList* commandList, const Matr
 
         if (type == ColliderType::kAABB) {
             AABB2D aabb = col->GetAABB();
-            float depth = col->GetBoxSize().z * baseScale.z;
-            float halfDepth = (depth > 0.01f) ? (depth * 0.5f) : 0.5f;
-            Vector3 minP = { aabb.left, aabb.bottom, basePos.z - halfDepth };
-            Vector3 maxP = { aabb.right, aabb.top, basePos.z + halfDepth };
-            lineRenderer->AddAABB(minP, maxP, wireColor);
+            if (isPlayerCollider) {
+                Vector3 minP = { aabb.left, aabb.bottom, basePos.z };
+                Vector3 maxP = { aabb.right, aabb.top, basePos.z };
+                lineRenderer->AddAABB(minP, maxP, wireColor);
+            } else {
+                float depth = col->GetBoxSize().z * baseScale.z;
+                float halfDepth = (depth > 0.01f) ? (depth * 0.5f) : 0.5f;
+                Vector3 minP = { aabb.left, aabb.bottom, basePos.z - halfDepth };
+                Vector3 maxP = { aabb.right, aabb.top, basePos.z + halfDepth };
+                lineRenderer->AddAABB(minP, maxP, wireColor);
+            }
         }
         else if (type == ColliderType::kOBB) {
             Vector3 size = col->GetBoxSize();

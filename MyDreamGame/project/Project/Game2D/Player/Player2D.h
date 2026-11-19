@@ -157,6 +157,7 @@ public:
 
     // ゲーム状態取得用ゲッター追加
     AABB2D GetAABB() const;
+    void SyncCollider();
     bool IsDead() const { return state_.isDead_; }
     bool IsRespawning() const { return state_.isRespawning_; }
     bool IsGoal() const { return state_.isGoal_; }

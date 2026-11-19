@@ -9,6 +9,7 @@ Player2D::~Player2D() = default;
 #include "Graphics/TextureManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Resource/Model/ModelManager.h"
+#include "Component/ColliderComponent.h"
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
@@ -192,6 +193,16 @@ void Player2D::Initialize() {
     // 初期ステートの設定（ポリモーフィズム）
     ChangeState(std::make_unique<PlayerNormalState>());
 
+    if (GetGameObject()) {
+        auto* cc = GetGameObject()->GetComponent<ColliderComponent>();
+        if (!cc) {
+            cc = GetGameObject()->AddComponent<ColliderComponent>();
+        }
+        cc->SetLayerMask(kLayerPlayer);
+        cc->SetIsSolid(false);
+        SyncCollider();
+    }
+
     Log("Player2D::Initialize: Finish\n");
 }
 
@@ -257,6 +268,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
 }
 
 void Player2D::Draw() {
+    SyncCollider();
     visuals_.Draw(state_, params_);
 }
 
@@ -403,6 +415,7 @@ void Player2D::DisplayImGui() {
             }
             if (sizeChanged) {
                 visuals_.SyncSize(params_);
+                SyncCollider();
             }
             ImGui::TreePop();
         }
@@ -518,6 +531,13 @@ void Player2D::ChangeState(std::unique_ptr<IPlayerState> nextState) {
 
 AABB2D Player2D::GetAABB() const {
     return physics_.GetAABB(state_, params_);
+}
+
+void Player2D::SyncCollider() {
+    if (!GetGameObject()) return;
+    if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+        cc->SetCustomAABB(GetAABB());
+    }
 }
 
 void Player2D::Update() {
