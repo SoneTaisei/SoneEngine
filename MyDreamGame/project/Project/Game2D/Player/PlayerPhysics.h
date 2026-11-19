@@ -40,8 +40,8 @@ private:
     void ApplyGravity(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime);
 
     void ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, float prevPosY, float moveDeltaY);
-    void ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY);
-    void ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY);
+    void ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY, float prevBottomOffset = 0.0f);
+    void ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY, float prevBottomOffset = 0.0f);
 
     void ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, float prevPosX, float moveDeltaX);
     void ResolveStaticCollisionX(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosX, float moveDeltaX);

@@ -42,6 +42,7 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["bodyHalfWidth_"] = params.bodyHalfWidth_;
         j["bodyHalfHeight_"] = params.bodyHalfHeight_;
         j["bodyOffsetY_"] = params.bodyOffsetY_;
+        j["bodyWallBottomShrink_"] = params.bodyWallBottomShrink_;
         j["headHalfWidth_"] = params.headHalfWidth_;
         j["headHalfHeight_"] = params.headHalfHeight_;
         j["headOffsetX_"] = params.headOffsetX_;
@@ -117,6 +118,7 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         if (j.contains("bodyHalfWidth_")) params.bodyHalfWidth_ = j["bodyHalfWidth_"];
         if (j.contains("bodyHalfHeight_")) params.bodyHalfHeight_ = j["bodyHalfHeight_"];
         if (j.contains("bodyOffsetY_")) params.bodyOffsetY_ = j["bodyOffsetY_"];
+        if (j.contains("bodyWallBottomShrink_")) params.bodyWallBottomShrink_ = j["bodyWallBottomShrink_"];
         if (j.contains("headHalfWidth_")) params.headHalfWidth_ = j["headHalfWidth_"];
         if (j.contains("headHalfHeight_")) params.headHalfHeight_ = j["headHalfHeight_"];
         if (j.contains("headOffsetX_")) params.headOffsetX_ = j["headOffsetX_"];

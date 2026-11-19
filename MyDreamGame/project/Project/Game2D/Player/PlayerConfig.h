@@ -32,6 +32,7 @@ struct PlayerParams {
     float bodyHalfWidth_ = 0.28f;
     float bodyHalfHeight_ = 0.38f;
     float bodyOffsetY_ = -0.35f;
+    float bodyWallBottomShrink_ = 0.20f;
     float headHalfWidth_ = 0.28f;
     float headHalfHeight_ = 0.28f;
     float headOffsetX_ = 0.0f;

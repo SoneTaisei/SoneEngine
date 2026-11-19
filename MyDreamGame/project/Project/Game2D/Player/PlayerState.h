@@ -37,6 +37,7 @@ struct PlayerState {
     float lockedDirectionX_ = 0.0f;
     bool isWallSliding_ = false;
     bool isWallClinging_ = false;
+    bool wasWallPose_ = false;
     float wallClingReleaseTimer_ = 0.0f;
     bool isDead_ = false;
     float deathTimer_ = 0.0f;

@@ -109,6 +109,7 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.wallJumpTimer_ = 0.0f;
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
+    state_.wasWallPose_ = false;
 
     // 動く足場の慣性を確実にリセット
     state_.isOnMovingPlatform_ = false;
@@ -428,6 +429,7 @@ void Player2D::DisplayImGui() {
             if (ImGui::DragFloat("胴体 半幅", &params_.bodyHalfWidth_, 0.01f, 0.05f, 5.0f)) partChanged = true;
             if (ImGui::DragFloat("胴体 半高", &params_.bodyHalfHeight_, 0.01f, 0.05f, 5.0f)) partChanged = true;
             if (ImGui::DragFloat("胴体 Yオフセット", &params_.bodyOffsetY_, 0.01f, -3.0f, 3.0f)) partChanged = true;
+            if (ImGui::DragFloat("胴体 壁掴み時足縮み", &params_.bodyWallBottomShrink_, 0.01f, 0.0f, 0.5f)) partChanged = true;
 
             ImGui::Separator();
             ImGui::Text("頭コライダー (Head / ピンク枠)");
@@ -506,6 +508,7 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.wallJumpTimer_ = 0.0f;
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
+    state_.wasWallPose_ = false;
     state_.isDead_ = false;
     state_.deathTimer_ = 0.0f;
     state_.isGoal_ = false;

@@ -135,6 +135,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         state_.coyoteTimer_ -= deltaTime;
     }
 
+    state_.wasWallPose_ = (state_.isWallSliding_ || state_.isWallClinging_);
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
 
@@ -622,16 +623,24 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
 }
 
 std::array<PlayerPhysics::HitPart, 2> PlayerPhysics::BuildHitParts(const PlayerState& state_, const PlayerParams& params_, bool usePreviousWallTouch) const {
+    const bool isWallPose = state_.isWallClinging_ || state_.isWallSliding_;
+
     HitPart body;
     body.offsetX = 0.0f;
     body.offsetY = params_.bodyOffsetY_;
     body.halfWidth = params_.bodyHalfWidth_;
     body.halfHeight = params_.bodyHalfHeight_;
+    if (isWallPose && params_.bodyWallBottomShrink_ > 0.0f) {
+        float origTop = params_.bodyOffsetY_ + params_.bodyHalfHeight_;
+        float newHalfH = (std::max)(0.05f, params_.bodyHalfHeight_ - params_.bodyWallBottomShrink_ * 0.5f);
+        body.halfHeight = newHalfH;
+        body.offsetY = origTop - newHalfH;
+    }
     body.allowWallTouch = true;
 
     HitPart head;
     head.offsetX = params_.headOffsetX_ * state_.facingDirectionX_;
-    if (state_.isWallClinging_ || state_.isWallSliding_) {
+    if (isWallPose) {
         bool touchRight = usePreviousWallTouch ? state_.wasTouchingWallRight_ : (state_.isTouchingWallRight_ || state_.wasTouchingWallRight_);
         bool touchLeft = usePreviousWallTouch ? state_.wasTouchingWallLeft_ : (state_.isTouchingWallLeft_ || state_.wasTouchingWallLeft_);
         if (touchRight) {
@@ -665,20 +674,34 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     state_.standingPlatformCollider_ = nullptr;
     state_.platformVelocity_ = {0.0f, 0.0f, 0.0f};
 
+    const bool isWallPose = state_.isWallClinging_ || state_.isWallSliding_;
+    float bodyPrevBottomOffset = 0.0f;
+    if (!isWallPose && state_.wasWallPose_ && params_.bodyWallBottomShrink_ > 0.0f) {
+        float shrunkHalfH = (std::max)(0.05f, params_.bodyHalfHeight_ - params_.bodyWallBottomShrink_ * 0.5f);
+        bodyPrevBottomOffset = (params_.bodyHalfHeight_ - shrunkHalfH) * 2.0f;
+    }
+
     auto parts = BuildHitParts(state_, params_);
 
-    // 静的ブロック判定
-    for (const auto& part : parts) {
-        ResolveStaticCollisionY(state_, params_, part, prevPosY, moveDeltaY);
+    // 1. まず胴体パーツで床・天井を判定
+    ResolveStaticCollisionY(state_, params_, parts[0], prevPosY, moveDeltaY, bodyPrevBottomOffset);
+    ResolveDynamicCollisionY(state_, params_, parts[0], prevPosY, moveDeltaY, bodyPrevBottomOffset);
+
+    // 壁掴み中に床へ着地した場合は立ち姿勢の足元高さに戻してから頭判定を行う
+    if (isWallPose && state_.isOnGround_ && params_.bodyWallBottomShrink_ > 0.0f) {
+        float actualShrink = (params_.bodyHalfHeight_ - parts[0].halfHeight) * 2.0f;
+        state_.position_.y += actualShrink;
+        state_.isWallClinging_ = false;
+        state_.isWallSliding_ = false;
+        parts = BuildHitParts(state_, params_);
     }
 
-    // 動的ブロック判定
-    for (const auto& part : parts) {
-        ResolveDynamicCollisionY(state_, params_, part, prevPosY, moveDeltaY);
-    }
+    // 2. 頭パーツで天井・床を判定
+    ResolveStaticCollisionY(state_, params_, parts[1], prevPosY, moveDeltaY, 0.0f);
+    ResolveDynamicCollisionY(state_, params_, parts[1], prevPosY, moveDeltaY, 0.0f);
 }
 
-void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY) {
+void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY, float prevBottomOffset) {
     const float kSkinX = (std::min)(0.02f, part.halfWidth * 0.5f);
     AABB2D aabb = MakePartAABB(state_.position_, part);
     float partPosY = state_.position_.y + part.offsetY;
@@ -693,7 +716,7 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
     queryAABB.top = (std::max)(partPrevPosY, partPosY) + part.halfHeight + 0.1f;
     queryAABB.bottom = (std::min)(partPrevPosY, partPosY) - part.halfHeight - 0.1f;
 
-    float prevBottom = partPrevPosY - part.halfHeight;
+    float prevBottom = partPrevPosY - part.halfHeight + prevBottomOffset;
     float prevTop = partPrevPosY + part.halfHeight;
 
     auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
@@ -793,7 +816,7 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
     }
 }
 
-void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY) {
+void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, const HitPart& part, float prevPosY, float moveDeltaY, float prevBottomOffset) {
     AABB2D aabb = MakePartAABB(state_.position_, part);
     AABB2D shrunkAABBY = aabb;
     const float skinX = (std::min)(0.02f, part.halfWidth * 0.5f);
@@ -806,7 +829,7 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
     }
 
     float partPrevPosY = prevPosY + part.offsetY;
-    float prevBottom = partPrevPosY - part.halfHeight;
+    float prevBottom = partPrevPosY - part.halfHeight + prevBottomOffset;
     float prevTop = partPrevPosY + part.halfHeight;
 
     auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(shrunkAABBY, kLayerBlock);
