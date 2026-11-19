@@ -4,10 +4,11 @@
 #include <functional>
 
 enum ColliderLayer : uint32_t {
-    kLayerPlayer  = 1 << 0,
-    kLayerBlock   = 1 << 1,
-    kLayerItem    = 1 << 2,
-    kLayerTrigger = 1 << 3,
+    kLayerPlayer     = 1 << 0,
+    kLayerBlock      = 1 << 1,
+    kLayerItem       = 1 << 2,
+    kLayerTrigger    = 1 << 3,
+    kLayerPlayerHead = 1 << 4,
 };
 
 enum class ColliderType {

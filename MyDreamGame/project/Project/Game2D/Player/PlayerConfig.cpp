@@ -39,6 +39,14 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         
         j["halfWidth_"] = params.halfWidth_;
         j["halfHeight_"] = params.halfHeight_;
+        j["bodyHalfWidth_"] = params.bodyHalfWidth_;
+        j["bodyHalfHeight_"] = params.bodyHalfHeight_;
+        j["bodyOffsetY_"] = params.bodyOffsetY_;
+        j["headHalfWidth_"] = params.headHalfWidth_;
+        j["headHalfHeight_"] = params.headHalfHeight_;
+        j["headOffsetX_"] = params.headOffsetX_;
+        j["headOffsetY_"] = params.headOffsetY_;
+        j["headWallOffsetX_"] = params.headWallOffsetX_;
         
         j["colorNormal_"] = { params.colorNormal_.x, params.colorNormal_.y, params.colorNormal_.z, params.colorNormal_.w };
         j["colorDashed_"] = { params.colorDashed_.x, params.colorDashed_.y, params.colorDashed_.z, params.colorDashed_.w };
@@ -106,6 +114,14 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         
         if (j.contains("halfWidth_")) params.halfWidth_ = j["halfWidth_"];
         if (j.contains("halfHeight_")) params.halfHeight_ = j["halfHeight_"];
+        if (j.contains("bodyHalfWidth_")) params.bodyHalfWidth_ = j["bodyHalfWidth_"];
+        if (j.contains("bodyHalfHeight_")) params.bodyHalfHeight_ = j["bodyHalfHeight_"];
+        if (j.contains("bodyOffsetY_")) params.bodyOffsetY_ = j["bodyOffsetY_"];
+        if (j.contains("headHalfWidth_")) params.headHalfWidth_ = j["headHalfWidth_"];
+        if (j.contains("headHalfHeight_")) params.headHalfHeight_ = j["headHalfHeight_"];
+        if (j.contains("headOffsetX_")) params.headOffsetX_ = j["headOffsetX_"];
+        if (j.contains("headOffsetY_")) params.headOffsetY_ = j["headOffsetY_"];
+        if (j.contains("headWallOffsetX_")) params.headWallOffsetX_ = j["headWallOffsetX_"];
         
         if (j.contains("colorNormal_")) {
             params.colorNormal_.x = j["colorNormal_"][0];

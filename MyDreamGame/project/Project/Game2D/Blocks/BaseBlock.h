@@ -35,6 +35,7 @@ public:
     // 当たり判定の性質
     virtual bool IsSolid() const { return false; }
     virtual bool IsOneWay() const { return false; }
+    virtual bool IsHazard() const { return false; }
     
     // リフトなどの動く足場用
     virtual bool IsMoving() const { return false; }

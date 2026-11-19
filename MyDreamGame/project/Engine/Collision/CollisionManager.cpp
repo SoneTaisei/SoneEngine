@@ -60,15 +60,19 @@ void CollisionManager::Draw3D(ID3D12GraphicsCommandList* commandList, const Matr
         if (!col || !col->IsEnabled()) continue;
 
         bool isPlayerCollider = (col->GetLayerMask() & kLayerPlayer) != 0;
+        bool isPlayerHeadCollider = (col->GetLayerMask() & kLayerPlayerHead) != 0;
         ColliderType type = col->GetColliderType();
 
         // 形状タイプ・対象ごとの色分け
-        // Player: 黄 (1.0f, 1.0f, 0.0f, 1.0f)
+        // Player Body: 黄 (1.0f, 1.0f, 0.0f, 1.0f)
+        // Player Head: マゼンタ (1.0f, 0.3f, 0.8f, 1.0f)
         // AABB: 緑 (0.0f, 1.0f, 0.0f, 1.0f)
         // OBB: オレンジ (1.0f, 0.65f, 0.0f, 1.0f)
         // Sphere: 水色 (0.0f, 0.86f, 1.0f, 1.0f)
         Vector4 wireColor = { 0.0f, 1.0f, 0.0f, 1.0f };
-        if (isPlayerCollider) {
+        if (isPlayerHeadCollider) {
+            wireColor = { 1.0f, 0.3f, 0.8f, 1.0f };
+        } else if (isPlayerCollider) {
             wireColor = { 1.0f, 1.0f, 0.0f, 1.0f };
         } else if (type == ColliderType::kOBB) {
             wireColor = { 1.0f, 0.65f, 0.0f, 1.0f };
@@ -89,7 +93,7 @@ void CollisionManager::Draw3D(ID3D12GraphicsCommandList* commandList, const Matr
 
         if (type == ColliderType::kAABB) {
             AABB2D aabb = col->GetAABB();
-            if (isPlayerCollider) {
+            if (isPlayerCollider || isPlayerHeadCollider) {
                 Vector3 minP = { aabb.left, aabb.bottom, basePos.z };
                 Vector3 maxP = { aabb.right, aabb.top, basePos.z };
                 lineRenderer->AddAABB(minP, maxP, wireColor);

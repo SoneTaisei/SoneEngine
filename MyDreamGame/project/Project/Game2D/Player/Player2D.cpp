@@ -194,12 +194,17 @@ void Player2D::Initialize() {
     ChangeState(std::make_unique<PlayerNormalState>());
 
     if (GetGameObject()) {
-        auto* cc = GetGameObject()->GetComponent<ColliderComponent>();
-        if (!cc) {
-            cc = GetGameObject()->AddComponent<ColliderComponent>();
+        bodyCollider_ = GetGameObject()->GetComponent<ColliderComponent>();
+        if (!bodyCollider_) {
+            bodyCollider_ = GetGameObject()->AddComponent<ColliderComponent>();
         }
-        cc->SetLayerMask(kLayerPlayer);
-        cc->SetIsSolid(false);
+        bodyCollider_->SetLayerMask(kLayerPlayer);
+        bodyCollider_->SetIsSolid(false);
+
+        headCollider_ = GetGameObject()->AddComponent<ColliderComponent>();
+        headCollider_->SetLayerMask(kLayerPlayerHead);
+        headCollider_->SetIsSolid(false);
+
         SyncCollider();
     }
 
@@ -407,14 +412,32 @@ void Player2D::DisplayImGui() {
 
         if (ImGui::TreeNode("サイズ")) {
             bool sizeChanged = false;
-            if (ImGui::DragFloat("当たり判定の半幅", &params_.halfWidth_, 0.01f, 0.05f, 5.0f)) {
+            if (ImGui::DragFloat("基準の半幅 (見た目用)", &params_.halfWidth_, 0.01f, 0.05f, 5.0f)) {
                 sizeChanged = true;
             }
-            if (ImGui::DragFloat("当たり判定の半高", &params_.halfHeight_, 0.01f, 0.05f, 5.0f)) {
+            if (ImGui::DragFloat("基準の半高 (足元位置)", &params_.halfHeight_, 0.01f, 0.05f, 5.0f)) {
                 sizeChanged = true;
             }
             if (sizeChanged) {
                 visuals_.SyncSize(params_);
+            }
+
+            ImGui::Separator();
+            ImGui::Text("胴体コライダー (Body / 黄枠)");
+            bool partChanged = false;
+            if (ImGui::DragFloat("胴体 半幅", &params_.bodyHalfWidth_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("胴体 半高", &params_.bodyHalfHeight_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("胴体 Yオフセット", &params_.bodyOffsetY_, 0.01f, -3.0f, 3.0f)) partChanged = true;
+
+            ImGui::Separator();
+            ImGui::Text("頭コライダー (Head / ピンク枠)");
+            if (ImGui::DragFloat("頭 半幅", &params_.headHalfWidth_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 半高", &params_.headHalfHeight_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 Xオフセット (向き連動)", &params_.headOffsetX_, 0.01f, -2.0f, 2.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 Yオフセット", &params_.headOffsetY_, 0.01f, -3.0f, 3.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 壁掴み時X逃がし", &params_.headWallOffsetX_, 0.01f, 0.0f, 1.0f)) partChanged = true;
+
+            if (sizeChanged || partChanged) {
                 SyncCollider();
             }
             ImGui::TreePop();
@@ -533,10 +556,23 @@ AABB2D Player2D::GetAABB() const {
     return physics_.GetAABB(state_, params_);
 }
 
+AABB2D Player2D::GetBodyAABB() const {
+    return physics_.GetBodyAABB(state_, params_);
+}
+
+AABB2D Player2D::GetHeadAABB() const {
+    return physics_.GetHeadAABB(state_, params_);
+}
+
 void Player2D::SyncCollider() {
     if (!GetGameObject()) return;
-    if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
-        cc->SetCustomAABB(GetAABB());
+    if (bodyCollider_) {
+        bodyCollider_->SetCustomAABB(GetBodyAABB());
+    } else if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+        cc->SetCustomAABB(GetBodyAABB());
+    }
+    if (headCollider_) {
+        headCollider_->SetCustomAABB(GetHeadAABB());
     }
 }
 

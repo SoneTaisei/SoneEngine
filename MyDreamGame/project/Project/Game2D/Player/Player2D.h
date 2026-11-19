@@ -14,6 +14,7 @@
 // 前方宣言
 class MapChip2D;
 class GameCamera;
+class ColliderComponent;
 class PlayerNormalState;
 class PlayerDeadState;
 class PlayerRespawnState;
@@ -157,6 +158,8 @@ public:
 
     // ゲーム状態取得用ゲッター追加
     AABB2D GetAABB() const;
+    AABB2D GetBodyAABB() const;
+    AABB2D GetHeadAABB() const;
     void SyncCollider();
     bool IsDead() const { return state_.isDead_; }
     bool IsRespawning() const { return state_.isRespawning_; }
@@ -176,4 +179,6 @@ private:
     std::unique_ptr<IPlayerState> currentState_;
 
     GameCamera *camera_ = nullptr;
+    ColliderComponent *bodyCollider_ = nullptr;
+    ColliderComponent *headCollider_ = nullptr;
 };

@@ -9,6 +9,7 @@ public:
     void Update() override;
     
     bool IsSolid() const override { return false; }
+    bool IsHazard() const override { return true; }
     void OnCollision(Player2D* player) override;
     void SetProperties(const nlohmann::json& properties) override;
 
