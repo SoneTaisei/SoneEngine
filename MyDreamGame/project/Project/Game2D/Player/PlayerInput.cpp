@@ -25,7 +25,7 @@ void PlayerInput::Update(InputState& outState) {
         padMoveX += 1.0f;
     }
     Vector2 stick = gamepad->GetLeftStick();
-    if (std::abs(stick.x) > 0.05f) {
+    if (std::abs(stick.x) > 0.35) {
         padMoveX += stick.x;
     }
 
@@ -47,7 +47,7 @@ void PlayerInput::Update(InputState& outState) {
     if (gamepad->IsDPadUp()) {
         padMoveY += 1.0f;
     }
-    if (std::abs(stick.y) > 0.05f) {
+    if (std::abs(stick.y) > 0.25f) {
         padMoveY += stick.y;
     }
 
