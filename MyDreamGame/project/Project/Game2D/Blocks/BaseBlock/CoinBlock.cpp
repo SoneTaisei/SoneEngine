@@ -81,7 +81,43 @@ void CoinBlock::OnCollision(Player2D *player) {
     }
 }
 
+void CoinBlock::SaveCollected() {
+    if (isCollected_) {
+        isSaved_ = true;
+    }
+}
+
+void CoinBlock::ApplySavedState() {
+    isCollected_ = true;
+    isSaved_ = true;
+    collectTimer_ = collectDuration_;
+    if (GetGameObject()) {
+        if (auto *mrc = GetGameObject()->GetComponent<MeshRendererComponent>()) {
+            Vector4 c = mrc->GetMaterial().color;
+            c.w = 0.0f;
+            mrc->SetColor(c);
+        }
+        if (auto *prc = GetGameObject()->GetComponent<PrimitiveRendererComponent>()) {
+            Vector4 c = prc->GetMaterial().color;
+            c.w = 0.0f;
+            prc->SetColor(c);
+        }
+        if (auto *cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+            cc->SetLayerMask(0);
+        }
+    }
+}
+
+void CoinBlock::ClearSavedState() {
+    isSaved_ = false;
+    Reset();
+}
+
 void CoinBlock::Reset() {
+    if (isSaved_) {
+        ApplySavedState();
+        return;
+    }
     BaseBlock::Reset();
     isCollected_ = false;
     collectTimer_ = 0.0f;

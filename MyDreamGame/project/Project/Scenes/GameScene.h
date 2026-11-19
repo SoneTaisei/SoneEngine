@@ -63,6 +63,8 @@ public:
     // プレイヤーの取得
     Player2D* GetPlayer() override { return player_; }
 
+    std::string GetLevelDataJsonPath() const override;
+
 private:
     // ---------------------------------------------------
     // 3D・エフェクト関連 (develop)

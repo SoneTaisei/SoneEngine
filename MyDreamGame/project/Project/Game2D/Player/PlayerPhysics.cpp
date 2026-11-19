@@ -73,14 +73,17 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     }
 
     // --- Y軸（上下）の移動と当たり判定 ---
+    float prevPosY = state_.position_.y;
+    float moveDeltaY = 0.0f;
     if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
-        state_.position_.y += state_.platformVelocity_.y * dt;
+        moveDeltaY += state_.platformVelocity_.y * deltaTime;
     }
     if (state_.isWallClinging_ || state_.isWallSliding_) {
-        state_.position_.y += state_.wallPlatformVelocity_.y * dt;
+        moveDeltaY += state_.wallPlatformVelocity_.y * deltaTime;
     }
-    state_.position_.y += state_.velocity_.y * dt;
-    ResolveCollisionY(state_, params_);
+    moveDeltaY += state_.velocity_.y * deltaTime;
+    state_.position_.y += moveDeltaY;
+    ResolveCollisionY(state_, params_, prevPosY, moveDeltaY);
 
     // --- X軸（左右）の移動と当たり判定 ---
     float prevPosX = state_.position_.x;
@@ -615,7 +618,7 @@ void PlayerPhysics::ApplyGravity(PlayerState& state_, const PlayerParams& params
     }
 }
 
-void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_) {
+void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, float prevPosY, float moveDeltaY) {
     state_.isOnGround_ = false;
     state_.isOnMovingPlatform_ = false;
     state_.standingPlatformCollider_ = nullptr;
@@ -624,23 +627,27 @@ void PlayerPhysics::ResolveCollisionY(PlayerState& state_, const PlayerParams& p
     AABB2D aabb = GetAABB(state_, params_);
 
     // 静的ブロック判定
-    ResolveStaticCollisionY(state_, params_, aabb);
+    ResolveStaticCollisionY(state_, params_, aabb, prevPosY, moveDeltaY);
 
     // 動的ブロック判定
     aabb = GetAABB(state_, params_); // 静的ブロックで位置が変わった可能性があるので再取得
-    ResolveDynamicCollisionY(state_, params_, aabb);
+    ResolveDynamicCollisionY(state_, params_, aabb, prevPosY, moveDeltaY);
 }
 
-void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
-    AABB2D queryAABB = aabb;
+void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb, float prevPosY, float moveDeltaY) {
+    const float kSkinX = 0.02f;
+    AABB2D queryAABB;
     
-    // 左右を少し削る（壁との引っかかり防止）
-    queryAABB.left += 0.05f;
-    queryAABB.right -= 0.05f;
+    // 左右をわずかに削る（壁密着時の引っかかり防止）
+    queryAABB.left = aabb.left + kSkinX;
+    queryAABB.right = aabb.right - kSkinX;
 
-    // 上下に拡張（速度ゼロでもめり込みを検知するため）
-    queryAABB.top += 0.1f;
-    queryAABB.bottom -= 0.1f;
+    // 移動前後のY範囲をすべてカバー（高速落下・斜め落下時のすり抜け防止）
+    queryAABB.top = (std::max)(prevPosY, state_.position_.y) + params_.halfHeight_ + 0.1f;
+    queryAABB.bottom = (std::min)(prevPosY, state_.position_.y) - params_.halfHeight_ - 0.1f;
+
+    float prevBottom = prevPosY - params_.halfHeight_;
+    float prevTop = prevPosY + params_.halfHeight_;
 
     auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
     for (auto* collider : colliders) {
@@ -648,14 +655,55 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
         if (!collider->IsSolid() && !collider->IsOneWay()) continue;
 
         AABB2D blockAABB = collider->GetAABB();
+
+        if (aabb.right - kSkinX <= blockAABB.left || aabb.left + kSkinX >= blockAABB.right) {
+            continue;
+        }
         
         if (collider->IsOneWay()) {
-            float previousBottom = state_.position_.y - state_.velocity_.y * dt_ - params_.halfHeight_;
-            if (previousBottom < blockAABB.top - 0.05f) {
+            if (prevBottom < blockAABB.top - 0.08f || moveDeltaY > 0.0001f) {
                 continue;
             }
         }
 
+        bool wasAbove = (prevBottom >= blockAABB.top - 0.08f);
+        bool wasBelow = (prevTop <= blockAABB.bottom + 0.08f);
+
+        // 1. 移動前にブロックの上面より上にいた場合（斜め落下や角への着地でも確実にキャッチ）
+        if (wasAbove && moveDeltaY <= 0.0001f && aabb.bottom <= blockAABB.top && prevBottom >= blockAABB.bottom) {
+            state_.position_.y = blockAABB.top + params_.halfHeight_;
+            state_.velocity_.y = 0.0f;
+            state_.isOnGround_ = true;
+            state_.canDash_ = true;
+            state_.wallJumpDirLockTimer_ = 0.0f;
+            state_.lockedDirectionX_ = 0.0f;
+
+            if (state_.climbingUpTimer_ > 0.0f) {
+                state_.climbLandingTimer_ = params_.climbLandingDuration_;
+                state_.climbingUpTimer_ = 0.0f;
+                state_.velocity_.x = 0.0f;
+                state_.externalVelocityX_ = 0.0f;
+                state_.externalVelocityTimer_ = 0.0f;
+            }
+
+            if (collider->GetUserData()) {
+                BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                block->OnPlayerStand();
+            }
+            aabb = GetAABB(state_, params_);
+            continue;
+        }
+
+        // 2. 移動前にブロックの下面より下にいた場合（下からの天井衝突）
+        if (wasBelow && moveDeltaY >= -0.0001f && aabb.top >= blockAABB.bottom && prevTop <= blockAABB.top) {
+            if (collider->IsOneWay()) continue;
+            state_.position_.y = blockAABB.bottom - params_.halfHeight_;
+            state_.velocity_.y = 0.0f;
+            aabb = GetAABB(state_, params_);
+            continue;
+        }
+
+        // 3. 移動前から既にY範囲が重なっていた場合（横からのめり込み等）
         if (aabb.right > blockAABB.left && aabb.left < blockAABB.right &&
             aabb.top > blockAABB.bottom && aabb.bottom < blockAABB.top) {
             
@@ -692,19 +740,23 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
                 state_.position_.y = blockAABB.bottom - params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
             }
+            aabb = GetAABB(state_, params_);
         }
     }
 }
 
-void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb) {
+void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb, float prevPosY, float moveDeltaY) {
     AABB2D shrunkAABBY = aabb;
-    shrunkAABBY.left += 0.05f;
-    shrunkAABBY.right -= 0.05f;
+    shrunkAABBY.left += 0.02f;
+    shrunkAABBY.right -= 0.02f;
 
     if (state_.isWallClinging_ || state_.isWallSliding_) {
         if (state_.isTouchingWallRight_) shrunkAABBY.right -= 0.15f;
         if (state_.isTouchingWallLeft_) shrunkAABBY.left += 0.15f;
     }
+
+    float prevBottom = prevPosY - params_.halfHeight_;
+    float prevTop = prevPosY + params_.halfHeight_;
 
     auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(shrunkAABBY, kLayerBlock);
     for (auto* collider : colliders) {
@@ -713,12 +765,17 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
         AABB2D blockAABB = collider->GetAABB();
 
         if (CheckAABBCollision(shrunkAABBY, blockAABB)) {
-            float overlapX = (std::min)(shrunkAABBY.right, blockAABB.right) - (std::max)(shrunkAABBY.left, blockAABB.left);
-            float overlapY = (std::min)(shrunkAABBY.top, blockAABB.top) - (std::max)(shrunkAABBY.bottom, blockAABB.bottom);
-            if (overlapY > overlapX) continue; // 壁への横からのめり込みの場合はY軸判定をスキップ
+            bool wasAbove = (prevBottom >= blockAABB.top - 0.15f);
+            bool wasBelow = (prevTop <= blockAABB.bottom + 0.15f);
+
+            if (!wasAbove && !wasBelow) {
+                float overlapX = (std::min)(shrunkAABBY.right, blockAABB.right) - (std::max)(shrunkAABBY.left, blockAABB.left);
+                float overlapY = (std::min)(shrunkAABBY.top, blockAABB.top) - (std::max)(shrunkAABBY.bottom, blockAABB.bottom);
+                if (overlapY > overlapX) continue; // 壁への横からのめり込みの場合はY軸判定をスキップ
+            }
             
             float blockCenterY = (blockAABB.top + blockAABB.bottom) * 0.5f;
-            if (state_.position_.y > blockCenterY) { // 上から乗った
+            if (wasAbove || (!wasBelow && state_.position_.y > blockCenterY)) { // 上から乗った
                 state_.position_.y = blockAABB.top + params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
                 state_.isOnGround_ = true;
@@ -746,6 +803,9 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                 state_.position_.y = blockAABB.bottom - params_.halfHeight_;
                 state_.velocity_.y = 0.0f;
             }
+            aabb = GetAABB(state_, params_);
+            shrunkAABBY.top = aabb.top;
+            shrunkAABBY.bottom = aabb.bottom;
         }
     }
 }
@@ -847,8 +907,8 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
             state_.isTouchingWallLeft_ = true;
         }
     }
-    // 3. 速度がほぼゼロの場合（静止状態でのめり込み解決）
-    else {
+    // 3. 残りのめり込み解決（斜め移動時や静止状態でのすり抜け防止）
+    {
         AABB2D currentAABB = GetAABB(state_, params_);
         for (const auto& blockAABB : hitBlocks) {
             if (currentAABB.right > blockAABB.left && currentAABB.left < blockAABB.right) {
@@ -864,6 +924,9 @@ void PlayerPhysics::ResolveStaticCollisionX(PlayerState& state_, const PlayerPar
                 state_.velocity_.x = 0.0f;
                 state_.externalVelocityX_ = 0.0f;
                 state_.externalVelocityTimer_ = 0.0f;
+                state_.hasDashInertia_ = false;
+                state_.dashJumpWindowTimer_ = 0.0f;
+                state_.lastDashDirX_ = 0.0f;
                 currentAABB = GetAABB(state_, params_);
             }
         }

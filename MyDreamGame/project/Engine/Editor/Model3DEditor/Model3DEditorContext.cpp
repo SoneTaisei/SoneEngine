@@ -476,6 +476,14 @@ void Model3DEditorContext::LoadLevelData(const std::string& filePath) {
     }
 }
 
+void Model3DEditorContext::LoadForStage(const std::string& stagePathOrName) {
+    if (stagePathOrName.empty()) return;
+    std::filesystem::path p(stagePathOrName);
+    std::string stem = p.stem().string();
+    if (stem.empty() || stem == "temp_play_map") return;
+    LoadLevelData("resources/json/shared/LevelData/" + stem + ".json");
+}
+
 bool Model3DEditorContext::DeleteFile(const std::string& filePath) {
     std::string path = ResolveFilePath(filePath);
     try {

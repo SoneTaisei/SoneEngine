@@ -20,11 +20,22 @@
 #include "Resource/Model/ModelManager.h"
 #include "Core/Utility/ParameterManager.h"
 #include "GameObject/WorldGif.h"
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
+#include <filesystem>
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
 
 GameScene::GameScene() = default;
 GameScene::~GameScene() = default;
+
+std::string GameScene::GetLevelDataJsonPath() const {
+    std::filesystem::path p(s_TargetMapFilePath);
+    std::string stem = p.stem().string();
+    if (stem.empty() || stem == "temp_play_map") {
+        return Model3DEditorContext::GetInstance()->GetCurrentFilePath();
+    }
+    return "resources/json/shared/LevelData/" + stem + ".json";
+}
 
 void GameScene::OnEnter(SceneManager* sceneManager) {
     // StageSelectSceneから選択されたステージのパスを受け取る
@@ -40,6 +51,7 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
             }
             if (s_TargetMapFilePath.find("temp_play_map") == std::string::npos) {
                 StageGifManager::GetInstance()->LoadForStage(s_TargetMapFilePath);
+                Model3DEditorContext::GetInstance()->LoadForStage(s_TargetMapFilePath);
             }
         }
     }
@@ -101,6 +113,7 @@ void GameScene::Initialize() {
         gifStagePath = StageGifManager::GetInstance()->GetCurrentStageName();
     }
     StageGifManager::GetInstance()->LoadForStage(gifStagePath);
+    Model3DEditorContext::GetInstance()->LoadForStage(gifStagePath);
 
     // 6. プレイヤーの生成と初期化
     playerObj_ = std::make_unique<GameObject>("Player");
@@ -241,6 +254,7 @@ void GameScene::Update(SceneManager *sceneManager) {
 #endif
 
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
+            map_->ClearSavedCoins();
             player_->FindSpawnPoint(*map_);
             if (cameraController_) {
                 cameraController_->OnRespawn(map_.get());
