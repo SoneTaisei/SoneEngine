@@ -5,7 +5,7 @@
 #include "Core/Utility/TransformFunctions.h"
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 
 void ReplayGhostRenderer::Draw3D(const Player2D* player) {

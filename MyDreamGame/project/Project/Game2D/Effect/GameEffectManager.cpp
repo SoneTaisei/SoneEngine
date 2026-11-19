@@ -17,7 +17,7 @@
 #include "Editor/Replay/ReplayManager.h"
 
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Core/TimeManager.h"
 

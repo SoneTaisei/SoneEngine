@@ -5,7 +5,7 @@
 #include "Scene/SceneFactory.h"
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
 #include "Renderer/Renderer.h"

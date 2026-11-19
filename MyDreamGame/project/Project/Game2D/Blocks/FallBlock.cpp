@@ -9,7 +9,7 @@
 
 #ifdef USE_IMGUI
 #include <imgui.h>
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 
 // BlockFactoryへの自動登録

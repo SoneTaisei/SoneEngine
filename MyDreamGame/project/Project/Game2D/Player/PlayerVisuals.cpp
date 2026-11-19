@@ -8,7 +8,7 @@
 #include "Effect/ParticleCommon.h"
 #include "Core/Utility/TransformFunctions.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #endif
 #include <random>

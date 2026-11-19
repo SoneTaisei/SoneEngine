@@ -3,7 +3,7 @@
 #include "Core/TimeManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include <imgui.h>
 #endif
 #include <cmath>

@@ -6,7 +6,7 @@
 #include "Core/TimeManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 
 void PatrolEnemyBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {

@@ -25,7 +25,7 @@
 #include "Component/ColliderComponent.h"
 #include "Collision/CollisionManager.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
 

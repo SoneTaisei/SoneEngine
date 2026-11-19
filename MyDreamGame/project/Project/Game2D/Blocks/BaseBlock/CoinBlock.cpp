@@ -2,7 +2,7 @@
 #include "Core/TimeManager.h"
 #include "Game2D/Player/Player2D.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
 

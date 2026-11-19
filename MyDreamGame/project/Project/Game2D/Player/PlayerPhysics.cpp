@@ -76,12 +76,12 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     float prevPosY = state_.position_.y;
     float moveDeltaY = 0.0f;
     if (state_.isOnMovingPlatform_ && state_.isOnGround_) {
-        moveDeltaY += state_.platformVelocity_.y * deltaTime;
+        moveDeltaY += state_.platformVelocity_.y * dt;
     }
     if (state_.isWallClinging_ || state_.isWallSliding_) {
-        moveDeltaY += state_.wallPlatformVelocity_.y * deltaTime;
+        moveDeltaY += state_.wallPlatformVelocity_.y * dt;
     }
-    moveDeltaY += state_.velocity_.y * deltaTime;
+    moveDeltaY += state_.velocity_.y * dt;
     state_.position_.y += moveDeltaY;
     ResolveCollisionY(state_, params_, prevPosY, moveDeltaY);
 

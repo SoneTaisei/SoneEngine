@@ -10,7 +10,7 @@
 #include <wrl.h>
 #include "Graphics/CameraManager.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Scene/SceneFactory.h"
 #include "Renderer/DirectXCommon/DirectXCommon.h"
