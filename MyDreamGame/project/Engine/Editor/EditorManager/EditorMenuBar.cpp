@@ -9,7 +9,6 @@
 #include "Scene/SceneManager.h"
 #include "Scene/SceneFactory.h"
 #include "GameObject/WorldGif.h"
-#include "Editor/Model3DEditor/Model3DEditorContext.h"
 #include "Game2D/MapChip2D.h"
 #include "Editor/Replay/ReplayManager.h"
 #include <imgui.h>
@@ -46,7 +45,6 @@ void EditorMenuBar::Draw(EditorManager* em, SceneManager* sceneManager, ModelCom
                 }
                 // GIFの配置状態も自動保存
                 StageGifManager::GetInstance()->SaveForStage(StageGifManager::GetInstance()->GetCurrentStageName());
-                Model3DEditorContext::GetInstance()->SaveToFile();
             }
             ImGui::PopStyleColor(3);
         } else {
