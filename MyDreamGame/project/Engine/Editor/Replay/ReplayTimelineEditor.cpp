@@ -58,6 +58,7 @@ void ReplayTimelineEditor::SetTrackKeyRange(ReplayData& data, int trackIdx, int 
 
     data.totalFrames = static_cast<int>(data.frames.size());
     RebuildMmlFromFrames(data);
+    ReplayManager::NormalizeFrameRecords(data);
 }
 
 void ReplayTimelineEditor::ModifyBlockRange(ReplayData& data, int trackIdx, int oldStart, int oldEnd, int newStart, int newEnd) {
@@ -89,6 +90,7 @@ void ReplayTimelineEditor::ModifyBlockRange(ReplayData& data, int trackIdx, int 
 
     data.totalFrames = static_cast<int>(data.frames.size());
     RebuildMmlFromFrames(data);
+    ReplayManager::NormalizeFrameRecords(data);
 }
 
 void ReplayTimelineEditor::DeleteBlockRange(ReplayData& data, int trackIdx, int startFrame, int endFrame) {
@@ -118,6 +120,7 @@ void ReplayTimelineEditor::ApplyMacro(ReplayData& data, int startFrame, const Re
     }
 
     RebuildMmlFromFrames(data);
+    ReplayManager::NormalizeFrameRecords(data);
     
     AppliedMacro am;
     am.name = macro.name;
@@ -164,8 +167,9 @@ void ReplayTimelineEditor::RebuildFramesFromMml(ReplayData& data) {
 
     data.frames.resize(data.totalFrames);
     for (int i = 0; i < data.totalFrames; ++i) {
-        data.frames[i].keys[0] = (i < static_cast<int>(track0.size())) ? track0[i] : '-';
-        data.frames[i].keys[1] = (data.frames[i].keys[0] == 'L' || data.frames[i].keys[0] == 'R') ? data.frames[i].keys[0] : '-';
+        char t0Val = (i < static_cast<int>(track0.size())) ? track0[i] : '-';
+        data.frames[i].keys[0] = (t0Val == 'L') ? 'L' : '-';
+        data.frames[i].keys[1] = (t0Val == 'R') ? 'R' : '-';
         data.frames[i].keys[2] = (i < static_cast<int>(track1.size())) ? track1[i] : '-';
         data.frames[i].keys[3] = (i < static_cast<int>(track2.size())) ? track2[i] : '-';
         data.frames[i].keys[4] = (i < static_cast<int>(track3.size())) ? track3[i] : '-';

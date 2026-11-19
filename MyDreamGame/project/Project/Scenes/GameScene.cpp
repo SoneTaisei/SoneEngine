@@ -170,6 +170,13 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
     }
 
+    if (ReplayManager::GetInstance()->IsPlaying() && gameState_ == GameState::StartReady) {
+        gameState_ = GameState::Playing;
+        if (readyGoUI_) {
+            readyGoUI_->Reset();
+        }
+    }
+
     if (gameState_ == GameState::StartReady) {
         if (readyGoUI_) {
             if (readyGoUI_->Update()) {
@@ -244,7 +251,15 @@ void GameScene::Update(SceneManager *sceneManager) {
 
         // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
         if (replayController_ && effectManager_) {
-            replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effectManager_->GetEffects(), previousScore_);
+            if (replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effectManager_->GetEffects(), previousScore_)) {
+                gameState_ = GameState::Playing;
+                if (clearUI_) {
+                    clearUI_->Reset(GetGameCamera());
+                }
+                if (cameraController_) {
+                    cameraController_->OnRespawn(map_.get());
+                }
+            }
         }
 
             if (player_) {
@@ -272,6 +287,10 @@ void GameScene::Update(SceneManager *sceneManager) {
                 canControl = false;
             }
 
+            if (replayController_) {
+                replayController_->EnsureRecordingStarted(player_, map_.get(), GetGameCamera(), isCurrentlyPlaying && canControl);
+            }
+
             player_->UpdateWithMap(*map_, GetGameCamera() && GetGameCamera()->IsTransitioning(), canControl);
 
             // ゴール判定
@@ -297,9 +316,9 @@ void GameScene::Update(SceneManager *sceneManager) {
             cameraController_->Update(player_, map_.get(), gameState_ == GameState::Clear, ReplayManager::GetInstance()->IsPlaying());
         }
 
-        // プレイ中の場合、リプレイ録画を行う
+        // プレイ中の場合、操作可能状態であればリプレイ録画を行う
         if (replayController_) {
-            replayController_->UpdateRecording(player_, map_.get(), GetGameCamera(), isCurrentlyPlaying);
+            replayController_->UpdateRecording(player_, map_.get(), GetGameCamera(), isCurrentlyPlaying && canControl);
         }
     }
 
@@ -319,8 +338,8 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         player_->DisplayImGui();
     }
 
-    // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
-    if (!EditorManager::IsPlaying() || gameState_ == GameState::Pause) {
+    // エディター側でプレイ状態（またはリプレイ再生中）になっていないときは、インゲームUI（スコア等）を描画しない
+    if ((!EditorManager::IsPlaying() && !ReplayManager::GetInstance()->IsPlaying()) || gameState_ == GameState::Pause) {
         return;
     }
 

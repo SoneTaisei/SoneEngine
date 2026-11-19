@@ -16,9 +16,10 @@ void GameReplayController::StopRecording() {
     }
 }
 
-void GameReplayController::UpdatePlayback(Player2D* player, MapChip2D* map, GameCamera* camera,
-                                        const std::vector<std::unique_ptr<BaseEffect>>& effects,
-                                        int& previousScore) {
+bool GameReplayController::UpdatePlayback(Player2D* player, MapChip2D* map, GameCamera* camera,
+                                          const std::vector<std::unique_ptr<BaseEffect>>& effects,
+                                          int& previousScore) {
+    bool didRebuildState = false;
     if (ReplayManager::GetInstance()->IsPlaying()) {
         // ループ判定を再生処理の一番最初で行う
         if (ReplayManager::GetInstance()->GetCurrentFrame() >= ReplayManager::GetInstance()->GetCurrentReplay().totalFrames) {
@@ -32,6 +33,7 @@ void GameReplayController::UpdatePlayback(Player2D* player, MapChip2D* map, Game
         if (ReplayManager::GetInstance()->IsPlaying()) {
             bool shouldRebuildState = !wasPlayingLastFrame_ || ReplayManager::GetInstance()->IsForceSnapNextFrame();
             if (shouldRebuildState) {
+                didRebuildState = true;
                 auto& replayData = ReplayManager::GetInstance()->GetCurrentReplay();
                 int curFrame = ReplayManager::GetInstance()->GetCurrentFrame();
 
@@ -110,10 +112,21 @@ void GameReplayController::UpdatePlayback(Player2D* player, MapChip2D* map, Game
         }
         wasPlayingLastFrame_ = false;
     }
+    return didRebuildState;
 }
 
-void GameReplayController::UpdateRecording(Player2D* player, MapChip2D* map, GameCamera* camera, bool isCurrentlyPlaying) {
-    if (isCurrentlyPlaying && !ReplayManager::GetInstance()->IsPlaying()) {
+void GameReplayController::EnsureRecordingStarted(Player2D* player, MapChip2D* map, GameCamera* camera, bool canRecord) {
+    if (canRecord && !ReplayManager::GetInstance()->IsPlaying()) {
+        if (player && !ReplayManager::GetInstance()->IsRecording()) {
+            Vector3 camPos = camera ? camera->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
+            std::string mapStr = map ? map->GetMapDataAsString() : "";
+            ReplayManager::GetInstance()->StartRecord(player->GetPosition(), camPos, mapStr);
+        }
+    }
+}
+
+void GameReplayController::UpdateRecording(Player2D* player, MapChip2D* map, GameCamera* camera, bool canRecord) {
+    if (canRecord && !ReplayManager::GetInstance()->IsPlaying()) {
         if (player) {
             Vector3 camPos = camera ? camera->GetTranslation() : Vector3{0.0f, 0.0f, 0.0f};
             if (!ReplayManager::GetInstance()->IsRecording()) {
