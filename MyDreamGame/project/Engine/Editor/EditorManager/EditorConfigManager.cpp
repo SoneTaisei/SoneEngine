@@ -274,6 +274,7 @@ void EditorConfigManager::InitializeMapOnStart(EditorManager *editor, SceneManag
             loaded = mapChip->LoadFromStageName(currentStageName);
             if (loaded) {
                 StageGifManager::GetInstance()->LoadForStage(currentStageName);
+                Model3DEditorContext::GetInstance()->LoadForStage(currentStageName);
             }
         }
         if (!loaded) {
@@ -286,6 +287,7 @@ void EditorConfigManager::InitializeMapOnStart(EditorManager *editor, SceneManag
                 }
             }
             StageGifManager::GetInstance()->LoadForStage(editor->mapEditor_ ? editor->mapEditor_->GetStageFilename() : "map_data.txt");
+            Model3DEditorContext::GetInstance()->LoadForStage(editor->mapEditor_ ? editor->mapEditor_->GetStageFilename() : "map_data.txt");
             editor->SaveSceneConfig();
         }
         if (editor->mapEditor_) {
@@ -330,6 +332,7 @@ void EditorConfigManager::RestoreMapOnReset(EditorManager *editor, SceneManager 
                 editor->mapEditor_->GetContext()->SetInputSize(mapChip->GetWidth(), mapChip->GetHeight());
                 editor->mapEditor_->UpdateAStarPositionsFromMap(mapChip, sceneManager);
                 StageGifManager::GetInstance()->LoadForStage(editor->mapEditor_->GetStageFilename());
+                Model3DEditorContext::GetInstance()->LoadForStage(editor->mapEditor_->GetStageFilename());
             }
             if (activeScene) {
                 activeScene->UpdateEditor();

@@ -1,0 +1,125 @@
+[
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/block",
+        "modelFileName": "block.gltf",
+        "name": "block",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            1.0,
+            1.0,
+            0.0010000000474974513
+        ],
+        "texturePath": "resources/Sprite/Original/UI/A.dds",
+        "translation": [
+            9.74325180053711,
+            12.600000381469727,
+            0.0
+        ],
+        "uvPivot": [
+            0.0,
+            0.0
+        ],
+        "uvRotation": 0.0,
+        "uvScale": [
+            4.0,
+            4.0
+        ],
+        "uvTranslation": [
+            0.49000000953674316,
+            0.0
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/block",
+        "modelFileName": "block.gltf",
+        "name": "block_Copy",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            1.0,
+            1.0,
+            0.0010000000474974513
+        ],
+        "texturePath": "resources/Sprite/Original/UI/X.png",
+        "translation": [
+            45.93301773071289,
+            12.600000381469727,
+            0.0
+        ],
+        "uvPivot": [
+            0.0,
+            0.0
+        ],
+        "uvRotation": 0.0,
+        "uvScale": [
+            4.0,
+            4.0
+        ],
+        "uvTranslation": [
+            0.49000000953674316,
+            0.0
+        ]
+    },
+    {
+        "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "isDoubleSided": false,
+        "modelDirectory": "resources/Object/Original/block",
+        "modelFileName": "block.gltf",
+        "name": "block_Copy_Copy",
+        "rotation": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scale": [
+            1.0,
+            1.0,
+            0.0010000000474974513
+        ],
+        "texturePath": "resources/Sprite/Original/UI/RB.png",
+        "translation": [
+            61.19546127319336,
+            32.35903549194336,
+            0.0
+        ],
+        "uvPivot": [
+            0.0,
+            0.0
+        ],
+        "uvRotation": 0.0,
+        "uvScale": [
+            4.0,
+            4.0
+        ],
+        "uvTranslation": [
+            0.5099999904632568,
+            0.0
+        ]
+    }
+]

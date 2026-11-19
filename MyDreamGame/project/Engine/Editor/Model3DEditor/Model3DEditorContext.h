@@ -68,6 +68,8 @@ public:
     bool DeleteFile(const std::string& filePath = "");
     // シーンに紐づくレベルデータJSONを読み込む (存在しない場合は配置を空にする)
     void LoadLevelData(const std::string& filePath);
+    // ステージ名・マップパスに連動してレベルデータJSONを切り替える
+    void LoadForStage(const std::string& stagePathOrName);
     void NewScene();
     void ScanLevelFiles();
 

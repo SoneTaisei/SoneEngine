@@ -32,6 +32,11 @@ void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime
             state_.position_.y >= rooms[i].y && state_.position_.y <= rooms[i].y + rooms[i].height) {
             player->SetCurrentRoomIndex(i);
             if (i != prevRoom) {
+                if (prevRoom != -1) {
+                    // 部屋（画面）が切り替わったら、ここまでに取得したコインとスコアを保存する
+                    map.SaveCollectedCoins();
+                    player->SetCheckpoint(player->GetCheckpointPosition(), state_.score_);
+                }
                 const auto& room = rooms[i];
                 for (int cy = 0; cy < map.GetHeight(); ++cy) {
                     for (int cx = 0; cx < map.GetWidth(); ++cx) {
