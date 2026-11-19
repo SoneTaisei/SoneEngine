@@ -12,7 +12,7 @@ public:
     ~CylinderEffect() override = default;
 
     void Initialize(ID3D12Device* device, uint32_t textureHandle);
-    void Update(float deltaTime) override;
+    void Update() override;
     void Draw() override;
 
     std::vector<PrimitiveObject*> GetPrimitives() override {

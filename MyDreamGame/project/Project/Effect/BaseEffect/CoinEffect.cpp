@@ -1,21 +1,26 @@
 #include "CoinEffect.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include <random>
+#include "core/TimeManager.h"
 
 void CoinEffect::Initialize(ID3D12Device* device) {
     device_ = device;
 }
 
-void CoinEffect::Update(float deltaTime) {
+void CoinEffect::Update() {
+    float dt = Time::GetDeltaTime();
+    if (dt <= 0.0f) {
+        return; 
+    }
     for (auto it = particles_.begin(); it != particles_.end(); ) {
-        it->lifeTime -= deltaTime;
+        it->lifeTime -= dt;
         if (it->lifeTime <= 0.0f) {
             it = particles_.erase(it);
             continue;
         }
 
-        it->position += it->velocity * deltaTime;
-        it->rotationZ += it->rotSpeed * deltaTime;
+        it->position += it->velocity * dt;
+        it->rotationZ += it->rotSpeed * dt;
         
         it->obj->SetTranslation(it->position);
         it->obj->SetRotation({0.0f, 0.0f, it->rotationZ});

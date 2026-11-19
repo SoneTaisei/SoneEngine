@@ -25,7 +25,7 @@
 #include "Component/ColliderComponent.h"
 #include "Collision/CollisionManager.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
 
@@ -588,6 +588,7 @@ bool MapChip2D::LoadFromFile(const std::string& filepath) {
     bool result = LoadFromString(buffer.str());
 
     if (result) {
+        savedCoinPositions_.clear();
         currentFilePath_ = filepath;
         // 境界線メタデータの読み込み
         std::string boundsPath = filepath;
@@ -1167,11 +1168,52 @@ void MapChip2D::ResetBlocks() {
     if (needsFullRebuild) {
         mapData_ = initialMapData_;
         RebuildChipObjects();
+        for (auto& block : updateBlocks_) {
+            if (auto* coin = dynamic_cast<CoinBlock*>(block.get())) {
+                const Vector3& initPos = coin->GetInitialPosition();
+                for (const auto& savedPos : savedCoinPositions_) {
+                    if (std::abs(initPos.x - savedPos.x) < 0.01f && std::abs(initPos.y - savedPos.y) < 0.01f) {
+                        coin->ApplySavedState();
+                        break;
+                    }
+                }
+            }
+        }
         return;
     }
     for (auto& block : updateBlocks_) {
         if (block) {
             block->Reset();
+        }
+    }
+}
+
+void MapChip2D::SaveCollectedCoins() {
+    for (auto& block : updateBlocks_) {
+        if (auto* coin = dynamic_cast<CoinBlock*>(block.get())) {
+            if (coin->IsCollected()) {
+                coin->SaveCollected();
+                const Vector3& initPos = coin->GetInitialPosition();
+                bool alreadyRecorded = false;
+                for (const auto& savedPos : savedCoinPositions_) {
+                    if (std::abs(initPos.x - savedPos.x) < 0.01f && std::abs(initPos.y - savedPos.y) < 0.01f) {
+                        alreadyRecorded = true;
+                        break;
+                    }
+                }
+                if (!alreadyRecorded) {
+                    savedCoinPositions_.push_back(initPos);
+                }
+            }
+        }
+    }
+}
+
+void MapChip2D::ClearSavedCoins() {
+    savedCoinPositions_.clear();
+    for (auto& block : updateBlocks_) {
+        if (auto* coin = dynamic_cast<CoinBlock*>(block.get())) {
+            coin->ClearSavedState();
         }
     }
 }

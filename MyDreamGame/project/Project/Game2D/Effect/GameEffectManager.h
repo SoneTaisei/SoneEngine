@@ -20,7 +20,7 @@ public:
     void Initialize();
 
     // 更新（isGameActive時はBaseEffectも更新、降雪パーティクルは常にカメラ追従更新）
-    void Update(float deltaTime, bool isGameActive, GameCamera* camera);
+    void Update(bool isGameActive, GameCamera* camera);
 
     // 描画（3Dエフェクトおよび降雪パーティクル）
     void Draw(ParticleCommon* particleCommon, const Matrix4x4& viewProjectionMatrix);

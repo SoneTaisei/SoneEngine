@@ -5,11 +5,12 @@
 #include "Scene/SceneManager.h"
 #include "Scene/IScene.h"
 #include "Game2D/MapChip2D.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include <filesystem>
 #include <vector>
 #include <string>
 #include "GameObject/WorldGif.h"
+#include "Editor/Model3DEditor/Model3DEditorContext.h"
 
 MapEditorSettings::MapEditorSettings(MapEditorContext* context, MapEditorPalette* palette)
     : context_(context), palette_(palette) {
@@ -88,6 +89,7 @@ void MapEditorSettings::Draw(
                                     }
                                 }
                                 StageGifManager::GetInstance()->LoadForStage(stageFiles[i]);
+                                Model3DEditorContext::GetInstance()->LoadForStage(stageFiles[i]);
                             }
                             if (isSelected) {
                                 ImGui::SetItemDefaultFocus();
@@ -109,6 +111,7 @@ void MapEditorSettings::Draw(
                             onSaveSceneConfig();
                         }
                         StageGifManager::GetInstance()->LoadForStage(context_->GetStageFilename());
+                        Model3DEditorContext::GetInstance()->LoadForStage(context_->GetStageFilename());
                     }
                 }
 
@@ -215,6 +218,7 @@ void MapEditorSettings::Draw(
                 // 操作ボタン
                 if (ImGui::Button("保存")) {
                     mapChip->SaveToFile(context_->GetFullFilePath(context_->GetStageFilename()));
+                    Model3DEditorContext::GetInstance()->SaveToFile();
                     if (onSaveSceneConfig) {
                         onSaveSceneConfig();
                     }

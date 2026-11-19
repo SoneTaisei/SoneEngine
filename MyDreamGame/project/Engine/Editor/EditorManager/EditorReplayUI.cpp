@@ -46,6 +46,7 @@ void EditorReplayUI::DrawHierarchyWindow(bool* pOpen, EditorManager* editorManag
                 if (selectedHistoryIdx >= 0 && selectedHistoryIdx < (int)history.size()) {
                     ImGui::Spacing();
                     if (ImGui::Button("再生", ImVec2(70, 0))) {
+                        editorManager->SetUseDebugCamera(false);
                         replayMgr->StartPlayback(selectedHistoryIdx);
                         if (!history[selectedHistoryIdx].mapDataStr.empty()) {
                             editorManager->SetLoadMapDataNextFrame(history[selectedHistoryIdx].mapDataStr);
@@ -80,6 +81,7 @@ void EditorReplayUI::DrawHierarchyWindow(bool* pOpen, EditorManager* editorManag
                 if (selectedFileIdx >= 0 && selectedFileIdx < (int)savedFiles.size()) {
                     ImGui::Spacing();
                     if (ImGui::Button("ファイル再生", ImVec2(90, 0))) {
+                        editorManager->SetUseDebugCamera(false);
                         replayMgr->StartPlayback(-1, savedFiles[selectedFileIdx]);
                         const auto& curReplay = replayMgr->GetCurrentReplay();
                         if (!curReplay.mapDataStr.empty()) {
@@ -133,6 +135,13 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
         auto replayMgr = ReplayManager::GetInstance();
         const auto& currentReplay = replayMgr->GetCurrentReplay();
 
+        // インスペクター側（EditorManager）の選択状態と同期
+        selectedReplayBlock_ = {
+            editorManager->selectedReplayBlock_.trackIdx,
+            editorManager->selectedReplayBlock_.startFrame,
+            editorManager->selectedReplayBlock_.endFrame
+        };
+
         int currentFrame = replayMgr->GetCurrentFrame();
         int totalFrames = currentReplay.totalFrames;
         if (totalFrames <= 0 && replayMgr->IsRecording()) {
@@ -154,22 +163,36 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
             if (ImGui::Button("一時停止", ImVec2(90, 28))) replayMgr->PausePlayback();
         } else {
             if (ImGui::Button("再生", ImVec2(90, 28))) {
-                replayMgr->SetSnapEnabled(true);
-                replayMgr->SetInterpolationEnabled(true);
-                const auto& history = replayMgr->GetHistory();
-                if (!history.empty()) {
-                    replayMgr->StartPlayback(0);
-                    if (!history[0].mapDataStr.empty()) {
-                        editorManager->SetLoadMapDataNextFrame(history[0].mapDataStr);
+                editorManager->SetUseDebugCamera(false);
+                if (replayMgr->IsPlaying() && replayMgr->IsPaused()) {
+                    replayMgr->ResumePlayback();
+                } else if (currentReplay.totalFrames > 0) {
+                    replayMgr->StartPlayback(-1, "");
+                    if (!currentReplay.mapDataStr.empty()) {
+                        editorManager->SetLoadMapDataNextFrame(currentReplay.mapDataStr);
                     }
                 } else {
-                    const auto& saved = replayMgr->GetSavedList();
-                    if (!saved.empty()) replayMgr->StartPlayback(-1, saved[0]);
+                    const auto& history = replayMgr->GetHistory();
+                    if (!history.empty()) {
+                        replayMgr->StartPlayback(0);
+                        if (!history[0].mapDataStr.empty()) {
+                            editorManager->SetLoadMapDataNextFrame(history[0].mapDataStr);
+                        }
+                    } else {
+                        const auto& saved = replayMgr->GetSavedList();
+                        if (!saved.empty()) {
+                            replayMgr->StartPlayback(-1, saved[0]);
+                            const auto& cur = replayMgr->GetCurrentReplay();
+                            if (!cur.mapDataStr.empty()) {
+                                editorManager->SetLoadMapDataNextFrame(cur.mapDataStr);
+                            }
+                        }
+                    }
                 }
             }
         }
         ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("保存されている元のリプレイデータを再生します");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("現在のリプレイデータを再生・再開します");
         ImGui::SameLine();
 
         if (ImGui::Button(">|", ImVec2(32, 28))) {
@@ -186,16 +209,13 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.68f, 0.42f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.14f, 0.45f, 0.27f, 1.0f));
         if (ImGui::Button("変更内容を再生", ImVec2(130, 28))) {
+            editorManager->SetUseDebugCamera(false);
             replayMgr->SetSnapEnabled(false);
             replayMgr->SetInterpolationEnabled(false);
-            if (replayMgr->IsPaused()) {
-                replayMgr->ResumePlayback();
-            } else {
-                replayMgr->StartPlayback(-1, "");
-                const auto& cur = replayMgr->GetCurrentReplay();
-                if (!cur.mapDataStr.empty()) {
-                    editorManager->SetLoadMapDataNextFrame(cur.mapDataStr);
-                }
+            replayMgr->StartPlayback(-1, "");
+            const auto& cur = replayMgr->GetCurrentReplay();
+            if (!cur.mapDataStr.empty()) {
+                editorManager->SetLoadMapDataNextFrame(cur.mapDataStr);
             }
         }
         ImGui::PopStyleColor(3);
@@ -261,7 +281,7 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
         ImVec2 rulerBottomRight = ImVec2(p0.x + trackHeaderWidth + timelineWidth, p0.y + rulerHeight);
         ImVec2 mousePos = ImGui::GetMousePos();
         bool isChildHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
-        bool mouseInRuler = (mousePos.x >= rulerTopLeft.x && mousePos.x <= rulerBottomRight.x &&
+        bool mouseInRuler = (mousePos.x >= (std::max)(rulerTopLeft.x, headerLeftX + trackHeaderWidth) && mousePos.x <= rulerBottomRight.x &&
                              mousePos.y >= rulerTopLeft.y && mousePos.y <= rulerBottomRight.y);
 
         if (isChildHovered && mouseInRuler && replayBlockDragMode_ == ReplayBlockDragMode::None) {
@@ -269,6 +289,7 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
             if (ImGui::IsMouseClicked(0)) {
                 isRulerScrubbing_ = true;
                 selectedReplayBlock_.Clear();
+                editorManager->selectedReplayBlock_.Clear();
             }
         }
 
@@ -321,11 +342,12 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
                     float blockMaxY = trackY + trackHeight - 2.0f;
                     bool isSelected = selectedReplayBlock_.Equals(trackIdx, blockStart, blockEnd);
 
+                    bool mouseInCanvasArea = (mousePos.x >= headerLeftX + trackHeaderWidth);
                     bool mouseInY = (mousePos.y >= blockMinY && mousePos.y <= blockMaxY);
                     bool mouseInX = (mousePos.x >= bMinX && mousePos.x <= bMaxX);
-                    bool mouseHoverBlock = mouseInY && mouseInX;
-                    bool nearLeft = mouseInY && (std::abs(mousePos.x - bMinX) <= 6.0f);
-                    bool nearRight = mouseInY && (std::abs(mousePos.x - bMaxX) <= 6.0f);
+                    bool mouseHoverBlock = mouseInCanvasArea && mouseInY && mouseInX;
+                    bool nearLeft = mouseInCanvasArea && mouseInY && (std::abs(mousePos.x - bMinX) <= 6.0f);
+                    bool nearRight = mouseInCanvasArea && mouseInY && (std::abs(mousePos.x - bMaxX) <= 6.0f);
 
                     if (isChildHovered && replayBlockDragMode_ == ReplayBlockDragMode::None) {
                         if (nearLeft || nearRight) {
@@ -333,6 +355,7 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
                         }
                         if ((nearLeft || nearRight || mouseHoverBlock) && ImGui::IsMouseClicked(0)) {
                             selectedReplayBlock_ = { trackIdx, blockStart, blockEnd };
+                            editorManager->selectedReplayBlock_ = { trackIdx, blockStart, blockEnd };
                             draggingBlockOriginal_ = selectedReplayBlock_;
                             dragStartMouseFrame_ = (int)((mousePos.x - (p0.x + trackHeaderWidth)) / timelineZoom_);
                             dragStartMousePos_ = mousePos;
@@ -420,27 +443,38 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
                 pEnd = (std::max)(draggingBlockOriginal_.startFrame + 1, draggingBlockOriginal_.endFrame + frameDelta);
             }
 
+            // ドラッグ中のプレビュー描画
+            float previewTrackY = p0.y + rulerHeight + draggingBlockOriginal_.trackIdx * (trackHeight + trackPadding) + 4.0f;
+            float previewMinX = p0.x + trackHeaderWidth + pStart * timelineZoom_;
+            float previewMaxX = p0.x + trackHeaderWidth + pEnd * timelineZoom_;
+            if (previewMaxX - previewMinX < 4.0f) previewMaxX = previewMinX + 4.0f;
+            drawList->AddRectFilled(ImVec2(previewMinX, previewTrackY + 2.0f), ImVec2(previewMaxX, previewTrackY + trackHeight - 2.0f), IM_COL32(255, 255, 255, 70), 3.0f);
+            drawList->AddRect(ImVec2(previewMinX, previewTrackY + 2.0f), ImVec2(previewMaxX, previewTrackY + trackHeight - 2.0f), IM_COL32(255, 255, 100, 230), 3.0f, 0, 2.0f);
+
             if (ImGui::IsMouseReleased(0)) {
                 ReplayData oldData = replayDragOldReplayData_;
                 SelectedReplayBlock oldBlock = replayDragOldSelectedBlock_;
                 ReplayManager::GetInstance()->ModifyBlockRange(draggingBlockOriginal_.trackIdx, draggingBlockOriginal_.startFrame, draggingBlockOriginal_.endFrame, pStart, pEnd);
                 selectedReplayBlock_ = { draggingBlockOriginal_.trackIdx, pStart, pEnd };
+                editorManager->selectedReplayBlock_ = { draggingBlockOriginal_.trackIdx, pStart, pEnd };
 
                 ReplayData newData = ReplayManager::GetInstance()->GetCurrentReplay();
                 SelectedReplayBlock newBlock = selectedReplayBlock_;
                 if (cmdManager) {
                     cmdManager->PushActionCommand(
-                        [oldData, oldBlock, this]() {
+                        [oldData, oldBlock, this, editorManager]() {
                             auto r = ReplayManager::GetInstance();
                             r->SetCurrentReplay(oldData);
                             r->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = oldBlock;
+                            editorManager->selectedReplayBlock_ = { oldBlock.trackIdx, oldBlock.startFrame, oldBlock.endFrame };
                         },
-                        [newData, newBlock, this]() {
+                        [newData, newBlock, this, editorManager]() {
                             auto r = ReplayManager::GetInstance();
                             r->SetCurrentReplay(newData);
                             r->RebuildMmlFromCurrentFrames();
                             this->selectedReplayBlock_ = newBlock;
+                            editorManager->selectedReplayBlock_ = { newBlock.trackIdx, newBlock.startFrame, newBlock.endFrame };
                         }
                     );
                 }
@@ -454,22 +488,25 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
             SelectedReplayBlock oldBlock = selectedReplayBlock_;
             ReplayManager::GetInstance()->DeleteBlockRange(selectedReplayBlock_.trackIdx, selectedReplayBlock_.startFrame, selectedReplayBlock_.endFrame);
             selectedReplayBlock_.Clear();
+            editorManager->selectedReplayBlock_.Clear();
 
             ReplayData newData = ReplayManager::GetInstance()->GetCurrentReplay();
             SelectedReplayBlock newBlock = selectedReplayBlock_;
             if (cmdManager) {
                 cmdManager->PushActionCommand(
-                    [oldData, oldBlock, this]() {
+                    [oldData, oldBlock, this, editorManager]() {
                         auto r = ReplayManager::GetInstance();
                         r->SetCurrentReplay(oldData);
                         r->RebuildMmlFromCurrentFrames();
                         this->selectedReplayBlock_ = oldBlock;
+                        editorManager->selectedReplayBlock_ = { oldBlock.trackIdx, oldBlock.startFrame, oldBlock.endFrame };
                     },
-                    [newData, newBlock, this]() {
+                    [newData, newBlock, this, editorManager]() {
                         auto r = ReplayManager::GetInstance();
                         r->SetCurrentReplay(newData);
                         r->RebuildMmlFromCurrentFrames();
                         this->selectedReplayBlock_ = newBlock;
+                        editorManager->selectedReplayBlock_ = { newBlock.trackIdx, newBlock.startFrame, newBlock.endFrame };
                     }
                 );
             }
@@ -484,6 +521,7 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !io.KeyCtrl) {
             if (replayBlockDragMode_ == ReplayBlockDragMode::None && pendingBlockDragMode_ == ReplayBlockDragMode::None) {
                 selectedReplayBlock_.Clear();
+                editorManager->selectedReplayBlock_.Clear();
             }
         }
 

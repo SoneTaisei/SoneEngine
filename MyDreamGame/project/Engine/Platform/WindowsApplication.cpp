@@ -7,7 +7,7 @@
 #include "Editor/LightEditor/LightEditor.h"
 #include "../../Project/Game2D/Player/Player2D.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include "Editor/Animation/AnimationPreviewScene.h"
 #include "Editor/GPUParticle/GPUParticlePreviewScene.h"
 #endif
@@ -35,7 +35,6 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 
-#include "Core/Utility/Utilityfunctions.h"
 #include "Graphics/TextureManager.h"
 #include "Input/GamepadInput.h"
 #include "Input/KeyboardInput.h"
@@ -332,6 +331,9 @@ void WindowsApplication::Update() {
         bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
         bool isEditorPaused = EditorManager::IsPlaying() && EditorManager::IsPaused();
 
+        bool shouldPause = !isCurrentlyActive || isTakeoverPausing || isEditorPaused;
+        Time::SetPaused(shouldPause);
+
         if (isCurrentlyActive && !isTakeoverPausing && !isEditorPaused) {
             if (!wasActive) {
                 // アクティブになった瞬間：現在の未保存のマップ状態を一時保存する
@@ -343,6 +345,7 @@ void WindowsApplication::Update() {
                 }
                 // GIFの現在の配置状態も自動保存してプレイ開始
                 StageGifManager::GetInstance()->SaveForStage(StageGifManager::GetInstance()->GetCurrentStageName());
+                Model3DEditorContext::GetInstance()->SaveToFile();
             }
 
             // 【再生中 / リプレイ中】シーンを更新する（遷移処理も含む）
@@ -374,6 +377,7 @@ void WindowsApplication::Update() {
 
                 // GIFステージを一時マップではなく本来のステージとして復帰
                 StageGifManager::GetInstance()->LoadForStage(currentGifStage);
+                Model3DEditorContext::GetInstance()->LoadForStage(currentGifStage);
                 
                 // 新しいシーンが再生成されるため、古いオブジェクトの参照（選択状態）を安全にクリアする
                 editorManager_->ClearSelection();

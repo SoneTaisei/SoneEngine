@@ -13,7 +13,7 @@ public:
     PlayerPhysics() = default;
     ~PlayerPhysics() = default;
 
-    void Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player);
+    void Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, Player2D* player);
 
     AABB2D GetAABB(const PlayerState& state_, const PlayerParams& params_) const;
     bool CheckAABBCollision(const AABB2D& a, const AABB2D& b) const;
@@ -21,12 +21,13 @@ public:
     void SimulateCollisions(PlayerState& state_, const PlayerParams& params_, Player2D* player);
 
 private:
-    void HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player);
-    void ApplyGravity(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime);
+    float dt_ = 0.0f; 
+    void HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, Player2D* player);
+    void ApplyGravity(PlayerState& state_, const PlayerParams& params_, const InputState& input_);
 
-    void ResolveCollisionY(PlayerState& state_, const PlayerParams& params_);
-    void ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb);
-    void ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb);
+    void ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, float prevPosY, float moveDeltaY);
+    void ResolveStaticCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb, float prevPosY, float moveDeltaY);
+    void ResolveDynamicCollisionY(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb, float prevPosY, float moveDeltaY);
 
     void ResolveCollisionX(PlayerState& state_, const PlayerParams& params_, float prevPosX, float moveDeltaX);
     void ResolveStaticCollisionX(PlayerState& state_, const PlayerParams& params_, AABB2D& aabb, float prevPosX, float moveDeltaX);

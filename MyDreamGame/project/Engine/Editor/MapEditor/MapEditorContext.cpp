@@ -4,7 +4,7 @@
 #include "Scene/IScene.h"
 #include "Game2D/Player/Player2D.h"
 #include "Editor/Replay/ReplayManager.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include <filesystem>
 #include <algorithm>
 #include <fstream>

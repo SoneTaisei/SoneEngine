@@ -155,18 +155,21 @@ void EditorInspector::DrawReplayNodeProperties(EditorManager* em) {
     auto replayMgrInstance = ReplayManager::GetInstance();
     ReplayData curReplay = replayMgrInstance->GetCurrentReplay();
     auto& currentJitters = curReplay.jitters;
+    static const int kTrackToKeyIdx[7] = { 0, 1, 5, 6, 2, 3, 4 };
+    int targetKeyIdx = (em->selectedReplayBlock_.trackIdx >= 0 && em->selectedReplayBlock_.trackIdx < 7)
+        ? kTrackToKeyIdx[em->selectedReplayBlock_.trackIdx] : 0;
     int currentJitterVal = 0;
     for (const auto& j : currentJitters) {
-        if (j.keyIdx == em->selectedReplayBlock_.trackIdx && j.startFrame == em->selectedReplayBlock_.startFrame) { currentJitterVal = j.maxJitter; break; }
+        if (j.keyIdx == targetKeyIdx && j.startFrame == em->selectedReplayBlock_.startFrame) { currentJitterVal = j.maxJitter; break; }
     }
     if (ImGui::DragInt("手振れ/Jitter強度 (±F)", &currentJitterVal, 1.0f, 0, 30)) {
         if (currentJitterVal < 0) currentJitterVal = 0;
         bool found = false;
         for (auto& j : currentJitters) {
-            if (j.keyIdx == em->selectedReplayBlock_.trackIdx && j.startFrame == em->selectedReplayBlock_.startFrame) { j.maxJitter = currentJitterVal; found = true; break; }
+            if (j.keyIdx == targetKeyIdx && j.startFrame == em->selectedReplayBlock_.startFrame) { j.maxJitter = currentJitterVal; found = true; break; }
         }
         if (!found && currentJitterVal > 0) {
-            currentJitters.push_back({ em->selectedReplayBlock_.trackIdx, em->selectedReplayBlock_.startFrame, em->selectedReplayBlock_.endFrame, currentJitterVal });
+            currentJitters.push_back({ targetKeyIdx, em->selectedReplayBlock_.startFrame, em->selectedReplayBlock_.endFrame, currentJitterVal });
         }
         replayMgrInstance->SetCurrentReplay(curReplay);
     }

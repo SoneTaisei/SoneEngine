@@ -219,7 +219,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
     static bool wasReplayingLastFrame = false;
     bool isReplayingNow = ReplayManager::GetInstance()->IsPlaying();
     if (wasReplayingLastFrame && !isReplayingNow && takeoverCountdown_ <= 0.0f) {
-        useDebugCamera_ = true;
         if (gameCamera && debugCamera) {
             debugCamera->SetTranslation(gameCamera->GetTranslation());
             debugCamera->SetRotation(gameCamera->GetRotation());

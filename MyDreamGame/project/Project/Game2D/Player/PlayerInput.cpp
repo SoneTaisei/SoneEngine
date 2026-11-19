@@ -1,12 +1,14 @@
 #include "PlayerInput.h"
 #include "Input/KeyboardInput.h"
 #include "Input/GamepadInput.h"
+#include "Editor/Replay/ReplayManager.h"
 #include <algorithm>
 #include <cmath>
 
 void PlayerInput::Update(InputState& outState) {
     KeyboardInput* keyboard = KeyboardInput::GetInstance();
     GamepadInput* gamepad = GamepadInput::GetInstance();
+    const bool isReplaying = ReplayManager::GetInstance()->IsPlaying();
 
     // 移動入力（X軸）
     float keyMoveX = 0.0f;
@@ -18,15 +20,18 @@ void PlayerInput::Update(InputState& outState) {
     }
 
     float padMoveX = 0.0f;
-    if (gamepad->IsDPadLeft()) {
-        padMoveX -= 1.0f;
-    }
-    if (gamepad->IsDPadRight()) {
-        padMoveX += 1.0f;
-    }
-    Vector2 stick = gamepad->GetLeftStick();
-    if (std::abs(stick.x) > 0.05f) {
-        padMoveX += stick.x;
+    Vector2 stick = { 0.0f, 0.0f };
+    if (!isReplaying) {
+        if (gamepad->IsDPadLeft()) {
+            padMoveX -= 1.0f;
+        }
+        if (gamepad->IsDPadRight()) {
+            padMoveX += 1.0f;
+        }
+        stick = gamepad->GetLeftStick();
+        if (std::abs(stick.x) > 0.05f) {
+            padMoveX += stick.x;
+        }
     }
 
     outState.moveX = std::clamp(keyMoveX + padMoveX, -1.0f, 1.0f);
@@ -41,27 +46,29 @@ void PlayerInput::Update(InputState& outState) {
     }
 
     float padMoveY = 0.0f;
-    if (gamepad->IsDPadDown()) {
-        padMoveY -= 1.0f;
-    }
-    if (gamepad->IsDPadUp()) {
-        padMoveY += 1.0f;
-    }
-    if (std::abs(stick.y) > 0.05f) {
-        padMoveY += stick.y;
+    if (!isReplaying) {
+        if (gamepad->IsDPadDown()) {
+            padMoveY -= 1.0f;
+        }
+        if (gamepad->IsDPadUp()) {
+            padMoveY += 1.0f;
+        }
+        if (std::abs(stick.y) > 0.05f) {
+            padMoveY += stick.y;
+        }
     }
 
     outState.moveY = std::clamp(keyMoveY + padMoveY, -1.0f, 1.0f);
 
     // ジャンプ（キーボード SPACE / パッド Aボタン）
-    outState.isJumpPressed = keyboard->IsKeyPressed(DIK_SPACE) || gamepad->IsButtonPressed(GamepadButton::A);
-    outState.isJumpReleased = keyboard->IsKeyReleased(DIK_SPACE) || gamepad->IsButtonReleased(GamepadButton::A);
+    outState.isJumpPressed = keyboard->IsKeyPressed(DIK_SPACE) || (!isReplaying && gamepad->IsButtonPressed(GamepadButton::A));
+    outState.isJumpReleased = keyboard->IsKeyReleased(DIK_SPACE) || (!isReplaying && gamepad->IsButtonReleased(GamepadButton::A));
 
     // ダッシュ（キーボード J / パッド Xボタン）
-    outState.isDashPressed = keyboard->IsKeyPressed(DIK_J) || gamepad->IsButtonPressed(GamepadButton::X);
+    outState.isDashPressed = keyboard->IsKeyPressed(DIK_J) || (!isReplaying && gamepad->IsButtonPressed(GamepadButton::X));
 
     // 崖つかまり・壁つかみ（キーボード K / パッド RB または RT）
-    bool isClingPad = gamepad->IsButtonDown(GamepadButton::RB) || (gamepad->GetRightTrigger() > 0.3f);
+    bool isClingPad = !isReplaying && (gamepad->IsButtonDown(GamepadButton::RB) || (gamepad->GetRightTrigger() > 0.3f));
     outState.isClingHeld = keyboard->IsKeyDown(DIK_K) || isClingPad;
 }
 

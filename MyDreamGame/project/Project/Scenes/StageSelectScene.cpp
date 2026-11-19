@@ -387,7 +387,7 @@ void StageSelectScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         saveNotificationTimer = 2.0f;
     }
     if (saveNotificationTimer > 0.0f) {
-        saveNotificationTimer -= ImGui::GetIO().DeltaTime;
+        saveNotificationTimer -= Time::GetUnscaledDeltaTime();
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "設定を保存しました！");
     }
