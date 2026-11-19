@@ -1,6 +1,6 @@
 #ifdef USE_IMGUI
 #include "AnimationEditorContext.h"
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include "GameObject/Object3D.h"
 #include "GameObject/GameObject.h"
 #include "Renderer/SrvManager.h"

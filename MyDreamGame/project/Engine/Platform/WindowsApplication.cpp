@@ -7,7 +7,7 @@
 #include "Editor/LightEditor/LightEditor.h"
 #include "../../Project/Game2D/Player/Player2D.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include "Editor/Animation/AnimationPreviewScene.h"
 #include "Editor/GPUParticle/GPUParticlePreviewScene.h"
 #endif
@@ -35,7 +35,6 @@
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "GameObject/PrimitiveObject.h"
 
-#include "Core/Utility/Utilityfunctions.h"
 #include "Graphics/TextureManager.h"
 #include "Input/GamepadInput.h"
 #include "Input/KeyboardInput.h"
@@ -331,6 +330,9 @@ void WindowsApplication::Update() {
         bool isCurrentlyActive = editorManager_->IsPlaying() || ReplayManager::GetInstance()->IsPlaying();
         bool isTakeoverPausing = editorManager_->IsTakeoverCountdown();
         bool isEditorPaused = EditorManager::IsPlaying() && EditorManager::IsPaused();
+
+        bool shouldPause = !isCurrentlyActive || isTakeoverPausing || isEditorPaused;
+        Time::SetPaused(shouldPause);
 
         if (isCurrentlyActive && !isTakeoverPausing && !isEditorPaused) {
             if (!wasActive) {

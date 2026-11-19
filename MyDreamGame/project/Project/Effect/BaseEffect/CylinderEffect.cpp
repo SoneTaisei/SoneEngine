@@ -1,6 +1,7 @@
 #include "CylinderEffect.h"
 #include "Resource/Primitive/PrimitiveManager.h"
 #include "Graphics/TextureManager.h"
+#include "core/TimeManager.h"
 
 CylinderEffect::CylinderEffect() {}
 
@@ -30,14 +31,15 @@ void CylinderEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
     }
 }
 
-void CylinderEffect::Update(float deltaTime) {
+void CylinderEffect::Update() {
+    float dt = Time::GetDeltaTime();
     if (cylinderEffectRoot_) {
         cylinderEffectRoot_->Update();
     }
     // シリンダーは点滅させずに回転させる
     if (cylinderObject_) {
         Vector3 rotation = cylinderObject_->GetRotation();
-        rotation.y += 0.6f * deltaTime; // 毎フレーム固定値ではなく、デルタタイムに依存して回転させる
+        rotation.y += 0.6f * dt; // 毎フレーム固定値ではなく、デルタタイムに依存して回転させる
         cylinderObject_->SetRotation(rotation);
         cylinderObject_->Update();
     }

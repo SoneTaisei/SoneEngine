@@ -16,7 +16,7 @@ public:
     void Reset(GameCamera* camera = nullptr);
 
     // クリア演出の更新
-    void Update(float deltaTime, GameCamera* camera);
+    void Update(GameCamera* camera);
 
     // タイトル画面へ戻る入力が押されたか (Space, Pad A, Pad Start)
     bool IsReturnRequested() const;

@@ -26,8 +26,7 @@ void GameCameraController::Setup(GameCamera* camera, Player2D* player, MapChip2D
     cameraLookRotation_ = { 0.0f, 0.0f, 0.0f };
 }
 
-void GameCameraController::Update(float deltaTime, Player2D* player, MapChip2D* map, bool isClear, bool isReplaying) {
-    (void)deltaTime;
+void GameCameraController::Update(Player2D* player, MapChip2D* map, bool isClear, bool isReplaying) {
     if (!camera_) return;
 
     if (player && !isReplaying) {

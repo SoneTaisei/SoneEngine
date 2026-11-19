@@ -1,13 +1,17 @@
 #include "windowParticle.h"
+#include "Core/TimeManager.h"
 
 void windowParticle::Update() {
     // -------------------------------------------------
     // 1. 新しいパーティクルの発生処理 (Emitter)
     // -------------------------------------------------
     // 1/60秒単位で処理が進むと仮定 (可変フレームレートなら引数でdeltaTimeをもらう必要があります)
-    const float kDeltaTime = 1.0f / 60.0f;
+    float dt = Time::GetDeltaTime();
+    if (dt <= 0.0f) {
+        return;
+    }
 
-    GetEmitter().frequencyTime += kDeltaTime;
+    GetEmitter().frequencyTime += dt;
 
     // 発生頻度(frequency)を超えたらパーティクルを生成
     if (GetEmitter().frequencyTime >= GetEmitter().frequency) {
@@ -36,7 +40,7 @@ void windowParticle::Update() {
     for (auto it = GetParticles().begin(); it != GetParticles().end();) {
 
         // --- 寿命の処理 ---
-        it->currentTime += kDeltaTime;
+        it->currentTime += dt;
         if(it->currentTime >= it->lifeTime) {
             // 寿命が尽きたら削除して次の要素へ
             it = GetParticles().erase(it);
@@ -47,15 +51,15 @@ void windowParticle::Update() {
 
         if (IsCollision(GetAccelerationField().area, it->transform.translate)) {
             // エリア内なら、風の加速度を加える
-            it->velocity.x += GetAccelerationField().acceleration.x * kDeltaTime;
-            it->velocity.y += GetAccelerationField().acceleration.y * kDeltaTime;
-            it->velocity.z += GetAccelerationField().acceleration.z * kDeltaTime;
+            it->velocity.x += GetAccelerationField().acceleration.x * dt;
+            it->velocity.y += GetAccelerationField().acceleration.y * dt;
+            it->velocity.z += GetAccelerationField().acceleration.z * dt;
         }
 
         // 例: 速度を加算して移動させる
-        it->transform.translate.x += it->velocity.x * kDeltaTime;
-        it->transform.translate.y += it->velocity.y * kDeltaTime;
-        it->transform.translate.z += it->velocity.z * kDeltaTime;
+        it->transform.translate.x += it->velocity.x * dt;
+        it->transform.translate.y += it->velocity.y * dt;
+        it->transform.translate.z += it->velocity.z * dt;
 
         // 例: 徐々に透明にする処理
         // lifeTimeに対するcurrentTimeの割合でアルファ値を減らす

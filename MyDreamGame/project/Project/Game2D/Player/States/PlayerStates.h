@@ -10,7 +10,7 @@ public:
     ~PlayerNormalState() override = default;
 
     void Enter(Player2D* player) override;
-    void Update(Player2D* player, MapChip2D& map, float deltaTime) override;
+    void Update(Player2D* player, MapChip2D& map) override;
     void Exit(Player2D* player) override;
 };
 
@@ -23,7 +23,7 @@ public:
     ~PlayerDeadState() override = default;
 
     void Enter(Player2D* player) override;
-    void Update(Player2D* player, MapChip2D& map, float deltaTime) override;
+    void Update(Player2D* player, MapChip2D& map) override;
     void Exit(Player2D* player) override;
 
 private:
@@ -39,7 +39,7 @@ public:
     ~PlayerRespawnState() override = default;
 
     void Enter(Player2D* player) override;
-    void Update(Player2D* player, MapChip2D& map, float deltaTime) override;
+    void Update(Player2D* player, MapChip2D& map) override;
     void Exit(Player2D* player) override;
 };
 
@@ -52,6 +52,6 @@ public:
     ~PlayerGoalState() override = default;
 
     void Enter(Player2D* player) override;
-    void Update(Player2D* player, MapChip2D& map, float deltaTime) override;
+    void Update(Player2D* player, MapChip2D& map) override;
     void Exit(Player2D* player) override;
 };

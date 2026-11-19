@@ -12,7 +12,7 @@ public:
     ~CoinHUD() = default;
 
     void Initialize(SpriteCommon* spriteCommon);
-    void Update(float deltaTime, int collectedCoins, int totalCoins);
+    void Update(int collectedCoins, int totalCoins);
     void Draw();
 
     void Reset();

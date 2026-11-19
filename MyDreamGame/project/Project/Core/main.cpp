@@ -1,13 +1,12 @@
 #include "Platform/WindowsApplication.h"
 #include "Renderer/DirectXCommon/D3DResourceLeakChecker.h"
 #define _CRTDBG_MAP_ALLOC
-#include <crtdbg.h>
 #include <memory> // std::unique_ptr を使うために追加
 
 #include "Scene/SceneManager.h"
 #include "Scene/SceneFactory.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 
 

@@ -18,7 +18,7 @@ public:
 
     void Initialize(SpriteCommon* spriteCommon);
     void Reset();
-    PauseMenuAction Update(float deltaTime);
+    PauseMenuAction Update();
     void Draw();
 
     int GetSelectedIndex() const { return selectedIndex_; }

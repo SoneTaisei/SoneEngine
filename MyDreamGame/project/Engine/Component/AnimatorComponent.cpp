@@ -5,7 +5,7 @@
 #include "GameObject/GameObject.h"
 #include "Core/TimeManager.h"
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #endif
 #include "Editor/Replay/ReplayManager.h"
 #include "Renderer/SrvManager.h"

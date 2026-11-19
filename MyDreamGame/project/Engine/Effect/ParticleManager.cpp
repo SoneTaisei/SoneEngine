@@ -198,15 +198,15 @@ void ParticleManager::EmitCustom(const Vector3& position, const ParticleProperty
 }
 
 void ParticleManager::Update() {
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
+    float dt = Time::GetDeltaTime();
     for (auto it = particles_.begin(); it != particles_.end(); ) {
-        it->currentTime += deltaTime;
+        it->currentTime += dt;
         if (it->currentTime >= it->lifeTime) {
             it = particles_.erase(it);
         } else {
-            it->transform.translate.x += it->velocity.x * deltaTime;
-            it->transform.translate.y += it->velocity.y * deltaTime;
-            it->transform.translate.z += it->velocity.z * deltaTime;
+            it->transform.translate.x += it->velocity.x * dt;
+            it->transform.translate.y += it->velocity.y * dt;
+            it->transform.translate.z += it->velocity.z * dt;
             ++it;
         }
     }

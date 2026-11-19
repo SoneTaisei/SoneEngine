@@ -15,7 +15,7 @@ public:
     void Reset();
 
     // 更新処理。演出が終了したら true を返す
-    bool Update(float deltaTime);
+    bool Update();
 
     // プレイヤーの操作を許可してよいか（inputDelay経過後ならtrue）
     bool CanControl() const;

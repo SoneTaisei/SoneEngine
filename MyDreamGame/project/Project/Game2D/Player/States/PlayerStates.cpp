@@ -14,14 +14,14 @@ void PlayerNormalState::Enter(Player2D* player) {
     player->ResetActionFlags();
 }
 
-void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
+void PlayerNormalState::Update(Player2D* player, MapChip2D& map) {
     const auto &state_ = player->GetState();
 
     // 壁ジャンプタイマーの更新
-    player->UpdateWallJumpTimer(deltaTime);
+    player->UpdateWallJumpTimer();
 
     // 物理演算と移動入力処理
-    player->UpdatePhysics(deltaTime);
+    player->UpdatePhysics();
 
     // 現在のルームを特定する
     const auto& rooms = map.GetRooms();
@@ -79,7 +79,7 @@ void PlayerNormalState::Update(Player2D* player, MapChip2D& map, float deltaTime
     player->UpdateVisualColor();
 
     // 走りエフェクトの発生
-    player->UpdateRunDust(deltaTime);
+    player->UpdateRunDust();
 
     // バグ検知処理（リプレイ再生中は無効化）
     if (!ReplayManager::GetInstance()->IsPlaying()) {
@@ -102,13 +102,13 @@ void PlayerDeadState::Enter(Player2D* player) {
     player->StartDeathSequence(isFallDeath_);
 }
 
-void PlayerDeadState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
+void PlayerDeadState::Update(Player2D* player, MapChip2D& map) {
     const auto& state_ = player->GetState();
     const auto& params_ = player->GetParams();
     auto& visuals_ = player->GetVisuals();
 
     // ノックバック物理挙動と死亡タイマー加算
-    player->UpdateDeathKnockback(deltaTime);
+    player->UpdateDeathKnockback();
 
     // ディゾルブ演出の進行
     float t = (std::min)(player->GetDeathTimer() / params_.deathDuration_, 1.0f);
@@ -165,12 +165,12 @@ void PlayerRespawnState::Enter(Player2D* player) {
     player->StartRespawnSequence();
 }
 
-void PlayerRespawnState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
+void PlayerRespawnState::Update(Player2D* player, MapChip2D& map) {
     const auto& state_ = player->GetState();
     const auto& params_ = player->GetParams();
     auto& visuals_ = player->GetVisuals();
 
-    player->UpdateRespawnTimer(deltaTime);
+    player->UpdateRespawnTimer();
     float t = (std::min)(player->GetRespawnTimer() / params_.respawnDuration_, 1.0f);
 
     // EaseOutBackによる弾むようなポップアップ
@@ -200,8 +200,8 @@ void PlayerGoalState::Enter(Player2D* player) {
     player->StartGoalSequence();
 }
 
-void PlayerGoalState::Update(Player2D* player, MapChip2D& map, float deltaTime) {
-    player->UpdateGoalTimer(deltaTime);
+void PlayerGoalState::Update(Player2D* player, MapChip2D& map) {
+    player->UpdateGoalTimer();
 }
 
 void PlayerGoalState::Exit(Player2D* player) {

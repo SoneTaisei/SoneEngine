@@ -12,7 +12,7 @@
 #include <cmath>
 #include <format>
 #ifdef USE_IMGUI
-#include "Editor/EditorManager.h"
+#include "Editor/EditorManager/EditorManager.h"
 #include <imgui.h>
 #endif
 #include "Editor/Replay/ReplayManager.h"
@@ -58,30 +58,10 @@ void DashRecovery::Initialize(ID3D12Device* device, Primitive* boxPrimitive, flo
 }
 
 void DashRecovery::Update() {
-    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
-
-    // グローバルクールダウンの更新
-    if (sGlobalCollectCooldown_ > 0.0f) {
-        sGlobalCollectCooldown_ -= deltaTime;
-    }
-
-    bool isPlayingOrReplaying = false;
-#ifdef USE_IMGUI
-    if (EditorManager::IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-#else
-    isPlayingOrReplaying = true;
-#endif
-    if (ReplayManager::GetInstance()->IsPlaying()) {
-        isPlayingOrReplaying = true;
-    }
-
-    bool isAnimActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused();
-    float animDeltaTime = isAnimActive ? deltaTime : 0.0f;
+    float dt = Time::GetDeltaTime();
 
     if (isActive_) {
-        hoverTimer_ += animDeltaTime;
+        hoverTimer_ += dt;
         // 上下にふわふわ浮遊
         float offsetY = std::sin(hoverTimer_ * hoverSpeed_) * hoverAmplitude_;
         Vector3 currentPos = { basePosition_.x, basePosition_.y + offsetY, basePosition_.z };
@@ -92,7 +72,7 @@ void DashRecovery::Update() {
         // 復活時のポップアップバウンドアニメーション
         Vector3 currentScale = baseScale_;
         if (respawnAnimTimer_ > 0.0f) {
-            respawnAnimTimer_ -= animDeltaTime;
+            respawnAnimTimer_ -= dt;
             float t = 1.0f - (respawnAnimTimer_ / respawnAnimDuration_);
             // 0 -> 1.25 -> 1.0 のバウンド拡縮
             float scalePop = 1.0f + 0.25f * std::sin(t * 3.14159265f);
@@ -113,7 +93,7 @@ void DashRecovery::Update() {
     } else {
         // 非アクティブ（クールダウン中）：タイマー更新
         if (respawnTime_ > 0.0f) {
-            respawnTimer_ += animDeltaTime;
+            respawnTimer_ += dt;
             if (respawnTimer_ >= respawnTime_) {
                 Respawn();
             }
@@ -140,7 +120,7 @@ void DashRecovery::Update() {
 
     // GPUパーティクルの更新
     if (gpuParticleSystem_ && (gpuParticleSystem_->IsPlaying() || gpuParticleSystem_->GetTotalActiveParticles() > 0)) {
-        gpuParticleSystem_->Update(animDeltaTime);
+        gpuParticleSystem_->Update(dt);
     }
 }
 
