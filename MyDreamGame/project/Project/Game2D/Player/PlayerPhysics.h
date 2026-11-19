@@ -18,6 +18,7 @@ public:
         float halfWidth = 0.4f;
         float halfHeight = 0.4f;
         bool allowWallTouch = false;
+        bool allowOneWayStand = false;
     };
 
     PlayerPhysics() = default;

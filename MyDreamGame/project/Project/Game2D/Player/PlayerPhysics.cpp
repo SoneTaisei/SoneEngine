@@ -637,6 +637,7 @@ std::array<PlayerPhysics::HitPart, 2> PlayerPhysics::BuildHitParts(const PlayerS
         body.offsetY = origTop - newHalfH;
     }
     body.allowWallTouch = true;
+    body.allowOneWayStand = true;
 
     HitPart head;
     head.offsetX = params_.headOffsetX_ * state_.facingDirectionX_;
@@ -653,6 +654,7 @@ std::array<PlayerPhysics::HitPart, 2> PlayerPhysics::BuildHitParts(const PlayerS
     head.halfWidth = params_.headHalfWidth_;
     head.halfHeight = params_.headHalfHeight_;
     head.allowWallTouch = false;
+    head.allowOneWayStand = false;
 
     return { body, head };
 }
@@ -731,7 +733,7 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
         }
         
         if (collider->IsOneWay()) {
-            if (prevBottom < blockAABB.top - 0.08f || moveDeltaY > 0.0001f) {
+            if (!part.allowOneWayStand || prevBottom < blockAABB.top - 0.08f || moveDeltaY > 0.0001f) {
                 continue;
             }
         }
