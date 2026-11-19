@@ -201,6 +201,8 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
         state_.position_ = state_.startPosition_;
         state_.lastCheckpointPosition_ = state_.startPosition_;
         state_.checkpointScore_ = 0;
+        state_.score_ = 0;
+        state_.currentRoomIndex_ = -1;
         if (GetGameObject()) {
             if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
