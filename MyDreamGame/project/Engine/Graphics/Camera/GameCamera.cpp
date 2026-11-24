@@ -38,7 +38,7 @@ void GameCamera::SetResolution(int kClientWidth, int kClientHeight) {
         if (kClientHeight > 0) {
             orthoWidth_ = orthoHeight_ * ((float)kClientWidth / (float)kClientHeight);
         }
-        UpdateMatrixOrthographic();
+        Camera::SetResolution(kClientWidth, kClientHeight);
     } else {
         Camera::SetResolution(kClientWidth, kClientHeight);
     }
