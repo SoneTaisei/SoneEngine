@@ -107,18 +107,30 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.wallJumpDirLockTimer_ = 0.0f;
     state_.lockedDirectionX_ = 0.0f;
     state_.wallJumpTimer_ = 0.0f;
+    state_.isTouchingWallRight_ = false;
+    state_.isTouchingWallLeft_ = false;
+    state_.wasTouchingWallRight_ = false;
+    state_.wasTouchingWallLeft_ = false;
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
     state_.wasWallPose_ = false;
+    state_.wallClingReleaseTimer_ = 0.0f;
     RefillStamina();
 
     // 動く足場の慣性を確実にリセット
     state_.isOnMovingPlatform_ = false;
+    state_.standingPlatformCollider_ = nullptr;
+    state_.wallPlatformCollider_ = nullptr;
     state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
     state_.recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
     state_.wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
     state_.platformInertiaTimer_ = 0.0f;
     state_.externalVelocityX_ = 0.0f;
+    state_.externalVelocityTimer_ = 0.0f;
+    state_.initialExternalVelocityX_ = 0.0f;
+    state_.springControlDisableTimer_ = 0.0f;
+    state_.hitstopTimer_ = 0.0f;
+    state_.isGrabbingVine_ = false;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
     if (camera_) {
@@ -138,6 +150,7 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
 void Player2D::StartRespawnSequence() {
     state_.isRespawning_ = true;
     state_.respawnTimer_ = 0.0f;
+    RefillStamina();
     visuals_.SetRespawnVisual(state_.position_, params_, 0.0f);
 }
 
@@ -170,6 +183,7 @@ void Player2D::UpdateGoalTimer(float deltaTime) {
 void Player2D::Initialize() {
     Log("Player2D::Initialize: Start\n");
     PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
+    RefillStamina();
     Log("Player2D::Initialize: Config loaded\n");
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
@@ -221,6 +235,7 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
         state_.checkpointScore_ = 0;
         state_.score_ = 0;
         state_.currentRoomIndex_ = -1;
+        RefillStamina();
         if (GetGameObject()) {
             if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
@@ -504,12 +519,17 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.dashTimer_ = 0.0f;
     state_.isTouchingWallRight_ = false;
     state_.isTouchingWallLeft_ = false;
+    state_.wasTouchingWallRight_ = false;
+    state_.wasTouchingWallLeft_ = false;
     state_.wallJumpDirLockTimer_ = 0.0f;
     state_.lockedDirectionX_ = 0.0f;
     state_.wallJumpTimer_ = 0.0f;
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
     state_.wasWallPose_ = false;
+    state_.wallClingReleaseTimer_ = 0.0f;
+    state_.standingPlatformCollider_ = nullptr;
+    state_.wallPlatformCollider_ = nullptr;
     RefillStamina();
     state_.isDead_ = false;
     state_.deathTimer_ = 0.0f;

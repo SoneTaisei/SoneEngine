@@ -205,6 +205,9 @@ void GameScene::Update(SceneManager *sceneManager) {
         if (isCurrentlyPlaying && !wasCurrentlyPlaying_) {
             map_->ClearSavedCoins();
             player_->FindSpawnPoint(*map_);
+            if (staminaHUD_) {
+                staminaHUD_->Reset();
+            }
             if (cameraController_) {
                 cameraController_->OnRespawn(map_.get());
             }
