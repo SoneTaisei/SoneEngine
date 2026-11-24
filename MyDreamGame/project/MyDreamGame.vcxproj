@@ -274,6 +274,7 @@
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
     <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp" />
+    <ClCompile Include="Project\Game2D\UI\StaminaHUD.cpp" />
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp" />
     <ClCompile Include="Project\Game2D\UI\ReadyGoUI.cpp" />
     <ClCompile Include="Project\Game2D\UI\ClearUI.cpp" />
@@ -564,6 +565,7 @@
     <ClInclude Include="Project\Game2D\Player\PlayerConfig.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />
     <ClInclude Include="Project\Game2D\UI\CoinHUD.h" />
+    <ClInclude Include="Project\Game2D\UI\StaminaHUD.h" />
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h" />
     <ClInclude Include="Project\Game2D\UI\ReadyGoUI.h" />
     <ClInclude Include="Project\Game2D\UI\ClearUI.h" />

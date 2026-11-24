@@ -300,6 +300,9 @@
     <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp">
       <Filter>Project\Game2D\UI</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\StaminaHUD.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp">
       <Filter>Project\Game2D\UI</Filter>
     </ClCompile>
@@ -849,6 +852,9 @@
       <Filter>Project\Game2D\Player</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\UI\CoinHUD.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\StaminaHUD.h">
       <Filter>Project\Game2D\UI</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h">

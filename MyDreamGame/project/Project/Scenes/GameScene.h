@@ -12,6 +12,7 @@
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/UI/CoinHUD.h"
+#include "Game2D/UI/StaminaHUD.h"
 #include "Game2D/UI/PauseMenu.h"
 #include "Game2D/UI/ReadyGoUI.h"
 #include "Game2D/UI/ClearUI.h"
@@ -112,6 +113,7 @@ private:
     std::unique_ptr<ClearUI> clearUI_;
     std::unique_ptr<PauseMenu> pauseMenu_;
     std::unique_ptr<CoinHUD> coinHUD_;
+    std::unique_ptr<StaminaHUD> staminaHUD_;
 
     // カメラ制御
     std::unique_ptr<GameCameraController> cameraController_;

@@ -136,7 +136,9 @@ void GameScene::Initialize() {
     clearUI_ = std::make_unique<ClearUI>();
     pauseMenu_ = std::make_unique<PauseMenu>();
     coinHUD_ = std::make_unique<CoinHUD>();
-    allUIs_ = {readyGoUI_.get(), clearUI_.get(), pauseMenu_.get(), coinHUD_.get()};
+    staminaHUD_ = std::make_unique<StaminaHUD>();
+    staminaHUD_->SetPlayer(player_);
+    allUIs_ = {readyGoUI_.get(), clearUI_.get(), pauseMenu_.get(), coinHUD_.get(), staminaHUD_.get()};
     for (IGameUI *ui : allUIs_) {
         ui->Initialize(GetSpriteCommon());
     }
@@ -220,6 +222,9 @@ void GameScene::Update(SceneManager *sceneManager) {
                 if (effectManager_) {
                     effectManager_->ResetAllEffects();
                 }
+                if (staminaHUD_) {
+                    staminaHUD_->Reset();
+                }
                 previousScore_ = player_->GetScore();
             }
             wasRespawning_ = isRespawning;
@@ -258,6 +263,10 @@ void GameScene::Update(SceneManager *sceneManager) {
     if (map_ && coinHUD_) {
         coinHUD_->SetCoinCounts(map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
         coinHUD_->Update();
+    }
+    if (staminaHUD_) {
+        staminaHUD_->SetPlayer(player_);
+        staminaHUD_->Update();
     }
 }
 
@@ -419,6 +428,9 @@ void GameScene::Draw2D() {
             GetSpriteCommon()->PreDraw();
             if (coinHUD_) {
                 coinHUD_->Draw();
+            }
+            if (staminaHUD_) {
+                staminaHUD_->Draw();
             }
         }
     }

@@ -110,6 +110,7 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
     state_.wasWallPose_ = false;
+    RefillStamina();
 
     // 動く足場の慣性を確実にリセット
     state_.isOnMovingPlatform_ = false;
@@ -509,6 +510,7 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
     state_.wasWallPose_ = false;
+    RefillStamina();
     state_.isDead_ = false;
     state_.deathTimer_ = 0.0f;
     state_.isGoal_ = false;
