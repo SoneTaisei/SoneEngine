@@ -17,34 +17,34 @@ BlockFactory& BlockFactory::GetInstance() {
 }
 
 BlockFactory::BlockFactory() {
-    Register("NormalBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("NormalBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<NormalBlock>(map, x, y);
     });
-    Register("DeathBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("DeathBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<DeathBlock>(map, x, y);
     });
-    Register("GoalBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("GoalBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<GoalBlock>(map, x, y);
     });
-    Register("OneWayBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("OneWayBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<OneWayBlock>(map, x, y);
     });
-    Register("CoinBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("CoinBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<CoinBlock>(map, x, y);
     });
-    Register("JumpBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("JumpBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<JumpBlock>(map, x, y);
     });
-    Register("LiftBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("LiftBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<LiftBlock>(map, x, y);
     });
-    Register("PatrolEnemyBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("PatrolEnemyBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<PatrolEnemyBlock>(map, x, y);
     });
-    Register("RailBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("RailBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<RailBlock>(map, x, y);
     });
-    Register("DustBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> {
+    Register("DustBlock", [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseMapObject> {
         return std::make_shared<DustBlock>(map, x, y);
     });
 }
@@ -56,7 +56,7 @@ void BlockFactory::Register(const std::string& typeName, BlockCreator creator) {
     }
 }
 
-std::shared_ptr<BaseBlock> BlockFactory::Create(const std::string& typeName, MapChip2D* map, int x, int y) {
+std::shared_ptr<BaseMapObject> BlockFactory::Create(const std::string& typeName, MapChip2D* map, int x, int y) {
     auto it = creators_.find(typeName);
     if (it != creators_.end()) {
         return it->second(map, x, y);

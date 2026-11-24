@@ -6,7 +6,7 @@
 #include "../Blocks/BaseBlock.h"
 #include <algorithm>
 #include <cmath>
-
+#include "../Blocks/BaseBlock/BaseMovingBlock.h"
 #include "Collision/CollisionManager.h"
 
 void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
@@ -56,13 +56,15 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
         if (state_.wallPlatformCollider_) {
             state_.wallPlatformVelocity_ = state_.wallPlatformCollider_->GetVelocity();
         }
-        
+
         if (std::abs(state_.wallPlatformVelocity_.x) > 0.01f || std::abs(state_.wallPlatformVelocity_.y) > 0.01f) {
             state_.recentPlatformVelocity_ = state_.wallPlatformVelocity_;
             float inertiaTime = 0.5f;
             if (state_.wallPlatformCollider_ && state_.wallPlatformCollider_->GetUserData()) {
-                auto* block = static_cast<BaseBlock*>(state_.wallPlatformCollider_->GetUserData());
-                inertiaTime = block->GetInertiaTime();
+                auto *base = static_cast<BaseMapObject *>(state_.wallPlatformCollider_->GetUserData());
+                if (auto *moving = dynamic_cast<BaseMovingBlock *>(base)) {
+                    inertiaTime = moving->GetInertiaTime();
+                }
             }
             state_.lastPlatformInertiaTime_ = inertiaTime;
             state_.platformInertiaTimer_ = 0.15f;
@@ -147,8 +149,10 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
             state_.recentPlatformVelocity_ = state_.platformVelocity_;
             float inertiaTime = 0.5f;
             if (state_.standingPlatformCollider_ && state_.standingPlatformCollider_->GetUserData()) {
-                auto* block = static_cast<BaseBlock*>(state_.standingPlatformCollider_->GetUserData());
-                inertiaTime = block->GetInertiaTime();
+                auto *base = static_cast<BaseMapObject *>(state_.standingPlatformCollider_->GetUserData());
+                if (auto *moving = dynamic_cast<BaseMovingBlock *>(base)) {
+                    inertiaTime = moving->GetInertiaTime();
+                }
             }
             state_.lastPlatformInertiaTime_ = inertiaTime;
             state_.platformInertiaTimer_ = 0.15f;
@@ -759,7 +763,7 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
             }
 
             if (collider->GetUserData()) {
-                BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                BaseMapObject* block = static_cast<BaseMapObject*>(collider->GetUserData());
                 block->OnPlayerStand();
             }
             aabb = MakePartAABB(state_.position_, part);
@@ -804,7 +808,7 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
                 }
                 
                 if (collider->GetUserData()) {
-                    BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                    BaseMapObject* block = static_cast<BaseMapObject*>(collider->GetUserData());
                     block->OnPlayerStand();
                 }
             } else {
@@ -870,7 +874,7 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                 }
 
                 if (collider->GetUserData()) {
-                    BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                    BaseMapObject* block = static_cast<BaseMapObject*>(collider->GetUserData());
                     block->OnPlayerStand();
                 }
                 state_.isOnMovingPlatform_ = true;
@@ -1129,7 +1133,7 @@ void PlayerPhysics::ResolveDynamicCollisionX(PlayerState& state_, const PlayerPa
             }
 
             if (part.allowWallTouch && collider->GetUserData()) {
-                BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+                BaseMapObject* block = static_cast<BaseMapObject*>(collider->GetUserData());
                 block->OnPlayerTouch();
             }
         }
@@ -1172,7 +1176,7 @@ void PlayerPhysics::SimulateCollisions(PlayerState& state_, const PlayerParams& 
     auto colliders = CollisionManager::GetInstance()->GetCollidersInAABB(queryAABB, kLayerBlock);
     for (auto* collider : colliders) {
         if (!collider->GetUserData()) continue;
-        BaseBlock* block = static_cast<BaseBlock*>(collider->GetUserData());
+        BaseMapObject* block = static_cast<BaseMapObject*>(collider->GetUserData());
         AABB2D blockAABB = collider->GetAABB();
 
         const bool isHazard = block->IsHazard();

@@ -8,9 +8,9 @@
 /// DashRecovery - ダッシュ回復ブロック/アイテム
 /// プレイヤーが接触するとダッシュ回数を即座に回復し、GPUパーティクルエフェクトを再生します。
 /// </summary>
-class DashRecovery : public BaseBlock {
+class DashRecovery : public BaseMapObject {
 public:
-    using BaseBlock::BaseBlock;
+    using BaseMapObject::BaseMapObject;
     ~DashRecovery() override;
 
     // 初期化処理（モデル・マテリアル・コライダー・GPUパーティクルのセットアップ）

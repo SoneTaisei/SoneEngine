@@ -70,7 +70,7 @@ Lvy::ChainInfo Lvy::GetChainInfo() const {
     // 上方向（chipY + 1）へ連続するLvyを探索して最上部（Root）を見つける
     int curY = GetChipY();
     while (true) {
-        BaseBlock* above = GetMap()->GetBlock(GetChipX(), curY + 1);
+        BaseMapObject* above = GetMap()->GetBlock(GetChipX(), curY + 1);
         auto* lvyAbove = dynamic_cast<Lvy*>(above);
         if (!lvyAbove) break;
         curY++;
@@ -83,7 +83,7 @@ Lvy::ChainInfo Lvy::GetChainInfo() const {
     // 下方向（chipY - 1）へ連続するLvyを探索して最下部（Tail）を見つける
     int botY = GetChipY();
     while (true) {
-        BaseBlock* below = GetMap()->GetBlock(GetChipX(), botY - 1);
+        BaseMapObject* below = GetMap()->GetBlock(GetChipX(), botY - 1);
         auto* lvyBelow = dynamic_cast<Lvy*>(below);
         if (!lvyBelow) break;
         botY--;
@@ -102,7 +102,7 @@ Lvy::ChainInfo Lvy::GetChainInfo() const {
     float totalLen = 0.0f;
     int segs = 0;
     for (int y = curY; y >= botY; --y) {
-        BaseBlock* block = GetMap()->GetBlock(GetChipX(), y);
+        BaseMapObject* block = GetMap()->GetBlock(GetChipX(), y);
         if (auto* lvy = dynamic_cast<Lvy*>(block)) {
             info.segments.push_back(lvy);
             totalLen += lvy->height_;
@@ -185,7 +185,7 @@ Lvy::VinePoint Lvy::GetPointAtDistance(const ChainInfo& chain, float distance) c
 }
 
 void Lvy::Update() {
-    BaseBlock::Update();
+    BaseMapObject::Update();
 
     if (!isActive_) return;
 

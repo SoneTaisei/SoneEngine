@@ -1,9 +1,9 @@
 #pragma once
 #include "Game2D/Blocks/BaseBlock.h"
 
-class GoalBlock : public BaseBlock {
+class GoalBlock : public BaseMapObject {
 public:
-    using BaseBlock::BaseBlock;
+    using BaseMapObject::BaseMapObject;
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
     void Update() override;
     void Reset() override;

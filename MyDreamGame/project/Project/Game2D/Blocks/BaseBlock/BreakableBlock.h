@@ -7,9 +7,9 @@
 /// BreakableBlock - 通常時は普通のブロックとして機能し、
 /// ダッシュで激突した時のみ破壊されるブロッククラス
 /// </summary>
-class BreakableBlock : public BaseBlock {
+class BreakableBlock : public BaseMapObject {
 public:
-    using BaseBlock::BaseBlock;
+    using BaseMapObject::BaseMapObject;
 
     // 初期化処理（モデル・マテリアル・コライダー・破片演出のセットアップ）
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;

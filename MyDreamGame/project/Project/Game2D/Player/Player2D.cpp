@@ -195,14 +195,14 @@ void Player2D::Initialize() {
     ChangeState(std::make_unique<PlayerNormalState>());
 
     if (GetGameObject()) {
-        bodyCollider_ = GetGameObject()->GetComponent<ColliderComponent>();
+        bodyCollider_ = GetGameObject()->GetComponent<BoxColliderComponent>();
         if (!bodyCollider_) {
-            bodyCollider_ = GetGameObject()->AddComponent<ColliderComponent>();
+            bodyCollider_ = GetGameObject()->AddComponent<BoxColliderComponent>();
         }
         bodyCollider_->SetLayerMask(kLayerPlayer);
         bodyCollider_->SetIsSolid(false);
 
-        headCollider_ = GetGameObject()->AddComponent<ColliderComponent>();
+        headCollider_ = GetGameObject()->AddComponent<BoxColliderComponent>();
         headCollider_->SetLayerMask(kLayerPlayerHead);
         headCollider_->SetIsSolid(false);
 

@@ -83,7 +83,7 @@ void JumpBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
 }
 
 void JumpBlock::Update() {
-    BaseBlock::Update();
+    BaseMapObject::Update();
 
     if (!GetGameObject()) return;
     auto *tc = GetGameObject()->GetComponent<TransformComponent>();
@@ -198,7 +198,7 @@ void JumpBlock::Update() {
 }
 
 void JumpBlock::Reset() {
-    BaseBlock::Reset();
+    BaseMapObject::Reset();
     isBouncing_ = false;
     bounceAmount_ = 0.0f;
     bounceVelocity_ = 0.0f;
@@ -215,7 +215,7 @@ AABB2D JumpBlock::GetAABB() const {
     if (baseCaptured_) {
         return baseAABB_;
     }
-    return BaseBlock::GetAABB();
+    return BaseMapObject::GetAABB();
 }
 
 void JumpBlock::TriggerBounce(BounceDirection dir) {

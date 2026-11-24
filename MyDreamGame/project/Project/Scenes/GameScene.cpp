@@ -1,26 +1,27 @@
 #include "GameScene.h"
-#include "Scene/SceneManager.h"
-#include "Resource/Model/ModelCommon.h"
 #include "Graphics/Camera/GameCamera.h"
+#include "Resource/Model/ModelCommon.h"
 #include "Scene/SceneFactory.h"
+#include "Scene/SceneManager.h"
 #ifdef USE_IMGUI
 #include "../externals/imgui/imgui.h"
 #include "Editor/EditorManager.h"
 #endif
-#include "Editor/Replay/ReplayManager.h"
-#include "Renderer/Renderer.h"
+#include "GameSceneStates.h"
 #include "Core/TimeManager.h"
-#include "Graphics/TextureManager.h"
-#include "Resource/Sprite/SpriteCommon.h"
-#include "GameObject/Object3D.h"
-#include "Input/KeyboardInput.h"
-#include "Input/GamepadInput.h"
-#include "Graphics/Skybox.h"
-#include "Graphics/CameraManager.h"
-#include "Resource/Model/ModelManager.h"
 #include "Core/Utility/ParameterManager.h"
-#include "GameObject/WorldGif.h"
 #include "Editor/Model3DEditor/Model3DEditorContext.h"
+#include "Editor/Replay/ReplayManager.h"
+#include "GameObject/Object3D.h"
+#include "GameObject/WorldGif.h"
+#include "Graphics/CameraManager.h"
+#include "Graphics/Skybox.h"
+#include "Graphics/TextureManager.h"
+#include "Input/GamepadInput.h"
+#include "Input/KeyboardInput.h"
+#include "Renderer/Renderer.h"
+#include "Resource/Model/ModelManager.h"
+#include "Resource/Sprite/SpriteCommon.h"
 #include <filesystem>
 
 std::string GameScene::s_TargetMapFilePath = "resources/json/shared/Map/map_data.json";
@@ -37,7 +38,7 @@ std::string GameScene::GetLevelDataJsonPath() const {
     return "resources/json/shared/LevelData/" + stem + ".json";
 }
 
-void GameScene::OnEnter(SceneManager* sceneManager) {
+void GameScene::OnEnter(SceneManager *sceneManager) {
     // StageSelectSceneから選択されたステージのパスを受け取る
     if (sceneManager->HasData("SelectedStagePath")) {
         std::string selectedPath = sceneManager->GetData<std::string>("SelectedStagePath");
@@ -63,7 +64,7 @@ void GameScene::OnEnter(SceneManager* sceneManager) {
     }
 }
 
-void GameScene::OnExit(SceneManager* sceneManager) {
+void GameScene::OnExit(SceneManager *sceneManager) {
     // スコアなどを保存してTitleやStageSelectに渡す
     if (player_) {
         sceneManager->SetData("LastScore", player_->GetScore());
@@ -103,7 +104,7 @@ void GameScene::Initialize() {
 
     // 5. マップの生成と初期化
     map_ = std::make_unique<MapChip2D>();
-    map_->Initialize( s_TargetMapFilePath);
+    map_->Initialize(s_TargetMapFilePath);
     Log("GameScene::Initialize: Map Initialized\n");
 
     // ステージ別ワールドGIF（板ポリ）の初期化とロード
@@ -121,7 +122,7 @@ void GameScene::Initialize() {
     player_ = playerObj_->AddComponent<Player2D>();
     player_->SetCamera(GetGameCamera()); // 画面揺れ連携用にカメラを渡す
     Log("GameScene::Initialize: Player Initialized\n");
-    
+
     player_->FindSpawnPoint(*map_);
     Log("GameScene::Initialize: Player SpawnPoint found\n");
 
@@ -130,27 +131,27 @@ void GameScene::Initialize() {
     cameraController_->Setup(GetGameCamera(), player_, map_.get());
     Log("GameScene::Initialize: Camera configured\n");
 
-    // 8. 開始演出・クリア演出用UIの初期化
+    // 8. UIの初期化
     readyGoUI_ = std::make_unique<ReadyGoUI>();
-    readyGoUI_->Initialize(GetSpriteCommon());
-
     clearUI_ = std::make_unique<ClearUI>();
-    clearUI_->Initialize(GetSpriteCommon());
-
-    // ポーズメニューとコインHUDの初期化
     pauseMenu_ = std::make_unique<PauseMenu>();
-    pauseMenu_->Initialize(GetSpriteCommon());
-
     coinHUD_ = std::make_unique<CoinHUD>();
-    coinHUD_->Initialize(GetSpriteCommon());
+    allUIs_ = {readyGoUI_.get(), clearUI_.get(), pauseMenu_.get(), coinHUD_.get()};
+    for (IGameUI *ui : allUIs_) {
+        ui->Initialize(GetSpriteCommon());
+    }
 
     replayController_ = std::make_unique<GameReplayController>();
     ghostRenderer_ = std::make_unique<ReplayGhostRenderer>();
+
+    // 初期ステータスのセット
+    ChangeState(std::make_unique<GameStartReadyState>());
 
     Log("GameScene::Initialize: Finish\n");
 }
 
 void GameScene::Update(SceneManager *sceneManager) {
+    activeSceneManager_ = sceneManager;
     bool isPlayingOrReplaying = false;
 #ifdef USE_IMGUI
     if (EditorManager::IsPlaying()) {
@@ -163,8 +164,9 @@ void GameScene::Update(SceneManager *sceneManager) {
         isPlayingOrReplaying = true;
     }
 
-    bool isGameActive = isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused() && gameState_ != GameState::Pause;
-
+    bool isGameActive =
+        isPlayingOrReplaying && !ReplayManager::GetInstance()->IsPaused() &&
+        (!GetCurrentState() || !GetCurrentState()->IsPaused());
     if (skybox_) {
         skybox_->Update();
     }
@@ -179,59 +181,12 @@ void GameScene::Update(SceneManager *sceneManager) {
     float transitionSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "transitionSpeed", 1.5f);
     if (transitionAlpha_ > 0.0f) {
         transitionAlpha_ -= dt * transitionSpeed;
-        if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
+        if (transitionAlpha_ < 0.0f)
+            transitionAlpha_ = 0.0f;
     }
 
-    if (gameState_ == GameState::StartReady) {
-        if (readyGoUI_) {
-            if (readyGoUI_->Update(dt)) {
-                gameState_ = GameState::Playing;
-            }
-        }
-    } else if (gameState_ == GameState::Clear) {
-        if (clearUI_) {
-            clearUI_->Update(dt, GetGameCamera());
-            if (clearUI_->IsReturnRequested()) {
-                clearUI_->Reset(GetGameCamera());
-                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kTitle));
-                return;
-            }
-        }
-    } else {
-        if (clearUI_ && clearUI_->IsActive()) {
-            clearUI_->Reset(GetGameCamera());
-        }
-    }
-
-    if (gameState_ != GameState::StartReady) {
-        if (readyGoUI_) {
-            readyGoUI_->Reset();
-        }
-    }
-
-    // ポーズ画面への移行（ゲームプレイ中にESCまたはコントローラーのSTARTボタン）
-    if (gameState_ == GameState::Playing) {
-        if (KeyboardInput::GetInstance()->IsKeyPressed(DIK_ESCAPE) ||
-            GamepadInput::GetInstance()->IsButtonPressed(GamepadButton::Start)) {
-            gameState_ = GameState::Pause;
-            if (pauseMenu_) {
-                pauseMenu_->Reset();
-            }
-        }
-    } else if (gameState_ == GameState::Pause) {
-        if (pauseMenu_) {
-            PauseMenuAction action = pauseMenu_->Update(dt);
-            if (action == PauseMenuAction::Resume) {
-                gameState_ = GameState::Playing;
-            } else if (action == PauseMenuAction::ExitToStageSelect) {
-                if (cameraController_) {
-                    cameraController_->ResetView();
-                }
-                sceneManager->ChangeScene(SceneFactory::CreateScene(SceneType::kStageSelect));
-                return;
-            }
-        }
-        // ポーズ中は以降のゲーム更新（プレイヤー、マップ、GIF等）を停止
+    stateMachine_.Update(this, dt);
+    if (GetCurrentState() && GetCurrentState()->IsPaused()) {
         return;
     }
 
@@ -254,60 +209,43 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
         wasCurrentlyPlaying_ = isCurrentlyPlaying;
 
-
         // リプレイ再生中の場合、キーを注入し、必要に応じて位置補正を行う
         if (replayController_ && effectManager_) {
             replayController_->UpdatePlayback(player_, map_.get(), GetGameCamera(), effectManager_->GetEffects(), previousScore_);
         }
 
-            if (player_) {
-                bool isRespawning = player_->IsRespawning();
-                if (isRespawning && !wasRespawning_) {
-                    if (effectManager_) {
-                        effectManager_->ResetAllEffects();
-                    }
-                    previousScore_ = player_->GetScore();
-                }
-                wasRespawning_ = isRespawning;
-            }
-
-            // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
-            if (map_) {
-                map_->Update();
-            }
-
-            bool canControl = true;
-            if (gameState_ == GameState::StartReady) {
-                if (readyGoUI_) {
-                    canControl = readyGoUI_->CanControl();
-                }
-            } else if (gameState_ == GameState::Clear) {
-                canControl = false;
-            }
-
-            player_->UpdateWithMap(*map_, GetGameCamera() && GetGameCamera()->IsTransitioning(), canControl);
-
-            // ゴール判定
-            if (gameState_ == GameState::Playing && player_->IsGoalComplete()) {
-                gameState_ = GameState::Clear;
-                if (clearUI_) {
-                    float currentScale = GetGameCamera() ? GetGameCamera()->GetScale() : (cameraController_ ? cameraController_->GetInitialScale() : 1.0f);
-                    clearUI_->Start(currentScale);
-                }
-            }
-
-            // コイン獲得エフェクト
-            int currentScore = player_->GetScore();
-            if (currentScore > previousScore_) {
+        if (player_) {
+            bool isRespawning = player_->IsRespawning();
+            if (isRespawning && !wasRespawning_) {
                 if (effectManager_) {
-                    effectManager_->EmitCoin(player_->GetPosition());
+                    effectManager_->ResetAllEffects();
                 }
-                previousScore_ = currentScore;
+                previousScore_ = player_->GetScore();
             }
+            wasRespawning_ = isRespawning;
+        }
+
+        // マップの更新をプレイヤーより先に行う（移動リフト等の新しい座標に対して判定するため）
+        if (map_) {
+            map_->Update();
+        }
+
+        bool canControl = GetCurrentState() ? GetCurrentState()->CanControl(this) : true;
+        player_->UpdateWithMap(*map_, GetGameCamera() && GetGameCamera()->IsTransitioning(), canControl);
+
+        // コイン獲得エフェクト
+        int currentScore = player_->GetScore();
+        if (currentScore > previousScore_) {
+            if (effectManager_) {
+                effectManager_->EmitCoin(player_->GetPosition());
+            }
+            previousScore_ = currentScore;
+        }
 
         // カメラの更新（追従・部屋境界・見渡し回転）
         if (cameraController_) {
-            cameraController_->Update(dt, player_, map_.get(), gameState_ == GameState::Clear, ReplayManager::GetInstance()->IsPlaying());
+            bool isClear = GetCurrentState() && GetCurrentState()->IsClear();
+            cameraController_->Update(dt, player_, map_.get(), isClear, ReplayManager::GetInstance()->IsPlaying());
         }
 
         // プレイ中の場合、リプレイ録画を行う
@@ -316,12 +254,14 @@ void GameScene::Update(SceneManager *sceneManager) {
         }
     }
 
+    // UI関連のUpdate
     if (map_ && coinHUD_) {
-        coinHUD_->Update(dt, map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
+        coinHUD_->SetCoinCounts(map_->GetCollectedCoinCount(), map_->GetTotalCoinCount());
+        coinHUD_->Update();
     }
 }
 
-void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
+void GameScene::DisplayImGui(PrimitiveObject *selectedPrimitive) {
 #ifdef USE_IMGUI
 
     if (skybox_) {
@@ -333,7 +273,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
     }
 
     // エディター側でプレイ状態になっていないときは、インゲームUI（スコア等）を描画しない
-    if (!EditorManager::IsPlaying() || gameState_ == GameState::Pause) {
+    if (!EditorManager::IsPlaying() || (GetCurrentState() && GetCurrentState()->IsPaused())) {
         return;
     }
 
@@ -358,17 +298,17 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::SetNextWindowPos(ImVec2(windowPos.x + 10.0f, windowPos.y + 70.0f), ImGuiCond_Always);
         ImGui::Begin("Operation Guide", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
 
-        ImGui::TextColored(ImVec4(1,1,1,0.8f), "[Operation Guide]");
+        ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "[Operation Guide]");
         if (GamepadInput::GetInstance()->IsConnected()) {
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "LStick / D-Pad : Move (Up/Down to Climb)");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[A] : Jump / Wall Jump");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[X] : Dash");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "[RB] / [RT] : Wall Cling");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "LStick / D-Pad : Move (Up/Down to Climb)");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "[A] : Jump / Wall Jump");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "[X] : Dash");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "[RB] / [RT] : Wall Cling");
         } else {
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "A/D or Left/Right : Move");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "SPACE : Jump / Wall Jump");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "J : Dash");
-            ImGui::TextColored(ImVec4(1,1,1,0.8f), "K : Wall Cling (W/S to Climb)");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "A/D or Left/Right : Move");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "SPACE : Jump / Wall Jump");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "J : Dash");
+            ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "K : Wall Cling (W/S to Climb)");
         }
         ImGui::End();
     }
@@ -378,16 +318,16 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::SetNextWindowPos(windowPos);
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
         ImGui::Begin("GameOverOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImDrawList *drawList = ImGui::GetWindowDrawList();
         ImVec2 p = ImGui::GetWindowPos();
-        drawList->AddRectFilled(p, ImVec2(p.x + windowWidth, p.y + windowHeight), IM_COL32(255, 0, 0, 100)); 
+        drawList->AddRectFilled(p, ImVec2(p.x + windowWidth, p.y + windowHeight), IM_COL32(255, 0, 0, 100));
 
-        ImGui::SetCursorPos(ImVec2(windowWidth/2.0f - 150.0f, windowHeight/2.0f - 50.0f));
+        ImGui::SetCursorPos(ImVec2(windowWidth / 2.0f - 150.0f, windowHeight / 2.0f - 50.0f));
         ImGui::SetWindowFontScale(6.0f);
-        const char* text = "MISS!";
+        const char *text = "MISS!";
         float textW = ImGui::CalcTextSize(text).x;
         ImGui::SetCursorPosX((windowWidth - textW) * 0.5f);
-        ImGui::TextColored(ImVec4(1,1,1,1), "%s", text);
+        ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", text);
         ImGui::End();
     }
 
@@ -396,7 +336,7 @@ void GameScene::DisplayImGui(PrimitiveObject* selectedPrimitive) {
         ImGui::SetNextWindowPos(windowPos);
         ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight));
         ImGui::Begin("TransitionOverlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs);
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImDrawList *drawList = ImGui::GetWindowDrawList();
         ImVec2 p = ImGui::GetWindowPos();
         drawList->AddRectFilled(p, ImVec2(p.x + windowWidth, p.y + windowHeight), IM_COL32(0, 0, 0, static_cast<int>(transitionAlpha_ * 255.0f)));
         ImGui::End();
@@ -433,7 +373,6 @@ void GameScene::Draw(const Matrix4x4 &viewProjectionMatrix) {
     if (player_) {
         player_->Draw();
     }
-
 
     // コンポーネントの描画を実行
     Renderer::GetInstance()->RenderComponents();
@@ -474,7 +413,8 @@ void GameScene::Draw2D() {
         isPlayingOrReplaying = true;
     }
 
-    if (isPlayingOrReplaying && gameState_ != GameState::Pause) {
+    bool isPaused = GetCurrentState() && GetCurrentState()->IsPaused();
+    if (isPlayingOrReplaying && !isPaused) {
         if (GetSpriteCommon()) {
             GetSpriteCommon()->PreDraw();
             if (coinHUD_) {
@@ -482,21 +422,9 @@ void GameScene::Draw2D() {
             }
         }
     }
-    if (gameState_ == GameState::StartReady) {
-        if (GetSpriteCommon() && readyGoUI_) {
-            GetSpriteCommon()->PreDraw();
-            readyGoUI_->Draw();
-        }
-    } else if (gameState_ == GameState::Clear) {
-        if (GetSpriteCommon() && clearUI_) {
-            GetSpriteCommon()->PreDraw();
-            clearUI_->Draw();
-        }
-    } else if (gameState_ == GameState::Pause) {
-        if (GetSpriteCommon() && pauseMenu_) {
-            GetSpriteCommon()->PreDraw();
-            pauseMenu_->Draw();
-        }
+    if (GetSpriteCommon() && GetCurrentState()) {
+        GetSpriteCommon()->PreDraw();
+        GetCurrentState()->Draw2D(this);
     }
 }
 
@@ -527,7 +455,7 @@ std::vector<PrimitiveObject *> GameScene::GetPrimitives() {
 
     // 2. プレイヤー
     if (player_) {
-        result.push_back(const_cast<PrimitiveObject*>(player_->GetPrimitiveObject()));
+        result.push_back(const_cast<PrimitiveObject *>(player_->GetPrimitiveObject()));
     }
 
     // 3. マップチップ
@@ -553,7 +481,8 @@ void GameScene::UpdateEditor() {
     // フェードイン演出 (エディタ停止中もフェードインさせる)
     if (transitionAlpha_ > 0.0f) {
         transitionAlpha_ -= dt * 1.5f;
-        if (transitionAlpha_ < 0.0f) transitionAlpha_ = 0.0f;
+        if (transitionAlpha_ < 0.0f)
+            transitionAlpha_ = 0.0f;
     }
 
     // 録画状態のままエディタが停止した場合、確実に停止させて履歴に保存する
@@ -571,7 +500,7 @@ void GameScene::UpdateEditor() {
         if (map_) {
             player_->FindSpawnPoint(*map_);
         }
-        auto* playerPrim = const_cast<PrimitiveObject*>(player_->GetPrimitiveObject());
+        auto *playerPrim = const_cast<PrimitiveObject *>(player_->GetPrimitiveObject());
         if (playerPrim) {
             playerPrim->SetTranslation(player_->GetPosition());
             playerPrim->Update();
@@ -588,3 +517,9 @@ void GameScene::UpdateEditor() {
     }
 }
 
+void GameScene::ChangeState(std::unique_ptr<IState<GameScene>> nextState) {
+    stateMachine_.ChangeState(std::move(nextState), this);
+}
+IGameSceneState *GameScene::GetCurrentState() const {
+    return static_cast<IGameSceneState *>(stateMachine_.GetCurrentState());
+}

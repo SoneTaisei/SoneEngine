@@ -5,7 +5,7 @@
 #include <memory>
 #include <d3d12.h>
 
-class BaseBlock;
+class BaseMapObject;
 class MapChip2D;
 class Primitive;
 
@@ -20,7 +20,7 @@ public:
     const Vector3& GetPosition() const { return position_; }
     const Vector3& GetScale() const { return scale_; }
     const nlohmann::json& GetProperties() const { return properties_; }
-    std::shared_ptr<BaseBlock> GetBlockLogic() const { return blockLogic_; }
+    std::shared_ptr<BaseMapObject> GetBlockLogic() const { return blockLogic_; }
 
     // Setters
     void SetName(const std::string& name) { name_ = name; }
@@ -55,5 +55,5 @@ private:
     nlohmann::json properties_ = nlohmann::json::object();
 
     // 内部に持つ実際のブロックロジック
-    std::shared_ptr<BaseBlock> blockLogic_;
+    std::shared_ptr<BaseMapObject> blockLogic_;
 };

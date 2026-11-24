@@ -133,7 +133,7 @@ void CoinBlock::Reset() {
         ApplySavedState();
         return;
     }
-    BaseBlock::Reset();
+    BaseMapObject::Reset();
     isCollected_ = false;
     collectTimer_ = 0.0f;
     rotationY_ = 0.0f;

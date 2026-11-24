@@ -3,11 +3,13 @@
 #include "Core/Utility/Structs.h"
 #include <functional>
 
+class LineRenderer;
+
 enum ColliderLayer : uint32_t {
-    kLayerPlayer     = 1 << 0,
-    kLayerBlock      = 1 << 1,
-    kLayerItem       = 1 << 2,
-    kLayerTrigger    = 1 << 3,
+    kLayerPlayer = 1 << 0,
+    kLayerBlock = 1 << 1,
+    kLayerItem = 1 << 2,
+    kLayerTrigger = 1 << 3,
     kLayerPlayerHead = 1 << 4,
 };
 
@@ -28,26 +30,12 @@ public:
 
     void Initialize() override;
     void Update() override;
-    void DisplayImGui() override;
+    void DisplayImGui() override = 0;
 
-    // 形状種別の取得（仮想関数）
-    virtual ColliderType GetColliderType() const { return type_; }
-    void SetColliderType(ColliderType type) { type_ = type; }
-
-    // 当たり判定AABBの取得（ポリモーフィズム用仮想関数）
-    virtual AABB2D GetAABB() const;
-
-    // --- Box Collider 仮想アクセサ（派生クラスでオーバーライド） ---
-    virtual void SetBoxSize(const Vector3& size) { boxSize_ = size; }
-    virtual void SetBoxOffset(const Vector3& offset) { boxOffset_ = offset; }
-    virtual Vector3 GetBoxSize() const { return boxSize_; }
-    virtual Vector3 GetBoxOffset() const { return boxOffset_; }
-
-    // --- Sphere Collider 仮想アクセサ（派生クラスでオーバーライド） ---
-    virtual void SetSphereRadius(float radius) { sphereRadius_ = radius; }
-    virtual void SetSphereOffset(const Vector3& offset) { sphereOffset_ = offset; }
-    virtual float GetSphereRadius() const { return sphereRadius_; }
-    virtual Vector3 GetSphereOffset() const { return sphereOffset_; }
+    // 形状種別の取得（純粋仮想関数）
+    virtual ColliderType GetColliderType() const = 0;
+    // 当たり判定AABBの取得（純粋仮想関数）
+    virtual AABB2D GetAABB() const = 0;
 
     // --- 共通の物理プロパティ ---
     void SetLayerMask(uint32_t layer) { layerMask_ = layer; }
@@ -62,41 +50,44 @@ public:
     void SetIsMoving(bool moving) { isMoving_ = moving; }
     bool IsMoving() const { return isMoving_; }
 
-    void SetVelocity(const Vector3& vel) { velocity_ = vel; }
+    void SetVelocity(const Vector3 &vel) { velocity_ = vel; }
     Vector3 GetVelocity() const { return velocity_; }
 
     // Custom Fixed AABB
-    void SetCustomAABB(const AABB2D& aabb) { customAABB_ = aabb; hasCustomAABB_ = true; }
+    void SetCustomAABB(const AABB2D &aabb) {
+        customAABB_ = aabb;
+        hasCustomAABB_ = true;
+    }
     void ClearCustomAABB() { hasCustomAABB_ = false; }
     bool HasCustomAABB() const { return hasCustomAABB_; }
-    const AABB2D& GetCustomAABB() const { return customAABB_; }
+    const AABB2D &GetCustomAABB() const { return customAABB_; }
 
-    void SetUserData(void* data) { userData_ = data; }
-    void* GetUserData() const { return userData_; }
+    void SetUserData(void *data) { userData_ = data; }
+    void *GetUserData() const { return userData_; }
 
     // Callbacks
-    using OnCollisionCallback = std::function<void(ColliderComponent*)>;
+    using OnCollisionCallback = std::function<void(ColliderComponent *)>;
     void SetOnCollision(OnCollisionCallback callback) { onCollision_ = callback; }
     void SetOnPlayerStand(OnCollisionCallback callback) { onPlayerStand_ = callback; }
 
-    void OnCollision(ColliderComponent* other) { if (onCollision_) onCollision_(other); }
-    void OnPlayerStand(ColliderComponent* other) { if (onPlayerStand_) onPlayerStand_(other); }
+    void OnCollision(ColliderComponent *other) {
+        if (onCollision_)
+            onCollision_(other);
+    }
+    void OnPlayerStand(ColliderComponent *other) {
+        if (onPlayerStand_)
+            onPlayerStand_(other);
+    }
+
+    virtual void DrawDebug(LineRenderer *lineRenderer, const Vector4 &color) const = 0;
 
 private:
-    ColliderType type_ = ColliderType::kBox;
-
-    Vector3 boxSize_{ 1.0f, 1.0f, 1.0f };
-    Vector3 boxOffset_{ 0.0f, 0.0f, 0.0f };
-
-    float sphereRadius_ = 1.0f;
-    Vector3 sphereOffset_{ 0.0f, 0.0f, 0.0f };
-
     uint32_t layerMask_ = 0xFFFFFFFF;
     bool isSolid_ = true;
     bool isOneWay_ = false;
     bool isMoving_ = false;
     Vector3 velocity_ = {0.0f, 0.0f, 0.0f};
-    void* userData_ = nullptr;
+    void *userData_ = nullptr;
 
     bool hasCustomAABB_ = false;
     AABB2D customAABB_{};

@@ -1,11 +1,11 @@
 #pragma once
-#include "BaseBlock.h"
+#include "BaseBlock/BaseMovingBlock.h"
 #include <vector>
 
 /// <summary>
 /// FallBlock - プレイヤーが上から乗った時、または側面につかまった時に物理的に落下するブロック
 /// </summary>
-class FallBlock : public BaseBlock {
+class FallBlock : public BaseMovingBlock {
 public:
     enum class State {
         Idle,           // 待機状態
@@ -15,7 +15,7 @@ public:
         Respawning      // リスポーン待機
     };
 
-    using BaseBlock::BaseBlock;
+    using BaseMovingBlock::BaseMovingBlock;
 
     // 初期化処理（モデル・マテリアル・コライダーのセットアップ）
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
@@ -27,8 +27,6 @@ public:
     bool IsSolid() const override { return isSolid_ && (state_ != State::Respawning); }
     bool IsOneWay() const override { return false; }
 
-    // 動く足場としてプレイヤーの追従・物理干渉を有効化
-    bool IsMoving() const override { return true; }
     Vector3 GetVelocity() const override { return velocity_; }
 
     // プレイヤーが接触した瞬間の処理

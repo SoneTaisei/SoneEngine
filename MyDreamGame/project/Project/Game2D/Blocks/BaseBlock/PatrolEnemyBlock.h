@@ -1,9 +1,9 @@
 #pragma once
 #include "Game2D/Blocks/BaseBlock.h"
 
-class PatrolEnemyBlock : public BaseBlock {
+class PatrolEnemyBlock : public BaseMapObject {
 public:
-    using BaseBlock::BaseBlock;
+    using BaseMapObject::BaseMapObject;
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
     
     void Update() override;

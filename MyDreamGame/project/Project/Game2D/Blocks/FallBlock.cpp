@@ -33,7 +33,7 @@ void FallBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     tc->SetScale({ width, height, 1.0f });
     tc->SetPosition(initialPos_);
 
-    SetupCollider();
+    SetupMovingCollider();
 
     UpdateShakeColor();
 
@@ -71,10 +71,10 @@ void FallBlock::ClearConnectedBlocks() {
 }
 
 void FallBlock::Update() {
-    BaseBlock::Update();
+    BaseMapObject::Update();
 
     auto* tc = GetGameObject() ? GetGameObject()->GetComponent<TransformComponent>() : nullptr;
-    auto* cc = GetGameObject() ? GetGameObject()->GetComponent<ColliderComponent>() : nullptr;
+    auto *cc = GetGameObject() ? GetGameObject()->GetComponent<BoxColliderComponent>() : nullptr;
     auto* prc = GetGameObject() ? GetGameObject()->GetComponent<PrimitiveRendererComponent>() : nullptr;
 
     bool isPlayingOrReplaying = false;
@@ -352,7 +352,7 @@ bool FallBlock::CheckGroundCollision(float nextY, float& outGroundY) {
     if (maxChipX >= GetMap()->GetWidth()) maxChipX = GetMap()->GetWidth() - 1;
 
     for (int chipX = minChipX; chipX <= maxChipX; ++chipX) {
-        BaseBlock* underBlock = GetMap()->GetBlock(chipX, chipY);
+        BaseMapObject* underBlock = GetMap()->GetBlock(chipX, chipY);
         // 自分自身以外のSolidブロックかつ移動中でない床に着地
         if (underBlock && underBlock != this && underBlock->IsSolid() && !underBlock->IsOneWay()) {
             // 接続された同じグループのFallBlockでないかも判定（未着地の接続FallBlockは接地対象外）
@@ -452,7 +452,7 @@ void FallBlock::Reset() {
         if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
             tc->SetPosition(initialPos_);
         }
-        if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+        if (auto *cc = GetGameObject()->GetComponent<BoxColliderComponent>()) {
             cc->SetVelocity(velocity_);
             cc->SetBoxOffset({ 0.0f, 0.0f, 0.0f });
         }

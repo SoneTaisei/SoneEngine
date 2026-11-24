@@ -1,22 +1,21 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include "Game2D/IGameUI.h"
 
 class Sprite;
 class SpriteCommon;
 class GameCamera;
 
-class ClearUI {
+class ClearUI:public IGameUI {
 public:
     ClearUI() = default;
     ~ClearUI() = default;
 
-    void Initialize(SpriteCommon* spriteCommon);
-    void Start(float initialCameraScale);
-    void Reset(GameCamera* camera = nullptr);
-
-    // クリア演出の更新
-    void Update(float deltaTime, GameCamera* camera);
+    void Initialize(SpriteCommon *spriteCommon) override;
+    void Update() override;
+    void Draw() override;
+    void Reset() override;
 
     // タイトル画面へ戻る入力が押されたか (Space, Pad A, Pad Start)
     bool IsReturnRequested() const;
@@ -24,8 +23,10 @@ public:
     // 演出中かどうか
     bool IsActive() const { return isActive_; }
 
-    // 2D描画
-    void Draw();
+    // スタート
+    void Start(float initialCameraScale); 
+    // カメラをセットする
+    void SetCamera(GameCamera *camera) { camera_ = camera; }
 
 private:
     bool isActive_ = false;
@@ -34,4 +35,6 @@ private:
 
     uint32_t clearTextureHandle_ = 0;
     std::unique_ptr<Sprite> clearSprite_;
+
+    GameCamera *camera_ = nullptr;
 };

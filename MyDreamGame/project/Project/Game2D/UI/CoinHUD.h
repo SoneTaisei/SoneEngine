@@ -2,20 +2,23 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include "Game2D/IGameUI.h"
 
 class Sprite;
 class SpriteCommon;
 
-class CoinHUD {
+class CoinHUD:public IGameUI {
 public:
     CoinHUD() = default;
     ~CoinHUD() = default;
 
-    void Initialize(SpriteCommon* spriteCommon);
-    void Update(float deltaTime, int collectedCoins, int totalCoins);
-    void Draw();
+    void Initialize(SpriteCommon *spriteCommon) override;
+    void Update() override;
+    void Draw() override;
+    void Reset() override;
 
-    void Reset();
+    // コインの枚数取得
+    void SetCoinCounts(int collectedCoins, int totalCoins);
 
 private:
     uint32_t coinTextureHandle_ = 0;

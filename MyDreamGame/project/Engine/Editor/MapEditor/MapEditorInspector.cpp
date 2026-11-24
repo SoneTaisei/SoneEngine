@@ -320,7 +320,7 @@ bool MapEditorInspector::Draw(SceneManager* sceneManager) {
     // ブロッククラス固有の ImGui UI (DrawImGui) の表示
     if (BlockFactory::GetInstance().HasType(targetDef->type)) {
         ImGui::Separator();
-        static std::shared_ptr<BaseBlock> previewBlock = nullptr;
+        static std::shared_ptr<BaseMapObject> previewBlock = nullptr;
         static std::string lastPreviewType = "";
         static int lastTargetId = -1;
         if (!previewBlock || lastPreviewType != targetDef->type || lastTargetId != targetDef->id) {
