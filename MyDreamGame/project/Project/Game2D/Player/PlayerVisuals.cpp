@@ -14,6 +14,11 @@
 #include <random>
 #include <cmath>
 
+namespace {
+constexpr float kModelPi = 3.14159265f;
+constexpr float kModelHalfPi = 1.57079632f;
+}
+
 PlayerVisuals::PlayerVisuals() = default;
 PlayerVisuals::~PlayerVisuals() = default;
 
@@ -57,6 +62,8 @@ void PlayerVisuals::Initialize(ID3D12Device* device, Primitive* boxPrimitive, Pr
         animator_->Play();
 
         modelObj_->SetAnimator(animator_.get());
+        currentRotationY_ = -kModelHalfPi;
+        modelObj_->SetRotation({ 0.0f, currentRotationY_, 0.0f });
     }
 
     dashRingPrimitive_ = std::make_unique<PrimitiveObject>();
@@ -207,28 +214,42 @@ void PlayerVisuals::Update(const PlayerState& state, const PlayerParams& params,
         // gaikotuモデルは足元原点のため、当たり判定の底辺に合わせるようY軸をオフセットする
         Vector3 modelPos = state.position_;
         modelPos.y -= params.halfHeight_;
-        
-        float rotationY = modelObj_->GetRotation().y;
+
+        float targetRotationY = currentRotationY_;
         if (state.isGoal_) {
             // ゴール・クリア時はカメラ正面（手前）を向いて歓喜のジャンプ
-            rotationY = 0.0f;
+            targetRotationY = 0.0f;
             float hop = std::abs(std::sin(state.goalTimer_ * 8.0f)) * 0.35f;
             modelPos.y += hop;
         } else if (state.isWallClinging_ || state.isWallSliding_) {
             if (state.isTouchingWallRight_) {
-                rotationY = -1.57079632f;
+                targetRotationY = -kModelHalfPi;
                 modelPos.x -= 0.2f; // 右壁から少し離す（左へずらす）
             } else if (state.isTouchingWallLeft_) {
-                rotationY = 1.57079632f;
+                targetRotationY = kModelHalfPi;
                 modelPos.x += 0.2f; // 左壁から少し離す（右へずらす）
             }
         } else {
             if (state.facingDirectionX_ < 0.0f) {
-                rotationY = 1.57079632f;
+                targetRotationY = kModelHalfPi;
             } else if (state.facingDirectionX_ > 0.0f) {
-                rotationY = -1.57079632f;
+                targetRotationY = -kModelHalfPi;
             }
         }
+
+        // カメラ手前側（0.0f付近）を通過して目標角度へ滑らかに回転させる
+        if (params.turnDuration_ <= 0.0001f) {
+            currentRotationY_ = targetRotationY;
+        } else {
+            float maxStep = (kModelPi / params.turnDuration_) * deltaTime;
+            float diff = targetRotationY - currentRotationY_;
+            if (std::abs(diff) <= maxStep) {
+                currentRotationY_ = targetRotationY;
+            } else {
+                currentRotationY_ += std::copysign(maxStep, diff);
+            }
+        }
+        float rotationY = currentRotationY_;
         
         modelObj_->SetTranslation(modelPos);
         
@@ -652,7 +673,15 @@ void PlayerVisuals::SetDissolveThreshold(float threshold) {
     }
 }
 
+void PlayerVisuals::ResetRotation(float facingDirectionX) {
+    currentRotationY_ = (facingDirectionX < 0.0f) ? kModelHalfPi : -kModelHalfPi;
+    if (modelObj_) {
+        modelObj_->SetRotation({ 0.0f, currentRotationY_, 0.0f });
+    }
+}
+
 void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& params) {
+    currentRotationY_ = -kModelHalfPi;
     if (primitiveObj_) {
         primitiveObj_->SetTranslation(position);
         primitiveObj_->SetColor(params.colorNormal_);
@@ -667,7 +696,7 @@ void PlayerVisuals::ResetVisuals(const Vector3& position, const PlayerParams& pa
         modelObj_->SetTranslation(modelPos);
         modelObj_->SetColor(params.colorNormal_);
         modelObj_->SetDissolveThreshold(0.0f);
-        modelObj_->SetRotation({ 0.0f, 0.0f, 0.0f });
+        modelObj_->SetRotation({ 0.0f, currentRotationY_, 0.0f });
         modelObj_->Update();
     }
 }

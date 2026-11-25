@@ -151,6 +151,7 @@ void Player2D::StartRespawnSequence() {
     state_.isRespawning_ = true;
     state_.respawnTimer_ = 0.0f;
     RefillStamina();
+    visuals_.ResetRotation(state_.facingDirectionX_);
     visuals_.SetRespawnVisual(state_.position_, params_, 0.0f);
 }
 
@@ -373,6 +374,7 @@ void Player2D::DisplayImGui() {
 
         if (ImGui::TreeNode("基本移動")) {
             ImGui::DragFloat("移動速度", &params_.moveSpeed_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("振り返り回転時間 (秒)", &params_.turnDuration_, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("ジャンプ力", &params_.jumpPower_, 0.1f, 0.0f, 30.0f);
             ImGui::DragFloat("重力", &params_.gravity_, 0.1f, -100.0f, 0.0f);
             ImGui::DragFloat("最大落下速度", &params_.maxFallSpeed_, 0.1f, -100.0f, 0.0f);

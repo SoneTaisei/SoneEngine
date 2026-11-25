@@ -59,6 +59,7 @@ public:
 
     // 表示制御・カプセル化用メソッド
     void SetDissolveThreshold(float threshold);
+    void ResetRotation(float facingDirectionX);
     void ResetVisuals(const Vector3& position, const PlayerParams& params);
     void SyncTransform(const Vector3& position, const PlayerParams& params);
     void SetRespawnVisual(const Vector3& position, const PlayerParams& params, float scaleProgress);
@@ -95,6 +96,7 @@ private:
     std::vector<DashRingParticle> dashRingParticles_;
 
     float visualTime_ = 0.0f;
+    float currentRotationY_ = -1.57079632f;
     float climbBlendFactor_ = 0.0f;
     float wallClimbAnimTime_ = 0.0f;
     float holdingWallAnimTime_ = 0.0f;
