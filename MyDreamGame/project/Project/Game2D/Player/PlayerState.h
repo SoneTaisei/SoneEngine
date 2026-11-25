@@ -27,6 +27,8 @@ struct PlayerState {
     float facingDirectionX_ = 1.0f; // 1.0f: 右, -1.0f: 左
     float jumpBufferTimer_ = 0.0f;
     float coyoteTimer_ = 0.0f;
+    bool isJumping_ = false;
+    float minJumpTimer_ = 0.0f;
     bool isTouchingWallRight_ = false;
     bool isTouchingWallLeft_ = false;
     bool wasTouchingWallRight_ = false;

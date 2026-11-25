@@ -69,6 +69,8 @@ void Player2D::StartDeathSequence(bool isFallDeath) {
     state_.lastDashDirX_ = 0.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
 
     if (isFallDeath) {
         state_.velocity_.y = -5.0f;
@@ -104,6 +106,8 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.facingDirectionX_ = 1.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
     state_.wallJumpDirLockTimer_ = 0.0f;
     state_.lockedDirectionX_ = 0.0f;
     state_.wallJumpTimer_ = 0.0f;
@@ -173,6 +177,8 @@ void Player2D::StartGoalSequence() {
     state_.lastDashDirX_ = 0.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
     visuals_.SpawnConfetti(state_.position_);
 }
 
@@ -376,6 +382,8 @@ void Player2D::DisplayImGui() {
             ImGui::DragFloat("移動速度", &params_.moveSpeed_, 0.1f, 0.0f, 30.0f);
             ImGui::DragFloat("振り返り回転時間 (秒)", &params_.turnDuration_, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("ジャンプ力", &params_.jumpPower_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("最低ジャンプ時間 (秒)", &params_.minJumpDuration_, 0.005f, 0.0f, 0.5f);
+            ImGui::DragFloat("ジャンプ離し時速度倍率", &params_.jumpCutMultiplier_, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("重力", &params_.gravity_, 0.1f, -100.0f, 0.0f);
             ImGui::DragFloat("最大落下速度", &params_.maxFallSpeed_, 0.1f, -100.0f, 0.0f);
             ImGui::TreePop();
@@ -515,6 +523,8 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.checkpointScore_ = 0;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.isOnGround_ = false;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
     state_.canDash_ = true;
     state_.facingDirectionX_ = 1.0f;
     state_.isDashing_ = false;

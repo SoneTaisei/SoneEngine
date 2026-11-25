@@ -44,6 +44,8 @@
     "headOffsetY_": 0.3100000023841858,
     "headWallOffsetX_": 0.15000000596046448,
     "jumpPower_": 17.0,
+    "minJumpDuration_": 0.08,
+    "jumpCutMultiplier_": 0.25,
     "maxFallSpeed_": -15.0,
     "maxStamina_": 110.0,
     "moveSpeed_": 7.0,

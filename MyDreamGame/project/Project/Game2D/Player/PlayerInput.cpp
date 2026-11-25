@@ -55,6 +55,7 @@ void PlayerInput::Update(InputState& outState) {
 
     // ジャンプ（キーボード SPACE / パッド Aボタン）
     outState.isJumpPressed = keyboard->IsKeyPressed(DIK_SPACE) || gamepad->IsButtonPressed(GamepadButton::A);
+    outState.isJumpHeld = keyboard->IsKeyDown(DIK_SPACE) || gamepad->IsButtonDown(GamepadButton::A);
     outState.isJumpReleased = keyboard->IsKeyReleased(DIK_SPACE) || gamepad->IsButtonReleased(GamepadButton::A);
 
     // ダッシュ（キーボード J / パッド Xボタン）

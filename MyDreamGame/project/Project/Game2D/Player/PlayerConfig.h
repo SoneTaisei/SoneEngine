@@ -6,6 +6,8 @@ struct PlayerParams {
     float moveSpeed_ = 5.0f;
     float turnDuration_ = 0.15f;
     float jumpPower_ = 17.0f;
+    float minJumpDuration_ = 0.08f;
+    float jumpCutMultiplier_ = 0.25f;
     float gravity_ = -40.0f;
     float maxFallSpeed_ = -15.0f;
     float dashDuration_ = 0.15f;

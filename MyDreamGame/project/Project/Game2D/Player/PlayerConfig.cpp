@@ -15,6 +15,8 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         j["moveSpeed_"] = params.moveSpeed_;
         j["turnDuration_"] = params.turnDuration_;
         j["jumpPower_"] = params.jumpPower_;
+        j["minJumpDuration_"] = params.minJumpDuration_;
+        j["jumpCutMultiplier_"] = params.jumpCutMultiplier_;
         j["gravity_"] = params.gravity_;
         j["maxFallSpeed_"] = params.maxFallSpeed_;
         
@@ -89,6 +91,8 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         if (j.contains("moveSpeed_")) params.moveSpeed_ = j["moveSpeed_"];
         if (j.contains("turnDuration_")) params.turnDuration_ = j["turnDuration_"];
         if (j.contains("jumpPower_")) params.jumpPower_ = j["jumpPower_"];
+        if (j.contains("minJumpDuration_")) params.minJumpDuration_ = j["minJumpDuration_"];
+        if (j.contains("jumpCutMultiplier_")) params.jumpCutMultiplier_ = j["jumpCutMultiplier_"];
         if (j.contains("gravity_")) params.gravity_ = j["gravity_"];
         if (j.contains("maxFallSpeed_")) params.maxFallSpeed_ = j["maxFallSpeed_"];
         

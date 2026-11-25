@@ -38,6 +38,7 @@ private:
     static AABB2D MakePartAABB(const Vector3& position, const HitPart& part);
 
     void HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player);
+    void BeginJump(PlayerState& state_, const PlayerParams& params_);
     void ApplyGravity(PlayerState& state_, const PlayerParams& params_, const InputState& input_, float deltaTime);
 
     void ResolveCollisionY(PlayerState& state_, const PlayerParams& params_, float prevPosY, float moveDeltaY);

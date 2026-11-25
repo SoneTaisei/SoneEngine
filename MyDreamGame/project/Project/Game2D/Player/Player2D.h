@@ -73,7 +73,11 @@ public:
     void UpdateWithMap(MapChip2D &map, bool isTransitioning = false, bool canControl = true);
 
     // 速度の設定と取得
-    void SetVelocity(const Vector3 &velocity) { state_.velocity_ = velocity; }
+    void SetVelocity(const Vector3 &velocity) {
+        state_.velocity_ = velocity;
+        state_.isJumping_ = false;
+        state_.minJumpTimer_ = 0.0f;
+    }
     Vector3 GetVelocity() const { return state_.velocity_; }
     void SetExternalVelocityX(float velX) { state_.externalVelocityX_ = velX; }
     void SetIsOnGround(bool state) { state_.isOnGround_ = state; }
@@ -93,7 +97,13 @@ public:
     float GetStamina() const { return state_.stamina_; }
     void ApplyHitstop(float duration) { state_.hitstopTimer_ = duration; }
     void SetSpringControlDisable(float duration) { state_.springControlDisableTimer_ = duration; }
-    void SetIsGrabbingVine(bool grabbing) { state_.isGrabbingVine_ = grabbing; }
+    void SetIsGrabbingVine(bool grabbing) {
+        state_.isGrabbingVine_ = grabbing;
+        if (grabbing) {
+            state_.isJumping_ = false;
+            state_.minJumpTimer_ = 0.0f;
+        }
+    }
     bool IsGrabbingVine() const { return state_.isGrabbingVine_; }
 
     // ダッシュ状態の取得

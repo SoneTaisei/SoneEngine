@@ -9,6 +9,7 @@ struct InputState {
     float moveY = 0.0f; // -1.0f (下) 〜 1.0f (上)
     
     bool isJumpPressed = false;   // ジャンプキーが押された瞬間
+    bool isJumpHeld = false;      // ジャンプキーが押されている間
     bool isJumpReleased = false;  // ジャンプキーが離された瞬間
     bool isDashPressed = false;   // ダッシュキーが押された瞬間
     bool isClingHeld = false;     // 壁つかみキーが押されている間

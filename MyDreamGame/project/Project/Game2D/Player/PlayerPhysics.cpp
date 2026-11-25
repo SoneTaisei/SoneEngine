@@ -101,7 +101,15 @@ void PlayerPhysics::Update(PlayerState& state_, const PlayerParams& params_, con
     SimulateCollisions(state_, params_, player);
 }
 
+void PlayerPhysics::BeginJump(PlayerState& state_, const PlayerParams& params_) {
+    state_.isJumping_ = true;
+    state_.minJumpTimer_ = (std::max)(0.0f, params_.minJumpDuration_);
+}
+
 void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& params_, const InputState& input_, PlayerVisuals& visuals_, float deltaTime, Player2D* player) {
+    if (state_.minJumpTimer_ > 0.0f) {
+        state_.minJumpTimer_ = (std::max)(0.0f, state_.minJumpTimer_ - deltaTime);
+    }
     if (state_.wallClingReleaseTimer_ > 0.0f) {
         state_.wallClingReleaseTimer_ -= deltaTime;
     }
@@ -208,6 +216,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 }
                 state_.isOnGround_ = false;
                 state_.isOnMovingPlatform_ = false;
+                BeginJump(state_, params_);
                 visuals_.SpawnJumpDust({state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f}, 0.0f);
             } else if (state_.isTouchingWallRight_) {
                 state_.jumpBufferTimer_ = 0.0f;
@@ -227,6 +236,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isTouchingWallRight_ = false;
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
+                BeginJump(state_, params_);
             } else if (state_.isTouchingWallLeft_) {
                 state_.jumpBufferTimer_ = 0.0f;
                 // 左壁キック
@@ -245,6 +255,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isTouchingWallLeft_ = false;
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
+                BeginJump(state_, params_);
             }
         }
     }
@@ -379,6 +390,8 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.externalVelocityTimer_ = 0.0f;
                 if (tryingToCling) {
                     state_.isWallClinging_ = true;
+                    state_.isJumping_ = false;
+                    state_.minJumpTimer_ = 0.0f;
                 }
             }
         }
@@ -426,6 +439,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 }
                 state_.isOnGround_ = false;
                 state_.isOnMovingPlatform_ = false;
+                BeginJump(state_, params_);
                 visuals_.SpawnJumpDust({state_.position_.x, state_.position_.y - params_.halfHeight_, 0.0f}, 0.0f);
             } else if (state_.isTouchingWallRight_) {
                 state_.jumpBufferTimer_ = 0.0f;
@@ -476,6 +490,7 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
                 state_.climbingUpTimer_ = 0.0f;
+                BeginJump(state_, params_);
             } else if (state_.isTouchingWallLeft_) {
                 state_.jumpBufferTimer_ = 0.0f;
                 // 壁張り付き状態（Control入力がある場合）
@@ -525,13 +540,19 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 state_.isWallSliding_ = false;
                 state_.isWallClinging_ = false;
                 state_.climbingUpTimer_ = 0.0f;
+                BeginJump(state_, params_);
             }
         }
 
-        // ジャンプキーを離したら下降が始まるようにする
-        if (!state_.isOnGround_ && state_.velocity_.y > 0.0f) {
-            if (input_.isJumpReleased) {
-                state_.velocity_.y = 0.0f;
+        // 最低ジャンプ時間経過後、ジャンプキーが離されていれば上昇速度をカットする
+        if (!state_.isOnGround_ && !state_.isWallClinging_ && state_.isJumping_) {
+            if (state_.velocity_.y <= 0.0f) {
+                state_.isJumping_ = false;
+                state_.minJumpTimer_ = 0.0f;
+            } else if (state_.minJumpTimer_ <= 0.0f && !input_.isJumpHeld) {
+                float cutMult = std::clamp(params_.jumpCutMultiplier_, 0.0f, 1.0f);
+                state_.velocity_.y *= cutMult;
+                state_.isJumping_ = false;
             }
         }
     }
@@ -561,6 +582,8 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
         state_.dashVelocity_ = { inputDir.x * params_.dashSpeed_, inputDir.y * params_.dashSpeed_, 0.0f };
         state_.velocity_ = state_.dashVelocity_;
         state_.isDashing_ = true;
+        state_.isJumping_ = false;
+        state_.minJumpTimer_ = 0.0f;
         state_.canDash_ = false;
         state_.dashTimer_ = 0.0f;
         state_.hasDashInertia_ = false;
@@ -750,6 +773,8 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
             state_.position_.y = blockAABB.top + part.halfHeight - part.offsetY;
             state_.velocity_.y = 0.0f;
             state_.isOnGround_ = true;
+            state_.isJumping_ = false;
+            state_.minJumpTimer_ = 0.0f;
             state_.canDash_ = true;
             state_.wallJumpDirLockTimer_ = 0.0f;
             state_.lockedDirectionX_ = 0.0f;
@@ -775,6 +800,8 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
             if (collider->IsOneWay()) continue;
             state_.position_.y = blockAABB.bottom - part.halfHeight - part.offsetY;
             state_.velocity_.y = 0.0f;
+            state_.isJumping_ = false;
+            state_.minJumpTimer_ = 0.0f;
             aabb = MakePartAABB(state_.position_, part);
             continue;
         }
@@ -794,6 +821,8 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
                 state_.position_.y = blockAABB.top + part.halfHeight - part.offsetY;
                 state_.velocity_.y = 0.0f;
                 state_.isOnGround_ = true;
+                state_.isJumping_ = false;
+                state_.minJumpTimer_ = 0.0f;
                 state_.canDash_ = true;
                 state_.wallJumpDirLockTimer_ = 0.0f;
                 state_.lockedDirectionX_ = 0.0f;
@@ -816,6 +845,8 @@ void PlayerPhysics::ResolveStaticCollisionY(PlayerState& state_, const PlayerPar
                 if (collider->IsOneWay()) continue; // OneWayは下からぶつかってもすり抜ける
                 state_.position_.y = blockAABB.bottom - part.halfHeight - part.offsetY;
                 state_.velocity_.y = 0.0f;
+                state_.isJumping_ = false;
+                state_.minJumpTimer_ = 0.0f;
             }
             aabb = MakePartAABB(state_.position_, part);
         }
@@ -860,6 +891,8 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
                 state_.position_.y = blockAABB.top + part.halfHeight - part.offsetY;
                 state_.velocity_.y = 0.0f;
                 state_.isOnGround_ = true;
+                state_.isJumping_ = false;
+                state_.minJumpTimer_ = 0.0f;
                 state_.canDash_ = true;
                 state_.wallJumpDirLockTimer_ = 0.0f;
                 state_.lockedDirectionX_ = 0.0f;
@@ -883,6 +916,8 @@ void PlayerPhysics::ResolveDynamicCollisionY(PlayerState& state_, const PlayerPa
             } else { // 下からぶつかった
                 state_.position_.y = blockAABB.bottom - part.halfHeight - part.offsetY;
                 state_.velocity_.y = 0.0f;
+                state_.isJumping_ = false;
+                state_.minJumpTimer_ = 0.0f;
             }
             aabb = MakePartAABB(state_.position_, part);
             shrunkAABBY.top = aabb.top;
