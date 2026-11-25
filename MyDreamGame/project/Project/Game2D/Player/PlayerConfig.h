@@ -4,6 +4,10 @@
 
 struct PlayerParams {
     float moveSpeed_ = 5.0f;
+    float groundAcceleration_ = 140.0f;
+    float groundDeceleration_ = 140.0f;
+    float airAcceleration_ = 60.0f;
+    float airDeceleration_ = 32.0f;
     float turnDuration_ = 0.15f;
     float jumpPower_ = 17.0f;
     float minJumpDuration_ = 0.08f;

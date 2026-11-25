@@ -363,7 +363,24 @@ void PlayerPhysics::HandleInputLogic(PlayerState& state_, const PlayerParams& pa
                 }
                 state_.velocity_.x = currentVelX;
             } else {
-                state_.velocity_.x = targetVelX + state_.externalVelocityX_;
+                float desiredVelX = targetVelX + state_.externalVelocityX_;
+                float currentVelX = state_.velocity_.x;
+
+                bool hasMoveInput = std::abs(targetVelX) > 0.001f;
+                float accelRate = state_.isOnGround_ ? params_.groundAcceleration_ : params_.airAcceleration_;
+                float decelRate = state_.isOnGround_ ? params_.groundDeceleration_ : params_.airDeceleration_;
+
+                bool isDecelerating = !hasMoveInput ||
+                    (std::abs(currentVelX) > std::abs(desiredVelX) && (currentVelX * desiredVelX > 0.0f));
+                float rate = (std::max)(0.0f, isDecelerating ? decelRate : accelRate);
+
+                float diff = desiredVelX - currentVelX;
+                float maxDelta = rate * deltaTime;
+                if (std::abs(diff) <= maxDelta) {
+                    state_.velocity_.x = desiredVelX;
+                } else {
+                    state_.velocity_.x = currentVelX + std::copysign(maxDelta, diff);
+                }
             }
         } else {
             // 壁キック直後の操作不能時間中の速度補間

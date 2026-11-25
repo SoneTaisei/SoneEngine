@@ -13,6 +13,10 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         
         nlohmann::json j;
         j["moveSpeed_"] = params.moveSpeed_;
+        j["groundAcceleration_"] = params.groundAcceleration_;
+        j["groundDeceleration_"] = params.groundDeceleration_;
+        j["airAcceleration_"] = params.airAcceleration_;
+        j["airDeceleration_"] = params.airDeceleration_;
         j["turnDuration_"] = params.turnDuration_;
         j["jumpPower_"] = params.jumpPower_;
         j["minJumpDuration_"] = params.minJumpDuration_;
@@ -89,6 +93,10 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         file.close();
         
         if (j.contains("moveSpeed_")) params.moveSpeed_ = j["moveSpeed_"];
+        if (j.contains("groundAcceleration_")) params.groundAcceleration_ = j["groundAcceleration_"];
+        if (j.contains("groundDeceleration_")) params.groundDeceleration_ = j["groundDeceleration_"];
+        if (j.contains("airAcceleration_")) params.airAcceleration_ = j["airAcceleration_"];
+        if (j.contains("airDeceleration_")) params.airDeceleration_ = j["airDeceleration_"];
         if (j.contains("turnDuration_")) params.turnDuration_ = j["turnDuration_"];
         if (j.contains("jumpPower_")) params.jumpPower_ = j["jumpPower_"];
         if (j.contains("minJumpDuration_")) params.minJumpDuration_ = j["minJumpDuration_"];

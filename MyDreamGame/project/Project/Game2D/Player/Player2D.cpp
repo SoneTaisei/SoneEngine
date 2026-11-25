@@ -380,6 +380,10 @@ void Player2D::DisplayImGui() {
 
         if (ImGui::TreeNode("基本移動")) {
             ImGui::DragFloat("移動速度", &params_.moveSpeed_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("地上加速度 (慣性)", &params_.groundAcceleration_, 1.0f, 0.0f, 1000.0f);
+            ImGui::DragFloat("地上減速度 (慣性)", &params_.groundDeceleration_, 1.0f, 0.0f, 1000.0f);
+            ImGui::DragFloat("空中加速度 (慣性)", &params_.airAcceleration_, 1.0f, 0.0f, 1000.0f);
+            ImGui::DragFloat("空中減速度 (慣性)", &params_.airDeceleration_, 1.0f, 0.0f, 1000.0f);
             ImGui::DragFloat("振り返り回転時間 (秒)", &params_.turnDuration_, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("ジャンプ力", &params_.jumpPower_, 0.1f, 0.0f, 30.0f);
             ImGui::DragFloat("最低ジャンプ時間 (秒)", &params_.minJumpDuration_, 0.005f, 0.0f, 0.5f);
