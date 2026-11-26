@@ -1,12 +1,12 @@
 #include "SphereColliderComponent.h"
 #include "GameObject/GameObject.h"
 #include "Component/TransformComponent.h"
+#include "Renderer/LineRenderer.h"
 #ifdef USE_IMGUI
 #include "imgui.h"
 #endif
 
 SphereColliderComponent::SphereColliderComponent() {
-    SetColliderType(ColliderType::kSphere);
     SetSphereRadius(1.0f);
     SetSphereOffset({0.0f, 0.0f, 0.0f});
 }
@@ -52,4 +52,29 @@ AABB2D SphereColliderComponent::GetAABB() const {
         pos.x + r,
         pos.y - r
     };
+}
+
+void SphereColliderComponent::DrawDebug(LineRenderer *lineRenderer, const Vector4 &color) const {
+    if (!lineRenderer)
+        return;
+
+    Vector3 basePos = {0.0f, 0.0f, 0.0f};
+    Vector3 baseScale = {1.0f, 1.0f, 1.0f};
+    if (auto *go = GetGameObject()) {
+        if (auto *tc = go->GetComponent<TransformComponent>()) {
+            basePos = tc->GetPosition();
+            baseScale = tc->GetScale();
+        }
+    }
+
+    float maxScale = baseScale.x;
+    if (baseScale.y > maxScale)
+        maxScale = baseScale.y;
+    if (baseScale.z > maxScale)
+        maxScale = baseScale.z;
+
+    float radius = GetSphereRadius() * maxScale;
+    Vector3 offset = GetSphereOffset();
+    Vector3 center = {basePos.x + offset.x, basePos.y + offset.y, basePos.z + offset.z};
+    lineRenderer->AddSphere(center, radius, color);
 }

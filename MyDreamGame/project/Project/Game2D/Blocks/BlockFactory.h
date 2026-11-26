@@ -5,7 +5,7 @@
 #include <functional>
 #include <memory>
 
-class BaseBlock;
+class BaseMapObject;
 class MapChip2D;
 
 /// <summary>
@@ -13,12 +13,12 @@ class MapChip2D;
 /// </summary>
 class BlockFactory {
 public:
-    using BlockCreator = std::function<std::shared_ptr<BaseBlock>(MapChip2D* map, int x, int y)>;
+    using BlockCreator = std::function<std::shared_ptr<BaseMapObject>(MapChip2D* map, int x, int y)>;
 
     static BlockFactory& GetInstance();
 
     void Register(const std::string& typeName, BlockCreator creator);
-    std::shared_ptr<BaseBlock> Create(const std::string& typeName, MapChip2D* map, int x, int y);
+    std::shared_ptr<BaseMapObject> Create(const std::string& typeName, MapChip2D* map, int x, int y);
     const std::vector<std::string>& GetAvailableTypes() const { return registeredTypes_; }
     bool HasType(const std::string& typeName) const;
 
@@ -36,7 +36,7 @@ private:
     namespace { \
         struct ClassName##_AutoRegister { \
             ClassName##_AutoRegister() { \
-                ::BlockFactory::GetInstance().Register(#ClassName, [](MapChip2D* map, int x, int y) -> std::shared_ptr<BaseBlock> { \
+                ::BlockFactory::GetInstance().Register(#ClassName, [](MapChip2D *map, int x, int y) -> std::shared_ptr<BaseMapObject> { \
                     return std::make_shared<ClassName>(map, x, y); \
                 }); \
             } \

@@ -4,15 +4,25 @@
 #include "Game2D/MapChip2D.h"
 #include "Input/GamepadInput.h"
 #include "Core/Utility/ParameterManager.h"
+#include "Renderer/DirectXCommon/DirectXCommon.h"
 #include <cmath>
+
+namespace {
+void InitializeGameCameraOrthographic(GameCamera* camera) {
+    float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
+    float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
+    auto* dxCommon = DirectXCommon::GetInstance();
+    int width = (dxCommon && dxCommon->GetWindowWidth() > 0) ? dxCommon->GetWindowWidth() : 1280;
+    int height = (dxCommon && dxCommon->GetWindowHeight() > 0) ? dxCommon->GetWindowHeight() : 720;
+    camera->InitializeOrthographic(width, height, orthoWidth, orthoHeight);
+}
+}
 
 void GameCameraController::Setup(GameCamera* camera, Player2D* player, MapChip2D* map) {
     camera_ = camera;
     if (!camera_) return;
 
-    float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
-    float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
-    camera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+    InitializeGameCameraOrthographic(camera_);
 
     if (map) {
         camera_->SetRooms(map->GetRooms());
@@ -94,9 +104,7 @@ void GameCameraController::UpdateEditor(Player2D* player, MapChip2D* map) {
     if (!camera_ || !player) return;
 
     if (!camera_->IsOrthographic()) {
-        float orthoWidth = ParameterManager::GetInstance()->GetValue("GameScene", "orthoWidth", 20.0f);
-        float orthoHeight = ParameterManager::GetInstance()->GetValue("GameScene", "orthoHeight", 11.25f);
-        camera_->InitializeOrthographic(1280, 720, orthoWidth, orthoHeight);
+        InitializeGameCameraOrthographic(camera_);
     }
     if (map) {
         camera_->SetRooms(map->GetRooms());

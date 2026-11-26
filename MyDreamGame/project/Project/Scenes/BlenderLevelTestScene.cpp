@@ -162,20 +162,18 @@ void BlenderLevelTestScene::Update(SceneManager* sceneManager) {
     }
 
     // 1. カメラの更新と CameraManager への伝達
+    Camera *activeCam = camera_.get();
     if (useDebugCamera_ && debugCamera_) {
-        debugCamera_->Update();
+        activeCam = debugCamera_.get();
+    }
+
+    if (activeCam) {
+        activeCam->Update();
+        activeCam->UpdateMatrix();
         CameraManager::GetInstance()->SetCameraInfo(
-            debugCamera_->GetTranslation(),
-            debugCamera_->GetViewMatrix(),
-            debugCamera_->GetProjectionMatrix()
-        );
-    } else if (camera_) {
-        camera_->UpdateMatrix();
-        CameraManager::GetInstance()->SetCameraInfo(
-            camera_->GetTranslation(),
-            camera_->GetViewMatrix(),
-            camera_->GetProjectionMatrix()
-        );
+            activeCam->GetTranslation(),
+            activeCam->GetViewMatrix(),
+            activeCam->GetProjectionMatrix());
     }
 
     // 2. 3Dレベルオブジェクト群の更新（コントローラーでプレイヤーを操作可能）

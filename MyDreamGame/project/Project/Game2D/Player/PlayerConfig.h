@@ -4,7 +4,14 @@
 
 struct PlayerParams {
     float moveSpeed_ = 5.0f;
+    float groundAcceleration_ = 140.0f;
+    float groundDeceleration_ = 140.0f;
+    float airAcceleration_ = 60.0f;
+    float airDeceleration_ = 32.0f;
+    float turnDuration_ = 0.15f;
     float jumpPower_ = 17.0f;
+    float minJumpDuration_ = 0.08f;
+    float jumpCutMultiplier_ = 0.25f;
     float gravity_ = -40.0f;
     float maxFallSpeed_ = -15.0f;
     float dashDuration_ = 0.15f;
@@ -29,6 +36,15 @@ struct PlayerParams {
     float climbLandingDuration_ = 0.2f;
     float halfWidth_ = 0.4f;
     float halfHeight_ = 0.8f;
+    float bodyHalfWidth_ = 0.28f;
+    float bodyHalfHeight_ = 0.38f;
+    float bodyOffsetY_ = -0.35f;
+    float bodyWallBottomShrink_ = 0.20f;
+    float headHalfWidth_ = 0.28f;
+    float headHalfHeight_ = 0.28f;
+    float headOffsetX_ = 0.0f;
+    float headOffsetY_ = 0.31f;
+    float headWallOffsetX_ = 0.15f;
     float deathDuration_ = 0.175f;
     float respawnDuration_ = 0.5f;
     float goalWaitTime_ = 2.0f;

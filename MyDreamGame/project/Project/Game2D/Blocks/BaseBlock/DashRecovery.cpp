@@ -287,7 +287,7 @@ void DashRecovery::SetProperties(const nlohmann::json& properties) {
 }
 
 void DashRecovery::Reset() {
-    BaseBlock::Reset();
+    BaseMapObject::Reset();
     isActive_ = true;
     respawnTimer_ = 0.0f;
     respawnAnimTimer_ = 0.0f;

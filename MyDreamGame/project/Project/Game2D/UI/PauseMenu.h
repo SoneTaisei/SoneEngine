@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include "Game2D/IGameUI.h"
 
 class Sprite;
 class SpriteCommon;
@@ -11,19 +12,23 @@ enum class PauseMenuAction {
     ExitToStageSelect   // セレクトに戻る
 };
 
-class PauseMenu {
+class PauseMenu:public IGameUI {
 public:
     PauseMenu() = default;
     ~PauseMenu() = default;
 
-    void Initialize(SpriteCommon* spriteCommon);
-    void Reset();
-    PauseMenuAction Update(float deltaTime);
-    void Draw();
+    void Initialize(SpriteCommon* spriteCommon)override;
+    void Update()override;
+    void Draw()override;
+    void Reset()override;
 
     int GetSelectedIndex() const { return selectedIndex_; }
 
+    PauseMenuAction GetAction() const { return lastAction_; }
+
 private:
+    PauseMenuAction lastAction_ = PauseMenuAction::None;
+
     int selectedIndex_ = 0; // 0: つづける, 1: セレクトに戻る
 
     uint32_t whiteTextureHandle_ = 0;

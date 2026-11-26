@@ -1,30 +1,24 @@
 #pragma once
+#include "Game2D/IGameUI.h"
 #include <cstdint>
 #include <memory>
-
 class Sprite;
 class SpriteCommon;
-
-class ReadyGoUI {
+class ReadyGoUI : public IGameUI {
 public:
     ReadyGoUI() = default;
-    ~ReadyGoUI() = default;
-
-    void Initialize(SpriteCommon* spriteCommon);
+    ~ReadyGoUI() override = default;
+    void Initialize(SpriteCommon *spriteCommon) override;
     void Start();
-    void Reset();
-
-    // 更新処理。演出が終了したら true を返す
-    bool Update(float deltaTime);
-
+    void Reset() override;
+    void Update() override;
+    void Draw() override;
+    // 演出が終了したか（!isActive_）
+    bool IsFinished() const { return !isActive_; }
     // プレイヤーの操作を許可してよいか（inputDelay経過後ならtrue）
     bool CanControl() const;
-
     // 演出中かどうか
     bool IsActive() const { return isActive_; }
-
-    // 2D描画
-    void Draw();
 
 private:
     bool isActive_ = true;

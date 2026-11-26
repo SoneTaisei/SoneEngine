@@ -16,7 +16,7 @@ public:
     GameEffectManager();
     ~GameEffectManager();
 
-    // 初期化（CoinEffect, RingEffect, CylinderEffect, GPUParticleSystem）
+    // 初期化（CoinEffect, GPUParticleSystem）
     void Initialize();
 
     // 更新（isGameActive時はBaseEffectも更新、降雪パーティクルは常にカメラ追従更新）

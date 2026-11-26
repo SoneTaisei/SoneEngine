@@ -13,6 +13,9 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ClInclude Include="Project\Game2D\IGameUI.h" />
+    <ClInclude Include="Project\Scenes\GameSceneStates.h" />
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BaseMovingBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\DashRecovery.h" />
     <ClInclude Include="Project\Game2D\Blocks\FallBlock.h" />
@@ -197,9 +200,7 @@
     </ClCompile>
     <ClCompile Include="Engine\Resource\Model\ModelBinaryIO.cpp" />
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp" />
-    <ClCompile Include="Project\Effect\SnowParticle.cpp" />
-    <ClCompile Include="Project\Effect\BaseEffect\RingEffect.cpp" />
-    <ClCompile Include="Project\Effect\BaseEffect\CylinderEffect.cpp" />
+    <ClCompile Include="Project\Scenes\GameSceneStates.cpp" />
     <ClCompile Include="Engine\Graphics\Camera\GameCamera.cpp" />
     <ClCompile Include="Engine\Graphics\Camera.cpp" />
     <ClCompile Include="Engine\Effect\ParticleManager.cpp" />
@@ -211,6 +212,7 @@
     <ClCompile Include="Engine\Scene\SceneManager.cpp" />
     <ClCompile Include="Engine\Scene\SceneFactory.cpp" />
     <ClCompile Include="Engine\Scene\LevelDataLoader.cpp" />
+    <ClCompile Include="Project\Game2D\Blocks\BaseBlock\BaseMovingBlock.cpp" />
     <ClCompile Include="Project\Scenes\GameScene.cpp" />
     <ClCompile Include="Project\Scenes\BlenderLevelTestScene.cpp" />
     <ClCompile Include="Engine\Resource\Model\Model.cpp" />
@@ -257,7 +259,6 @@
     <ClCompile Include="Project\Scenes\TitleScene.cpp" />
     <ClCompile Include="Project\Scenes\StageSelectScene.cpp" />
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp" />
-    <ClCompile Include="Project\Effect\windowParticle.cpp" />
     <ClCompile Include="Engine\Renderer\SrvManager.cpp" />
     <ClCompile Include="Engine\Renderer\LineRenderer.cpp" />
     <ClCompile Include="Engine\Platform\Window.cpp" />
@@ -273,6 +274,7 @@
     <ClCompile Include="Project\Game2D\Player\PlayerConfig.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerVisuals.cpp" />
     <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp" />
+    <ClCompile Include="Project\Game2D\UI\StaminaHUD.cpp" />
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp" />
     <ClCompile Include="Project\Game2D\UI\ReadyGoUI.cpp" />
     <ClCompile Include="Project\Game2D\UI\ClearUI.cpp" />
@@ -478,9 +480,6 @@
     <ClInclude Include="externals\imgui\imstb_truetype.h" />
     <ClInclude Include="Engine\Resource\Model\ModelBinaryIO.h" />
     <ClInclude Include="Engine\Resource\Model\ModelManager.h" />
-    <ClInclude Include="Project\Effect\SnowParticle.h" />
-    <ClInclude Include="Project\Effect\BaseEffect\RingEffect.h" />
-    <ClInclude Include="Project\Effect\BaseEffect\CylinderEffect.h" />
     <ClInclude Include="Engine\Graphics\Camera\GameCamera.h" />
     <ClInclude Include="Engine\Graphics\Camera.h" />
     <ClInclude Include="Engine\Effect\ParticleManager.h" />
@@ -536,7 +535,6 @@
     <ClInclude Include="Project\Scenes\TitleScene.h" />
     <ClInclude Include="Project\Scenes\StageSelectScene.h" />
     <ClInclude Include="Engine\Platform\WindowsApplication.h" />
-    <ClInclude Include="Project\Effect\windowParticle.h" />
     <ClInclude Include="Engine\Renderer\SrvManager.h" />
     <ClInclude Include="Engine\Renderer\LineRenderer.h" />
     <ClInclude Include="Engine\Platform\Window.h" />
@@ -567,6 +565,7 @@
     <ClInclude Include="Project\Game2D\Player\PlayerConfig.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerVisuals.h" />
     <ClInclude Include="Project\Game2D\UI\CoinHUD.h" />
+    <ClInclude Include="Project\Game2D\UI\StaminaHUD.h" />
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h" />
     <ClInclude Include="Project\Game2D\UI\ReadyGoUI.h" />
     <ClInclude Include="Project\Game2D\UI\ClearUI.h" />

@@ -13,7 +13,14 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         
         nlohmann::json j;
         j["moveSpeed_"] = params.moveSpeed_;
+        j["groundAcceleration_"] = params.groundAcceleration_;
+        j["groundDeceleration_"] = params.groundDeceleration_;
+        j["airAcceleration_"] = params.airAcceleration_;
+        j["airDeceleration_"] = params.airDeceleration_;
+        j["turnDuration_"] = params.turnDuration_;
         j["jumpPower_"] = params.jumpPower_;
+        j["minJumpDuration_"] = params.minJumpDuration_;
+        j["jumpCutMultiplier_"] = params.jumpCutMultiplier_;
         j["gravity_"] = params.gravity_;
         j["maxFallSpeed_"] = params.maxFallSpeed_;
         
@@ -39,6 +46,15 @@ void PlayerConfig::Save(const PlayerParams& params, const std::string& filepath)
         
         j["halfWidth_"] = params.halfWidth_;
         j["halfHeight_"] = params.halfHeight_;
+        j["bodyHalfWidth_"] = params.bodyHalfWidth_;
+        j["bodyHalfHeight_"] = params.bodyHalfHeight_;
+        j["bodyOffsetY_"] = params.bodyOffsetY_;
+        j["bodyWallBottomShrink_"] = params.bodyWallBottomShrink_;
+        j["headHalfWidth_"] = params.headHalfWidth_;
+        j["headHalfHeight_"] = params.headHalfHeight_;
+        j["headOffsetX_"] = params.headOffsetX_;
+        j["headOffsetY_"] = params.headOffsetY_;
+        j["headWallOffsetX_"] = params.headWallOffsetX_;
         
         j["colorNormal_"] = { params.colorNormal_.x, params.colorNormal_.y, params.colorNormal_.z, params.colorNormal_.w };
         j["colorDashed_"] = { params.colorDashed_.x, params.colorDashed_.y, params.colorDashed_.z, params.colorDashed_.w };
@@ -77,7 +93,14 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         file.close();
         
         if (j.contains("moveSpeed_")) params.moveSpeed_ = j["moveSpeed_"];
+        if (j.contains("groundAcceleration_")) params.groundAcceleration_ = j["groundAcceleration_"];
+        if (j.contains("groundDeceleration_")) params.groundDeceleration_ = j["groundDeceleration_"];
+        if (j.contains("airAcceleration_")) params.airAcceleration_ = j["airAcceleration_"];
+        if (j.contains("airDeceleration_")) params.airDeceleration_ = j["airDeceleration_"];
+        if (j.contains("turnDuration_")) params.turnDuration_ = j["turnDuration_"];
         if (j.contains("jumpPower_")) params.jumpPower_ = j["jumpPower_"];
+        if (j.contains("minJumpDuration_")) params.minJumpDuration_ = j["minJumpDuration_"];
+        if (j.contains("jumpCutMultiplier_")) params.jumpCutMultiplier_ = j["jumpCutMultiplier_"];
         if (j.contains("gravity_")) params.gravity_ = j["gravity_"];
         if (j.contains("maxFallSpeed_")) params.maxFallSpeed_ = j["maxFallSpeed_"];
         
@@ -106,6 +129,15 @@ void PlayerConfig::Load(PlayerParams& params, const std::string& filepath) {
         
         if (j.contains("halfWidth_")) params.halfWidth_ = j["halfWidth_"];
         if (j.contains("halfHeight_")) params.halfHeight_ = j["halfHeight_"];
+        if (j.contains("bodyHalfWidth_")) params.bodyHalfWidth_ = j["bodyHalfWidth_"];
+        if (j.contains("bodyHalfHeight_")) params.bodyHalfHeight_ = j["bodyHalfHeight_"];
+        if (j.contains("bodyOffsetY_")) params.bodyOffsetY_ = j["bodyOffsetY_"];
+        if (j.contains("bodyWallBottomShrink_")) params.bodyWallBottomShrink_ = j["bodyWallBottomShrink_"];
+        if (j.contains("headHalfWidth_")) params.headHalfWidth_ = j["headHalfWidth_"];
+        if (j.contains("headHalfHeight_")) params.headHalfHeight_ = j["headHalfHeight_"];
+        if (j.contains("headOffsetX_")) params.headOffsetX_ = j["headOffsetX_"];
+        if (j.contains("headOffsetY_")) params.headOffsetY_ = j["headOffsetY_"];
+        if (j.contains("headWallOffsetX_")) params.headWallOffsetX_ = j["headWallOffsetX_"];
         
         if (j.contains("colorNormal_")) {
             params.colorNormal_.x = j["colorNormal_"][0];

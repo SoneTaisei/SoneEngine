@@ -154,8 +154,6 @@ void EditorReplayUI::DrawTimelineWindow(bool* pOpen, EditorManager* editorManage
             if (ImGui::Button("一時停止", ImVec2(90, 28))) replayMgr->PausePlayback();
         } else {
             if (ImGui::Button("再生", ImVec2(90, 28))) {
-                replayMgr->SetSnapEnabled(true);
-                replayMgr->SetInterpolationEnabled(true);
                 const auto& history = replayMgr->GetHistory();
                 if (!history.empty()) {
                     replayMgr->StartPlayback(0);

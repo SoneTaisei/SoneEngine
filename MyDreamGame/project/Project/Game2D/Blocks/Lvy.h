@@ -9,9 +9,9 @@
 /// 曲げ剛性スプリング物理により、プレイヤーがつかまるとリアルにしなって美しい弧を描く。
 /// つかまった高さ（座標）でそのまま保持され、上下入力でツタを登り降りできる。
 /// </summary>
-class Lvy : public BaseBlock {
+class Lvy : public BaseMapObject {
 public:
-    using BaseBlock::BaseBlock;
+    using BaseMapObject::BaseMapObject;
 
     struct SegmentPhysics {
         float angle = 0.0f;           // 各セグメントの傾き角度 (ラジアン)

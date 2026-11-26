@@ -1,14 +1,15 @@
 #pragma once
 #include "Game2D/Blocks/BaseBlock.h"
 
-class PatrolEnemyBlock : public BaseBlock {
+class PatrolEnemyBlock : public BaseMapObject {
 public:
-    using BaseBlock::BaseBlock;
+    using BaseMapObject::BaseMapObject;
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
     
     void Update() override;
     
     bool IsSolid() const override { return false; }
+    bool IsHazard() const override { return true; }
     void OnCollision(Player2D* player) override;
     void SetProperties(const nlohmann::json& properties) override;
 

@@ -62,7 +62,7 @@ void BreakableBlock::Update() {
 
     if (!isBroken_) {
         // 通常時：普通のブロックとしてGameObjectを更新
-        BaseBlock::Update();
+        BaseMapObject::Update();
     } else {
         // 破壊状態時：自動復活の設定があればタイマーを加算
         if (respawnTime_ > 0.0f) {
@@ -125,7 +125,7 @@ void BreakableBlock::Update() {
 void BreakableBlock::Draw() {
     if (!isBroken_) {
         // 通常時は本体を描画
-        BaseBlock::Draw();
+        BaseMapObject::Draw();
     }
 
     // 破壊時の破片を描画
@@ -261,7 +261,7 @@ void BreakableBlock::Break(Player2D* player, bool triggerChain) {
                 if (visited.count({ nx, ny })) continue;
                 visited.insert({ nx, ny });
 
-                BaseBlock *neighbor = GetMap()->GetBlock(nx, ny);
+                BaseMapObject *neighbor = GetMap()->GetBlock(nx, ny);
                 if (neighbor) {
                     if (auto* bBlock = dynamic_cast<BreakableBlock*>(neighbor)) {
                         if (!bBlock->IsBroken()) {

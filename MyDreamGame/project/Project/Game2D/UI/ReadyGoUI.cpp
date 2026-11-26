@@ -4,6 +4,7 @@
 #include "Core/Utility/ParameterManager.h"
 #include <cmath>
 #include <algorithm>
+#include "Core/TimeManager.h"
 
 void ReadyGoUI::Initialize(SpriteCommon* spriteCommon) {
     if (!spriteCommon) return;
@@ -75,10 +76,10 @@ bool ReadyGoUI::CanControl() const {
     return timer_ >= inputDelay;
 }
 
-bool ReadyGoUI::Update(float deltaTime) {
-    if (!isActive_) return true;
+void ReadyGoUI::Update() {
+    if (!isActive_) return;
 
-    timer_ += deltaTime;
+    timer_ += TimeManager::GetInstance().GetDeltaTime();
     float startReadyTime = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyTime", 2.0f);
     float inputDelay = ParameterManager::GetInstance()->GetValue("GameScene", "startReadyInputDelay", 1.0f);
     float centerX = 1280.0f * 0.5f;
@@ -180,10 +181,10 @@ bool ReadyGoUI::Update(float deltaTime) {
         if (readyBarBgSprite_) readyBarBgSprite_->SetColor({ 0.1f, 0.1f, 0.1f, 0.0f });
         if (readyBarFillSprite_) readyBarFillSprite_->SetColor({ 1.0f, 0.2f, 0.2f, 0.0f });
         if (goSprite_) goSprite_->SetColor({ 1.0f, 0.95f, 0.1f, 0.0f });
-        return true;
+        return;
     }
 
-    return false;
+    return;
 }
 
 void ReadyGoUI::Draw() {

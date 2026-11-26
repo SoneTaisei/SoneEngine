@@ -145,7 +145,7 @@ void LiftBlock::Initialize(ID3D12Device* device, Primitive* boxPrimitive, float 
     isPlayerStandingThisFrame_ = false;
     currentSpeed_ = 0.0f;
     shakeTimer_ = 0.0f;
-    SetupCollider();
+    SetupMovingCollider();
 }
 
 void LiftBlock::Update() {
@@ -267,7 +267,7 @@ void LiftBlock::Update() {
     if (auto* tc = GetGameObject()->GetComponent<TransformComponent>()) {
         tc->SetPosition(newPos);
     }
-    if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+    if (auto *cc = GetGameObject()->GetComponent<BoxColliderComponent>()) {
         cc->SetVelocity(velocity_);
         // 物理コライダーの位置がシェイクで揺れないように、Transformのシェイク分をオフセットで打ち消す
         cc->SetBoxOffset({ -shakeVec.x, -shakeVec.y, 0.0f });
@@ -281,7 +281,7 @@ void LiftBlock::Update() {
 }
 
 void LiftBlock::Reset() {
-    BaseBlock::Reset();
+    BaseMapObject::Reset();
     state_ = LiftState::IdleAtStart;
     waitTimer_ = 0.0f;
     currentSpeed_ = 0.0f;
@@ -293,7 +293,7 @@ void LiftBlock::Reset() {
     if (auto* tc = GetGameObject() ? GetGameObject()->GetComponent<TransformComponent>() : nullptr) {
         tc->SetPosition(startPos_);
     }
-    if (auto* cc = GetGameObject() ? GetGameObject()->GetComponent<ColliderComponent>() : nullptr) {
+    if (auto *cc = GetGameObject() ? GetGameObject()->GetComponent<BoxColliderComponent>() : nullptr) {
         cc->SetVelocity(velocity_);
         cc->SetBoxOffset({ 0.0f, 0.0f, 0.0f });
     }

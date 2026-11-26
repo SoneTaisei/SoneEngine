@@ -27,11 +27,22 @@ public:
         return rawPtr;
     }
 
+    /// <summary>
+    /// 当たり判定のデータを持ってくる
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <returns></returns>
     template<typename T>
     T* GetComponent() {
         auto it = componentMap_.find(typeid(T));
         if (it != componentMap_.end() && !it->second.empty()) {
             return static_cast<T*>(it->second.front());
+        }
+        // 基底クラスで派生コンポーネントも取れるようにする。
+        for (const auto &comp : components_) {
+            if (T *casted = dynamic_cast<T *>(comp.get())) {
+                return casted;
+            }
         }
         return nullptr;
     }

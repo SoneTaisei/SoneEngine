@@ -216,17 +216,6 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
         configManager_->RestoreMapOnReset(this, sceneManager, gameCamera, debugCamera);
     }
 
-    static bool wasReplayingLastFrame = false;
-    bool isReplayingNow = ReplayManager::GetInstance()->IsPlaying();
-    if (wasReplayingLastFrame && !isReplayingNow && takeoverCountdown_ <= 0.0f) {
-        useDebugCamera_ = true;
-        if (gameCamera && debugCamera) {
-            debugCamera->SetTranslation(gameCamera->GetTranslation());
-            debugCamera->SetRotation(gameCamera->GetRotation());
-        }
-    }
-    wasReplayingLastFrame = isReplayingNow;
-
     if (mapEditor_) mapEditor_->SetVisible(false);
 
     if (menuBarUI_) {
@@ -446,6 +435,20 @@ void EditorManager::UpdateUI(ModelCommon *modelCommon, GameCamera *gameCamera, D
 
     if (layoutManager_) layoutManager_->DrawSavePresetModal(&showSavePresetWindow_);
     if (commandManager_) commandManager_->UpdateShortcuts(this, sceneManager);
+
+    // リプレイ再生開始時にデバッグカメラをOFFにし、停止・終了時はONに戻す
+    static bool wasReplayingLastFrame = false;
+    bool isReplayingNow = ReplayManager::GetInstance()->IsPlaying();
+    if (!wasReplayingLastFrame && isReplayingNow) {
+        useDebugCamera_ = false;
+    } else if (wasReplayingLastFrame && !isReplayingNow && takeoverCountdown_ <= 0.0f) {
+        useDebugCamera_ = true;
+        if (gameCamera && debugCamera) {
+            debugCamera->SetTranslation(gameCamera->GetTranslation());
+            debugCamera->SetRotation(gameCamera->GetRotation());
+        }
+    }
+    wasReplayingLastFrame = isReplayingNow;
 
     if (focusActiveTabCountdown_ > 0) {
         if (!activeMainTab_.empty()) ImGui::SetWindowFocus(activeMainTab_.c_str());

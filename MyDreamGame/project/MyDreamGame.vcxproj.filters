@@ -99,15 +99,6 @@
     <ClCompile Include="Engine\Resource\Model\ModelManager.cpp">
       <Filter>Engine\Resource\Model</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Effect\SnowParticle.cpp">
-      <Filter>Project\Effect</Filter>
-    </ClCompile>
-    <ClCompile Include="Project\Effect\BaseEffect\RingEffect.cpp">
-      <Filter>Project\Effect\BaseEffect</Filter>
-    </ClCompile>
-    <ClCompile Include="Project\Effect\BaseEffect\CylinderEffect.cpp">
-      <Filter>Project\Effect\BaseEffect</Filter>
-    </ClCompile>
     <ClCompile Include="Engine\Graphics\Camera\GameCamera.cpp">
       <Filter>Engine\Graphics\Camera</Filter>
     </ClCompile>
@@ -264,9 +255,6 @@
     <ClCompile Include="Engine\Platform\WindowsApplication.cpp">
       <Filter>Engine\Platform</Filter>
     </ClCompile>
-    <ClCompile Include="Project\Effect\windowParticle.cpp">
-      <Filter>Project\Effect</Filter>
-    </ClCompile>
     <ClCompile Include="Engine\Renderer\SrvManager.cpp">
       <Filter>Engine\Renderer</Filter>
     </ClCompile>
@@ -310,6 +298,9 @@
       <Filter>Project\Game2D\Player</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\UI\CoinHUD.cpp">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\UI\StaminaHUD.cpp">
       <Filter>Project\Game2D\UI</Filter>
     </ClCompile>
     <ClCompile Include="Project\Game2D\UI\PauseMenu.cpp">
@@ -531,6 +522,12 @@
     <ClCompile Include="Project\Game2D\Blocks\Lvy.cpp">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClCompile>
+    <ClCompile Include="Project\Scenes\GameSceneStates.cpp">
+      <Filter>Project\Scenes\States</Filter>
+    </ClCompile>
+    <ClCompile Include="Project\Game2D\Blocks\BaseBlock\BaseMovingBlock.cpp">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BreakableBlock.h">
@@ -601,15 +598,6 @@
     </ClInclude>
     <ClInclude Include="Engine\Resource\Model\ModelManager.h">
       <Filter>Engine\Resource\Model</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Effect\SnowParticle.h">
-      <Filter>Project\Effect</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Effect\BaseEffect\RingEffect.h">
-      <Filter>Project\Effect\BaseEffect</Filter>
-    </ClInclude>
-    <ClInclude Include="Project\Effect\BaseEffect\CylinderEffect.h">
-      <Filter>Project\Effect\BaseEffect</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\Camera\GameCamera.h">
       <Filter>Engine\Graphics\Camera</Filter>
@@ -776,9 +764,6 @@
     <ClInclude Include="Engine\Platform\WindowsApplication.h">
       <Filter>Engine\Platform</Filter>
     </ClInclude>
-    <ClInclude Include="Project\Effect\windowParticle.h">
-      <Filter>Project\Effect</Filter>
-    </ClInclude>
     <ClInclude Include="Engine\Renderer\SrvManager.h">
       <Filter>Engine\Renderer</Filter>
     </ClInclude>
@@ -867,6 +852,9 @@
       <Filter>Project\Game2D\Player</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\UI\CoinHUD.h">
+      <Filter>Project\Game2D\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\UI\StaminaHUD.h">
       <Filter>Project\Game2D\UI</Filter>
     </ClInclude>
     <ClInclude Include="Project\Game2D\UI\PauseMenu.h">
@@ -1064,6 +1052,13 @@
     <ClInclude Include="Project\Game2D\Blocks\Lvy.h">
       <Filter>Project\Game2D\Blocks</Filter>
     </ClInclude>
+    <ClInclude Include="Project\Scenes\GameSceneStates.h">
+      <Filter>Project\Scenes\States</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BaseMovingBlock.h">
+      <Filter>Project\Game2D\Blocks</Filter>
+    </ClInclude>
+    <ClInclude Include="Project\Game2D\IGameUI.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="externals\imgui\.editorconfig">
@@ -1253,6 +1248,9 @@
     </Filter>
     <Filter Include="Engine\Resource\Texture">
       <UniqueIdentifier>{1ca24662-3236-45f5-85e5-a79da4eb95d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Project\Scenes\States">
+      <UniqueIdentifier>{1a6c4c41-d940-40d1-87e1-7ef58dbd40f1}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

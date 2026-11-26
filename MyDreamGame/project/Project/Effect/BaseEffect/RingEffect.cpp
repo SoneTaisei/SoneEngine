@@ -81,7 +81,7 @@ void RingEffect::Initialize(ID3D12Device* device, uint32_t textureHandle) {
 }
 
 void RingEffect::Update(float deltaTime) {
-    // リングのアニメーション更新 (1秒周期でパッと出てゆっくり消える)
+    // リングのアニメーション更新 (2秒周期でパッと出てゆっくり消える)
     ringEffectTimer_ += deltaTime;
     if (ringEffectTimer_ > kRingEffectDuration) {
         ringEffectTimer_ = 0.0f; // ループ

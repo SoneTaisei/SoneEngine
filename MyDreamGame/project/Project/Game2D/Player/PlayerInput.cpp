@@ -25,7 +25,7 @@ void PlayerInput::Update(InputState& outState) {
         padMoveX += 1.0f;
     }
     Vector2 stick = gamepad->GetLeftStick();
-    if (std::abs(stick.x) > 0.05f) {
+    if (std::abs(stick.x) > 0.35) {
         padMoveX += stick.x;
     }
 
@@ -47,7 +47,7 @@ void PlayerInput::Update(InputState& outState) {
     if (gamepad->IsDPadUp()) {
         padMoveY += 1.0f;
     }
-    if (std::abs(stick.y) > 0.05f) {
+    if (std::abs(stick.y) > 0.25f) {
         padMoveY += stick.y;
     }
 
@@ -55,6 +55,7 @@ void PlayerInput::Update(InputState& outState) {
 
     // ジャンプ（キーボード SPACE / パッド Aボタン）
     outState.isJumpPressed = keyboard->IsKeyPressed(DIK_SPACE) || gamepad->IsButtonPressed(GamepadButton::A);
+    outState.isJumpHeld = keyboard->IsKeyDown(DIK_SPACE) || gamepad->IsButtonDown(GamepadButton::A);
     outState.isJumpReleased = keyboard->IsKeyReleased(DIK_SPACE) || gamepad->IsButtonReleased(GamepadButton::A);
 
     // ダッシュ（キーボード J / パッド Xボタン）

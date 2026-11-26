@@ -325,7 +325,7 @@ void EditorInspector::DrawGlobalSettings(EditorManager* em, ModelCommon* modelCo
         }
         if (showColliders) {
             ImGui::SameLine(); ImGui::TextDisabled("(?)");
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("形状タイプごとの色分け:\n・緑: AABB (矩形)\n・オレンジ: OBB (回転ボックス)\n・水色: Sphere (球)");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("形状タイプごとの色分け:\n・黄: プレイヤー\n・緑: AABB (矩形)\n・オレンジ: OBB (回転ボックス)\n・水色: Sphere (球)");
             ImGui::Indent();
             bool depthTest = CollisionManager::GetInstance()->IsDepthTestEnabled(), oldDepth = depthTest;
             if (ImGui::Checkbox("遮蔽 (ブロックの奥で隠す)", &depthTest)) {

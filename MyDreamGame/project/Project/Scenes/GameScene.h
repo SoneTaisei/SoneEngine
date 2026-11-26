@@ -12,6 +12,7 @@
 #include "Game2D/Player/Player2D.h"
 #include "Game2D/MapChip2D.h"
 #include "Game2D/UI/CoinHUD.h"
+#include "Game2D/UI/StaminaHUD.h"
 #include "Game2D/UI/PauseMenu.h"
 #include "Game2D/UI/ReadyGoUI.h"
 #include "Game2D/UI/ClearUI.h"
@@ -19,20 +20,15 @@
 #include "Game2D/Replay/ReplayGhostRenderer.h"
 #include "Game2D/Camera/GameCameraController.h"
 #include "Resource/Sprite/Sprite.h"
-
-class GameCamera;
-
 #include "GameObject/PrimitiveObject.h"
 #include "Resource/Primitive/PrimitiveManager.h"
+#include "State/StateMachine.h"
+#include "Game2D/IGameUI.h"
+
+class GameCamera;
+class IGameSceneState;
 class Skybox;
 
-
-enum class GameState {
-    StartReady,
-    Playing,
-    Pause,
-    Clear
-};
 
 class GameScene : public IScene {
 public:
@@ -65,7 +61,20 @@ public:
 
     std::string GetLevelDataJsonPath() const override;
 
+    
+    void ChangeState(std::unique_ptr<IState<GameScene>> nextState);
+    IGameSceneState *GetCurrentState() const;
+
+     // ステートから使うゲッター群
+    ReadyGoUI *GetReadyGoUI() const { return readyGoUI_.get(); }
+    ClearUI *GetClearUI() const { return clearUI_.get(); }
+    PauseMenu *GetPauseMenu() const { return pauseMenu_.get(); }
+    GameCameraController *GetCameraController() const { return cameraController_.get(); }
+    SceneManager *GetSceneManager() const { return activeSceneManager_; }
+
 private:
+    StateMachine<GameScene> stateMachine_;
+    SceneManager *activeSceneManager_ = nullptr;
     // ---------------------------------------------------
     // 3D・エフェクト関連 (develop)
     // ---------------------------------------------------
@@ -97,7 +106,6 @@ private:
     
 
 
-    GameState gameState_ = GameState::StartReady;
     float transitionAlpha_ = 1.0f; // 画面遷移演出用(フェードイン)
 
     // UIコンポーネント
@@ -105,6 +113,7 @@ private:
     std::unique_ptr<ClearUI> clearUI_;
     std::unique_ptr<PauseMenu> pauseMenu_;
     std::unique_ptr<CoinHUD> coinHUD_;
+    std::unique_ptr<StaminaHUD> staminaHUD_;
 
     // カメラ制御
     std::unique_ptr<GameCameraController> cameraController_;
@@ -114,4 +123,6 @@ private:
     std::unique_ptr<ReplayGhostRenderer> ghostRenderer_;
 
     static std::string s_TargetMapFilePath;
+
+    std::vector<IGameUI *> allUIs_;
 };

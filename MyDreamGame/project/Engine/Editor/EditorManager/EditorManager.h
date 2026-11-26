@@ -23,6 +23,7 @@
 #include "Editor/PostEffectEditor/PostEffectEditor.h"
 #include "Editor/SpriteAnimationEditor/SpriteAnimationEditor.h"
 #include "Editor/Common/ModelSelectModal.h"
+#include "Editor/EditorManager/EditorCommandManager.h"
 
 class SceneManager;
 class ParticleManager;
@@ -262,66 +263,27 @@ public:
         ClearHistory();
     }
 
-    class IEditorCommand {
-    public:
-        virtual ~IEditorCommand() = default;
-        virtual void Undo() = 0;
-        virtual void Redo() = 0;
-    };
-
     template <typename T>
-    class ValueEditCommand : public IEditorCommand {
-        T* target_;
-        T oldValue_;
-        T newValue_;
-        std::function<void()> onUpdate_;
-    public:
-        ValueEditCommand(T* target, const T& oldVal, const T& newVal, std::function<void()> onUpdate = nullptr)
-            : target_(target), oldValue_(oldVal), newValue_(newVal), onUpdate_(onUpdate) {}
-        void Undo() override { *target_ = oldValue_; if (onUpdate_) onUpdate_(); }
-        void Redo() override { *target_ = newValue_; if (onUpdate_) onUpdate_(); }
-    };
-    
-    template <typename T>
-    void PushCommand(T* target, const T& oldVal, const T& newVal, std::function<void()> onUpdate = nullptr) {
-        undoStack_.push_back(std::make_shared<ValueEditCommand<T>>(target, oldVal, newVal, onUpdate));
-        if (undoStack_.size() > 100) {
-            undoStack_.erase(undoStack_.begin());
-        }
-        redoStack_.clear();
+    void PushCommand(T *target, const T &oldVal, const T &newVal, std::function<void()> onUpdate = nullptr) {
+        if (commandManager_)
+            commandManager_->PushValueCommand(target, oldVal, newVal, onUpdate);
     }
 
-    class ActionCommand : public IEditorCommand {
-        std::function<void()> undoAction_;
-        std::function<void()> redoAction_;
-    public:
-        ActionCommand(std::function<void()> undo, std::function<void()> redo)
-            : undoAction_(undo), redoAction_(redo) {}
-        void Undo() override { if(undoAction_) undoAction_(); }
-        void Redo() override { if(redoAction_) redoAction_(); }
-    };
-
     void PushActionCommand(std::function<void()> undo, std::function<void()> redo) {
-        undoStack_.push_back(std::make_shared<ActionCommand>(undo, redo));
-        if (undoStack_.size() > 100) {
-            undoStack_.erase(undoStack_.begin());
-        }
-        redoStack_.clear();
+        if (commandManager_)
+            commandManager_->PushActionCommand(undo, redo);
     }
 
     void PushCommand(std::shared_ptr<IEditorCommand> cmd) {
-        undoStack_.push_back(cmd);
-        if (undoStack_.size() > 100) {
-            undoStack_.erase(undoStack_.begin());
-        }
-        redoStack_.clear();
+        if (commandManager_)
+            commandManager_->PushCommand(cmd);
     }
 
     void Undo();
     void Redo();
     void ClearHistory() {
-        undoStack_.clear();
-        redoStack_.clear();
+        if (commandManager_)
+            commandManager_->Clear();
     }
 
     // マップ用の履歴保存ヘルパー
@@ -361,9 +323,6 @@ private:
 
     bool isGameViewHovered_ = false; // ゲームビューがホバーされているか
     bool isReplayEditorHovered_ = false; // リプレイエディタがホバーされているか
-
-    std::vector<std::shared_ptr<IEditorCommand>> undoStack_;
-    std::vector<std::shared_ptr<IEditorCommand>> redoStack_;
 
     // エディターで選択中のシーンタイプ
     SceneType currentSceneType_ = SceneType::kTitle;

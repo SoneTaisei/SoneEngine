@@ -1,7 +1,7 @@
 #pragma once
 #include "Game2D/Blocks/BaseBlock.h"
 
-class JumpBlock : public BaseBlock {
+class JumpBlock : public BaseMapObject {
 public:
     enum class BounceDirection {
         kUp,
@@ -11,7 +11,7 @@ public:
         kCenter
     };
 
-    using BaseBlock::BaseBlock;
+    using BaseMapObject::BaseMapObject;
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
     
     // 当たり判定：すり抜けないようにする

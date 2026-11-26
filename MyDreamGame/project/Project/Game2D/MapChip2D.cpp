@@ -172,7 +172,7 @@ void MapChip2D::Draw() {
     }
 }
 
-BaseBlock* MapChip2D::GetBlock(int chipX, int chipY) const {
+BaseMapObject* MapChip2D::GetBlock(int chipX, int chipY) const {
     if (chipX < 0 || chipX >= mapWidth_ || chipY < 0 || chipY >= mapHeight_) {
         return nullptr;
     }
@@ -387,7 +387,7 @@ void MapChip2D::RebuildChipObjects() {
     if (!isRebuildEnabled_) return;
 
     activeBlocks_.clear();
-    activeBlocks_.resize(mapHeight_, std::vector<std::shared_ptr<BaseBlock>>(mapWidth_, nullptr));
+    activeBlocks_.resize(mapHeight_, std::vector<std::shared_ptr<BaseMapObject>>(mapWidth_, nullptr));
     updateBlocks_.clear();
 
     std::vector<std::vector<bool>> visited(mapHeight_, std::vector<bool>(mapWidth_, false));
@@ -452,7 +452,7 @@ void MapChip2D::RebuildChipObjects() {
                 }
             }
 
-            std::shared_ptr<BaseBlock> newBlock = InstantiateBlock(x, y, type, spanWidth, spanHeight, boxPrimitive);
+            std::shared_ptr<BaseMapObject> newBlock = InstantiateBlock(x, y, type, spanWidth, spanHeight, boxPrimitive);
             if (newBlock) {
                 updateBlocks_.push_back(newBlock);
 
@@ -506,7 +506,7 @@ void MapChip2D::CreateBoundaries() {
         if (!boundaries_[i]) {
             boundaries_[i] = std::make_unique<GameObject>("Boundary" + std::to_string(i));
             boundaries_[i]->AddComponent<TransformComponent>();
-            auto* cc = boundaries_[i]->AddComponent<ColliderComponent>();
+            auto* cc = boundaries_[i]->AddComponent<BoxColliderComponent>();
             cc->SetLayerMask(kLayerBlock);
             cc->SetIsSolid(true);
         }
@@ -520,25 +520,25 @@ void MapChip2D::CreateBoundaries() {
     auto* tc0 = boundaries_[0]->GetComponent<TransformComponent>();
     tc0->SetPosition({w * 0.5f, -thickness * 0.5f, 0.0f});
     tc0->SetScale({w + thickness * 2, thickness, 1.0f});
-    boundaries_[0]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+    boundaries_[0]->GetComponent<BoxColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 
     // Top
     auto* tc1 = boundaries_[1]->GetComponent<TransformComponent>();
     tc1->SetPosition({w * 0.5f, h + thickness * 0.5f, 0.0f});
     tc1->SetScale({w + thickness * 2, thickness, 1.0f});
-    boundaries_[1]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+    boundaries_[1]->GetComponent<BoxColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 
     // Left
     auto* tc2 = boundaries_[2]->GetComponent<TransformComponent>();
     tc2->SetPosition({-thickness * 0.5f, h * 0.5f, 0.0f});
     tc2->SetScale({thickness, h, 1.0f});
-    boundaries_[2]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+    boundaries_[2]->GetComponent<BoxColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 
     // Right
     auto* tc3 = boundaries_[3]->GetComponent<TransformComponent>();
     tc3->SetPosition({w + thickness * 0.5f, h * 0.5f, 0.0f});
     tc3->SetScale({thickness, h, 1.0f});
-    boundaries_[3]->GetComponent<ColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
+    boundaries_[3]->GetComponent<BoxColliderComponent>()->SetBoxSize({1.0f, 1.0f, 1.0f});
 }
 
 bool MapChip2D::SaveToFile(const std::string& filepath) {
@@ -900,11 +900,11 @@ bool MapChip2D::LoadTemplatesFromFile(const std::string& filepath) {
 }
 
 
-std::shared_ptr<BaseBlock> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive* boxPrimitive) {
+std::shared_ptr<BaseMapObject> MapChip2D::InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, Primitive* boxPrimitive) {
     float worldX = ChipToWorldX(x) + (spanWidth * chipSize_) * 0.5f;
     float worldY = ChipToWorldY(y) + (spanHeight * chipSize_) * 0.5f;
 
-    std::shared_ptr<BaseBlock> newBlock = nullptr;
+    std::shared_ptr<BaseMapObject> newBlock = nullptr;
     int typeId = static_cast<int>(type);
 
     if (type == ChipType::kBlock) {

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <memory>
 #include <nlohmann/json.hpp>
 #include "Core/Utility/Structs.h"
@@ -12,11 +12,11 @@ class MapChip2D;
 struct ID3D12Device;
 class Primitive;
 
-class BaseBlock {
+class BaseMapObject {
 public:
-    BaseBlock(MapChip2D* map, int chipX, int chipY) 
+    BaseMapObject(MapChip2D* map, int chipX, int chipY) 
         : map_(map), chipX_(chipX), chipY_(chipY) {}
-    virtual ~BaseBlock() = default;
+    virtual ~BaseMapObject() = default;
 
     virtual void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) {}
     
@@ -35,11 +35,8 @@ public:
     // 当たり判定の性質
     virtual bool IsSolid() const { return false; }
     virtual bool IsOneWay() const { return false; }
+    virtual bool IsHazard() const { return false; }
     
-    // リフトなどの動く足場用
-    virtual bool IsMoving() const { return false; }
-    virtual Vector3 GetVelocity() const { return {0.0f, 0.0f, 0.0f}; }
-    virtual float GetInertiaTime() const { return 0.5f; }
 
     // プレイヤーと接触した際の処理
     virtual void OnCollision(Player2D* player) {}
@@ -74,13 +71,14 @@ public:
     void SetDestroyed(bool destroyed) { isDestroyed_ = destroyed; }
 
     void SetupCollider() {
-        if (!gameObject_) return;
-        auto* cc = gameObject_->AddComponent<ColliderComponent>();
+        if (!gameObject_)
+            return;
+        auto *cc = gameObject_->AddComponent<BoxColliderComponent>();
         cc->SetLayerMask(kLayerBlock);
         cc->SetIsSolid(IsSolid());
         cc->SetIsOneWay(IsOneWay());
-        cc->SetIsMoving(IsMoving());
-        cc->SetVelocity(GetVelocity());
+        cc->SetIsMoving(false);
+        cc->SetVelocity({0.0f,0.0f,0.0f});
         cc->SetUserData(this);
         if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
             cc->SetBoxSize({tc->GetScale().x, tc->GetScale().y, tc->GetScale().z});

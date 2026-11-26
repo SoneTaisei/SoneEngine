@@ -11,8 +11,6 @@
 // エフェクト各種
 #include "Effect/BaseEffect.h"
 #include "Effect/BaseEffect/CoinEffect.h"
-#include "Effect/BaseEffect/RingEffect.h"
-#include "Effect/BaseEffect/CylinderEffect.h"
 #include "Effect/GPUParticle/GPUParticleSystem.h"
 #include "Editor/Replay/ReplayManager.h"
 
@@ -33,16 +31,6 @@ void GameEffectManager::Initialize() {
     coinEffect->Initialize(device);
     coinEffect_ = coinEffect.get();
     effects_.push_back(std::move(coinEffect));
-
-    uint32_t gradationHandle = TextureManager::GetInstance()->Load("resources/Sprite/School/gradationLine.png");
-
-    auto ringEffect = std::make_unique<RingEffect>();
-    ringEffect->Initialize(device, gradationHandle);
-    effects_.push_back(std::move(ringEffect));
-
-    auto cylinderEffect = std::make_unique<CylinderEffect>();
-    cylinderEffect->Initialize(device, gradationHandle);
-    effects_.push_back(std::move(cylinderEffect));
 
     // 2. GPUパーティクル (snow) の初期化
     snowParticle_ = std::make_unique<GPUParticleSystem>();

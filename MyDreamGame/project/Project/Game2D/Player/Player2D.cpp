@@ -9,6 +9,7 @@ Player2D::~Player2D() = default;
 #include "Graphics/TextureManager.h"
 #include "Editor/Replay/ReplayManager.h"
 #include "Resource/Model/ModelManager.h"
+#include "Component/ColliderComponent.h"
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
@@ -68,6 +69,8 @@ void Player2D::StartDeathSequence(bool isFallDeath) {
     state_.lastDashDirX_ = 0.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
 
     if (isFallDeath) {
         state_.velocity_.y = -5.0f;
@@ -103,19 +106,35 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
     state_.facingDirectionX_ = 1.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
     state_.wallJumpDirLockTimer_ = 0.0f;
     state_.lockedDirectionX_ = 0.0f;
     state_.wallJumpTimer_ = 0.0f;
+    state_.isTouchingWallRight_ = false;
+    state_.isTouchingWallLeft_ = false;
+    state_.wasTouchingWallRight_ = false;
+    state_.wasTouchingWallLeft_ = false;
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
+    state_.wasWallPose_ = false;
+    state_.wallClingReleaseTimer_ = 0.0f;
+    RefillStamina();
 
     // 動く足場の慣性を確実にリセット
     state_.isOnMovingPlatform_ = false;
+    state_.standingPlatformCollider_ = nullptr;
+    state_.wallPlatformCollider_ = nullptr;
     state_.platformVelocity_ = { 0.0f, 0.0f, 0.0f };
     state_.recentPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
     state_.wallPlatformVelocity_ = { 0.0f, 0.0f, 0.0f };
     state_.platformInertiaTimer_ = 0.0f;
     state_.externalVelocityX_ = 0.0f;
+    state_.externalVelocityTimer_ = 0.0f;
+    state_.initialExternalVelocityX_ = 0.0f;
+    state_.springControlDisableTimer_ = 0.0f;
+    state_.hitstopTimer_ = 0.0f;
+    state_.isGrabbingVine_ = false;
     state_.climbingUpTimer_ = 0.0f;
     state_.climbLandingTimer_ = 0.0f;
     if (camera_) {
@@ -135,6 +154,8 @@ void Player2D::RespawnAt(const Vector3 &respawnPos) {
 void Player2D::StartRespawnSequence() {
     state_.isRespawning_ = true;
     state_.respawnTimer_ = 0.0f;
+    RefillStamina();
+    visuals_.ResetRotation(state_.facingDirectionX_);
     visuals_.SetRespawnVisual(state_.position_, params_, 0.0f);
 }
 
@@ -156,6 +177,8 @@ void Player2D::StartGoalSequence() {
     state_.lastDashDirX_ = 0.0f;
     state_.jumpBufferTimer_ = 0.0f;
     state_.coyoteTimer_ = 0.0f;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
     visuals_.SpawnConfetti(state_.position_);
 }
 
@@ -167,6 +190,7 @@ void Player2D::UpdateGoalTimer(float deltaTime) {
 void Player2D::Initialize() {
     Log("Player2D::Initialize: Start\n");
     PlayerConfig::Load(params_, "resources/json/shared/Player/player_parameters.json");
+    RefillStamina();
     Log("Player2D::Initialize: Config loaded\n");
 
     Microsoft::WRL::ComPtr<ID3D12Device> device;
@@ -192,6 +216,21 @@ void Player2D::Initialize() {
     // 初期ステートの設定（ポリモーフィズム）
     ChangeState(std::make_unique<PlayerNormalState>());
 
+    if (GetGameObject()) {
+        bodyCollider_ = GetGameObject()->GetComponent<BoxColliderComponent>();
+        if (!bodyCollider_) {
+            bodyCollider_ = GetGameObject()->AddComponent<BoxColliderComponent>();
+        }
+        bodyCollider_->SetLayerMask(kLayerPlayer);
+        bodyCollider_->SetIsSolid(false);
+
+        headCollider_ = GetGameObject()->AddComponent<BoxColliderComponent>();
+        headCollider_->SetLayerMask(kLayerPlayerHead);
+        headCollider_->SetIsSolid(false);
+
+        SyncCollider();
+    }
+
     Log("Player2D::Initialize: Finish\n");
 }
 
@@ -203,6 +242,7 @@ void Player2D::FindSpawnPoint(const MapChip2D& map) {
         state_.checkpointScore_ = 0;
         state_.score_ = 0;
         state_.currentRoomIndex_ = -1;
+        RefillStamina();
         if (GetGameObject()) {
             if (auto *tc = GetGameObject()->GetComponent<TransformComponent>()) {
                 tc->SetPosition(state_.position_);
@@ -257,6 +297,7 @@ void Player2D::UpdateWithMap(MapChip2D& map, bool isTransitioning, bool canContr
 }
 
 void Player2D::Draw() {
+    SyncCollider();
     visuals_.Draw(state_, params_);
 }
 
@@ -339,7 +380,14 @@ void Player2D::DisplayImGui() {
 
         if (ImGui::TreeNode("基本移動")) {
             ImGui::DragFloat("移動速度", &params_.moveSpeed_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("地上加速度 (慣性)", &params_.groundAcceleration_, 1.0f, 0.0f, 1000.0f);
+            ImGui::DragFloat("地上減速度 (慣性)", &params_.groundDeceleration_, 1.0f, 0.0f, 1000.0f);
+            ImGui::DragFloat("空中加速度 (慣性)", &params_.airAcceleration_, 1.0f, 0.0f, 1000.0f);
+            ImGui::DragFloat("空中減速度 (慣性)", &params_.airDeceleration_, 1.0f, 0.0f, 1000.0f);
+            ImGui::DragFloat("振り返り回転時間 (秒)", &params_.turnDuration_, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("ジャンプ力", &params_.jumpPower_, 0.1f, 0.0f, 30.0f);
+            ImGui::DragFloat("最低ジャンプ時間 (秒)", &params_.minJumpDuration_, 0.005f, 0.0f, 0.5f);
+            ImGui::DragFloat("ジャンプ離し時速度倍率", &params_.jumpCutMultiplier_, 0.01f, 0.0f, 1.0f);
             ImGui::DragFloat("重力", &params_.gravity_, 0.1f, -100.0f, 0.0f);
             ImGui::DragFloat("最大落下速度", &params_.maxFallSpeed_, 0.1f, -100.0f, 0.0f);
             ImGui::TreePop();
@@ -395,14 +443,34 @@ void Player2D::DisplayImGui() {
 
         if (ImGui::TreeNode("サイズ")) {
             bool sizeChanged = false;
-            if (ImGui::DragFloat("当たり判定の半幅", &params_.halfWidth_, 0.01f, 0.05f, 5.0f)) {
+            if (ImGui::DragFloat("基準の半幅 (見た目用)", &params_.halfWidth_, 0.01f, 0.05f, 5.0f)) {
                 sizeChanged = true;
             }
-            if (ImGui::DragFloat("当たり判定の半高", &params_.halfHeight_, 0.01f, 0.05f, 5.0f)) {
+            if (ImGui::DragFloat("基準の半高 (足元位置)", &params_.halfHeight_, 0.01f, 0.05f, 5.0f)) {
                 sizeChanged = true;
             }
             if (sizeChanged) {
                 visuals_.SyncSize(params_);
+            }
+
+            ImGui::Separator();
+            ImGui::Text("胴体コライダー (Body / 黄枠)");
+            bool partChanged = false;
+            if (ImGui::DragFloat("胴体 半幅", &params_.bodyHalfWidth_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("胴体 半高", &params_.bodyHalfHeight_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("胴体 Yオフセット", &params_.bodyOffsetY_, 0.01f, -3.0f, 3.0f)) partChanged = true;
+            if (ImGui::DragFloat("胴体 壁掴み時足縮み", &params_.bodyWallBottomShrink_, 0.01f, 0.0f, 0.5f)) partChanged = true;
+
+            ImGui::Separator();
+            ImGui::Text("頭コライダー (Head / ピンク枠)");
+            if (ImGui::DragFloat("頭 半幅", &params_.headHalfWidth_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 半高", &params_.headHalfHeight_, 0.01f, 0.05f, 5.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 Xオフセット (向き連動)", &params_.headOffsetX_, 0.01f, -2.0f, 2.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 Yオフセット", &params_.headOffsetY_, 0.01f, -3.0f, 3.0f)) partChanged = true;
+            if (ImGui::DragFloat("頭 壁掴み時X逃がし", &params_.headWallOffsetX_, 0.01f, 0.0f, 1.0f)) partChanged = true;
+
+            if (sizeChanged || partChanged) {
+                SyncCollider();
             }
             ImGui::TreePop();
         }
@@ -459,17 +527,26 @@ void Player2D::ResetState(const Vector3& initPos) {
     state_.checkpointScore_ = 0;
     state_.velocity_ = { 0.0f, 0.0f, 0.0f };
     state_.isOnGround_ = false;
+    state_.isJumping_ = false;
+    state_.minJumpTimer_ = 0.0f;
     state_.canDash_ = true;
     state_.facingDirectionX_ = 1.0f;
     state_.isDashing_ = false;
     state_.dashTimer_ = 0.0f;
     state_.isTouchingWallRight_ = false;
     state_.isTouchingWallLeft_ = false;
+    state_.wasTouchingWallRight_ = false;
+    state_.wasTouchingWallLeft_ = false;
     state_.wallJumpDirLockTimer_ = 0.0f;
     state_.lockedDirectionX_ = 0.0f;
     state_.wallJumpTimer_ = 0.0f;
     state_.isWallSliding_ = false;
     state_.isWallClinging_ = false;
+    state_.wasWallPose_ = false;
+    state_.wallClingReleaseTimer_ = 0.0f;
+    state_.standingPlatformCollider_ = nullptr;
+    state_.wallPlatformCollider_ = nullptr;
+    RefillStamina();
     state_.isDead_ = false;
     state_.deathTimer_ = 0.0f;
     state_.isGoal_ = false;
@@ -518,6 +595,26 @@ void Player2D::ChangeState(std::unique_ptr<IPlayerState> nextState) {
 
 AABB2D Player2D::GetAABB() const {
     return physics_.GetAABB(state_, params_);
+}
+
+AABB2D Player2D::GetBodyAABB() const {
+    return physics_.GetBodyAABB(state_, params_);
+}
+
+AABB2D Player2D::GetHeadAABB() const {
+    return physics_.GetHeadAABB(state_, params_);
+}
+
+void Player2D::SyncCollider() {
+    if (!GetGameObject()) return;
+    if (bodyCollider_) {
+        bodyCollider_->SetCustomAABB(GetBodyAABB());
+    } else if (auto* cc = GetGameObject()->GetComponent<ColliderComponent>()) {
+        cc->SetCustomAABB(GetBodyAABB());
+    }
+    if (headCollider_) {
+        headCollider_->SetCustomAABB(GetHeadAABB());
+    }
 }
 
 void Player2D::Update() {

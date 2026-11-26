@@ -7,6 +7,7 @@
 #include "Core/Utility/ParameterManager.h"
 #include <cmath>
 #include <algorithm>
+#include "Core/TimeManager.h"
 
 void ClearUI::Initialize(SpriteCommon* spriteCommon) {
     if (!spriteCommon) return;
@@ -34,13 +35,13 @@ void ClearUI::Start(float initialCameraScale) {
     initialCameraScale_ = initialCameraScale;
 }
 
-void ClearUI::Reset(GameCamera* camera) {
-    if (isActive_ && camera) {
-        if (std::abs(camera->GetScale() - initialCameraScale_) > 0.001f) {
-            camera->SetScale(initialCameraScale_);
+void ClearUI::Reset() {
+    if (isActive_ && camera_) {
+        if (std::abs(camera_->GetScale() - initialCameraScale_) > 0.001f) {
+            camera_->SetScale(initialCameraScale_);
         }
-        if (std::abs(camera->GetFollowOffset().y) > 0.001f) {
-            camera->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
+        if (std::abs(camera_->GetFollowOffset().y) > 0.001f) {
+            camera_->SetFollowOffset({ 0.0f, 0.0f, 0.0f });
         }
     }
     isActive_ = false;
@@ -50,7 +51,8 @@ void ClearUI::Reset(GameCamera* camera) {
     }
 }
 
-void ClearUI::Update(float deltaTime, GameCamera* camera) {
+void ClearUI::Update() {
+    float deltaTime = TimeManager::GetInstance().GetDeltaTime();
     if (!isActive_) {
         if (clearSprite_) {
             clearSprite_->SetColor({ 1.0f, 1.0f, 1.0f, 0.0f });
@@ -87,19 +89,19 @@ void ClearUI::Update(float deltaTime, GameCamera* camera) {
         clearSprite_->Update();
     }
 
-    if (camera) {
+    if (camera_) {
         // クリア時はプレイヤーへカメラをズームイン（アップ）
         float targetScale = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomScale", 2.2f);
         float zoomSpeed = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraZoomSpeed", 3.0f);
-        float currentScale = camera->GetScale();
+        float currentScale = camera_->GetScale();
         float newScale = currentScale + (targetScale - currentScale) * (1.0f - std::exp(-zoomSpeed * deltaTime));
-        camera->SetScale(newScale);
+        camera_->SetScale(newScale);
 
         // プレイヤーを画面のやや下側に配置するため、カメラの注視点を上方にオフセット
         float targetOffsetY = ParameterManager::GetInstance()->GetValue("GameScene", "clearCameraOffsetY", 1.0f);
-        Vector3 currentOffset = camera->GetFollowOffset();
+        Vector3 currentOffset = camera_->GetFollowOffset();
         float newOffsetY = currentOffset.y + (targetOffsetY - currentOffset.y) * (1.0f - std::exp(-zoomSpeed * deltaTime));
-        camera->SetFollowOffset({ currentOffset.x, newOffsetY, currentOffset.z });
+        camera_->SetFollowOffset({ currentOffset.x, newOffsetY, currentOffset.z });
     }
 }
 

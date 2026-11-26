@@ -39,9 +39,10 @@ void PauseMenu::Initialize(SpriteCommon* spriteCommon) {
 
 void PauseMenu::Reset() {
     selectedIndex_ = 0;
+    lastAction_ = PauseMenuAction::None;
 }
 
-PauseMenuAction PauseMenu::Update(float /*deltaTime*/) {
+void PauseMenu::Update() {
     // ポーズ画面の操作（キーボード / コントローラー両対応）
     bool isMoveUp = KeyboardInput::GetInstance()->IsKeyPressed(DIK_UP) ||
                     KeyboardInput::GetInstance()->IsKeyPressed(DIK_W) ||
@@ -108,7 +109,7 @@ PauseMenuAction PauseMenu::Update(float /*deltaTime*/) {
         selectSprite_->Update();
     }
 
-    return action;
+    lastAction_ = action;
 }
 
 void PauseMenu::Draw() {

@@ -1,10 +1,10 @@
 #pragma once
-#include "Game2D/Blocks/BaseBlock.h"
+#include "BaseMovingBlock.h"
 #include "Core/TimeManager.h"
 
-class LiftBlock : public BaseBlock {
+class LiftBlock : public BaseMovingBlock {
 public:
-    LiftBlock(MapChip2D* map, int chipX, int chipY) : BaseBlock(map, chipX, chipY) {}
+    LiftBlock(MapChip2D* map, int chipX, int chipY) : BaseMovingBlock(map, chipX, chipY) {}
 
     void Initialize(ID3D12Device* device, Primitive* boxPrimitive, float worldX, float worldY, float width, float height) override;
     void Update() override;
@@ -17,7 +17,6 @@ public:
     void Reset() override;
 
     Vector3 GetVelocity() const override { return velocity_; }
-    bool IsMoving() const override { return true; }
     float GetInertiaTime() const override { return inertiaTime_; }
 
 private:

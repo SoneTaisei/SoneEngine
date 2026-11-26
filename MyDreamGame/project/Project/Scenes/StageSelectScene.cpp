@@ -133,17 +133,20 @@ void StageSelectScene::Update(SceneManager *sceneManager) {
         GetGameCamera()->SetTranslation(cameraTransform_.translate);
         GetGameCamera()->SetRotation(cameraTransform_.rotate);
         GetGameCamera()->SetFov(0.45f);
+        GetGameCamera()->SetNearClip(0.1f);
+        GetGameCamera()->SetFarClip(1000.0f);
         GetGameCamera()->UpdateMatrix();
+    } else {
+        auto* dxCommon = DirectXCommon::GetInstance();
+        float aspect = (dxCommon && dxCommon->GetWindowHeight() > 0)
+            ? static_cast<float>(dxCommon->GetWindowWidth()) / static_cast<float>(dxCommon->GetWindowHeight())
+            : (1280.0f / 720.0f);
+
+        Matrix4x4 viewMatrix = TransformFunctions::MakeViewMatrix(cameraTransform_.rotate, cameraTransform_.translate);
+        Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, aspect, 0.1f, 1000.0f);
+        CameraManager::GetInstance()->SetCameraInfo(cameraTransform_.translate, viewMatrix, projectionMatrix);
     }
     CameraManager::GetInstance()->ClearCullingCameraInfo();
-
-    // 1. カメラのTransformからビュー行列を作成
-    Matrix4x4 viewMatrix = TransformFunctions::MakeViewMatrix(cameraTransform_.rotate, cameraTransform_.translate);
-
-    // 2. プロジェクション行列（透視投影行列）を作成
-    Matrix4x4 projectionMatrix = TransformFunctions::MakePerspectiveFovMatrix(0.45f, 1280.0f / 720.0f, 0.1f, 1000.0f);
-
-    CameraManager::GetInstance()->SetCameraInfo(cameraTransform_.translate, viewMatrix, projectionMatrix);
 
     // 入力処理（遅延タイマー経過後）
     bool canInput = true;

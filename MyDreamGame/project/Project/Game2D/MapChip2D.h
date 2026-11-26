@@ -36,7 +36,7 @@ public:
     void Draw();
 
     // 指定座標のブロックを取得する
-    BaseBlock* GetBlock(int chipX, int chipY) const;
+    BaseMapObject* GetBlock(int chipX, int chipY) const;
 
     // 指定座標のチップの種類を取得
     ChipType GetChipType(int chipX, int chipY) const;
@@ -122,7 +122,7 @@ public:
     bool LoadRoomsFromFile(const std::string& filepath);
 
     // 描画および動的更新対象のブロックリストを取得（動的当たり判定用）
-    const std::vector<std::shared_ptr<BaseBlock>>& GetUpdateBlocks() const { return updateBlocks_; }
+    const std::vector<std::shared_ptr<BaseMapObject>>& GetUpdateBlocks() const { return updateBlocks_; }
     int GetTotalCoinCount() const;
     int GetCollectedCoinCount() const;
     void SaveCollectedCoins();
@@ -175,7 +175,7 @@ public:
     void BuildMap();
 
 private:
-    std::shared_ptr<BaseBlock> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
+    std::shared_ptr<BaseMapObject> InstantiateBlock(int x, int y, ChipType type, int spanWidth, int spanHeight, class Primitive* boxPrimitive);
     void CreateChipObjects();
 
 private:
@@ -193,10 +193,10 @@ private:
     void CreateBoundaries();
 
     // 実行時に生成される各種ブロックのインスタンス
-    std::vector<std::vector<std::shared_ptr<BaseBlock>>> activeBlocks_;
+    std::vector<std::vector<std::shared_ptr<BaseMapObject>>> activeBlocks_;
     
     // 更新・描画用のユニークなブロックリスト
-    std::vector<std::shared_ptr<BaseBlock>> updateBlocks_;
+    std::vector<std::shared_ptr<BaseMapObject>> updateBlocks_;
 
     // カスタムパレット（自作ブロック定義リスト）
     std::vector<CustomBlockDef> customPalette_;

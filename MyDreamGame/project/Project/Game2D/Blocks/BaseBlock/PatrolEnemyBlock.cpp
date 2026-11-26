@@ -90,7 +90,7 @@ void PatrolEnemyBlock::Update() {
         if (wallChipX < 0 || wallChipX >= GetMap()->GetWidth()) {
             moveDir_ = -moveDir_;
         } else {
-            BaseBlock *wallBlock = GetMap()->GetBlock(wallChipX, chipY);
+            BaseMapObject *wallBlock = GetMap()->GetBlock(wallChipX, chipY);
             if (wallBlock && wallBlock->IsSolid()) {
                 moveDir_ = -moveDir_;
             }
@@ -105,7 +105,7 @@ void PatrolEnemyBlock::Update() {
 
             bool hasFloor = false;
             if (floorChipX >= 0 && floorChipX < GetMap()->GetWidth() && floorChipY >= 0 && floorChipY < GetMap()->GetHeight()) {
-                BaseBlock *floorBlock = GetMap()->GetBlock(floorChipX, floorChipY);
+                BaseMapObject *floorBlock = GetMap()->GetBlock(floorChipX, floorChipY);
                 if (floorBlock && floorBlock->IsSolid()) {
                     hasFloor = true;
                 }
@@ -123,7 +123,7 @@ void PatrolEnemyBlock::Update() {
 
         isOnGround_ = false;
         if (underChipX >= 0 && underChipX < GetMap()->GetWidth() && underChipY >= 0 && underChipY < GetMap()->GetHeight()) {
-            BaseBlock *underBlock = GetMap()->GetBlock(underChipX, underChipY);
+            BaseMapObject *underBlock = GetMap()->GetBlock(underChipX, underChipY);
             if (underBlock && underBlock->IsSolid()) {
                 float blockTopY = GetMap()->ChipToWorldY(underChipY) + GetMap()->GetChipSize(); // ブロックの上面（底辺 + 高さ）
                 if (nextY - radius_ <= blockTopY && velocity_.y <= 0.0f) {
