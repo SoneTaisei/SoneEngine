@@ -42,6 +42,7 @@
 #include "Vector2.h"
 #include "Vector3.h"
 #include "Vector4.h"
+#include "AABB2D.h"
 #include "TransformFunctions.h"
 
 // ImGuiを使うための宣言
@@ -80,14 +81,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 /*********************************************************
 *構造体
 *********************************************************/
-
-
-struct AABB2D {
-    float left;
-    float top;
-    float right;
-    float bottom;
-};
 
 struct StageRoom {
     float x;

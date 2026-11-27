@@ -33,8 +33,7 @@ std::vector<ColliderComponent*> CollisionManager::GetCollidersInAABB(const AABB2
         if ((collider->GetLayerMask() & layerMask) == 0) continue;
         
         AABB2D cAABB = collider->GetAABB();
-        if (aabb.right > cAABB.left && aabb.left < cAABB.right &&
-            aabb.top > cAABB.bottom && aabb.bottom < cAABB.top) {
+        if (aabb.Intersects(cAABB)) {
             result.push_back(collider);
         }
     }

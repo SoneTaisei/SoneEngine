@@ -65,20 +65,6 @@ public:
     void SetUserData(void *data) { userData_ = data; }
     void *GetUserData() const { return userData_; }
 
-    // Callbacks
-    using OnCollisionCallback = std::function<void(ColliderComponent *)>;
-    void SetOnCollision(OnCollisionCallback callback) { onCollision_ = callback; }
-    void SetOnPlayerStand(OnCollisionCallback callback) { onPlayerStand_ = callback; }
-
-    void OnCollision(ColliderComponent *other) {
-        if (onCollision_)
-            onCollision_(other);
-    }
-    void OnPlayerStand(ColliderComponent *other) {
-        if (onPlayerStand_)
-            onPlayerStand_(other);
-    }
-
     virtual void DrawDebug(LineRenderer *lineRenderer, const Vector4 &color) const = 0;
 
 private:
@@ -91,9 +77,6 @@ private:
 
     bool hasCustomAABB_ = false;
     AABB2D customAABB_{};
-
-    OnCollisionCallback onCollision_ = nullptr;
-    OnCollisionCallback onPlayerStand_ = nullptr;
 };
 
 #include "ColliderComponent/BoxColliderComponent.h"

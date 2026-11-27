@@ -13,6 +13,7 @@
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ClInclude Include="Engine\Core\Utility\AABB2D.h" />
     <ClInclude Include="Project\Game2D\IGameUI.h" />
     <ClInclude Include="Project\Scenes\GameSceneStates.h" />
     <ClInclude Include="Project\Game2D\Blocks\BaseBlock\BaseMovingBlock.h" />
@@ -316,6 +317,10 @@
     <ClCompile Include="Engine\Resource\Primitive\Primitive\PrimitiveStar.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerInput.cpp" />
     <ClCompile Include="Project\Game2D\Player\PlayerPhysics.cpp" />
+    <ClCompile Include="Project\Game2D\Player\Physics\PlayerMovement.cpp" />
+    <ClCompile Include="Project\Game2D\Player\Physics\PlayerJump.cpp" />
+    <ClCompile Include="Project\Game2D\Player\Physics\PlayerDash.cpp" />
+    <ClCompile Include="Project\Game2D\Player\Physics\PlayerCollisionSolver.cpp" />
     <ClCompile Include="Engine\Collision\CollisionFunctions.cpp" />
     <ClCompile Include="Engine\Editor\Animation\AnimationPreviewScene.cpp" />
     <ClCompile Include="Engine\Editor\Common\ModelSelectModal.cpp" />
@@ -597,6 +602,10 @@
     <ClInclude Include="Engine\Editor\Replay\LevelEvolutionAI.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerInput.h" />
     <ClInclude Include="Project\Game2D\Player\PlayerPhysics.h" />
+    <ClInclude Include="Project\Game2D\Player\Physics\PlayerMovement.h" />
+    <ClInclude Include="Project\Game2D\Player\Physics\PlayerJump.h" />
+    <ClInclude Include="Project\Game2D\Player\Physics\PlayerDash.h" />
+    <ClInclude Include="Project\Game2D\Player\Physics\PlayerCollisionSolver.h" />
     <ClInclude Include="Engine\Collision\CollisionFunctions.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationLightingConfig.h" />
     <ClInclude Include="Engine\Editor\Animation\AnimationPreviewScene.h" />

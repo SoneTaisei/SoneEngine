@@ -122,22 +122,6 @@ public:
     // マップからプレイヤー初期位置を検索して設定する
     void FindSpawnPoint(const MapChip2D &map);
 
-    // AABBの取得（当たり判定用）
-
-    // 将来の拡張用 OBB（Oriented Bounding Box）構造体
-    struct OBB2D {
-        Vector3 center;
-        Vector3 extents; // half-width, half-height, z=0
-        float rotation;  // radian
-    };
-
-    // AABB同士の交差判定ヘルパー
-    static bool CheckAABBCollision(const AABB2D &a, const AABB2D &b);
-
-    // OBBを用いた衝突判定（戻り値はMTV: Minimum Translation Vector）
-    // （今回は不使用ですが将来のリフト回転対応用として実装）
-    static bool CheckCollisionOBB(const OBB2D &obb1, const OBB2D &obb2, Vector3 &outMTV);
-
     // ヒエラルキー用
     const PrimitiveObject *GetPrimitiveObject() const { return visuals_.GetPrimitiveObject(); }
     const Object3D *GetModelObject() const { return visuals_.GetModelObject(); }
@@ -146,8 +130,6 @@ public:
     // ゲーム状態取得用
     int GetScore() const { return state_.score_; }
     void SetScore(int score) { state_.score_ = score; }
-
-    // リプレイ巻き戻し用の状態復元メソッド
 
     // ブロックのOnCollisionから呼ばれるコールバック群
     void Kill(bool isFallDeath = false);

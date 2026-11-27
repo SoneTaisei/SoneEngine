@@ -81,26 +81,27 @@ public:
         cc->SetVelocity({0.0f,0.0f,0.0f});
         cc->SetUserData(this);
         if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
-            cc->SetBoxSize({tc->GetScale().x, tc->GetScale().y, tc->GetScale().z});
             cc->SetBoxSize({1.0f, 1.0f, 1.0f}); // TransformComponentのスケールが反映されるので1.0でOK
         }
     }
 
     virtual AABB2D GetAABB() const {
-        Vector3 pos = {0.0f, 0.0f, 0.0f};
-        Vector3 scale = {1.0f, 1.0f, 1.0f};
         if (gameObject_) {
+            if (auto* cc = gameObject_->GetComponent<ColliderComponent>()) {
+                return cc->GetAABB();
+            }
             if (auto* tc = gameObject_->GetComponent<TransformComponent>()) {
-                pos = tc->GetPosition();
-                scale = tc->GetScale();
+                const Vector3& pos = tc->GetPosition();
+                const Vector3& scale = tc->GetScale();
+                return {
+                    pos.x - scale.x * 0.5f,
+                    pos.y + scale.y * 0.5f,
+                    pos.x + scale.x * 0.5f,
+                    pos.y - scale.y * 0.5f
+                };
             }
         }
-        return {
-            pos.x - scale.x * 0.5f,
-            pos.y + scale.y * 0.5f,
-            pos.x + scale.x * 0.5f,
-            pos.y - scale.y * 0.5f
-        };
+        return { 0.0f, 0.0f, 0.0f, 0.0f };
     }
 
      MapChip2D *GetMap() const { return map_; }

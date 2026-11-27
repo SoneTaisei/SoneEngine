@@ -485,41 +485,6 @@ void Player2D::DisplayImGui() {
 #endif
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void Player2D::ResetState(const Vector3& initPos) {
     state_.position_ = initPos;
     state_.startPosition_ = initPos;
